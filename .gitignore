@@ -1,0 +1,35 @@
+# ── 가중치·라이선스 제한 파일 (공개 저장소에 올리면 안 됨) ──────────────────
+# AnyHand/WiLoR 체크포인트: CC-BY-NC-ND (비상업·연구 한정)
+# MANO_RIGHT.pkl: MPI MANO 라이선스상 재배포 금지
+# → README.md §2 안내대로 각자 원본(HF, mano.is.tue.mpg.de)에서 받아 배치할 것
+models/*.ckpt
+models/*.pt
+mano_data/*.pkl
+mano_data/*.bak
+
+# ── 대용량 샘플·생성 결과물 (용량만 크고 재현 가능) ──────────────────────────
+samples/*.mp4
+out/
+
+# ── 파이썬 가상환경 ─────────────────────────────────────────────────────────
+.venv/
+venv/
+__pycache__/
+**/__pycache__/
+*.py[cod]
+*.egg-info/
+build/
+dist/
+
+# ── 캐시 ────────────────────────────────────────────────────────────────────
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.ipynb_checkpoints/
+
+# ── OS / 에디터 ─────────────────────────────────────────────────────────────
+.DS_Store
+Thumbs.db
+.vscode/
+.idea/
+*.swp
