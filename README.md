@@ -150,19 +150,6 @@ out/gigahands/*.md                 실험 결과 보고서(git 포함, CSV·PNG 
                                       가능하므로 `.gitignore` 처리 — 재현: 아래 스크립트 재실행)
 ```
 
-**핵심 결론 요약** (상세·수치 근거는 `out/gigahands/*.md` 각 보고서 참고):
-
-- 파이프라인이 기본으로 쓰는 focal_length(`model_config_wilor.yaml` 기준 약 5000px)가 실제
-  GigaHands 촬영 카메라(평균 약 914px)와 5.5배 어긋나 있어, 절대 위치 오차가 실측(GT) focal
-  대비 약 21.7배(130.9mm → 2,840.5mm) 폭증합니다 — **실사용 시 반드시 촬영 카메라의 실제
-  focal_length를 지정해야 합니다.**
-- focal_length를 정확히 맞춰도(GT-focal) 절대 위치 오차가 평균 130.9mm 남습니다 — WiLoR가
-  예측하는 크롭 스케일 자체가 GigaHands 촬영 거리 분포에 완전히 보정돼 있지 않은 것으로
-  보이며(원인 일부만 규명, 추가 조사 필요), focal_length 선택만으로는 해결되지 않습니다.
-- GeoCalib으로 focal_length를 자동 추정해봤지만, 이 도메인(근접 손 클로즈업, 고정 리그)에서는
-  24mm 고정 가정보다 오히려 부정확했습니다(GT 대비 평균 +28% 편향). 같은 영상 안에서 프레임별
-  추정치를 평균 내도(`GeoCalib_영상평균`) 이 편향 자체는 거의 줄지 않습니다.
-
 GeoCalib은 기존 `.venv`에 `--no-deps` editable로 설치돼 있습니다(`pip install --no-deps -e
 GeoCalib/`). 설치 시 발견된 의존성 충돌(`opencv-python`의 numpy≥2 강제, `kornia` 0.8.3의
 torch 2.1.2 비호환)과 해결 방법은 `models/experiment_geocalib.yaml`에 기록돼 있습니다.
