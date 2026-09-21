@@ -1,0 +1,49 @@
+# GigaHands 실험 ①: PA-MPJPE baseline
+# 이 파일은 어떤 파라미터로 이 실험을 돌렸는지 보기 위한 설정 기록이다.
+# 결과 수치는 여기 없음 — eval_results_gigahands.json / eval_per_instance_gigahands.csv 참고.
+
+experiment_name: pa_mpjpe_baseline
+script: gigahands/eval_pa_mpjpe_gigahands.py   # hand-demo 프로젝트 내 위치
+date_run: "2026-09-16"
+
+data:
+  dataset: GigaHands
+  location: /public/data/gigahands   # 원본 데이터셋(GT+영상, 11GB+)은 프로젝트에 넣지 않고 외부에 둠
+  scenes: [p005-tea, p005-noodle-fastfood]
+  gt_dir: gigahands_gt/
+  video_source: gigahands_sample_videos/ (file0..9, 로컬에 다운로드된 대표 카메라 서브셋)
+  camera_video_map: gigahands_gt/multiview_camera_video_map.csv
+
+sampling:
+  method: stratified_by_fov_group   # eval_pa_mpjpe_gigahands.stratified_sample
+  seed: 0
+  target_per_group: 500
+  fov_groups: ["25mm", "26mm", "27mm"]   # 35mm-equivalent, fov_lib.py 공식 기반 분류
+  fov_group_source: gigahands_fov_result.csv   # /public/data/gigahands/ 에 위치, gigahands_optim_params_sample.txt 에서 사전 계산됨
+  total_samples: 1500
+  gt_hand_instances: 2804
+
+model:
+  pipeline: hand-demo (AnyHandPredictor)
+  backend: wilor
+  checkpoint: anyhand_wilor.ckpt   # models/model_config_wilor.yaml 짝
+  det_conf: 0.3    # AnyHandPredictor 기본값, override 없음
+  det_iou: 0.3
+  rescale_factor: 2.0
+  batch_size: 16
+
+metric:
+  name: PA-MPJPE
+  alignment: procrustes (rotation+translation+scale 제거)
+  joints: 21 (전체, GigaHands keypoints_3d 에 per-joint validity mask 없음)
+  min_valid_joints: 4
+  handedness_match: is_right(예측) vs GT left.jsonl/right.jsonl (별도 파일)
+
+outputs:   # 전부 out/gigahands/ 아래
+  - eval_results_gigahands.json
+  - eval_per_instance_gigahands.csv
+
+note: >
+  이 실험은 PA-MPJPE(Procrustes 정렬 후 오차)만 계산한다 — 정렬 과정에서 회전·이동·스케일이
+  전부 제거되므로 cam_t/focal_length 오차의 영향을 구조적으로 반영하지 못한다. 그 빈틈을
+  메우는 후속 실험이 experiment_translation.yaml.

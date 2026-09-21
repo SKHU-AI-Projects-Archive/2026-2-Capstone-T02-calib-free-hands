@@ -9,7 +9,16 @@ mano_data/*.bak
 
 # ── 대용량 샘플·생성 결과물 (용량만 크고 재현 가능) ──────────────────────────
 samples/*.mp4
-out/
+# out/ 는 기본적으로 전부 제외하되, GigaHands 실험 분석 보고서(.md)는 작고(총 64K)
+# GPU 재추론 없이는 재현 비용이 커서 예외적으로 포함한다.
+out/*
+!out/gigahands/
+out/gigahands/*
+!out/gigahands/*.md
+
+# ── GeoCalib(cvg/GeoCalib, vendored) 데모용 대용량 에셋 — 코드 실행에 불필요 ─────
+GeoCalib/assets/
+GeoCalib/demo.ipynb
 
 # ── 파이썬 가상환경 ─────────────────────────────────────────────────────────
 .venv/

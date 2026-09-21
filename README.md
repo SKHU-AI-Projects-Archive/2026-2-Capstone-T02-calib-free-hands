@@ -125,3 +125,44 @@ python demo\demo_hand_mano.py --input some.jpg --out out\img
 | 표시 | `Left` `Right` 체크박스 | 손별 표시 켜기/끄기 |
 
 3D 패널의 흰 점은 촬영 카메라(원점), 바닥 격자 간격은 0.1 m 입니다. 하단 라벨에 현재 프레임 번호와 양손 손목 깊이(m)가 표시됩니다.
+
+## 4. GigaHands 벤치마크 · 부가 도구
+
+핵심 데모(위 1~3, `demo/`)는 그대로이고, 파이프라인의 절대 위치·스케일 정확도를 검증하기
+위해 GigaHands 공개 데이터셋 기반 벤치마크와 실험 도구를 추가했습니다(원본 데이터셋은 이
+저장소에 포함하지 않고 별도 경로에 둡니다).
+
+```
+gigahands/                         GigaHands 벤치마크 스크립트
+├── eval_pa_mpjpe_gigahands.py       기본 정확도(PA-MPJPE, 검출 recall)
+├── eval_translation_gigahands.py    절대 translation 오차 — GT/24mm 하드코딩/파이프라인
+│                                     기본값/GeoCalib(프레임별·영상평균) focal 조건 비교
+├── run_geocalib_gigahands.py        GeoCalib focal 추정 + (scene,seq,cam) 영상 단위 평균
+├── capture_*.py, detect_only_*.py,  coverage-aware 지표(FAcc/Recall/F1/MPJPE-p/PA-MPJPE-p/
+│   jitter_gigahands.py               GO-p/CT-p/Jitter, arXiv 2606.30308 방식)용 재추론·캐싱
+└── compute_coverage_metrics.py      위 캐시로 coverage-aware 지표 계산
+
+GeoCalib/                          단일 이미지 카메라 캘리브레이션 모델(cvg/GeoCalib, Apache-2.0)
+                                      — 선택적 focal_length 추정기, 파이프라인 코어와는 독립
+tools/render_focal_comparison.py   focal 조건별(파이프라인 기본값 vs GeoCalib) 비교 영상 렌더링
+models/experiment_*.yaml           위 실험들의 설정 기록(표본, 조건, 산출물 목록)
+out/gigahands/*.md                 실험 결과 보고서(git 포함, CSV·PNG 등 원시 산출물은 재현
+                                      가능하므로 `.gitignore` 처리 — 재현: 아래 스크립트 재실행)
+```
+
+**핵심 결론 요약** (상세·수치 근거는 `out/gigahands/*.md` 각 보고서 참고):
+
+- 파이프라인이 기본으로 쓰는 focal_length(`model_config_wilor.yaml` 기준 약 5000px)가 실제
+  GigaHands 촬영 카메라(평균 약 914px)와 5.5배 어긋나 있어, 절대 위치 오차가 실측(GT) focal
+  대비 약 21.7배(130.9mm → 2,840.5mm) 폭증합니다 — **실사용 시 반드시 촬영 카메라의 실제
+  focal_length를 지정해야 합니다.**
+- focal_length를 정확히 맞춰도(GT-focal) 절대 위치 오차가 평균 130.9mm 남습니다 — WiLoR가
+  예측하는 크롭 스케일 자체가 GigaHands 촬영 거리 분포에 완전히 보정돼 있지 않은 것으로
+  보이며(원인 일부만 규명, 추가 조사 필요), focal_length 선택만으로는 해결되지 않습니다.
+- GeoCalib으로 focal_length를 자동 추정해봤지만, 이 도메인(근접 손 클로즈업, 고정 리그)에서는
+  24mm 고정 가정보다 오히려 부정확했습니다(GT 대비 평균 +28% 편향). 같은 영상 안에서 프레임별
+  추정치를 평균 내도(`GeoCalib_영상평균`) 이 편향 자체는 거의 줄지 않습니다.
+
+GeoCalib은 기존 `.venv`에 `--no-deps` editable로 설치돼 있습니다(`pip install --no-deps -e
+GeoCalib/`). 설치 시 발견된 의존성 충돌(`opencv-python`의 numpy≥2 강제, `kornia` 0.8.3의
+torch 2.1.2 비호환)과 해결 방법은 `models/experiment_geocalib.yaml`에 기록돼 있습니다.

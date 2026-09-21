@@ -1,0 +1,78 @@
+# GigaHands 실험 ③: GeoCalib 추정 focal_length 비교 (4번째 조건 추가)
+# 결과 수치는 여기 없음 — geocalib_comparison_report.md 참고.
+
+experiment_name: geocalib_focal_comparison
+script: gigahands/run_geocalib_gigahands.py   # hand-demo 프로젝트 내 위치
+date_run: "2026-09-16"
+reused_from: experiment_translation.yaml   # 동일 1,846 인스턴스 / 1,150 고유 프레임, WiLoR 재추론 없음
+
+environment:
+  venv: /home/juson/project/hand-demo/.venv   # 기존 파이프라인과 공유, 새 venv 생성 안 함
+  pre_install_snapshot: out/gigahands/requirements_before_geocalib.txt
+  constraints_file: out/gigahands/constraints_geocalib.txt
+  package_changes:
+    kornia:
+      installed_version: 0.7.4
+      attempted_first: 0.8.3
+      reason_for_pin: >
+        kornia 0.8.3 은 torch.jit.script 로 컴파일되는 geometry/epipolar/essential.py 의
+        .any(dim=(-2,-1)) 호출이 torch 2.1.2 미지원 오버로드라 import 자체가 실패함
+        (스모크 테스트로 발견). 0.7.4 는 동일 문제 없음, numpy/opencv 요구사항도 없음.
+    opencv:
+      action: "GeoCalib 요구 opencv-python 설치 생략, 기존 opencv-python-headless(4.11.0.86) 재사용"
+      reason: "opencv-python(미고정 최신판)은 Python>=3.9에서 numpy>=2 강제 -> 기존 numpy==1.26.4 핀과 충돌"
+    unchanged: [numpy==1.26.4, torch==2.1.2+cu121, torchvision==0.16.2+cu121]
+  gui_call_check:
+    result: safe
+    detail: >
+      geocalib/interactive_demo.py 에만 cv2.imshow/waitKey 존재, geocalib/__init__.py 는
+      이 모듈을 import 하지 않음(GeoCalib().calibrate() 경로와 무관) — grep으로 확인.
+
+model:
+  name: GeoCalib
+  source: https://github.com/cvg/GeoCalib (installed editable, --no-deps)
+  source_location: /home/juson/project/hand-demo/GeoCalib   # WiLoR/ 와 동일 위치 규칙
+  weights: pinhole
+  weights_url: https://github.com/cvg/GeoCalib/releases/download/v1.0/geocalib-pinhole.tar
+  weights_cache: ~/.cache/torch/hub/geocalib/pinhole.tar
+  input_spec: "img (C,H,W) torch.Tensor, [0,1] 정규화, RGB"
+  gpu: "0번 전용"
+
+data:
+  unique_frames: 1150   # 1,846 인스턴스 중 동일 프레임 좌/우 중복 제거
+  frame_source: baseline.extract_frames (기존 영상, 재다운로드 없음)
+  n_videos_decoded: 326
+
+recompute:
+  method: "_cam_crop_to_full 을 focal_length=focal_x_geocalib 로 오프라인 재호출 (WiLoR 재추론 없음)"
+  wrist_offset_correction: true   # experiment_translation.yaml 과 동일 보정 적용
+  manual_verification: "5개 인스턴스 수기 재현, atol=1e-4 전부 일치"
+
+outputs:   # 전부 hand-demo/out/gigahands/ 아래
+  - geocalib_focal_estimates.csv   # 1,150행
+  - eval_translation_geocalib.csv  # 1,846행
+  - geocalib_comparison_report.md
+  - gigahands_raw_instances_cache.csv / eval_translation_gigahands.csv 에 geocalib 컬럼 병합
+
+followup_seqavg:   # GeoCalib_영상평균 — 프레임별 지터를 (scene,seq,cam) 영상 단위 평균으로 줄인 조건
+  goal: >
+    GeoCalib 은 시간적 연속성 없이 프레임마다 독립 추론해 같은 영상 안에서도 focal 추정치가
+    흔들린다. 영상(=(scene,seq,cam), 카메라 1대의 녹화 파일 1개) 단위로 샘플링된 프레임들의
+    평균 focal 하나를 그 영상 전체에 고정 적용했을 때 절대오차가 어떻게 바뀌는지 확인.
+  scripts:
+    - gigahands/run_geocalib_gigahands.py --seq-stats-only   # (scene,seq,cam)별 평균/표준편차/min/max, GeoCalib 재추론 없음
+    - gigahands/eval_translation_gigahands.py --recompute-geocalib-seqavg   # 캐시에서만 재계산, GPU/WiLoR 불필요
+  sequence_unit_decision: >
+    (scene,seq) 가 아니라 (scene,seq,cam) 을 "영상 1개"로 정의함 — 같은 take 라도 카메라마다
+    물리적으로 다른 렌즈(실제 초점거리)를 쓰므로, scene+seq 로만 묶으면 25/26/27mm 처럼 서로
+    다른 실제 초점거리를 가진 카메라들의 추정치가 섞여 평균이 무의미해짐. 기존 by_video
+    그룹핑(영상 파일 1개 = (scene,seq,cam) 1개) 관례와 일치.
+  caveat: >
+    "영상 평균"은 영상 전체 프레임이 아니라 이번 실험에서 25/26/27mm 계층 샘플링으로 뽑힌
+    프레임들만의 평균 (영상당 평균 3.5프레임, 중앙값 3, 1프레임뿐인 영상 14/326개).
+  date_run: "2026-09-18"
+  results_summary: "절대오차 평균 239.4mm / 중앙값 181.1mm (기존 GeoCalib 프레임별: 240.4mm) — 상세는 geocalib_seqavg_comparison_report.md"
+  outputs:
+    - geocalib_focal_seq_stats.csv   # 신규, 326행: (scene,seq,cam)별 focal_x_geocalib mean/std/min/max
+    - geocalib_seqavg_comparison_report.md
+    - gigahands_raw_instances_cache.csv / eval_translation_gigahands.csv / eval_interhand_distance_gigahands.csv 에 *_geocalib_seqavg 컬럼 병합
