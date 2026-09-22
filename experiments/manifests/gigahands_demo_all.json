@@ -1,0 +1,19 @@
+﻿{
+    "dataset":  "GigaHands",
+    "subset":  "demo_all",
+    "prepared_date":  "2026-09-22",
+    "sequences":  [
+                      "p36-tea-0010",
+                      "p41-boxing-0021",
+                      "p41-plant-0004",
+                      "p44-dog-0004",
+                      "p52-instrument-0034"
+                  ],
+    "file_count":  1385,
+    "video_count":  263,
+    "json_count":  24,
+    "jsonl_count":  810,
+    "total_bytes":  880543251,
+    "archive_sha256":  "4243B1F837B85EF3F0689502E83D911798E6F634BA6A35FA27816BDD61EFBBA4",
+    "raw_path":  "experiments/datasets/gigahands/demo_all/raw"
+}
