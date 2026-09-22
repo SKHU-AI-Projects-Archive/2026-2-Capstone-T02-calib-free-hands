@@ -1,0 +1,15 @@
+path,size_bytes,modified_utc,extension
+experiments/datasets/assemblyhands/annotations/demo/assemblyhands_demo_ego_calib_v1-1.json,26761679,2023-05-23T12:50:28+00:00,json
+experiments/datasets/assemblyhands/annotations/demo/assemblyhands_demo_ego_data_v1-1.json,123284,2023-05-23T12:37:08+00:00,json
+experiments/datasets/assemblyhands/annotations/demo/assemblyhands_demo_joint_3d_v1-1.json,34041,2023-05-23T12:37:08+00:00,json
+experiments/datasets/assemblyhands/annotations/skeleton.txt,657,2023-06-01T18:49:08+00:00,txt
+experiments/datasets/assemblyhands/annotations/test-eccv2024/assemblyhands_test_ego_calib_v1-1.json,20217519,2024-08-02T03:41:30+00:00,json
+experiments/datasets/assemblyhands/annotations/test-eccv2024/assemblyhands_test_ego_data_v1-1.json,85828854,2024-08-02T03:41:46+00:00,json
+experiments/datasets/assemblyhands/annotations/test-eccv2024/assemblyhands_test_joint_3d_v1-1.json,55874092,2024-08-02T03:40:11+00:00,json
+experiments/datasets/assemblyhands/annotations/test-eccv2024/invalid_test_ego.txt,287248,2024-07-31T06:22:27+00:00,txt
+experiments/datasets/assemblyhands/annotations/test-iccv2023/assemblyhands_test_abs_depth_iccv23-v1-3.json,5312728,2023-08-24T04:31:00+00:00,json
+experiments/datasets/assemblyhands/annotations/test-iccv2023/assemblyhands_test_ego_calib_iccv23_v1-1.json,29421611,2023-08-26T05:20:02+00:00,json
+experiments/datasets/assemblyhands/annotations/test-iccv2023/assemblyhands_test_ego_data_iccv23-v1-3.json,37141718,2023-08-24T04:30:50+00:00,json
+experiments/datasets/assemblyhands/annotations/test-iccv2023/assemblyhands_test_exo_calib_v1-1.json,19718,2024-01-31T17:41:50+00:00,json
+experiments/datasets/assemblyhands/annotations/test-iccv2023/template/assemblyhands_test_joint_3d_iccv23-v1-3_pred_template.json,147985077,2023-08-24T04:31:00+00:00,json
+experiments/datasets/assemblyhands/annotations/test-iccv2023/UPDATES.txt,303,2023-08-26T05:24:24+00:00,txt

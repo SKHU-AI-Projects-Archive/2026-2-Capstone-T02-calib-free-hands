@@ -1,0 +1,88 @@
+{
+  "dataset": "AssemblyHands",
+  "prepared_date": "2026-09-22",
+  "root_path": "experiments/datasets/assemblyhands",
+  "file_count": 14,
+  "total_bytes": 409008529,
+  "total_gb": 0.3809,
+  "extension_histogram": {
+    "json": 11,
+    "txt": 3
+  },
+  "archives": [
+    {
+      "path": "experiments/datasets/_downloads/assemblyhands/drive-download-20260922T044927Z-1-001.zip",
+      "size_bytes": 185759964,
+      "sha256": "CD69E3D1A0AB381454578A85CE929726AC6B467243186D22E621941D4291292D",
+      "listing_ok": true,
+      "entries": 11,
+      "integrity": "ok (CRC verified)"
+    },
+    {
+      "path": "experiments/datasets/_downloads/assemblyhands/test_HANDS2024_annot.tar",
+      "size_bytes": 162222080,
+      "sha256": "DB6BDA566A750BB44F4CFD3702B5B31C9BE1CA8EDD7599C619A0178CE0074EAA",
+      "listing_ok": true,
+      "entries": 4,
+      "integrity": "ok (listing readable)"
+    }
+  ],
+  "status": "prepared",
+  "notes": [
+    "annotation-only download; no RGB / ego images on disk (image overlay not possible)",
+    "annotations[].keypoints IS a genuine 2D annotation [u,v,conf]",
+    "camera key mismatch: images[].camera = HMC_84358933 vs calib key HMC_84358933_mono10bit - loader resolves by prefix",
+    "camera convention: 3x4 [R|t] per frame per camera, X_cam = R @ X_world + t, millimetres",
+    "test-eccv2024 split came from test_HANDS2024_annot.tar, extracted during preparation"
+  ],
+  "components": [
+    "demo",
+    "test-eccv2024",
+    "test-iccv2023"
+  ],
+  "splits": {
+    "demo": [
+      "assemblyhands_demo_ego_calib_v1-1.json",
+      "assemblyhands_demo_ego_data_v1-1.json",
+      "assemblyhands_demo_joint_3d_v1-1.json"
+    ],
+    "test-eccv2024": [
+      "assemblyhands_test_ego_calib_v1-1.json",
+      "assemblyhands_test_ego_data_v1-1.json",
+      "assemblyhands_test_joint_3d_v1-1.json"
+    ],
+    "test-iccv2023": [
+      "assemblyhands_test_abs_depth_iccv23-v1-3.json",
+      "assemblyhands_test_ego_calib_iccv23_v1-1.json",
+      "assemblyhands_test_ego_data_iccv23-v1-3.json",
+      "assemblyhands_test_exo_calib_v1-1.json"
+    ]
+  },
+  "important_files": [
+    {
+      "path": "experiments/datasets/assemblyhands/annotations/skeleton.txt",
+      "size_bytes": 657,
+      "sha256": "456414C85B8A00379E0A7D55099C7E2F1CE346D7580FD136AA051ACE72C150A3",
+      "role": "skeleton.txt"
+    },
+    {
+      "path": "experiments/datasets/assemblyhands/annotations/demo/assemblyhands_demo_ego_calib_v1-1.json",
+      "size_bytes": 26761679,
+      "sha256": "F2A39C4D68CE8F029B5DE9A540B0ABCB0F91C2A36F2939F365E146ADE6F06618",
+      "role": "demo/*calib*.json"
+    },
+    {
+      "path": "experiments/datasets/assemblyhands/annotations/test-eccv2024/assemblyhands_test_ego_calib_v1-1.json",
+      "size_bytes": 20217519,
+      "sha256": "3707CAEC0C2193EC7C5D88037403BD38A5C79A1B38F3C111CC006B45B03A8BA4",
+      "role": "test-eccv2024/*calib*.json"
+    }
+  ],
+  "gt": {
+    "camera": true,
+    "joints_3d": true,
+    "joints_2d": true,
+    "rgb_video": false
+  },
+  "ready_for_cam_exp_001": true
+}

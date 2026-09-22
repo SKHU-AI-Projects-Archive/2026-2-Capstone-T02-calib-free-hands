@@ -1,0 +1,24 @@
+{
+  "dataset": "Re:InterHand",
+  "prepared_date": "2026-09-22",
+  "root_path": "experiments/datasets/reinterhand",
+  "file_count": 0,
+  "total_bytes": 0,
+  "total_gb": 0.0,
+  "archives": [],
+  "components": [],
+  "important_files": [],
+  "status": "not_downloaded",
+  "gt": {
+    "camera": null,
+    "joints_3d": null,
+    "joints_2d": null,
+    "rgb_video": null
+  },
+  "ready_for_cam_exp_001": false,
+  "notes": [
+    "intentionally not downloaded (hundreds of GB)",
+    "candidate for the later camera-diversity / generalization stage",
+    "placeholder README written at experiments/datasets/reinterhand/README.md"
+  ]
+}

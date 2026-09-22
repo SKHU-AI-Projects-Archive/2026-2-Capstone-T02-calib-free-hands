@@ -41,3 +41,11 @@ experiments/cache/
 # Large per-run artifacts
 experiments/runs/**/artifacts/
 experiments/runs/**/tmp/
+# Safety net: dataset archives / videos must never be committed from anywhere
+experiments/**/*.zip
+experiments/**/*.tar
+experiments/**/*.tar.gz
+experiments/**/*.tgz
+experiments/**/*.7z
+experiments/datasets/**
+experiments/**/*.mp4

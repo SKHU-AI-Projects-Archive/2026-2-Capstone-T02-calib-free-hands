@@ -1,19 +1,87 @@
-﻿{
-    "dataset":  "GigaHands",
-    "subset":  "demo_all",
-    "prepared_date":  "2026-09-22",
-    "sequences":  [
-                      "p36-tea-0010",
-                      "p41-boxing-0021",
-                      "p41-plant-0004",
-                      "p44-dog-0004",
-                      "p52-instrument-0034"
-                  ],
-    "file_count":  1385,
-    "video_count":  263,
-    "json_count":  24,
-    "jsonl_count":  810,
-    "total_bytes":  880543251,
-    "archive_sha256":  "4243B1F837B85EF3F0689502E83D911798E6F634BA6A35FA27816BDD61EFBBA4",
-    "raw_path":  "experiments/datasets/gigahands/demo_all/raw"
+{
+  "dataset": "GigaHands",
+  "prepared_date": "2026-09-22",
+  "root_path": "experiments/datasets/gigahands",
+  "file_count": 1385,
+  "total_bytes": 880543251,
+  "total_gb": 0.8201,
+  "extension_histogram": {
+    "jsonl": 810,
+    "mp4": 263,
+    "txt": 253,
+    "json": 24,
+    "ply": 15,
+    "bin": 5,
+    "mtl": 5,
+    "obj": 5,
+    "png": 5
+  },
+  "archives": [
+    {
+      "path": "experiments/datasets/_downloads/gigahands/gigahands_demo_all.tar.gz",
+      "size_bytes": 760999592,
+      "sha256": "4243B1F837B85EF3F0689502E83D911798E6F634BA6A35FA27816BDD61EFBBA4",
+      "listing_ok": true,
+      "entries": 1746,
+      "integrity": "ok (listing readable)"
+    }
+  ],
+  "status": "prepared",
+  "notes": [
+    "keypoints_2d are per-view 2D detections with confidence, not curated GT",
+    "3D/2D jsonl row index == video frame index; chosen_frames_<hand>.json lists valid 3D frames",
+    "camera convention: X_cam = R(qvec wxyz) @ X_world + tvec, OpenCV [k1,k2,p1,p2], metres"
+  ],
+  "components": [
+    "hand_pose",
+    "object_pose"
+  ],
+  "subset": "demo_all",
+  "sequences": [
+    "p36-tea-0010",
+    "p41-boxing-0021",
+    "p41-plant-0004",
+    "p44-dog-0004",
+    "p52-instrument-0034"
+  ],
+  "n_sequences": 5,
+  "important_files": [
+    {
+      "path": "experiments/datasets/gigahands/demo_all/raw/hand_pose/p36-tea-0010/optim_params.txt",
+      "size_bytes": 16155,
+      "sha256": "24BE4D39354488C150454EF4A7F5D1B0CBEF2C3D4345262621EBBC2C819F5AB3",
+      "role": "hand_pose/*/optim_params.txt"
+    },
+    {
+      "path": "experiments/datasets/gigahands/demo_all/raw/hand_pose/p41-boxing-0021/optim_params.txt",
+      "size_bytes": 16155,
+      "sha256": "24BE4D39354488C150454EF4A7F5D1B0CBEF2C3D4345262621EBBC2C819F5AB3",
+      "role": "hand_pose/*/optim_params.txt"
+    },
+    {
+      "path": "experiments/datasets/gigahands/demo_all/raw/hand_pose/p41-plant-0004/optim_params.txt",
+      "size_bytes": 16155,
+      "sha256": "24BE4D39354488C150454EF4A7F5D1B0CBEF2C3D4345262621EBBC2C819F5AB3",
+      "role": "hand_pose/*/optim_params.txt"
+    },
+    {
+      "path": "experiments/datasets/gigahands/demo_all/raw/hand_pose/p44-dog-0004/optim_params.txt",
+      "size_bytes": 16168,
+      "sha256": "DE14FA37767EE91CB71AA1BA3D1A1B8F53B418A2294226A81298D551DE4DC143",
+      "role": "hand_pose/*/optim_params.txt"
+    },
+    {
+      "path": "experiments/datasets/gigahands/demo_all/raw/hand_pose/p52-instrument-0034/optim_params.txt",
+      "size_bytes": 16165,
+      "sha256": "A5668AE5AA454A3ABD8419E00779937F7256E88CD96AA5095284B0AA1B2CADFD",
+      "role": "hand_pose/*/optim_params.txt"
+    }
+  ],
+  "gt": {
+    "camera": true,
+    "joints_3d": true,
+    "joints_2d": true,
+    "rgb_video": true
+  },
+  "ready_for_cam_exp_001": true
 }

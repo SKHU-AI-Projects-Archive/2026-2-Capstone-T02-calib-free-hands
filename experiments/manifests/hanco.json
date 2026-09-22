@@ -1,0 +1,94 @@
+{
+  "dataset": "HanCo",
+  "prepared_date": "2026-09-22",
+  "root_path": "experiments/datasets/hanco",
+  "file_count": 112029,
+  "total_bytes": 403555671,
+  "total_gb": 0.3758,
+  "extension_histogram": {
+    "json": 108277,
+    "jpg": 3752
+  },
+  "archives": [
+    {
+      "path": "experiments/datasets/_downloads/hanco/HanCo_tester.zip",
+      "size_bytes": 61720728,
+      "sha256": "BA3403B1997A06881341953DE8D24D3E630169A9EF7B8BD279300BF10EF84603",
+      "listing_ok": true,
+      "entries": 4573,
+      "integrity": "ok (CRC verified)"
+    },
+    {
+      "path": "experiments/datasets/_downloads/hanco/HanCo_calib_meta.zip",
+      "size_bytes": 168235388,
+      "sha256": "EC73F362F9F87D42E7B1C2E67C72222F9F48027D48820B709F71ADC7BBD37C1D",
+      "listing_ok": true,
+      "entries": 109058,
+      "integrity": "ok (CRC verified)"
+    }
+  ],
+  "status": "prepared",
+  "notes": [
+    "two archives kept in separate roots: HanCo_tester (images+xyz+calib for one sequence) vs HanCo_calib_meta (calib for all sequences + meta.json)",
+    "official archive layout preserved (no flattening)",
+    "ships NO 2D keypoint annotation; RGB images ARE available, so HanCo is the best overlay target",
+    "camera convention: per-frame K[8] + M[8] 4x4 world->camera, metres, images undistorted",
+    "tester sequences: ['0110']; calib_meta covers 1518 sequences"
+  ],
+  "components": {
+    "tester": {
+      "root_path": "experiments/datasets/hanco/HanCo_tester",
+      "file_count": 4490,
+      "total_bytes": 65491380,
+      "total_gb": 0.061,
+      "top_level": [
+        "calib",
+        "mask_fg",
+        "mask_hand",
+        "meta.json",
+        "rgb",
+        "rgb_color_auto",
+        "rgb_color_sample",
+        "rgb_homo",
+        "rgb_merged",
+        "shape",
+        "xyz"
+      ]
+    },
+    "calib_meta": {
+      "root_path": "experiments/datasets/hanco/HanCo_calib_meta",
+      "file_count": 107539,
+      "total_bytes": 338064291,
+      "total_gb": 0.3148,
+      "top_level": [
+        "calib",
+        "meta.json"
+      ]
+    }
+  },
+  "n_calib_sequences": 1518,
+  "tester_sequences": [
+    "0110"
+  ],
+  "important_files": [
+    {
+      "path": "experiments/datasets/hanco/HanCo_calib_meta/meta.json",
+      "size_bytes": 2942440,
+      "sha256": "4E09251E265BBD425BE673AF0DB420409C9A12540CE384ED7393B28D1B337EC2",
+      "role": "meta.json"
+    },
+    {
+      "path": "experiments/datasets/hanco/HanCo_tester/meta.json",
+      "size_bytes": 2942440,
+      "sha256": "4E09251E265BBD425BE673AF0DB420409C9A12540CE384ED7393B28D1B337EC2",
+      "role": "meta.json"
+    }
+  ],
+  "gt": {
+    "camera": true,
+    "joints_3d": true,
+    "joints_2d": false,
+    "rgb_video": true
+  },
+  "ready_for_cam_exp_001": true
+}
