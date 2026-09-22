@@ -11,6 +11,23 @@ Camera storage (``optim_params.txt``, COLMAP convention):
 2D keypoints (``keypoints_2d/<hand>/<take>/<cam>_<ts>.jsonl``) are *per-view
 detections* of 21 joints flattened as [x, y, conf] * 21 - not curated GT, so
 occluded / mis-assigned views legitimately produce large outliers.
+
+Two data properties, both established in CAM-EXP-001.2 (see that run's report):
+
+* When a hand is not annotated in a view, all 21 joints are written as exactly
+  ``(0, 0)`` *with confidence 1.0*, so a confidence filter alone does not
+  remove them. ``drop_zero_2d`` marks those joints invalid. GigaHands does not
+  document this value, so it is treated as an observed invalid pattern rather
+  than a documented sentinel.
+* ``rgb_vid/<cam>/`` may contain a recording whose filename timestamp differs
+  from the annotated take (25 of 40 cameras in p52-instrument-0034). The video
+  is therefore matched by exact filename stem and left unset otherwise, rather
+  than pairing the annotation with a different segment.
+
+Index conventions verified against all five demo sequences in CAM-EXP-001.2:
+2D row index, 3D row index and RGB frame index are the same 0-based index;
+``params`` and the official ``repro_*_vid`` montages instead use the position
+within ``sorted(chosen_left | chosen_right)``.
 """
 from __future__ import annotations
 
@@ -49,6 +66,16 @@ def load_cameras(seq_dir: Path) -> dict[str, Camera]:
     return cams
 
 
+def is_zero_2d(g2d: np.ndarray) -> np.ndarray:
+    """Per-joint mask of the observed 'not annotated' pattern: exactly (0, 0).
+
+    Confidence is reported as 1.0 for these rows, so they survive any
+    confidence threshold and must be excluded explicitly.
+    """
+    g = np.asarray(g2d, dtype=float)
+    return (g[:, 0] == 0.0) & (g[:, 1] == 0.0)
+
+
 def sequences(root: Path | None = None) -> list[Path]:
     root = root or DATASETS_ROOT / "gigahands" / "demo_all" / "raw" / "hand_pose"
     return sorted(p for p in root.iterdir() if p.is_dir())
@@ -60,8 +87,13 @@ def iter_samples(
     max_cameras: int | None = None,
     max_frames: int | None = None,
     conf_threshold: float = 0.5,
+    drop_zero_2d: bool = True,
 ):
-    """Yield Samples pairing GT 3D joints with per-view 2D detections."""
+    """Yield Samples pairing GT 3D joints with per-view 2D detections.
+
+    ``drop_zero_2d`` (default on) marks joints annotated as exactly (0, 0) as
+    invalid. Pass False only to reproduce the pre-CAM-EXP-001.2 behaviour.
+    """
     for seq_dir in sequences(root)[:max_sequences]:
         cams = load_cameras(seq_dir)
         for take_dir in sorted((seq_dir / "keypoints_3d").iterdir()):
@@ -93,7 +125,10 @@ def iter_samples(
                         X = np.asarray(kp3[fi], dtype=float)
                         g = np.asarray(kp2[fi], dtype=float).reshape(-1, 3)
                         conf3 = X[:, 3] if X.shape[1] > 3 else np.ones(len(X))
+                        zero2d = is_zero_2d(g)
                         valid = (g[:, 2] >= conf_threshold) & (conf3 > 0)
+                        if drop_zero_2d:
+                            valid &= ~zero2d
                         yield Sample(
                             dataset="gigahands", subset="demo_all",
                             sequence=f"{seq_dir.name}/{take}", camera_name=cam_name,
@@ -101,5 +136,7 @@ def iter_samples(
                             joints3d_world=X[:, :3], joints2d_gt=g[:, :2], valid=valid,
                             image_path=vid if vid.exists() else None,
                             joints2d_source="per-view 2D detection (keypoints_2d)",
-                            extra={"video_frame": fi, "conf": g[:, 2]},
+                            extra={"video_frame": fi, "conf": g[:, 2],
+                                   "zero_2d_joints": int(zero2d.sum()),
+                                   "zero_2d_view": bool(zero2d.all())},
                         )

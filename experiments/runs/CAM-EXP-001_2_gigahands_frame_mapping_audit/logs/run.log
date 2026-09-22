@@ -1,0 +1,12 @@
+2026-09-22 21:13:28,228 INFO === CAM-EXP-001.2 GigaHands frame/annotation mapping audit ===
+2026-09-22 21:13:28,280 INFO branch=kjh commit=f0f2f982
+2026-09-22 21:13:28,282 INFO step 1: frame structure, timestamps, chosen_frames semantics
+2026-09-22 21:13:32,719 INFO structure verdicts: {'kp2d_rows_eq_rgb_frames': False, 'kp3d_rows_eq_max_chosen_plus1': True, 'repro_videos_eq_union': True, 'params_eq_union': True, 'timestamps_eq_rgb_frames': False}
+2026-09-22 21:13:32,719 INFO   2D rows == RGB frames: False | 3D rows == max(chosen)+1: True | repro == |union|: True | params == |union|: True
+2026-09-22 21:13:32,719 INFO step 2: QC census and re-audit of CAM-EXP-001.1 cases
+2026-09-22 21:13:32,719 INFO running full QC census (stride=20 frames)
+2026-09-22 21:13:35,687 INFO census: {'likely_hand_identity_error': 518, 'medium': 1119, 'bad_unexplained': 204, 'invalid_2d_zero': 1333, 'not_chosen': 40, 'good': 2386}
+2026-09-22 21:13:35,688 INFO   census: {'likely_hand_identity_error': 518, 'medium': 1119, 'bad_unexplained': 204, 'invalid_2d_zero': 1333, 'not_chosen': 40, 'good': 2386}
+2026-09-22 21:13:35,688 INFO   systematic-swap cameras: ['brics-odroid-027_cam1', 'brics-odroid-030_cam1', 'brics-odroid-029_cam0', 'brics-odroid-026_cam0', 'brics-odroid-027_cam0', 'brics-odroid-027_cam1', 'brics-odroid-028_cam0', 'brics-odroid-029_cam0']
+2026-09-22 21:13:35,688 INFO step 3: bimanual figures and official repro comparison
+2026-09-22 21:14:29,449 INFO done -> experiments/runs/CAM-EXP-001_2_gigahands_frame_mapping_audit

@@ -1,0 +1,11 @@
+sequence,take,hand,kp3d_rows,chosen_count,chosen_min,chosen_max,chosen_is_contiguous_0_to_max,rows_eq_chosen_max_plus_1,n_rows_in_chosen,n_rows_not_in_chosen,frac_chosen_rows_nonzero,frac_unchosen_rows_nonzero
+p36-tea-0010,010,left,375,359,0,374,0,1,359,16,1.0,0.0
+p36-tea-0010,010,right,375,344,0,374,0,1,344,31,1.0,0.0
+p41-boxing-0021,021,left,361,361,0,360,1,1,361,0,1.0,
+p41-boxing-0021,021,right,361,361,0,360,1,1,361,0,1.0,
+p41-plant-0004,004,left,169,169,0,168,1,1,169,0,1.0,
+p41-plant-0004,004,right,169,169,0,168,1,1,169,0,1.0,
+p44-dog-0004,004,left,331,331,0,330,1,1,331,0,1.0,
+p44-dog-0004,004,right,331,331,0,330,1,1,331,0,1.0,
+p52-instrument-0034,034,left,133,133,0,132,1,1,133,0,1.0,
+p52-instrument-0034,034,right,133,133,0,132,1,1,133,0,1.0,

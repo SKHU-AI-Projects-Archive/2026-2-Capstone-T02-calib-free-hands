@@ -1,0 +1,22 @@
+{
+  "census_rows": 5600,
+  "status_counts": {
+    "likely_hand_identity_error": 518,
+    "medium": 1119,
+    "bad_unexplained": 204,
+    "invalid_2d_zero": 1333,
+    "not_chosen": 40,
+    "good": 2386
+  },
+  "reaudited_cases": 26,
+  "systematic_swap_cameras": [
+    "brics-odroid-027_cam1",
+    "brics-odroid-030_cam1",
+    "brics-odroid-029_cam0",
+    "brics-odroid-026_cam0",
+    "brics-odroid-027_cam0",
+    "brics-odroid-027_cam1",
+    "brics-odroid-028_cam0",
+    "brics-odroid-029_cam0"
+  ]
+}

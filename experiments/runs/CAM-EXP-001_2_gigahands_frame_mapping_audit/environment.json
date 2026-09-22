@@ -1,0 +1,43 @@
+{
+  "experiment": "CAM-EXP-001.2_gigahands_frame_mapping_audit",
+  "date": "2026-09-22T12:14:29.320724+00:00",
+  "os": "Windows 10 (10.0.26200)",
+  "machine": "AMD64",
+  "python_version": "3.11.7",
+  "numpy_version": "2.4.6",
+  "opencv_version": "5.0.0",
+  "matplotlib_version": "3.11.2",
+  "gpu_used": false,
+  "git_branch": "kjh",
+  "git_commit": "f0f2f982eee5990bae98504a5311be19dc937c45",
+  "git_dirty": true,
+  "git_remote": "git@github.com:SKHU-AI-Projects-Archive/2026-2-Capstone-T02-calib-free-hands.git",
+  "preflight_checks": {
+    "cam_exp_001_present": true,
+    "cam_exp_001_1_present": true,
+    "gigahands_root": "experiments/datasets/gigahands/demo_all/raw/hand_pose",
+    "gigahands_root_exists": true,
+    "sequences_found": [
+      "p36-tea-0010",
+      "p41-boxing-0021",
+      "p41-plant-0004",
+      "p44-dog-0004",
+      "p52-instrument-0034"
+    ]
+  },
+  "structure_verdicts": {
+    "kp2d_rows_eq_rgb_frames": false,
+    "kp3d_rows_eq_max_chosen_plus1": true,
+    "repro_videos_eq_union": true,
+    "params_eq_union": true,
+    "timestamps_eq_rgb_frames": false
+  },
+  "census_status_counts": {
+    "likely_hand_identity_error": 518,
+    "medium": 1119,
+    "bad_unexplained": 204,
+    "invalid_2d_zero": 1333,
+    "not_chosen": 40,
+    "good": 2386
+  }
+}

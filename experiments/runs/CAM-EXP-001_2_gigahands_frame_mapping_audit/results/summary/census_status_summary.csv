@@ -1,0 +1,7 @@
+status,n,share
+good,2386,0.4261
+invalid_2d_zero,1333,0.238
+medium,1119,0.1998
+likely_hand_identity_error,518,0.0925
+bad_unexplained,204,0.0364
+not_chosen,40,0.0071

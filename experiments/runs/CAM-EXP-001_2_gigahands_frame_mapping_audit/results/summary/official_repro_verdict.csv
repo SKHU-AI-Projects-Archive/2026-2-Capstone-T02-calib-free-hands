@@ -1,0 +1,11 @@
+tag,sequence,camera,frame,union_position,tile_index_matched,tile_index_nominal_sorted_order,tile_match_score,tile_order_equals_sorted_camera_order,left_err_px,right_err_px,figure
+swap,p36-tea-0010,brics-odroid-027_cam1,20,20,34,34,0.6346,1,379.08,391.09,experiments/runs/CAM-EXP-001_2_gigahands_frame_mapping_audit/figures/official_repro_comparison/swap_p36-tea-0010_brics-odroid-027_cam1_f20.png
+swap,p36-tea-0010,brics-odroid-030_cam1,0,0,39,39,0.5635,1,,852.87,experiments/runs/CAM-EXP-001_2_gigahands_frame_mapping_audit/figures/official_repro_comparison/swap_p36-tea-0010_brics-odroid-030_cam1_f0.png
+swap,p41-boxing-0021,brics-odroid-029_cam0,0,0,36,36,0.7197,1,,217.64,experiments/runs/CAM-EXP-001_2_gigahands_frame_mapping_audit/figures/official_repro_comparison/swap_p41-boxing-0021_brics-odroid-029_cam0_f0.png
+swap,p52-instrument-0034,brics-odroid-027_cam0,0,0,33,33,0.6171,1,312.92,330.58,experiments/runs/CAM-EXP-001_2_gigahands_frame_mapping_audit/figures/official_repro_comparison/swap_p52-instrument-0034_brics-odroid-027_cam0_f0.png
+zero,p36-tea-0010,brics-odroid-001_cam0,160,160,0,0,0.7749,1,,22.77,experiments/runs/CAM-EXP-001_2_gigahands_frame_mapping_audit/figures/official_repro_comparison/zero_p36-tea-0010_brics-odroid-001_cam0_f160.png
+zero,p36-tea-0010,brics-odroid-001_cam1,180,180,1,1,0.7517,1,,,experiments/runs/CAM-EXP-001_2_gigahands_frame_mapping_audit/figures/official_repro_comparison/zero_p36-tea-0010_brics-odroid-001_cam1_f180.png
+good,p36-tea-0010,brics-odroid-001_cam1,40,40,1,1,0.6738,1,6.48,6.08,experiments/runs/CAM-EXP-001_2_gigahands_frame_mapping_audit/figures/official_repro_comparison/good_p36-tea-0010_brics-odroid-001_cam1_f40.png
+good,p36-tea-0010,brics-odroid-002_cam0,40,40,2,2,0.6421,1,7.92,8.6,experiments/runs/CAM-EXP-001_2_gigahands_frame_mapping_audit/figures/official_repro_comparison/good_p36-tea-0010_brics-odroid-002_cam0_f40.png
+good,p36-tea-0010,brics-odroid-007_cam0,0,0,4,4,0.6859,1,2.61,2.78,experiments/runs/CAM-EXP-001_2_gigahands_frame_mapping_audit/figures/official_repro_comparison/good_p36-tea-0010_brics-odroid-007_cam0_f0.png
+good,p36-tea-0010,brics-odroid-007_cam1,0,0,5,5,0.6933,1,2.73,9.34,experiments/runs/CAM-EXP-001_2_gigahands_frame_mapping_audit/figures/official_repro_comparison/good_p36-tea-0010_brics-odroid-007_cam1_f0.png
