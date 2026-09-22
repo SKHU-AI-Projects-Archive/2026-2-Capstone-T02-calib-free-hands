@@ -1,0 +1,13 @@
+{
+  "otsu_threshold_px": 30.112,
+  "good_max_median_px": 10.0,
+  "bad_min_median_px": 60.224,
+  "rule": "Otsu split on log10(per-view median error) over non-sentinel views; good = median <= min(otsu/2, 10), bad = median >= max(otsu*2, 50), medium in between, zero-sentinel separate.",
+  "counts": {
+    "medium": 1685,
+    "bad": 920,
+    "good": 3516,
+    "zero_sentinel": 1879
+  },
+  "n_non_sentinel": 6090
+}

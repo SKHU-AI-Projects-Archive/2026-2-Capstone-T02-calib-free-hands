@@ -1,0 +1,27 @@
+sequence,camera,frame,hand,role,reason,pair_id,view_class,err_median_px,err_mean_px,err_p90_px,n_compared_joints,zero_sentinel_ratio
+p36-tea-0010/010,brics-odroid-015_cam0,136,left,good,lowest per-view median error in sequence p36-tea-0010/010,,good,1.6904,1.6904,1.6904,1,0.0
+p52-instrument-0034/034,brics-odroid-016_cam0,114,right,good,lowest per-view median error in sequence p52-instrument-0034/034,,good,1.7837,2.9164,5.8657,21,0.0
+p44-dog-0004/004,brics-odroid-009_cam1,32,right,good,lowest per-view median error in sequence p44-dog-0004/004,,good,1.9517,2.6541,4.6922,21,0.0
+p41-boxing-0021/021,brics-odroid-015_cam1,324,right,good,lowest per-view median error in sequence p41-boxing-0021/021,,good,2.0435,2.7613,6.2904,21,0.0
+p41-plant-0004/004,brics-odroid-024_cam1,112,left,good,lowest per-view median error in sequence p41-plant-0004/004,,good,2.9144,3.5577,6.3082,21,0.0
+p36-tea-0010/010,brics-odroid-015_cam0,136,left,good,globally lowest per-view median error,,good,1.6904,1.6904,1.6904,1,0.0
+p36-tea-0010/010,brics-odroid-030_cam1,0,right,bad,extreme non-sentinel failure (highest per-view median error),,bad,852.8653,847.0476,941.0223,21,0.0
+p36-tea-0010/010,brics-odroid-030_cam1,17,right,bad,extreme non-sentinel failure (highest per-view median error),,bad,717.2533,707.1564,817.2204,21,0.0
+p36-tea-0010/010,brics-odroid-020_cam0,17,right,bad,extreme non-sentinel failure (highest per-view median error),,bad,695.8143,680.0186,732.7597,18,0.0
+p52-instrument-0034/034,brics-odroid-030_cam1,36,right,bad,extreme non-sentinel failure (highest per-view median error),,bad,570.9696,573.5985,691.7895,21,0.0
+p41-boxing-0021/021,brics-odroid-025_cam0,252,left,bad,extreme non-sentinel failure (highest per-view median error),,bad,497.9999,509.6302,580.1161,21,0.0
+p44-dog-0004/004,brics-odroid-026_cam0,48,left,bad,extreme non-sentinel failure (highest per-view median error),,bad,493.0614,481.3752,498.32,5,0.0
+p36-tea-0010/010,brics-odroid-011_cam0,0,left,pair_good,same sequence/frame/hand as pair01 partner; good camera,pair01,good,2.1266,3.272,5.8252,21,0.0
+p36-tea-0010/010,brics-odroid-026_cam0,0,left,pair_bad,same sequence/frame/hand as pair01 partner; bad(non-sentinel) camera,pair01,bad,411.7102,411.7102,420.07,2,0.0
+p36-tea-0010/010,brics-odroid-016_cam0,0,right,pair_good,same sequence/frame/hand as pair02 partner; good camera,pair02,good,1.7263,1.9379,3.5624,21,0.0
+p36-tea-0010/010,brics-odroid-030_cam1,0,right,pair_bad,same sequence/frame/hand as pair02 partner; bad(non-sentinel) camera,pair02,bad,852.8653,847.0476,941.0223,21,0.0
+p36-tea-0010/010,brics-odroid-020_cam1,102,left,pair_good,same sequence/frame/hand as pair03 partner; good camera,pair03,good,3.2863,4.4728,7.9004,21,0.0
+p36-tea-0010/010,brics-odroid-001_cam0,102,left,pair_bad,same sequence/frame/hand as pair03 partner; bad(non-sentinel) camera,pair03,bad,608.3293,630.545,837.5736,20,0.0
+p36-tea-0010/010,brics-odroid-012_cam0,102,right,pair_good,same sequence/frame/hand as pair04 partner; good camera,pair04,good,3.0499,3.9454,7.6736,21,0.0
+p36-tea-0010/010,brics-odroid-030_cam1,102,right,pair_bad,same sequence/frame/hand as pair04 partner; bad(non-sentinel) camera,pair04,bad,302.7041,315.7376,398.2706,21,0.0
+p36-tea-0010/010,brics-odroid-007_cam0,119,left,pair_good,same sequence/frame/hand as pair05 partner; good camera,pair05,good,3.1492,3.4708,5.3842,21,0.0
+p36-tea-0010/010,brics-odroid-030_cam1,119,left,pair_bad,same sequence/frame/hand as pair05 partner; bad(non-sentinel) camera,pair05,bad,296.8924,316.8934,406.4955,21,0.0
+p36-tea-0010/010,brics-odroid-011_cam0,119,right,pair_good,same sequence/frame/hand as pair06 partner; good camera,pair06,good,2.9316,3.3411,6.6324,21,0.0
+p36-tea-0010/010,brics-odroid-030_cam1,119,right,pair_bad,same sequence/frame/hand as pair06 partner; bad(non-sentinel) camera,pair06,bad,300.6326,325.7047,394.7953,21,0.0
+p36-tea-0010/010,brics-odroid-001_cam1,136,left,zero_sentinel,"hand not detected in this view: every GT 2D joint is exactly (0,0) with confidence 1.0",,zero_sentinel,,,,0,1.0
+p36-tea-0010/010,brics-odroid-001_cam1,170,left,zero_sentinel,"hand not detected in this view: every GT 2D joint is exactly (0,0) with confidence 1.0",,zero_sentinel,,,,0,1.0

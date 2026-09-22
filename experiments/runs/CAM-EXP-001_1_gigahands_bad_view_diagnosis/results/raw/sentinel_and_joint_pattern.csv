@@ -1,0 +1,10 @@
+metric,value
+hypothesis,H1 plain 2D detection failure
+zero_sentinel_view_rate,0.2349
+n_bad_views_examined,200
+mean_frac_joints_over_50px_in_bad_views,0.9543
+frac_bad_views_failing_as_whole_view,0.835
+frames_where_both_hands_sentinel,680
+frames_where_exactly_one_hand_sentinel,519
+verdict,supported
+evidence,"23.5% of all views carry no annotation at all: every GT 2D joint is exactly (0,0) while confidence is reported as 1.0, which is an undetected-hand sentinel rather than a measurement. Among the remaining bad views 84% fail as a whole view (>90% of joints over 50 px), and 519 frames have exactly one hand sentinel while the other is annotated, so the failure follows the hand/view rather than the camera geometry."

@@ -1,0 +1,6 @@
+failure_mode,n,share
+A_no_detection_sentinel,265,0.6625
+F_structural_mismatch,76,0.19
+B_shape_preserved_wrong_placement,31,0.0775
+D_partial_joint_corruption,21,0.0525
+C_whole_view_translation,7,0.0175

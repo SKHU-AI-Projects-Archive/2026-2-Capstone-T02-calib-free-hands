@@ -1,0 +1,5 @@
+view_class,n_views,share_of_all_views,view_median_n,view_median_mean_px,view_median_median_px,view_median_p90_px,view_median_p95_px,view_median_max_px
+good,3516,0.4395,3516,5.8294,5.5787,8.7693,9.3674,9.9993
+medium,1685,0.2106,1654,21.3409,15.9962,42.1493,50.5357,60.0985
+bad,920,0.115,920,226.8487,204.257,399.4395,431.1648,852.8653
+zero_sentinel,1879,0.2349,,,,,,
