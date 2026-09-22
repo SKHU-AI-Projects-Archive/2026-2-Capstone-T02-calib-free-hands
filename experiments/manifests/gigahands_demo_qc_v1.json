@@ -1,0 +1,54 @@
+{
+  "manifest_version": "v1",
+  "created": "2026-09-22",
+  "experiment": "CAM-EXP-001.3_gigahands_multiview_triangulation",
+  "git_commit": "",
+  "source_dataset": "GigaHands demo_all (immutable; nothing deleted)",
+  "n_observations": 108240,
+  "qc_status_counts": {
+    "EXCLUDE": 49173,
+    "PASS_SINGLE_HAND": 16005,
+    "PASS_STRICT": 32826,
+    "REVIEW": 10236
+  },
+  "qc_status_shares": {
+    "EXCLUDE": 0.4543,
+    "PASS_SINGLE_HAND": 0.1479,
+    "PASS_STRICT": 0.3033,
+    "REVIEW": 0.0946
+  },
+  "case_counts": {
+    "CONFIRMED_2D_HAND_IDENTITY_SWAP": 7101,
+    "BAD_2D_GEOMETRY": 15611,
+    "MULTIVIEW_CONFIRMED_GOOD": 48860,
+    "NO_USABLE_2D_ANNOTATION": 25852,
+    "UNRESOLVED_INSUFFICIENT_GEOMETRY": 10207,
+    "NOT_CHOSEN_FRAME": 600,
+    "CONFIRMED_2D_HAND_IDENTITY_SWAP_UNVERIFIED_3D": 9
+  },
+  "bimanual_clean_frames": 16413,
+  "camera_benchmark_rows": 200,
+  "n_cameras_usable_for_camera_benchmark": 175,
+  "thresholds": {
+    "triangulation_inlier_px": 6.0,
+    "min_inliers_for_reconstruction": 4,
+    "same_hand_reprojection_px": 16.0,
+    "provided3d_mpjpe_mm": 10.0,
+    "qc_min_inlier_cameras": 8,
+    "min_ray_angle_deg": 30.0,
+    "identity_margin_factor": 3.0,
+    "identity_min_gap_px": 30.0
+  },
+  "files": {
+    "per_observation": "experiments/manifests/gigahands_demo_qc_v1.csv.gz",
+    "bimanual_clean": "experiments/manifests/gigahands_demo_bimanual_clean_v1.csv.gz",
+    "camera_benchmark": "experiments/manifests/gigahands_demo_camera_benchmark_v1.csv.gz"
+  },
+  "usage": "filter qc_status == PASS_STRICT for core experiments; PASS_SINGLE_HAND is usable for single-hand work; REVIEW must not be used in core experiments; EXCLUDE is unusable. The dataset files themselves are never modified.",
+  "status_definitions": {
+    "PASS_STRICT": "chosen, annotated, robustly triangulated with sufficient geometry, identity confirmed, 2D and 3D consistent",
+    "PASS_SINGLE_HAND": "this hand is strict-clean but the other hand of the same frame is not",
+    "REVIEW": "not clearly wrong but not clearly clean; excluded from core work",
+    "EXCLUDE": "clearly unusable (no annotation, not chosen, confirmed identity swap, or 2D matching no reconstruction)"
+  }
+}

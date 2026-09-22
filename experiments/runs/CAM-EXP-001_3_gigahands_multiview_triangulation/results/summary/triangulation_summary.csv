@@ -1,0 +1,4 @@
+metric,n,unit,median,p90,p95,p99,max
+triangulation_median_reprojection_px,107640,px,3.082,3.3534,3.4253,3.5837,3.7402
+reconstruction_vs_provided_same_hand_mpjpe,107640,mm,3.9977,6.4816,7.3431,9.7245,24.2597
+reconstruction_vs_provided_other_hand_mpjpe,107040,mm,192.3047,309.3135,328.36,380.2831,408.1192

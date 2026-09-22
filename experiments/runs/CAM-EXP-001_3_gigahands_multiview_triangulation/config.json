@@ -1,0 +1,55 @@
+{
+  "experiment": "CAM-EXP-001.3_gigahands_multiview_triangulation",
+  "purpose": "decide whether the GigaHands hand-identity mismatches are a per-camera 2D annotation problem, a dataset 3D problem, or undecidable, using a reconstruction that never sees the dataset's 3D",
+  "non_circularity_rules": [
+    "reconstruction inputs are only keypoints_2d and camera calibration",
+    "the camera under test is removed from the observation set before reconstruction",
+    "dataset-provided 3D is read only after the hypothesis is frozen, and never feeds back into inlier selection",
+    "CAM-EXP-001.2 status is used only to choose which cases to inspect, never as truth and never as an inlier criterion",
+    "all-(0,0) records are excluded as observations (M5)"
+  ],
+  "mapping_rules_from_001_2": {
+    "M1": "RGB frame i == timestamp line i == keypoints_2d row i == keypoints_3d row i",
+    "M2": "chosen_frames_<hand> = frame ids with a valid 3D pose for that hand",
+    "M3": "rows outside chosen_frames are placeholders and are not used",
+    "M4": "params / repro_*_vid use the position within sorted(union)",
+    "M5": "all-(0,0) 2D is an observed invalid pattern",
+    "M6": "some p52-instrument-0034 cameras ship a different video segment"
+  },
+  "read_only_inputs": [
+    "experiments/runs/CAM-EXP-001_gt_projection_validation",
+    "experiments/runs/CAM-EXP-001_1_gigahands_bad_view_diagnosis",
+    "experiments/runs/CAM-EXP-001_2_gigahands_frame_mapping_audit",
+    "experiments/runs/CAM-EXP-001_2_gigahands_frame_mapping_audit/results/raw/gigahands_demo_qc_census.csv.gz"
+  ],
+  "triangulation": {
+    "method": "RANSAC over camera pairs, consensus refit, per joint",
+    "distortion": "observations undistorted to normalised coordinates before geometry; residuals evaluated in pixels with distortion re-applied",
+    "min_joints_per_view": 8,
+    "confidence_threshold": 0.5
+  },
+  "full_pass": {
+    "stride": 1,
+    "scope": "every chosen frame x every annotated camera x both hands",
+    "loco_variant": "consensus refit excluding the held-out camera (see loco.py); validated against the strict variant",
+    "rgb_decoded": false
+  },
+  "thresholds": {
+    "triangulation_inlier_px": 6.0,
+    "min_inliers_for_reconstruction": 4,
+    "same_hand_reprojection_px": 16.0,
+    "provided3d_mpjpe_mm": 10.0,
+    "qc_min_inlier_cameras": 8,
+    "min_ray_angle_deg": 30.0,
+    "identity_margin_factor": 3.0,
+    "identity_min_gap_px": 30.0
+  },
+  "threshold_derivation": "see results/summary/_thresholds.json",
+  "qc_statuses": [
+    "PASS_STRICT",
+    "PASS_SINGLE_HAND",
+    "REVIEW",
+    "EXCLUDE"
+  ],
+  "dataset_mutation": "none - the dataset is immutable; manifests carry the QC"
+}

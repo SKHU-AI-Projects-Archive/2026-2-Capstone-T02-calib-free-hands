@@ -1,0 +1,61 @@
+{
+  "experiment": "CAM-EXP-001.3_gigahands_multiview_triangulation",
+  "date": "2026-09-22T13:11:30.965578+00:00",
+  "os": "Windows 10 (10.0.26200)",
+  "machine": "AMD64",
+  "python_version": "3.11.7",
+  "numpy_version": "2.4.6",
+  "opencv_version": "5.0.0",
+  "matplotlib_version": "3.11.2",
+  "gpu_used": false,
+  "git_branch": "kjh",
+  "git_commit": "7066b7008e3e70afee83cca22a1c5fa978ac7e88",
+  "git_dirty": true,
+  "git_remote": "git@github.com:SKHU-AI-Projects-Archive/2026-2-Capstone-T02-calib-free-hands.git",
+  "preflight_checks": {
+    "cam_exp_001_2_census_present": true,
+    "sequences": [
+      "p36-tea-0010",
+      "p41-boxing-0021",
+      "p41-plant-0004",
+      "p44-dog-0004",
+      "p52-instrument-0034"
+    ],
+    "n_cameras_per_sequence": {
+      "p36-tea-0010": 40,
+      "p41-boxing-0021": 40,
+      "p41-plant-0004": 40,
+      "p44-dog-0004": 40,
+      "p52-instrument-0034": 40
+    },
+    "n_chosen_frames": {
+      "p36-tea-0010": 359,
+      "p41-boxing-0021": 361,
+      "p41-plant-0004": 169,
+      "p44-dog-0004": 331,
+      "p52-instrument-0034": 133
+    }
+  },
+  "note": "config and environment written after the staged run; see logs/run.log for the staged execution",
+  "qc_status_counts": {
+    "EXCLUDE": 49173,
+    "PASS_SINGLE_HAND": 16005,
+    "PASS_STRICT": 32826,
+    "REVIEW": 10236
+  },
+  "case_counts": {
+    "CONFIRMED_2D_HAND_IDENTITY_SWAP": 7101,
+    "BAD_2D_GEOMETRY": 15611,
+    "MULTIVIEW_CONFIRMED_GOOD": 48860,
+    "NO_USABLE_2D_ANNOTATION": 25852,
+    "UNRESOLVED_INSUFFICIENT_GEOMETRY": 10207,
+    "NOT_CHOSEN_FRAME": 600,
+    "CONFIRMED_2D_HAND_IDENTITY_SWAP_UNVERIFIED_3D": 9
+  },
+  "bimanual_clean_frames": 16413,
+  "fast_vs_strict": "see results/summary/fast_vs_strict_validation.csv",
+  "tests": {
+    "synthetic_geometry": "ALL PASSED",
+    "non_circularity": "ALL PASSED"
+  }
+}

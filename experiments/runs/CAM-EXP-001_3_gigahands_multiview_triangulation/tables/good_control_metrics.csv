@@ -1,0 +1,12 @@
+metric,description,n,median,p90,max
+E_{H}_px,held-out 2D vs SAME-hand reconstruction (px),20,8.332,12.515,16.674
+E_{X}_px,held-out 2D vs OTHER-hand reconstruction (px),20,192.675,347.255,547.287
+C_{H}_px,"centroid, same hand (px)",20,5.782,10.042,11.23
+C_{X}_px,"centroid, other hand (px)",20,188.106,354.663,543.729
+{h}_vs_provided_{h}_mpjpe_mm,reconstruction vs provided SAME 3D (mm),20,3.303,6.244,6.805
+{h}_vs_provided_{o}_mpjpe_mm,reconstruction vs provided OTHER 3D (mm),20,180.375,322.665,387.144
+{h}_vs_provided_{h}_root_aligned_mpjpe_mm,root-aligned MPJPE (mm),20,8.98,15.978,16.311
+{h}_vs_provided_{h}_wrist_mm,wrist distance (mm),20,7.561,16.322,16.623
+{h}_tri_median_reproj_px,triangulation residual (px),20,3.065,3.279,3.338
+{h}_n_inlier_cameras,inlier cameras,20,14.0,15.0,16.0
+{h}_max_ray_angle_deg,max ray angle (deg),20,132.647,145.307,149.358

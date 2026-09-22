@@ -140,3 +140,95 @@ def iter_samples(
                                    "zero_2d_joints": int(zero2d.sum()),
                                    "zero_2d_view": bool(zero2d.all())},
                         )
+
+
+class GigaHandsTake:
+    """Random access to one GigaHands take, following the CAM-EXP-001.2 rules.
+
+    M1  RGB frame i == timestamp line i == keypoints_2d row i == keypoints_3d row i
+    M2  chosen_frames_<hand> = frame ids with a valid 3D pose for that hand
+    M3  rows outside chosen_frames are all-zero placeholders - never use them
+    M4  params / repro_*_vid / mano_vid are indexed by position within
+        sorted(chosen_left | chosen_right), not by frame id
+    M5  a 2D record whose 21 joints are all exactly (0,0) is an observed
+        invalid pattern and is not a usable observation
+    M6  rgb_vid may hold a different segment; the video is matched by exact
+        filename stem and left unset otherwise
+
+    ``joints3d`` deliberately sits behind an explicit call so that an
+    experiment can keep dataset-provided 3D out of a reconstruction path.
+    """
+
+    def __init__(self, seq_dir: Path):
+        self.dir = Path(seq_dir)
+        self.name = self.dir.name
+        self.take = sorted(p.name for p in (self.dir / "keypoints_3d").iterdir()
+                           if p.is_dir())[0]
+        self.k3dir = self.dir / "keypoints_3d" / self.take
+        self.cameras = load_cameras(self.dir)
+        self.chosen = {h: set(json.load(open(self.k3dir / f"chosen_frames_{h}.json")))
+                       for h in HANDS}
+        self.union_sorted = sorted(self.chosen["left"] | self.chosen["right"])
+        self.intersect_sorted = sorted(self.chosen["left"] & self.chosen["right"])
+        self._kp3: dict = {}
+        self._kp2: dict = {}
+        self._files2d: dict = {}
+        for h in HANDS:
+            d = self.dir / "keypoints_2d" / h / self.take
+            self._files2d[h] = {"_".join(p.stem.split("_")[:2]): p
+                                for p in d.glob("*.jsonl")} if d.is_dir() else {}
+
+    # -- 2D (reconstruction input) ----------------------------------------
+    def cameras_2d(self, hand: str = "left") -> list:
+        return sorted(self._files2d[hand])
+
+    def kp2(self, hand: str, camera: str) -> list:
+        key = (hand, camera)
+        if key not in self._kp2:
+            p = self._files2d[hand].get(camera)
+            self._kp2[key] = _read_jsonl(p) if p else []
+        return self._kp2[key]
+
+    def joints2d(self, hand: str, camera: str, frame: int):
+        rows = self.kp2(hand, camera)
+        if frame < 0 or frame >= len(rows):
+            return None
+        return np.asarray(rows[frame], dtype=float).reshape(-1, 3)
+
+    def is_usable_2d(self, hand: str, camera: str, frame: int,
+                     conf_threshold: float = 0.5, min_joints: int = 8) -> bool:
+        g = self.joints2d(hand, camera, frame)
+        if g is None or is_zero_2d(g).all():
+            return False
+        return int((g[:, 2] >= conf_threshold).sum()) >= min_joints
+
+    # -- 3D (evaluation only) ---------------------------------------------
+    def joints3d(self, hand: str, frame: int):
+        """Dataset-provided 3D. Keep out of any reconstruction input."""
+        if frame not in self.chosen[hand]:
+            return None                      # M3: placeholder row
+        if hand not in self._kp3:
+            self._kp3[hand] = _read_jsonl(self.k3dir / f"{hand}.jsonl")
+        rows = self._kp3[hand]
+        if frame < 0 or frame >= len(rows):
+            return None
+        return np.asarray(rows[frame], dtype=float)[:, :3]
+
+    # -- media -------------------------------------------------------------
+    def video_path(self, camera: str):
+        p = self._files2d["left"].get(camera) or self._files2d["right"].get(camera)
+        if p is None:
+            return None
+        v = self.dir / "rgb_vid" / camera / f"{p.stem}.mp4"
+        return v if v.exists() else None
+
+    def union_index(self, frame: int) -> int:
+        try:
+            return self.union_sorted.index(frame)
+        except ValueError:
+            return -1
+
+
+def takes(root: Path | None = None) -> list:
+    """All demo takes as GigaHandsTake objects."""
+    return [GigaHandsTake(d) for d in sequences(root)]
