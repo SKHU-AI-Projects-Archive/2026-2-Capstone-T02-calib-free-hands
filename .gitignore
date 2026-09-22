@@ -49,3 +49,8 @@ experiments/**/*.tgz
 experiments/**/*.7z
 experiments/datasets/**
 experiments/**/*.mp4
+
+# Per-run inference caches (large, regenerable by re-running the pipeline)
+experiments/runs/**/cache/
+# Pipeline inference environment (torch + numpy<2), kept out of the analysis venv
+experiments/.venv-anyhand/

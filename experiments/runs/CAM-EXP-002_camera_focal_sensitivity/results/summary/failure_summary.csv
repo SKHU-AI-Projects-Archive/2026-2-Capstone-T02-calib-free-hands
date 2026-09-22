@@ -1,0 +1,3 @@
+source,reason,n
+model_failures,no hand detected,11
+hand_association_failures,AMBIGUOUS_HAND_ASSOCIATION,16

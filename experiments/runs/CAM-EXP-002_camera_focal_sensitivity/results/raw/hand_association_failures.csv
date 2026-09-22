@@ -1,0 +1,17 @@
+sequence,camera,frame,n_pred_hands,n_ref_hands,reason
+p36-tea-0010,brics-odroid-026_cam0,119,2,2,AMBIGUOUS_HAND_ASSOCIATION: ambiguous_pairing_margin
+p36-tea-0010,brics-odroid-026_cam0,120,2,2,AMBIGUOUS_HAND_ASSOCIATION: ambiguous_pairing_margin
+p36-tea-0010,brics-odroid-026_cam0,122,2,2,AMBIGUOUS_HAND_ASSOCIATION: ambiguous_pairing_margin
+p36-tea-0010,brics-odroid-026_cam0,123,2,2,AMBIGUOUS_HAND_ASSOCIATION: ambiguous_pairing_margin
+p36-tea-0010,brics-odroid-026_cam0,124,2,2,AMBIGUOUS_HAND_ASSOCIATION: ambiguous_pairing_margin
+p36-tea-0010,brics-odroid-030_cam1,42,3,2,AMBIGUOUS_HAND_ASSOCIATION: ambiguous_pairing_margin
+p36-tea-0010,brics-odroid-030_cam1,43,3,2,AMBIGUOUS_HAND_ASSOCIATION: ambiguous_pairing_margin
+p36-tea-0010,brics-odroid-030_cam1,44,3,2,AMBIGUOUS_HAND_ASSOCIATION: ambiguous_pairing_margin
+p36-tea-0010,brics-odroid-030_cam1,45,3,2,AMBIGUOUS_HAND_ASSOCIATION: ambiguous_pairing_margin
+p36-tea-0010,brics-odroid-030_cam1,46,3,2,AMBIGUOUS_HAND_ASSOCIATION: ambiguous_pairing_margin
+p44-dog-0004,brics-odroid-010_cam0,321,2,2,AMBIGUOUS_HAND_ASSOCIATION: ambiguous_pairing_margin
+p44-dog-0004,brics-odroid-010_cam0,322,2,2,AMBIGUOUS_HAND_ASSOCIATION: ambiguous_pairing_margin
+p44-dog-0004,brics-odroid-010_cam0,323,3,2,AMBIGUOUS_HAND_ASSOCIATION: ambiguous_pairing_margin
+p44-dog-0004,brics-odroid-010_cam0,324,2,2,AMBIGUOUS_HAND_ASSOCIATION: ambiguous_pairing_margin
+p44-dog-0004,brics-odroid-010_cam0,325,2,2,AMBIGUOUS_HAND_ASSOCIATION: ambiguous_pairing_margin
+p44-dog-0004,brics-odroid-010_cam0,326,2,2,AMBIGUOUS_HAND_ASSOCIATION: ambiguous_pairing_margin
