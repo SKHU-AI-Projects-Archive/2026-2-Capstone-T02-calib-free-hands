@@ -1,0 +1,3 @@
+dataset,n_views,view_median_of_medians,frac_views_median_under_1px,frac_views_median_under_2px,frac_views_median_under_5px,frac_views_median_under_10px,frac_views_median_under_20px,frac_views_median_under_50px,frac_views_median_under_100px,frac_views_median_under_200px,frac_views_median_under_500px,n_views_under_50px,median_px_within_those_views
+assemblyhands,24,0.0,1.0,1.0,1.0,1.0,1.0,1.0,1.0,1.0,1.0,24,0.0
+gigahands,7824,11.9743,0.0,0.0009,0.1782,0.4494,0.5847,0.649,0.6803,0.7193,0.8038,5078,7.2125

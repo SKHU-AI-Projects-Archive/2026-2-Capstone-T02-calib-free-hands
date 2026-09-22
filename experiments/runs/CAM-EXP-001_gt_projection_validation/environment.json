@@ -1,0 +1,12 @@
+{
+  "date": "2026-09-22T05:45:16.333802+00:00",
+  "os": "Windows 10 (10.0.26200)",
+  "machine": "AMD64",
+  "python_version": "3.11.7",
+  "git_commit": "224ea50f3f6e16b841767b721cbf8cc515e10958",
+  "git_branch": "kjh",
+  "git_dirty": true,
+  "numpy_version": "2.4.6",
+  "opencv_version": "5.0.0",
+  "gpu_used": false
+}
