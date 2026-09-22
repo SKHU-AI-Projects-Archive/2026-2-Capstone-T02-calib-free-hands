@@ -1,0 +1,32 @@
+[
+  {
+    "model_key": "demo_fixed",
+    "model": "DEMO_FIXED_5000",
+    "status": "RUN_SUCCESS",
+    "note": "",
+    "n_attempted": 1400,
+    "n_success": 1400,
+    "failure_rate": 0.0,
+    "total_seconds": 22.3
+  },
+  {
+    "model_key": "image_center_pp",
+    "model": "IMAGE_CENTER_PP",
+    "status": "RUN_SUCCESS",
+    "note": "",
+    "n_attempted": 1400,
+    "n_success": 0,
+    "failure_rate": 1.0,
+    "total_seconds": 22.0
+  },
+  {
+    "model_key": "oracle_gt",
+    "model": "ORACLE_GT",
+    "status": "RUN_SUCCESS",
+    "note": "",
+    "n_attempted": 1400,
+    "n_success": 1400,
+    "failure_rate": 0.0,
+    "total_seconds": 19.3
+  }
+]

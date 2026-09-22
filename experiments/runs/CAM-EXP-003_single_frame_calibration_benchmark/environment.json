@@ -1,0 +1,44 @@
+{
+  "experiment": "CAM-EXP-003_single_frame_calibration_benchmark",
+  "date": "2026-09-22T15:38:10.578318+00:00",
+  "os": "Windows 10 (10.0.26200)",
+  "machine": "AMD64",
+  "gpu": "NVIDIA GeForce RTX 4060 Ti (16 GB)",
+  "analysis_python": "3.11.7",
+  "analysis_numpy": "2.4.6",
+  "model_environment": {
+    "venv": "experiments/.venv-calib (git-ignored)",
+    "python": "3.11",
+    "torch": "2.1.2+cu121",
+    "cuda": "12.1",
+    "numpy": "1.26.4",
+    "opencv": "4.10.0.84",
+    "kornia": "0.7.2",
+    "install_notes": [
+      "kornia pinned to 0.7.2: newer kornia uses .any(dim=(-2,-1)) which the TorchScript in torch 2.1.2 rejects, breaking the GeoCalib import",
+      "PerspectiveFields installed with --no-deps (+ yacs, timm, einops, scipy, scikit-learn, pyequilib, imageio, omegaconf, opencv-contrib): albumentations pulls stringzilla, which has no Windows wheel and is not needed for inference",
+      "PYTHONUTF8=1 needed on this Korean-locale Windows to read UTF-8 package metadata",
+      "PYOPENGL_PLATFORM=win32 so pyrender-dependent imports do not try EGL"
+    ],
+    "kept_separate_from": [
+      "experiments/.venv (analysis)",
+      "experiments/.venv-anyhand (CAM-EXP-002 pipeline)"
+    ]
+  },
+  "checkpoints": {
+    "anycalib": "anycalib_pinhole.pt, official GitHub release v1.0.0, 1.19 GB, torch hub cache",
+    "geocalib": "geocalib-pinhole.tar, official GitHub release v1.0, 111 MB, torch hub cache",
+    "perspective_fields": "Paramnet-360Cities-edina-{centered,uncentered}, official Hugging Face release"
+  },
+  "frame_manifest_sha256_32": "58c95f231b7f157aa388c1bddee578ad",
+  "git_branch": "kjh",
+  "git_commit": "06cfe6de9d3e7eb888c08c10aa1e89ef6b4ff19d",
+  "git_dirty": true,
+  "reproduce": [
+    "python src/common.py                      # freeze the frame manifest",
+    "python src/cache_frames.py                # decode frames once (PNG cache)",
+    "python src/run_benchmark.py --models ...  # per model, optionally --start/--count",
+    "python src/assemble.py                    # join chunk part files",
+    "python src/evaluate.py && python src/figures.py"
+  ]
+}

@@ -1,0 +1,7 @@
+model,n_views,cv_median,cv_p90,range_pct_of_mean_median,range_pct_of_mean_p90
+AnyCalib[anycalib_pinhole/pinhole],175,0.016,0.0372,4.567,11.0056
+DEMO_FIXED_5000,175,0.0,0.0,0.0,0.0
+GeoCalib[pinhole],175,0.0604,0.4419,17.658,131.1254
+ORACLE_GT,175,0.0,0.0,0.0,0.0
+PerspectiveFields[centered],175,0.0619,0.1809,18.763,50.7712
+PerspectiveFields[uncentered],175,0.0493,0.0961,14.443,28.0334

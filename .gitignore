@@ -54,3 +54,6 @@ experiments/**/*.mp4
 experiments/runs/**/cache/
 # Pipeline inference environment (torch + numpy<2), kept out of the analysis venv
 experiments/.venv-anyhand/
+
+# Calibration-model inference environment (CAM-EXP-003)
+experiments/.venv-calib/
