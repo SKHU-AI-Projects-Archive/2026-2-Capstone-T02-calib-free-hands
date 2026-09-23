@@ -19,15 +19,16 @@ def claim_ledger():
     rows = [
         {"claim_id": "C01",
          "claim_we_may_write": "The deployed pipeline assumes a fixed virtual "
-                               "focal length that is far from the physical focal "
-                               "length of the capture cameras, and this alone "
+                               "focal convention that is far from the dataset-provided "
+                               "reference focal of the capture cameras in the "
+                               "same image-coordinate convention, and this alone "
                                "displaces the hand by metres.",
          "supporting_experiment": "CAM-EXP-002",
          "supporting_numbers": f"{v('cam002_pipeline_virtual_focal_px'):.0f} px vs "
-                               f"{v('cam002_gigahands_physical_focal_median_px'):.1f} px; "
+                               f"{v('cam002_gt_effective_focal_median_px'):.1f} px; "
                                f"root error "
                                f"{v('cam002_baseline_root_error_median_mm'):.0f} mm vs "
-                               f"{v('cam002_physical_focal_root_error_median_mm'):.1f} mm",
+                               f"{v('cam002_gt_effective_focal_root_error_median_mm'):.1f} mm",
          "evidence_level": "ROBUST_BUT_SINGLE_DATASET",
          "allowed_wording": "본 GigaHands 환경에서 파이프라인이 가정한 가상 초점거리는 "
                             "실제 카메라 초점거리와 크게 달랐고, 이로 인해 절대 위치가 "
@@ -166,10 +167,14 @@ def claim_ledger():
          "supporting_numbers": f"AnyCalib "
                                f"{v('e2_or_model_rerun_anycalib_gen_cam004_median')} % "
                                f"-> E2 {v('e2_or_model_rerun_E2_frozen_cam004_median')} % "
-                               f"(re-run {v('e2_or_model_rerun_E2_frozen_cam0041_median')} %, "
-                               f"LOSO {v('e2_loso_heldout_median_range_pct')[0]}-"
-                               f"{v('e2_loso_heldout_median_range_pct')[1]} %); gain "
-                               "+2.23 pp, CI excludes zero at all cluster levels",
+                               f"({v('e2_or_model_rerun_E2_frozen_cam0041_median')} % "
+                               "in a separate execution on the same 175 "
+                               "benchmark views, "
+                               f"{v('e2_loso_heldout_median_range_pct')[0]}-"
+                               f"{v('e2_loso_heldout_median_range_pct')[1]} % "
+                               "across retrospective leave-one-sequence-out "
+                               "folds); gain +2.23 pp, CI excludes zero at all "
+                               "cluster levels",
          "evidence_level": "EXPLORATORY_INTERNAL_VALIDATION",
          "allowed_wording": "frozen exploratory ensemble / 현재까지 확인된 가장 "
                             "유망한 baseline / strongest baseline identified so far.",
@@ -295,11 +300,12 @@ def main_results():
          "caveat": "thresholds were set on a small clean-control set; manual "
                    "validation is still pending (OPEN_ISSUE)"},
         {"report_section": "5 - Experiment 2", "experiment": "CAM-EXP-002",
-         "quantity": "virtual vs physical focal, absolute root error",
+         "quantity": "pipeline virtual focal convention vs dataset-provided "
+                     "reference focal, absolute root error",
          "value": f"{v('cam002_baseline_root_error_median_mm'):.0f} mm at "
                   f"{v('cam002_pipeline_virtual_focal_px'):.0f} px -> "
-                  f"{v('cam002_physical_focal_root_error_median_mm'):.1f} mm at "
-                  f"{v('cam002_gigahands_physical_focal_median_px'):.1f} px",
+                  f"{v('cam002_gt_effective_focal_root_error_median_mm'):.1f} mm at "
+                  f"{v('cam002_gt_effective_focal_median_px'):.1f} px",
          "n": f"{v('cam002_hands_evaluated'):,} hands over "
               f"{v('cam002_frames_evaluated'):,} evaluated frames "
               f"({v('cam002_views_evaluated')} views, "
@@ -393,7 +399,7 @@ def main_results():
         {"report_section": "7 and 8", "experiment": "CAM-EXP-004 / 004.1",
          "quantity": "frozen E2 exploratory ensemble",
          "value": f"selection set {v('e2_or_model_rerun_E2_frozen_cam004_median')} %, "
-                  f"independent re-run "
+                  f"separate rerun on the same views "
                   f"{v('e2_or_model_rerun_E2_frozen_cam0041_median')} %, "
                   f"LOSO held-out {v('e2_loso_heldout_median_range_pct')[0]}-"
                   f"{v('e2_loso_heldout_median_range_pct')[1]} %",
@@ -451,8 +457,10 @@ def limitations():
          "when_to_resolve": "before any broad intrinsic-sensitivity claim",
          "evidence_level": "OPEN_ISSUE"},
         {"limitation": "GeoCalib is not run-to-run deterministic",
-         "impact": "any GeoCalib-derived number carries a ~+/-0.35 pp run-to-run "
-                   "tolerance that no bootstrap captures",
+         "impact": "GeoCalib-derived numbers move between executions. Two full "
+                   "benchmark executions differed by about 0.32 pp on the "
+                   "aggregate median; that is an observed difference, not a "
+                   "statistical uncertainty interval",
          "what_is_already_mitigated": "quantified (40 frames x 3 repeats), the "
                                       "input was verified bit-identical, and an "
                                       "independent full re-run is reported",
@@ -517,7 +525,8 @@ def future_work():
          "why_now": "frame count and frame selection are both closed as levers, so "
                     "the per-view bias is the binding constraint",
          "inputs": "frozen E2 as the baseline; leave-one-sequence-out for every "
-                   "selection; GeoCalib numbers with the +/-0.35 pp tolerance",
+                   "selection; GeoCalib numbers reported with the observed "
+                   "between-execution difference",
          "blocked_by": "nothing",
          "out_of_scope": "hand cues"},
         {"id": "CAM-EXP-006 prerequisite", "status": "BLOCKER FOR 006",
@@ -603,7 +612,11 @@ def principles():
         ("reproducibility",
          "exact repository commits and checkpoint SHA256 recorded for every "
          "external model; GeoCalib is known to vary between runs and its numbers "
-         "carry a ~+/-0.35 pp tolerance."),
+         "move between executions: the two full benchmark executions run here "
+         "differed by about 0.32 pp on the aggregate median. Report that "
+         "observed difference and the 40-frame x 3-repeat spreads "
+         "separately; they are different measurements and must not be "
+         "merged into one uncertainty interval."),
     ]
     md = ["# Common evaluation principles\n",
           "These rules apply to every experiment in this report and can be "

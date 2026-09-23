@@ -61,7 +61,7 @@ def save(fig, name):
 def fig01():
     fig, ax = plt.subplots(figsize=(11.5, 4.6))
     ax.set_xlim(0, 100)
-    ax.set_ylim(0, 40)
+    ax.set_ylim(-7, 40)
     ax.axis("off")
     boxes = [("RGB video\n(monocular)", 2), ("hand detection\n+ crop", 21),
              ("hand pose model\nrelative 3D shape", 40),
@@ -73,8 +73,8 @@ def fig01():
                                     boxstyle="round,pad=0.6",
                                     linewidth=2.4 if hl else 1.2,
                                     edgecolor="black",
-                                    facecolor="#d9d9d9" if hl else "white",
-                                    hatch="///" if hl else None, zorder=2))
+                                    facecolor="#e2e2e2" if hl else "white",
+                                    zorder=2))
         ax.text(x + 8, 25.5, txt, ha="center", va="center", fontsize=10,
                 fontweight="bold" if hl else "normal", zorder=3)
         if i < len(boxes) - 1:
@@ -85,25 +85,35 @@ def fig01():
                 xy=(69, 19.6), xytext=(69, 12.5), ha="center", fontsize=10.5,
                 arrowprops=dict(arrowstyle="-|>", lw=1.3, color="black"))
     f_virtual = v("cam002_pipeline_virtual_focal_px")
-    f_phys = v("cam002_gigahands_physical_focal_median_px")
+    f_phys = v("cam002_gt_effective_focal_median_px")
     ax.text(50, 7.2,
             r"$t_z = 2f\,/\,(s\,B)$" + "   -  the depth the hand is placed at is "
             "proportional to the focal length used",
             ha="center", fontsize=11)
-    ax.text(50, 2.4,
-            f"deployed pipeline assumes  f = {f_virtual:,.0f} px        "
-            f"GigaHands cameras actually have  f $\\approx$ {f_phys:,.0f} px "
-            f"(median)",
-            ha="center", fontsize=11, fontweight="bold",
-            bbox=dict(boxstyle="round,pad=0.5", facecolor="white",
+    ax.text(50, 2.6,
+            f"pipeline focal convention:  f = {f_virtual:,.0f} px          "
+            f"dataset-provided reference focal (median):  "
+            f"f $\\approx$ {f_phys:,.0f} px",
+            ha="center", fontsize=10.5, fontweight="bold",
+            bbox=dict(boxstyle="round,pad=0.45", facecolor="white",
                       edgecolor="black", linewidth=1.2))
+    ax.text(50, -3.2,
+            "left: a training-convention virtual focal, FOCAL_LENGTH/IMAGE_SIZE "
+            "x max(W,H), never read from any calibration.\n"
+            "right: the dataset-provided camera intrinsic fx, verified to be in "
+            "the same original full-image pixel convention.",
+            ha="center", fontsize=8.6, style="italic")
     ax.set_title("Where the camera enters the existing hand pipeline", pad=6)
     save(fig, "Fig01_existing_pipeline_and_camera_role")
     write_csv(DATA / "Fig01.csv", [
-        {"quantity": "pipeline assumed focal", "value_px": f_virtual,
+        {"quantity": "pipeline virtual focal convention "
+                     "(PIPELINE_BASELINE_FOCAL = FOCAL_LENGTH/IMAGE_SIZE "
+                     "* max(W,H))", "value_px": f_virtual,
          "source": NUM["cam002_pipeline_virtual_focal_px"]["source_file"]},
-        {"quantity": "GigaHands physical focal (median)", "value_px": f_phys,
-         "source": NUM["cam002_gigahands_physical_focal_median_px"]["source_file"]}])
+        {"quantity": "dataset-provided reference focal, median "
+                     "(GT_EFFECTIVE_FOCAL = GT_NATIVE_FX)",
+         "value_px": f_phys,
+         "source": NUM["cam002_gt_effective_focal_median_px"]["source_file"]}])
 
 
 # ------------------------------------------------------------------- Fig 02
@@ -539,8 +549,9 @@ def fig07():
         for r in bn] + [
         {"panel": "B/C", "model": e, "median_rel_err_pct_N8": m,
          "within_5_pct_N8": w, "signed_median_pct": s,
-         "source": "figures/main/data/Fig06.csv (single re-run) and "
-                   "CAM-EXP-003.1 model_summary.csv for the signed values"}
+         "source": "figures/main/data/Fig06.csv (a single execution over the "
+                   "same 175 benchmark views) and CAM-EXP-003.1 "
+                   "model_summary.csv for the signed values"}
         for e, m, w, s in zip(ests, med, w5, sgn)])
 
 

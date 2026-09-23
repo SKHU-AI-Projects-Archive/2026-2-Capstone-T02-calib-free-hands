@@ -83,8 +83,9 @@ have not yet been validated by a human (`OPEN_ISSUE`).
 ## Section 5 — Experiment 2: focal error and absolute depth
 
 **Claims:**
-1. The deployed pipeline assumes a focal length far from the physical one, and
-   that alone displaces the hand by metres.
+1. The deployed pipeline's camera-translation conversion uses a focal
+   convention far from the dataset-provided reference focal of the capture
+   cameras, and that difference alone displaces the hand by metres.
 2. Focal error propagates nearly proportionally into absolute depth, while the
    hand's own shape is untouched.
 
@@ -98,7 +99,17 @@ of 1,200 frames drawn from the
 16 had an ambiguous hand association, and
 both were dropped. The pool size is not the experiment's sample size.
 
-**Numbers:** assumed 5000 px vs physical 922.77 px (median); root error
+**Focal terminology (from CAM-EXP-002's `focal_usage_audit.md`):** 5000 px is
+`PIPELINE_BASELINE_FOCAL`, a training-convention *virtual* focal
+(`FOCAL_LENGTH/IMAGE_SIZE × max(W,H)`) expressed in original full-image pixels
+and never read from any calibration. 922.77 px is the median
+`GT_EFFECTIVE_FOCAL`, the dataset-provided camera intrinsic `fx`, which the
+audit derives to equal `GT_NATIVE_FX` exactly because there is no resize and no
+crop rescaling. Neither is an optical/sensor focal length; do not call either
+one a "physical focal".
+
+**Numbers:** pipeline focal convention 5000 px vs dataset-provided reference
+focal 922.77 px (median); root error
 2881.885 mm → 78.54 mm; absolute MPJPE 2885.314 mm → 68.68 mm; root-aligned
 MPJPE **identical** at 34.404 mm in both conditions. Perturbation: 5 % →
 32.801 mm, 10 % → 65.602 mm, 20 % → 131.204 mm (median). 2,210 hands.
@@ -165,9 +176,12 @@ view, camera and sequence clustering.
 
 **Caveats:** one rig; the statement covers N ≤ 64 and does not imply that more
 frames never help elsewhere. E2's exact value is a selection-set number — quote
-6.14 % (selection set), 6.46 % (independent re-run) and 5.73–8.80 %
-(leave-one-sequence-out) together, never the first alone. GeoCalib and therefore
-E2 carry a ~±0.35 pp run-to-run tolerance.
+6.14 % (selection set), 6.46 % (a separate execution on the same 175
+benchmark views) and 5.73–8.80 % (retrospective leave-one-sequence-out) together, never the first alone. GeoCalib and therefore
+E2 move between executions: the two full benchmark executions run here
+differed by about 0.32 pp on the aggregate median. That is an observed
+difference between two runs, not a statistical uncertainty interval, and it is
+reported separately from the 40-frame × 3-repeat spread diagnostic.
 
 ---
 

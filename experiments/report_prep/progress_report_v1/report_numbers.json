@@ -402,9 +402,9 @@
       "source_column_or_key": "focal_used_px_median @ PIPELINE_BASELINE",
       "statistical_unit": "hand",
       "evidence_level": "CONFIRMED_IN_CURRENT_ENVIRONMENT",
-      "notes": "the deployed pipeline's assumed focal, FOCAL_LENGTH/IMAGE_SIZE*max(W,H)"
+      "notes": "PIPELINE_BASELINE_FOCAL: a TRAINING-CONVENTION VIRTUAL FOCAL, FOCAL_LENGTH/IMAGE_SIZE * max(W,H) = 1000/256 * 1280, expressed in original full-image pixels. It is never measured and never read from any calibration (focal_usage_audit.md sections 1 and 3). It is a convention inside the weak-perspective -> camera-translation conversion, so it must not be described as a wrong or unphysical camera intrinsic."
     },
-    "cam002_gigahands_physical_focal_median_px": {
+    "cam002_gt_effective_focal_median_px": {
       "value": 922.77,
       "unit": "px",
       "experiment": "CAM-EXP-002",
@@ -412,7 +412,7 @@
       "source_column_or_key": "focal_used_px_median @ GT_x1.00",
       "statistical_unit": "hand",
       "evidence_level": "CONFIRMED_IN_CURRENT_ENVIRONMENT",
-      "notes": "median dataset-provided focal over the evaluated hands"
+      "notes": "GT_EFFECTIVE_FOCAL, median over the evaluated hands: the DATASET-PROVIDED camera intrinsic fx from GigaHands optim_params.txt, expressed in the same original full-image pixel convention the pipeline focal lives in. focal_usage_audit.md section 4 DERIVES GT_EFFECTIVE_FOCAL = GT_NATIVE_FX exactly, because there is no resize and no crop rescaling of the focal. It is a pixel intrinsic, NOT an optical/sensor focal length, so 'physical focal' is the wrong term for it."
     },
     "cam002_baseline_root_error_median_mm": {
       "value": 2881.885,
@@ -424,7 +424,7 @@
       "evidence_level": "CONFIRMED_IN_CURRENT_ENVIRONMENT",
       "notes": "SCOPE: focal-length sensitivity of ABSOLUTE hand depth. This experiment did not test principal point, anisotropic focal or distortion downstream."
     },
-    "cam002_physical_focal_root_error_median_mm": {
+    "cam002_gt_effective_focal_root_error_median_mm": {
       "value": 78.54,
       "unit": "mm",
       "experiment": "CAM-EXP-002",
@@ -444,7 +444,7 @@
       "evidence_level": "CONFIRMED_IN_CURRENT_ENVIRONMENT",
       "notes": "SCOPE: focal-length sensitivity of ABSOLUTE hand depth. This experiment did not test principal point, anisotropic focal or distortion downstream."
     },
-    "cam002_physical_focal_absolute_mpjpe_median_mm": {
+    "cam002_gt_effective_focal_absolute_mpjpe_median_mm": {
       "value": 68.68,
       "unit": "mm",
       "experiment": "CAM-EXP-002",
@@ -1014,7 +1014,7 @@
       "source_column_or_key": "median_rel_err_pct",
       "statistical_unit": "view (175)",
       "evidence_level": "ROBUST_BUT_SINGLE_DATASET",
-      "notes": "single run; all four N come from the same inference pass"
+      "notes": "single execution; all four N come from the same inference pass over the same 175 benchmark views as CAM-EXP-003/004. Nothing here is an independent dataset."
     },
     "cam0041_anycalib_gen_N8_within5": {
       "value": 20.0,
@@ -1034,7 +1034,7 @@
       "source_column_or_key": "median_rel_err_pct",
       "statistical_unit": "view (175)",
       "evidence_level": "ROBUST_BUT_SINGLE_DATASET",
-      "notes": "single run; all four N come from the same inference pass"
+      "notes": "single execution; all four N come from the same inference pass over the same 175 benchmark views as CAM-EXP-003/004. Nothing here is an independent dataset."
     },
     "cam0041_anycalib_gen_N16_within5": {
       "value": 19.43,
@@ -1054,7 +1054,7 @@
       "source_column_or_key": "median_rel_err_pct",
       "statistical_unit": "view (175)",
       "evidence_level": "ROBUST_BUT_SINGLE_DATASET",
-      "notes": "single run; all four N come from the same inference pass"
+      "notes": "single execution; all four N come from the same inference pass over the same 175 benchmark views as CAM-EXP-003/004. Nothing here is an independent dataset."
     },
     "cam0041_anycalib_gen_N32_within5": {
       "value": 20.57,
@@ -1074,7 +1074,7 @@
       "source_column_or_key": "median_rel_err_pct",
       "statistical_unit": "view (175)",
       "evidence_level": "ROBUST_BUT_SINGLE_DATASET",
-      "notes": "single run; all four N come from the same inference pass"
+      "notes": "single execution; all four N come from the same inference pass over the same 175 benchmark views as CAM-EXP-003/004. Nothing here is an independent dataset."
     },
     "cam0041_anycalib_gen_N64_within5": {
       "value": 20.57,
@@ -1094,7 +1094,7 @@
       "source_column_or_key": "median_rel_err_pct",
       "statistical_unit": "view (175)",
       "evidence_level": "ROBUST_BUT_SINGLE_DATASET",
-      "notes": "single run; all four N come from the same inference pass"
+      "notes": "single execution; all four N come from the same inference pass over the same 175 benchmark views as CAM-EXP-003/004. Nothing here is an independent dataset."
     },
     "cam0041_geocalib_distorted_N8_within5": {
       "value": 22.29,
@@ -1114,7 +1114,7 @@
       "source_column_or_key": "median_rel_err_pct",
       "statistical_unit": "view (175)",
       "evidence_level": "ROBUST_BUT_SINGLE_DATASET",
-      "notes": "single run; all four N come from the same inference pass"
+      "notes": "single execution; all four N come from the same inference pass over the same 175 benchmark views as CAM-EXP-003/004. Nothing here is an independent dataset."
     },
     "cam0041_geocalib_distorted_N16_within5": {
       "value": 21.71,
@@ -1134,7 +1134,7 @@
       "source_column_or_key": "median_rel_err_pct",
       "statistical_unit": "view (175)",
       "evidence_level": "ROBUST_BUT_SINGLE_DATASET",
-      "notes": "single run; all four N come from the same inference pass"
+      "notes": "single execution; all four N come from the same inference pass over the same 175 benchmark views as CAM-EXP-003/004. Nothing here is an independent dataset."
     },
     "cam0041_geocalib_distorted_N32_within5": {
       "value": 22.29,
@@ -1154,7 +1154,7 @@
       "source_column_or_key": "median_rel_err_pct",
       "statistical_unit": "view (175)",
       "evidence_level": "ROBUST_BUT_SINGLE_DATASET",
-      "notes": "single run; all four N come from the same inference pass"
+      "notes": "single execution; all four N come from the same inference pass over the same 175 benchmark views as CAM-EXP-003/004. Nothing here is an independent dataset."
     },
     "cam0041_geocalib_distorted_N64_within5": {
       "value": 22.29,
@@ -1174,7 +1174,7 @@
       "source_column_or_key": "median_rel_err_pct",
       "statistical_unit": "view (175)",
       "evidence_level": "ROBUST_BUT_SINGLE_DATASET",
-      "notes": "single run; all four N come from the same inference pass"
+      "notes": "single execution; all four N come from the same inference pass over the same 175 benchmark views as CAM-EXP-003/004. Nothing here is an independent dataset."
     },
     "cam0041_E2_frozen_N8_within5": {
       "value": 40.0,
@@ -1194,7 +1194,7 @@
       "source_column_or_key": "median_rel_err_pct",
       "statistical_unit": "view (175)",
       "evidence_level": "ROBUST_BUT_SINGLE_DATASET",
-      "notes": "single run; all four N come from the same inference pass"
+      "notes": "single execution; all four N come from the same inference pass over the same 175 benchmark views as CAM-EXP-003/004. Nothing here is an independent dataset."
     },
     "cam0041_E2_frozen_N16_within5": {
       "value": 41.71,
@@ -1214,7 +1214,7 @@
       "source_column_or_key": "median_rel_err_pct",
       "statistical_unit": "view (175)",
       "evidence_level": "ROBUST_BUT_SINGLE_DATASET",
-      "notes": "single run; all four N come from the same inference pass"
+      "notes": "single execution; all four N come from the same inference pass over the same 175 benchmark views as CAM-EXP-003/004. Nothing here is an independent dataset."
     },
     "cam0041_E2_frozen_N32_within5": {
       "value": 40.0,
@@ -1234,7 +1234,7 @@
       "source_column_or_key": "median_rel_err_pct",
       "statistical_unit": "view (175)",
       "evidence_level": "ROBUST_BUT_SINGLE_DATASET",
-      "notes": "single run; all four N come from the same inference pass"
+      "notes": "single execution; all four N come from the same inference pass over the same 175 benchmark views as CAM-EXP-003/004. Nothing here is an independent dataset."
     },
     "cam0041_E2_frozen_N64_within5": {
       "value": 40.0,
@@ -1264,7 +1264,7 @@
       "source_column_or_key": "cam_exp_0041_rerun_median_pct",
       "statistical_unit": "view (175)",
       "evidence_level": "ROBUST_BUT_SINGLE_DATASET",
-      "notes": "independent re-run of the identical 8 frames, same environment"
+      "notes": "separate execution on the SAME 175 benchmark views and the identical 8 frames, same environment. A same-data repeat execution, NOT an independent dataset or an independent test."
     },
     "e2_or_model_rerun_geocalib_distorted_cam004_median": {
       "value": 11.184,
@@ -1284,7 +1284,7 @@
       "source_column_or_key": "cam_exp_0041_rerun_median_pct",
       "statistical_unit": "view (175)",
       "evidence_level": "ROBUST_BUT_SINGLE_DATASET",
-      "notes": "independent re-run of the identical 8 frames, same environment"
+      "notes": "separate execution on the SAME 175 benchmark views and the identical 8 frames, same environment. A same-data repeat execution, NOT an independent dataset or an independent test."
     },
     "e2_or_model_rerun_E2_frozen_cam004_median": {
       "value": 6.138,
@@ -1304,7 +1304,7 @@
       "source_column_or_key": "cam_exp_0041_rerun_median_pct",
       "statistical_unit": "view (175)",
       "evidence_level": "ROBUST_BUT_SINGLE_DATASET",
-      "notes": "independent re-run of the identical 8 frames, same environment"
+      "notes": "separate execution on the SAME 175 benchmark views and the identical 8 frames, same environment. A same-data repeat execution, NOT an independent dataset or an independent test."
     },
     "e2_loso_heldout_median_range_pct": {
       "value": [

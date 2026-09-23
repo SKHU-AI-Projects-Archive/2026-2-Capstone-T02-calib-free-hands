@@ -17,4 +17,4 @@ These rules apply to every experiment in this report and can be quoted directly 
 | aggregation | never across sequences: a deployment calibrates one video at a time. |
 | selection protocol from CAM-EXP-005 | leave-one-sequence-out; selection may only see the four training-fold sequences, and all five held-out numbers are reported. |
 | final confirmation | a sealed external dataset, evaluated once, after method development is finished. |
-| reproducibility | exact repository commits and checkpoint SHA256 recorded for every external model; GeoCalib is known to vary between runs and its numbers carry a ~+/-0.35 pp tolerance. |
+| reproducibility | exact repository commits and checkpoint SHA256 recorded for every external model; GeoCalib is known to vary between runs and its numbers move between executions: the two full benchmark executions run here differed by about 0.32 pp on the aggregate median. Report that observed difference and the 40-frame x 3-repeat spreads separately; they are different measurements and must not be merged into one uncertainty interval. |

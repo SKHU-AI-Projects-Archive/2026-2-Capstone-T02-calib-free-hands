@@ -387,6 +387,116 @@ def check_figure_labels():
           "M2. Fig04 data records that the sample was drawn from a pool")
 
 
+# N ------------------------------- focal terminology and independence wording
+def check_focal_terminology():
+    bad = []
+    for p in scannable_files():
+        t = _scannable_text(p)
+        for m in re.finditer(r"physical focal|actual focal|true focal|"
+                             r"physical_focal", t, re.I):
+            ctx = t[max(0, m.start() - 300):m.end() + 300]
+            # our own prohibitions and the correction history are not assertions
+            if re.search(r"do not|never|wrong term|wrong for|avoid|"
+                         r"corrected|instead|rather than|not an optical|"
+                         r"was the wrong|not a physical|it is not|must not", ctx, re.I):
+                continue
+            bad.append(f"{p.relative_to(PKG)}: '{m.group(0)}'")
+    check(not bad, "N1. 'physical focal' is not used as assertive terminology",
+          "; ".join(bad[:5]))
+
+    num = read_json(PKG / "report_numbers.json")["numbers"]
+    check("cam002_gigahands_physical_focal_median_px" not in num
+          and "cam002_gt_effective_focal_median_px" in num,
+          "N1b. the focal key is renamed to GT_EFFECTIVE_FOCAL with no alias")
+
+    # every artifact that puts the two focal numbers together must say what each
+    # one is
+    missing = []
+    for p in scannable_files():
+        t = _scannable_text(p)
+        if "5000" not in t and "5,000" not in t:
+            continue
+        if "922" not in t:
+            continue
+        has_pipeline = re.search(r"PIPELINE_BASELINE_FOCAL|focal convention|"
+                                 r"virtual focal", t, re.I)
+        has_reference = re.search(r"GT_EFFECTIVE_FOCAL|dataset-provided reference "
+                                 r"focal|dataset-provided camera intrinsic", t, re.I)
+        if not (has_pipeline and has_reference):
+            missing.append(str(p.relative_to(PKG)))
+    check(not missing, "N2. wherever 5000 px and 922 px appear together, both "
+                       "semantic roles are named", f"{missing}")
+
+    unphysical = []
+    for p in scannable_files():
+        t = _scannable_text(p)
+        for m in re.finditer(r"wrong focal|incorrect focal|unphysical focal|"
+                             r"pipeline is broken|physical mismatch", t, re.I):
+            ctx = t[max(0, m.start() - 250):m.end() + 250]
+            if re.search(r"do not|never|avoid|not claim|it never claimed",
+                         ctx, re.I):
+                continue
+            unphysical.append(f"{p.relative_to(PKG)}: '{m.group(0)}'")
+    check(not unphysical, "N2b. 5000 px is never asserted to be a wrong or "
+                          "unphysical camera intrinsic", "; ".join(unphysical[:5]))
+
+
+def check_e2_independence():
+    bad = []
+    for p in scannable_files():
+        t = _scannable_text(p)
+        for m in re.finditer(r"independent (re-?run|run|replication|test|"
+                             r"validation|dataset)", t, re.I):
+            ctx = t[max(0, m.start() - 300):m.end() + 300]
+            if re.search(r"do not|never|not an independent|is not|needs the "
+                         r"sealed|rejected|avoid|genuinely independent|"
+                         r"nothing here is|is NOT an", ctx, re.I):
+                continue
+            bad.append(f"{p.relative_to(PKG)}: '{m.group(0)}'")
+    check(not bad, "N3. E2's 6.46 % is never called an independent run or test",
+          "; ".join(bad[:5]))
+
+    missing = []
+    for p in scannable_files():
+        t = _scannable_text(p)
+        for m in re.finditer(r"6\.46", t):
+            ctx = t[max(0, m.start() - 500):m.end() + 500]
+            if re.search(r"same[- ](175[- ])?(benchmark[- ])?views|same-data|"
+                         r"same data|separate (execution|rerun)|same-views|"
+                         r"benchmark executions", ctx, re.I):
+                continue
+            missing.append(f"{p.relative_to(PKG)}: {ctx[460:620]}")
+    check(not missing, "N4. 6.46 % always carries the 'same benchmark views' "
+                       "context", "; ".join(missing[:3]))
+
+
+def check_tolerance_wording():
+    bad = []
+    for p in scannable_files():
+        t = _scannable_text(p)
+        for m in re.finditer(r"[+±]/?-?\s*0\.3\d\s*(pp|percentage)|"
+                             r"run-to-run tolerance|tolerance of about", t, re.I):
+            ctx = t[max(0, m.start() - 300):m.end() + 300]
+            if re.search(r"do not|never|avoid|not a statistical|observed "
+                         r"difference|corrected", ctx, re.I):
+                continue
+            bad.append(f"{p.relative_to(PKG)}: '{m.group(0)}'")
+    check(not bad, "N5. no '+/-0.3x pp tolerance' is stated as an uncertainty "
+                   "interval", "; ".join(bad[:5]))
+
+    # the two GeoCalib measurements must be recorded separately
+    num = read_json(PKG / "report_numbers.json")["numbers"]
+    has_repeat = all(f"determinism_geocalib_distorted_radial_{k}" in num
+                     for k in ("median_spread_pct", "p90_spread_pct",
+                               "max_spread_pct"))
+    has_runs = ("e2_or_model_rerun_geocalib_distorted_cam004_median" in num
+                and "e2_or_model_rerun_geocalib_distorted_cam0041_median" in num)
+    check(has_repeat and has_runs,
+          "N6. the repeat-spread diagnostic and the two-execution difference "
+          "are stored as separate numbers",
+          f"repeat={has_repeat} runs={has_runs}")
+
+
 def main() -> None:
     check_sources()
     check_main_results()
@@ -401,6 +511,9 @@ def main() -> None:
     check_bias_unit()
     check_exp1_tail()
     check_figure_labels()
+    check_focal_terminology()
+    check_e2_independence()
+    check_tolerance_wording()
 
     print(f"PASS  {len(OK)}")
     for w in WARN:

@@ -4,7 +4,7 @@ Paths are relative to `experiments/` unless they start with `runs/` or `manifest
 
 | artifact | claim or metric | source experiment | source file | source columns | transformation | script |
 |---|---|---|---|---|---|---|
-| Fig01 | pipeline assumed focal (5000 px) and GigaHands physical focal | CAM-EXP-002 | runs/CAM-EXP-002_camera_focal_sensitivity/results/summary/baseline_vs_gt_focal.csv | focal_used_px_median | none - read directly | scripts/make_figures.py::fig01 |
+| Fig01 | pipeline virtual focal convention (5000 px) and the dataset-provided reference focal (GT_EFFECTIVE_FOCAL) | CAM-EXP-002 | runs/CAM-EXP-002_camera_focal_sensitivity/results/summary/baseline_vs_gt_focal.csv | focal_used_px_median | none - read directly | scripts/make_figures.py::fig01 |
 | Fig02 | one headline finding per experiment | all | report_numbers.json | several keys | none - each value is quoted from report_numbers.json | scripts/make_figures.py::fig02 |
 | Fig03 | QC counts, camera-clean and bimanual-clean subset sizes | CAM-EXP-001.3 / CAM-EXP-003 | manifests/gigahands_demo_qc_v1.csv.gz; manifests/gigahands_demo_camera_benchmark_v1.csv.gz; manifests/gigahands_demo_bimanual_clean_v1.csv.gz | qc_status, usable_for_camera_benchmark, row counts | counting only | scripts/build_report_numbers.py, scripts/make_figures.py::fig03 |
 | Fig04 | median and p90 depth displacement per focal perturbation | CAM-EXP-002 | runs/CAM-EXP-002_camera_focal_sensitivity/results/summary/focal_sensitivity_summary.csv | incremental_signed_dz_median_mm, incremental_root_shift_p90_mm | none - read directly | scripts/make_figures.py::fig04 |

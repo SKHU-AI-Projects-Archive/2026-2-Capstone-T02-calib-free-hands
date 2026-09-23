@@ -67,7 +67,8 @@ it, not because it is a finished contribution.
 **Do not write:** "E2 achieves 6.14 %".
 
 **Write:** all three numbers together — "6.14 % on the selection set, 6.46 % on
-an independent re-run, and 5.73–8.80 % across leave-one-sequence-out folds".
+a separate execution on the same 175 benchmark views, and 5.73–8.80 % across
+retrospective leave-one-sequence-out folds".
 
 **Why:** the single number looks like a measurement of the method. The three
 together show what is actually known: the direction is solid, the exact value is
@@ -111,13 +112,64 @@ setting.
 
 ## J. GeoCalib numbers
 
-**Do not write:** a bare GeoCalib or E2 figure with no tolerance.
+**Do not write:** a bare GeoCalib or E2 figure with nothing attached, and do not
+write "±0.35 pp tolerance" or any other ± interval.
 
 **Write:** the number plus "GeoCalib은 동일 입력에서도 실행 간 변동이
-관찰되었으나, 전체 중앙값 변화는 약 0.32 %p로 주요 결론을 변경하지 않았다."
-(details in the appendix).
+관찰되었으나, 여기서 수행한 두 번의 전체 벤치마크 실행 사이 전체 중앙값 차이는
+약 0.32 %p로 주요 결론을 변경하지 않았다." (details in the appendix).
 
-**Why:** GeoCalib is not run-to-run deterministic on byte-identical input.
+**Why:** GeoCalib is not run-to-run deterministic on byte-identical input. But
+two executions do not give a confidence interval. Report the **observed
+difference between those two executions** (about 0.32 pp on the aggregate
+median) and, separately, the **40-frame × 3-repeat spread diagnostic** (median
+1.18 %, p90 6.85 %, max 41.5 %). They measure different things and must not be
+merged into a single ± number.
+
+## M. The two focal quantities in Experiment 2
+
+**Do not write:** "physical focal", "the actual focal", "the true focal", or
+"5000 px is the wrong focal".
+
+**Write:** "the pipeline's focal convention (`PIPELINE_BASELINE_FOCAL`, 5000 px)"
+and "the dataset-provided reference focal (`GT_EFFECTIVE_FOCAL`, median
+922.77 px)".
+
+**Why:** per CAM-EXP-002's `focal_usage_audit.md`, 5000 px is a
+training-convention *virtual* focal, `FOCAL_LENGTH/IMAGE_SIZE × max(W,H)`,
+expressed in original full-image pixels and never read from any calibration — it
+is a convention inside the weak-perspective → camera-translation conversion, not
+a claimed camera intrinsic. And 922.77 px is `GT_EFFECTIVE_FOCAL`, the
+dataset-provided intrinsic `fx`, which the audit *derives* to equal
+`GT_NATIVE_FX` exactly because there is no resize and no crop rescaling. Neither
+number is an optical or sensor focal length, so "physical focal" is wrong for
+both.
+
+**A sentence that is safe to use:**
+
+> The existing pipeline used a 5000 px focal convention in its camera-translation
+> conversion, whereas the evaluated GigaHands samples had a median
+> dataset-provided reference focal of 922.77 px in the corresponding
+> image-coordinate convention.
+
+한국어:
+
+> 기존 파이프라인의 카메라 이동량 변환에는 5000 px의 focal convention이
+> 사용되었으며, 평가한 GigaHands 표본의 dataset-provided reference focal
+> 중앙값은 동일하게 비교 가능한 영상 좌표계에서 약 922.77 px였다.
+
+## N. E2's three numbers are all same-data
+
+**Do not write:** "independent re-run", "independent test", "independent
+validation", or anything implying a second dataset.
+
+**Write:** "6.14 % on the selection set", "6.46 % in a separate execution on the
+same 175 benchmark views", "5.73–8.80 % in retrospective leave-one-sequence-out
+internal validation".
+
+**Why:** all three come from the same GigaHands benchmark views. None of them is
+an independent-dataset result; that is exactly what the sealed external holdout
+is reserved for.
 
 ## K. The ±5 % target
 

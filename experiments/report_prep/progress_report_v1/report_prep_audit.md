@@ -80,7 +80,8 @@ duplicate them.
 * **D** — no file presents 1400 as an independent sample count, except where it
   is explicitly being warned against.
 * **F** — the E2 selection-set figure never appears alone: wherever it is
-  written, the independent re-run (6.46 %) and the leave-one-sequence-out range
+  written, the same-views repeat execution (6.46 %) and the
+  leave-one-sequence-out range
   (5.73–8.80 %) are within a few lines of it.
 * **G** — every file mentioning GeoCalib carries the reproducibility caveat.
 * **H4** — no file still records AnyCam as `NOT_INSTALLED`, apart from the
@@ -191,3 +192,105 @@ this audit now say that. The earlier commit message is left as written.
 Unchanged, as before — checked automatically. No file under any run's
 `results/raw/` or `results/summary/` was touched in this pass either, including
 CAM-EXP-002's.
+
+---
+
+# Third pass — focal semantics and independence wording (2026-09-23)
+
+Three terminology problems, all of which would have read as stronger claims than
+the evidence supports. As before, fixed in the generators and locked with new
+checks. No numerical value changed.
+
+## 1. "physical focal" was the wrong term for both numbers
+
+The package described the CAM-EXP-002 comparison as 5000 px "assumed" versus
+922.77 px "physical". CAM-EXP-002's own `focal_usage_audit.md` says something
+more specific, and both halves of that phrasing were wrong.
+
+**5000 px is `PIPELINE_BASELINE_FOCAL`** — a *training-convention virtual focal*,
+`FOCAL_LENGTH/IMAGE_SIZE * max(W,H)` = `1000/256 * 1280`, expressed in original
+full-image pixels. The audit's own table rules out the alternatives explicitly:
+it is not a physical focal in original pixels, not a resized-coordinate focal and
+not a crop-coordinate focal, because no calibration is ever read and there is no
+resize (`rgb_predictor.py:404-411`). It is a convention inside the
+weak-perspective to camera-translation conversion.
+
+**922.77 px is the median `GT_EFFECTIVE_FOCAL`** — the dataset-provided camera
+intrinsic `fx` from GigaHands `optim_params.txt`. The audit *derives*
+`GT_EFFECTIVE_FOCAL = GT_NATIVE_FX` exactly, because the pipeline focal and the
+GigaHands intrinsics live in the same original 1280x720 pixel coordinate system
+and the focal undergoes no resize or crop rescaling. It is a pixel intrinsic, not
+a sensor/optical focal length.
+
+So "physical focal" was wrong for 5000 px (it is virtual) and misleading for
+922.77 px (it is a pixel intrinsic, not an optical focal). Both are now named by
+their audited roles everywhere.
+
+**Keys renamed, no aliases kept** (the package is pre-report, so the canonical
+names are fixed now rather than deprecated later):
+
+| Old | New |
+|---|---|
+| `cam002_gigahands_physical_focal_median_px` | `cam002_gt_effective_focal_median_px` |
+| `cam002_physical_focal_root_error_median_mm` | `cam002_gt_effective_focal_root_error_median_mm` |
+| `cam002_physical_focal_absolute_mpjpe_median_mm` | `cam002_gt_effective_focal_absolute_mpjpe_median_mm` |
+
+Fig01's on-figure text now reads "pipeline focal convention: f = 5,000 px" and
+"dataset-provided reference focal (median): f ≈ 923 px", with a footnote naming
+each one's definition. Fig04's title already named the evaluated sample.
+A new guardrail section (M) carries the safe sentence in English and Korean.
+
+**What was also checked:** no artifact asserts that 5000 px is a "wrong",
+"incorrect" or "unphysical" focal. What CAM-EXP-002 showed is narrower and is
+what the tables now say: on the same cached predictions, substituting the
+dataset-provided reference focal for the pipeline's focal convention changed the
+median absolute root error from 2881.885 mm to 78.54 mm, while the root-aligned
+MPJPE was identical at 34.404 mm.
+
+## 2. E2's 6.46 % was called an "independent re-run"
+
+It is not independent of anything: that execution used the same 175 GigaHands
+benchmark views. The three E2 numbers are now labelled by what they are:
+
+* **6.14 %** — selection-set result;
+* **6.46 %** — a separate execution on the **same** 175 benchmark views
+  (same-data repeat execution);
+* **5.73–8.80 %** — retrospective leave-one-sequence-out internal validation.
+
+None is an independent-dataset result. That is precisely what the sealed
+external holdout is reserved for, and E2's status is unchanged: a frozen
+exploratory ensemble, never a validated or proposed method.
+
+## 3. "±0.35 pp tolerance" was an invented interval
+
+Two executions do not make a confidence interval. The package now states the two
+GeoCalib measurements separately and never merges them:
+
+* **between-execution difference**: across the two full benchmark executions run
+  here, the aggregate median differed by about **0.32 pp** (GeoCalib
+  11.184 → 10.860 %, E2 6.138 → 6.460 %; AnyCalib 9.890 → 9.890 %, identical);
+* **repeat diagnostic** (40 frames × 3 repeats on byte-identical images):
+  median spread 1.18 %, p90 6.85 %, max 41.50 %, 0 % bit-identical.
+
+## New checks
+
+| Check | What it enforces |
+|---|---|
+| N1, N1b | "physical/actual/true focal" is never asserted; the focal key is renamed with no alias left behind |
+| N2 | wherever 5000 px and 922 px appear together, both semantic roles are named |
+| N2b | 5000 px is never asserted to be a wrong or unphysical camera intrinsic |
+| N3 | E2's 6.46 % is never called an independent run, test, validation or dataset |
+| N4 | 6.46 % always carries the "same benchmark views" context |
+| N5 | no "±0.3x pp tolerance" is stated as an uncertainty interval |
+| N6 | the repeat-spread diagnostic and the two-execution difference exist as separate numbers |
+
+37 checks → **45 checks, all passing**. The 37 earlier checks still pass, including
+the CAM-EXP-002 pool-versus-sample separation, the 2,210 / 1,173 / 134 / 37
+counts, the per-view terminology, the Experiment 1 unresolved cases, the E2
+context rule, AnyCam provenance, and the untouched historical results.
+
+## Numerical impact
+
+None. Every value in `report_numbers.json` is unchanged; only three keys were
+renamed and the accompanying descriptions rewritten. No file under any run's
+`results/raw/` or `results/summary/` was modified.

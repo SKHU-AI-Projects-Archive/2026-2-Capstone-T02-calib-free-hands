@@ -105,7 +105,9 @@ def main() -> None:
                 "p90_rel_err_pct": round(float(np.percentile(v, 90)), 3),
                 "within_5_pct": round(float((v <= 5).mean() * 100), 2),
                 "within_10_pct": round(float((v <= 10).mean() * 100), 2),
-                "source_run": "CAM-EXP-004.1 extended predictions (single run)",
+                "source_run": "CAM-EXP-004.1 extended predictions, a single "
+                              "execution over the same 175 benchmark views as "
+                              "CAM-EXP-003/004 (not an independent dataset)",
             })
     write_csv(PKG / "figures" / "main" / "data" / "Fig06.csv", out)
 
@@ -139,7 +141,10 @@ def main() -> None:
                 "cam004_original_median_pct": b["median_rel_err_pct"],
                 "cam0041_rerun_median_pct": a["median_rel_err_pct"],
                 "difference_pp": round(a["median_rel_err_pct"]
-                                       - b["median_rel_err_pct"], 3)})
+                                       - b["median_rel_err_pct"], 3),
+                "note": "two separate executions over the SAME 175 benchmark "
+                        "views; the difference is run-to-run variation, not a "
+                        "result on independent data"})
     write_csv(PKG / "tables" / "multiframe_run_agreement.csv", cmp_rows)
 
     write_json(PKG / "figures" / "main" / "data" / "Fig06_provenance.json", {

@@ -228,17 +228,30 @@ def exp002_numbers():
         "CAM-EXP-002", R002 / "results/summary/baseline_vs_gt_focal.csv",
         "focal_used_px_median @ PIPELINE_BASELINE", "hand",
         "CONFIRMED_IN_CURRENT_ENVIRONMENT",
-        "the deployed pipeline's assumed focal, FOCAL_LENGTH/IMAGE_SIZE*max(W,H)")
-    add("cam002_gigahands_physical_focal_median_px", f(gt["focal_used_px_median"], 2),
+        "PIPELINE_BASELINE_FOCAL: a TRAINING-CONVENTION VIRTUAL FOCAL, "
+        "FOCAL_LENGTH/IMAGE_SIZE * max(W,H) = 1000/256 * 1280, expressed in "
+        "original full-image pixels. It is never measured and never read from "
+        "any calibration (focal_usage_audit.md sections 1 and 3). It is a "
+        "convention inside the weak-perspective -> camera-translation "
+        "conversion, so it must not be described as a wrong or unphysical "
+        "camera intrinsic.")
+    add("cam002_gt_effective_focal_median_px", f(gt["focal_used_px_median"], 2),
         "px", "CAM-EXP-002", R002 / "results/summary/baseline_vs_gt_focal.csv",
         "focal_used_px_median @ GT_x1.00", "hand",
         "CONFIRMED_IN_CURRENT_ENVIRONMENT",
-        "median dataset-provided focal over the evaluated hands")
+        "GT_EFFECTIVE_FOCAL, median over the evaluated hands: the "
+        "DATASET-PROVIDED camera intrinsic fx from GigaHands optim_params.txt, "
+        "expressed in the same original full-image pixel convention the "
+        "pipeline focal lives in. focal_usage_audit.md section 4 DERIVES "
+        "GT_EFFECTIVE_FOCAL = GT_NATIVE_FX exactly, because there is no resize "
+        "and no crop rescaling of the focal. It is a pixel intrinsic, NOT an "
+        "optical/sensor focal length, so 'physical focal' is the wrong term "
+        "for it.")
     add("cam002_baseline_root_error_median_mm", f(base["root_xyz_error_mm_median"], 3),
         "mm", "CAM-EXP-002", R002 / "results/summary/baseline_vs_gt_focal.csv",
         "root_xyz_error_mm_median @ PIPELINE_BASELINE", "hand",
         "CONFIRMED_IN_CURRENT_ENVIRONMENT", scope)
-    add("cam002_physical_focal_root_error_median_mm", f(gt["root_xyz_error_mm_median"], 3),
+    add("cam002_gt_effective_focal_root_error_median_mm", f(gt["root_xyz_error_mm_median"], 3),
         "mm", "CAM-EXP-002", R002 / "results/summary/baseline_vs_gt_focal.csv",
         "root_xyz_error_mm_median @ GT_x1.00", "hand",
         "CONFIRMED_IN_CURRENT_ENVIRONMENT", scope)
@@ -246,7 +259,7 @@ def exp002_numbers():
         "mm", "CAM-EXP-002", R002 / "results/summary/baseline_vs_gt_focal.csv",
         "absolute_mpjpe_mm_median @ PIPELINE_BASELINE", "hand",
         "CONFIRMED_IN_CURRENT_ENVIRONMENT", scope)
-    add("cam002_physical_focal_absolute_mpjpe_median_mm",
+    add("cam002_gt_effective_focal_absolute_mpjpe_median_mm",
         f(gt["absolute_mpjpe_mm_median"], 3), "mm", "CAM-EXP-002",
         R002 / "results/summary/baseline_vs_gt_focal.csv",
         "absolute_mpjpe_mm_median @ GT_x1.00", "hand",
@@ -371,7 +384,9 @@ def exp004_numbers():
                 "%", "CAM-EXP-004.1",
                 R0041 / "results/summary/frame_count_8_16_32_64.csv",
                 "median_rel_err_pct", "view (175)", "ROBUST_BUT_SINGLE_DATASET",
-                "single run; all four N come from the same inference pass")
+                "single execution; all four N come from the same inference pass "
+                "over the same 175 benchmark views as CAM-EXP-003/004. Nothing "
+                "here is an independent dataset.")
             add(f"cam0041_{est}_N{n}_within5", f(r["within_5_pct"], 2), "% of views",
                 "CAM-EXP-004.1", R0041 / "results/summary/frame_count_8_16_32_64.csv",
                 "within_5_pct", "view (175)", "ROBUST_BUT_SINGLE_DATASET", "")
@@ -388,7 +403,9 @@ def exp004_numbers():
             R0041 / "results/summary/independent_rerun_comparison.csv",
             "cam_exp_0041_rerun_median_pct", "view (175)",
             "ROBUST_BUT_SINGLE_DATASET",
-            "independent re-run of the identical 8 frames, same environment")
+            "separate execution on the SAME 175 benchmark views and the "
+            "identical 8 frames, same environment. A same-data repeat "
+            "execution, NOT an independent dataset or an independent test.")
 
     lo = read_csv(R0041 / "results" / "summary" / "ensemble_selection_stability.csv")
     vals = [f(r["heldout_median_of_fixed_E2_pct"], 3) for r in lo]

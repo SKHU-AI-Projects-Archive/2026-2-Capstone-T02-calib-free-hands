@@ -8,7 +8,8 @@ sys.path.insert(0, str(Path(__file__).resolve().parent))
 from common import PKG, RUNS, write_csv, write_md_table  # noqa: E402
 
 ARTIFACTS = [
-    ("Fig01", "pipeline assumed focal (5000 px) and GigaHands physical focal",
+    ("Fig01", "pipeline virtual focal convention (5000 px) and the "
+     "dataset-provided reference focal (GT_EFFECTIVE_FOCAL)",
      "CAM-EXP-002",
      "runs/CAM-EXP-002_camera_focal_sensitivity/results/summary/baseline_vs_gt_focal.csv",
      "focal_used_px_median", "none - read directly", "scripts/make_figures.py::fig01"),

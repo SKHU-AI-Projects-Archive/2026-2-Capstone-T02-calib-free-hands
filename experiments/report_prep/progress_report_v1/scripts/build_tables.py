@@ -273,23 +273,27 @@ def hypothesis_table():
                                   "working-distance regime",
          "next_implication": "gives the +/-5 % focal target a physical meaning"},
         {"experiment": "CAM-EXP-002",
-         "original_hypothesis": "using the dataset-provided physical focal places "
-                                "the hand far better than the pipeline's assumed "
-                                "virtual focal",
-         "test": "same predictions, two focal choices, identical metric",
+         "original_hypothesis": "applying the dataset-provided reference focal "
+                                "(GT_EFFECTIVE_FOCAL) in place of the pipeline's "
+                                "training-convention virtual focal places the "
+                                "hand far closer to the reference 3D",
+         "test": "same cached predictions, two focal conventions, identical metric",
          "result": "confirmed, by nearly two orders of magnitude",
          "key_numbers": f"virtual focal {v('cam002_pipeline_virtual_focal_px'):.0f} px "
                         f"-> root error "
                         f"{v('cam002_baseline_root_error_median_mm'):.0f} mm; "
-                        f"physical focal "
-                        f"{v('cam002_gigahands_physical_focal_median_px'):.1f} px "
-                        f"-> {v('cam002_physical_focal_root_error_median_mm'):.1f} mm; "
+                        f"dataset-provided reference focal "
+                        f"{v('cam002_gt_effective_focal_median_px'):.1f} px "
+                        f"-> {v('cam002_gt_effective_focal_root_error_median_mm'):.1f} mm; "
                         f"root-aligned MPJPE unchanged at "
                         f"{v('cam002_root_aligned_mpjpe_median_mm')} mm",
          "verdict": "SUPPORTED",
          "evidence_level": "ROBUST_BUT_SINGLE_DATASET",
          "scope": "metric placement, not hand shape - the root-aligned error is "
-                  "identical under both focals",
+                  "identical under both focal conventions. This compares two "
+                  "focal CONVENTIONS on the same predictions; it does not show "
+                  "that 5000 px is an invalid camera intrinsic, which it never "
+                  "claimed to be.",
          "remaining_uncertainty": "none for the direction; the magnitude is "
                                   "dataset-specific",
          "next_implication": "the camera, not the hand model, is the first thing "
@@ -377,7 +381,9 @@ def hypothesis_table():
                         f"-> {v('cam0041_anycalib_gen_N64_focal_err_median')} %; "
                         f"E2 {v('cam0041_E2_frozen_N8_focal_err_median')} -> "
                         f"{v('cam0041_E2_frozen_N64_focal_err_median')} %; every "
-                        "paired step CI contains zero",
+                        "paired step CI contains zero. One execution over the "
+                        "same 175 benchmark views, so every N is directly "
+                        "comparable.",
          "verdict": "CONFIRMED_SATURATION",
          "evidence_level": "ROBUST_BUT_SINGLE_DATASET",
          "scope": "up to 64 frames, GigaHands static cameras. Says nothing about "
@@ -403,11 +409,12 @@ def hypothesis_table():
          "next_implication": "frozen as the baseline CAM-EXP-005/006 must beat"},
         {"experiment": "CAM-EXP-004.1",
          "original_hypothesis": "E2 = 6.14 % is an independent final test number",
-         "test": "leave-one-sequence-out selection and an independent re-run",
+         "test": "leave-one-sequence-out selection, plus a separate execution on "
+                 "the same benchmark views",
          "result": "rejected - it is a selection-set number with real spread",
          "key_numbers": f"selection set "
                         f"{v('e2_or_model_rerun_E2_frozen_cam004_median')} %, "
-                        f"independent re-run "
+                        f"separate rerun on the same views "
                         f"{v('e2_or_model_rerun_E2_frozen_cam0041_median')} %, "
                         f"LOSO held-out {v('e2_loso_heldout_median_range_pct')[0]}"
                         f"-{v('e2_loso_heldout_median_range_pct')[1]} %; "
@@ -451,8 +458,10 @@ def hypothesis_table():
          "evidence_level": "OPEN_ISSUE",
          "scope": "this environment, this GeoCalib commit",
          "remaining_uncertainty": "whether deterministic algorithms fix it",
-         "next_implication": "quote GeoCalib-derived numbers with a +/-0.35 pp "
-                             "run-to-run tolerance"},
+         "next_implication": "report the observed between-execution difference "
+                             "(about 0.32 pp on the aggregate median) and "
+                             "the repeat-diagnostic spreads separately; do "
+                             "not merge them into one uncertainty interval"},
     ]
     write_csv(PKG / "tables" / "hypothesis_result_evidence.csv", rows)
     write_md_table(

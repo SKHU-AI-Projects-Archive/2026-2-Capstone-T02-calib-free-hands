@@ -1,13 +1,13 @@
-estimator,N,cam004_original_median_pct,cam0041_rerun_median_pct,difference_pp
-anycalib_gen,1,9.618,9.618,0.0
-anycalib_gen,2,9.618,9.618,0.0
-anycalib_gen,4,9.767,9.767,0.0
-anycalib_gen,8,9.89,9.89,0.0
-geocalib_distorted,1,13.366,13.889,0.523
-geocalib_distorted,2,13.366,13.449,0.083
-geocalib_distorted,4,11.652,11.572,-0.08
-geocalib_distorted,8,11.184,10.86,-0.324
-E2_frozen,1,7.756,7.762,0.006
-E2_frozen,2,7.422,7.239,-0.183
-E2_frozen,4,6.607,6.775,0.168
-E2_frozen,8,6.138,6.46,0.322
+estimator,N,cam004_original_median_pct,cam0041_rerun_median_pct,difference_pp,note
+anycalib_gen,1,9.618,9.618,0.0,"two separate executions over the SAME 175 benchmark views; the difference is run-to-run variation, not a result on independent data"
+anycalib_gen,2,9.618,9.618,0.0,"two separate executions over the SAME 175 benchmark views; the difference is run-to-run variation, not a result on independent data"
+anycalib_gen,4,9.767,9.767,0.0,"two separate executions over the SAME 175 benchmark views; the difference is run-to-run variation, not a result on independent data"
+anycalib_gen,8,9.89,9.89,0.0,"two separate executions over the SAME 175 benchmark views; the difference is run-to-run variation, not a result on independent data"
+geocalib_distorted,1,13.366,13.889,0.523,"two separate executions over the SAME 175 benchmark views; the difference is run-to-run variation, not a result on independent data"
+geocalib_distorted,2,13.366,13.449,0.083,"two separate executions over the SAME 175 benchmark views; the difference is run-to-run variation, not a result on independent data"
+geocalib_distorted,4,11.652,11.572,-0.08,"two separate executions over the SAME 175 benchmark views; the difference is run-to-run variation, not a result on independent data"
+geocalib_distorted,8,11.184,10.86,-0.324,"two separate executions over the SAME 175 benchmark views; the difference is run-to-run variation, not a result on independent data"
+E2_frozen,1,7.756,7.762,0.006,"two separate executions over the SAME 175 benchmark views; the difference is run-to-run variation, not a result on independent data"
+E2_frozen,2,7.422,7.239,-0.183,"two separate executions over the SAME 175 benchmark views; the difference is run-to-run variation, not a result on independent data"
+E2_frozen,4,6.607,6.775,0.168,"two separate executions over the SAME 175 benchmark views; the difference is run-to-run variation, not a result on independent data"
+E2_frozen,8,6.138,6.46,0.322,"two separate executions over the SAME 175 benchmark views; the difference is run-to-run variation, not a result on independent data"

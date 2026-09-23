@@ -38,9 +38,14 @@ been produced. That is the next step, after this package is reviewed.
    `ROBUST_BUT_SINGLE_DATASET`, `EXPLORATORY_INTERNAL_VALIDATION`,
    `PENDING_EXTERNAL_CONFIRMATION`, `OPEN_ISSUE`.
 4. **E2 is a frozen exploratory baseline**, never "our method", and its
-   performance is always quoted as three numbers: 6.14 % (selection set),
-   6.46 % (independent re-run), 5.73–8.80 % (leave-one-sequence-out).
-5. **GeoCalib numbers carry a run-to-run tolerance** of about ±0.35 pp.
+   performance is always quoted as three numbers, all from the same 175
+   benchmark views: 6.14 % (selection set), 6.46 % (a separate execution on
+   those same views), 5.73–8.80 % (retrospective leave-one-sequence-out). None
+   of the three comes from independent data.
+5. **GeoCalib numbers move between executions.** The two full benchmark
+   executions run here differed by about 0.32 pp on the aggregate median; the
+   40-frame × 3-repeat diagnostic is reported separately (median spread 1.18 %,
+   p90 6.85 %, max 41.5 %). Do not merge them into one ± interval.
 6. **Every figure ships the numbers it plotted**, in `figures/main/data/`.
 7. **An eligible pool is not an evaluated sample.** CAM-EXP-002 was allowed to
    draw from 16,413 bimanual-clean frames; it actually evaluated 2,210 hands
@@ -49,6 +54,11 @@ been produced. That is the next step, after this package is reviewed.
 8. **The bias decomposition unit is the (sequence, camera) static view**, not
    the physical camera. Physical camera is a *resampling* unit used only to
    widen confidence intervals in CAM-EXP-004.1.
+9. **The two Experiment 2 focal quantities have names.** 5000 px is
+   `PIPELINE_BASELINE_FOCAL`, a training-convention virtual focal; 922.77 px is
+   the median `GT_EFFECTIVE_FOCAL`, the dataset-provided camera intrinsic `fx`
+   in the same pixel convention. Neither one is an optical or sensor focal
+   length, so the term "physical focal" must not be used for either.
 
 ## Layout
 
@@ -99,7 +109,7 @@ distinguished by marker, line style and hatch, never by colour alone.
 
 ## Known state
 
-`scripts/quality_checks.py` passes all 37 checks, including: every source file
+`scripts/quality_checks.py` passes all 45 checks, including: every source file
 exists; the figure CSVs match the canonical summaries; no file presents 1400 as
 an independent sample count; no dangerous phrasing is used assertively; the E2
 selection-set figure never appears without the re-run and leave-one-sequence-out
@@ -107,8 +117,10 @@ numbers beside it; every file mentioning GeoCalib carries the
 reproducibility caveat; AnyCam provenance is consistent everywhere; the CAM-EXP-002 pool
 and evaluated sample are recorded separately; the 98.1 % decomposition is never
 described as a physical-camera bias; the Experiment 1 error tail is never
-claimed as fully explained; and no historical raw or summary result file was
-modified.
+claimed as fully explained; 'physical focal' is never asserted for either of
+the two Experiment 2 focal quantities; the E2 repeat execution on the same 175
+benchmark views is never called independent; no invented +/- tolerance appears; and no historical raw or
+summary result file was modified.
 
 The one open decision that blocks nothing in the report but shapes its
 conclusion is whether to download an external image set for the final
