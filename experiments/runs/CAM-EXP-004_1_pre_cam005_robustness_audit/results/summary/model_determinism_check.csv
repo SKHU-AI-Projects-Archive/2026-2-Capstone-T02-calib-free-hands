@@ -1,0 +1,3 @@
+model,n_frames,n_repeats,pct_frames_bit_identical,median_spread_pct,mean_spread_pct,p90_spread_pct,max_spread_pct,pct_frames_spread_over_1pct,pct_frames_spread_over_5pct,verdict
+anycalib_gen_radial,40,3,100.0,0.0,0.0,0.0,0.0,0.0,0.0,DETERMINISTIC
+geocalib_distorted_radial,40,3,0.0,1.1756767809748099,4.031247708242718,6.8517770968703156,41.49941555835729,65.0,15.0,NON_DETERMINISTIC

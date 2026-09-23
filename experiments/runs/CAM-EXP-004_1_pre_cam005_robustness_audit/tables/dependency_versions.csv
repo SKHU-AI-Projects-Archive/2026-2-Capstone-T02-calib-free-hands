@@ -1,0 +1,14 @@
+package,version,criticality
+python,3.11.7,recorded
+torch,2.1.2+cu121,PINNED - required
+torchvision,0.16.2+cu121,recorded
+numpy,1.26.4,PINNED - required
+cv2,4.10.0,recorded
+kornia,0.7.2,PINNED - required
+scipy,1.17.1,recorded
+PIL,12.3.0,recorded
+matplotlib,3.11.2,recorded
+detectron2,NOT_INSTALLED,recorded
+cuda,12.1,recorded
+cudnn,8801,recorded
+gpu,NVIDIA GeForce RTX 4060 Ti,recorded

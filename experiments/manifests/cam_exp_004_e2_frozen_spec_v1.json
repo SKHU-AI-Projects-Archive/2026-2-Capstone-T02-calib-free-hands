@@ -1,0 +1,41 @@
+{
+  "id": "CAM_EXP_004_E2_FROZEN_V1",
+  "frozen_on": "2026-09-23",
+  "frozen_in": "CAM-EXP-004.1",
+  "name": "E2_perframe_geomean",
+  "definition": {
+    "step_1_per_frame": "f_t = sqrt(f_anycalib_t * f_geocalib_t) - the geometric mean of the two model focals on the same frame",
+    "step_2_per_view": "f_view = median over the frames of one (sequence, camera) static view"
+  },
+  "members": [
+    {
+      "model": "AnyCalib",
+      "checkpoint": "anycalib_gen",
+      "camera_model": "radial:2",
+      "output": "pred_fx in original pixels",
+      "adapter": "experiments/src/calibration/anycalib_adapter.py"
+    },
+    {
+      "model": "GeoCalib",
+      "weights": "distorted",
+      "camera_model": "radial",
+      "output": "pred_fx in original pixels",
+      "adapter": "experiments/src/calibration/geocalib_adapter.py"
+    }
+  ],
+  "parameters_fitted": "NONE - no weights, no thresholds, no tuning. The geometric mean is equal-weight by construction.",
+  "aggregation_unit": "(sequence, camera) - one static camera in one take",
+  "inputs": "raw images, no undistortion",
+  "evidence_status": "EXPLORATORY - selected as the best of E1-E5 on the same 175 views it is reported on",
+  "reported_performance_on_selection_set": {
+    "dataset": "GigaHands demo, 175 views, N=8",
+    "median_rel_focal_err_pct": 6.14,
+    "p90_pct": 19.18,
+    "within_5_pct": 38.3,
+    "within_10_pct": 68.6,
+    "within_20_pct": 90.3,
+    "signed_median_pct": -2.36,
+    "caveat": "selection-set performance; expected to be optimistic"
+  },
+  "change_policy": "This definition is FROZEN. CAM-EXP-005 and CAM-EXP-006 use it verbatim as a baseline and must not modify the formula, the members or the aggregation. A different combination rule is a NEW estimator with a new name, compared against this one."
+}

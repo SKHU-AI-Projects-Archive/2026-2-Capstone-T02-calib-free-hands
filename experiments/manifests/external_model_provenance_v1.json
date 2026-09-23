@@ -1,0 +1,145 @@
+{
+  "id": "EXTERNAL_MODEL_PROVENANCE_V1",
+  "frozen_on": "2026-09-23",
+  "environment": {
+    "venv": "experiments/.venv-calib (git-ignored)",
+    "python": "3.11.7",
+    "torch": "2.1.2+cu121",
+    "torchvision": "0.16.2+cu121",
+    "numpy": "1.26.4",
+    "cv2": "4.10.0",
+    "kornia": "0.7.2",
+    "scipy": "1.17.1",
+    "PIL": "12.3.0",
+    "matplotlib": "3.11.2",
+    "detectron2": "NOT_INSTALLED",
+    "cuda": "12.1",
+    "cudnn": "8801",
+    "gpu": "NVIDIA GeForce RTX 4060 Ti",
+    "os": "Windows 11 Pro 10.0.26200"
+  },
+  "models": {
+    "AnyCalib": {
+      "repository": "https://github.com/javrtg/AnyCalib",
+      "exact_commit": "027a8497d893f4b2596f23d6324c05e4b81064ed",
+      "commit_resolution": "recovered from pip direct_url.json vcs_info",
+      "installed_version": "1.0",
+      "checkpoints_used": [
+        "anycalib_gen",
+        "anycalib_dist",
+        "anycalib_pinhole"
+      ],
+      "adapter": "experiments/src/calibration/anycalib_adapter.py",
+      "inference_command": "AnyCalibAdapter(model_id=..., cam_id='radial:2').predict(bgr, meta)",
+      "output_convention": "intrinsics already mapped back to ORIGINAL image pixels by predict(); [fx, fy, cx, cy, k1, k2] for radial:2; normalised radial polynomial 1 + k1 r^2 + k2 r^4 (OpenCV-compatible)",
+      "license": "see repository",
+      "used_in": [
+        "CAM-EXP-003",
+        "CAM-EXP-003.1",
+        "CAM-EXP-004",
+        "CAM-EXP-004.1"
+      ]
+    },
+    "GeoCalib": {
+      "repository": "https://github.com/cvg/GeoCalib",
+      "exact_commit": "97b8968e7798a66bf04fcf791fb535624241bda7",
+      "commit_resolution": "recovered from pip direct_url.json vcs_info",
+      "installed_version": "1.0",
+      "checkpoints_used": [
+        "geocalib_distorted",
+        "geocalib_pinhole"
+      ],
+      "checkpoint_release": "GitHub release v1.0, fetched by the package itself via torch.hub.load_state_dict_from_url",
+      "adapter": "experiments/src/calibration/geocalib_adapter.py",
+      "inference_command": "GeoCalibAdapter(weights='distorted', camera_model='radial').predict(bgr, meta)",
+      "output_convention": "camera.f already in original pixels; principal point fixed at the image centre and reported as NOT_PREDICTED; radial k1,k2 OpenCV-compatible",
+      "critical_pin": "kornia==0.7.2 (newer kornia has a TorchScript incompatibility with torch 2.1.2)",
+      "license": "see repository",
+      "used_in": [
+        "CAM-EXP-003",
+        "CAM-EXP-003.1",
+        "CAM-EXP-004",
+        "CAM-EXP-004.1"
+      ]
+    },
+    "PerspectiveFields": {
+      "repository": "https://github.com/jinlinyi/PerspectiveFields",
+      "exact_commit": "d54be737d6eacfb9d39a2b7079a494924b45bb6c",
+      "commit_resolution": "installed from a local clone at experiments/cache/external_models/PerspectiveFields; commit read from that clone's git HEAD",
+      "installed_version": "1.0.0",
+      "checkpoints_used": [
+        "pf_uncentered_rpfpp",
+        "pf_centered_rpf"
+      ],
+      "adapter": "experiments/src/calibration/perspective_fields_adapter.py",
+      "inference_command": "PerspectiveFieldsAdapter(version=UNCENTERED).predict(bgr, meta)",
+      "output_convention": "rel_focal = f / image_height; f_px = rel_focal * H",
+      "install_note": "installed with --no-deps; albumentations pulls stringzilla which has no Windows wheel and is not needed for inference",
+      "license": "see repository",
+      "used_in": [
+        "CAM-EXP-003",
+        "CAM-EXP-004 (diversity baseline)"
+      ]
+    },
+    "AnyCam": {
+      "repository": "https://github.com/Brummi/anycam",
+      "exact_commit": null,
+      "commit_resolution": "NOT_INSTALLED",
+      "status": "NOT_APPLICABLE_REQUIRES_CAMERA_MOTION - audited in CAM-EXP-004 and stress-tested in CAM-EXP-004.1; see anycam_static_stress_test.md",
+      "used_in": []
+    }
+  },
+  "unresolved": [],
+  "note": "AnyCalib and GeoCalib exact commits were recovered from pip's direct_url.json; no EXACT_COMMIT_UNRESOLVED_FOR_HISTORICAL_RUN case remained, so no re-install equivalence check was needed for provenance reasons. An independent equivalence check on the 8 shared frames is reported separately.",
+  "checkpoints": {
+    "anycalib_gen": {
+      "file": "C:\\Users\\user\\.cache\\torch\\hub\\anycalib\\anycalib_gen.pt",
+      "bytes": 1281193843,
+      "sha256": "65d375de971456d0bcc2c8dcdeb711e4f2ac892366b8ae7dd4351868a9d4d940",
+      "url": "https://github.com/javrtg/AnyCalib/releases/download/v1.0.0/anycalib_gen.pt",
+      "status": "PRESENT_AND_HASHED"
+    },
+    "anycalib_dist": {
+      "file": "C:\\Users\\user\\.cache\\torch\\hub\\anycalib\\anycalib_dist.pt",
+      "bytes": 1281194246,
+      "sha256": "89090e4b43e78b3ba16fefdb305f500047b870fb93da4d498ffa935ee27e8ee5",
+      "url": "https://github.com/javrtg/AnyCalib/releases/download/v1.0.0/anycalib_dist.pt",
+      "status": "PRESENT_AND_HASHED"
+    },
+    "anycalib_pinhole": {
+      "file": "C:\\Users\\user\\.cache\\torch\\hub\\anycalib\\anycalib_pinhole.pt",
+      "bytes": 1281195455,
+      "sha256": "e73b174563bcb90dc9a0e348ee64fbb898901d2a1786623e62fc0e3b176a1a38",
+      "url": "https://github.com/javrtg/AnyCalib/releases/download/v1.0.0/anycalib_pinhole.pt",
+      "status": "PRESENT_AND_HASHED"
+    },
+    "geocalib_distorted": {
+      "file": "C:\\Users\\user\\.cache\\torch\\hub\\geocalib\\distorted.tar",
+      "bytes": 116143955,
+      "sha256": "13cc505928e3ff4eb26c00bff73861ab2b11b804a546323456cf5462e1f8f447",
+      "url": "https://github.com/cvg/GeoCalib/releases/download/v1.0/geocalib-distorted.tar",
+      "status": "PRESENT_AND_HASHED"
+    },
+    "geocalib_pinhole": {
+      "file": "C:\\Users\\user\\.cache\\torch\\hub\\geocalib\\pinhole.tar",
+      "bytes": 116074121,
+      "sha256": "86d6aeacd8bbd974c59ce39f61854e00d36911c732ad89be471476fd708722ac",
+      "url": "https://github.com/cvg/GeoCalib/releases/download/v1.0/geocalib-pinhole.tar",
+      "status": "PRESENT_AND_HASHED"
+    },
+    "pf_uncentered_rpfpp": {
+      "file": "C:\\Users\\user\\.cache\\torch\\hub\\checkpoints\\paramnet_360cities_edina_rpfpp.pth",
+      "bytes": 837147876,
+      "sha256": "5220df6d9d89380d490bb9a3e4a162a8a5ca8eeb8610510173410076719fca67",
+      "url": "torch.hub checkpoint for Paramnet-360Cities-edina-uncentered",
+      "status": "PRESENT_AND_HASHED"
+    },
+    "pf_centered_rpf": {
+      "file": "C:\\Users\\user\\.cache\\torch\\hub\\checkpoints\\paramnet_360cities_edina_rpf.pth",
+      "bytes": 837147876,
+      "sha256": "58fe0285fe5d4592aec77e9ef57ac94273deb79bcb99f27d08bae68a2d1efc4a",
+      "url": "torch.hub checkpoint for Paramnet-360Cities-edina-centered",
+      "status": "PRESENT_AND_HASHED"
+    }
+  }
+}

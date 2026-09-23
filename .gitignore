@@ -57,3 +57,7 @@ experiments/.venv-anyhand/
 
 # Calibration-model inference environment (CAM-EXP-003)
 experiments/.venv-calib/
+
+# AnyCam applicability testing environment (CAM-EXP-004.1); its official
+# inference path cannot run on Windows, see that run's anycam_static_stress_test.md
+experiments/.venv-anycam/

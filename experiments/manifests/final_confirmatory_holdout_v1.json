@@ -1,0 +1,41 @@
+{
+  "id": "FINAL_CONFIRMATORY_HOLDOUT_V1",
+  "frozen_on": "2026-09-23",
+  "purpose": "the last, single, unrepeated evaluation of whatever method CAM-EXP-005/006 produces",
+  "primary": {
+    "dataset": "InterHand2.6M",
+    "status": "DESIGNATED_PRIMARY_HOLDOUT_PENDING_IMAGE_DOWNLOAD_APPROVAL",
+    "what_is_held_locally": "annotations and camera parameters only (1.6 GB); the ~80 GB image release has NOT been downloaded and downloading it needs an explicit decision",
+    "why": "genuinely static multi-camera studio rig, different from GigaHands in optics, lighting, scene and resolution, and the only candidate that can confirm BOTH the single-frame and the static-camera multi-frame claims",
+    "contamination_risk": "currently zero - no image has ever been read"
+  },
+  "secondary": {
+    "dataset": "HanCo (tester)",
+    "status": "RESERVED_FINAL_CONFIRMATORY_HOLDOUT_SINGLE_FRAME",
+    "scope": "single-frame calibration claims only",
+    "why_limited": "the released rgb/ images are per-frame hand-centred crops, so the image-space intrinsics change every frame (fx varies up to 96 % relative within one camera) and the static-camera premise does not hold; the images are also already undistorted, so the distortion-aware result cannot be confirmed on them",
+    "size": "536 images, 8 cameras, 1 sequence, 224x224"
+  },
+  "contamination_rules": [
+    "no result from a holdout dataset may influence method choice, ensemble membership, weights, thresholds or any cue rule",
+    "no calibration model may be run on holdout images before the final experiment",
+    "structural sanity checks are allowed and must be logged"
+  ],
+  "sanity_checks_performed_so_far": [
+    {
+      "dataset": "HanCo tester",
+      "date": "2026-09-23",
+      "what": "counted rgb directories and images, read image size and mode of one file, read K and M shapes from the calib json, and measured whether K is constant across frames",
+      "what_was_NOT_done": "no calibration model was run, no image content was inspected visually, no metric was computed",
+      "finding": "8 cameras, 536 images, 224x224, per-frame K varies because the images are crops"
+    },
+    {
+      "dataset": "InterHand2.6M",
+      "date": "2026-09-23",
+      "what": "read the existing preparation manifest only",
+      "what_was_NOT_done": "no image was downloaded or read",
+      "finding": "annotations only on disk"
+    }
+  ],
+  "open_decision_for_the_user": "Confirming the CAM-EXP-004 static-camera result needs a second rig with genuinely static cameras and full images. Nothing local provides that. The options are (a) download the InterHand2.6M image release, (b) download the full HanCo RGB release, or (c) accept that the multi-frame claim stays single-dataset. All three were previously excluded on size grounds, so this is a decision to make rather than something to assume."
+}
