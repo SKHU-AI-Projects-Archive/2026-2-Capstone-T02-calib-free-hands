@@ -159,7 +159,7 @@ algorithms and, failing that, to report the median of k repeats.
 | AnyCalib | `027a8497d893f4b2596f23d6324c05e4b81064ed` | pip `direct_url.json` `vcs_info` | gen / dist / pinhole, SHA256 recorded |
 | GeoCalib | `97b8968e7798a66bf04fcf791fb535624241bda7` | pip `direct_url.json` `vcs_info` | distorted / pinhole, SHA256 recorded |
 | PerspectiveFields | `d54be737d6eacfb9d39a2b7079a494924b45bb6c` | git HEAD of the local clone it was installed from | rpf / rpfpp, SHA256 recorded |
-| AnyCam | `e609cc8a9e4ee8f78cf2ce39ebeb86b35e82d10d` | fresh clone (not used for any result) | `fwimbauer/anycam_v1_seq8` |
+| AnyCam | `e609cc8a9e4ee8f78cf2ce39ebeb86b35e82d10d` | git HEAD of the clone; two of its functions were executed for the identifiability test, no end-to-end inference | `fwimbauer/anycam_v1_seq8` |
 
 All seven checkpoints are present and hashed. No
 `EXACT_COMMIT_UNRESOLVED_FOR_HISTORICAL_RUN` case remained, so no re-install

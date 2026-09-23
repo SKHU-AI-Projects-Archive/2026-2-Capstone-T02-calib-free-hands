@@ -1,0 +1,7 @@
+panel,model,bias_fraction_pct,within_fraction_pct,median_abs_view_bias_pct,median_within_view_std_pct,source,median_rel_err_pct_N8,within_5_pct_N8,signed_median_pct
+A,anycalib_gen,98.07938467631675,1.920615323683249,9.633193027957422,1.4254224802789053,CAM-EXP-004/results/summary/bias_noise_summary.csv,,,
+A,geocalib_distorted,53.38591657134712,46.61408342865286,11.563091681082582,4.658733939359946,CAM-EXP-004/results/summary/bias_noise_summary.csv,,,
+A,pf_uncentered,96.00033501495886,3.999664985041103,23.401658890249966,4.606053869704323,CAM-EXP-004/results/summary/bias_noise_summary.csv,,,
+B/C,anycalib_gen,,,,,figures/main/data/Fig06.csv (single re-run) and CAM-EXP-003.1 model_summary.csv for the signed values,9.89,20.0,-9.298
+B/C,geocalib_distorted,,,,,figures/main/data/Fig06.csv (single re-run) and CAM-EXP-003.1 model_summary.csv for the signed values,10.86,22.29,6.557
+B/C,E2_frozen,,,,,figures/main/data/Fig06.csv (single re-run) and CAM-EXP-003.1 model_summary.csv for the signed values,6.46,40.0,-2.45

@@ -83,10 +83,44 @@
     },
     "AnyCam": {
       "repository": "https://github.com/Brummi/anycam",
-      "exact_commit": null,
-      "commit_resolution": "NOT_INSTALLED",
-      "status": "NOT_APPLICABLE_REQUIRES_CAMERA_MOTION - audited in CAM-EXP-004 and stress-tested in CAM-EXP-004.1; see anycam_static_stress_test.md",
-      "used_in": []
+      "exact_commit": "e609cc8a9e4ee8f78cf2ce39ebeb86b35e82d10d",
+      "commit_resolution": "git rev-parse HEAD of the clone at experiments/cache/external_models/anycam, made during the CAM-EXP-004.1 static applicability audit",
+      "execution_status": {
+        "REPOSITORY_INSTALLED_SOURCE_AVAILABLE": true,
+        "CHECKPOINT_DOWNLOADED": true,
+        "END_TO_END_INFERENCE": "BLOCKED_ON_WINDOWS",
+        "MECHANISTIC_IDENTIFIABILITY_TEST": "COMPLETED"
+      },
+      "windows_blocker": "anycam/scripts/fit_video.py applies torch.compile at import, which raises 'Windows not yet supported for torch.compile' on torch <= 2.5; meanwhile the UniDepth depth backbone imports xformers.components.attention.NystromAttention, which exists only in xformers <= 0.0.28.post3 - a version with no Windows wheel that also requires torch 2.5.1. The two requirements are mutually exclusive on this platform, and satisfying them would require editing official source, which was not done.",
+      "official_code_actually_executed": [
+        "anycam.trainer.make_proj_from_focal_length",
+        "anycam.trainer.induce_flow_dist"
+      ],
+      "code_path_of_the_identifiability_test": "the same functions anycam/scripts/fit_video.py uses to score its 32 focal candidates before proj_labels.argmax(); called unmodified on synthetic depth with identity vs translating relative poses",
+      "checkpoints_used": [
+        "anycam_v1_seq8"
+      ],
+      "checkpoint_source": {
+        "huggingface_repo": "fwimbauer/anycam_v1_seq8",
+        "resolved_from": "the repository's own hubconf.py, which downloads config.yaml and pytorch_model.bin from that repo id",
+        "files": {
+          "pytorch_model.bin": {
+            "bytes": 459833700,
+            "sha256": "4b2f723f6b6672a9ef3a6a4d1831c08418db498f2832c565d524e3d201c300af"
+          },
+          "config.yaml": {
+            "bytes": 11240,
+            "sha256": "4c978ef6e23279b56d0f21ae7a452eafdafbb4521dc82174717a7a07774d908c"
+          }
+        }
+      },
+      "benchmark_status": "NOT_A_PERFORMANCE_BENCHMARK - AnyCam was never run as a ranked baseline and produced no focal-accuracy number",
+      "status": "NOT_APPLICABLE_REQUIRES_CAMERA_MOTION - the official focal selection objective is flat across all 32 candidates under a static camera (spread 2.73e-09 vs 0.223 with camera motion)",
+      "license": "see repository",
+      "used_in": [
+        "CAM-EXP-004 (source audit)",
+        "CAM-EXP-004.1 (mechanistic identifiability test)"
+      ]
     }
   },
   "unresolved": [],
@@ -141,5 +175,20 @@
       "url": "torch.hub checkpoint for Paramnet-360Cities-edina-centered",
       "status": "PRESENT_AND_HASHED"
     }
-  }
+  },
+  "schema_version": "1.0",
+  "corrections": [
+    {
+      "date": "2026-09-23",
+      "field": "models.AnyCam",
+      "old": {
+        "exact_commit": null,
+        "commit_resolution": "NOT_INSTALLED",
+        "used_in": []
+      },
+      "reason": "the generating script hard-coded NOT_INSTALLED; the official repository had in fact been cloned, the official checkpoint downloaded, and two official functions executed for the identifiability test",
+      "numerical_impact": "none - no experiment result depends on this field",
+      "corrected_by": "experiments/report_prep/progress_report_v1/scripts/fix_anycam_provenance.py"
+    }
+  ]
 }

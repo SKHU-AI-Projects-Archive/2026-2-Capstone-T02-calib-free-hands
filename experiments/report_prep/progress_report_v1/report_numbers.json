@@ -1,0 +1,1319 @@
+{
+  "_meta": {
+    "id": "PROGRESS_REPORT_V1_CANONICAL_NUMBERS",
+    "purpose": "single source of truth for every number that may appear in the progress report. Read from canonical result files; nothing recomputed, nothing hand-edited.",
+    "rule": "if a number is not in here, it is not ready to be written in the report. If a number in the report disagrees with here, here wins.",
+    "evidence_levels": [
+      "CONFIRMED_IN_CURRENT_ENVIRONMENT",
+      "ROBUST_BUT_SINGLE_DATASET",
+      "EXPLORATORY_INTERNAL_VALIDATION",
+      "PENDING_EXTERNAL_CONFIRMATION",
+      "OPEN_ISSUE"
+    ],
+    "n_entries": 126,
+    "generated_by": "experiments/report_prep/progress_report_v1/scripts/build_report_numbers.py"
+  },
+  "numbers": {
+    "gigahands_qc_pass_strict_n": {
+      "value": 32826,
+      "unit": "hand observations",
+      "experiment": "CAM-EXP-001.3",
+      "source_file": "experiments/manifests/gigahands_demo_qc_v1.csv.gz",
+      "source_column_or_key": "qc_status == PASS_STRICT",
+      "statistical_unit": "hand observation (sequence, camera, frame, hand)",
+      "evidence_level": "CONFIRMED_IN_CURRENT_ENVIRONMENT",
+      "notes": "counted directly from the manifest"
+    },
+    "gigahands_qc_pass_single_hand_n": {
+      "value": 16005,
+      "unit": "hand observations",
+      "experiment": "CAM-EXP-001.3",
+      "source_file": "experiments/manifests/gigahands_demo_qc_v1.csv.gz",
+      "source_column_or_key": "qc_status == PASS_SINGLE_HAND",
+      "statistical_unit": "hand observation (sequence, camera, frame, hand)",
+      "evidence_level": "CONFIRMED_IN_CURRENT_ENVIRONMENT",
+      "notes": "counted directly from the manifest"
+    },
+    "gigahands_qc_review_n": {
+      "value": 10236,
+      "unit": "hand observations",
+      "experiment": "CAM-EXP-001.3",
+      "source_file": "experiments/manifests/gigahands_demo_qc_v1.csv.gz",
+      "source_column_or_key": "qc_status == REVIEW",
+      "statistical_unit": "hand observation (sequence, camera, frame, hand)",
+      "evidence_level": "CONFIRMED_IN_CURRENT_ENVIRONMENT",
+      "notes": "counted directly from the manifest"
+    },
+    "gigahands_qc_exclude_n": {
+      "value": 49173,
+      "unit": "hand observations",
+      "experiment": "CAM-EXP-001.3",
+      "source_file": "experiments/manifests/gigahands_demo_qc_v1.csv.gz",
+      "source_column_or_key": "qc_status == EXCLUDE",
+      "statistical_unit": "hand observation (sequence, camera, frame, hand)",
+      "evidence_level": "CONFIRMED_IN_CURRENT_ENVIRONMENT",
+      "notes": "counted directly from the manifest"
+    },
+    "gigahands_qc_total_observations": {
+      "value": 108240,
+      "unit": "hand observations",
+      "experiment": "CAM-EXP-001.3",
+      "source_file": "experiments/manifests/gigahands_demo_qc_v1.csv.gz",
+      "source_column_or_key": "row count",
+      "statistical_unit": "hand observation",
+      "evidence_level": "CONFIRMED_IN_CURRENT_ENVIRONMENT",
+      "notes": "2 hands x 54,120 frame-view pairs"
+    },
+    "gigahands_qc_zero_pattern_n": {
+      "value": 26083,
+      "unit": "hand observations",
+      "experiment": "CAM-EXP-001.2 / 001.3",
+      "source_file": "experiments/manifests/gigahands_demo_qc_v1.csv.gz",
+      "source_column_or_key": "zero_pattern == 1",
+      "statistical_unit": "hand observation",
+      "evidence_level": "CONFIRMED_IN_CURRENT_ENVIRONMENT",
+      "notes": "the observed invalid all-zero 2D pattern; NOT a documented sentinel"
+    },
+    "gigahands_bimanual_clean_frames": {
+      "value": 16413,
+      "unit": "frames",
+      "experiment": "CAM-EXP-001.3",
+      "source_file": "experiments/manifests/gigahands_demo_bimanual_clean_v1.csv.gz",
+      "source_column_or_key": "row count",
+      "statistical_unit": "frame within a view",
+      "evidence_level": "CONFIRMED_IN_CURRENT_ENVIRONMENT",
+      "notes": "frames where BOTH hands pass strict QC"
+    },
+    "gigahands_bimanual_clean_views": {
+      "value": 154,
+      "unit": "views",
+      "experiment": "CAM-EXP-001.3",
+      "source_file": "experiments/manifests/gigahands_demo_bimanual_clean_v1.csv.gz",
+      "source_column_or_key": "distinct (sequence, camera)",
+      "statistical_unit": "view",
+      "evidence_level": "CONFIRMED_IN_CURRENT_ENVIRONMENT",
+      "notes": ""
+    },
+    "camera_benchmark_views_usable": {
+      "value": 175,
+      "unit": "views",
+      "experiment": "CAM-EXP-003",
+      "source_file": "experiments/manifests/gigahands_demo_camera_benchmark_v1.csv.gz",
+      "source_column_or_key": "usable_for_camera_benchmark == 1",
+      "statistical_unit": "view",
+      "evidence_level": "CONFIRMED_IN_CURRENT_ENVIRONMENT",
+      "notes": "camera usability only; hand annotation quality is NOT a filter here"
+    },
+    "camera_benchmark_views_excluded": {
+      "value": 25,
+      "unit": "views",
+      "experiment": "CAM-EXP-003",
+      "source_file": "experiments/manifests/gigahands_demo_camera_benchmark_v1.csv.gz",
+      "source_column_or_key": "usable_for_camera_benchmark == 0",
+      "statistical_unit": "view",
+      "evidence_level": "CONFIRMED_IN_CURRENT_ENVIRONMENT",
+      "notes": "all 25 lack a usable RGB segment matching the annotation"
+    },
+    "gigahands_unique_physical_cameras": {
+      "value": 40,
+      "unit": "cameras",
+      "experiment": "all",
+      "source_file": "experiments/manifests/gigahands_demo_camera_benchmark_v1.csv.gz",
+      "source_column_or_key": "distinct camera id",
+      "statistical_unit": "physical camera",
+      "evidence_level": "CONFIRMED_IN_CURRENT_ENVIRONMENT",
+      "notes": "each appears in several sequences; used as a coarser cluster unit"
+    },
+    "gigahands_sequences": {
+      "value": 5,
+      "unit": "sequences",
+      "experiment": "all",
+      "source_file": "experiments/manifests/gigahands_demo_camera_benchmark_v1.csv.gz",
+      "source_column_or_key": "distinct sequence",
+      "statistical_unit": "sequence",
+      "evidence_level": "CONFIRMED_IN_CURRENT_ENVIRONMENT",
+      "notes": ""
+    },
+    "cam003_frames_total": {
+      "value": 1400,
+      "unit": "frames",
+      "experiment": "CAM-EXP-003",
+      "source_file": "experiments/manifests/gigahands_demo_cam_exp_003_frames_v1.csv.gz",
+      "source_column_or_key": "row count",
+      "statistical_unit": "frame (REPEATED OBSERVATION, not an independent sample)",
+      "evidence_level": "CONFIRMED_IN_CURRENT_ENVIRONMENT",
+      "notes": "175 views x 8 frames; the statistical unit is the view, not the frame"
+    },
+    "cam0041_frames_total": {
+      "value": 11200,
+      "unit": "frames",
+      "experiment": "CAM-EXP-004.1",
+      "source_file": "experiments/manifests/gigahands_demo_cam_exp_0041_64frames_v1.csv.gz",
+      "source_column_or_key": "row count",
+      "statistical_unit": "frame (repeated observation)",
+      "evidence_level": "CONFIRMED_IN_CURRENT_ENVIRONMENT",
+      "notes": "175 views x 64 frames; the CAM-EXP-003 8 frames are an exact subset"
+    },
+    "cam0013_recon_vs_provided3d_same_hand_median_mm": {
+      "value": 3.9977,
+      "unit": "mm",
+      "experiment": "CAM-EXP-001.3",
+      "source_file": "experiments/runs/CAM-EXP-001_3_gigahands_multiview_triangulation/results/summary/triangulation_summary.csv",
+      "source_column_or_key": "median",
+      "statistical_unit": "hand observation",
+      "evidence_level": "CONFIRMED_IN_CURRENT_ENVIRONMENT",
+      "notes": "SELF-CONSISTENCY between the released 2D observations and the provided 3D. It is NOT accuracy against an independent external ground truth, and must never be written as such."
+    },
+    "cam0013_recon_vs_provided3d_same_hand_p90_mm": {
+      "value": 6.4816,
+      "unit": "mm",
+      "experiment": "CAM-EXP-001.3",
+      "source_file": "experiments/runs/CAM-EXP-001_3_gigahands_multiview_triangulation/results/summary/triangulation_summary.csv",
+      "source_column_or_key": "p90",
+      "statistical_unit": "hand observation",
+      "evidence_level": "CONFIRMED_IN_CURRENT_ENVIRONMENT",
+      "notes": "SELF-CONSISTENCY between the released 2D observations and the provided 3D. It is NOT accuracy against an independent external ground truth, and must never be written as such."
+    },
+    "cam0013_recon_vs_provided3d_other_hand_median_mm": {
+      "value": 192.3047,
+      "unit": "mm",
+      "experiment": "CAM-EXP-001.3",
+      "source_file": "experiments/runs/CAM-EXP-001_3_gigahands_multiview_triangulation/results/summary/triangulation_summary.csv",
+      "source_column_or_key": "median",
+      "statistical_unit": "hand observation",
+      "evidence_level": "CONFIRMED_IN_CURRENT_ENVIRONMENT",
+      "notes": "the wrong-hand control: ~48x larger, which is what makes the same-hand agreement meaningful rather than trivial"
+    },
+    "cam0013_triangulation_median_reprojection_px": {
+      "value": 3.082,
+      "unit": "px",
+      "experiment": "CAM-EXP-001.3",
+      "source_file": "experiments/runs/CAM-EXP-001_3_gigahands_multiview_triangulation/results/summary/triangulation_summary.csv",
+      "source_column_or_key": "median",
+      "statistical_unit": "hand observation",
+      "evidence_level": "CONFIRMED_IN_CURRENT_ENVIRONMENT",
+      "notes": ""
+    },
+    "cam0013_n_triangulated_observations": {
+      "value": 107640,
+      "unit": "hand observations",
+      "experiment": "CAM-EXP-001.3",
+      "source_file": "experiments/runs/CAM-EXP-001_3_gigahands_multiview_triangulation/results/summary/triangulation_summary.csv",
+      "source_column_or_key": "n",
+      "statistical_unit": "hand observation",
+      "evidence_level": "CONFIRMED_IN_CURRENT_ENVIRONMENT",
+      "notes": ""
+    },
+    "cam0013_identity_multiview_confirmed_good_n": {
+      "value": 48860,
+      "unit": "hand observations",
+      "experiment": "CAM-EXP-001.3",
+      "source_file": "experiments/runs/CAM-EXP-001_3_gigahands_multiview_triangulation/results/summary/identity_verdict_summary.csv",
+      "source_column_or_key": "case == MULTIVIEW_CONFIRMED_GOOD",
+      "statistical_unit": "hand observation",
+      "evidence_level": "CONFIRMED_IN_CURRENT_ENVIRONMENT",
+      "notes": ""
+    },
+    "cam0013_identity_confirmed_2d_hand_identity_swap_n": {
+      "value": 7101,
+      "unit": "hand observations",
+      "experiment": "CAM-EXP-001.3",
+      "source_file": "experiments/runs/CAM-EXP-001_3_gigahands_multiview_triangulation/results/summary/identity_verdict_summary.csv",
+      "source_column_or_key": "case == CONFIRMED_2D_HAND_IDENTITY_SWAP",
+      "statistical_unit": "hand observation",
+      "evidence_level": "CONFIRMED_IN_CURRENT_ENVIRONMENT",
+      "notes": ""
+    },
+    "cam0013_identity_bad_2d_geometry_n": {
+      "value": 15611,
+      "unit": "hand observations",
+      "experiment": "CAM-EXP-001.3",
+      "source_file": "experiments/runs/CAM-EXP-001_3_gigahands_multiview_triangulation/results/summary/identity_verdict_summary.csv",
+      "source_column_or_key": "case == BAD_2D_GEOMETRY",
+      "statistical_unit": "hand observation",
+      "evidence_level": "CONFIRMED_IN_CURRENT_ENVIRONMENT",
+      "notes": ""
+    },
+    "cam0013_identity_no_usable_2d_annotation_n": {
+      "value": 25852,
+      "unit": "hand observations",
+      "experiment": "CAM-EXP-001.3",
+      "source_file": "experiments/runs/CAM-EXP-001_3_gigahands_multiview_triangulation/results/summary/identity_verdict_summary.csv",
+      "source_column_or_key": "case == NO_USABLE_2D_ANNOTATION",
+      "statistical_unit": "hand observation",
+      "evidence_level": "CONFIRMED_IN_CURRENT_ENVIRONMENT",
+      "notes": ""
+    },
+    "cam001_gigahands_reprojection_median_px": {
+      "value": 13.171,
+      "unit": "px",
+      "experiment": "CAM-EXP-001",
+      "source_file": "experiments/runs/CAM-EXP-001_gt_projection_validation/results/summary/dataset_summary.csv",
+      "source_column_or_key": "inimg_median_px",
+      "statistical_unit": "joint",
+      "evidence_level": "CONFIRMED_IN_CURRENT_ENVIRONMENT",
+      "notes": "provided 3D projected with the provided camera vs the provided 2D; the long tail here is what CAM-EXP-001.1/001.2/001.3 went on to explain"
+    },
+    "cam001_gigahands_reprojection_frac_under_10px": {
+      "value": 0.4316,
+      "unit": "fraction",
+      "experiment": "CAM-EXP-001",
+      "source_file": "experiments/runs/CAM-EXP-001_gt_projection_validation/results/summary/dataset_summary.csv",
+      "source_column_or_key": "inimg_frac_under_10px",
+      "statistical_unit": "joint",
+      "evidence_level": "CONFIRMED_IN_CURRENT_ENVIRONMENT",
+      "notes": ""
+    },
+    "cam002_pipeline_virtual_focal_px": {
+      "value": 5000.0,
+      "unit": "px",
+      "experiment": "CAM-EXP-002",
+      "source_file": "experiments/runs/CAM-EXP-002_camera_focal_sensitivity/results/summary/baseline_vs_gt_focal.csv",
+      "source_column_or_key": "focal_used_px_median @ PIPELINE_BASELINE",
+      "statistical_unit": "hand",
+      "evidence_level": "CONFIRMED_IN_CURRENT_ENVIRONMENT",
+      "notes": "the deployed pipeline's assumed focal, FOCAL_LENGTH/IMAGE_SIZE*max(W,H)"
+    },
+    "cam002_gigahands_physical_focal_median_px": {
+      "value": 922.77,
+      "unit": "px",
+      "experiment": "CAM-EXP-002",
+      "source_file": "experiments/runs/CAM-EXP-002_camera_focal_sensitivity/results/summary/baseline_vs_gt_focal.csv",
+      "source_column_or_key": "focal_used_px_median @ GT_x1.00",
+      "statistical_unit": "hand",
+      "evidence_level": "CONFIRMED_IN_CURRENT_ENVIRONMENT",
+      "notes": "median dataset-provided focal over the evaluated hands"
+    },
+    "cam002_baseline_root_error_median_mm": {
+      "value": 2881.885,
+      "unit": "mm",
+      "experiment": "CAM-EXP-002",
+      "source_file": "experiments/runs/CAM-EXP-002_camera_focal_sensitivity/results/summary/baseline_vs_gt_focal.csv",
+      "source_column_or_key": "root_xyz_error_mm_median @ PIPELINE_BASELINE",
+      "statistical_unit": "hand",
+      "evidence_level": "CONFIRMED_IN_CURRENT_ENVIRONMENT",
+      "notes": "SCOPE: focal-length sensitivity of ABSOLUTE hand depth. This experiment did not test principal point, anisotropic focal or distortion downstream."
+    },
+    "cam002_physical_focal_root_error_median_mm": {
+      "value": 78.54,
+      "unit": "mm",
+      "experiment": "CAM-EXP-002",
+      "source_file": "experiments/runs/CAM-EXP-002_camera_focal_sensitivity/results/summary/baseline_vs_gt_focal.csv",
+      "source_column_or_key": "root_xyz_error_mm_median @ GT_x1.00",
+      "statistical_unit": "hand",
+      "evidence_level": "CONFIRMED_IN_CURRENT_ENVIRONMENT",
+      "notes": "SCOPE: focal-length sensitivity of ABSOLUTE hand depth. This experiment did not test principal point, anisotropic focal or distortion downstream."
+    },
+    "cam002_baseline_absolute_mpjpe_median_mm": {
+      "value": 2885.314,
+      "unit": "mm",
+      "experiment": "CAM-EXP-002",
+      "source_file": "experiments/runs/CAM-EXP-002_camera_focal_sensitivity/results/summary/baseline_vs_gt_focal.csv",
+      "source_column_or_key": "absolute_mpjpe_mm_median @ PIPELINE_BASELINE",
+      "statistical_unit": "hand",
+      "evidence_level": "CONFIRMED_IN_CURRENT_ENVIRONMENT",
+      "notes": "SCOPE: focal-length sensitivity of ABSOLUTE hand depth. This experiment did not test principal point, anisotropic focal or distortion downstream."
+    },
+    "cam002_physical_focal_absolute_mpjpe_median_mm": {
+      "value": 68.68,
+      "unit": "mm",
+      "experiment": "CAM-EXP-002",
+      "source_file": "experiments/runs/CAM-EXP-002_camera_focal_sensitivity/results/summary/baseline_vs_gt_focal.csv",
+      "source_column_or_key": "absolute_mpjpe_mm_median @ GT_x1.00",
+      "statistical_unit": "hand",
+      "evidence_level": "CONFIRMED_IN_CURRENT_ENVIRONMENT",
+      "notes": "SCOPE: focal-length sensitivity of ABSOLUTE hand depth. This experiment did not test principal point, anisotropic focal or distortion downstream."
+    },
+    "cam002_root_aligned_mpjpe_median_mm": {
+      "value": 34.404,
+      "unit": "mm",
+      "experiment": "CAM-EXP-002",
+      "source_file": "experiments/runs/CAM-EXP-002_camera_focal_sensitivity/results/summary/baseline_vs_gt_focal.csv",
+      "source_column_or_key": "root_aligned_mpjpe_mm_median (identical in both conditions)",
+      "statistical_unit": "hand",
+      "evidence_level": "CONFIRMED_IN_CURRENT_ENVIRONMENT",
+      "notes": "IDENTICAL under both focals - focal changes metric placement, not hand shape. This is the control that makes the comparison interpretable."
+    },
+    "cam002_n_hands": {
+      "value": 2210,
+      "unit": "hands",
+      "experiment": "CAM-EXP-002",
+      "source_file": "experiments/runs/CAM-EXP-002_camera_focal_sensitivity/results/summary/baseline_vs_gt_focal.csv",
+      "source_column_or_key": "n_hands",
+      "statistical_unit": "hand",
+      "evidence_level": "CONFIRMED_IN_CURRENT_ENVIRONMENT",
+      "notes": ""
+    },
+    "cam002_focal_5pct_root_shift_median_mm": {
+      "value": 32.801,
+      "unit": "mm",
+      "experiment": "CAM-EXP-002",
+      "source_file": "experiments/runs/CAM-EXP-002_camera_focal_sensitivity/results/summary/focal_sensitivity_summary.csv",
+      "source_column_or_key": "incremental_root_shift_median_mm",
+      "statistical_unit": "hand",
+      "evidence_level": "CONFIRMED_IN_CURRENT_ENVIRONMENT",
+      "notes": "INCREMENTAL displacement caused by perturbing focal alone, at this working distance. Not a measure of calibration accuracy. SCOPE: focal-length sensitivity of ABSOLUTE hand depth. This experiment did not test principal point, anisotropic focal or distortion downstream."
+    },
+    "cam002_focal_5pct_root_shift_p90_mm": {
+      "value": 47.197,
+      "unit": "mm",
+      "experiment": "CAM-EXP-002",
+      "source_file": "experiments/runs/CAM-EXP-002_camera_focal_sensitivity/results/summary/focal_sensitivity_summary.csv",
+      "source_column_or_key": "incremental_root_shift_p90_mm",
+      "statistical_unit": "hand",
+      "evidence_level": "CONFIRMED_IN_CURRENT_ENVIRONMENT",
+      "notes": "SCOPE: focal-length sensitivity of ABSOLUTE hand depth. This experiment did not test principal point, anisotropic focal or distortion downstream."
+    },
+    "cam002_focal_10pct_root_shift_median_mm": {
+      "value": 65.602,
+      "unit": "mm",
+      "experiment": "CAM-EXP-002",
+      "source_file": "experiments/runs/CAM-EXP-002_camera_focal_sensitivity/results/summary/focal_sensitivity_summary.csv",
+      "source_column_or_key": "incremental_root_shift_median_mm",
+      "statistical_unit": "hand",
+      "evidence_level": "CONFIRMED_IN_CURRENT_ENVIRONMENT",
+      "notes": "INCREMENTAL displacement caused by perturbing focal alone, at this working distance. Not a measure of calibration accuracy. SCOPE: focal-length sensitivity of ABSOLUTE hand depth. This experiment did not test principal point, anisotropic focal or distortion downstream."
+    },
+    "cam002_focal_10pct_root_shift_p90_mm": {
+      "value": 94.394,
+      "unit": "mm",
+      "experiment": "CAM-EXP-002",
+      "source_file": "experiments/runs/CAM-EXP-002_camera_focal_sensitivity/results/summary/focal_sensitivity_summary.csv",
+      "source_column_or_key": "incremental_root_shift_p90_mm",
+      "statistical_unit": "hand",
+      "evidence_level": "CONFIRMED_IN_CURRENT_ENVIRONMENT",
+      "notes": "SCOPE: focal-length sensitivity of ABSOLUTE hand depth. This experiment did not test principal point, anisotropic focal or distortion downstream."
+    },
+    "cam002_focal_20pct_root_shift_median_mm": {
+      "value": 131.204,
+      "unit": "mm",
+      "experiment": "CAM-EXP-002",
+      "source_file": "experiments/runs/CAM-EXP-002_camera_focal_sensitivity/results/summary/focal_sensitivity_summary.csv",
+      "source_column_or_key": "incremental_root_shift_median_mm",
+      "statistical_unit": "hand",
+      "evidence_level": "CONFIRMED_IN_CURRENT_ENVIRONMENT",
+      "notes": "INCREMENTAL displacement caused by perturbing focal alone, at this working distance. Not a measure of calibration accuracy. SCOPE: focal-length sensitivity of ABSOLUTE hand depth. This experiment did not test principal point, anisotropic focal or distortion downstream."
+    },
+    "cam002_focal_20pct_root_shift_p90_mm": {
+      "value": 188.788,
+      "unit": "mm",
+      "experiment": "CAM-EXP-002",
+      "source_file": "experiments/runs/CAM-EXP-002_camera_focal_sensitivity/results/summary/focal_sensitivity_summary.csv",
+      "source_column_or_key": "incremental_root_shift_p90_mm",
+      "statistical_unit": "hand",
+      "evidence_level": "CONFIRMED_IN_CURRENT_ENVIRONMENT",
+      "notes": "SCOPE: focal-length sensitivity of ABSOLUTE hand depth. This experiment did not test principal point, anisotropic focal or distortion downstream."
+    },
+    "cam003_anycalib_pinhole_focal_err_median": {
+      "value": 16.3102,
+      "unit": "%",
+      "experiment": "CAM-EXP-003",
+      "source_file": "experiments/runs/CAM-EXP-003_single_frame_calibration_benchmark/results/summary/model_summary.csv",
+      "source_column_or_key": "focal_error_pct_median",
+      "statistical_unit": "view (175). The 1400 frames are 8 repeated observations of each of 175 static cameras and are NOT 1400 independent samples.",
+      "evidence_level": "ROBUST_BUT_SINGLE_DATASET",
+      "notes": "single frame, raw image, pinhole camera model"
+    },
+    "cam003_anycalib_pinhole_focal_err_p90": {
+      "value": 32.8083,
+      "unit": "%",
+      "experiment": "CAM-EXP-003",
+      "source_file": "experiments/runs/CAM-EXP-003_single_frame_calibration_benchmark/results/summary/model_summary.csv",
+      "source_column_or_key": "focal_error_pct_p90",
+      "statistical_unit": "view (175). The 1400 frames are 8 repeated observations of each of 175 static cameras and are NOT 1400 independent samples.",
+      "evidence_level": "ROBUST_BUT_SINGLE_DATASET",
+      "notes": "single frame, raw image, pinhole camera model"
+    },
+    "cam003_anycalib_pinhole_focal_err_within5": {
+      "value": 11.43,
+      "unit": "% of views",
+      "experiment": "CAM-EXP-003",
+      "source_file": "experiments/runs/CAM-EXP-003_single_frame_calibration_benchmark/results/summary/model_summary.csv",
+      "source_column_or_key": "within_5pct_rate",
+      "statistical_unit": "view (175). The 1400 frames are 8 repeated observations of each of 175 static cameras and are NOT 1400 independent samples.",
+      "evidence_level": "ROBUST_BUT_SINGLE_DATASET",
+      "notes": "single frame, raw image, pinhole camera model"
+    },
+    "cam003_geocalib_pinhole_focal_err_median": {
+      "value": 24.9645,
+      "unit": "%",
+      "experiment": "CAM-EXP-003",
+      "source_file": "experiments/runs/CAM-EXP-003_single_frame_calibration_benchmark/results/summary/model_summary.csv",
+      "source_column_or_key": "focal_error_pct_median",
+      "statistical_unit": "view (175). The 1400 frames are 8 repeated observations of each of 175 static cameras and are NOT 1400 independent samples.",
+      "evidence_level": "ROBUST_BUT_SINGLE_DATASET",
+      "notes": "single frame, raw image, pinhole camera model"
+    },
+    "cam003_geocalib_pinhole_focal_err_p90": {
+      "value": 77.1819,
+      "unit": "%",
+      "experiment": "CAM-EXP-003",
+      "source_file": "experiments/runs/CAM-EXP-003_single_frame_calibration_benchmark/results/summary/model_summary.csv",
+      "source_column_or_key": "focal_error_pct_p90",
+      "statistical_unit": "view (175). The 1400 frames are 8 repeated observations of each of 175 static cameras and are NOT 1400 independent samples.",
+      "evidence_level": "ROBUST_BUT_SINGLE_DATASET",
+      "notes": "single frame, raw image, pinhole camera model"
+    },
+    "cam003_geocalib_pinhole_focal_err_within5": {
+      "value": 11.5,
+      "unit": "% of views",
+      "experiment": "CAM-EXP-003",
+      "source_file": "experiments/runs/CAM-EXP-003_single_frame_calibration_benchmark/results/summary/model_summary.csv",
+      "source_column_or_key": "within_5pct_rate",
+      "statistical_unit": "view (175). The 1400 frames are 8 repeated observations of each of 175 static cameras and are NOT 1400 independent samples.",
+      "evidence_level": "ROBUST_BUT_SINGLE_DATASET",
+      "notes": "single frame, raw image, pinhole camera model"
+    },
+    "cam003_pf_centered_focal_err_median": {
+      "value": 20.8152,
+      "unit": "%",
+      "experiment": "CAM-EXP-003",
+      "source_file": "experiments/runs/CAM-EXP-003_single_frame_calibration_benchmark/results/summary/model_summary.csv",
+      "source_column_or_key": "focal_error_pct_median",
+      "statistical_unit": "view (175). The 1400 frames are 8 repeated observations of each of 175 static cameras and are NOT 1400 independent samples.",
+      "evidence_level": "ROBUST_BUT_SINGLE_DATASET",
+      "notes": "single frame, raw image, pinhole camera model"
+    },
+    "cam003_pf_centered_focal_err_p90": {
+      "value": 39.1492,
+      "unit": "%",
+      "experiment": "CAM-EXP-003",
+      "source_file": "experiments/runs/CAM-EXP-003_single_frame_calibration_benchmark/results/summary/model_summary.csv",
+      "source_column_or_key": "focal_error_pct_p90",
+      "statistical_unit": "view (175). The 1400 frames are 8 repeated observations of each of 175 static cameras and are NOT 1400 independent samples.",
+      "evidence_level": "ROBUST_BUT_SINGLE_DATASET",
+      "notes": "single frame, raw image, pinhole camera model"
+    },
+    "cam003_pf_centered_focal_err_within5": {
+      "value": 10.29,
+      "unit": "% of views",
+      "experiment": "CAM-EXP-003",
+      "source_file": "experiments/runs/CAM-EXP-003_single_frame_calibration_benchmark/results/summary/model_summary.csv",
+      "source_column_or_key": "within_5pct_rate",
+      "statistical_unit": "view (175). The 1400 frames are 8 repeated observations of each of 175 static cameras and are NOT 1400 independent samples.",
+      "evidence_level": "ROBUST_BUT_SINGLE_DATASET",
+      "notes": "single frame, raw image, pinhole camera model"
+    },
+    "cam003_pf_uncentered_focal_err_median": {
+      "value": 23.5346,
+      "unit": "%",
+      "experiment": "CAM-EXP-003",
+      "source_file": "experiments/runs/CAM-EXP-003_single_frame_calibration_benchmark/results/summary/model_summary.csv",
+      "source_column_or_key": "focal_error_pct_median",
+      "statistical_unit": "view (175). The 1400 frames are 8 repeated observations of each of 175 static cameras and are NOT 1400 independent samples.",
+      "evidence_level": "ROBUST_BUT_SINGLE_DATASET",
+      "notes": "single frame, raw image, pinhole camera model"
+    },
+    "cam003_pf_uncentered_focal_err_p90": {
+      "value": 66.2629,
+      "unit": "%",
+      "experiment": "CAM-EXP-003",
+      "source_file": "experiments/runs/CAM-EXP-003_single_frame_calibration_benchmark/results/summary/model_summary.csv",
+      "source_column_or_key": "focal_error_pct_p90",
+      "statistical_unit": "view (175). The 1400 frames are 8 repeated observations of each of 175 static cameras and are NOT 1400 independent samples.",
+      "evidence_level": "ROBUST_BUT_SINGLE_DATASET",
+      "notes": "single frame, raw image, pinhole camera model"
+    },
+    "cam003_pf_uncentered_focal_err_within5": {
+      "value": 11.14,
+      "unit": "% of views",
+      "experiment": "CAM-EXP-003",
+      "source_file": "experiments/runs/CAM-EXP-003_single_frame_calibration_benchmark/results/summary/model_summary.csv",
+      "source_column_or_key": "within_5pct_rate",
+      "statistical_unit": "view (175). The 1400 frames are 8 repeated observations of each of 175 static cameras and are NOT 1400 independent samples.",
+      "evidence_level": "ROBUST_BUT_SINGLE_DATASET",
+      "notes": "single frame, raw image, pinhole camera model"
+    },
+    "cam003_demo_fixed_5000_focal_err_median": {
+      "value": 442.5284,
+      "unit": "%",
+      "experiment": "CAM-EXP-003",
+      "source_file": "experiments/runs/CAM-EXP-003_single_frame_calibration_benchmark/results/summary/model_summary.csv",
+      "source_column_or_key": "focal_error_pct_median",
+      "statistical_unit": "view (175). The 1400 frames are 8 repeated observations of each of 175 static cameras and are NOT 1400 independent samples.",
+      "evidence_level": "ROBUST_BUT_SINGLE_DATASET",
+      "notes": "single frame, raw image, pinhole camera model"
+    },
+    "cam003_demo_fixed_5000_focal_err_p90": {
+      "value": 453.6998,
+      "unit": "%",
+      "experiment": "CAM-EXP-003",
+      "source_file": "experiments/runs/CAM-EXP-003_single_frame_calibration_benchmark/results/summary/model_summary.csv",
+      "source_column_or_key": "focal_error_pct_p90",
+      "statistical_unit": "view (175). The 1400 frames are 8 repeated observations of each of 175 static cameras and are NOT 1400 independent samples.",
+      "evidence_level": "ROBUST_BUT_SINGLE_DATASET",
+      "notes": "single frame, raw image, pinhole camera model"
+    },
+    "cam003_demo_fixed_5000_focal_err_within5": {
+      "value": 0.0,
+      "unit": "% of views",
+      "experiment": "CAM-EXP-003",
+      "source_file": "experiments/runs/CAM-EXP-003_single_frame_calibration_benchmark/results/summary/model_summary.csv",
+      "source_column_or_key": "within_5pct_rate",
+      "statistical_unit": "view (175). The 1400 frames are 8 repeated observations of each of 175 static cameras and are NOT 1400 independent samples.",
+      "evidence_level": "ROBUST_BUT_SINGLE_DATASET",
+      "notes": "single frame, raw image, pinhole camera model"
+    },
+    "cam0031_anycalib_gen_radial_focal_err_median": {
+      "value": 9.546,
+      "unit": "%",
+      "experiment": "CAM-EXP-003.1",
+      "source_file": "experiments/runs/CAM-EXP-003_1_distortion_aware_diagnostic/results/summary/model_summary.csv",
+      "source_column_or_key": "focal_error_pct_median",
+      "statistical_unit": "frame for the rate; the view-clustered CI for the PAIRED comparison is in CAM-EXP-004.1",
+      "evidence_level": "ROBUST_BUT_SINGLE_DATASET",
+      "notes": "single frame, raw image, distortion-aware camera model"
+    },
+    "cam0031_anycalib_gen_radial_focal_err_p90": {
+      "value": 18.553,
+      "unit": "%",
+      "experiment": "CAM-EXP-003.1",
+      "source_file": "experiments/runs/CAM-EXP-003_1_distortion_aware_diagnostic/results/summary/model_summary.csv",
+      "source_column_or_key": "focal_error_pct_p90",
+      "statistical_unit": "frame for the rate; the view-clustered CI for the PAIRED comparison is in CAM-EXP-004.1",
+      "evidence_level": "ROBUST_BUT_SINGLE_DATASET",
+      "notes": "single frame, raw image, distortion-aware camera model"
+    },
+    "cam0031_anycalib_gen_radial_focal_err_within5": {
+      "value": 20.14,
+      "unit": "% of frames",
+      "experiment": "CAM-EXP-003.1",
+      "source_file": "experiments/runs/CAM-EXP-003_1_distortion_aware_diagnostic/results/summary/model_summary.csv",
+      "source_column_or_key": "within_5pct_rate",
+      "statistical_unit": "frame for the rate; the view-clustered CI for the PAIRED comparison is in CAM-EXP-004.1",
+      "evidence_level": "ROBUST_BUT_SINGLE_DATASET",
+      "notes": "single frame, raw image, distortion-aware camera model"
+    },
+    "cam0031_anycalib_gen_radial_focal_err_within10": {
+      "value": 53.21,
+      "unit": "% of frames",
+      "experiment": "CAM-EXP-003.1",
+      "source_file": "experiments/runs/CAM-EXP-003_1_distortion_aware_diagnostic/results/summary/model_summary.csv",
+      "source_column_or_key": "within_10pct_rate",
+      "statistical_unit": "frame for the rate; the view-clustered CI for the PAIRED comparison is in CAM-EXP-004.1",
+      "evidence_level": "ROBUST_BUT_SINGLE_DATASET",
+      "notes": "single frame, raw image, distortion-aware camera model"
+    },
+    "cam0031_anycalib_gen_radial_focal_err_within20": {
+      "value": 94.14,
+      "unit": "% of frames",
+      "experiment": "CAM-EXP-003.1",
+      "source_file": "experiments/runs/CAM-EXP-003_1_distortion_aware_diagnostic/results/summary/model_summary.csv",
+      "source_column_or_key": "within_20pct_rate",
+      "statistical_unit": "frame for the rate; the view-clustered CI for the PAIRED comparison is in CAM-EXP-004.1",
+      "evidence_level": "ROBUST_BUT_SINGLE_DATASET",
+      "notes": "single frame, raw image, distortion-aware camera model"
+    },
+    "cam0031_anycalib_gen_radial_focal_err_signed_median": {
+      "value": -9.298,
+      "unit": "%",
+      "experiment": "CAM-EXP-003.1",
+      "source_file": "experiments/runs/CAM-EXP-003_1_distortion_aware_diagnostic/results/summary/model_summary.csv",
+      "source_column_or_key": "signed_focal_error_pct_median",
+      "statistical_unit": "frame for the rate; the view-clustered CI for the PAIRED comparison is in CAM-EXP-004.1",
+      "evidence_level": "ROBUST_BUT_SINGLE_DATASET",
+      "notes": "single frame, raw image, distortion-aware camera model"
+    },
+    "cam0031_geocalib_distorted_radial_focal_err_median": {
+      "value": 12.162,
+      "unit": "%",
+      "experiment": "CAM-EXP-003.1",
+      "source_file": "experiments/runs/CAM-EXP-003_1_distortion_aware_diagnostic/results/summary/model_summary.csv",
+      "source_column_or_key": "focal_error_pct_median",
+      "statistical_unit": "frame for the rate; the view-clustered CI for the PAIRED comparison is in CAM-EXP-004.1",
+      "evidence_level": "ROBUST_BUT_SINGLE_DATASET",
+      "notes": "single frame, raw image, distortion-aware camera model"
+    },
+    "cam0031_geocalib_distorted_radial_focal_err_p90": {
+      "value": 49.347,
+      "unit": "%",
+      "experiment": "CAM-EXP-003.1",
+      "source_file": "experiments/runs/CAM-EXP-003_1_distortion_aware_diagnostic/results/summary/model_summary.csv",
+      "source_column_or_key": "focal_error_pct_p90",
+      "statistical_unit": "frame for the rate; the view-clustered CI for the PAIRED comparison is in CAM-EXP-004.1",
+      "evidence_level": "ROBUST_BUT_SINGLE_DATASET",
+      "notes": "single frame, raw image, distortion-aware camera model"
+    },
+    "cam0031_geocalib_distorted_radial_focal_err_within5": {
+      "value": 21.79,
+      "unit": "% of frames",
+      "experiment": "CAM-EXP-003.1",
+      "source_file": "experiments/runs/CAM-EXP-003_1_distortion_aware_diagnostic/results/summary/model_summary.csv",
+      "source_column_or_key": "within_5pct_rate",
+      "statistical_unit": "frame for the rate; the view-clustered CI for the PAIRED comparison is in CAM-EXP-004.1",
+      "evidence_level": "ROBUST_BUT_SINGLE_DATASET",
+      "notes": "single frame, raw image, distortion-aware camera model"
+    },
+    "cam0031_geocalib_distorted_radial_focal_err_within10": {
+      "value": 41.64,
+      "unit": "% of frames",
+      "experiment": "CAM-EXP-003.1",
+      "source_file": "experiments/runs/CAM-EXP-003_1_distortion_aware_diagnostic/results/summary/model_summary.csv",
+      "source_column_or_key": "within_10pct_rate",
+      "statistical_unit": "frame for the rate; the view-clustered CI for the PAIRED comparison is in CAM-EXP-004.1",
+      "evidence_level": "ROBUST_BUT_SINGLE_DATASET",
+      "notes": "single frame, raw image, distortion-aware camera model"
+    },
+    "cam0031_geocalib_distorted_radial_focal_err_within20": {
+      "value": 70.14,
+      "unit": "% of frames",
+      "experiment": "CAM-EXP-003.1",
+      "source_file": "experiments/runs/CAM-EXP-003_1_distortion_aware_diagnostic/results/summary/model_summary.csv",
+      "source_column_or_key": "within_20pct_rate",
+      "statistical_unit": "frame for the rate; the view-clustered CI for the PAIRED comparison is in CAM-EXP-004.1",
+      "evidence_level": "ROBUST_BUT_SINGLE_DATASET",
+      "notes": "single frame, raw image, distortion-aware camera model"
+    },
+    "cam0031_geocalib_distorted_radial_focal_err_signed_median": {
+      "value": 6.557,
+      "unit": "%",
+      "experiment": "CAM-EXP-003.1",
+      "source_file": "experiments/runs/CAM-EXP-003_1_distortion_aware_diagnostic/results/summary/model_summary.csv",
+      "source_column_or_key": "signed_focal_error_pct_median",
+      "statistical_unit": "frame for the rate; the view-clustered CI for the PAIRED comparison is in CAM-EXP-004.1",
+      "evidence_level": "ROBUST_BUT_SINGLE_DATASET",
+      "notes": "single frame, raw image, distortion-aware camera model"
+    },
+    "cam0031_anycalib_gen_radial_improvement_pp_frame_legacy": {
+      "value": [
+        6.537,
+        5.746,
+        7.302
+      ],
+      "unit": "percentage points [median, ci_lo, ci_hi]",
+      "experiment": "CAM-EXP-004.1",
+      "source_file": "experiments/runs/CAM-EXP-004_1_pre_cam005_robustness_audit/results/summary/cam0031_statistical_reanalysis.csv",
+      "source_column_or_key": "median_improvement_pp, ci_lo, ci_hi",
+      "statistical_unit": "LEGACY_FRAME_BOOTSTRAP (1400 clusters)",
+      "evidence_level": "CONFIRMED_IN_CURRENT_ENVIRONMENT",
+      "notes": "point estimate identical at every level; only the CI changes. pseudo-replicated - retained for comparison only"
+    },
+    "cam0031_anycalib_gen_radial_improvement_pp_view": {
+      "value": [
+        6.537,
+        4.573,
+        8.491
+      ],
+      "unit": "percentage points [median, ci_lo, ci_hi]",
+      "experiment": "CAM-EXP-004.1",
+      "source_file": "experiments/runs/CAM-EXP-004_1_pre_cam005_robustness_audit/results/summary/cam0031_statistical_reanalysis.csv",
+      "source_column_or_key": "median_improvement_pp, ci_lo, ci_hi",
+      "statistical_unit": "VIEW_CLUSTER (175 clusters)",
+      "evidence_level": "CONFIRMED_IN_CURRENT_ENVIRONMENT",
+      "notes": "point estimate identical at every level; only the CI changes. primary"
+    },
+    "cam0031_anycalib_gen_radial_improvement_pp_camera": {
+      "value": [
+        6.537,
+        3.514,
+        9.737
+      ],
+      "unit": "percentage points [median, ci_lo, ci_hi]",
+      "experiment": "CAM-EXP-004.1",
+      "source_file": "experiments/runs/CAM-EXP-004_1_pre_cam005_robustness_audit/results/summary/cam0031_statistical_reanalysis.csv",
+      "source_column_or_key": "median_improvement_pp, ci_lo, ci_hi",
+      "statistical_unit": "PHYSICAL_CAMERA_CLUSTER (40 clusters)",
+      "evidence_level": "CONFIRMED_IN_CURRENT_ENVIRONMENT",
+      "notes": "point estimate identical at every level; only the CI changes. primary"
+    },
+    "cam0031_anycalib_gen_radial_improvement_pp_sequence": {
+      "value": [
+        6.537,
+        4.379,
+        8.196
+      ],
+      "unit": "percentage points [median, ci_lo, ci_hi]",
+      "experiment": "CAM-EXP-004.1",
+      "source_file": "experiments/runs/CAM-EXP-004_1_pre_cam005_robustness_audit/results/summary/cam0031_statistical_reanalysis.csv",
+      "source_column_or_key": "median_improvement_pp, ci_lo, ci_hi",
+      "statistical_unit": "SEQUENCE_CLUSTER (5 clusters)",
+      "evidence_level": "EXPLORATORY_INTERNAL_VALIDATION",
+      "notes": "point estimate identical at every level; only the CI changes. 5 clusters - sensitivity analysis only, not a trustworthy CI"
+    },
+    "cam0031_geocalib_distorted_radial_improvement_pp_frame_legacy": {
+      "value": [
+        8.529,
+        7.091,
+        10.242
+      ],
+      "unit": "percentage points [median, ci_lo, ci_hi]",
+      "experiment": "CAM-EXP-004.1",
+      "source_file": "experiments/runs/CAM-EXP-004_1_pre_cam005_robustness_audit/results/summary/cam0031_statistical_reanalysis.csv",
+      "source_column_or_key": "median_improvement_pp, ci_lo, ci_hi",
+      "statistical_unit": "LEGACY_FRAME_BOOTSTRAP (1400 clusters)",
+      "evidence_level": "CONFIRMED_IN_CURRENT_ENVIRONMENT",
+      "notes": "point estimate identical at every level; only the CI changes. pseudo-replicated - retained for comparison only"
+    },
+    "cam0031_geocalib_distorted_radial_improvement_pp_view": {
+      "value": [
+        8.529,
+        5.09,
+        12.863
+      ],
+      "unit": "percentage points [median, ci_lo, ci_hi]",
+      "experiment": "CAM-EXP-004.1",
+      "source_file": "experiments/runs/CAM-EXP-004_1_pre_cam005_robustness_audit/results/summary/cam0031_statistical_reanalysis.csv",
+      "source_column_or_key": "median_improvement_pp, ci_lo, ci_hi",
+      "statistical_unit": "VIEW_CLUSTER (175 clusters)",
+      "evidence_level": "CONFIRMED_IN_CURRENT_ENVIRONMENT",
+      "notes": "point estimate identical at every level; only the CI changes. primary"
+    },
+    "cam0031_geocalib_distorted_radial_improvement_pp_camera": {
+      "value": [
+        8.529,
+        3.404,
+        15.723
+      ],
+      "unit": "percentage points [median, ci_lo, ci_hi]",
+      "experiment": "CAM-EXP-004.1",
+      "source_file": "experiments/runs/CAM-EXP-004_1_pre_cam005_robustness_audit/results/summary/cam0031_statistical_reanalysis.csv",
+      "source_column_or_key": "median_improvement_pp, ci_lo, ci_hi",
+      "statistical_unit": "PHYSICAL_CAMERA_CLUSTER (40 clusters)",
+      "evidence_level": "CONFIRMED_IN_CURRENT_ENVIRONMENT",
+      "notes": "point estimate identical at every level; only the CI changes. primary"
+    },
+    "cam0031_geocalib_distorted_radial_improvement_pp_sequence": {
+      "value": [
+        8.529,
+        5.156,
+        12.963
+      ],
+      "unit": "percentage points [median, ci_lo, ci_hi]",
+      "experiment": "CAM-EXP-004.1",
+      "source_file": "experiments/runs/CAM-EXP-004_1_pre_cam005_robustness_audit/results/summary/cam0031_statistical_reanalysis.csv",
+      "source_column_or_key": "median_improvement_pp, ci_lo, ci_hi",
+      "statistical_unit": "SEQUENCE_CLUSTER (5 clusters)",
+      "evidence_level": "EXPLORATORY_INTERNAL_VALIDATION",
+      "notes": "point estimate identical at every level; only the CI changes. 5 clusters - sensitivity analysis only, not a trustworthy CI"
+    },
+    "cam004_anycalib_gen_bias_fraction_pct": {
+      "value": 98.08,
+      "unit": "%",
+      "experiment": "CAM-EXP-004",
+      "source_file": "experiments/runs/CAM-EXP-004_static_camera_multiframe_aggregation/results/summary/bias_noise_summary.csv",
+      "source_column_or_key": "bias_fraction_pct",
+      "statistical_unit": "view",
+      "evidence_level": "ROBUST_BUT_SINGLE_DATASET",
+      "notes": "share of the total squared log focal error that is a stable per-camera offset rather than frame-to-frame scatter"
+    },
+    "cam004_anycalib_gen_median_abs_view_bias_pct": {
+      "value": 9.63,
+      "unit": "%",
+      "experiment": "CAM-EXP-004",
+      "source_file": "experiments/runs/CAM-EXP-004_static_camera_multiframe_aggregation/results/summary/bias_noise_summary.csv",
+      "source_column_or_key": "median_abs_view_bias_pct",
+      "statistical_unit": "view",
+      "evidence_level": "ROBUST_BUT_SINGLE_DATASET",
+      "notes": ""
+    },
+    "cam004_anycalib_gen_median_within_view_std_pct": {
+      "value": 1.43,
+      "unit": "%",
+      "experiment": "CAM-EXP-004",
+      "source_file": "experiments/runs/CAM-EXP-004_static_camera_multiframe_aggregation/results/summary/bias_noise_summary.csv",
+      "source_column_or_key": "median_within_view_std_pct",
+      "statistical_unit": "view",
+      "evidence_level": "ROBUST_BUT_SINGLE_DATASET",
+      "notes": ""
+    },
+    "cam004_geocalib_distorted_bias_fraction_pct": {
+      "value": 53.39,
+      "unit": "%",
+      "experiment": "CAM-EXP-004",
+      "source_file": "experiments/runs/CAM-EXP-004_static_camera_multiframe_aggregation/results/summary/bias_noise_summary.csv",
+      "source_column_or_key": "bias_fraction_pct",
+      "statistical_unit": "view",
+      "evidence_level": "ROBUST_BUT_SINGLE_DATASET",
+      "notes": "share of the total squared log focal error that is a stable per-camera offset rather than frame-to-frame scatter"
+    },
+    "cam004_geocalib_distorted_median_abs_view_bias_pct": {
+      "value": 11.56,
+      "unit": "%",
+      "experiment": "CAM-EXP-004",
+      "source_file": "experiments/runs/CAM-EXP-004_static_camera_multiframe_aggregation/results/summary/bias_noise_summary.csv",
+      "source_column_or_key": "median_abs_view_bias_pct",
+      "statistical_unit": "view",
+      "evidence_level": "ROBUST_BUT_SINGLE_DATASET",
+      "notes": ""
+    },
+    "cam004_geocalib_distorted_median_within_view_std_pct": {
+      "value": 4.66,
+      "unit": "%",
+      "experiment": "CAM-EXP-004",
+      "source_file": "experiments/runs/CAM-EXP-004_static_camera_multiframe_aggregation/results/summary/bias_noise_summary.csv",
+      "source_column_or_key": "median_within_view_std_pct",
+      "statistical_unit": "view",
+      "evidence_level": "ROBUST_BUT_SINGLE_DATASET",
+      "notes": ""
+    },
+    "cam004_pf_uncentered_bias_fraction_pct": {
+      "value": 96.0,
+      "unit": "%",
+      "experiment": "CAM-EXP-004",
+      "source_file": "experiments/runs/CAM-EXP-004_static_camera_multiframe_aggregation/results/summary/bias_noise_summary.csv",
+      "source_column_or_key": "bias_fraction_pct",
+      "statistical_unit": "view",
+      "evidence_level": "ROBUST_BUT_SINGLE_DATASET",
+      "notes": "share of the total squared log focal error that is a stable per-camera offset rather than frame-to-frame scatter"
+    },
+    "cam004_pf_uncentered_median_abs_view_bias_pct": {
+      "value": 23.4,
+      "unit": "%",
+      "experiment": "CAM-EXP-004",
+      "source_file": "experiments/runs/CAM-EXP-004_static_camera_multiframe_aggregation/results/summary/bias_noise_summary.csv",
+      "source_column_or_key": "median_abs_view_bias_pct",
+      "statistical_unit": "view",
+      "evidence_level": "ROBUST_BUT_SINGLE_DATASET",
+      "notes": ""
+    },
+    "cam004_pf_uncentered_median_within_view_std_pct": {
+      "value": 4.61,
+      "unit": "%",
+      "experiment": "CAM-EXP-004",
+      "source_file": "experiments/runs/CAM-EXP-004_static_camera_multiframe_aggregation/results/summary/bias_noise_summary.csv",
+      "source_column_or_key": "median_within_view_std_pct",
+      "statistical_unit": "view",
+      "evidence_level": "ROBUST_BUT_SINGLE_DATASET",
+      "notes": ""
+    },
+    "cam0041_anycalib_gen_N8_focal_err_median": {
+      "value": 9.89,
+      "unit": "%",
+      "experiment": "CAM-EXP-004.1",
+      "source_file": "experiments/runs/CAM-EXP-004_1_pre_cam005_robustness_audit/results/summary/frame_count_8_16_32_64.csv",
+      "source_column_or_key": "median_rel_err_pct",
+      "statistical_unit": "view (175)",
+      "evidence_level": "ROBUST_BUT_SINGLE_DATASET",
+      "notes": "single run; all four N come from the same inference pass"
+    },
+    "cam0041_anycalib_gen_N8_within5": {
+      "value": 20.0,
+      "unit": "% of views",
+      "experiment": "CAM-EXP-004.1",
+      "source_file": "experiments/runs/CAM-EXP-004_1_pre_cam005_robustness_audit/results/summary/frame_count_8_16_32_64.csv",
+      "source_column_or_key": "within_5_pct",
+      "statistical_unit": "view (175)",
+      "evidence_level": "ROBUST_BUT_SINGLE_DATASET",
+      "notes": ""
+    },
+    "cam0041_anycalib_gen_N16_focal_err_median": {
+      "value": 9.966,
+      "unit": "%",
+      "experiment": "CAM-EXP-004.1",
+      "source_file": "experiments/runs/CAM-EXP-004_1_pre_cam005_robustness_audit/results/summary/frame_count_8_16_32_64.csv",
+      "source_column_or_key": "median_rel_err_pct",
+      "statistical_unit": "view (175)",
+      "evidence_level": "ROBUST_BUT_SINGLE_DATASET",
+      "notes": "single run; all four N come from the same inference pass"
+    },
+    "cam0041_anycalib_gen_N16_within5": {
+      "value": 19.43,
+      "unit": "% of views",
+      "experiment": "CAM-EXP-004.1",
+      "source_file": "experiments/runs/CAM-EXP-004_1_pre_cam005_robustness_audit/results/summary/frame_count_8_16_32_64.csv",
+      "source_column_or_key": "within_5_pct",
+      "statistical_unit": "view (175)",
+      "evidence_level": "ROBUST_BUT_SINGLE_DATASET",
+      "notes": ""
+    },
+    "cam0041_anycalib_gen_N32_focal_err_median": {
+      "value": 9.954,
+      "unit": "%",
+      "experiment": "CAM-EXP-004.1",
+      "source_file": "experiments/runs/CAM-EXP-004_1_pre_cam005_robustness_audit/results/summary/frame_count_8_16_32_64.csv",
+      "source_column_or_key": "median_rel_err_pct",
+      "statistical_unit": "view (175)",
+      "evidence_level": "ROBUST_BUT_SINGLE_DATASET",
+      "notes": "single run; all four N come from the same inference pass"
+    },
+    "cam0041_anycalib_gen_N32_within5": {
+      "value": 20.57,
+      "unit": "% of views",
+      "experiment": "CAM-EXP-004.1",
+      "source_file": "experiments/runs/CAM-EXP-004_1_pre_cam005_robustness_audit/results/summary/frame_count_8_16_32_64.csv",
+      "source_column_or_key": "within_5_pct",
+      "statistical_unit": "view (175)",
+      "evidence_level": "ROBUST_BUT_SINGLE_DATASET",
+      "notes": ""
+    },
+    "cam0041_anycalib_gen_N64_focal_err_median": {
+      "value": 9.966,
+      "unit": "%",
+      "experiment": "CAM-EXP-004.1",
+      "source_file": "experiments/runs/CAM-EXP-004_1_pre_cam005_robustness_audit/results/summary/frame_count_8_16_32_64.csv",
+      "source_column_or_key": "median_rel_err_pct",
+      "statistical_unit": "view (175)",
+      "evidence_level": "ROBUST_BUT_SINGLE_DATASET",
+      "notes": "single run; all four N come from the same inference pass"
+    },
+    "cam0041_anycalib_gen_N64_within5": {
+      "value": 20.57,
+      "unit": "% of views",
+      "experiment": "CAM-EXP-004.1",
+      "source_file": "experiments/runs/CAM-EXP-004_1_pre_cam005_robustness_audit/results/summary/frame_count_8_16_32_64.csv",
+      "source_column_or_key": "within_5_pct",
+      "statistical_unit": "view (175)",
+      "evidence_level": "ROBUST_BUT_SINGLE_DATASET",
+      "notes": ""
+    },
+    "cam0041_geocalib_distorted_N8_focal_err_median": {
+      "value": 10.86,
+      "unit": "%",
+      "experiment": "CAM-EXP-004.1",
+      "source_file": "experiments/runs/CAM-EXP-004_1_pre_cam005_robustness_audit/results/summary/frame_count_8_16_32_64.csv",
+      "source_column_or_key": "median_rel_err_pct",
+      "statistical_unit": "view (175)",
+      "evidence_level": "ROBUST_BUT_SINGLE_DATASET",
+      "notes": "single run; all four N come from the same inference pass"
+    },
+    "cam0041_geocalib_distorted_N8_within5": {
+      "value": 22.29,
+      "unit": "% of views",
+      "experiment": "CAM-EXP-004.1",
+      "source_file": "experiments/runs/CAM-EXP-004_1_pre_cam005_robustness_audit/results/summary/frame_count_8_16_32_64.csv",
+      "source_column_or_key": "within_5_pct",
+      "statistical_unit": "view (175)",
+      "evidence_level": "ROBUST_BUT_SINGLE_DATASET",
+      "notes": ""
+    },
+    "cam0041_geocalib_distorted_N16_focal_err_median": {
+      "value": 10.92,
+      "unit": "%",
+      "experiment": "CAM-EXP-004.1",
+      "source_file": "experiments/runs/CAM-EXP-004_1_pre_cam005_robustness_audit/results/summary/frame_count_8_16_32_64.csv",
+      "source_column_or_key": "median_rel_err_pct",
+      "statistical_unit": "view (175)",
+      "evidence_level": "ROBUST_BUT_SINGLE_DATASET",
+      "notes": "single run; all four N come from the same inference pass"
+    },
+    "cam0041_geocalib_distorted_N16_within5": {
+      "value": 21.71,
+      "unit": "% of views",
+      "experiment": "CAM-EXP-004.1",
+      "source_file": "experiments/runs/CAM-EXP-004_1_pre_cam005_robustness_audit/results/summary/frame_count_8_16_32_64.csv",
+      "source_column_or_key": "within_5_pct",
+      "statistical_unit": "view (175)",
+      "evidence_level": "ROBUST_BUT_SINGLE_DATASET",
+      "notes": ""
+    },
+    "cam0041_geocalib_distorted_N32_focal_err_median": {
+      "value": 10.786,
+      "unit": "%",
+      "experiment": "CAM-EXP-004.1",
+      "source_file": "experiments/runs/CAM-EXP-004_1_pre_cam005_robustness_audit/results/summary/frame_count_8_16_32_64.csv",
+      "source_column_or_key": "median_rel_err_pct",
+      "statistical_unit": "view (175)",
+      "evidence_level": "ROBUST_BUT_SINGLE_DATASET",
+      "notes": "single run; all four N come from the same inference pass"
+    },
+    "cam0041_geocalib_distorted_N32_within5": {
+      "value": 22.29,
+      "unit": "% of views",
+      "experiment": "CAM-EXP-004.1",
+      "source_file": "experiments/runs/CAM-EXP-004_1_pre_cam005_robustness_audit/results/summary/frame_count_8_16_32_64.csv",
+      "source_column_or_key": "within_5_pct",
+      "statistical_unit": "view (175)",
+      "evidence_level": "ROBUST_BUT_SINGLE_DATASET",
+      "notes": ""
+    },
+    "cam0041_geocalib_distorted_N64_focal_err_median": {
+      "value": 11.283,
+      "unit": "%",
+      "experiment": "CAM-EXP-004.1",
+      "source_file": "experiments/runs/CAM-EXP-004_1_pre_cam005_robustness_audit/results/summary/frame_count_8_16_32_64.csv",
+      "source_column_or_key": "median_rel_err_pct",
+      "statistical_unit": "view (175)",
+      "evidence_level": "ROBUST_BUT_SINGLE_DATASET",
+      "notes": "single run; all four N come from the same inference pass"
+    },
+    "cam0041_geocalib_distorted_N64_within5": {
+      "value": 22.29,
+      "unit": "% of views",
+      "experiment": "CAM-EXP-004.1",
+      "source_file": "experiments/runs/CAM-EXP-004_1_pre_cam005_robustness_audit/results/summary/frame_count_8_16_32_64.csv",
+      "source_column_or_key": "within_5_pct",
+      "statistical_unit": "view (175)",
+      "evidence_level": "ROBUST_BUT_SINGLE_DATASET",
+      "notes": ""
+    },
+    "cam0041_E2_frozen_N8_focal_err_median": {
+      "value": 6.46,
+      "unit": "%",
+      "experiment": "CAM-EXP-004.1",
+      "source_file": "experiments/runs/CAM-EXP-004_1_pre_cam005_robustness_audit/results/summary/frame_count_8_16_32_64.csv",
+      "source_column_or_key": "median_rel_err_pct",
+      "statistical_unit": "view (175)",
+      "evidence_level": "ROBUST_BUT_SINGLE_DATASET",
+      "notes": "single run; all four N come from the same inference pass"
+    },
+    "cam0041_E2_frozen_N8_within5": {
+      "value": 40.0,
+      "unit": "% of views",
+      "experiment": "CAM-EXP-004.1",
+      "source_file": "experiments/runs/CAM-EXP-004_1_pre_cam005_robustness_audit/results/summary/frame_count_8_16_32_64.csv",
+      "source_column_or_key": "within_5_pct",
+      "statistical_unit": "view (175)",
+      "evidence_level": "ROBUST_BUT_SINGLE_DATASET",
+      "notes": ""
+    },
+    "cam0041_E2_frozen_N16_focal_err_median": {
+      "value": 6.61,
+      "unit": "%",
+      "experiment": "CAM-EXP-004.1",
+      "source_file": "experiments/runs/CAM-EXP-004_1_pre_cam005_robustness_audit/results/summary/frame_count_8_16_32_64.csv",
+      "source_column_or_key": "median_rel_err_pct",
+      "statistical_unit": "view (175)",
+      "evidence_level": "ROBUST_BUT_SINGLE_DATASET",
+      "notes": "single run; all four N come from the same inference pass"
+    },
+    "cam0041_E2_frozen_N16_within5": {
+      "value": 41.71,
+      "unit": "% of views",
+      "experiment": "CAM-EXP-004.1",
+      "source_file": "experiments/runs/CAM-EXP-004_1_pre_cam005_robustness_audit/results/summary/frame_count_8_16_32_64.csv",
+      "source_column_or_key": "within_5_pct",
+      "statistical_unit": "view (175)",
+      "evidence_level": "ROBUST_BUT_SINGLE_DATASET",
+      "notes": ""
+    },
+    "cam0041_E2_frozen_N32_focal_err_median": {
+      "value": 6.703,
+      "unit": "%",
+      "experiment": "CAM-EXP-004.1",
+      "source_file": "experiments/runs/CAM-EXP-004_1_pre_cam005_robustness_audit/results/summary/frame_count_8_16_32_64.csv",
+      "source_column_or_key": "median_rel_err_pct",
+      "statistical_unit": "view (175)",
+      "evidence_level": "ROBUST_BUT_SINGLE_DATASET",
+      "notes": "single run; all four N come from the same inference pass"
+    },
+    "cam0041_E2_frozen_N32_within5": {
+      "value": 40.0,
+      "unit": "% of views",
+      "experiment": "CAM-EXP-004.1",
+      "source_file": "experiments/runs/CAM-EXP-004_1_pre_cam005_robustness_audit/results/summary/frame_count_8_16_32_64.csv",
+      "source_column_or_key": "within_5_pct",
+      "statistical_unit": "view (175)",
+      "evidence_level": "ROBUST_BUT_SINGLE_DATASET",
+      "notes": ""
+    },
+    "cam0041_E2_frozen_N64_focal_err_median": {
+      "value": 6.74,
+      "unit": "%",
+      "experiment": "CAM-EXP-004.1",
+      "source_file": "experiments/runs/CAM-EXP-004_1_pre_cam005_robustness_audit/results/summary/frame_count_8_16_32_64.csv",
+      "source_column_or_key": "median_rel_err_pct",
+      "statistical_unit": "view (175)",
+      "evidence_level": "ROBUST_BUT_SINGLE_DATASET",
+      "notes": "single run; all four N come from the same inference pass"
+    },
+    "cam0041_E2_frozen_N64_within5": {
+      "value": 40.0,
+      "unit": "% of views",
+      "experiment": "CAM-EXP-004.1",
+      "source_file": "experiments/runs/CAM-EXP-004_1_pre_cam005_robustness_audit/results/summary/frame_count_8_16_32_64.csv",
+      "source_column_or_key": "within_5_pct",
+      "statistical_unit": "view (175)",
+      "evidence_level": "ROBUST_BUT_SINGLE_DATASET",
+      "notes": ""
+    },
+    "e2_or_model_rerun_anycalib_gen_cam004_median": {
+      "value": 9.89,
+      "unit": "%",
+      "experiment": "CAM-EXP-004",
+      "source_file": "experiments/runs/CAM-EXP-004_1_pre_cam005_robustness_audit/results/summary/independent_rerun_comparison.csv",
+      "source_column_or_key": "cam_exp_004_median_pct",
+      "statistical_unit": "view (175)",
+      "evidence_level": "ROBUST_BUT_SINGLE_DATASET",
+      "notes": "original CAM-EXP-004 run at N=8"
+    },
+    "e2_or_model_rerun_anycalib_gen_cam0041_median": {
+      "value": 9.89,
+      "unit": "%",
+      "experiment": "CAM-EXP-004.1",
+      "source_file": "experiments/runs/CAM-EXP-004_1_pre_cam005_robustness_audit/results/summary/independent_rerun_comparison.csv",
+      "source_column_or_key": "cam_exp_0041_rerun_median_pct",
+      "statistical_unit": "view (175)",
+      "evidence_level": "ROBUST_BUT_SINGLE_DATASET",
+      "notes": "independent re-run of the identical 8 frames, same environment"
+    },
+    "e2_or_model_rerun_geocalib_distorted_cam004_median": {
+      "value": 11.184,
+      "unit": "%",
+      "experiment": "CAM-EXP-004",
+      "source_file": "experiments/runs/CAM-EXP-004_1_pre_cam005_robustness_audit/results/summary/independent_rerun_comparison.csv",
+      "source_column_or_key": "cam_exp_004_median_pct",
+      "statistical_unit": "view (175)",
+      "evidence_level": "ROBUST_BUT_SINGLE_DATASET",
+      "notes": "original CAM-EXP-004 run at N=8"
+    },
+    "e2_or_model_rerun_geocalib_distorted_cam0041_median": {
+      "value": 10.86,
+      "unit": "%",
+      "experiment": "CAM-EXP-004.1",
+      "source_file": "experiments/runs/CAM-EXP-004_1_pre_cam005_robustness_audit/results/summary/independent_rerun_comparison.csv",
+      "source_column_or_key": "cam_exp_0041_rerun_median_pct",
+      "statistical_unit": "view (175)",
+      "evidence_level": "ROBUST_BUT_SINGLE_DATASET",
+      "notes": "independent re-run of the identical 8 frames, same environment"
+    },
+    "e2_or_model_rerun_E2_frozen_cam004_median": {
+      "value": 6.138,
+      "unit": "%",
+      "experiment": "CAM-EXP-004",
+      "source_file": "experiments/runs/CAM-EXP-004_1_pre_cam005_robustness_audit/results/summary/independent_rerun_comparison.csv",
+      "source_column_or_key": "cam_exp_004_median_pct",
+      "statistical_unit": "view (175)",
+      "evidence_level": "ROBUST_BUT_SINGLE_DATASET",
+      "notes": "original CAM-EXP-004 run at N=8"
+    },
+    "e2_or_model_rerun_E2_frozen_cam0041_median": {
+      "value": 6.46,
+      "unit": "%",
+      "experiment": "CAM-EXP-004.1",
+      "source_file": "experiments/runs/CAM-EXP-004_1_pre_cam005_robustness_audit/results/summary/independent_rerun_comparison.csv",
+      "source_column_or_key": "cam_exp_0041_rerun_median_pct",
+      "statistical_unit": "view (175)",
+      "evidence_level": "ROBUST_BUT_SINGLE_DATASET",
+      "notes": "independent re-run of the identical 8 frames, same environment"
+    },
+    "e2_loso_heldout_median_range_pct": {
+      "value": [
+        5.73,
+        8.797
+      ],
+      "unit": "%",
+      "experiment": "CAM-EXP-004.1",
+      "source_file": "experiments/runs/CAM-EXP-004_1_pre_cam005_robustness_audit/results/summary/ensemble_selection_stability.csv",
+      "source_column_or_key": "heldout_median_of_fixed_E2_pct",
+      "statistical_unit": "sequence fold (5 folds)",
+      "evidence_level": "EXPLORATORY_INTERNAL_VALIDATION",
+      "notes": "RETROSPECTIVE_INTERNAL_VALIDATION - same rig, same 5 sequences; not an independent test"
+    },
+    "e2_loso_heldout_medians_pct": {
+      "value": [
+        7.084,
+        5.73,
+        5.785,
+        5.806,
+        8.797
+      ],
+      "unit": "%",
+      "experiment": "CAM-EXP-004.1",
+      "source_file": "experiments/runs/CAM-EXP-004_1_pre_cam005_robustness_audit/results/summary/ensemble_selection_stability.csv",
+      "source_column_or_key": "heldout_median_of_fixed_E2_pct",
+      "statistical_unit": "sequence fold",
+      "evidence_level": "EXPLORATORY_INTERNAL_VALIDATION",
+      "notes": "order: p36-tea-0010, p41-boxing-0021, p41-plant-0004, p44-dog-0004, p52-instrument-0034"
+    },
+    "e2_loso_folds_selecting_e2": {
+      "value": 5,
+      "unit": "of 5 folds",
+      "experiment": "CAM-EXP-004.1",
+      "source_file": "experiments/runs/CAM-EXP-004_1_pre_cam005_robustness_audit/results/summary/ensemble_selection_stability.csv",
+      "source_column_or_key": "selected_on_training_folds",
+      "statistical_unit": "sequence fold",
+      "evidence_level": "EXPLORATORY_INTERNAL_VALIDATION",
+      "notes": "selection cost 0.00 pp in every fold"
+    },
+    "determinism_anycalib_gen_radial_median_spread_pct": {
+      "value": 0.0,
+      "unit": "%",
+      "experiment": "CAM-EXP-004.1",
+      "source_file": "experiments/runs/CAM-EXP-004_1_pre_cam005_robustness_audit/results/summary/model_determinism_check.csv",
+      "source_column_or_key": "median_spread_pct",
+      "statistical_unit": "frame (40 frames x 3 repeats on byte-identical images)",
+      "evidence_level": "CONFIRMED_IN_CURRENT_ENVIRONMENT",
+      "notes": "run-to-run variation on the SAME input; the input was verified bit-identical (max abs pixel difference 0)"
+    },
+    "determinism_anycalib_gen_radial_p90_spread_pct": {
+      "value": 0.0,
+      "unit": "%",
+      "experiment": "CAM-EXP-004.1",
+      "source_file": "experiments/runs/CAM-EXP-004_1_pre_cam005_robustness_audit/results/summary/model_determinism_check.csv",
+      "source_column_or_key": "p90_spread_pct",
+      "statistical_unit": "frame (40 frames x 3 repeats on byte-identical images)",
+      "evidence_level": "CONFIRMED_IN_CURRENT_ENVIRONMENT",
+      "notes": "run-to-run variation on the SAME input; the input was verified bit-identical (max abs pixel difference 0)"
+    },
+    "determinism_anycalib_gen_radial_max_spread_pct": {
+      "value": 0.0,
+      "unit": "%",
+      "experiment": "CAM-EXP-004.1",
+      "source_file": "experiments/runs/CAM-EXP-004_1_pre_cam005_robustness_audit/results/summary/model_determinism_check.csv",
+      "source_column_or_key": "max_spread_pct",
+      "statistical_unit": "frame (40 frames x 3 repeats on byte-identical images)",
+      "evidence_level": "CONFIRMED_IN_CURRENT_ENVIRONMENT",
+      "notes": "run-to-run variation on the SAME input; the input was verified bit-identical (max abs pixel difference 0)"
+    },
+    "determinism_anycalib_gen_radial_pct_bit_identical": {
+      "value": 100.0,
+      "unit": "%",
+      "experiment": "CAM-EXP-004.1",
+      "source_file": "experiments/runs/CAM-EXP-004_1_pre_cam005_robustness_audit/results/summary/model_determinism_check.csv",
+      "source_column_or_key": "pct_frames_bit_identical",
+      "statistical_unit": "frame (40 frames x 3 repeats on byte-identical images)",
+      "evidence_level": "CONFIRMED_IN_CURRENT_ENVIRONMENT",
+      "notes": "run-to-run variation on the SAME input; the input was verified bit-identical (max abs pixel difference 0)"
+    },
+    "determinism_geocalib_distorted_radial_median_spread_pct": {
+      "value": 1.18,
+      "unit": "%",
+      "experiment": "CAM-EXP-004.1",
+      "source_file": "experiments/runs/CAM-EXP-004_1_pre_cam005_robustness_audit/results/summary/model_determinism_check.csv",
+      "source_column_or_key": "median_spread_pct",
+      "statistical_unit": "frame (40 frames x 3 repeats on byte-identical images)",
+      "evidence_level": "CONFIRMED_IN_CURRENT_ENVIRONMENT",
+      "notes": "run-to-run variation on the SAME input; the input was verified bit-identical (max abs pixel difference 0)"
+    },
+    "determinism_geocalib_distorted_radial_p90_spread_pct": {
+      "value": 6.85,
+      "unit": "%",
+      "experiment": "CAM-EXP-004.1",
+      "source_file": "experiments/runs/CAM-EXP-004_1_pre_cam005_robustness_audit/results/summary/model_determinism_check.csv",
+      "source_column_or_key": "p90_spread_pct",
+      "statistical_unit": "frame (40 frames x 3 repeats on byte-identical images)",
+      "evidence_level": "CONFIRMED_IN_CURRENT_ENVIRONMENT",
+      "notes": "run-to-run variation on the SAME input; the input was verified bit-identical (max abs pixel difference 0)"
+    },
+    "determinism_geocalib_distorted_radial_max_spread_pct": {
+      "value": 41.5,
+      "unit": "%",
+      "experiment": "CAM-EXP-004.1",
+      "source_file": "experiments/runs/CAM-EXP-004_1_pre_cam005_robustness_audit/results/summary/model_determinism_check.csv",
+      "source_column_or_key": "max_spread_pct",
+      "statistical_unit": "frame (40 frames x 3 repeats on byte-identical images)",
+      "evidence_level": "CONFIRMED_IN_CURRENT_ENVIRONMENT",
+      "notes": "run-to-run variation on the SAME input; the input was verified bit-identical (max abs pixel difference 0)"
+    },
+    "determinism_geocalib_distorted_radial_pct_bit_identical": {
+      "value": 0.0,
+      "unit": "%",
+      "experiment": "CAM-EXP-004.1",
+      "source_file": "experiments/runs/CAM-EXP-004_1_pre_cam005_robustness_audit/results/summary/model_determinism_check.csv",
+      "source_column_or_key": "pct_frames_bit_identical",
+      "statistical_unit": "frame (40 frames x 3 repeats on byte-identical images)",
+      "evidence_level": "CONFIRMED_IN_CURRENT_ENVIRONMENT",
+      "notes": "run-to-run variation on the SAME input; the input was verified bit-identical (max abs pixel difference 0)"
+    },
+    "anycam_static_identity_pose_candidate_spread": {
+      "value": 2.7265514290775172e-09,
+      "unit": "induced-flow units",
+      "experiment": "CAM-EXP-004.1",
+      "source_file": "experiments/runs/CAM-EXP-004_1_pre_cam005_robustness_audit/results/summary/anycam_identifiability.json",
+      "source_column_or_key": "results[].spread_across_candidates",
+      "statistical_unit": "synthetic test case",
+      "evidence_level": "CONFIRMED_IN_CURRENT_ENVIRONMENT",
+      "notes": "spread of AnyCam's own focal-scoring objective across its 32 focal candidates; flat means the focal is not identifiable"
+    },
+    "anycam_moving_camera_candidate_spread": {
+      "value": 0.22306479513645172,
+      "unit": "induced-flow units",
+      "experiment": "CAM-EXP-004.1",
+      "source_file": "experiments/runs/CAM-EXP-004_1_pre_cam005_robustness_audit/results/summary/anycam_identifiability.json",
+      "source_column_or_key": "results[].spread_across_candidates",
+      "statistical_unit": "synthetic test case",
+      "evidence_level": "CONFIRMED_IN_CURRENT_ENVIRONMENT",
+      "notes": "spread of AnyCam's own focal-scoring objective across its 32 focal candidates; flat means the focal is not identifiable"
+    }
+  }
+}

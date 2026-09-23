@@ -1,0 +1,31 @@
+{
+  "passed": [
+    "A. every report_numbers source file exists - missing: []",
+    "B. cam0013_recon_vs_provided3d_same_hand_median_mm appears verbatim in report_main_results - value 3.9977 not found",
+    "B. cam002_focal_5pct_root_shift_median_mm appears verbatim in report_main_results - value 32.801 not found",
+    "B. cam003_anycalib_pinhole_focal_err_median appears verbatim in report_main_results - value 16.3102 not found",
+    "B. cam0031_anycalib_gen_radial_focal_err_median appears verbatim in report_main_results - value 9.546 not found",
+    "B. cam0041_anycalib_gen_N64_focal_err_median appears verbatim in report_main_results - value 9.966 not found",
+    "B. cam004_anycalib_gen_bias_fraction_pct appears verbatim in report_main_results - value 98.08 not found",
+    "C1. Fig04.csv matches CAM-EXP-002 summary - rows []",
+    "C2. Fig06.csv N>=8 matches the CAM-EXP-004.1 summary (same run, same aggregation) - []",
+    "C3. Fig01.csv exists",
+    "C3. Fig03.csv exists",
+    "C3. Fig04.csv exists",
+    "C3. Fig05.csv exists",
+    "C3. Fig06.csv exists",
+    "C3. Fig07.csv exists",
+    "D. no '1400' presented as an independent sample count",
+    "E. no dangerous phrasing used assertively",
+    "F. 6.14 % never appears without its re-run / LOSO context",
+    "G. every file mentioning GeoCalib carries the reproducibility caveat - []",
+    "H1. manifest records the AnyCam commit - e609cc8a9e4ee8f78cf2ce39ebeb86b35e82d10d",
+    "H2. manifest records that end-to-end inference did not run",
+    "H3. the run table agrees with the manifest - e609cc8a9e4ee8f78cf2ce39ebeb86b35e82d10d",
+    "H4. no file still records AnyCam as NOT_INSTALLED - []",
+    "I. no historical raw/summary result file was modified - []"
+  ],
+  "warnings": [],
+  "failed": [],
+  "status": "PASS"
+}

@@ -1,0 +1,23 @@
+# Where every report-facing number comes from
+
+Paths are relative to `experiments/` unless they start with `runs/` or `manifests/`, which are also under `experiments/`. Scripts are relative to this package.
+
+| artifact | claim or metric | source experiment | source file | source columns | transformation | script |
+|---|---|---|---|---|---|---|
+| Fig01 | pipeline assumed focal (5000 px) and GigaHands physical focal | CAM-EXP-002 | runs/CAM-EXP-002_camera_focal_sensitivity/results/summary/baseline_vs_gt_focal.csv | focal_used_px_median | none - read directly | scripts/make_figures.py::fig01 |
+| Fig02 | one headline finding per experiment | all | report_numbers.json | several keys | none - each value is quoted from report_numbers.json | scripts/make_figures.py::fig02 |
+| Fig03 | QC counts, camera-clean and bimanual-clean subset sizes | CAM-EXP-001.3 / CAM-EXP-003 | manifests/gigahands_demo_qc_v1.csv.gz; manifests/gigahands_demo_camera_benchmark_v1.csv.gz; manifests/gigahands_demo_bimanual_clean_v1.csv.gz | qc_status, usable_for_camera_benchmark, row counts | counting only | scripts/build_report_numbers.py, scripts/make_figures.py::fig03 |
+| Fig04 | median and p90 depth displacement per focal perturbation | CAM-EXP-002 | runs/CAM-EXP-002_camera_focal_sensitivity/results/summary/focal_sensitivity_summary.csv | incremental_signed_dz_median_mm, incremental_root_shift_p90_mm | none - read directly | scripts/make_figures.py::fig04 |
+| Fig05 | single-frame focal error, pinhole vs distortion-aware | CAM-EXP-003 / CAM-EXP-003.1 | runs/CAM-EXP-003_single_frame_calibration_benchmark/results/summary/model_summary.csv; runs/CAM-EXP-003_1_distortion_aware_diagnostic/results/summary/model_summary.csv | focal_error_pct_median, within_5pct_rate, within_10pct_rate, within_20pct_rate | rates multiplied by 100 for display | scripts/make_figures.py::fig05 |
+| Fig05 caption | view-clustered paired CI for the distortion-aware gain | CAM-EXP-004.1 | runs/CAM-EXP-004_1_pre_cam005_robustness_audit/results/summary/cam0031_statistical_reanalysis.csv | median_improvement_pp, ci_lo, ci_hi (resampling_unit = VIEW_CLUSTER) | none | scripts/build_report_numbers.py |
+| Fig06 | median focal error for N = 1..64, one run | CAM-EXP-004.1 | runs/CAM-EXP-004_1_pre_cam005_robustness_audit/results/raw/extended_frame_predictions.csv.gz | pred_fx, gt_fx, grid_pos, in_n8, in_n16, in_n32 | re-aggregated with the frozen CAM-EXP-004 rules; for N<=8 all C(8,N) subsets of the frozen 8-frame set, averaged per view. NO new inference. | scripts/build_multiframe_curve.py |
+| Fig06 crosses | CAM-EXP-004 original run at N = 1,2,4,8 | CAM-EXP-004 | runs/CAM-EXP-004_static_camera_multiframe_aggregation/results/raw/per_view_aggregation.csv.gz; .../cross_model_ensemble.csv.gz | mean_rel_err_pct | median over views; plotted as points, never joined to the curve | scripts/build_multiframe_curve.py |
+| Fig07 panel A | bias vs noise share of the squared log focal error | CAM-EXP-004 | runs/CAM-EXP-004_static_camera_multiframe_aggregation/results/summary/bias_noise_summary.csv | bias_fraction_pct, within_fraction_pct | none | scripts/make_figures.py::fig07 |
+| Fig07 panel B | median error and within-5 % rate at N = 8 | CAM-EXP-004.1 | figures/main/data/Fig06.csv | median_rel_err_pct, within_5_pct | single-run re-aggregation | scripts/build_multiframe_curve.py, scripts/make_figures.py::fig07 |
+| Fig07 panel C | signed median focal error per model | CAM-EXP-003.1 | runs/CAM-EXP-003_1_distortion_aware_diagnostic/results/summary/model_summary.csv | signed_focal_error_pct_median | E2's value is taken from the CAM-EXP-004.1 re-run aggregation | scripts/make_figures.py::fig07 |
+| tables/report_dataset_usage | per-experiment data counts | all | the four GigaHands manifests plus each run's summary | several | counting only | scripts/build_tables.py |
+| tables/hypothesis_result_evidence | hypothesis, result, evidence level | all | report_numbers.json | several keys | none | scripts/build_tables.py |
+| tables/claim_evidence_ledger | allowed claims and wording | all | report_numbers.json | several keys | none | scripts/build_tables2.py |
+| tables/report_main_results | headline numbers per section | all | report_numbers.json | several keys | none | scripts/build_tables2.py |
+| tables/multiframe_run_agreement | difference between the two runs at the overlapping N | CAM-EXP-004 vs 004.1 | figures/main/data/Fig06.csv and Fig06_cam004_original.csv | median_rel_err_pct | subtraction | scripts/build_multiframe_curve.py |
+| report_numbers.json | every report-facing number | all | the canonical summary files listed in each entry | per entry | read only | scripts/build_report_numbers.py |

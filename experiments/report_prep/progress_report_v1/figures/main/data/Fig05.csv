@@ -1,0 +1,6 @@
+model,median_rel_focal_err_pct,within_5_pct,within_10_pct,within_20_pct,distortion_aware,source
+AnyCalib pinhole,16.31,11.43,25.71,64.0,0,CAM-EXP-003 / CAM-EXP-003.1 model_summary.csv
+AnyCalib distortion-aware,9.546,20.14,53.21,94.14,1,CAM-EXP-003 / CAM-EXP-003.1 model_summary.csv
+GeoCalib pinhole,24.965,11.5,23.86,42.86,0,CAM-EXP-003 / CAM-EXP-003.1 model_summary.csv
+GeoCalib distortion-aware,12.162,21.79,41.64,70.14,1,CAM-EXP-003 / CAM-EXP-003.1 model_summary.csv
+PerspectiveFields uncentered (no distortion variant),23.535,11.14,22.57,43.64,0,CAM-EXP-003 / CAM-EXP-003.1 model_summary.csv
