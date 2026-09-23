@@ -21,17 +21,25 @@ from .base import CalibrationAdapter, CalibrationPrediction
 MODEL_ID = "anycalib_pinhole"
 CAM_ID = "pinhole"
 
+# Distortion-aware use (CAM-EXP-003.1). AnyCalib's "radial" model is
+#     x = fx * (X/Z) * (1 + k1 r^2 + k2 r^4 + ...) + cx
+# i.e. the same normalised radial polynomial as OpenCV's Brown-Conrady; it has
+# no tangential terms. num_k defaults to 2, so "radial" == "radial:2".
+DIST_MODEL_ID = "anycalib_dist"
+DIST_CAM_ID = "radial:2"
+
 
 class AnyCalibAdapter(CalibrationAdapter):
     name = "AnyCalib"
     predicts_principal_point = True
-    predicts_distortion = False           # the pinhole variant predicts none
+    predicts_distortion = False           # set True by the radial variants
 
     def __init__(self, device: str = "cuda", model_id: str = MODEL_ID,
                  cam_id: str = CAM_ID):
         super().__init__(device)
         self.model_id = model_id
         self.cam_id = cam_id
+        self.predicts_distortion = not cam_id.startswith("pinhole")
         self.name = f"AnyCalib[{model_id}/{cam_id}]"
 
     def _load(self):
@@ -53,10 +61,15 @@ class AnyCalibAdapter(CalibrationAdapter):
                                          raw_output=str(intr.tolist()),
                                          failure_reason="unexpected intrinsics length")
         fx, fy, cx, cy = (float(v) for v in intr[:4])
+        dist = intr[4:] if intr.size > 4 else np.zeros(0)
         return CalibrationPrediction(
             model=self.name, fx_px=fx, fy_px=fy, cx_px=cx, cy_px=cy,
+            distortion=",".join(f"{v:.8g}" for v in dist),
             raw_output=f"intrinsics={intr[:4].tolist()} pred_size={tuple(pred_size)}",
             conversion_note=("none needed: predict() already applies "
                              "reverse_scale_and_shift back to original pixels"),
             failure_reason="" if ok else "model reported success=False",
-            extra={"pred_size": str(tuple(pred_size)), "model_success_flag": ok})
+            extra={"pred_size": str(tuple(pred_size)), "model_success_flag": ok,
+                   "cam_id": self.cam_id,
+                   "k1": float(dist[0]) if dist.size > 0 else "",
+                   "k2": float(dist[1]) if dist.size > 1 else ""})

@@ -1,0 +1,12 @@
+model_run,n_views,median_abs_view_bias_pct,median_signed_view_bias_pct,view_bias_p90_abs_pct,within_view_cv_median,within_view_cv_p90
+A:anycalib,175,16.4609,15.5684,32.0586,0.01602,0.03718
+A:geocalib,175,21.6152,13.9881,71.0971,0.06045,0.44188
+A:pf_centered,175,20.2078,-11.5944,35.9011,0.06187,0.18095
+A:pf_uncentered,175,23.8796,23.5432,66.4633,0.04933,0.09611
+anycalib_dist_radial,175,11.1224,-11.1195,19.3914,0.01548,0.02989
+anycalib_gen_radial,175,9.8896,-9.2511,18.6814,0.01522,0.03046
+geocalib_distorted_radial,175,11.1838,6.2011,41.315,0.04828,0.4546
+undist_anycalib_pinhole,175,10.7009,9.7468,21.8651,0.01179,0.0318
+undist_geocalib_pinhole,175,12.6574,0.0407,36.1202,0.03178,0.22145
+undist_pf_centered,175,27.8649,-26.1897,49.2707,0.0653,0.17675
+undist_pf_uncentered,175,15.4137,-12.3959,36.0272,0.04731,0.10353
