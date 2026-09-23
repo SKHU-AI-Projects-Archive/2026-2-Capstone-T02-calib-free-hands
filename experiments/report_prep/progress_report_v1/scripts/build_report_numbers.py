@@ -62,7 +62,9 @@ def dataset_numbers():
     add("gigahands_bimanual_clean_frames", len(bm), "frames", "CAM-EXP-001.3",
         MANIFESTS / "gigahands_demo_bimanual_clean_v1.csv.gz", "row count",
         "frame within a view", "CONFIRMED_IN_CURRENT_ENVIRONMENT",
-        "frames where BOTH hands pass strict QC")
+        "frames where BOTH hands pass strict QC. This is the ELIGIBLE POOL that "
+        "CAM-EXP-002 draws from; it is NOT the sample CAM-EXP-002 evaluated - "
+        "see cam002_frames_attempted / cam002_hands_evaluated.")
     add("gigahands_bimanual_clean_views", len({(r["sequence"], r["camera"]) for r in bm}),
         "views", "CAM-EXP-001.3", MANIFESTS / "gigahands_demo_bimanual_clean_v1.csv.gz",
         "distinct (sequence, camera)", "view", "CONFIRMED_IN_CURRENT_ENVIRONMENT", "")
@@ -123,9 +125,11 @@ def exp001_numbers():
         "CAM-EXP-001.3", R0013 / "results/summary/triangulation_summary.csv", "n",
         "hand observation", "CONFIRMED_IN_CURRENT_ENVIRONMENT", "")
 
+    # every verdict class, including the ones that were NOT explained. Leaving
+    # UNRESOLVED_INSUFFICIENT_GEOMETRY out would make the diagnosis look more
+    # complete than it is.
     ident = read_csv(R0013 / "results" / "summary" / "identity_verdict_summary.csv")
-    for case in ("MULTIVIEW_CONFIRMED_GOOD", "CONFIRMED_2D_HAND_IDENTITY_SWAP",
-                 "BAD_2D_GEOMETRY", "NO_USABLE_2D_ANNOTATION"):
+    for case in sorted(r["case"] for r in ident):
         r = pick(ident, case=case)
         add(f"cam0013_identity_{case.lower()}_n", int(r["n"]), "hand observations",
             "CAM-EXP-001.3", R0013 / "results/summary/identity_verdict_summary.csv",
@@ -145,7 +149,75 @@ def exp001_numbers():
 
 
 # --------------------------------------------------------------- CAM-EXP-002
+def exp002_usage():
+    """What CAM-EXP-002 actually ran on, as opposed to what it could have run on.
+
+    The bimanual-clean manifest is the ELIGIBLE POOL. The experiment drew a
+    stratified sample from it, and frames were lost to detector and
+    hand-association failures before evaluation. Those are different numbers and
+    are recorded separately.
+    """
+    meta = read_json(R002 / "results" / "summary" / "_inference_meta.json")
+    cache = read_csv(R002 / "results" / "raw" / "inference_cache_index.csv")
+    mfail = read_csv(R002 / "results" / "raw" / "model_failures.csv")
+    afail = read_csv(R002 / "results" / "raw" / "hand_association_failures.csv")
+    hands = [r for r in read_csv(R002 / "results" / "raw"
+                                 / "focal_sweep_per_hand.csv.gz")
+             if r["condition"] == "GT_x1.00"]
+    frames = [r for r in read_csv(R002 / "results" / "raw"
+                                  / "focal_sweep_per_frame.csv.gz")
+              if r["condition"] == "GT_x1.00"]
+    ok = [r for r in cache if r["status"] != "no_detection"]
+    src = R002 / "results" / "raw" / "inference_cache_index.csv"
+
+    add("cam002_frames_attempted", len(cache), "frames", "CAM-EXP-002", src,
+        "row count", "frame", "CONFIRMED_IN_CURRENT_ENVIRONMENT",
+        f"stratified sample drawn from the bimanual-clean eligible pool "
+        f"(target {meta['target_n']}, seed {meta['seed']}); grouped by "
+        "(sequence, camera), shuffled, taken round-robin and evenly spaced in "
+        "time within a group")
+    add("cam002_frames_inference_successful", len(ok), "frames", "CAM-EXP-002",
+        src, "status != no_detection", "frame",
+        "CONFIRMED_IN_CURRENT_ENVIRONMENT", "")
+    add("cam002_model_failures", len(mfail), "frames", "CAM-EXP-002",
+        R002 / "results" / "raw" / "model_failures.csv", "row count", "frame",
+        "CONFIRMED_IN_CURRENT_ENVIRONMENT", "no hand detected")
+    add("cam002_hand_association_failures", len(afail), "frames", "CAM-EXP-002",
+        R002 / "results" / "raw" / "hand_association_failures.csv", "row count",
+        "frame", "CONFIRMED_IN_CURRENT_ENVIRONMENT",
+        "AMBIGUOUS_HAND_ASSOCIATION; the frame is dropped rather than guessed")
+    hsrc = R002 / "results" / "raw" / "focal_sweep_per_hand.csv.gz"
+    add("cam002_frames_evaluated", len({(r["sequence"], r["camera"], r["frame"])
+                                        for r in hands}), "frames",
+        "CAM-EXP-002", hsrc, "distinct (sequence, camera, frame) at GT_x1.00",
+        "frame", "CONFIRMED_IN_CURRENT_ENVIRONMENT",
+        "frames contributing at least one evaluated hand")
+    add("cam002_hands_evaluated", len(hands), "hands", "CAM-EXP-002", hsrc,
+        "rows at condition GT_x1.00", "hand",
+        "CONFIRMED_IN_CURRENT_ENVIRONMENT",
+        "the analysis unit; matches n_hands in the summary tables")
+    add("cam002_views_evaluated", len({(r["sequence"], r["camera"])
+                                       for r in hands}), "views", "CAM-EXP-002",
+        hsrc, "distinct (sequence, camera) at GT_x1.00", "view",
+        "CONFIRMED_IN_CURRENT_ENVIRONMENT", "")
+    add("cam002_unique_physical_cameras_evaluated",
+        len({r["camera"] for r in hands}), "cameras", "CAM-EXP-002", hsrc,
+        "distinct camera id at GT_x1.00", "physical camera",
+        "CONFIRMED_IN_CURRENT_ENVIRONMENT", "")
+    add("cam002_sequences_evaluated", len({r["sequence"] for r in hands}),
+        "sequences", "CAM-EXP-002", hsrc, "distinct sequence at GT_x1.00",
+        "sequence", "CONFIRMED_IN_CURRENT_ENVIRONMENT", "")
+    add("cam002_bimanual_frames_evaluated",
+        len({(r["sequence"], r["camera"], r["frame"]) for r in frames}),
+        "frames", "CAM-EXP-002",
+        R002 / "results" / "raw" / "focal_sweep_per_frame.csv.gz",
+        "distinct frames at GT_x1.00", "frame",
+        "CONFIRMED_IN_CURRENT_ENVIRONMENT",
+        "frames where BOTH hands were evaluated, used for the bimanual metrics")
+
+
 def exp002_numbers():
+    exp002_usage()
     bl = read_csv(R002 / "results" / "summary" / "baseline_vs_gt_focal.csv")
     base = pick(bl, condition="PIPELINE_BASELINE")
     gt = pick(bl, condition="GT_x1.00")
@@ -278,7 +350,11 @@ def exp004_numbers():
             "CAM-EXP-004", R004 / "results/summary/bias_noise_summary.csv",
             "bias_fraction_pct", "view", "ROBUST_BUT_SINGLE_DATASET",
             "share of the total squared log focal error that is a stable "
-            "per-camera offset rather than frame-to-frame scatter")
+            "BETWEEN-VIEW component: the decomposition unit is the "
+            "(sequence, camera) static view, with frames treated as repeated "
+            "observations inside it. This is NOT a physical-camera-level "
+            "statement; physical camera is a RESAMPLING unit used in "
+            "CAM-EXP-004.1, not the decomposition unit.")
         add(f"cam004_{m}_median_abs_view_bias_pct", f(r["median_abs_view_bias_pct"], 2),
             "%", "CAM-EXP-004", R004 / "results/summary/bias_noise_summary.csv",
             "median_abs_view_bias_pct", "view", "ROBUST_BUT_SINGLE_DATASET", "")

@@ -123,10 +123,11 @@ def fig02():
          f"{v('cam0031_anycalib_gen_radial_focal_err_median')} %), "
          "but ~10 % remains"),
         ("Experiment 4\nMulti-frame use & bias analysis",
-         f"{v('cam004_anycalib_gen_bias_fraction_pct'):.0f} % of the residual is "
-         "per-camera bias;\n8-64 frames do not remove it"),
+         f"{v('cam004_anycalib_gen_bias_fraction_pct'):.0f} % of the residual is a "
+         "stable between-view\ncomponent; 8-64 frames do not remove it"),
         ("Current bottleneck",
-         "a stable per-camera / per-view bias,\nnot frame count and not frame choice"),
+         "a stable per-(sequence, camera) view bias,\n"
+         "not frame count and not frame choice"),
         ("Next: CAM-EXP-005",
          "why does each view have its own bias?\n(scene / background / viewpoint cues)"),
         ("Later",
@@ -165,18 +166,19 @@ def fig02():
 # ------------------------------------------------------------------- Fig 03
 def fig03():
     qc_total = v("gigahands_qc_total_observations")
-    fig, ax = plt.subplots(figsize=(12.0, 8.6))
+    fig, ax = plt.subplots(figsize=(12.6, 11.0))
     ax.set_xlim(0, 100)
-    ax.set_ylim(0, 100)
+    ax.set_ylim(-16, 100)
     ax.axis("off")
 
-    def box(x, y, w, h, txt, bold=False, fc="white", hatch=None, ls="-"):
+    def box(x, y, w, h, txt, bold=False, fc="white", hatch=None, ls="-",
+            fs=9.2):
         ax.add_patch(FancyBboxPatch((x, y), w, h, boxstyle="round,pad=0.5",
                                     linewidth=1.8 if bold else 1.1,
                                     edgecolor="black", facecolor=fc,
-                                    hatch=hatch, linestyle=ls))
+                                    hatch=hatch, linestyle=ls, zorder=2))
         ax.text(x + w / 2, y + h / 2, txt, ha="center", va="center",
-                fontsize=9.6, fontweight="bold" if bold else "normal")
+                fontsize=fs, fontweight="bold" if bold else "normal", zorder=3)
 
     def arrow(x1, y1, x2, y2):
         ax.add_patch(FancyArrowPatch((x1, y1), (x2, y2), arrowstyle="-|>",
@@ -189,12 +191,18 @@ def fig03():
     box(30, 74, 40, 8, "camera / coordinate convention validation\n"
                        "(CAM-EXP-001)")
     arrow(50, 73.6, 50, 68.5)
-    box(18, 57, 64, 11,
-        "diagnosis of the error tail (CAM-EXP-001.1 / 001.2)\n"
+    box(14, 56, 72, 12,
+        "diagnosis of PART of the error tail (CAM-EXP-001.1 / 001.2)\n"
         f"all-zero 2D pattern: {v('gigahands_qc_zero_pattern_n'):,} observations   |   "
-        "per-camera left/right swaps\nRGB segment matching   |   chosen-frame "
-        "index audit against official source")
-    arrow(50, 56.6, 50, 51.5)
+        f"left/right identity swaps within a view: "
+        f"{v('cam0013_identity_confirmed_2d_hand_identity_swap_n'):,}\n"
+        "RGB segment matching   |   chosen-frame index audit against official "
+        "source\n"
+        f"NOT explained: {v('cam0013_identity_bad_2d_geometry_n'):,} "
+        "BAD_2D_GEOMETRY, "
+        f"{v('cam0013_identity_unresolved_insufficient_geometry_n'):,} "
+        "UNRESOLVED_INSUFFICIENT_GEOMETRY")
+    arrow(50, 55.6, 50, 51.5)
     box(22, 40, 56, 11,
         "independent multi-view reconstruction + leave-one-camera-out\n"
         "(CAM-EXP-001.3; the provided 3D is never an input)\n"
@@ -209,32 +217,59 @@ def fig03():
         f"PASS_SINGLE_HAND {v('gigahands_qc_pass_single_hand_n'):,}  |  "
         f"REVIEW {v('gigahands_qc_review_n'):,}  |  "
         f"EXCLUDE {v('gigahands_qc_exclude_n'):,}", bold=True)
-    arrow(40, 25.6, 24, 19.5)
-    arrow(60, 25.6, 76, 19.5)
-    box(3, 6, 42, 13,
+    arrow(40, 25.6, 25, 18.6)
+    arrow(60, 25.6, 75, 18.6)
+    box(2, 1, 46, 17,
         "A. CAMERA-CLEAN subset\n(needs RGB + valid camera parameters)\n\n"
         f"{v('camera_benchmark_views_usable')} of 200 views, "
         f"{v('gigahands_unique_physical_cameras')} physical cameras\n"
         f"{v('camera_benchmark_views_excluded')} excluded: no usable RGB segment\n"
-        "hand annotation quality is NOT a filter here\n"
-        "-> Experiments 3 and 4", bold=True, fc="#ededed")
-    box(55, 6, 42, 13,
-        "B. HAND-CLEAN / BIMANUAL-CLEAN subset\n(needs valid hand annotation; "
-        "bimanual needs BOTH hands)\n\n"
+        "hand annotation quality is NOT a filter here\n\n"
+        "-> Experiments 3 and 4", bold=True, fc="#ededed", fs=8.8)
+    box(52, 1, 46, 17,
+        "B. HAND-CLEAN / BIMANUAL-CLEAN ELIGIBLE POOL\n"
+        "(needs valid hand annotation;\nbimanual needs BOTH hands)\n\n"
         f"{v('gigahands_bimanual_clean_frames'):,} frames over "
-        f"{v('gigahands_bimanual_clean_views')} views\n"
-        "-> Experiment 2, and later hand-aware work", bold=True, fc="#ededed",
-        hatch="\\\\\\")
+        f"{v('gigahands_bimanual_clean_views')} views\n\n"
+        "-> the pool Experiment 2 draws from,\nand later hand-aware work",
+        bold=True, fc="white", ls="--", fs=8.8)
+    arrow(75, 0.6, 75, -3.0)
+    box(48, -14, 50, 11,
+        "stratified sample ACTUALLY EVALUATED in CAM-EXP-002\n\n"
+        f"{v('cam002_frames_attempted'):,} frames drawn  ->  "
+        f"{v('cam002_frames_evaluated'):,} evaluated  ->  "
+        f"{v('cam002_hands_evaluated'):,} hands\n"
+        f"{v('cam002_views_evaluated')} views, "
+        f"{v('cam002_unique_physical_cameras_evaluated')} physical cameras, "
+        f"{v('cam002_sequences_evaluated')} sequences\n"
+        f"(dropped: {v('cam002_model_failures')} no-detection, "
+        f"{v('cam002_hand_association_failures')} ambiguous association)")
     ax.set_title("GigaHands validation and QC flow, and why the experiments use "
-                 "different subsets", fontsize=12.5, pad=10)
+                 "different subsets\n"
+                 "(an eligible pool is not the sample an experiment evaluated)",
+                 fontsize=12, pad=10)
     save(fig, "Fig03_gigahands_validation_and_qc_flow")
+    def role(k):
+        if k.startswith("cam002_"):
+            return "CAM-EXP-002 evaluated sample"
+        if k.startswith("gigahands_bimanual"):
+            return "eligible pool (NOT the evaluated sample)"
+        if k.startswith("camera_benchmark"):
+            return "camera-clean subset"
+        return "QC labelling"
+
     write_csv(DATA / "Fig03.csv", [
-        {"quantity": k, "value": v(k), "source": NUM[k]["source_file"]}
+        {"quantity": k, "value": v(k), "role": role(k),
+         "source": NUM[k]["source_file"]}
         for k in ("gigahands_qc_total_observations", "gigahands_qc_pass_strict_n",
                   "gigahands_qc_pass_single_hand_n", "gigahands_qc_review_n",
                   "gigahands_qc_exclude_n", "gigahands_qc_zero_pattern_n",
                   "camera_benchmark_views_usable", "camera_benchmark_views_excluded",
                   "gigahands_bimanual_clean_frames", "gigahands_bimanual_clean_views",
+                  "cam002_frames_attempted", "cam002_frames_evaluated",
+                  "cam002_hands_evaluated", "cam002_views_evaluated",
+                  "cam002_unique_physical_cameras_evaluated",
+                  "cam002_sequences_evaluated",
                   "gigahands_unique_physical_cameras")])
 
 
@@ -262,8 +297,11 @@ def fig04():
     ax.set_xlabel("focal-length perturbation (%)")
     ax.set_ylabel("absolute depth displacement of the hand (mm)")
     ax.set_title("Focal-length sensitivity of absolute hand depth\n"
-                 f"({v('cam002_n_hands'):,} hands, GigaHands bimanual-clean subset)",
-                 fontsize=11.5)
+                 f"evaluated sample: {v('cam002_hands_evaluated'):,} hands / "
+                 f"{v('cam002_frames_evaluated'):,} frames / "
+                 f"{v('cam002_views_evaluated')} views, drawn from the "
+                 f"{v('gigahands_bimanual_clean_frames'):,}-frame\n"
+                 "bimanual-clean eligible pool", fontsize=10.5)
     ax.legend(loc="upper left", frameon=False)
     ax.text(0.98, 0.04,
             "the near-linear relation is expected from the pipeline equation "
@@ -276,6 +314,11 @@ def fig04():
          "median_root_shift_mm": r["incremental_root_shift_median_mm"],
          "p90_root_shift_mm": r["incremental_root_shift_p90_mm"],
          "n_hands": r["n_hands"],
+         "evaluated_sample_note":
+             f"{v('cam002_hands_evaluated')} hands / "
+             f"{v('cam002_frames_evaluated')} frames / "
+             f"{v('cam002_views_evaluated')} views, sampled from a "
+             f"{v('gigahands_bimanual_clean_frames')}-frame eligible pool",
          "source": "experiments/runs/CAM-EXP-002_camera_focal_sensitivity/"
                    "results/summary/focal_sensitivity_summary.csv"} for r in rows])
 

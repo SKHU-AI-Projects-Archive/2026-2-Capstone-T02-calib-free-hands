@@ -7,6 +7,7 @@ These rules apply to every experiment in this report and can be quoted directly 
 | primary statistical unit | one static camera view within one sequence, i.e. (sequence, camera). 175 of them in the camera experiments. |
 | frame | a repeated observation of that view, NOT an independent sample. 1400 frames means 175 views x 8 frames. |
 | coarser cluster units | physical camera id (40) and sequence (5), used to check that results survive correlated structure. Five clusters is a sensitivity check, not a trustworthy confidence interval. |
+| bias-decomposition unit vs resampling unit | these are different and must not be conflated. The bias/noise decomposition is computed over the (sequence, camera) STATIC VIEW, with frames as repeated observations inside it - so its output is a between-view component, not a physical-camera-level bias. Physical camera and sequence are RESAMPLING units, used only to widen confidence intervals in the CAM-EXP-004.1 robustness check. |
 | focal reference | the dataset-provided camera intrinsics. |
 | provided 3D | a reference / self-consistency target, not an independent external ground truth. |
 | provided 2D | dataset-provided 2D observations with confidence, not curated GT. An all-zero (0,0) entry is an observed invalid pattern, not a documented sentinel. |

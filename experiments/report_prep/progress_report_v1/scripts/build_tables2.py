@@ -116,22 +116,28 @@ def claim_ledger():
          "external_confirmation_needed": "yes",
          "report_section": "6 (Experiment 3)"},
         {"claim_id": "C06",
-         "claim_we_may_write": "The residual focal error of the best model is a "
-                               "stable per-camera bias, not frame-to-frame noise.",
+         "claim_we_may_write": "The residual focal error of the best model is "
+                               "dominated by a stable between-view component - a "
+                               "per-(sequence, camera) static-view bias - rather "
+                               "than by frame-to-frame noise.",
          "supporting_experiment": "CAM-EXP-004",
          "supporting_numbers": f"{v('cam004_anycalib_gen_bias_fraction_pct')} % of "
-                               "AnyCalib's squared log error is per-view bias; "
-                               f"median |bias| "
+                               "AnyCalib's squared log focal error is the "
+                               "between-view component; median |view bias| "
                                f"{v('cam004_anycalib_gen_median_abs_view_bias_pct')} % "
                                f"vs within-view sd "
                                f"{v('cam004_anycalib_gen_median_within_view_std_pct')} %",
          "evidence_level": "ROBUST_BUT_SINGLE_DATASET",
-         "allowed_wording": "본 GigaHands 고정카메라 환경에서 AnyCalib의 잔여 초점거리 "
-                            "오차는 프레임 간 랜덤 변동보다 카메라 관점별 편향에 의해 "
-                            "지배되었다.",
-         "wording_to_avoid": "모든 고정카메라 calibration 모델의 오류는 view bias "
+         "allowed_wording": "AnyCalib 잔여 오차는 동일 고정 관점 내 프레임 노이즈보다 "
+                            "(sequence, camera) 관점별 안정적 편향에 의해 "
+                            "지배되었다. 분해 단위는 고정 관점이며, "
+                            "physical camera 단위의 편향을 측정한 것이 아니다.",
+         "wording_to_avoid": "98.1 %의 오차가 physical-camera bias 때문이다 / "
+                             "모든 고정카메라 calibration 모델의 오류는 view bias "
                              "때문이다.",
-         "scope": "one rig, 40 physical cameras",
+         "scope": "one rig; the decomposition unit is the (sequence, camera) "
+                  "static view, NOT the physical camera. Physical camera is a "
+                  "resampling unit used for robustness in CAM-EXP-004.1.",
          "external_confirmation_needed": "yes",
          "report_section": "7 (Experiment 4)"},
         {"claim_id": "C07",
@@ -294,7 +300,12 @@ def main_results():
                   f"{v('cam002_pipeline_virtual_focal_px'):.0f} px -> "
                   f"{v('cam002_physical_focal_root_error_median_mm'):.1f} mm at "
                   f"{v('cam002_gigahands_physical_focal_median_px'):.1f} px",
-         "n": f"{v('cam002_n_hands'):,} hands",
+         "n": f"{v('cam002_hands_evaluated'):,} hands over "
+              f"{v('cam002_frames_evaluated'):,} evaluated frames "
+              f"({v('cam002_views_evaluated')} views, "
+              f"{v('cam002_unique_physical_cameras_evaluated')} physical "
+              f"cameras), sampled from a "
+              f"{v('gigahands_bimanual_clean_frames'):,}-frame eligible pool",
          "statistical_unit": "hand",
          "evidence_level": "ROBUST_BUT_SINGLE_DATASET",
          "caveat": "root-aligned MPJPE is identical "
@@ -305,7 +316,12 @@ def main_results():
          "value": f"5 % -> {v('cam002_focal_5pct_root_shift_median_mm')} mm; "
                   f"10 % -> {v('cam002_focal_10pct_root_shift_median_mm')} mm; "
                   f"20 % -> {v('cam002_focal_20pct_root_shift_median_mm')} mm",
-         "n": f"{v('cam002_n_hands'):,} hands",
+         "n": f"{v('cam002_hands_evaluated'):,} hands over "
+              f"{v('cam002_frames_evaluated'):,} evaluated frames "
+              f"({v('cam002_views_evaluated')} views, "
+              f"{v('cam002_unique_physical_cameras_evaluated')} physical "
+              f"cameras), sampled from a "
+              f"{v('gigahands_bimanual_clean_frames'):,}-frame eligible pool",
          "statistical_unit": "hand",
          "evidence_level": "ROBUST_BUT_SINGLE_DATASET",
          "caveat": "FOCAL ONLY; specific to this working-distance regime"},
@@ -347,14 +363,20 @@ def main_results():
          "evidence_level": "CONFIRMED_IN_CURRENT_ENVIRONMENT",
          "caveat": "use these CIs, not the frame-level ones"},
         {"report_section": "7 - Experiment 4", "experiment": "CAM-EXP-004",
-         "quantity": "bias vs noise share of the squared log focal error",
-         "value": f"AnyCalib {v('cam004_anycalib_gen_bias_fraction_pct')} % bias; "
-                  f"GeoCalib {v('cam004_geocalib_distorted_bias_fraction_pct')} %; "
+         "quantity": "between-view vs within-view share of the squared log "
+                     "focal error",
+         "value": f"AnyCalib {v('cam004_anycalib_gen_bias_fraction_pct')} % "
+                  "between-view; GeoCalib "
+                  f"{v('cam004_geocalib_distorted_bias_fraction_pct')} %; "
                   f"PF {v('cam004_pf_uncentered_bias_fraction_pct')} %",
          "n": "175 views",
-         "statistical_unit": "view",
+         "statistical_unit": "(sequence, camera) static view - the decomposition "
+                             "unit, NOT the physical camera",
          "evidence_level": "ROBUST_BUT_SINGLE_DATASET",
-         "caveat": "this is what makes more frames ineffective"},
+         "caveat": "this is what makes more frames ineffective. Do not restate "
+                   "it as a physical-camera-level bias: physical camera is a "
+                   "resampling unit in CAM-EXP-004.1, not the unit this "
+                   "decomposition was computed over."},
         {"report_section": "7 - Experiment 4",
          "experiment": "CAM-EXP-004 + 004.1",
          "quantity": "median focal error vs frame count (single re-run)",
@@ -545,6 +567,13 @@ def principles():
          "physical camera id (40) and sequence (5), used to check that results "
          "survive correlated structure. Five clusters is a sensitivity check, not "
          "a trustworthy confidence interval."),
+        ("bias-decomposition unit vs resampling unit",
+         "these are different and must not be conflated. The bias/noise "
+         "decomposition is computed over the (sequence, camera) STATIC VIEW, "
+         "with frames as repeated observations inside it - so its output is a "
+         "between-view component, not a physical-camera-level bias. Physical "
+         "camera and sequence are RESAMPLING units, used only to widen "
+         "confidence intervals in the CAM-EXP-004.1 robustness check."),
         ("focal reference",
          "the dataset-provided camera intrinsics."),
         ("provided 3D",

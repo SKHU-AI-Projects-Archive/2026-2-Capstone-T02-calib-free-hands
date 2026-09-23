@@ -1,8 +1,8 @@
-focal_error_percent,median_signed_dz_mm,median_root_shift_mm,p90_root_shift_mm,n_hands,source
--20.0,-131.204,131.204,188.788,2210,experiments/runs/CAM-EXP-002_camera_focal_sensitivity/results/summary/focal_sensitivity_summary.csv
--10.0,-65.602,65.602,94.394,2210,experiments/runs/CAM-EXP-002_camera_focal_sensitivity/results/summary/focal_sensitivity_summary.csv
--5.0,-32.801,32.801,47.197,2210,experiments/runs/CAM-EXP-002_camera_focal_sensitivity/results/summary/focal_sensitivity_summary.csv
-0.0,0.0,0.0,0.0,2210,experiments/runs/CAM-EXP-002_camera_focal_sensitivity/results/summary/focal_sensitivity_summary.csv
-5.0,32.801,32.801,47.197,2210,experiments/runs/CAM-EXP-002_camera_focal_sensitivity/results/summary/focal_sensitivity_summary.csv
-10.0,65.602,65.602,94.394,2210,experiments/runs/CAM-EXP-002_camera_focal_sensitivity/results/summary/focal_sensitivity_summary.csv
-20.0,131.204,131.204,188.788,2210,experiments/runs/CAM-EXP-002_camera_focal_sensitivity/results/summary/focal_sensitivity_summary.csv
+focal_error_percent,median_signed_dz_mm,median_root_shift_mm,p90_root_shift_mm,n_hands,evaluated_sample_note,source
+-20.0,-131.204,131.204,188.788,2210,"2210 hands / 1173 frames / 134 views, sampled from a 16413-frame eligible pool",experiments/runs/CAM-EXP-002_camera_focal_sensitivity/results/summary/focal_sensitivity_summary.csv
+-10.0,-65.602,65.602,94.394,2210,"2210 hands / 1173 frames / 134 views, sampled from a 16413-frame eligible pool",experiments/runs/CAM-EXP-002_camera_focal_sensitivity/results/summary/focal_sensitivity_summary.csv
+-5.0,-32.801,32.801,47.197,2210,"2210 hands / 1173 frames / 134 views, sampled from a 16413-frame eligible pool",experiments/runs/CAM-EXP-002_camera_focal_sensitivity/results/summary/focal_sensitivity_summary.csv
+0.0,0.0,0.0,0.0,2210,"2210 hands / 1173 frames / 134 views, sampled from a 16413-frame eligible pool",experiments/runs/CAM-EXP-002_camera_focal_sensitivity/results/summary/focal_sensitivity_summary.csv
+5.0,32.801,32.801,47.197,2210,"2210 hands / 1173 frames / 134 views, sampled from a 16413-frame eligible pool",experiments/runs/CAM-EXP-002_camera_focal_sensitivity/results/summary/focal_sensitivity_summary.csv
+10.0,65.602,65.602,94.394,2210,"2210 hands / 1173 frames / 134 views, sampled from a 16413-frame eligible pool",experiments/runs/CAM-EXP-002_camera_focal_sensitivity/results/summary/focal_sensitivity_summary.csv
+20.0,131.204,131.204,188.788,2210,"2210 hands / 1173 frames / 134 views, sampled from a 16413-frame eligible pool",experiments/runs/CAM-EXP-002_camera_focal_sensitivity/results/summary/focal_sensitivity_summary.csv

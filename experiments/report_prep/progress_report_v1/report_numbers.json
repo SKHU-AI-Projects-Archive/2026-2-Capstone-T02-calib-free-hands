@@ -10,7 +10,7 @@
       "PENDING_EXTERNAL_CONFIRMATION",
       "OPEN_ISSUE"
     ],
-    "n_entries": 126,
+    "n_entries": 139,
     "generated_by": "experiments/report_prep/progress_report_v1/scripts/build_report_numbers.py"
   },
   "numbers": {
@@ -82,7 +82,7 @@
       "source_column_or_key": "row count",
       "statistical_unit": "frame within a view",
       "evidence_level": "CONFIRMED_IN_CURRENT_ENVIRONMENT",
-      "notes": "frames where BOTH hands pass strict QC"
+      "notes": "frames where BOTH hands pass strict QC. This is the ELIGIBLE POOL that CAM-EXP-002 draws from; it is NOT the sample CAM-EXP-002 evaluated - see cam002_frames_attempted / cam002_hands_evaluated."
     },
     "gigahands_bimanual_clean_views": {
       "value": 154,
@@ -204,12 +204,12 @@
       "evidence_level": "CONFIRMED_IN_CURRENT_ENVIRONMENT",
       "notes": ""
     },
-    "cam0013_identity_multiview_confirmed_good_n": {
-      "value": 48860,
+    "cam0013_identity_bad_2d_geometry_n": {
+      "value": 15611,
       "unit": "hand observations",
       "experiment": "CAM-EXP-001.3",
       "source_file": "experiments/runs/CAM-EXP-001_3_gigahands_multiview_triangulation/results/summary/identity_verdict_summary.csv",
-      "source_column_or_key": "case == MULTIVIEW_CONFIRMED_GOOD",
+      "source_column_or_key": "case == BAD_2D_GEOMETRY",
       "statistical_unit": "hand observation",
       "evidence_level": "CONFIRMED_IN_CURRENT_ENVIRONMENT",
       "notes": ""
@@ -224,12 +224,32 @@
       "evidence_level": "CONFIRMED_IN_CURRENT_ENVIRONMENT",
       "notes": ""
     },
-    "cam0013_identity_bad_2d_geometry_n": {
-      "value": 15611,
+    "cam0013_identity_confirmed_2d_hand_identity_swap_unverified_3d_n": {
+      "value": 9,
       "unit": "hand observations",
       "experiment": "CAM-EXP-001.3",
       "source_file": "experiments/runs/CAM-EXP-001_3_gigahands_multiview_triangulation/results/summary/identity_verdict_summary.csv",
-      "source_column_or_key": "case == BAD_2D_GEOMETRY",
+      "source_column_or_key": "case == CONFIRMED_2D_HAND_IDENTITY_SWAP_UNVERIFIED_3D",
+      "statistical_unit": "hand observation",
+      "evidence_level": "CONFIRMED_IN_CURRENT_ENVIRONMENT",
+      "notes": ""
+    },
+    "cam0013_identity_multiview_confirmed_good_n": {
+      "value": 48860,
+      "unit": "hand observations",
+      "experiment": "CAM-EXP-001.3",
+      "source_file": "experiments/runs/CAM-EXP-001_3_gigahands_multiview_triangulation/results/summary/identity_verdict_summary.csv",
+      "source_column_or_key": "case == MULTIVIEW_CONFIRMED_GOOD",
+      "statistical_unit": "hand observation",
+      "evidence_level": "CONFIRMED_IN_CURRENT_ENVIRONMENT",
+      "notes": ""
+    },
+    "cam0013_identity_not_chosen_frame_n": {
+      "value": 600,
+      "unit": "hand observations",
+      "experiment": "CAM-EXP-001.3",
+      "source_file": "experiments/runs/CAM-EXP-001_3_gigahands_multiview_triangulation/results/summary/identity_verdict_summary.csv",
+      "source_column_or_key": "case == NOT_CHOSEN_FRAME",
       "statistical_unit": "hand observation",
       "evidence_level": "CONFIRMED_IN_CURRENT_ENVIRONMENT",
       "notes": ""
@@ -240,6 +260,16 @@
       "experiment": "CAM-EXP-001.3",
       "source_file": "experiments/runs/CAM-EXP-001_3_gigahands_multiview_triangulation/results/summary/identity_verdict_summary.csv",
       "source_column_or_key": "case == NO_USABLE_2D_ANNOTATION",
+      "statistical_unit": "hand observation",
+      "evidence_level": "CONFIRMED_IN_CURRENT_ENVIRONMENT",
+      "notes": ""
+    },
+    "cam0013_identity_unresolved_insufficient_geometry_n": {
+      "value": 10207,
+      "unit": "hand observations",
+      "experiment": "CAM-EXP-001.3",
+      "source_file": "experiments/runs/CAM-EXP-001_3_gigahands_multiview_triangulation/results/summary/identity_verdict_summary.csv",
+      "source_column_or_key": "case == UNRESOLVED_INSUFFICIENT_GEOMETRY",
       "statistical_unit": "hand observation",
       "evidence_level": "CONFIRMED_IN_CURRENT_ENVIRONMENT",
       "notes": ""
@@ -263,6 +293,106 @@
       "statistical_unit": "joint",
       "evidence_level": "CONFIRMED_IN_CURRENT_ENVIRONMENT",
       "notes": ""
+    },
+    "cam002_frames_attempted": {
+      "value": 1200,
+      "unit": "frames",
+      "experiment": "CAM-EXP-002",
+      "source_file": "experiments/runs/CAM-EXP-002_camera_focal_sensitivity/results/raw/inference_cache_index.csv",
+      "source_column_or_key": "row count",
+      "statistical_unit": "frame",
+      "evidence_level": "CONFIRMED_IN_CURRENT_ENVIRONMENT",
+      "notes": "stratified sample drawn from the bimanual-clean eligible pool (target 1200, seed 20260922); grouped by (sequence, camera), shuffled, taken round-robin and evenly spaced in time within a group"
+    },
+    "cam002_frames_inference_successful": {
+      "value": 1189,
+      "unit": "frames",
+      "experiment": "CAM-EXP-002",
+      "source_file": "experiments/runs/CAM-EXP-002_camera_focal_sensitivity/results/raw/inference_cache_index.csv",
+      "source_column_or_key": "status != no_detection",
+      "statistical_unit": "frame",
+      "evidence_level": "CONFIRMED_IN_CURRENT_ENVIRONMENT",
+      "notes": ""
+    },
+    "cam002_model_failures": {
+      "value": 11,
+      "unit": "frames",
+      "experiment": "CAM-EXP-002",
+      "source_file": "experiments/runs/CAM-EXP-002_camera_focal_sensitivity/results/raw/model_failures.csv",
+      "source_column_or_key": "row count",
+      "statistical_unit": "frame",
+      "evidence_level": "CONFIRMED_IN_CURRENT_ENVIRONMENT",
+      "notes": "no hand detected"
+    },
+    "cam002_hand_association_failures": {
+      "value": 16,
+      "unit": "frames",
+      "experiment": "CAM-EXP-002",
+      "source_file": "experiments/runs/CAM-EXP-002_camera_focal_sensitivity/results/raw/hand_association_failures.csv",
+      "source_column_or_key": "row count",
+      "statistical_unit": "frame",
+      "evidence_level": "CONFIRMED_IN_CURRENT_ENVIRONMENT",
+      "notes": "AMBIGUOUS_HAND_ASSOCIATION; the frame is dropped rather than guessed"
+    },
+    "cam002_frames_evaluated": {
+      "value": 1173,
+      "unit": "frames",
+      "experiment": "CAM-EXP-002",
+      "source_file": "experiments/runs/CAM-EXP-002_camera_focal_sensitivity/results/raw/focal_sweep_per_hand.csv.gz",
+      "source_column_or_key": "distinct (sequence, camera, frame) at GT_x1.00",
+      "statistical_unit": "frame",
+      "evidence_level": "CONFIRMED_IN_CURRENT_ENVIRONMENT",
+      "notes": "frames contributing at least one evaluated hand"
+    },
+    "cam002_hands_evaluated": {
+      "value": 2210,
+      "unit": "hands",
+      "experiment": "CAM-EXP-002",
+      "source_file": "experiments/runs/CAM-EXP-002_camera_focal_sensitivity/results/raw/focal_sweep_per_hand.csv.gz",
+      "source_column_or_key": "rows at condition GT_x1.00",
+      "statistical_unit": "hand",
+      "evidence_level": "CONFIRMED_IN_CURRENT_ENVIRONMENT",
+      "notes": "the analysis unit; matches n_hands in the summary tables"
+    },
+    "cam002_views_evaluated": {
+      "value": 134,
+      "unit": "views",
+      "experiment": "CAM-EXP-002",
+      "source_file": "experiments/runs/CAM-EXP-002_camera_focal_sensitivity/results/raw/focal_sweep_per_hand.csv.gz",
+      "source_column_or_key": "distinct (sequence, camera) at GT_x1.00",
+      "statistical_unit": "view",
+      "evidence_level": "CONFIRMED_IN_CURRENT_ENVIRONMENT",
+      "notes": ""
+    },
+    "cam002_unique_physical_cameras_evaluated": {
+      "value": 37,
+      "unit": "cameras",
+      "experiment": "CAM-EXP-002",
+      "source_file": "experiments/runs/CAM-EXP-002_camera_focal_sensitivity/results/raw/focal_sweep_per_hand.csv.gz",
+      "source_column_or_key": "distinct camera id at GT_x1.00",
+      "statistical_unit": "physical camera",
+      "evidence_level": "CONFIRMED_IN_CURRENT_ENVIRONMENT",
+      "notes": ""
+    },
+    "cam002_sequences_evaluated": {
+      "value": 5,
+      "unit": "sequences",
+      "experiment": "CAM-EXP-002",
+      "source_file": "experiments/runs/CAM-EXP-002_camera_focal_sensitivity/results/raw/focal_sweep_per_hand.csv.gz",
+      "source_column_or_key": "distinct sequence at GT_x1.00",
+      "statistical_unit": "sequence",
+      "evidence_level": "CONFIRMED_IN_CURRENT_ENVIRONMENT",
+      "notes": ""
+    },
+    "cam002_bimanual_frames_evaluated": {
+      "value": 1037,
+      "unit": "frames",
+      "experiment": "CAM-EXP-002",
+      "source_file": "experiments/runs/CAM-EXP-002_camera_focal_sensitivity/results/raw/focal_sweep_per_frame.csv.gz",
+      "source_column_or_key": "distinct frames at GT_x1.00",
+      "statistical_unit": "frame",
+      "evidence_level": "CONFIRMED_IN_CURRENT_ENVIRONMENT",
+      "notes": "frames where BOTH hands were evaluated, used for the bimanual metrics"
     },
     "cam002_pipeline_virtual_focal_px": {
       "value": 5000.0,
@@ -794,7 +924,7 @@
       "source_column_or_key": "bias_fraction_pct",
       "statistical_unit": "view",
       "evidence_level": "ROBUST_BUT_SINGLE_DATASET",
-      "notes": "share of the total squared log focal error that is a stable per-camera offset rather than frame-to-frame scatter"
+      "notes": "share of the total squared log focal error that is a stable BETWEEN-VIEW component: the decomposition unit is the (sequence, camera) static view, with frames treated as repeated observations inside it. This is NOT a physical-camera-level statement; physical camera is a RESAMPLING unit used in CAM-EXP-004.1, not the decomposition unit."
     },
     "cam004_anycalib_gen_median_abs_view_bias_pct": {
       "value": 9.63,
@@ -824,7 +954,7 @@
       "source_column_or_key": "bias_fraction_pct",
       "statistical_unit": "view",
       "evidence_level": "ROBUST_BUT_SINGLE_DATASET",
-      "notes": "share of the total squared log focal error that is a stable per-camera offset rather than frame-to-frame scatter"
+      "notes": "share of the total squared log focal error that is a stable BETWEEN-VIEW component: the decomposition unit is the (sequence, camera) static view, with frames treated as repeated observations inside it. This is NOT a physical-camera-level statement; physical camera is a RESAMPLING unit used in CAM-EXP-004.1, not the decomposition unit."
     },
     "cam004_geocalib_distorted_median_abs_view_bias_pct": {
       "value": 11.56,
@@ -854,7 +984,7 @@
       "source_column_or_key": "bias_fraction_pct",
       "statistical_unit": "view",
       "evidence_level": "ROBUST_BUT_SINGLE_DATASET",
-      "notes": "share of the total squared log focal error that is a stable per-camera offset rather than frame-to-frame scatter"
+      "notes": "share of the total squared log focal error that is a stable BETWEEN-VIEW component: the decomposition unit is the (sequence, camera) static view, with frames treated as repeated observations inside it. This is NOT a physical-camera-level statement; physical camera is a RESAMPLING unit used in CAM-EXP-004.1, not the decomposition unit."
     },
     "cam004_pf_uncentered_median_abs_view_bias_pct": {
       "value": 23.4,

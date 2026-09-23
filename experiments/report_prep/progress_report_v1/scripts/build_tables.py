@@ -71,21 +71,41 @@ def dataset_usage():
         {"experiment": "CAM-EXP-002",
          "purpose": "how far does absolute hand depth move when only the focal "
                     "length changes",
-         "dataset": "GigaHands demo, bimanual-clean subset",
-         "n_sequences": 5,
-         "n_sequence_camera_views": v("gigahands_bimanual_clean_views"),
-         "n_unique_physical_cameras": 40,
-         "n_frames_input": v("gigahands_bimanual_clean_frames"),
-         "n_hand_observations": v("cam002_n_hands"),
-         "n_used": v("cam002_n_hands"), "n_excluded": "see notes",
-         "exclusion_reason_summary": "frames where either hand fails strict QC "
-                                     "were never admitted; one inference per "
-                                     "frame, cached",
+         "dataset": "GigaHands demo, sample drawn from the bimanual-clean subset",
+         "eligible_source_pool": "gigahands_demo_bimanual_clean_v1 (LEFT and "
+                                 "RIGHT both PASS_STRICT)",
+         "eligible_pool_frames": v("gigahands_bimanual_clean_frames"),
+         "eligible_pool_views": v("gigahands_bimanual_clean_views"),
+         "actual_frames_attempted": v("cam002_frames_attempted"),
+         "actual_frames_successful": v("cam002_frames_inference_successful"),
+         "actual_frames_evaluated": v("cam002_frames_evaluated"),
+         "actual_hands_evaluated": v("cam002_hands_evaluated"),
+         "actual_views": v("cam002_views_evaluated"),
+         "actual_unique_cameras": v("cam002_unique_physical_cameras_evaluated"),
+         "n_sequences": v("cam002_sequences_evaluated"),
+         "n_sequence_camera_views": v("cam002_views_evaluated"),
+         "n_unique_physical_cameras": v("cam002_unique_physical_cameras_evaluated"),
+         "n_frames_input": v("cam002_frames_attempted"),
+         "n_hand_observations": v("cam002_hands_evaluated"),
+         "n_used": v("cam002_hands_evaluated"),
+         "n_excluded": f"{v('cam002_model_failures')} frames (no hand detected) "
+                       f"+ {v('cam002_hand_association_failures')} frames "
+                       "(ambiguous hand association)",
+         "exclusion_reason_summary":
+             f"the eligible pool is {v('gigahands_bimanual_clean_frames'):,} "
+             f"frames; a stratified sample of "
+             f"{v('cam002_frames_attempted'):,} was drawn from it (grouped by "
+             "(sequence, camera), shuffled with a fixed seed, taken round-robin "
+             "and evenly spaced in time). Detector and hand-association "
+             "failures then removed 27 frames.",
          "statistical_unit": "hand",
          "hand_quality_required": "YES - bimanual-clean (both hands PASS_STRICT)",
          "camera_quality_required": "provided intrinsics required",
-         "notes": "this is a HAND-clean experiment, which is why it uses far "
-                  "fewer views than CAM-EXP-003/004"},
+         "notes": f"the pool and the evaluated sample are different numbers. "
+                  f"{v('cam002_bimanual_frames_evaluated'):,} of the evaluated "
+                  "frames had BOTH hands evaluated and carry the bimanual "
+                  "metrics. This is a HAND-clean experiment, which is why it "
+                  "covers fewer views than CAM-EXP-003/004."},
         {"experiment": "CAM-EXP-003 / 003.1",
          "purpose": "how accurate are existing single-frame calibration models, "
                     "and how much of their error is unmodelled lens distortion",
@@ -139,16 +159,28 @@ def dataset_usage():
          "notes": "the CAM-EXP-003 8 frames are an exact subset of these 64, so "
                   "the two runs can be compared frame by frame"},
     ]
-    write_csv(PKG / "tables" / "report_dataset_usage.csv", rows)
+    cols, seen = [], set()
+    for r in rows:
+        for k in r:
+            if k not in seen:
+                seen.add(k)
+                cols.append(k)
+    write_csv(PKG / "tables" / "report_dataset_usage.csv", rows, fieldnames=cols)
     write_md_table(
-        PKG / "tables" / "report_dataset_usage.md", rows,
+        PKG / "tables" / "report_dataset_usage.md", rows, columns=cols,
         title="Data used by each experiment",
         notes="Every count is read from the manifests and result files listed in "
               "`report_numbers.json`, not from prose. The three different "
               "'clean' subsets are not interchangeable: a camera experiment "
               "needs RGB plus valid camera parameters, a hand experiment needs "
               "valid hand annotation, and a bimanual experiment needs both hands "
-              "clean in the same frame.")
+              "clean in the same frame.\n\n"
+              "**Eligible pool is not the same as evaluated sample.** For "
+              "CAM-EXP-002 the bimanual-clean manifest is the pool it was "
+              "allowed to draw from; the experiment evaluated a stratified "
+              "sample of it. The `eligible_*` and `actual_*` columns are kept "
+              "separate for exactly this reason, and only the `actual_*` "
+              "numbers describe what was measured.")
     return rows
 
 
@@ -179,15 +211,26 @@ def hypothesis_table():
                                 "than loader mistakes",
          "test": "human-inspectable overlays, index-space audit against official "
                  "GigaHands source, repro-video comparison",
-         "result": "confirmed: an all-zero 2D pattern carrying confidence 1.0, and "
-                   "per-camera left/right hand swaps",
+         "result": "supported for a substantial part of the tail: an all-zero 2D "
+                   "pattern carrying confidence 1.0, and per-view left/right "
+                   "hand swaps. It does NOT account for the whole tail.",
          "key_numbers": f"{v('gigahands_qc_zero_pattern_n'):,} observations carry "
-                        "the all-zero pattern",
-         "verdict": "SUPPORTED",
+                        "the all-zero pattern; "
+                        f"{v('cam0013_identity_confirmed_2d_hand_identity_swap_n'):,} "
+                        "confirmed identity swaps; still "
+                        f"{v('cam0013_identity_bad_2d_geometry_n'):,} "
+                        "BAD_2D_GEOMETRY and "
+                        f"{v('cam0013_identity_unresolved_insufficient_geometry_n'):,} "
+                        "UNRESOLVED_INSUFFICIENT_GEOMETRY",
+         "verdict": "PARTIALLY_SUPPORTED - named causes for part of the tail, "
+                    "not for all of it",
          "evidence_level": "CONFIRMED_IN_CURRENT_ENVIRONMENT",
          "scope": "GigaHands demo",
          "remaining_uncertainty": "the all-zero pattern is OBSERVED, not a "
-                                  "documented sentinel value",
+                                  "documented sentinel value; and the cause of "
+                                  "the BAD_2D_GEOMETRY / unresolved cases was "
+                                  "not determined - they were conservatively "
+                                  "labelled REVIEW/EXCLUDE rather than guessed",
          "next_implication": "the loader drops all-zero 2D; identity must be "
                              "checked per camera"},
         {"experiment": "CAM-EXP-001.3",

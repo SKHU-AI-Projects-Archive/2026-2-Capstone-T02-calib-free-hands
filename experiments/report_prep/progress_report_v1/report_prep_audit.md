@@ -59,7 +59,7 @@ is checked automatically (`quality_checks.py`, check I). In particular:
 
 ## Canonical numbers
 
-`report_numbers.json` holds **126** entries. Each carries value, unit,
+`report_numbers.json` holds **139** entries (see the second pass below; it was 126 before the CAM-EXP-002 usage audit). Each carries value, unit,
 experiment, source file, source column, statistical unit, evidence level and
 notes. Every source file was verified to exist.
 
@@ -73,7 +73,7 @@ duplicate them.
 
 ## Quality checks
 
-24/24 pass. The interesting ones:
+24/24 pass at the time of the first pass; **37/37** after the second pass below. The interesting ones:
 
 * **C2** — the Fig06 curve matches the CAM-EXP-004.1 summary at every N ≥ 8, so
   the recomputation did not silently change anything.
@@ -106,3 +106,88 @@ duplicate them.
 
 None of these blocks writing the report. Items 1 and 4 shape how two sentences
 are phrased, and both phrasings are already prepared in the claim ledger.
+
+---
+
+# Second pass — semantic corrections (2026-09-23)
+
+A review of the package found three semantic problems that the first round of
+checks did not catch. All three were corrected in the **generator scripts**, not
+only in the output files, and four new check families were added so they cannot
+recur.
+
+## 1. CAM-EXP-002: eligible pool was being presented as the experiment's input
+
+`report_dataset_usage` listed the bimanual-clean manifest (16,413 frames,
+154 views, 40 cameras) in the `n_frames_input` position for CAM-EXP-002. That is
+the pool the experiment was allowed to draw from, not what it ran on.
+
+Read from CAM-EXP-002's own files (`_inference_meta.json`,
+`inference_cache_index.csv`, `model_failures.csv`,
+`hand_association_failures.csv`, `focal_sweep_per_hand.csv.gz`,
+`focal_sweep_per_frame.csv.gz`):
+
+| Quantity | Value |
+|---|---|
+| eligible bimanual-clean pool | 16,413 frames / 154 views |
+| frames drawn (stratified, seed 20260922, target 1200) | 1,200 |
+| inference successful | 1,189 (11 with no hand detected) |
+| dropped for ambiguous hand association | 16 |
+| **frames evaluated** | **1,173** |
+| **hands evaluated** | **2,210** |
+| views / physical cameras / sequences | 134 / 37 / 5 |
+| frames with BOTH hands evaluated (bimanual metrics) | 1,037 |
+
+2,210 matches `n_hands` in every CAM-EXP-002 summary table, which is now checked
+automatically (J4). The usage table gained explicit `eligible_*` and `actual_*`
+columns; Fig03 gained a separate "actually evaluated" box; Fig04's title now
+names the evaluated sample rather than the subset.
+
+## 2. "per-camera bias" was the wrong unit
+
+The 98.1 % figure comes from decomposing the squared log focal error into a
+per-(sequence, camera) **view** mean and a within-view residual. Calling it a
+per-camera bias implies a physical-camera-level result, which is not what was
+computed — physical camera appears in this project only as a *resampling* unit
+in the CAM-EXP-004.1 robustness check.
+
+Corrected in the claim ledger (C06), the main-results table, the evidence index
+(Section 7 heading, claims and numbers), Fig02 and the report_numbers notes. The
+principles table gained an explicit row separating the **decomposition unit**
+from the **resampling unit**.
+
+## 3. Experiment 1's tail was implied to be fully explained
+
+The evidence index said the tail "is caused by" the all-zero pattern and hand
+swaps. CAM-EXP-001.3 still contains 15,611 `BAD_2D_GEOMETRY` and 10,207
+`UNRESOLVED_INSUFFICIENT_GEOMETRY` cases. The wording now says a *substantial
+part* was traced to named causes and that the rest was conservatively labelled
+REVIEW/EXCLUDE rather than explained; Fig03's diagnosis box is titled "diagnosis
+of PART of the error tail" and prints the unexplained counts; and every verdict
+class is now in `report_numbers.json` (previously the unresolved class was
+omitted).
+
+## New checks
+
+| Check | What it enforces |
+|---|---|
+| J1–J5 | the CAM-EXP-002 pool and evaluated sample are recorded separately, agree with the raw files, and the pool is never presented as the sample |
+| K1–K3 | the 98.1 % decomposition is never described as a physical-camera bias; no bare "per-camera bias" is asserted; the principles table separates decomposition unit from resampling unit |
+| L1–L3 | the Experiment 1 tail is never claimed as fully explained, and the unexplained classes are present in the numbers file and the evidence index |
+| M1–M2 | Fig03 and Fig04 data files distinguish the eligible pool from the evaluated sample |
+
+24 checks → **37 checks, all passing**.
+
+## Wording of "no new number"
+
+The package previously said it contains "no new research". More precisely: it
+contains **no new model inference and no new experimental evidence**; some
+report-facing aggregates (the 1→64 curve) were deterministically regenerated
+from existing frozen predictions with the frozen aggregation rules. README and
+this audit now say that. The earlier commit message is left as written.
+
+## Historical results
+
+Unchanged, as before — checked automatically. No file under any run's
+`results/raw/` or `results/summary/` was touched in this pass either, including
+CAM-EXP-002's.

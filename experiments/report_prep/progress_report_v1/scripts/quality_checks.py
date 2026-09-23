@@ -149,15 +149,31 @@ def _scannable_text(p: Path) -> str:
                             if k not in AVOID_COLUMNS)
     txt = p.read_text(encoding="utf-8", errors="ignore")
     if p.suffix.lower() == ".md":
-        # drop the "wording to avoid" column of a rendered table row
-        out = []
+        # In a rendered table, the column whose job is to quote bad wording is
+        # not an assertion. Find it from the header row and drop that cell from
+        # every row of the table.
+        out, drop = [], None
         for line in txt.splitlines():
-            if line.count("|") >= 6 and "wording" not in line.lower():
-                cells = line.split("|")
-                out.append("|".join(c for i, c in enumerate(cells)
-                                    if i != 7))
-            else:
+            cells = line.split("|")
+            if len(cells) < 4:
                 out.append(line)
+                drop = None
+                continue
+            header = [c.strip().lower() for c in cells]
+            if any(h in ("wording to avoid", "wording_to_avoid",
+                         "what to avoid") for h in header):
+                drop = next(i for i, h in enumerate(header)
+                            if h in ("wording to avoid", "wording_to_avoid",
+                                     "what to avoid"))
+                out.append(line)
+                continue
+            if drop is not None:
+                # Cells can contain escaped pipes, so the columns of a data row
+                # cannot be split reliably. The same content is scanned from the
+                # CSV twin of this table with the avoid column removed, so the
+                # whole row is skipped here rather than mis-sliced.
+                continue
+            out.append(line)
         return chr(10).join(out)
     return txt
 
@@ -257,6 +273,120 @@ def check_no_raw_edits():
           f"{raw}")
 
 
+# J ------------------------- CAM-EXP-002: pool and evaluated sample are distinct
+def check_cam002_usage():
+    num = read_json(PKG / "report_numbers.json")["numbers"]
+    usage = read_csv(PKG / "tables" / "report_dataset_usage.csv")
+    row = next(r for r in usage if r["experiment"] == "CAM-EXP-002")
+
+    pool = num["gigahands_bimanual_clean_frames"]["value"]
+    attempted = num["cam002_frames_attempted"]["value"]
+    hands = num["cam002_hands_evaluated"]["value"]
+
+    check(str(row.get("eligible_pool_frames")) == str(pool),
+          "J1. CAM-EXP-002 row records the eligible pool separately",
+          f"got {row.get('eligible_pool_frames')!r}")
+    check(str(row.get("actual_frames_attempted")) == str(attempted)
+          and str(row.get("actual_hands_evaluated")) == str(hands),
+          "J2. CAM-EXP-002 row records the actual evaluated sample",
+          f"attempted {row.get('actual_frames_attempted')!r}, "
+          f"hands {row.get('actual_hands_evaluated')!r}")
+    check(str(row.get("n_frames_input")) != str(pool),
+          "J3. the eligible pool is NOT presented as the experiment's input "
+          "frame count", f"n_frames_input = {row.get('n_frames_input')!r}")
+    # the summary tables' own n_hands must agree with the raw per-hand file
+    summ = read_csv(RUNS / "CAM-EXP-002_camera_focal_sensitivity" / "results"
+                    / "summary" / "baseline_vs_gt_focal.csv")
+    check(all(int(r["n_hands"]) == hands for r in summ),
+          "J4. evaluated hands match the CAM-EXP-002 summary tables",
+          f"raw {hands} vs summary {[r['n_hands'] for r in summ]}")
+
+    # no artifact may pair the pool size with wording that implies it was used
+    bad = []
+    for p in scannable_files():
+        t = _scannable_text(p)
+        for m in re.finditer(r"16,?413", t):
+            ctx = t[max(0, m.start() - 600):m.end() + 600]
+            if re.search(r"pool|draws? from|eligible|not what|not the",
+                         ctx, re.I):
+                continue
+            bad.append(f"{p.relative_to(PKG)}: {ctx[180:320]}")
+    check(not bad, "J5. the 16,413-frame pool is never presented as the "
+                   "evaluated sample", "; ".join(bad[:3]))
+
+
+# K ------------------------------ bias decomposition unit is the view, not the camera
+def check_bias_unit():
+    bad = []
+    for p in scannable_files():
+        t = _scannable_text(p)
+        for m in re.finditer(r"98\.0?8?1?\d*\s*%|98\.1", t):
+            ctx = t[max(0, m.start() - 300):m.end() + 300]
+            if not re.search(r"physical[- ]camera bias|per-camera bias|camera bias",
+                             ctx, re.I):
+                continue
+            # a sentence whose job is to forbid or to document the correction of
+            # that phrasing is not an assertion of it
+            if re.search(r"never|not a physical|wrong unit|implies|do not|"
+                         r"corrected|avoid|instead of", ctx, re.I):
+                continue
+            bad.append(f"{p.relative_to(PKG)}: {ctx[260:400]}")
+    check(not bad, "K1. the bias-decomposition figure is never described as a "
+                   "physical-camera bias", "; ".join(bad[:3]))
+
+    loose = []
+    for p in scannable_files():
+        t = _scannable_text(p)
+        for m in re.finditer(r"per-camera bias|camera-specific bias", t, re.I):
+            ctx = t[max(0, m.start() - 250):m.end() + 250]
+            if re.search(r"do not|avoid|not a physical|never|wrong unit|"
+                         r"implies|corrected|instead of|rather than", ctx, re.I):
+                continue
+            loose.append(f"{p.relative_to(PKG)}: {m.group(0)}")
+    check(not loose, "K2. no bare 'per-camera bias' phrasing is asserted",
+          "; ".join(loose[:5]))
+
+    prin = (PKG / "tables" / "common_evaluation_principles.md").read_text(
+        encoding="utf-8")
+    check("decomposition" in prin.lower() and "resampling" in prin.lower(),
+          "K3. the principles table separates the decomposition unit from the "
+          "resampling unit")
+
+
+# L ------------------------------ Experiment 1 tail is not claimed as fully explained
+def check_exp1_tail():
+    bad = []
+    pats = [r"tail is caused by", r"all (large-error )?(cases|failures) (are|were) "
+            r"explain", r"explained the (whole|entire) tail",
+            r"identified the cause of all"]
+    for p in scannable_files():
+        t = _scannable_text(p)
+        for pat in pats:
+            for m in re.finditer(pat, t, re.I):
+                bad.append(f"{p.relative_to(PKG)}: '{m.group(0)}'")
+    check(not bad, "L1. the Experiment 1 tail is never claimed as fully "
+                   "explained", "; ".join(bad[:5]))
+
+    num = read_json(PKG / "report_numbers.json")["numbers"]
+    check("cam0013_identity_unresolved_insufficient_geometry_n" in num,
+          "L2. the unresolved-geometry count is in report_numbers")
+    ei = (PKG / "evidence_index.md").read_text(encoding="utf-8")
+    check("UNRESOLVED_INSUFFICIENT_GEOMETRY" in ei and "BAD_2D_GEOMETRY" in ei,
+          "L3. the evidence index names the unexplained classes")
+
+
+# M ------------------------------------ Fig03 / Fig04 distinguish pool from sample
+def check_figure_labels():
+    d = PKG / "figures" / "main" / "data"
+    f3 = {r["quantity"] for r in read_csv(d / "Fig03.csv")}
+    check({"cam002_frames_attempted", "cam002_hands_evaluated"} <= f3,
+          "M1. Fig03 data carries the actual evaluated sample, not only the pool")
+    f4 = read_csv(d / "Fig04.csv")
+    check(all("evaluated_sample_note" in r and "eligible pool" in
+              r["evaluated_sample_note"] for r in f4),
+          "M2. Fig04 data records that the sample was drawn from a pool")
+
+
 def main() -> None:
     check_sources()
     check_main_results()
@@ -267,6 +397,10 @@ def main() -> None:
     check_geocalib_caveat()
     check_anycam()
     check_no_raw_edits()
+    check_cam002_usage()
+    check_bias_unit()
+    check_exp1_tail()
+    check_figure_labels()
 
     print(f"PASS  {len(OK)}")
     for w in WARN:

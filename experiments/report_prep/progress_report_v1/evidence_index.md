@@ -19,7 +19,7 @@ Three different validity requirements produce three different subsets:
 |---|---|---|---|
 | **camera-clean** | an RGB segment that matches the annotation, plus valid provided camera parameters | 175 of 200 views, 40 physical cameras, 5 sequences | Experiments 3 and 4 |
 | **hand-clean** | a usable hand annotation for that hand | `PASS_STRICT` 32,826 + `PASS_SINGLE_HAND` 16,005 observations | future hand-aware work |
-| **bimanual-clean** | BOTH hands clean in the same frame | 16,413 frames over 154 views | Experiment 2 |
+| **bimanual-clean** | BOTH hands clean in the same frame | 16,413 frames over 154 views (this is the **eligible pool**, not what Experiment 2 evaluated) | Experiment 2 draws its sample from here |
 
 The 25 views missing from the camera-clean subset were excluded because they
 have no usable RGB segment matching the annotation — **not** because their hand
@@ -51,8 +51,12 @@ narrow — measured, not assumed (CAM-EXP-004.1).
 
 **Claims:**
 1. Our reading of the camera and coordinate conventions is correct.
-2. The reprojection error tail is caused by data problems we can name: an
-   observed invalid all-zero 2D pattern, and per-camera left/right hand swaps.
+2. A substantial part of the large-error tail was traced to named data
+   problems: the observed invalid all-zero 2D pattern, and left/right hand
+   identity mismatches within a view. Other cases remained `BAD_2D_GEOMETRY`
+   (15,611) or `UNRESOLVED_INSUFFICIENT_GEOMETRY` (10,207) because the available
+   multi-view geometry was insufficient to decide, and were conservatively
+   labelled REVIEW/EXCLUDE rather than explained.
 3. 3D reconstructed from the released 2D agrees with the provided 3D to about
    4 mm, while a wrong-hand control is about 48× worse.
 
@@ -60,6 +64,9 @@ narrow — measured, not assumed (CAM-EXP-004.1).
 192.3047 mm; triangulation reprojection median 3.082 px; 107,640 observations.
 QC: `PASS_STRICT` 32,826 / `PASS_SINGLE_HAND` 16,005 / `REVIEW` 10,236 /
 `EXCLUDE` 49,173 out of 108,240. All-zero pattern: 26,083 observations.
+Verdict classes: `MULTIVIEW_CONFIRMED_GOOD` 48,860, `NO_USABLE_2D_ANNOTATION`
+25,852, `BAD_2D_GEOMETRY` 15,611, `UNRESOLVED_INSUFFICIENT_GEOMETRY` 10,207,
+`CONFIRMED_2D_HAND_IDENTITY_SWAP` 7,101.
 
 **Artifacts:** `figures/main/Fig03`, `tables/report_main_results.md`,
 appendix overlays and the QC status grid.
@@ -67,8 +74,9 @@ appendix overlays and the QC status grid.
 **Caveat — the important one:** this is **self-consistency between the released
 2D and the provided 3D**, not accuracy against an independent external ground
 truth. The wrong-hand control is reported precisely so the agreement is not read
-as trivial. The QC thresholds themselves have not yet been validated by a human
-(`OPEN_ISSUE`).
+as trivial. The diagnosis is also partial: we did **not** explain every
+large-error case, and must not write that we did. The QC thresholds themselves
+have not yet been validated by a human (`OPEN_ISSUE`).
 
 ---
 
@@ -79,6 +87,16 @@ as trivial. The QC thresholds themselves have not yet been validated by a human
    that alone displaces the hand by metres.
 2. Focal error propagates nearly proportionally into absolute depth, while the
    hand's own shape is untouched.
+
+**Evaluated sample:** 2,210 hands over
+1,173 frames, 134 views,
+37 physical cameras,
+5 sequences. These came from a stratified sample
+of 1,200 frames drawn from the
+16,413-frame bimanual-clean **eligible pool**;
+11 frames had no hand detected and
+16 had an ambiguous hand association, and
+both were dropped. The pool size is not the experiment's sample size.
 
 **Numbers:** assumed 5000 px vs physical 922.77 px (median); root error
 2881.885 mm → 78.54 mm; absolute MPJPE 2885.314 mm → 68.68 mm; root-aligned
@@ -122,20 +140,24 @@ function.
 
 ---
 
-## Section 7 — Experiment 4: multi-frame use and per-camera bias
+## Section 7 — Experiment 4: multi-frame use and per-view bias
 
 **Claims:**
 1. Within GigaHands static views, aggregating 1 → 64 frames did not improve
    focal accuracy for the best model.
-2. The reason is that the residual error is a stable per-camera bias, not
-   frame-to-frame noise.
+2. The reason is that the residual error is dominated by a stable
+   **between-view** component — a per-(sequence, camera) static-view bias — not
+   by frame-to-frame noise.
 3. Combining two model families with opposite signed bias is the most promising
    direction found so far.
 
 **Numbers:** AnyCalib 9.62 % (N=1) → 9.97 % (N=64); GeoCalib 13.89 → 11.28 %;
-E2 7.76 → 6.74 %, all from a single run. Bias share of the squared log error:
-AnyCalib 98.1 %, GeoCalib 53.4 %, PF 96.0 %; AnyCalib median |view bias| 9.63 %
-vs within-view sd 1.43 %. E2 gain over AnyCalib +2.23 pp, CI excluding zero at
+E2 7.76 → 6.74 %, all from a single run. Between-view share of the squared log
+error: AnyCalib 98.1 %, GeoCalib 53.4 %, PF 96.0 %; AnyCalib median |view bias|
+9.63 % vs within-view sd 1.43 %. **The decomposition unit is the
+(sequence, camera) static view**, with frames as repeated observations inside
+it; physical camera is a *resampling* unit used for robustness in CAM-EXP-004.1
+and is not what this 98.1 % refers to. E2 gain over AnyCalib +2.23 pp, CI excluding zero at
 view, camera and sequence clustering.
 
 **Artifacts:** `figures/main/Fig06`, `figures/main/Fig07`,
@@ -151,7 +173,7 @@ E2 carry a ~±0.35 pp run-to-run tolerance.
 
 ## Section 8 — Overall results and direction
 
-**Claim:** the binding constraint is now a stable per-camera bias. Frame count
+**Claim:** the binding constraint is now a stable per-view bias. Frame count
 is closed as a lever (measured to 64), frame selection is low-value (a GT oracle
 best-of-8 only reaches 6.85 % for AnyCalib, which the deployable ensemble
 already beats), and the remaining lever is understanding why each view is biased.

@@ -1,12 +1,18 @@
-quantity,value,source
-gigahands_qc_total_observations,108240,experiments/manifests/gigahands_demo_qc_v1.csv.gz
-gigahands_qc_pass_strict_n,32826,experiments/manifests/gigahands_demo_qc_v1.csv.gz
-gigahands_qc_pass_single_hand_n,16005,experiments/manifests/gigahands_demo_qc_v1.csv.gz
-gigahands_qc_review_n,10236,experiments/manifests/gigahands_demo_qc_v1.csv.gz
-gigahands_qc_exclude_n,49173,experiments/manifests/gigahands_demo_qc_v1.csv.gz
-gigahands_qc_zero_pattern_n,26083,experiments/manifests/gigahands_demo_qc_v1.csv.gz
-camera_benchmark_views_usable,175,experiments/manifests/gigahands_demo_camera_benchmark_v1.csv.gz
-camera_benchmark_views_excluded,25,experiments/manifests/gigahands_demo_camera_benchmark_v1.csv.gz
-gigahands_bimanual_clean_frames,16413,experiments/manifests/gigahands_demo_bimanual_clean_v1.csv.gz
-gigahands_bimanual_clean_views,154,experiments/manifests/gigahands_demo_bimanual_clean_v1.csv.gz
-gigahands_unique_physical_cameras,40,experiments/manifests/gigahands_demo_camera_benchmark_v1.csv.gz
+quantity,value,role,source
+gigahands_qc_total_observations,108240,QC labelling,experiments/manifests/gigahands_demo_qc_v1.csv.gz
+gigahands_qc_pass_strict_n,32826,QC labelling,experiments/manifests/gigahands_demo_qc_v1.csv.gz
+gigahands_qc_pass_single_hand_n,16005,QC labelling,experiments/manifests/gigahands_demo_qc_v1.csv.gz
+gigahands_qc_review_n,10236,QC labelling,experiments/manifests/gigahands_demo_qc_v1.csv.gz
+gigahands_qc_exclude_n,49173,QC labelling,experiments/manifests/gigahands_demo_qc_v1.csv.gz
+gigahands_qc_zero_pattern_n,26083,QC labelling,experiments/manifests/gigahands_demo_qc_v1.csv.gz
+camera_benchmark_views_usable,175,camera-clean subset,experiments/manifests/gigahands_demo_camera_benchmark_v1.csv.gz
+camera_benchmark_views_excluded,25,camera-clean subset,experiments/manifests/gigahands_demo_camera_benchmark_v1.csv.gz
+gigahands_bimanual_clean_frames,16413,eligible pool (NOT the evaluated sample),experiments/manifests/gigahands_demo_bimanual_clean_v1.csv.gz
+gigahands_bimanual_clean_views,154,eligible pool (NOT the evaluated sample),experiments/manifests/gigahands_demo_bimanual_clean_v1.csv.gz
+cam002_frames_attempted,1200,CAM-EXP-002 evaluated sample,experiments/runs/CAM-EXP-002_camera_focal_sensitivity/results/raw/inference_cache_index.csv
+cam002_frames_evaluated,1173,CAM-EXP-002 evaluated sample,experiments/runs/CAM-EXP-002_camera_focal_sensitivity/results/raw/focal_sweep_per_hand.csv.gz
+cam002_hands_evaluated,2210,CAM-EXP-002 evaluated sample,experiments/runs/CAM-EXP-002_camera_focal_sensitivity/results/raw/focal_sweep_per_hand.csv.gz
+cam002_views_evaluated,134,CAM-EXP-002 evaluated sample,experiments/runs/CAM-EXP-002_camera_focal_sensitivity/results/raw/focal_sweep_per_hand.csv.gz
+cam002_unique_physical_cameras_evaluated,37,CAM-EXP-002 evaluated sample,experiments/runs/CAM-EXP-002_camera_focal_sensitivity/results/raw/focal_sweep_per_hand.csv.gz
+cam002_sequences_evaluated,5,CAM-EXP-002 evaluated sample,experiments/runs/CAM-EXP-002_camera_focal_sensitivity/results/raw/focal_sweep_per_hand.csv.gz
+gigahands_unique_physical_cameras,40,QC labelling,experiments/manifests/gigahands_demo_camera_benchmark_v1.csv.gz

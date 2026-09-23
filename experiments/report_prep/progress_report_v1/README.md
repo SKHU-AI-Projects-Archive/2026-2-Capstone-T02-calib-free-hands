@@ -2,10 +2,13 @@
 
 **This package is the source of truth for the next progress report.**
 
-It contains no new research. Everything here is read out of the completed runs
-CAM-EXP-001 … CAM-EXP-004.1, checked for internal consistency, and fixed so that
-the report can be written without going back to the raw results or
-re-remembering which caveat belongs to which number.
+It contains **no new model inference and no new experimental evidence**.
+Everything here is read out of the completed runs CAM-EXP-001 … CAM-EXP-004.1,
+checked for internal consistency, and fixed so that the report can be written
+without going back to the raw results or re-remembering which caveat belongs to
+which number. Some report-facing aggregates — notably the 1→64 frame curve —
+were deterministically regenerated from existing frozen predictions using the
+frozen aggregation rules; that is a re-aggregation, not a new measurement.
 
 The report prose itself has **not** been written yet, and no document or PDF has
 been produced. That is the next step, after this package is reviewed.
@@ -18,7 +21,7 @@ been produced. That is the next step, after this package is reviewed.
 |---|---|
 | know what may and may not be claimed | `tables/claim_evidence_ledger.md` |
 | write a section | `evidence_index.md` — one entry per report section |
-| find a number | `report_numbers.json` — 126 canonical entries |
+| find a number | `report_numbers.json` — 139 canonical entries |
 | know where a number came from | `source_map/report_artifact_sources.csv` |
 | avoid an overstatement | `source_map/report_wording_guardrails.md` |
 | know which chapter uses which experiment | `source_map/experiment_to_report_section.md` |
@@ -39,6 +42,13 @@ been produced. That is the next step, after this package is reviewed.
    6.46 % (independent re-run), 5.73–8.80 % (leave-one-sequence-out).
 5. **GeoCalib numbers carry a run-to-run tolerance** of about ±0.35 pp.
 6. **Every figure ships the numbers it plotted**, in `figures/main/data/`.
+7. **An eligible pool is not an evaluated sample.** CAM-EXP-002 was allowed to
+   draw from 16,413 bimanual-clean frames; it actually evaluated 2,210 hands
+   over 1,173 frames. The `eligible_*` and `actual_*` columns of
+   `tables/report_dataset_usage.csv` are kept apart for this reason.
+8. **The bias decomposition unit is the (sequence, camera) static view**, not
+   the physical camera. Physical camera is a *resampling* unit used only to
+   widen confidence intervals in CAM-EXP-004.1.
 
 ## Layout
 
@@ -46,7 +56,7 @@ been produced. That is the next step, after this package is reviewed.
 README.md                      this file
 evidence_index.md              per-section claims, numbers, artifacts, caveats
 correction_log.md              metadata corrections, with old values kept
-report_numbers.json            126 canonical numbers, each with its source
+report_numbers.json            139 canonical numbers, each with its source
 quality_check_report.json      output of scripts/quality_checks.py
 tables/                        report-ready tables (.csv and .md of each)
 figures/main/                  Fig01-Fig07, PNG at 300 dpi and PDF
@@ -89,13 +99,16 @@ distinguished by marker, line style and hatch, never by colour alone.
 
 ## Known state
 
-`scripts/quality_checks.py` passes all 24 checks, including: every source file
+`scripts/quality_checks.py` passes all 37 checks, including: every source file
 exists; the figure CSVs match the canonical summaries; no file presents 1400 as
 an independent sample count; no dangerous phrasing is used assertively; the E2
 selection-set figure never appears without the re-run and leave-one-sequence-out
 numbers beside it; every file mentioning GeoCalib carries the
-reproducibility caveat; AnyCam provenance is consistent everywhere; and no
-historical raw or summary result file was modified.
+reproducibility caveat; AnyCam provenance is consistent everywhere; the CAM-EXP-002 pool
+and evaluated sample are recorded separately; the 98.1 % decomposition is never
+described as a physical-camera bias; the Experiment 1 error tail is never
+claimed as fully explained; and no historical raw or summary result file was
+modified.
 
 The one open decision that blocks nothing in the report but shapes its
 conclusion is whether to download an external image set for the final
