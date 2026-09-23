@@ -1,0 +1,95 @@
+{
+  "experiment": "CAM-EXP-004_static_camera_multiframe_aggregation",
+  "question": "in our deployment setting (monocular RGB video, static camera, fixed intrinsics, offline access to the whole video), how much does using more frames improve single-frame calibration, and what part of the error can more frames never remove",
+  "aggregation_unit": {
+    "unit": "(sequence, camera)",
+    "rule": "frames are NEVER pooled across sequences, even when the same physical camera id reappears, because a deployment estimates the calibration of one video",
+    "cross_sequence_repeats": "may be used for diagnostics only, never as aggregation input"
+  },
+  "data": {
+    "frames": "experiments/manifests/gigahands_demo_cam_exp_003_frames_v1.csv.gz (frozen in CAM-EXP-003, unchanged)",
+    "filter": "usable_for_camera_benchmark == 1 from gigahands_demo_camera_benchmark_v1.csv.gz",
+    "hand_quality": "NOT used as a filter - hand REVIEW/EXCLUDE labels never remove a camera-valid view",
+    "n_views": 175,
+    "n_frames_per_view": 8
+  },
+  "phase_a": {
+    "inference": "NONE - reuses CAM-EXP-003 / 003.1 per-frame predictions verbatim",
+    "N_values": [
+      1,
+      2,
+      4,
+      8
+    ],
+    "subsets": "ALL C(8,N) subsets are evaluated (8, 28, 70, 1) so no result depends on which frames a single random draw picked",
+    "statistical_unit": "the view. Subsets are collapsed to the view's expected error first; the ~19k subsets are never treated as independent samples",
+    "models": {
+      "PRIMARY": "AnyCalib anycalib_gen + radial:2",
+      "SECONDARY": "GeoCalib distorted + radial",
+      "DIVERSITY_BASELINE": "PerspectiveFields uncentered, raw input"
+    },
+    "excluded": [
+      "GT-undistorted images (CAM-EXP-003.1 condition C) - oracle, not deployable",
+      "PF-centered + GT-undistorted - measured to degrade in CAM-EXP-003.1"
+    ]
+  },
+  "aggregation_methods": {
+    "mean": "arithmetic mean of focal",
+    "median": "median of focal",
+    "geomean": "exp(mean(log f)) - focal error is multiplicative, so the log domain is analysed too",
+    "log_huber": "Huber M-estimator of location in log space, iteratively reweighted, scale = MAD/0.6745, tuning constant c = 1.345 (the standard robust-statistics default for 95% Gaussian efficiency). NOT tuned against GT."
+  },
+  "ensembles": {
+    "constraint": "parameter-free and GT-blind only. Fitting or tuning ensemble weights against this dataset's GT is forbidden in this experiment.",
+    "E1_perframe_mean": "per-frame arithmetic mean of the two focals, then median over frames",
+    "E2_perframe_geomean": "per-frame geometric mean, then median over frames",
+    "E3_perview_mean": "median over frames per model, then arithmetic mean of the two",
+    "E4_perview_geomean": "median over frames per model, then geometric mean of the two",
+    "E5_three_model_median": "median over frames per model, then median across the three models"
+  },
+  "oracle": {
+    "ORACLE_BEST_OF_N": "the single frame inside the subset with the smallest GT focal error",
+    "status": "DIAGNOSTIC ONLY - uses GT, is not a method, and is never mixed with deployable numbers"
+  },
+  "bias_noise_decomposition": {
+    "e_vt": "log(f_pred_vt / f_gt_v)",
+    "view_bias_b_v": "mean_t e_vt",
+    "within_residual": "r_vt = e_vt - b_v",
+    "identity": "mean(e^2) = mean(b^2) + mean(r^2) exactly, since residuals are zero-mean within each view",
+    "reported": "each term as a fraction of the total squared log error"
+  },
+  "phase_b_stopping_rule": {
+    "fixed_before_results_were_inspected": true,
+    "evaluated_on": "PRIMARY anycalib_gen, median aggregation, 4 -> 8 frames",
+    "criterion_A": "median relative focal error drops by >= 10 % relative",
+    "criterion_B": "within-5 % rate increases by >= 3 absolute percentage points",
+    "action_if_either_holds": "run PHASE B with N = 16, 32, 64",
+    "action_otherwise": "record SATURATED_BY_8_FRAMES and skip PHASE B"
+  },
+  "frame_selection": {
+    "allowed": "uniform temporal sampling only",
+    "forbidden": [
+      "choosing frames using GT focal",
+      "choosing frames using hand annotations",
+      "choosing frames using scene heuristics (lines, clutter, hand visibility)"
+    ],
+    "note": "scene-aware selection is deferred to CAM-EXP-005+"
+  },
+  "metrics": "identical definitions to CAM-EXP-003: relative focal error = |f_pred - f_gt| / f_gt * 100",
+  "depth_reference": "CAM-EXP-002 sensitivity (5 % ~ 32.8 mm, 10 % ~ 65.6 mm, 20 % ~ 131.2 mm isolated depth displacement) is quoted only as an interpretation reference. Nothing here measures depth.",
+  "statistics": {
+    "paired": "view-level paired deltas",
+    "ci": "nonparametric paired bootstrap, 2000 resamples, 95 %",
+    "reported": [
+      "median delta",
+      "fraction improved",
+      "fraction worsened"
+    ]
+  },
+  "out_of_scope": [
+    "hand geometry as a calibration cue",
+    "training or fine-tuning any network",
+    "scene/background ablation (CAM-EXP-005+)",
+    "any proposed new method"
+  ]
+}

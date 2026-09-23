@@ -1,0 +1,5 @@
+criterion,definition,threshold,evaluated_on,fixed_before_results
+A,relative drop in median relative focal error from N=4 to N=8,>= 10 % relative,anycalib_gen + median,yes
+B,absolute increase in the within-5 % view rate from N=4 to N=8,>= 3 percentage points,anycalib_gen + median,yes
+ACTION_IF_EITHER,"run PHASE B with N = 16, 32, 64 on the PRIMARY model first",n/a,n/a,yes
+ACTION_OTHERWISE,record SATURATED_BY_8_FRAMES and skip PHASE B,n/a,n/a,yes

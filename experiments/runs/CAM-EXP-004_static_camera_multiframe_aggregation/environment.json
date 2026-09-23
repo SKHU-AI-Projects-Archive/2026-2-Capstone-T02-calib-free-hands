@@ -1,0 +1,27 @@
+{
+  "experiment": "CAM-EXP-004_static_camera_multiframe_aggregation",
+  "date": "2026-09-23T02:43:13.643997+00:00",
+  "os": "Windows 10 (10.0.26200)",
+  "python": "3.11.7",
+  "numpy": "2.4.6",
+  "analysis_venv": "experiments/.venv (git-ignored)",
+  "model_inference": "NONE. PHASE A reuses existing predictions; PHASE B was not run (SATURATED_BY_8_FRAMES), so no GPU, no model weights and no image decoding were needed in this run.",
+  "inputs": {
+    "frame_manifest": "experiments/manifests/gigahands_demo_cam_exp_003_frames_v1.csv.gz",
+    "frame_manifest_sha256_32": "58c95f231b7f157aa388c1bddee578ad",
+    "anycalib_gen": "experiments/runs/CAM-EXP-003_1_distortion_aware_diagnostic/results/raw/anycalib_gen_radial_predictions.csv.gz",
+    "geocalib_distorted": "experiments/runs/CAM-EXP-003_1_distortion_aware_diagnostic/results/raw/geocalib_distorted_radial_predictions.csv.gz",
+    "pf_uncentered": "experiments/runs/CAM-EXP-003_single_frame_calibration_benchmark/results/raw/pf_uncentered_predictions.csv.gz"
+  },
+  "prior_runs": "CAM-EXP-001 .. CAM-EXP-003.1 were read only and are unmodified",
+  "anycam": "audited from the official paper and official source, not installed and not run - see anycam_applicability_audit.md",
+  "git_branch": "kjh",
+  "git_commit_at_start": "5e18982 (CAM-EXP-003.1)",
+  "reproduce": [
+    "python src/static_gt_check.py",
+    "python src/phase_a.py",
+    "python src/evaluate.py",
+    "python src/figures.py"
+  ],
+  "determinism": "fully deterministic apart from the bootstrap, which uses a fixed seed (20260923)"
+}

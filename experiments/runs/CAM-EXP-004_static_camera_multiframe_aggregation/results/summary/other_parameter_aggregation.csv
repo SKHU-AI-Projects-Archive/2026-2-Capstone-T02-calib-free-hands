@@ -1,0 +1,13 @@
+model,parameter,method,n_views,median_abs_err,status
+anycalib_gen,k1,mean,175,0.07732800814260482,COMPARED (same OpenCV radial convention)
+anycalib_gen,principal_point_px,mean,175,32.596745686677494,COMPARED
+anycalib_gen,k1,median,175,0.07789054625762937,COMPARED (same OpenCV radial convention)
+anycalib_gen,principal_point_px,median,175,32.63650849613555,COMPARED
+geocalib_distorted,k1,mean,175,0.1541720064690304,COMPARED (same OpenCV radial convention)
+geocalib_distorted,principal_point_px,mean,0,,NOT_PREDICTED_BY_MODEL (fixed at image centre)
+geocalib_distorted,k1,median,175,0.15007034721305845,COMPARED (same OpenCV radial convention)
+geocalib_distorted,principal_point_px,median,0,,NOT_PREDICTED_BY_MODEL (fixed at image centre)
+pf_uncentered,k1,mean,0,,NOT_PREDICTED_BY_MODEL
+pf_uncentered,principal_point_px,mean,175,160.18392514409618,COMPARED
+pf_uncentered,k1,median,0,,NOT_PREDICTED_BY_MODEL
+pf_uncentered,principal_point_px,median,175,161.05983016378332,COMPARED

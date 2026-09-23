@@ -1,0 +1,38 @@
+{
+  "rule_source": "config.json, fixed before the numbers were inspected",
+  "primary_model": "anycalib_gen",
+  "aggregation": "median",
+  "median_rel_err_pct_N4": 9.766674803445213,
+  "median_rel_err_pct_N8": 9.889594236305198,
+  "relative_median_drop_4_to_8_pct": -1.2585596974788755,
+  "criterion_A_relative_drop_ge_10pct": false,
+  "within_5_pct_N4": 20.0,
+  "within_5_pct_N8": 20.0,
+  "within_5_absolute_gain_pp": 0.0,
+  "criterion_B_within5_gain_ge_3pp": false,
+  "run_phase_b": false,
+  "status": "SATURATED_BY_8_FRAMES",
+  "supplementary_check_not_part_of_the_rule": {
+    "geocalib_distorted+median": {
+      "median_N4": 11.652089877571823,
+      "median_N8": 11.183800877646032,
+      "relative_drop_pct": 4.01892711819159,
+      "within_5_gain_pp": 0.5714285714285727,
+      "would_trigger_phase_b": false
+    },
+    "E4_perview_geomean": {
+      "median_N4": 6.621350514441782,
+      "median_N8": 6.3731443845366496,
+      "relative_drop_pct": 3.748572581435946,
+      "within_5_gain_pp": -0.5714285714285727,
+      "would_trigger_phase_b": false
+    },
+    "E2_perframe_geomean": {
+      "median_N4": 6.606658944326398,
+      "median_N8": 6.137798934114361,
+      "relative_drop_pct": 7.0967793882364685,
+      "within_5_gain_pp": 0.0,
+      "would_trigger_phase_b": false
+    }
+  }
+}

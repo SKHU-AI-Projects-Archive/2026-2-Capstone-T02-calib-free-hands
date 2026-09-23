@@ -1,0 +1,11 @@
+method,definition,domain,tuning,notes
+mean,arithmetic mean of the N predicted focals,linear,none,under a consistent-sign per-view error this is provably identical in expected absolute error to N=1
+median,median of the N predicted focals,linear,none,best single-model method for the noisy model (GeoCalib)
+geomean,exp(mean(log f)),log,none,"focal error is multiplicative, so the log domain is the natural one"
+log_huber,"Huber M-estimator of location on log f, iteratively reweighted",log,"c = 1.345, scale = MAD/0.6745 (standard robust-statistics defaults, NOT tuned on GT)","degenerates to the log-domain mean for N<=2 or zero MAD, which is the correct Huber answer there"
+E1_perframe_mean,"per-frame arithmetic mean of the two model focals, then median over frames",mixed,none,
+E2_perframe_geomean,"per-frame geometric mean of the two, then median over frames",mixed,none,best overall deployable estimator in this experiment
+E3_perview_mean,"median over frames per model, then arithmetic mean of the two",mixed,none,
+E4_perview_geomean,"median over frames per model, then geometric mean of the two",mixed,none,
+E5_three_model_median,"median over frames per model, then median across three models",linear,none,PF drags the median; worse than the two-model versions
+ORACLE_BEST_OF_N,the frame in the subset with the smallest GT focal error,n/a,n/a,"NOT DEPLOYABLE - uses GT, diagnostic only"

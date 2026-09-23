@@ -1,0 +1,15 @@
+field,value
+method,AnyCam (CVPR 2025)
+official_paper,https://arxiv.org/abs/2503.23282
+official_repo,https://github.com/Brummi/anycam
+input_required,video sequence (mp4 or list of frames); README documents no static-camera mode
+intrinsics_estimated,"yes - focal length as a distribution over 32 candidates (focal_parameterization='candidates', focal_min=0.1, focal_max=4.0)"
+how_focal_is_selected,"fit_video.py scores each candidate with induce_flow_dist(depth, candidate_intrinsics, relative_pose) and takes argmax of the resulting label"
+camera_motion_required,YES - the scoring signal is camera-induced flow between frames
+static_camera_is_degenerate,"YES - with identity relative pose the induced flow is identically zero for every focal candidate, so the selection objective is flat and carries no focal information; trainer.py's own comment states 'The last pose should be identity -> Induced flow should be zero'"
+moving_people_objects_sufficient,"NO - independently moving content is down-weighted by the uncertainty formulation, not used as a calibration cue"
+official_code_supports_fixed_camera_input,not documented; no known-intrinsics input path in the README
+verdict,NOT_APPLICABLE_REQUIRES_CAMERA_MOTION
+status_in_this_experiment,"METHOD_ASSUMPTION_MISMATCH - deliberately not run, not a failure and not BLOCKED"
+smoke_test_run,no - the spec gates it on APPLICABLE_STATIC_CAMERA
+would_change_verdict,"data with genuine camera motion, or a variant that scores focal on something other than camera-induced flow"
