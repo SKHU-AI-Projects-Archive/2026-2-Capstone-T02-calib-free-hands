@@ -1,0 +1,20 @@
+{
+  "n_camera_sequence_pairs": 300,
+  "rotation_difference_deg": {
+    "median": 0.8593500000000001,
+    "p90": 3.1902,
+    "max": 5.9288
+  },
+  "camera_centre_difference_m": {
+    "median": 0.009363,
+    "p90": 0.042718,
+    "max": 0.117028
+  },
+  "intrinsic_fx_difference_px": {
+    "median": 4.0815,
+    "max": 109.1891
+  },
+  "verdict": "COMPARABLE_ACROSS_SEQUENCES",
+  "consequence": "camera orientation descriptors derived from the provided extrinsics are comparable across sequences and may be used as an ORACLE DIAGNOSTIC",
+  "status": "ORACLE_DIAGNOSTIC_ONLY - provided calibration metadata is never a deployable feature"
+}

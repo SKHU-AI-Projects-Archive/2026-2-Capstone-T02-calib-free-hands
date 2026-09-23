@@ -1,0 +1,5 @@
+model,n_parameters,n_views,sse,sse_reduction_vs_M0,r2_in_sample,adjusted_r2,mae_log,mae_pct_equivalent,interpretation,status
+M0_intercept_only,1,175,1.1537585437635476,2.220446049250313e-16,2.220446049250313e-16,1.1102230246251565e-16,0.061625257875082044,6.509158218047614,"descriptive explanatory fit, in-sample; NOT a causal variance share",baseline
+M_SEQ_sequence_id,5,175,1.137396423156354,0.016362120607193775,0.014181581315810377,-0.00901414618264118,0.060683178921228,6.410158757524781,"descriptive explanatory fit, in-sample; NOT a causal variance share",SEQUENCE_SPECIFIC_DIAGNOSTIC
+M_CAM_physical_camera_id,40,175,0.5520088405294519,0.6017497032340959,0.5215560105593627,0.3833388580542898,0.04068976386130297,4.232892755834248,"descriptive explanatory fit, in-sample; NOT a causal variance share",DIAGNOSTIC_ONLY - camera identity is not available for a new deployment camera
+M_BOTH_sequence_plus_camera,44,175,0.5341408176763704,0.6196177260871774,0.5370428062582238,0.3850797579307704,0.039853409089396497,4.143986550538677,"descriptive explanatory fit, in-sample; NOT a causal variance share",baseline

@@ -1,0 +1,78 @@
+{
+  "id": "CAM_EXP_005_PROBE_SPEC_V1",
+  "created_before_target_analysis": true,
+  "purpose": "A LINEAR PROBE DIAGNOSTIC that asks whether a feature group carries cross-view predictive information about the per-view bias. It is NOT a proposed calibration method.",
+  "model": "Ridge regression (scikit-learn), fitted on the training fold only",
+  "target": "signed log focal bias of AnyCalib-gen radial:2 per view",
+  "preprocessing": [
+    "training-fold median imputation",
+    "training-fold standardisation",
+    "no statistic of any kind is taken from the held-out fold"
+  ],
+  "alpha_grid": [
+    0.01,
+    0.1,
+    1,
+    10,
+    100
+  ],
+  "alpha_selection": "inner K-fold cross-validation INSIDE the training fold only; the held-out fold is never consulted",
+  "inner_cv": "GroupKFold by physical camera within the training fold, k = min(5, number of training cameras)",
+  "seed": 20260924,
+  "feature_sets": {
+    "P0_baseline": "training-fold mean only (intercept)",
+    "P1": [
+      "F_SCENE_GEOM"
+    ],
+    "P2": [
+      "F_IMAGE_GLOBAL"
+    ],
+    "P3": [
+      "F_BORDER_SCENE"
+    ],
+    "P4": [
+      "F_MODEL_SELF"
+    ],
+    "P5": [
+      "MODEL_DISAGREEMENT"
+    ],
+    "P6": [
+      "F_SCENE_GEOM",
+      "F_IMAGE_GLOBAL",
+      "F_BORDER_SCENE"
+    ],
+    "P7": [
+      "F_SCENE_GEOM",
+      "F_IMAGE_GLOBAL",
+      "F_BORDER_SCENE",
+      "F_MODEL_SELF",
+      "MODEL_DISAGREEMENT"
+    ]
+  },
+  "diagnostic_only_feature_sets": {
+    "D_CAMERA_ID": "one-hot physical camera - ORACLE_OR_RIG_SPECIFIC_DIAGNOSTIC, a ceiling-like reference, never deployable",
+    "D_SEQUENCE_ID": "one-hot sequence - SEQUENCE_SPECIFIC_DIAGNOSTIC"
+  },
+  "outer_validation": {
+    "A_LOSO": "leave one sequence out (5 folds). A CONTENT/SEQUENCE SHIFT test: the same physical camera may appear in train and test, so it is NOT a new-camera test.",
+    "B_LOCO": "leave one physical camera out (40 folds). The NEW CAMERA test, and the primary decision criterion."
+  },
+  "metrics": [
+    "MAE of the predicted log bias",
+    "R^2",
+    "Spearman predicted vs actual bias",
+    "LINEAR_PROBE_CORRECTION_DIAGNOSTIC: f_corrected = f_pred / exp(b_hat), then median relative focal error, within +/-5 %, within +/-10 %, signed median"
+  ],
+  "decision_thresholds_fixed_before_results": {
+    "primary_criterion": "Leave-One-Physical-Camera-Out",
+    "A_relative_median_error_reduction_pct": 10.0,
+    "B_within_5pct_gain_pp": 5.0,
+    "direction_must_hold_under": "physical-camera cluster bootstrap",
+    "tags": {
+      "DEPLOYABLE_RGB_SIGNAL_PROMISING": "A or B met on LOCO and the direction holds",
+      "WEAK_RGB_SIGNAL": "improvement present but below both thresholds",
+      "RIG_OR_CAMERA_REPETITION_SIGNAL": "LOSO improves, LOCO does not",
+      "NO_USEFUL_DEPLOYABLE_RGB_SIGNAL": "neither improves"
+    }
+  }
+}

@@ -1,0 +1,14 @@
+{
+  "target": "anycalib_signed_log_bias",
+  "n_views": 175,
+  "n_cameras": 40,
+  "grand_mean_log": -0.10205838726356015,
+  "ss_between_camera": 0.6017497032340959,
+  "ss_within_camera": 0.5520088405294518,
+  "pct_ss_between_camera": 52.15560105593627,
+  "ms_between": 0.015429479570105023,
+  "ms_within": 0.004088954374292235,
+  "n0_effective_group_size": 4.373626373626374,
+  "icc_like_one_way_random": 0.38805408714823125,
+  "caveat": "unbalanced one-way decomposition over 40 cameras and 5 sequences; descriptive repeatability index, not an inferential ICC"
+}

@@ -1,0 +1,214 @@
+{
+  "id": "CAM_EXP_005_SCENE_FEATURE_SPEC_V1",
+  "created_before_target_analysis": true,
+  "frozen_on": "2026-09-24",
+  "frames": "the frozen 64-frame nested set per view (gigahands_demo_cam_exp_0041_64frames_v1.csv.gz). No frame is chosen using the target, the ground truth or any model output.",
+  "frame_to_view_aggregation": {
+    "primary": "median over the view's frames",
+    "secondary": "IQR over the view's frames, for the features marked with_iqr",
+    "rule": "target-independent; defined before any correlation was seen"
+  },
+  "border_fraction": 0.2,
+  "groups": {
+    "F_SCENE_GEOM": [
+      {
+        "name": "edge_density",
+        "definition": "fraction of Canny(50,150) edge pixels"
+      },
+      {
+        "name": "grad_mag_mean",
+        "definition": "mean Sobel gradient magnitude"
+      },
+      {
+        "name": "grad_mag_p90",
+        "definition": "90th percentile Sobel gradient magnitude"
+      },
+      {
+        "name": "grad_orientation_entropy",
+        "definition": "Shannon entropy of the gradient-orientation histogram (36 bins, magnitude-weighted), bits"
+      },
+      {
+        "name": "line_count",
+        "definition": "LSD line segments detected"
+      },
+      {
+        "name": "long_line_count",
+        "definition": "segments longer than 10 % of the image diagonal"
+      },
+      {
+        "name": "total_line_length_over_area",
+        "definition": "sum of segment lengths / (W*H)"
+      },
+      {
+        "name": "median_norm_line_length",
+        "definition": "median segment length / image diagonal"
+      },
+      {
+        "name": "horizontal_line_fraction",
+        "definition": "fraction of segments within 15 deg of horizontal"
+      },
+      {
+        "name": "vertical_line_fraction",
+        "definition": "fraction of segments within 15 deg of vertical"
+      },
+      {
+        "name": "diagonal_line_fraction",
+        "definition": "fraction of segments that are neither"
+      },
+      {
+        "name": "line_orientation_entropy",
+        "definition": "Shannon entropy of the length-weighted segment orientation histogram (18 bins over 180 deg), bits"
+      },
+      {
+        "name": "dominant_line_orientation_strength",
+        "definition": "largest bin share of that histogram"
+      },
+      {
+        "name": "corner_count_over_area",
+        "definition": "goodFeaturesToTrack corners / (W*H) * 1e6"
+      },
+      {
+        "name": "vp_consensus_strength",
+        "definition": "largest share of segments consistent with a single RANSAC-like vanishing point (skipped if unstable)"
+      },
+      {
+        "name": "orthogonal_line_support",
+        "definition": "share of segment pairs whose orientations differ by 90 +/- 10 deg"
+      }
+    ],
+    "F_IMAGE_GLOBAL": [
+      {
+        "name": "gray_mean",
+        "definition": "mean of the grayscale image"
+      },
+      {
+        "name": "gray_std",
+        "definition": "standard deviation of the grayscale image"
+      },
+      {
+        "name": "gray_entropy",
+        "definition": "Shannon entropy of the 256-bin grayscale histogram, bits"
+      },
+      {
+        "name": "saturation_mean",
+        "definition": "mean HSV saturation"
+      },
+      {
+        "name": "saturation_std",
+        "definition": "standard deviation of HSV saturation"
+      },
+      {
+        "name": "local_contrast",
+        "definition": "mean of the local std in 16x16 blocks"
+      },
+      {
+        "name": "laplacian_variance",
+        "definition": "variance of the Laplacian (focus/sharpness proxy)"
+      }
+    ],
+    "F_BORDER_SCENE": [
+      {
+        "name": "border_edge_density",
+        "definition": "edge density in the outer 20 % border ring"
+      },
+      {
+        "name": "border_line_count",
+        "definition": "LSD segments whose midpoint lies in the border ring"
+      },
+      {
+        "name": "border_long_line_count",
+        "definition": "of those, longer than 10 % of the diagonal"
+      },
+      {
+        "name": "border_horizontal_line_fraction",
+        "definition": "horizontal share among border segments"
+      },
+      {
+        "name": "border_vertical_line_fraction",
+        "definition": "vertical share among border segments"
+      },
+      {
+        "name": "border_line_orientation_entropy",
+        "definition": "orientation entropy of border segments"
+      },
+      {
+        "name": "border_grad_mag_mean",
+        "definition": "mean gradient magnitude in the border ring"
+      },
+      {
+        "name": "border_gray_std",
+        "definition": "grayscale std in the border ring"
+      }
+    ],
+    "F_MODEL_SELF": [
+      {
+        "name": "self_pred_focal_px",
+        "definition": "median predicted focal over the view (AnyCalib)"
+      },
+      {
+        "name": "self_pred_focal_log_iqr",
+        "definition": "IQR of log predicted focal within the view"
+      },
+      {
+        "name": "self_pred_k1",
+        "definition": "median predicted radial k1"
+      },
+      {
+        "name": "self_pred_k2",
+        "definition": "median predicted radial k2"
+      },
+      {
+        "name": "self_pred_k1_iqr",
+        "definition": "IQR of predicted k1 within the view"
+      },
+      {
+        "name": "self_pp_offset_norm",
+        "definition": "median |predicted principal point - image centre| / image diagonal"
+      },
+      {
+        "name": "self_pp_offset_iqr",
+        "definition": "IQR of that offset within the view"
+      },
+      {
+        "name": "self_fx_over_fy",
+        "definition": "median predicted fx / fy"
+      }
+    ],
+    "MODEL_DISAGREEMENT": [
+      {
+        "name": "disagree_abs_log_any_vs_geo",
+        "definition": "|log(f_AnyCalib / f_GeoCalib)| per frame, median over the view"
+      },
+      {
+        "name": "disagree_signed_log_any_vs_geo",
+        "definition": "signed log ratio, median over the view"
+      },
+      {
+        "name": "disagree_log_iqr",
+        "definition": "IQR of that signed log ratio within the view"
+      }
+    ]
+  },
+  "deployability": {
+    "F_SCENE_GEOM": "deployable - classical OpenCV/NumPy on the RGB frame",
+    "F_IMAGE_GLOBAL": "deployable - nuisance/scene-condition features, not a geometric causal claim",
+    "F_BORDER_SCENE": "deployable - generic outer-region statistics. NOT a hand segmentation; no hand annotation, detector box or hand prediction is used anywhere",
+    "F_MODEL_SELF": "deployable - the calibration model's own outputs. NOTE: includes the predicted focal, which is mathematically related to the target, so this group is always reported separately from the scene-only groups",
+    "MODEL_DISAGREEMENT": "deployable - needs a second calibration model at deployment time; reported as its own diagnostic"
+  },
+  "forbidden_inputs": [
+    "provided 2D or 3D hand annotation",
+    "hand joint geometry",
+    "MANO",
+    "predicted hand joints or depth",
+    "hand detector output",
+    "ground-truth focal, distortion, principal point or extrinsics",
+    "physical camera id",
+    "sequence id"
+  ],
+  "unstable_feature_policy": "a feature whose implementation is not stable is recorded as FEATURE_SKIPPED_UNSTABLE rather than forced",
+  "determinism": {
+    "seed": 20260924,
+    "note": "OpenCV LSD and goodFeaturesToTrack are deterministic for a fixed input"
+  }
+}
