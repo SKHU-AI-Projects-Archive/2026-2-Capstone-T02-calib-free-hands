@@ -10,7 +10,7 @@
       "PENDING_EXTERNAL_CONFIRMATION",
       "OPEN_ISSUE"
     ],
-    "n_entries": 139,
+    "n_entries": 141,
     "generated_by": "experiments/report_prep/progress_report_v1/scripts/build_report_numbers.py"
   },
   "numbers": {
@@ -473,6 +473,26 @@
       "statistical_unit": "hand",
       "evidence_level": "CONFIRMED_IN_CURRENT_ENVIRONMENT",
       "notes": ""
+    },
+    "cam002_root_error_reduction_factor": {
+      "value": 36.69,
+      "unit": "x",
+      "experiment": "CAM-EXP-002",
+      "source_file": "experiments/runs/CAM-EXP-002_camera_focal_sensitivity/results/summary/baseline_vs_gt_focal.csv",
+      "source_column_or_key": "root_xyz_error_mm_median @ PIPELINE_BASELINE / @ GT_x1.00",
+      "statistical_unit": "hand",
+      "evidence_level": "ROBUST_BUT_SINGLE_DATASET",
+      "notes": "DERIVED ratio of the two medians, not an independent measurement. Quote this factor with both medians; do not round it up to 'two orders of magnitude'. SCOPE: focal-length sensitivity of ABSOLUTE hand depth. This experiment did not test principal point, anisotropic focal or distortion downstream."
+    },
+    "cam002_absolute_mpjpe_reduction_factor": {
+      "value": 42.01,
+      "unit": "x",
+      "experiment": "CAM-EXP-002",
+      "source_file": "experiments/runs/CAM-EXP-002_camera_focal_sensitivity/results/summary/baseline_vs_gt_focal.csv",
+      "source_column_or_key": "absolute_mpjpe_mm_median @ PIPELINE_BASELINE / @ GT_x1.00",
+      "statistical_unit": "hand",
+      "evidence_level": "ROBUST_BUT_SINGLE_DATASET",
+      "notes": "DERIVED ratio of the two medians. SCOPE: focal-length sensitivity of ABSOLUTE hand depth. This experiment did not test principal point, anisotropic focal or distortion downstream."
     },
     "cam002_focal_5pct_root_shift_median_mm": {
       "value": 32.801,

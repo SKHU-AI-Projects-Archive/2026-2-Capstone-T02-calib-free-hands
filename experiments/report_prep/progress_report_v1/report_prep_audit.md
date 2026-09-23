@@ -294,3 +294,77 @@ context rule, AnyCam provenance, and the untouched historical results.
 None. Every value in `report_numbers.json` is unchanged; only three keys were
 renamed and the accompanying descriptions rewritten. No file under any run's
 `results/raw/` or `results/summary/` was modified.
+
+---
+
+# Fourth pass — CAM-EXP-002 magnitude and causal wording (2026-09-23)
+
+Two remaining overstatements, both in `scripts/build_tables.py` and therefore in
+every table it generated. Fixed at the generator, locked with four new checks.
+No numerical value changed.
+
+## 1. "nearly two orders of magnitude" → the measured factor
+
+The CAM-EXP-002 hypothesis row recorded the result as *"confirmed, by nearly two
+orders of magnitude"*. Two orders of magnitude is ~100×. The measured ratio is
+
+```
+2881.885 mm / 78.54 mm = 36.69
+```
+
+— about a third of what the phrase implies. The figure is now derived in
+`report_numbers.json` as `cam002_root_error_reduction_factor` (and
+`cam002_absolute_mpjpe_reduction_factor` = 42.01 for the absolute MPJPE), so the
+ratio is computed from the two canonical medians and cannot drift from them.
+
+The row now reads: *"supported; the median root error was approximately 36.69×
+lower under the dataset-provided reference focal condition (2881.885 mm →
+78.54 mm)"*. Guardrail section O forbids the "orders of magnitude" phrasing and
+requires the factor to be quoted with both medians.
+
+## 2. "the camera, not the hand model" → an upstream-priority claim
+
+The same row's `next_implication` said *"the camera, not the hand model, is the
+first thing to fix"*. Nothing in the evidence exonerates the hand-pose model.
+Under the dataset-provided reference focal the absolute error does not vanish:
+
+* median root error **78.54 mm**
+* root-aligned MPJPE **34.404 mm**
+
+The row now reads: *"camera focal handling is a major upstream source of
+absolute-placement error and is therefore a justified calibration priority
+before interpreting residual hand-model error"*, and its
+`remaining_uncertainty` states the residuals explicitly. Guardrail section P
+carries the safe framing in English and Korean.
+
+## 3. C01's causal wording
+
+C01 said the focal difference *"alone displaces the hand by metres"*. It is now
+phrased as what was actually done — an intervention on fixed predictions:
+
+> Holding all cached hand predictions fixed, replacing the pipeline's focal
+> convention with the dataset-provided reference focal reduced the median root
+> error from 2881.885 mm to 78.54 mm.
+
+Its scope line now says that substantial absolute error remains under the
+reference focal condition, so the claim is not an attribution of the whole
+absolute error to the camera. The `wording_to_avoid` cell picked up both
+retired phrases.
+
+## New checks
+
+| Check | What it enforces |
+|---|---|
+| O1 | "orders of magnitude" is never used for the CAM-EXP-002 improvement |
+| O2 | no dichotomy that clears the hand-pose model ("camera, not the hand model", "first thing to fix") |
+| O3a | the stored reduction factor equals the ratio of the two canonical medians |
+| O3b | every improvement factor quoted next to those medians matches the canonical one |
+| O4 | wherever the reference-focal result is claimed, the residual error (78.54 mm root, 34.404 mm root-aligned) is stated too |
+
+45 checks → **50 checks, all passing.**
+
+## Numerical impact
+
+None. Two derived ratio entries were added to `report_numbers.json` (both
+computed from existing canonical medians); no experimental value changed, and no
+file under any run's `results/raw/` or `results/summary/` was modified.

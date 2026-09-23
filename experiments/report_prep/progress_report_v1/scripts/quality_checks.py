@@ -497,6 +497,74 @@ def check_tolerance_wording():
           f"repeat={has_repeat} runs={has_runs}")
 
 
+# O -------------------- CAM-EXP-002 magnitude and camera-vs-hand-model wording
+def check_cam002_magnitude():
+    bad = []
+    for p in scannable_files():
+        t = _scannable_text(p)
+        for m in re.finditer(r"orders of magnitude", t, re.I):
+            ctx = t[max(0, m.start() - 300):m.end() + 300]
+            # correction-history prose quotes the retired phrase in order to
+            # record that it was retired; that is not an assertion of it
+            if re.search(r"do not|never|avoid|would be|wording_to_avoid|"
+                         r"almost three times|recorded|forbids|now reads|"
+                         r"retired|is ~100|phrase implies", ctx, re.I):
+                continue
+            bad.append(f"{p.relative_to(PKG)}: '{m.group(0)}'")
+    check(not bad, "O1. the CAM-EXP-002 improvement is never called 'orders of "
+                   "magnitude'", "; ".join(bad[:5]))
+
+    dicho = []
+    for p in scannable_files():
+        t = _scannable_text(p)
+        for m in re.finditer(r"camera,? not the hand model|camera,? not hand|"
+                             r"first thing to fix|hand model is not the problem",
+                             t, re.I):
+            ctx = t[max(0, m.start() - 300):m.end() + 300]
+            if re.search(r"do not|never|avoid|wording_to_avoid|nothing in this|"
+                         r"exonerat|now reads|retired|said|recorded",
+                         ctx, re.I):
+                continue
+            dicho.append(f"{p.relative_to(PKG)}: '{m.group(0)}'")
+    check(not dicho, "O2. no dichotomy that clears the hand-pose model",
+          "; ".join(dicho[:5]))
+
+    num = read_json(PKG / "report_numbers.json")["numbers"]
+    base = num["cam002_baseline_root_error_median_mm"]["value"]
+    ref = num["cam002_gt_effective_focal_root_error_median_mm"]["value"]
+    factor = num["cam002_root_error_reduction_factor"]["value"]
+    check(abs(factor - base / ref) < 0.01,
+          "O3a. the stored reduction factor equals the ratio of the two medians",
+          f"{factor} vs {base / ref:.4f}")
+
+    missing = []
+    for p in scannable_files():
+        t = _scannable_text(p)
+        # any artifact quoting the factor must quote it consistently
+        for m in re.finditer(r"(\d+\.?\d*)\s*x lower|~\s*(\d+\.?\d*)x", t):
+            ctx = t[max(0, m.start() - 200):m.end() + 200]
+            # only factors describing the CAM-EXP-002 focal comparison, keyed on
+            # its two medians rather than on the generic word "focal", which
+            # also appears in neighbouring rows of the same CSV
+            if not re.search(r"2881|78\.54", ctx):
+                continue
+            val = float(m.group(1) or m.group(2))
+            if abs(val - factor) > 0.5:
+                missing.append(f"{p.relative_to(PKG)}: {val} vs {factor}")
+    check(not missing, "O3b. every quoted improvement factor matches the "
+                       "canonical one", "; ".join(missing[:3]))
+
+    # the residual under the reference focal must be stated where the claim is
+    res = []
+    for f in ("evidence_index.md", "tables/hypothesis_result_evidence.csv",
+              "tables/claim_evidence_ledger.csv"):
+        t = _scannable_text(PKG / f)
+        if "78.54" in t and "34.404" not in t:
+            res.append(f)
+    check(not res, "O4. wherever the reference-focal result is claimed, the "
+                   "residual error is stated too", f"{res}")
+
+
 def main() -> None:
     check_sources()
     check_main_results()
@@ -514,6 +582,7 @@ def main() -> None:
     check_focal_terminology()
     check_e2_independence()
     check_tolerance_wording()
+    check_cam002_magnitude()
 
     print(f"PASS  {len(OK)}")
     for w in WARN:

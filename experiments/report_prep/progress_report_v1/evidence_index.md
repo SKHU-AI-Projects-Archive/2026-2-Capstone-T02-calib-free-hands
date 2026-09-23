@@ -83,9 +83,9 @@ have not yet been validated by a human (`OPEN_ISSUE`).
 ## Section 5 — Experiment 2: focal error and absolute depth
 
 **Claims:**
-1. The deployed pipeline's camera-translation conversion uses a focal
-   convention far from the dataset-provided reference focal of the capture
-   cameras, and that difference alone displaces the hand by metres.
+1. Holding all cached hand predictions fixed, replacing the pipeline's focal
+   convention with the dataset-provided reference focal reduced the median root
+   error from 2881.885 mm to 78.54 mm — approximately 36.69× lower.
 2. Focal error propagates nearly proportionally into absolute depth, while the
    hand's own shape is untouched.
 
@@ -109,8 +109,9 @@ crop rescaling. Neither is an optical/sensor focal length; do not call either
 one a "physical focal".
 
 **Numbers:** pipeline focal convention 5000 px vs dataset-provided reference
-focal 922.77 px (median); root error
-2881.885 mm → 78.54 mm; absolute MPJPE 2885.314 mm → 68.68 mm; root-aligned
+focal 922.77 px (median); median root error 2881.885 mm → 78.54 mm
+(**≈ 36.69×** lower — quote the factor with both medians, never "orders of
+magnitude"); absolute MPJPE 2885.314 mm → 68.68 mm (≈ 42.01×); root-aligned
 MPJPE **identical** at 34.404 mm in both conditions. Perturbation: 5 % →
 32.801 mm, 10 % → 65.602 mm, 20 % → 131.204 mm (median). 2,210 hands.
 
@@ -121,6 +122,13 @@ a general camera-calibration sensitivity analysis. Principal point, anisotropic
 focal and distortion were never varied downstream. The mm values belong to this
 working-distance regime. The near-linear shape is expected from the pipeline
 equation Z ∝ f, not a discovery.
+
+**Caveat — do not make it a dichotomy.** Substantial absolute error *remains*
+under the reference focal condition: median root error 78.54 mm and root-aligned
+MPJPE 34.404 mm. So this experiment identifies the focal convention as a major
+**upstream** contributor; it does not show that the hand-pose model is fine.
+The defensible framing is: camera focal handling should be corrected before the
+remaining absolute error is attributed to downstream hand-model components.
 
 ---
 

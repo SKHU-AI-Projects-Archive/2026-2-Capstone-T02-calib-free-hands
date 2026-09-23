@@ -278,7 +278,11 @@ def hypothesis_table():
                                 "training-convention virtual focal places the "
                                 "hand far closer to the reference 3D",
          "test": "same cached predictions, two focal conventions, identical metric",
-         "result": "confirmed, by nearly two orders of magnitude",
+         "result": f"supported; the median root error was approximately "
+                   f"{v('cam002_root_error_reduction_factor')}x lower under the "
+                   "dataset-provided reference focal condition "
+                   f"({v('cam002_baseline_root_error_median_mm')} mm -> "
+                   f"{v('cam002_gt_effective_focal_root_error_median_mm')} mm)",
          "key_numbers": f"virtual focal {v('cam002_pipeline_virtual_focal_px'):.0f} px "
                         f"-> root error "
                         f"{v('cam002_baseline_root_error_median_mm'):.0f} mm; "
@@ -295,9 +299,18 @@ def hypothesis_table():
                   "that 5000 px is an invalid camera intrinsic, which it never "
                   "claimed to be.",
          "remaining_uncertainty": "none for the direction; the magnitude is "
-                                  "dataset-specific",
-         "next_implication": "the camera, not the hand model, is the first thing "
-                             "to fix -> CAM-EXP-003"},
+                                  "dataset-specific. Substantial absolute error "
+                                  "REMAINS under the reference focal condition "
+                                  f"(median root error "
+                                  f"{v('cam002_gt_effective_focal_root_error_median_mm')} mm, "
+                                  f"root-aligned MPJPE "
+                                  f"{v('cam002_root_aligned_mpjpe_median_mm')} mm), "
+                                  "so this experiment does not rule out "
+                                  "downstream hand-model contributions",
+         "next_implication": "camera focal handling is a major upstream source "
+                             "of absolute-placement error and is therefore a "
+                             "justified calibration priority before interpreting "
+                             "residual hand-model error -> CAM-EXP-003"},
         {"experiment": "CAM-EXP-003",
          "original_hypothesis": "single-frame calibration alone can reach the "
                                 "+/-5 % focal target",

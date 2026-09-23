@@ -18,24 +18,34 @@ def v(k):
 def claim_ledger():
     rows = [
         {"claim_id": "C01",
-         "claim_we_may_write": "The deployed pipeline assumes a fixed virtual "
-                               "focal convention that is far from the dataset-provided "
-                               "reference focal of the capture cameras in the "
-                               "same image-coordinate convention, and this alone "
-                               "displaces the hand by metres.",
+         "claim_we_may_write": "Holding all cached hand predictions fixed, "
+                               "replacing the pipeline's focal convention with "
+                               "the dataset-provided reference focal reduced the "
+                               "median root error from "
+                               f"{v('cam002_baseline_root_error_median_mm')} mm to "
+                               f"{v('cam002_gt_effective_focal_root_error_median_mm')} mm.",
          "supporting_experiment": "CAM-EXP-002",
          "supporting_numbers": f"{v('cam002_pipeline_virtual_focal_px'):.0f} px vs "
                                f"{v('cam002_gt_effective_focal_median_px'):.1f} px; "
-                               f"root error "
-                               f"{v('cam002_baseline_root_error_median_mm'):.0f} mm vs "
-                               f"{v('cam002_gt_effective_focal_root_error_median_mm'):.1f} mm",
+                               f"median root error "
+                               f"{v('cam002_baseline_root_error_median_mm')} mm vs "
+                               f"{v('cam002_gt_effective_focal_root_error_median_mm')} mm "
+                               f"(~{v('cam002_root_error_reduction_factor')}x lower); "
+                               f"root-aligned MPJPE identical at "
+                               f"{v('cam002_root_aligned_mpjpe_median_mm')} mm",
          "evidence_level": "ROBUST_BUT_SINGLE_DATASET",
-         "allowed_wording": "본 GigaHands 환경에서 파이프라인이 가정한 가상 초점거리는 "
-                            "실제 카메라 초점거리와 크게 달랐고, 이로 인해 절대 위치가 "
-                            "미터 단위로 이동했다.",
+         "allowed_wording": "동일한 hand prediction을 고정한 채 파이프라인의 focal "
+                            "convention을 dataset-provided reference focal로 "
+                            "교체했을 때, median root error가 2881.885 mm에서 "
+                            "78.54 mm로 감소했다 (약 36.69배).",
          "wording_to_avoid": "The pipeline is broken / all monocular hand pipelines "
-                             "have metre-scale error.",
-         "scope": "one dataset, one working-distance regime",
+                             "have metre-scale error / nearly two orders of "
+                             "magnitude / the camera, not the hand model, is the "
+                             "problem.",
+         "scope": "one dataset, one working-distance regime. This isolates the "
+                  "focal term on fixed predictions; substantial absolute error "
+                  "remains under the reference focal condition, so it does not "
+                  "attribute the whole absolute error to the camera.",
          "external_confirmation_needed": "yes, for the magnitude",
          "report_section": "5 (Experiment 2)"},
         {"claim_id": "C02",

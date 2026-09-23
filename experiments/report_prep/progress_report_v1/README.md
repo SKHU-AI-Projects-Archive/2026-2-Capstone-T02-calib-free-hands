@@ -21,7 +21,7 @@ been produced. That is the next step, after this package is reviewed.
 |---|---|
 | know what may and may not be claimed | `tables/claim_evidence_ledger.md` |
 | write a section | `evidence_index.md` — one entry per report section |
-| find a number | `report_numbers.json` — 139 canonical entries |
+| find a number | `report_numbers.json` — 141 canonical entries |
 | know where a number came from | `source_map/report_artifact_sources.csv` |
 | avoid an overstatement | `source_map/report_wording_guardrails.md` |
 | know which chapter uses which experiment | `source_map/experiment_to_report_section.md` |
@@ -66,7 +66,7 @@ been produced. That is the next step, after this package is reviewed.
 README.md                      this file
 evidence_index.md              per-section claims, numbers, artifacts, caveats
 correction_log.md              metadata corrections, with old values kept
-report_numbers.json            139 canonical numbers, each with its source
+report_numbers.json            141 canonical numbers, each with its source
 quality_check_report.json      output of scripts/quality_checks.py
 tables/                        report-ready tables (.csv and .md of each)
 figures/main/                  Fig01-Fig07, PNG at 300 dpi and PDF
@@ -109,7 +109,7 @@ distinguished by marker, line style and hatch, never by colour alone.
 
 ## Known state
 
-`scripts/quality_checks.py` passes all 45 checks, including: every source file
+`scripts/quality_checks.py` passes all 50 checks, including: every source file
 exists; the figure CSVs match the canonical summaries; no file presents 1400 as
 an independent sample count; no dangerous phrasing is used assertively; the E2
 selection-set figure never appears without the re-run and leave-one-sequence-out

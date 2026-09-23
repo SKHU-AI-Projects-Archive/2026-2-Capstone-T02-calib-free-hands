@@ -273,6 +273,22 @@ def exp002_numbers():
     add("cam002_n_hands", int(base["n_hands"]), "hands", "CAM-EXP-002",
         R002 / "results/summary/baseline_vs_gt_focal.csv", "n_hands", "hand",
         "CONFIRMED_IN_CURRENT_ENVIRONMENT", "")
+    # derived from the two rows above, so the ratio can never drift from them
+    add("cam002_root_error_reduction_factor",
+        round(f(base["root_xyz_error_mm_median"])
+              / f(gt["root_xyz_error_mm_median"]), 2), "x", "CAM-EXP-002",
+        R002 / "results/summary/baseline_vs_gt_focal.csv",
+        "root_xyz_error_mm_median @ PIPELINE_BASELINE / @ GT_x1.00", "hand",
+        "ROBUST_BUT_SINGLE_DATASET",
+        "DERIVED ratio of the two medians, not an independent measurement. Quote "
+        "this factor with both medians; do not round it up to 'two orders of "
+        "magnitude'. " + scope)
+    add("cam002_absolute_mpjpe_reduction_factor",
+        round(f(base["absolute_mpjpe_mm_median"])
+              / f(gt["absolute_mpjpe_mm_median"]), 2), "x", "CAM-EXP-002",
+        R002 / "results/summary/baseline_vs_gt_focal.csv",
+        "absolute_mpjpe_mm_median @ PIPELINE_BASELINE / @ GT_x1.00", "hand",
+        "ROBUST_BUT_SINGLE_DATASET", "DERIVED ratio of the two medians. " + scope)
 
     sens = read_csv(R002 / "results" / "summary" / "focal_sensitivity_summary.csv")
     for pct in ("5.0", "10.0", "20.0"):

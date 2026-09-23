@@ -191,3 +191,38 @@ valid.
 
 **Why:** hand annotation quality never removed a camera-valid view; that was a
 deliberate design rule.
+
+## O. The size of the Experiment 2 improvement
+
+**Do not write:** "nearly two orders of magnitude", "two orders of magnitude",
+"~100×".
+
+**Write:** the factor with both medians — "the median root error was
+approximately 36.69× lower under the dataset-provided reference focal condition
+(2881.885 mm → 78.54 mm)".
+
+**Why:** 2881.885 / 78.54 = 36.69. "Two orders of magnitude" would be ~100×,
+almost three times the measured factor. The ratio is derived in
+`report_numbers.json` as `cam002_root_error_reduction_factor` so it cannot drift
+from the two medians it comes from.
+
+## P. Camera versus hand model
+
+**Do not write:** "the camera, not the hand model, is the problem", "the camera
+is the first thing to fix", or anything that clears the hand-pose model.
+
+**Write:** "the focal convention is a major upstream contributor to absolute
+placement error in this pipeline, so camera focal handling should be corrected
+before attributing the remaining absolute error to downstream hand-model
+components."
+
+한국어:
+
+> 본 파이프라인에서는 focal convention이 절대 위치 오차의 주요 상류 요인으로
+> 확인되었으므로, 잔여 절대 오차를 손 자세 모델의 문제로 해석하기 전에
+> 카메라 focal 처리를 먼저 바로잡는 것이 타당하다.
+
+**Why:** under the dataset-provided reference focal the absolute error does not
+vanish — median root error 78.54 mm and root-aligned MPJPE 34.404 mm remain.
+Nothing in this evidence isolates or exonerates the hand-pose model. The
+priority claim is supported; the exclusion claim is not.

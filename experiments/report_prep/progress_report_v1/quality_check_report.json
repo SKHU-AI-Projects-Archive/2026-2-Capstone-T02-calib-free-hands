@@ -44,7 +44,12 @@
     "N3. E2's 6.46 % is never called an independent run or test",
     "N4. 6.46 % always carries the 'same benchmark views' context",
     "N5. no '+/-0.3x pp tolerance' is stated as an uncertainty interval",
-    "N6. the repeat-spread diagnostic and the two-execution difference are stored as separate numbers - repeat=True runs=True"
+    "N6. the repeat-spread diagnostic and the two-execution difference are stored as separate numbers - repeat=True runs=True",
+    "O1. the CAM-EXP-002 improvement is never called 'orders of magnitude'",
+    "O2. no dichotomy that clears the hand-pose model",
+    "O3a. the stored reduction factor equals the ratio of the two medians - 36.69 vs 36.6932",
+    "O3b. every quoted improvement factor matches the canonical one",
+    "O4. wherever the reference-focal result is claimed, the residual error is stated too - []"
   ],
   "warnings": [],
   "failed": [],
