@@ -1,0 +1,29 @@
+{
+  "video": "1_insert.mp4",
+  "frames_rendered": 953,
+  "fps": 30.0,
+  "codec": "h264 (libx264, yuv420p)",
+  "pipeline_focal_px": 7500.0,
+  "anycalib_video_focal_px": 1462.6211547851562,
+  "geocalib_video_focal_px": 1871.77734375,
+  "e2_video_focal_px": 1662.1363192634753,
+  "current_demo_method": "FROZEN E2 - exploratory ensemble",
+  "axis_limits_display_space": [
+    [
+      -0.30248128056526186,
+      0.08657822191715242
+    ],
+    [
+      -2.0897364950180055,
+      -0.12886341199278828
+    ],
+    [
+      -0.1283459525555372,
+      0.22165404744446277
+    ]
+  ],
+  "axis_limit_rule": "robust 3-97 percentile over BOTH conditions jointly, padded, cubed; identical limits and view angle on both sides",
+  "hand_prediction_reuse": "single inference pass; both conditions use the same detections, crops, MANO results and root-relative joints",
+  "what_differs": "only cam_t[2] (tz), which the pipeline defines as 2*f/(s*box_size)",
+  "not_ground_truth": "these clips have no dataset-provided calibration; neither condition is known to be metrically correct"
+}

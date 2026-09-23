@@ -1,0 +1,13 @@
+{
+  "video": "2_screw.mp4",
+  "width": 1920,
+  "height": 1080,
+  "fps": 30.0,
+  "frames": 364,
+  "duration_sec": 12.13,
+  "codec": "h264",
+  "median_bg_shift_px_between_sampled_frames": 0.22,
+  "p90_bg_shift_px": 4.5,
+  "camera_motion_status": "STATIC_CAMERA",
+  "scope": "primary target for the static-camera demo"
+}

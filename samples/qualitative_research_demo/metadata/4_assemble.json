@@ -1,0 +1,13 @@
+{
+  "video": "4_assemble.mp4",
+  "width": 1080,
+  "height": 1920,
+  "fps": 30.004,
+  "frames": 570,
+  "duration_sec": 19.0,
+  "codec": "hevc",
+  "median_bg_shift_px_between_sampled_frames": 14.83,
+  "p90_bg_shift_px": 38.45,
+  "camera_motion_status": "MOVING_CAMERA",
+  "scope": "OUT_OF_SCOPE_FOR_STATIC_AGGREGATION"
+}

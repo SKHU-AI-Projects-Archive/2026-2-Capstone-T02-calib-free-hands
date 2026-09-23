@@ -1,0 +1,13 @@
+{
+  "video": "3_weld.mp4",
+  "width": 1080,
+  "height": 1920,
+  "fps": 30.006,
+  "frames": 1761,
+  "duration_sec": 58.69,
+  "codec": "hevc",
+  "median_bg_shift_px_between_sampled_frames": 30.41,
+  "p90_bg_shift_px": 77.5,
+  "camera_motion_status": "MOVING_CAMERA",
+  "scope": "OUT_OF_SCOPE_FOR_STATIC_AGGREGATION"
+}

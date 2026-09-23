@@ -1,0 +1,20 @@
+{
+  "chosen": "2_screw.mp4",
+  "copied_to": "BEST_COMPARISON.mp4",
+  "criteria_in_order": [
+    "camera_motion_status == STATIC_CAMERA (this is a static-camera study)",
+    "most frames with both hands detected (longest continuous bimanual coverage)",
+    "shorter clip, so the whole thing can be watched"
+  ],
+  "explicitly_not_used": [
+    "how large or small the focal estimate came out",
+    "how favourable the depth change looks",
+    "any ground truth - these clips have none"
+  ],
+  "values": {
+    "camera_motion_status": "STATIC_CAMERA",
+    "n_frames_bimanual": 364,
+    "duration_sec": "12.13",
+    "n_processed_frames": 364
+  }
+}

@@ -61,3 +61,15 @@ experiments/.venv-calib/
 # AnyCam applicability testing environment (CAM-EXP-004.1); its official
 # inference path cannot run on Windows, see that run's anycam_static_stress_test.md
 experiments/.venv-anycam/
+
+# Qualitative research demo (samples/qualitative_research_demo): the rendered
+# videos, the still frames and the hand-inference cache are large and fully
+# regenerable from the scripts. The metadata, calibration numbers and CSVs are
+# small and ARE committed.
+samples/qualitative_research_demo/cache/
+samples/qualitative_research_demo/legacy/
+samples/qualitative_research_demo/anycalib/
+samples/qualitative_research_demo/e2/
+samples/qualitative_research_demo/comparison/
+samples/qualitative_research_demo/comparison_frames/
+samples/qualitative_research_demo/BEST_COMPARISON.mp4

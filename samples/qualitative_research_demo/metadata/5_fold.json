@@ -1,0 +1,13 @@
+{
+  "video": "5_fold.mp4",
+  "width": 1634,
+  "height": 908,
+  "fps": 30.0,
+  "frames": 502,
+  "duration_sec": 16.73,
+  "codec": "h264",
+  "median_bg_shift_px_between_sampled_frames": 17.52,
+  "p90_bg_shift_px": 36.49,
+  "camera_motion_status": "MOVING_CAMERA",
+  "scope": "OUT_OF_SCOPE_FOR_STATIC_AGGREGATION"
+}
