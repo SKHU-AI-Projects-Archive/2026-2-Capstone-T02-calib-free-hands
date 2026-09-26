@@ -7,10 +7,16 @@ DECISION TAGS
   F_SINGLE_FOCAL_PRIOR_CONFOUND   (controls only, as designed)
 ```
 
-**One sentence:** No linearly decodable camera-residual signal was detected in
-the frozen AnyHand-WiLoR outputs or in its selected image-encoder
-representation, under this dataset and validation protocol — every hand feature
-group performed at the level of its own shuffled control.
+**One sentence:** Under the current GigaHands rig, selected frozen
+AnyHand-WiLoR outputs and one mean-pooled backbone representation did not
+provide a generalisable linearly decodable signal for AnyCalib's view-level
+focal residual on unseen physical cameras — every hand feature group performed
+at the level of its own shuffled control.
+
+This is a negative result for the tested representations and linear-probe
+protocol, **not** evidence that all learned hand models contain no camera
+information. The narrow focal distribution of this rig is a major limitation,
+and a varied-focal dataset is the most important next validation requirement.
 
 ## 1. Plain-language summary
 
@@ -172,13 +178,25 @@ collapsed. So the failure is noise, not degenerate memorisation.
 | S5 (≥5 %) | 4 | 4 | 14.80 % | 11.53 % | 12.56 % | 11.62 % |
 
 S5 is flagged `UNDERPOWERED_STRESS_SUBSET` (4 views, 4 cameras) and no
-conclusion is drawn from it. On the powered S2 subset the hand probes still do
-not separate from the baselines.
+conclusion is drawn from it.
+
+On the GT-defined S2 stress subset the latent probe had a lower median error
+than B1 (**4.83 % vs 5.60 %**). This is a secondary stress diagnostic, **not**
+evidence of a detected hand-derived camera cue: the subset is
+reference-focal-defined and therefore analysis-only, it is not the headline
+benchmark, it was not a pre-registered route to success, and the corresponding
+shuffle-control superiority was not established for it. It is reported because
+it exists, not because it supports a signal.
 
 ## 8. Most predictive individual features
 
-Among the pre-registered explicit features, only 3 of 78 have a cluster-
-bootstrap CI excluding zero:
+Feature-level associations are reported descriptively using Spearman
+correlation with physical-camera cluster-bootstrap confidence intervals. **No
+formal multiple-comparison correction is applied**, and these univariate
+associations are not a success criterion.
+
+Three of 78 pre-registered explicit scalar features had intervals excluding
+zero:
 
 | feature | group | Spearman vs signed bias | CI |
 | --- | --- | ---: | --- |
@@ -188,9 +206,12 @@ bootstrap CI excluding zero:
 | `bbox_cy_norm__median` | F0 | +0.158 | [−0.064, +0.350] |
 | `mano_beta_5__median` | F2 | −0.138 | [−0.282, +0.021] |
 
-These are descriptive. Three marginal associations out of 78 features is close
-to what multiplicity alone produces, and crucially **none of them survives into
-predictive performance on an unseen camera** — the probes containing them fail.
+Because many features were inspected and no formal multiple-comparison
+correction was applied, these are treated as **descriptive associations only**,
+not statistically confirmed findings. Three out of 78 is close to what
+inspecting that many features produces by itself, and crucially **none of them
+translated into unseen-camera predictive performance** — the probes containing
+them fail.
 
 ## 9. Hypotheses
 
@@ -221,7 +242,10 @@ to unseen physical cameras or improves on a single constant correction.
   than a search.
 * That hand-derived camera cues are impossible in other regimes. GigaHands has
   a 1.9 % focal spread, which leaves very little for any per-camera method to
-  demonstrate.
+  demonstrate. That narrow spread is a major limitation, but it does not by
+  itself establish that the representation side is adequate — this run tested
+  one checkpoint, one layer, one pooling and one linear read-out, so a
+  representation-side limitation cannot be excluded either.
 
 The correct wording is: *no linearly decodable camera-residual signal was
 detected in the selected frozen representation under this dataset and
@@ -229,21 +253,28 @@ validation protocol.*
 
 ## 11. CAM-EXP-007.1
 
-**Recommendation: do not proceed with a hand-derived correction head.**
+**Recommendation: method development is not justified by the present
+evidence.**
 
-The pre-registered criteria were not met by any group, and the shuffle control
-shows the probes were not using hand information at all. Building a correction
+No pre-registered hand feature group beats the global-bias baseline by the
+required margin, and the shuffle controls do not degrade. Building a correction
 head on this basis would be fitting noise.
 
-Before any further hand-based focal work, the binding problem is the dataset,
-not the model: on a rig with a 1.9 % focal spread, a constant beats everything,
-and that will remain true whatever cue is used. A varied-focal dataset is the
-prerequisite.
+In addition, the narrow focal distribution of the current GigaHands rig is a
+major limiting factor and prevents a strong conclusion about whether richer
+hand-model representations could carry useful camera information. A
+varied-focal dataset should precede any new correction head, and is the most
+important next validation requirement.
+
+Both constraints are real and neither is singled out: this experiment tested
+one frozen hand model, one selected representation layer, global-average
+pooling and a linear probe, so a representation-side limitation cannot be
+excluded either.
 
 If hand-derived cues are revisited later, the honest next step is a *different
-instrument* — several layers and a non-linear read-out, pre-registered as a
-search with the multiplicity accounted for — not a correction head built on
-this null result.
+instrument* — several layers, spatial structure retained, and a non-linear
+read-out, pre-registered as a search with multiplicity accounted for — not a
+correction head built on this null result.
 
 ## 12. Limitations
 
@@ -269,11 +300,22 @@ reference to the target, the reference focal or any AnyCalib output.
 Phase B (`src/run_probes.py` onward) is the first code that reads
 `view_targets.csv.gz`.
 
-No post-hoc analysis was added after seeing results. One implementation
-correction was made *before* the target was read: the scene baseline initially
-matched CAM-005 feature names on their base name, which pulled in `__iqr`
-variants and would have redefined the frozen 31-feature set as 62. It was
-corrected to an exact-name match before probes were evaluated.
+No post-hoc analysis was added after seeing results.
+
+One implementation correction is recorded as
+`IMPLEMENTATION_CORRECTION_BEFORE_PERFORMANCE_INSPECTION`. The target had
+already been loaded by the Phase-B probe script when the scene-baseline
+feature-count mismatch was detected. However, **no model performance metric had
+been inspected** — `evaluate.py` had not been run. The mismatch was identified
+from the feature-count metadata itself (`scene feats 62` instead of the frozen
+CAM-EXP-005 P6 set of 31 features), caused by matching CAM-005 feature names on
+their base name so that `x` and `x__iqr` both passed. The selector was
+corrected to exact-name matching before performance evaluation, and only the
+corrected run is used as the scientific result.
+
+This is deliberately **not** described as a correction made before the target
+was read: it was not. Full account in
+[`analysis_provenance.md`](analysis_provenance.md) §2.
 
 ## 14. Reproduce
 

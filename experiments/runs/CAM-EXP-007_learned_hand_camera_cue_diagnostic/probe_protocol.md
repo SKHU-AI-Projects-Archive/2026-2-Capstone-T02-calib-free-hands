@@ -86,7 +86,25 @@ repeated observations and are never counted as independent samples.
 All paired comparisons run on the **common eligible set** of 160 views, so no
 probe is scored on an easier subset than its baseline.
 
-## 9. A note on reading the correlation column
+## 9. Feature-level associations
+
+`src/feature_associations.py` is a **descriptive supplement**, not part of the
+decision procedure. It reports Spearman correlation with physical-camera
+cluster-bootstrap confidence intervals and applies **no formal
+multiple-comparison correction**. Intervals excluding zero there are
+descriptive associations, not statistically confirmed findings, and they are
+never a success criterion.
+
+## 10. Implementation correction during Phase B
+
+The scene-baseline selector initially matched CAM-EXP-005 feature names on
+their base name, admitting 62 features instead of the frozen 31. The target had
+already been loaded when this was found, but no performance metric had been
+inspected; the mismatch was visible in the feature-count metadata alone. See
+[`analysis_provenance.md`](analysis_provenance.md) §2. Label:
+`IMPLEMENTATION_CORRECTION_BEFORE_PERFORMANCE_INSPECTION`.
+
+## 11. A note on reading the correlation column
 
 B0, B1 and P0 emit a (near-)constant prediction. Their Spearman against the
 actual bias is defined only through small fold-to-fold changes in the training

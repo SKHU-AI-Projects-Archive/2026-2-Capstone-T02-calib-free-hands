@@ -1,7 +1,14 @@
 """Per-feature association between explicit hand features and the bias target.
 
-Descriptive supplement. Effect size with a physical-camera cluster bootstrap is
-the headline; BH-FDR is reported alongside but does not drive any decision.
+Descriptive supplement only. Reports Spearman correlation with physical-camera
+cluster-bootstrap confidence intervals.
+
+NO formal multiple-comparison correction is applied. An earlier version of this
+docstring claimed a BH-FDR supplement was reported alongside; it never was, and
+the claim was removed rather than the analysis added, because adding a new
+analysis is outside a documentation correction. These univariate associations
+are not a success criterion.
+
 Latent dimensions are NOT enumerated individually.
 """
 from __future__ import annotations

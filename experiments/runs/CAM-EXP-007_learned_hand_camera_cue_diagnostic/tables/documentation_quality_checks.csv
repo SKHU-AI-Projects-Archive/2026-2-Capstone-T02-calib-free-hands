@@ -1,0 +1,15 @@
+check,description,status,violations,detail
+Q1,no claim that the scene fix preceded the target read,PASS,0,
+Q2,"correction recorded as target-loaded=YES, performance-inspected=NO",PASS,0,
+Q3,no unsupported BH-FDR claim in docs or code,PASS,0,implementation_present=False
+Q4,no exclusive dataset-not-model attribution,PASS,0,
+Q5,S2 stress subset not claimed as a positive hand signal,PASS,0,
+Q6,"CAM-007.1 = not justified now, not impossible forever",PASS,0,
+Q7_raw,CAM-007 raw: no pre-existing file changed,PASS,0,changed=0 added=0
+Q7_summary,CAM-007 summary: no pre-existing file changed,PASS,0,changed=0 added=0
+Q7_figures,CAM-007 figures: no pre-existing file changed,PASS,0,changed=0 added=0
+Q7_tables,CAM-007 tables: no pre-existing file changed,PASS,0,changed=0 added=1 (documentation_quality_checks.csv)
+Q8,CAM-007 frozen manifests byte-identical,PASS,0,changed=0
+Q9,historical CAM-001..006.1 results/figures/tables byte-identical,PASS,0,checked=587 changed=0
+Q10,report_prep untouched,PASS,0,
+Q11,feature_associations.py executable code unchanged (docstring only),PASS,0,

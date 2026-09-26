@@ -62,7 +62,15 @@ Target-independent criteria only: all-NaN, constant, near-zero variance, or NaN
 rate above 50 %. **78 features, 0 dropped.** Table:
 `tables/hand_feature_quality_audit.csv`.
 
-## 7. Missingness
+## 7. A note on the scene baseline
+
+The CAM-EXP-005 scene baseline used for comparison is matched on **exact**
+column names, giving its frozen 31-feature set. An initial implementation
+matched base names and admitted 62 features; it was corrected during Phase B,
+after the target had been loaded but before any performance metric was
+inspected. See [`analysis_provenance.md`](analysis_provenance.md) §2.
+
+## 8. Missingness
 
 Training-fold median imputation, fit inside each outer fold.
 `availability_rate` and `n_frames_with_hand` are themselves features.
