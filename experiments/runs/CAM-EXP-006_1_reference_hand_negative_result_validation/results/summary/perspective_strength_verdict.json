@@ -1,0 +1,31 @@
+{
+  "cases": 4271,
+  "views": 159,
+  "dZ_over_Z": {
+    "median": 0.14986,
+    "p10": 0.09169,
+    "p90": 0.26266
+  },
+  "diameter_over_Z": {
+    "median": 0.24293,
+    "p10": 0.15389,
+    "p90": 0.39275
+  },
+  "distance_over_diameter": {
+    "median": 4.1164,
+    "p10": 2.5461,
+    "p90": 6.4981
+  },
+  "median_depth_Z": {
+    "median": 0.68612,
+    "p10": 0.47413,
+    "p90": 0.96115
+  },
+  "hand_diameter": {
+    "median": 0.16183,
+    "p10": 0.1381,
+    "p90": 0.21864
+  },
+  "gt_usage": "the dataset-provided reference focal is used ONLY to fit the pose for this causal diagnostic; it is never an input to any focal estimator",
+  "reading": "distance_over_diameter states how many hand-diameters away the camera sits. The synthetic distance sweep used the same ratio, so the two are directly comparable."
+}

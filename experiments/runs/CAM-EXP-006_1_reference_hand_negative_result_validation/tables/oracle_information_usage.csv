@@ -1,0 +1,7 @@
+condition,condition_name,uses_gt_focal_magnitude,uses_gt_focal_ratio,uses_gt_principal_point,uses_gt_distortion,uses_gt_extrinsic,uses_target_2d_in_reference_3d,deployable,diagnostic_only
+R0,ORIGINAL_REPRODUCTION,0,0,0,0,0,0,1,0
+R1,FRAME_BALANCED,0,0,0,0,0,0,1,0
+R2,FRAME_BALANCED_GT_PP_ORACLE,0,0,1,0,0,0,0,1
+R3,FRAME_BALANCED_GT_DIST_ORACLE,0,0,0,1,0,0,0,1
+R4,FRAME_BALANCED_GT_PP_DIST_ORACLE,0,0,1,1,0,0,0,1
+R5,FULL_CAMERA_MODEL_ORACLE_EXCEPT_FOCAL,0,1,1,1,0,0,0,1

@@ -1,0 +1,5 @@
+id,comparison,fires_if,otherwise
+FRAME_WEIGHTING_MATERIAL,R0 vs R1,"median relative focal error changes by >= 10 percentage points, OR flat-profile share changes by >= 10 pp, OR cleanly-identifiable share changes by >= 10 pp",FRAME_WEIGHTING_NON_MATERIAL
+CAMERA_MODEL_MISMATCH_MATERIAL,R1 vs R5,"median relative focal error falls by >= 25 % in relative terms, OR identifiable share rises by >= 20 pp, OR flat share falls by >= 20 pp, OR focal tracking correlation becomes materially positive with a cluster-bootstrap CI excluding zero",CAMERA_MODEL_MISMATCH_NON_MATERIAL
+REPRODUCTION_MISMATCH,R0 vs CAM-EXP-006,"N=16 median relative focal error differs by more than 5 percentage points from 202.16 %, or the flat share differs by more than 5 pp from 86.86 %",REPRODUCTION_OK
+UNDERPOWERED_STRESS_SUBSET,S2 / S5 subsets,fewer than 20 views or fewer than 8 physical cameras,stress subset reportable

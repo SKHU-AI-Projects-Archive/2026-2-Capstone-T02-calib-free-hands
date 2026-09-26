@@ -1,0 +1,10 @@
+{
+  "hand_weighting_mismatch_detected": true,
+  "label": "CAM006_ORIGINAL_HAND_WEIGHTED",
+  "evidence_line_in_run_solver": "ps = [p for f in order[:n] for p in prof.get((cond, f), [])]",
+  "evidence_line_in_combine": "return np.nanmean(lg, axis=0)",
+  "docstring_of_combine": "Mean over frames of the per-frame log objective, as frozen in the spec.",
+  "reading": "the docstring states a per-FRAME mean, but the argument handed to it is a flat list of per-HAND profiles, so the mean is over hands. Frames containing two usable hands are weighted twice.",
+  "stages_matching": 8,
+  "stages_total": 9
+}

@@ -1,0 +1,7 @@
+family,condition,n_trials,median_rel_focal_err_pct,mean_rel_focal_err_pct,p90_rel_focal_err_pct,share_within_1pct,share_within_5pct,share_within_10pct,share_flat_profile,share_boundary,share_identifiable,median_profile_width,median_curvature
+principal_point,CENTER_PP,100,0.1238,0.1242,0.129,1.0,1.0,1.0,0.0,0.0,1.0,0.025,0.128185
+principal_point,OFFCENTER_PP_SOLVER_ASSUMES_CENTRE,100,2.0902,2.6258,5.5966,0.25,0.85,0.99,0.0,0.0,1.0,0.0749,0.067101
+principal_point,OFFCENTER_PP_SOLVER_GIVEN_TRUE_PP,100,0.1249,0.1247,0.129,1.0,1.0,1.0,0.0,0.0,1.0,0.025,0.122562
+distortion,D0_none_none,100,0.1239,0.1243,0.1298,1.0,1.0,1.0,0.0,0.0,1.0,0.025,0.120969
+distortion,D1_distorted_solver_assumes_none,100,5.1805,6.399,13.9222,0.08,0.49,0.8,0.0,0.0,1.0,0.0749,0.094246
+distortion,D2_distorted_solver_given_true,100,0.1238,0.1233,0.1321,1.0,1.0,1.0,0.0,0.0,1.0,0.025,0.123557

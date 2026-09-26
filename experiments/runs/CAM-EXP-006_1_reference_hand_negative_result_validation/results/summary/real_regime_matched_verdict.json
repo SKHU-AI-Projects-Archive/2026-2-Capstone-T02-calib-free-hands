@@ -1,0 +1,22 @@
+{
+  "real_distance_over_diameter_median": 4.12,
+  "loco_reprojection_residual_px_median": 7.21,
+  "matched_condition": {
+    "distance_over_diameter": 4.12,
+    "noise_px": 7.21,
+    "n_trials": 100,
+    "median_rel_focal_err_pct": 55.2988,
+    "mean_rel_focal_err_pct": 165.9331,
+    "p90_rel_focal_err_pct": 611.1111,
+    "share_within_1pct": 0.02,
+    "share_within_5pct": 0.06,
+    "share_within_10pct": 0.1,
+    "share_flat_profile": 0.34,
+    "share_boundary": 0.19,
+    "share_identifiable": 0.66,
+    "median_profile_width": 0.2496,
+    "median_curvature": 0.047787
+  },
+  "reading": "holding the measured real distance ratio fixed and setting the 2D noise to the measured reference-3D/2D residual reproduces the scale of the real-data focal error and flat rate. The real failure is therefore NOT weak perspective alone: it is a moderately weak-perspective geometry combined with a reference-3D/2D disagreement of several pixels. Either ingredient on its own is not sufficient.",
+  "caveat": "this is an order-of-magnitude correspondence, not a fit. The synthetic noise is isotropic Gaussian on the 2D, whereas the real residual also carries correlated reconstruction error."
+}

@@ -1,0 +1,5 @@
+noise_px,n_trials,median_rel_focal_err_pct,mean_rel_focal_err_pct,p90_rel_focal_err_pct,share_within_1pct,share_within_5pct,share_within_10pct,share_flat_profile,share_boundary,share_identifiable,median_profile_width,median_curvature
+0.0,100,0.125,0.1248,0.1291,1.0,1.0,1.0,0.0,0.0,1.0,0.025,0.125231
+0.5,100,2.0261,2.6049,6.2072,0.28,0.84,0.99,0.0,0.0,1.0,0.0999,0.09151
+1.0,100,3.7602,5.1393,11.5945,0.14,0.64,0.85,0.0,0.0,1.0,0.0999,0.113682
+2.0,100,8.5454,16.142,30.1373,0.14,0.32,0.56,0.0,0.0,1.0,0.1248,0.113947
