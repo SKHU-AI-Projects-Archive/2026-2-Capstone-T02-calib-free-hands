@@ -1,0 +1,82 @@
+feature_group,feature,uses_RGB,uses_hand_model,uses_dataset_2d_annotation,uses_dataset_3d_annotation,uses_GT_focal,uses_GT_distortion,uses_GT_extrinsic,uses_camera_ID,uses_sequence_ID,uses_anycalib_prediction,uses_pipeline_focal,available_at_deployment,allowed_primary,note
+F0,availability_rate,1,1,0,0,0,0,0,0,0,0,0,1,1,detector and crop geometry on the image plane
+F0,mean_hands_per_frame,1,1,0,0,0,0,0,0,0,0,0,1,1,detector and crop geometry on the image plane
+F0,n_hands_std,1,1,0,0,0,0,0,0,0,0,0,1,1,detector and crop geometry on the image plane
+F0,side_consistency,1,1,0,0,0,0,0,0,0,0,0,1,1,detector and crop geometry on the image plane
+F0,bbox_area_norm__median,1,1,0,0,0,0,0,0,0,0,0,1,1,detector and crop geometry on the image plane
+F0,bbox_area_norm__iqr,1,1,0,0,0,0,0,0,0,0,0,1,1,detector and crop geometry on the image plane
+F0,bbox_aspect__median,1,1,0,0,0,0,0,0,0,0,0,1,1,detector and crop geometry on the image plane
+F0,bbox_aspect__iqr,1,1,0,0,0,0,0,0,0,0,0,1,1,detector and crop geometry on the image plane
+F0,bbox_cx_norm__median,1,1,0,0,0,0,0,0,0,0,0,1,1,detector and crop geometry on the image plane
+F0,bbox_cx_norm__iqr,1,1,0,0,0,0,0,0,0,0,0,1,1,detector and crop geometry on the image plane
+F0,bbox_cy_norm__median,1,1,0,0,0,0,0,0,0,0,0,1,1,detector and crop geometry on the image plane
+F0,bbox_cy_norm__iqr,1,1,0,0,0,0,0,0,0,0,0,1,1,detector and crop geometry on the image plane
+F0,bbox_h_over_H__median,1,1,0,0,0,0,0,0,0,0,0,1,1,detector and crop geometry on the image plane
+F0,bbox_h_over_H__iqr,1,1,0,0,0,0,0,0,0,0,0,1,1,detector and crop geometry on the image plane
+F0,bbox_w_over_W__median,1,1,0,0,0,0,0,0,0,0,0,1,1,detector and crop geometry on the image plane
+F0,bbox_w_over_W__iqr,1,1,0,0,0,0,0,0,0,0,0,1,1,detector and crop geometry on the image plane
+F2,bone_ratio_mean__median,1,1,0,0,0,0,0,0,0,0,0,1,1,root-relative predicted hand shape and pose
+F2,bone_ratio_mean__iqr,1,1,0,0,0,0,0,0,0,0,0,1,1,root-relative predicted hand shape and pose
+F2,bone_ratio_std__median,1,1,0,0,0,0,0,0,0,0,0,1,1,root-relative predicted hand shape and pose
+F2,bone_ratio_std__iqr,1,1,0,0,0,0,0,0,0,0,0,1,1,root-relative predicted hand shape and pose
+F0,box_size_norm__median,1,1,0,0,0,0,0,0,0,0,0,1,1,detector and crop geometry on the image plane
+F0,box_size_norm__iqr,1,1,0,0,0,0,0,0,0,0,0,1,1,detector and crop geometry on the image plane
+F2,depth_extent__median,1,1,0,0,0,0,0,0,0,0,0,1,1,root-relative predicted hand shape and pose
+F2,depth_extent__iqr,1,1,0,0,0,0,0,0,0,0,0,1,1,root-relative predicted hand shape and pose
+F2,depth_over_diameter__median,1,1,0,0,0,0,0,0,0,0,0,1,1,root-relative predicted hand shape and pose
+F2,depth_over_diameter__iqr,1,1,0,0,0,0,0,0,0,0,0,1,1,root-relative predicted hand shape and pose
+F0,det_score__median,1,1,0,0,0,0,0,0,0,0,0,1,1,detector and crop geometry on the image plane
+F0,det_score__iqr,1,1,0,0,0,0,0,0,0,0,0,1,1,detector and crop geometry on the image plane
+F2,finger_spread__median,1,1,0,0,0,0,0,0,0,0,0,1,1,root-relative predicted hand shape and pose
+F2,finger_spread__iqr,1,1,0,0,0,0,0,0,0,0,0,1,1,root-relative predicted hand shape and pose
+F2,global_orient_aa_norm__median,1,1,0,0,0,0,0,0,0,0,0,1,1,root-relative predicted hand shape and pose
+F2,global_orient_aa_norm__iqr,1,1,0,0,0,0,0,0,0,0,0,1,1,root-relative predicted hand shape and pose
+F2,hand_diameter__median,1,1,0,0,0,0,0,0,0,0,0,1,1,root-relative predicted hand shape and pose
+F2,hand_diameter__iqr,1,1,0,0,0,0,0,0,0,0,0,1,1,root-relative predicted hand shape and pose
+F2,hand_pose_aa_mean_abs__median,1,1,0,0,0,0,0,0,0,0,0,1,1,root-relative predicted hand shape and pose
+F2,hand_pose_aa_mean_abs__iqr,1,1,0,0,0,0,0,0,0,0,0,1,1,root-relative predicted hand shape and pose
+F2,hand_pose_aa_norm__median,1,1,0,0,0,0,0,0,0,0,0,1,1,root-relative predicted hand shape and pose
+F2,hand_pose_aa_norm__iqr,1,1,0,0,0,0,0,0,0,0,0,1,1,root-relative predicted hand shape and pose
+F2,lateral_extent__median,1,1,0,0,0,0,0,0,0,0,0,1,1,root-relative predicted hand shape and pose
+F2,lateral_extent__iqr,1,1,0,0,0,0,0,0,0,0,0,1,1,root-relative predicted hand shape and pose
+F2,mano_beta_0__median,1,1,0,0,0,0,0,0,0,0,0,1,1,root-relative predicted hand shape and pose
+F2,mano_beta_0__iqr,1,1,0,0,0,0,0,0,0,0,0,1,1,root-relative predicted hand shape and pose
+F2,mano_beta_1__median,1,1,0,0,0,0,0,0,0,0,0,1,1,root-relative predicted hand shape and pose
+F2,mano_beta_1__iqr,1,1,0,0,0,0,0,0,0,0,0,1,1,root-relative predicted hand shape and pose
+F2,mano_beta_2__median,1,1,0,0,0,0,0,0,0,0,0,1,1,root-relative predicted hand shape and pose
+F2,mano_beta_2__iqr,1,1,0,0,0,0,0,0,0,0,0,1,1,root-relative predicted hand shape and pose
+F2,mano_beta_3__median,1,1,0,0,0,0,0,0,0,0,0,1,1,root-relative predicted hand shape and pose
+F2,mano_beta_3__iqr,1,1,0,0,0,0,0,0,0,0,0,1,1,root-relative predicted hand shape and pose
+F2,mano_beta_4__median,1,1,0,0,0,0,0,0,0,0,0,1,1,root-relative predicted hand shape and pose
+F2,mano_beta_4__iqr,1,1,0,0,0,0,0,0,0,0,0,1,1,root-relative predicted hand shape and pose
+F2,mano_beta_5__median,1,1,0,0,0,0,0,0,0,0,0,1,1,root-relative predicted hand shape and pose
+F2,mano_beta_5__iqr,1,1,0,0,0,0,0,0,0,0,0,1,1,root-relative predicted hand shape and pose
+F2,mano_beta_6__median,1,1,0,0,0,0,0,0,0,0,0,1,1,root-relative predicted hand shape and pose
+F2,mano_beta_6__iqr,1,1,0,0,0,0,0,0,0,0,0,1,1,root-relative predicted hand shape and pose
+F2,mano_beta_7__median,1,1,0,0,0,0,0,0,0,0,0,1,1,root-relative predicted hand shape and pose
+F2,mano_beta_7__iqr,1,1,0,0,0,0,0,0,0,0,0,1,1,root-relative predicted hand shape and pose
+F2,mano_beta_8__median,1,1,0,0,0,0,0,0,0,0,0,1,1,root-relative predicted hand shape and pose
+F2,mano_beta_8__iqr,1,1,0,0,0,0,0,0,0,0,0,1,1,root-relative predicted hand shape and pose
+F2,mano_beta_9__median,1,1,0,0,0,0,0,0,0,0,0,1,1,root-relative predicted hand shape and pose
+F2,mano_beta_9__iqr,1,1,0,0,0,0,0,0,0,0,0,1,1,root-relative predicted hand shape and pose
+F2,palm_normal_z__median,1,1,0,0,0,0,0,0,0,0,0,1,1,root-relative predicted hand shape and pose
+F2,palm_normal_z__iqr,1,1,0,0,0,0,0,0,0,0,0,1,1,root-relative predicted hand shape and pose
+F1,pred_cam_s__median,1,1,0,0,0,0,0,0,0,0,0,1,1,"the model's weak-perspective camera head, crop space"
+F1,pred_cam_s__iqr,1,1,0,0,0,0,0,0,0,0,0,1,1,"the model's weak-perspective camera head, crop space"
+F1,pred_cam_tx__median,1,1,0,0,0,0,0,0,0,0,0,1,1,"the model's weak-perspective camera head, crop space"
+F1,pred_cam_tx__iqr,1,1,0,0,0,0,0,0,0,0,0,1,1,"the model's weak-perspective camera head, crop space"
+F1,pred_cam_ty__median,1,1,0,0,0,0,0,0,0,0,0,1,1,"the model's weak-perspective camera head, crop space"
+F1,pred_cam_ty__iqr,1,1,0,0,0,0,0,0,0,0,0,1,1,"the model's weak-perspective camera head, crop space"
+F3,pred_cam_s__std,1,1,0,0,0,0,0,0,0,0,0,1,1,temporal dispersion across a static view
+F3,pred_cam_tx__std,1,1,0,0,0,0,0,0,0,0,0,1,1,temporal dispersion across a static view
+F3,pred_cam_ty__std,1,1,0,0,0,0,0,0,0,0,0,1,1,temporal dispersion across a static view
+F3,bbox_area_norm__std,1,1,0,0,0,0,0,0,0,0,0,1,1,temporal dispersion across a static view
+F3,box_size_norm__std,1,1,0,0,0,0,0,0,0,0,0,1,1,temporal dispersion across a static view
+F3,hand_diameter__std,1,1,0,0,0,0,0,0,0,0,0,1,1,temporal dispersion across a static view
+F3,depth_over_diameter__std,1,1,0,0,0,0,0,0,0,0,0,1,1,temporal dispersion across a static view
+F3,det_score__std,1,1,0,0,0,0,0,0,0,0,0,1,1,temporal dispersion across a static view
+F3,hand_pose_aa_norm__std,1,1,0,0,0,0,0,0,0,0,0,1,1,temporal dispersion across a static view
+F3,beta_std_mean,1,1,0,0,0,0,0,0,0,0,0,1,1,temporal dispersion across a static view
+F4,LATENT::0..1279 (pooled vit_out),1,1,0,0,0,0,0,0,0,0,0,1,1,frozen image-encoder representation before the MANO and camera heads
+CONTROL_C1,log_f_anycalib,1,0,0,0,0,0,0,0,0,1,0,1,0,"SINGLE_FOCAL_PRIOR_CONFOUND_CONTROL - never a hand feature, never mixed into a primary set"
+BASELINE_B3,training-fold median reference focal,0,0,0,0,1,0,0,0,0,0,0,0,0,"ORACLE_SANITY_CONTROL, uses training target labels, not deployable"

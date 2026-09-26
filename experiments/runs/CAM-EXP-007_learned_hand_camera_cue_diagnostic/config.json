@@ -1,0 +1,23 @@
+{
+  "experiment": "CAM-EXP-007",
+  "title": "Learned Hand-Derived Camera Cue Diagnostic",
+  "kind": "LEARNED_HAND_CAMERA_INFORMATION_DIAGNOSTIC",
+  "trains_new_network": false,
+  "proposes_calibration_method": false,
+  "primary_target": "CAM-EXP-005 anycalib_signed_log_bias, reused exactly",
+  "primary_protocol": "LOCO_PHYSICAL_CAMERA (40 folds)",
+  "frozen_manifests": {
+    "cam_exp_007_control_spec_v1.json": "26ee28bfbbdcfd60a5d4db55244dbaa4cf7d63c2f378b3c249626433c05759db",
+    "cam_exp_007_feature_spec_v1.json": "0bf55a1ced507703ca2e62950a46fcb228a9a14b7d34b042dc255a1a6727257f",
+    "cam_exp_007_frame_manifest_v1.csv.gz": "54fe7b983fb9b5b774f2bcbdb066b35f896a003e7b00a84b75cb784ed93a0af2",
+    "cam_exp_007_latent_spec_v1.json": "30735cd1a8676baa5339ac4575a8c00112a4b0ee8a35bfdf72b8a3f3d95066b7",
+    "cam_exp_007_outer_splits_v1.json": "1da49d0fb934f430b56d829a4595a14010e01668d9f695b1a4e45e96ca3cf921",
+    "cam_exp_007_probe_spec_v1.json": "599ada88cf63c24ca190fab4ca0ce1695fdf5d03b49e4527e941b6397af85a69"
+  },
+  "reused_unchanged": [
+    "CAM-EXP-006 frozen 16-frame grid",
+    "CAM-EXP-005 view target",
+    "CAM-EXP-005 deployable scene baseline (its P6, 31 features)"
+  ],
+  "external_holdout": "InterHand2.6M / HanCo remain reserved and UNOPENED"
+}

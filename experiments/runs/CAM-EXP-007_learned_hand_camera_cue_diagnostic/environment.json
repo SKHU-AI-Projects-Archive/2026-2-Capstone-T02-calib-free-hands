@@ -1,0 +1,47 @@
+{
+  "experiment": "CAM-EXP-007_learned_hand_camera_cue_diagnostic",
+  "inference_env": {
+    "venv": "experiments/.venv-anyhand",
+    "python": "GeForce",
+    "torch": "2.1.2+cu121",
+    "cuda": "12.1",
+    "gpu": "NVIDIA GeForce RTX 4060 Ti",
+    "env_var_required": "PYOPENGL_PLATFORM=win32 (PyOpenGL otherwise selects the EGL backend, which is absent on Windows)",
+    "cwd_required": "repo root, because the WiLoR cfg uses the relative path ./mano_data/mano_mean_params.npz"
+  },
+  "analysis_env": {
+    "venv": "experiments/.venv",
+    "python": "3.11.7",
+    "numpy": "2.4.6",
+    "opencv": "5.0.0",
+    "note": "scikit-learn is not installed; ridge regression and PCA are implemented in closed form with numpy, which is deterministic and keeps the preprocessing explicit"
+  },
+  "os": "Windows 10 (10.0.26200)",
+  "git_branch": "kjh",
+  "git_parent_commit": "2a24603",
+  "model": "AnyHand-WiLoR (WiLoR architecture, AnyHand fine-tuned checkpoint)",
+  "checkpoints": {
+    "wilor": {
+      "path": "models/anyhand_wilor.ckpt",
+      "exists": true,
+      "bytes": 2565031198,
+      "sha256": "9709eca6e77fb77d2cfcf6ee641660f98dca6941e9fc1cf7a5be19fe62164b77"
+    },
+    "detector": {
+      "path": "models/detector.pt",
+      "exists": true,
+      "bytes": 53582271,
+      "sha256": "5ef3df44e42d2db52d4ffe91f83a22ce9925e2acc9abebf453f2c5d22e380033"
+    }
+  },
+  "latent_layer": {
+    "layer": "model.backbone",
+    "which_output": "index 3 of the returned tuple (vit_out)",
+    "why": "the image encoder's final feature map, before the MANO and camera heads consume it. Chosen on architecture semantics before any target was read.",
+    "tensor_shape": "(B, 1280, 16, 12)",
+    "pooling": "global average pool over the two spatial axes -> (B, 1280)",
+    "extraction_method": "forward hook; no model source is modified"
+  },
+  "seed": 20260928,
+  "determinism": "AnyCalib target reused frozen; hand inference is a single deterministic forward pass per frame; all shuffles use fixed seeds"
+}

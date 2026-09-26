@@ -1,0 +1,27 @@
+{
+  "phase_a_files": {
+    "audit_hand_model.py": [],
+    "freeze_spec.py": [],
+    "run_hand_inference.py": [],
+    "extract_hand_features.py": [],
+    "feature_quality_audit.py": [],
+    "verify_hook_identity.py": []
+  },
+  "phase_b_files": {
+    "run_probes.py": [
+      "imports CAM005_KEPT",
+      "imports VIEW_TARGETS",
+      "uses CAM005_KEPT",
+      "uses VIEW_TARGETS"
+    ],
+    "evaluate.py": [],
+    "feature_associations.py": [
+      "imports VIEW_TARGETS",
+      "uses VIEW_TARGETS"
+    ],
+    "figures.py": []
+  },
+  "phase_a_violations": {},
+  "verdict": "PHASE_SEPARATION_HELD",
+  "note": "prose mentions are deliberately not flagged: extract_hand_features.py's docstring names VIEW_TARGETS in order to assert it is absent, and freeze_spec.py records which target the pre-registration commits to. Neither reads target data."
+}

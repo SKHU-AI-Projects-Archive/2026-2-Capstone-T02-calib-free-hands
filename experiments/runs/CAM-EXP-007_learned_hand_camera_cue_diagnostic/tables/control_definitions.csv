@@ -1,0 +1,5 @@
+id,name,features,role,is_hand_signal,why,rule,n_seeds
+C1,ANYCALIB_FOCAL_PRIOR_CONTROL,['log_f_anycalib'],SINGLE_FOCAL_PRIOR_CONFOUND_CONTROL,0,"the target is log(f_any / f_ref). Handing the probe log(f_any) lets it exploit the rig's narrow reference-focal prior and look excellent without any camera cue. Never counted as hand signal, and never mixed into a primary hand feature set.",,
+C2,HAND_FEATURE_VIEW_SHUFFLE,,PRIMARY_NEGATIVE_CONTROL,0,,"within each outer fold, permute the feature ROWS among training views and, separately, among held-out views. Targets are never shuffled. Permutation is within-sequence where a sequence has at least 4 views in that partition, otherwise within the whole partition.",10
+C3,RANDOM_FEATURE_CONTROL,,SECONDARY_CONTROL,0,,"deterministic Gaussian features of matched dimension, seeded per view id",
+C4,TRAIN_TARGET_SHUFFLE,,SECONDARY_CONTROL,0,,shuffle training targets only; test targets stay true,

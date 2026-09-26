@@ -1,0 +1,10 @@
+{
+  "views_total": 175,
+  "views_hand_feature_eligible": 160,
+  "views_with_latent": 162,
+  "latent_dim": 1280,
+  "min_frames_with_hand_required": 4,
+  "n_frames_per_view": 16,
+  "n_view_feature_columns": 79,
+  "target_blind": true
+}

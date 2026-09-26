@@ -1,0 +1,4 @@
+probe,probe_name,scene_only_median_err,with_hand_median_err,delta_median_err_pp,scene_only_within5,with_hand_within5,delta_within5_pp,scene_only_bias_mae,with_hand_bias_mae,scene_only_spearman,with_hand_spearman
+P8,SCENE_PLUS_ALL_EXPLICIT,4.872,5.0656,0.1936,0.5125,0.4938,-1.87,0.059971,0.061731,0.2786,0.2351
+P9,SCENE_PLUS_LATENT,4.872,5.1868,0.3148,0.5125,0.4938,-1.87,0.059971,0.066028,0.2786,0.0324
+P10,SCENE_PLUS_ALL_HAND,4.872,5.5045,0.6325,0.5125,0.4625,-5.0,0.059971,0.068959,0.2786,-0.0537

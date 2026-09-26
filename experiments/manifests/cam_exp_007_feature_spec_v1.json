@@ -1,0 +1,113 @@
+{
+  "spec_id": "cam_exp_007_feature_spec_v1",
+  "created_before_target_analysis": true,
+  "seed": 20260928,
+  "n_frames_per_view": 16,
+  "eligibility": {
+    "rule": "a view is HAND_FEATURE_ELIGIBLE if at least 4 of its 16 frames yield at least one usable hand prediction",
+    "otherwise": "HAND_FEATURE_UNAVAILABLE, excluded from the hand-probe common set but reported in coverage",
+    "frames_are_never_replaced": "a frame with no detection stays in the manifest and becomes an availability feature"
+  },
+  "frame_to_view_aggregation": {
+    "hands_to_frame": "scalar features: median over the hands in that frame. vector/latent features: mean over hands. Either way a frame contributes exactly once, whether it holds one hand or two.",
+    "frames_to_view": "median and IQR across frames; the temporal group additionally uses std and rates"
+  },
+  "missingness": "training-fold median imputation; missingness rate may itself be a feature",
+  "groups": {
+    "F0_HAND_VISIBILITY_AND_BOX": {
+      "what": "detector and crop geometry on the image plane",
+      "not_a_hand_representation": true,
+      "per_frame": [
+        "n_hands",
+        "bbox_area_norm",
+        "bbox_w_over_W",
+        "bbox_h_over_H",
+        "bbox_aspect",
+        "bbox_cx_norm",
+        "bbox_cy_norm",
+        "box_size_norm",
+        "det_score",
+        "crop_kp2d_spread_x",
+        "crop_kp2d_spread_y"
+      ],
+      "view_aggregate": [
+        "median",
+        "iqr"
+      ],
+      "extra_view_level": [
+        "availability_rate",
+        "n_frames_with_hand",
+        "mean_hands_per_frame",
+        "side_consistency"
+      ]
+    },
+    "F1_CAMERA_HEAD_OUTPUT": {
+      "what": "the model's own weak-perspective camera head, in CROP space",
+      "per_frame": [
+        "pred_cam_s",
+        "pred_cam_tx",
+        "pred_cam_ty"
+      ],
+      "view_aggregate": [
+        "median",
+        "iqr"
+      ],
+      "never": "pred_cam is never converted to a metric translation, because that conversion multiplies in the pipeline focal"
+    },
+    "F2_EXPLICIT_HAND_GEOMETRY": {
+      "what": "root-relative predicted hand shape and pose, focal-free",
+      "per_frame": [
+        "hand_diameter",
+        "depth_extent",
+        "depth_over_diameter",
+        "lateral_extent",
+        "palm_normal_z",
+        "finger_spread",
+        "bone_ratio_mean",
+        "bone_ratio_std",
+        "mano_beta_0..9 (10)",
+        "global_orient_aa_norm",
+        "hand_pose_aa_norm",
+        "hand_pose_aa_mean_abs"
+      ],
+      "view_aggregate": [
+        "median",
+        "iqr"
+      ],
+      "side_handling": "LEFT hands are already mirrored into the canonical right-hand frame by the model wrapper (x-flip). Only side-invariant scalars are used, and no extra mirror transform is applied."
+    },
+    "F3_TEMPORAL_HAND_STABILITY": {
+      "what": "dispersion of the above across the 16 frames of a STATIC view",
+      "view_level": [
+        "pred_cam_s_std",
+        "pred_cam_s_iqr",
+        "bbox_area_std",
+        "box_size_std",
+        "beta_std_mean",
+        "pose_aa_std",
+        "hand_diameter_std",
+        "depth_over_diameter_std",
+        "det_score_std",
+        "availability_rate",
+        "side_consistency",
+        "n_hands_std"
+      ],
+      "note": "a static camera means these disperse only through the model, not through camera motion"
+    },
+    "F4_LEARNED_HAND_LATENT": {
+      "what": "the frozen image-encoder representation",
+      "see": "cam_exp_007_latent_spec_v1.json"
+    }
+  },
+  "forbidden_in_primary": [
+    "absolute camera translation cam_t",
+    "pipeline focal length",
+    "any position computed with a focal (5000 px, AnyCalib or reference)",
+    "dataset-provided 2D or 3D hand annotations",
+    "provided MANO",
+    "GT focal / distortion / extrinsics",
+    "camera ID",
+    "sequence ID",
+    "AnyCalib's prediction"
+  ]
+}

@@ -1,0 +1,5 @@
+id,name,deployable,what,role,note,uses_training_target_labels
+B0,RAW_ANYCALIB,1,AnyCalib's view focal with no correction,,,
+B1,GLOBAL_BIAS_CORRECTED_ANYCALIB,1,"subtract the training folds' median signed log bias; one constant, no per-view information",PRIMARY_PRACTICAL_BASELINE,,
+B2,CAM005_FROZEN_SCENE_BASELINE,1,"CAM-EXP-005's deployable scene-only feature set P6 (scene geometry + image global + border), reused unchanged",,"CAM-005's P4 and P7 are NOT used: they contain the model's own prediction, which is exactly the confound C1 isolates",
+B3,TRAINING_FOLD_CONSTANT_REFERENCE_ORACLE,0,emit the training cameras' median reference focal,ORACLE_SANITY_CONTROL,,1
