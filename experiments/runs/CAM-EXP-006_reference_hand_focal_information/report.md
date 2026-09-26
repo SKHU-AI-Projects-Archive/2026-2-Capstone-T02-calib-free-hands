@@ -1,6 +1,16 @@
 # CAM-EXP-006 — Reference-Hand Geometry Focal Information Diagnostic
 
-**Status: complete. The result is strongly negative, and is reported unchanged.**
+**Status: complete. The result is strongly negative, and is reported
+unchanged. Validated and partly re-attributed by CAM-EXP-006.1 — see the note
+below and `scientific_wording_review.md` in that run.**
+
+> **Attribution corrected by CAM-EXP-006.1 (numbers below unchanged).** The
+> 202 % headline was produced with the rig's lens distortion modelled as zero,
+> on a rig whose median `k1` is -0.392. Supplying the provided distortion
+> reduces the N=16 median error to about **50 %**, while leaving the direction
+> of this result intact: the focal is still not identifiable. Quote ~50 %, not
+> 202 %, as the size of the reference-hand focal limit. Full analysis in
+> `experiments/runs/CAM-EXP-006_1_reference_hand_negative_result_validation/`.
 
 ```
 DECISION TAGS
@@ -16,10 +26,13 @@ If we already knew the exact 3D shape of the hand in the image — an oracle we
 will never have at deployment time — could we read the camera's focal length
 off a single view of it?
 
-This sets an **information ceiling**. If the answer is no even with an oracle
-hand, then no hand-based focal estimator, however good its hand model, can work
-under these imaging conditions. That is why the experiment is worth running
-despite being undeployable by construction.
+This sets an **information ceiling** for this estimator. If the answer is no
+even with an oracle hand, then a hand-based focal estimator of *this form* is
+unlikely to work under these imaging conditions however good its hand model.
+That is why the experiment is worth running despite being undeployable by
+construction. (Originally this read "no hand-based focal estimator ... can
+work"; narrowed by CAM-EXP-006.1, since a learned estimator may use cues
+beyond explicit 3D geometry.)
 
 Scope tag: `INTERNAL_REFERENCE_HAND_DIAGNOSTIC`. Every number below is an upper
 bound under an oracle reference hand. None of them is achievable performance,
@@ -143,8 +156,13 @@ This also explains the two most surprising rows in the table:
   the argmin is pinned near the low end of the grid. Being pinned near the low
   end happens to land nearer the true focal than the plateau does. It is an
   artefact of where a flat curve's argmin falls, not evidence that a flat hand
-  is informative. A control beating the main condition is itself a signature of
-  absent signal.
+  is informative.
+
+  > **Qualified by CAM-EXP-006.1.** This bullet originally ended "A control
+  > beating the main condition is itself a signature of absent signal." That
+  > control necessarily ran a different PnP back-end, so it is sensitivity
+  > evidence only. The clean evidence is CAM-006.1's synthetic planarity sweep,
+  > which points the same way.
 * **Why more frames hurt.** Averaging N flat curves in log space suppresses the
   per-frame noise that was the only thing creating a local minimum, so the
   argmin migrates further onto the plateau and toward the grid boundary
@@ -152,11 +170,23 @@ This also explains the two most surprising rows in the table:
 
 ## 6. What this does and does not establish
 
-**Establishes.** Under GigaHands imaging conditions, hand geometry carries
-essentially no usable focal information, even given an oracle 3D hand. A
-single-view reprojection objective cannot separate focal from depth for an
-object of this size at this distance. This is a geometric limit, not a modelling
-limit, so it will not be fixed by a better hand model.
+**Establishes.** Under the evaluated GigaHands imaging regime and this
+profiled-PnP formulation, other-camera-only reference hand geometry does not
+provide enough perspective information to identify the focal reliably, even
+given an oracle 3D hand. A single-view reprojection objective does not
+separate focal from depth for an object of this size at this distance.
+Improving hand-geometry accuracy alone is unlikely to resolve this ambiguity
+in this formulation.
+
+> **Corrected by CAM-EXP-006.1.** This section originally read "This is a
+> geometric limit, not a modelling limit, so it will not be fixed by a better
+> hand model." That was too strong on both counts. Modelling mattered a great
+> deal: the headline 202 % below was produced with the rig's lens distortion
+> modelled as zero, and supplying the provided coefficients reduces it to about
+> 50 %. Hand accuracy also matters: a reference-3D error of 1 % of hand
+> diameter already costs about 26 % focal error. What survives is the narrower
+> statement above - even a fully correct camera model leaves the focal
+> unidentified. See `CAM-EXP-006_1_reference_hand_negative_result_validation/`.
 
 **Does not establish.** That hand-based focal estimation is impossible in
 general. The result is conditioned on this rig, this object scale, this depth
@@ -164,12 +194,18 @@ range and this single focal setting. A hand filling much more of the frame, or
 imaged at a much shorter distance, would sit in a more perspective-dominated
 regime and could behave differently.
 
-**Consequence for CAM-EXP-007.** The planned predicted-hand experiment
-(WiLoR / AnyHand cues) inherits this ceiling. A predicted hand cannot carry more
-focal information than the oracle hand tested here, so CAM-007 should be
-re-scoped: as a *focal estimator* it is already ruled out by this result. It
-remains worth running only for a different question, such as whether predicted
-hands are consistent enough to serve some other diagnostic purpose.
+**Consequence for CAM-EXP-007.** This result rules out the assumption that
+simply replacing the reference geometry with a noisier predicted geometry will
+solve this same profiled-PnP focal problem. It does **not** establish that all
+learned hand-derived features contain zero camera information: a learned model
+can encode training priors, image appearance and camera priors that explicit 3D
+geometry does not. CAM-007 should therefore be redesigned around that different
+question rather than either repeated as planned or abandoned.
+
+> **Corrected by CAM-EXP-006.1.** This paragraph originally claimed "A predicted
+> hand cannot carry more focal information than the oracle hand tested here" and
+> that CAM-007 was "already ruled out". That inference was logically too strong
+> for the reason given above.
 
 ## 7. Important caveats
 
@@ -177,7 +213,7 @@ hands are consistent enough to serve some other diagnostic purpose.
    1.90 % (CV) across the 175 views, which is why a single constant achieves
    0.85 %. On this rig a per-view focal method has almost no dynamic range to
    demonstrate skill in. The constant-rig oracle is a
-   `POST_HOC_ORACLE_SANITY_CONTROL`, not a method — it uses the evaluation
+   `PRE_REGISTERED_IN_CAM006_ORACLE_SANITY_CONTROL`, not a method — it uses the evaluation
    targets and could not be formed without them.
 2. **The reference 3D is not independent of the rig's calibration.** It is
    triangulated with the rig's own provided camera parameters, so any error
@@ -197,6 +233,7 @@ All open issues: [`OPEN_ISSUES.md`](OPEN_ISSUES.md).
 
 | kind | path |
 | --- | --- |
+| follow-up validation | `experiments/runs/CAM-EXP-006_1_reference_hand_negative_result_validation/` |
 | frozen specs | `experiments/manifests/cam_exp_006_{reference_hand,controls,evaluation}_spec_v1.json` |
 | frozen frame grid | `experiments/manifests/cam_exp_006_reference_hand_frames_v1.csv.gz` |
 | manual-QC manifest | `experiments/manifests/cam_exp_006_manual_hand_qc_v1.csv` |
@@ -222,3 +259,19 @@ python src/solver_sanity_check.py
 python src/figures.py
 python src/figures_profile.py
 ```
+
+
+## 10. Note on the frozen evaluation spec
+
+`experiments/manifests/cam_exp_006_evaluation_spec_v1.json` labels the constant
+control `PRE_REGISTERED_POST_HOC_ORACLE_SANITY_CONTROL`, which is
+self-contradictory: the confound was discovered post hoc in CAM-EXP-005 and was
+therefore already known when CAM-006 began, so in CAM-006 the control is simply
+pre-registered. The correct label is
+`PRE_REGISTERED_IN_CAM006_ORACLE_SANITY_CONTROL`, motivated by the CAM-005
+post-hoc finding, and that is the label used in this report.
+
+The frozen manifest itself is **deliberately not retro-edited**. Its value is as
+a dated record of what was committed to before results were seen, and silently
+rewriting it would destroy that. The correction is recorded here and in
+`CAM-EXP-006_1_.../scientific_wording_review.md` instead.
