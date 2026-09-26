@@ -63,4 +63,5 @@ Two consequences follow, and both are load-bearing:
    ±5 %**. Any feature group containing the predicted focal can therefore reach a
    very low error by learning that one constant. That is not calibration, and the
    `CONSTANT_RIG_FOCAL_ORACLE` control exists to make the distinction impossible
-   to miss.
+   to miss. It is a `POST_HOC_ORACLE_SANITY_CONTROL`: it was added after the P4
+   result was seen, not pre-registered.

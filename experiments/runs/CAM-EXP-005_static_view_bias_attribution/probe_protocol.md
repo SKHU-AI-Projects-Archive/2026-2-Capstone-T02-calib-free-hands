@@ -48,10 +48,12 @@ Primary criterion is `B_LOCO`, against the `P0` mean-bias baseline:
 
 with the direction holding under the physical-camera cluster bootstrap.
 
-## The control that decides the interpretation
+## The control that decides the interpretation (POST_HOC_ORACLE_SANITY_CONTROL)
 
 `CONSTANT_RIG_FOCAL_ORACLE` ignores the image entirely and outputs the training
-folds' median reference focal. It uses ground truth, so it is oracle-only — but
+folds' median reference focal. It was added AFTER the P4 result was seen, so it
+is a post-hoc sanity control rather than a pre-registered one. It uses ground
+truth, so it is oracle-only — but
 on a rig whose reference focal varies by 1.90 % it is a very strong predictor,
 and any probe that fails to beat it has demonstrated memorisation of a constant
 rather than a calibration signal.

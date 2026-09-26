@@ -8,13 +8,13 @@ it has never seen?
 
 **Two answers, and they point in opposite directions.**
 
-1. **The bias travels with the camera.** Physical camera identity describes the
+1. **The bias is associated with physical camera identity, and repeats across sequences.** Physical camera identity describes the
    per-view bias (adjusted R² **0.383** in-sample); sequence identity describes
    essentially none of it (adjusted R² **−0.009**). Different sequences agree on
    which camera is biased (median Pearson r **+0.422** over the 10 sequence
    pairs), and 28 of 40 cameras keep the same sign of bias in every sequence they
-   appear in. So this is a per-view / per-camera property, not an activity or
-   content effect.
+   appear in. The structure sits with the view / camera, not with the activity
+   or scene content.
 
 2. **No deployable RGB cue recovers it on an unseen camera.** Under
    leave-one-physical-camera-out, no scene-geometry, image-global or border
@@ -54,7 +54,7 @@ secondary only and is not modified.
 Median signed bias: **−0.0974 log = −9.28 %**, camera-cluster CI
 [−10.94 %, −7.48 %].
 
-## 2. The bias is a camera property (H1, H2 — both supported)
+## 2. The bias shows repeatable physical-camera structure (H1, H2 — both supported)
 
 **Repeatability across sequences** (`results/summary/camera_across_sequence_repeatability.csv`):
 
@@ -139,7 +139,7 @@ essentially no association with the residual bias (rho +0.093, CI spanning zero)
 same caveat as before.
 
 So we could not name *which* camera property produces the offset, even with the
-ground truth in hand. The bias is clearly attached to the camera (§2) but is not
+ground truth in hand. The bias shows clear per-camera structure (§2) but is not
 explained by any single provided parameter we measured.
 
 ## 6. Can any cue predict the bias on a NEW camera? (H4 — no; H5 — not even that)
@@ -170,7 +170,7 @@ the training fold. Not a calibration method.
 | P1 scene geometry | 4.84 % | [3.64, 5.84] | 52.6 % | 80.6 % |
 | P6 all scene | 5.00 % | [3.71, 6.04] | 49.7 % | 81.1 % |
 | P4 model self | 1.12 % | [0.83, 1.22] | 97.1 % | 99.4 % |
-| **`CONSTANT_RIG_FOCAL_ORACLE`** | **0.88 %** | [0.55, 1.18] | **97.7 %** | 99.4 % |
+| **`CONSTANT_RIG_FOCAL_ORACLE`** *(POST_HOC_ORACLE_SANITY_CONTROL)* | **0.88 %** | [0.55, 1.18] | **97.7 %** | 99.4 % |
 
 Against the pre-registered thresholds (`tables/decision_summary.csv`), on
 leave-one-camera-out: P1 gives +3.15 % relative reduction and +2.29 pp within
@@ -198,7 +198,7 @@ same lens.
 
 ## 7. Decision tags
 
-* **`PHYSICAL_CAMERA_PATTERN_STRONG`** — the bias repeats per physical camera
+* **`PHYSICAL_CAMERA_PATTERN_STRONG`** — the bias shows repeatable structure per physical camera
   across sequences (adjusted R² 0.383 vs −0.009 for sequence; pairwise r +0.422).
 * **`NO_USEFUL_DEPLOYABLE_RGB_SIGNAL`** — no scene, image-global, border or
   disagreement group met either pre-registered threshold on a held-out camera.
