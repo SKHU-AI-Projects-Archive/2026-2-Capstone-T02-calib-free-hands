@@ -1,0 +1,6 @@
+component,original_behavior,expected_behavior,issue,severity,cam0091_correction
+fit_bones distortion handling,"undistortPoints(uv,K,dist,P=K) then solvePnP(...,K,dist) on the SAME undistorted points","undistort once, then solve with distCoeffs=None",DOUBLE_DISTORTION_CONVENTION_BUG,high,UNDISTORT_ONCE_INTERNAL
+run_synthetic.eval_reproj,"distortion-aware PnP, then PINHOLE projection compared against RAW DISTORTED pixels","either pinhole vs undistorted, or projectPoints with distortion vs raw",RAW_VS_PINHOLE_REPROJECTION_MISMATCH,high,"both scores computed, each self-consistent"
+alternating iterations,n_iter = 6,enough to converge from a uniform start,INSUFFICIENT_ALTERNATION_ITERATIONS: ~0.4 px residual at the TRUE focal,high,"n_iter = 32 (8->0.425, 16->0.021, 32->0.00067 px)"
+condition seeding,abs(hash(name)) - Python hash is salted per process,process-independent seeds,NONDETERMINISTIC_SEEDING,medium,sha256(name) based stable_seed
+'bilateral_held' metric,identical value to bilateral_fit; nothing was held out,an independent refit on held-out frames,MISLEADING_METRIC_NAME,medium,"BILATERAL_FIT vs BILATERAL_EVAL, computed separately"

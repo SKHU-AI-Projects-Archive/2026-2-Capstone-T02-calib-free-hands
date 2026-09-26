@@ -1,0 +1,49 @@
+{
+  "spec_id": "cam_exp_0091_solver_validation_spec_v1",
+  "status": "CAM0091_PRE_SPECIFIED_BEFORE_CORRECTED_EXECUTION",
+  "provenance_note": "These criteria were fixed before the corrected focal sweep was executed. They are NOT pre-registered from the start of the project: CAM-EXP-009 had already produced a synthetic negative result, and this run exists to validate the solver behind it.",
+  "distortion_convention": "UNDISTORT_ONCE_INTERNAL - per candidate focal, undistort raw pixels once with that candidate K and the known coefficients; inside the solver distCoeffs is always None. Never undistort twice; never reuse an undistortion made with a different K.",
+  "scoring": {
+    "ideal": "pinhole projection vs undistorted pixels",
+    "raw": "cv2.projectPoints with distortion vs raw pixels",
+    "both_reported": true
+  },
+  "pnp_order": [
+    "SOLVEPNP_SQPNP",
+    "SOLVEPNP_IPPE",
+    "SOLVEPNP_ITERATIVE"
+  ],
+  "alternating_iterations": 32,
+  "iteration_provenance": "raised from 8 to 32 DURING solver validation, judged only against the positive control at the TRUE focal, before any focal sweep. CAM-EXP-009 used 6.",
+  "convergence_tolerance": "atol 1e-7 on the bone vector",
+  "initialisation": "uniform (deployable). Multi-start and true-bone init are DIAGNOSTIC ONLY.",
+  "n_multistart": 8,
+  "positivity": "clip at 1e-5 then renormalise",
+  "normalisation": "sum(l) = 1, so absolute hand size is never a cue",
+  "fit_eval_split": "deterministic alternating frames, target-independent",
+  "candidate_grid": {
+    "q_min": 0.5,
+    "q_max": 1.5,
+    "n": 161
+  },
+  "seeds": "sha256 of the condition name plus BASE_SEED 20261001; Python hash() is never used",
+  "shape_dof": {
+    "D20": "every bone free",
+    "D10": "adjacent bones paired",
+    "D5": "one per finger chain",
+    "D0": "true shape fixed (oracle)"
+  },
+  "gates": {
+    "raw_roundtrip_median_px": 1e-06,
+    "raw_roundtrip_max_px": 0.0001,
+    "ideal_roundtrip_median_px": 1e-05,
+    "ideal_roundtrip_max_px": 0.001,
+    "true_geometry_median_px": 0.05,
+    "focal_err_pct": 5.0,
+    "boundary_rate": 0.1,
+    "control_degradation_pp": 10.0,
+    "control_within5_drop_pp": 20.0
+  },
+  "primary_identifiability_metric": "HELD-OUT reprojection, because free bone proportions can absorb a wrong focal on the frames they were fitted to",
+  "control_criterion": "correct mapping must beat wrong mapping and subject swap by >= 10 pp absolute focal error OR >= 20 pp within-5%"
+}

@@ -1,0 +1,12 @@
+{
+  "I0_uniform_ideal_px": 0.0006379536608236813,
+  "I1_multistart_ideal_px": 0.00039724552781759026,
+  "I2_oracle_init_ideal_px": 1.0420043708878307e-05,
+  "I0_bone_L1": 4.81269186444755e-07,
+  "I2_bone_L1": 4.359424114752653e-09,
+  "I0_cosine": 0.9999999999485566,
+  "multistart_shape_spread_L1": 4.490683223074259e-07,
+  "shape_nonidentifiable": false,
+  "threshold_px": 0.05,
+  "verdict": "PASS"
+}

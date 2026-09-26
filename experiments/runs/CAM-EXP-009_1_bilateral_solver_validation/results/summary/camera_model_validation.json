@@ -1,0 +1,13 @@
+{
+  "raw_median_px": 0.0,
+  "raw_max_px": 0.0,
+  "ideal_median_px": 2.1690478603866867e-09,
+  "ideal_max_px": 0.0008419618535667703,
+  "thresholds": {
+    "raw_roundtrip_median_px": 1e-06,
+    "raw_roundtrip_max_px": 0.0001,
+    "ideal_roundtrip_median_px": 1e-05,
+    "ideal_roundtrip_max_px": 0.001
+  },
+  "verdict": "PASS"
+}

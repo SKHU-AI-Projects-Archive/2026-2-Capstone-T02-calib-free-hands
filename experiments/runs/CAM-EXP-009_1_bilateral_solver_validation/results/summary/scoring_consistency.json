@@ -1,0 +1,6 @@
+{
+  "median_spearman_ideal_vs_raw": 0.9993506493506494,
+  "ideal_argmin_q_median": 1.0211718159726757,
+  "raw_argmin_q_median": 1.0211718159726757,
+  "verdict": "PASS"
+}

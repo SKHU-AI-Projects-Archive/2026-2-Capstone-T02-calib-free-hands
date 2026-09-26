@@ -1,0 +1,36 @@
+{
+  "n_trials": 8,
+  "n_frames": 12,
+  "grid": {
+    "q_min": 0.5,
+    "q_max": 1.5,
+    "n": 161
+  },
+  "conditions": [
+    "NODIST_d4",
+    "DIST_d4",
+    "DIST_d2",
+    "DIST_d8",
+    "DIST_d16",
+    "DIST_d32",
+    "ASYM_0.0",
+    "ASYM_0.01",
+    "ASYM_0.02",
+    "ASYM_0.05",
+    "NOISE_0.0",
+    "NOISE_0.5",
+    "NOISE_1.0",
+    "NOISE_2.0",
+    "NOISE_4.0",
+    "POSE_LOW",
+    "POSE_MED",
+    "POSE_HIGH",
+    "DOF_D20",
+    "DOF_D10",
+    "DOF_D5",
+    "CTRL_correct",
+    "CTRL_wrongbone",
+    "CTRL_swap"
+  ],
+  "primary_identifiability_metric": "HELD-OUT reprojection"
+}

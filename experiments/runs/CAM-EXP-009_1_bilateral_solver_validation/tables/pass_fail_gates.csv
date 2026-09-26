@@ -1,0 +1,6 @@
+gate,passed,verdict
+G0_camera_roundtrip,1,PASS
+G1_true_geometry,1,PASS
+G2_bone_fitter,1,PASS
+G3_determinism,1,SYNTHETIC_DETERMINISM_PASS
+G4_scoring_consistency,1,PASS

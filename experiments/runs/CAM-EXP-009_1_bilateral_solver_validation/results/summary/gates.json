@@ -1,0 +1,56 @@
+{
+  "gates": {
+    "G0_camera_roundtrip": true,
+    "G1_true_geometry": true,
+    "G2_bone_fitter": true,
+    "G3_determinism": true,
+    "G4_scoring_consistency": true
+  },
+  "results": {
+    "G0_camera_roundtrip": {
+      "raw_median_px": 0.0,
+      "raw_max_px": 0.0,
+      "ideal_median_px": 2.1690478603866867e-09,
+      "ideal_max_px": 0.0008419618535667703,
+      "thresholds": {
+        "raw_roundtrip_median_px": 1e-06,
+        "raw_roundtrip_max_px": 0.0001,
+        "ideal_roundtrip_median_px": 1e-05,
+        "ideal_roundtrip_max_px": 0.001
+      },
+      "verdict": "PASS"
+    },
+    "G1_true_geometry": {
+      "ideal_median_px": 3.86264313830265e-07,
+      "raw_median_px": 3.810244895942678e-07,
+      "threshold_px": 0.05,
+      "verdict": "PASS"
+    },
+    "G2_bone_fitter": {
+      "I0_uniform_ideal_px": 0.0006379536608236813,
+      "I1_multistart_ideal_px": 0.00039724552781759026,
+      "I2_oracle_init_ideal_px": 1.0420043708878307e-05,
+      "I0_bone_L1": 4.81269186444755e-07,
+      "I2_bone_L1": 4.359424114752653e-09,
+      "I0_cosine": 0.9999999999485566,
+      "multistart_shape_spread_L1": 4.490683223074259e-07,
+      "shape_nonidentifiable": false,
+      "threshold_px": 0.05,
+      "verdict": "PASS"
+    },
+    "G3_determinism": {
+      "identical_across_processes": true,
+      "n_checked": 10,
+      "seeding": "sha256 of the condition name; Python hash() is never used because it is salted per process",
+      "verdict": "SYNTHETIC_DETERMINISM_PASS"
+    },
+    "G4_scoring_consistency": {
+      "median_spearman_ideal_vs_raw": 0.9993506493506494,
+      "ideal_argmin_q_median": 1.0211718159726757,
+      "raw_argmin_q_median": 1.0211718159726757,
+      "verdict": "PASS"
+    }
+  },
+  "all_passed": true,
+  "consequence": "the corrected full sweep runs only if all gates pass; otherwise FULL_SWEEP_NOT_RUN"
+}

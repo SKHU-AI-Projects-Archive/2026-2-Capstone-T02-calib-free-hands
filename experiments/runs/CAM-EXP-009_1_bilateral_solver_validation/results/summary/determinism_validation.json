@@ -1,0 +1,6 @@
+{
+  "identical_across_processes": true,
+  "n_checked": 10,
+  "seeding": "sha256 of the condition name; Python hash() is never used because it is salted per process",
+  "verdict": "SYNTHETIC_DETERMINISM_PASS"
+}
