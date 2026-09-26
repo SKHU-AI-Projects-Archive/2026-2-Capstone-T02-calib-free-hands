@@ -91,8 +91,13 @@ cannot say how much a whole video's worth of frames would add.
 | hand observations (reference 3D) | **12,860** |
 | scene predictions reused, none recomputed | 6,677 |
 
-"ALL_COMMON" below means *every QC-passing frame within the 64-frame grid*
-(median 51 per view) — not every frame of the video.
+**Naming.** Historical result files use the key `ALL_COMMON` for all usable
+frames within the frozen 64-frame grid. This is **not** the attempted
+30,031-frame whole-video ALL_COMMON candidate set of §3. Where the narrative
+needs to be unambiguous this report calls it the
+**`64GRID_COMMON_SET`** — every QC-passing frame within the 64-frame grid,
+median 51 per view. The frozen manifests and result-file keys are not
+retroactively renamed.
 
 ## 4. The paired comparison held
 
@@ -252,7 +257,7 @@ a reference CV of 1.73 % — scattered, not collapsed.
 | Q5 | does more temporal evidence help? | No coherent trend; N64 gave exactly zero |
 | Q6 | does pose diversity help? | No; low-diversity subsets gained marginally more |
 | Q7 | does hand-only fail while scene+hand succeeds? | Hand-only fails (24 % vs 9 %) and scene+hand also fails |
-| Q8 | do scene distortion/PP errors limit the gain? | Not testable as a limiter here: the hand term is too shallow to be limited by anything. The oracle-nuisance condition was not run — see limitations |
+| Q8 | do scene distortion/PP errors limit the gain? | **No.** Answered by the closure run: with the provided PP, distortion and fy/fx the profile deepens only 1.82 -> 2.86 px, the q bias is unchanged, and fusion gets marginally worse |
 | Q9 | camera-specific improvement beyond a constant prior? | No. A constant still beats everything by ~10× |
 
 ## 12. What this does and does not establish
@@ -276,11 +281,14 @@ predicted hand would be strictly noisier.
 
 ## 13. Consequence for CAM-EXP-008.1
 
-**Do not proceed with the predicted-hand practical fusion.** The pre-registered
-logic was explicit: if even the oracle hand does not help, there is little
-reason to implement the same formulation with a noisier predicted hand. The
-oracle hand did not help, and the controls show the residual movement was not
-hand information.
+**Do not proceed with the predicted-hand practical fusion for now.** The
+pre-registered logic was explicit: if even the oracle hand does not help, there
+is little motivation to repeat the same explicit scene-plus-reprojection
+formulation with noisier predicted geometry. The oracle hand did not help, and
+the controls show the residual movement was not hand information.
+
+This does **not** establish that every predicted-hand formulation or learned
+hand-derived constraint must fail — only that this one has no support.
 
 The binding constraint remains what CAM-EXP-007 also ran into: on a rig where
 the reference focal varies by 1.73 % and a constant scores 0.9 %, there is very
@@ -295,10 +303,10 @@ either.
    per unit.
 2. `SINGLE_FOCAL_RIG_CONFOUND`: reference focal CV 1.73 %; a constant scores
    0.906 %.
-3. The oracle-nuisance diagnostic (giving the fusion the provided principal
-   point and distortion) was **not run**. It was optional in the spec and was
-   skipped once the hand profile proved too shallow to be limited by nuisance
-   error; this leaves Q8 only partly answered.
+3. The oracle-nuisance diagnostic was not run *in this run*. It has since
+   been completed in `CAM-EXP-008_closure_camera_nuisance`, which found the
+   negative result robust to camera-nuisance error
+   (`CAM008_NEGATIVE_ROBUST_TO_CAMERA_NUISANCE`). Q8 is answered there.
 4. The E2 secondary anchor was not run, for the same reason.
 5. S2 underpowered (6 views, 5 cameras); S5 empty.
 6. One dataset, one rig, one focal setting, one worker per sequence.
