@@ -1,0 +1,60 @@
+{
+  "spec_id": "cam_exp_009_bilateral_spec_v1",
+  "provenance_note": "The gate criteria g1-g5 and every sweep were fixed in src/run_synthetic.py BEFORE it was executed. These manifest files transcribe them and were written after the run, so they are a faithful record rather than an independent pre-registration. Stated plainly rather than implied.",
+  "seed": 20260930,
+  "question": "for the same person, do anatomically corresponding LEFT and RIGHT bones become more consistent at the correct candidate focal, and does that improve a scene-anchored focal estimate?",
+  "naive_formulation_rejected": {
+    "what": "compare the FIXED reference 3D bone lengths of the two hands",
+    "why_rejected": "that value does not depend on the candidate focal, so d/df = 0 and it carries no focal information. Measured range over a +-50 % sweep: exactly 0."
+  },
+  "primary_formulation": {
+    "name": "CANDIDATE_CONDITIONED_SHARED_BONE_FIT",
+    "per_candidate_focal": "refit one sequence-shared bone-proportion vector per side from that side's own 2D, with free per-frame pose",
+    "loss": "L_bilateral(f) = mean |l_L(f) - l_R(f)| over corresponding bones",
+    "scale": "both vectors sum to 1, so absolute hand size is never used as a cue and a person with larger hands is not penalised",
+    "symmetry": "NOT enforced as a hard equality; real people are not perfectly symmetric. A side-scale nuisance r_LR would be redundant once both vectors are sum-normalised, so it is not introduced.",
+    "linearity": "with bone directions fixed the hand is linear in the bone-length vector, so the fit alternates PnP for pose with a linear solve for the lengths",
+    "initialisation": "uniform. The reference bone lengths are never used as an initial value or a prior centre."
+  },
+  "articulation_source": "OTHER_CAMERA_ONLY_REFERENCE_3D bone DIRECTIONS only; the reference bone LENGTHS are deliberately not fixed, otherwise the hypothesis could not be tested",
+  "overfitting_guard": "deterministic alternating FIT / EVAL frame split; the bone vector is estimated on FIT frames and the reprojection is also measured on held-out EVAL frames",
+  "focal_grid": {
+    "q_min": 0.5,
+    "q_max": 1.5,
+    "n": 161,
+    "definition": "q = f / f_scene (real) or f / f_true (synthetic)"
+  },
+  "lambdas": [
+    0.0,
+    0.01,
+    0.03,
+    0.1,
+    0.3,
+    1.0,
+    3.0,
+    10.0
+  ],
+  "min_bimanual_frames": 8,
+  "synthetic_gate": {
+    "g1": "the bilateral objective must not be focal-invariant",
+    "g2": "in the noiseless moderate-perspective condition the true focal must be near the minimum (median focal error <= 5 %)",
+    "g3": "held-out reprojection must identify the focal",
+    "g4": "wrong bone correspondence must degrade",
+    "g5": "the fixed-length control must be flat",
+    "rule": "g1 and g2 and g4 are required. If the gate fails, the GigaHands real-data phase is NOT run."
+  },
+  "real_conditions_if_gate_passes": [
+    "R0 scene only",
+    "R1 scene + temporal separate-side",
+    "R2 scene + bilateral",
+    "R3 scene + temporal + bilateral"
+  ],
+  "forbidden": [
+    "fixed anthropometric hand size",
+    "arbitrary non-bone joint pairs",
+    "GT focal as an optimisation input",
+    "target camera inside the reference articulation",
+    "frame or hand filtering by focal performance",
+    "opening the external confirmatory holdout"
+  ]
+}

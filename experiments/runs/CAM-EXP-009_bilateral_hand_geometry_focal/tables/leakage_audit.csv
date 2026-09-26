@@ -1,0 +1,5 @@
+item,used_in_generation,used_in_solver,note
+f_true (synthetic),1,0,"the solver receives only 2D, bone directions and image size"
+true bone vectors,1,0,the fit initialises from a uniform vector
+"true pose R,T",1,0,re-estimated by PnP at every candidate
+GigaHands reference focal,0,0,"the real-data phase was not run, so it was never read"

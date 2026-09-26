@@ -1,0 +1,22 @@
+{
+  "experiment": "CAM-EXP-009_bilateral_hand_geometry_focal",
+  "analysis_env": {
+    "venv": "experiments/.venv",
+    "python": "3.11.7",
+    "numpy": "2.4.6",
+    "opencv": "5.0.0"
+  },
+  "os": "Windows 10 (10.0.26200)",
+  "git_branch": "kjh",
+  "git_parent_commit": "7e6fb25",
+  "seed": 20260930,
+  "pnp": "cv2.solvePnP SQPNP primary, IPPE then ITERATIVE fallback (provenance: CAM-EXP-006.1 validated implementation)",
+  "phases_executed": [
+    "focal dependence audit",
+    "synthetic gate"
+  ],
+  "phases_not_executed": [
+    "real GigaHands data phase"
+  ],
+  "determinism": "all synthetic generation, splits and permutations seeded"
+}

@@ -1,0 +1,50 @@
+{
+  "spec_id": "cam_exp_009_synthetic_spec_v1",
+  "provenance_note": "The gate criteria g1-g5 and every sweep were fixed in src/run_synthetic.py BEFORE it was executed. These manifest files transcribe them and were written after the run, so they are a faithful record rather than an independent pre-registration. Stated plainly rather than implied.",
+  "seed": 20260930,
+  "image": {
+    "W": 1280,
+    "H": 720
+  },
+  "f_true_px": 900.0,
+  "n_trials_per_condition": 20,
+  "n_frames": 12,
+  "sweeps": {
+    "distance_over_diameter": [
+      2,
+      4,
+      8,
+      16,
+      32
+    ],
+    "bilateral_asymmetry": [
+      0.0,
+      0.01,
+      0.02,
+      0.05
+    ],
+    "noise_px": [
+      0.0,
+      0.5,
+      1.0,
+      2.0,
+      4.0
+    ],
+    "pose_diversity": [
+      "LOW",
+      "MEDIUM",
+      "HIGH"
+    ]
+  },
+  "controls": {
+    "BONE_INDEX_PERMUTATION": "corresponding bones deliberately mismapped",
+    "RIGHT_HAND_SWAP": "the right hand of a different synthetic subject",
+    "FIXED_REFERENCE_LENGTH_BILATERAL": "must be focal-invariant; this is the control that shows why the naive idea cannot work"
+  },
+  "solver_never_receives": [
+    "f_true",
+    "R",
+    "T",
+    "the true bone vectors"
+  ]
+}
