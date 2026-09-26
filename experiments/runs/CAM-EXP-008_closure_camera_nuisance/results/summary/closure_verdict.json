@@ -1,0 +1,107 @@
+{
+  "question": "was CAM-EXP-008's hand profile shallow and biased toward q = 1.184 because the scene-estimated principal point, distortion and aspect ratio were wrong?",
+  "profile_shape": [
+    {
+      "condition": "N0",
+      "n_views": 151,
+      "L_hand_max_px_median": 1.8203,
+      "preferred_q_median": 1.2634,
+      "boundary_rate": 0.245,
+      "correct_direction_rate": 0.6623
+    },
+    {
+      "condition": "N1",
+      "n_views": 151,
+      "L_hand_max_px_median": 1.7973,
+      "preferred_q_median": 1.2208,
+      "boundary_rate": 0.2318,
+      "correct_direction_rate": 0.6689
+    },
+    {
+      "condition": "N2",
+      "n_views": 151,
+      "L_hand_max_px_median": 2.524,
+      "preferred_q_median": 1.3165,
+      "boundary_rate": 0.2384,
+      "correct_direction_rate": 0.6954
+    },
+    {
+      "condition": "N3",
+      "n_views": 151,
+      "L_hand_max_px_median": 2.7972,
+      "preferred_q_median": 1.2986,
+      "boundary_rate": 0.2384,
+      "correct_direction_rate": 0.7086
+    },
+    {
+      "condition": "N4",
+      "n_views": 151,
+      "L_hand_max_px_median": 2.8608,
+      "preferred_q_median": 1.2721,
+      "boundary_rate": 0.2517,
+      "correct_direction_rate": 0.7152
+    }
+  ],
+  "fused": [
+    {
+      "condition": "N0",
+      "n_views": 151,
+      "scene_only_median_err_pct": 8.8658,
+      "scene_plus_hand_median_err_pct": 8.6719,
+      "median_paired_gain_pp": 0.0317,
+      "gain_ci_lo": 0.0116,
+      "gain_ci_hi": 0.0654,
+      "relative_reduction_pct": 2.1866,
+      "share_improved": 0.6225
+    },
+    {
+      "condition": "N1",
+      "n_views": 151,
+      "scene_only_median_err_pct": 8.8658,
+      "scene_plus_hand_median_err_pct": 8.7046,
+      "median_paired_gain_pp": 0.0449,
+      "gain_ci_lo": 0.012,
+      "gain_ci_hi": 0.086,
+      "relative_reduction_pct": 1.8185,
+      "share_improved": 0.6225
+    },
+    {
+      "condition": "N2",
+      "n_views": 151,
+      "scene_only_median_err_pct": 8.8658,
+      "scene_plus_hand_median_err_pct": 8.6953,
+      "median_paired_gain_pp": 0.0139,
+      "gain_ci_lo": 0.0056,
+      "gain_ci_hi": 0.0337,
+      "relative_reduction_pct": 1.9227,
+      "share_improved": 0.6623
+    },
+    {
+      "condition": "N3",
+      "n_views": 151,
+      "scene_only_median_err_pct": 8.8658,
+      "scene_plus_hand_median_err_pct": 8.7123,
+      "median_paired_gain_pp": 0.26,
+      "gain_ci_lo": 0.0982,
+      "gain_ci_hi": 0.4259,
+      "relative_reduction_pct": 1.7315,
+      "share_improved": 0.6556
+    },
+    {
+      "condition": "N4",
+      "n_views": 151,
+      "scene_only_median_err_pct": 8.8658,
+      "scene_plus_hand_median_err_pct": 8.8769,
+      "median_paired_gain_pp": 0.0279,
+      "gain_ci_lo": 0.0003,
+      "gain_ci_hi": 0.0592,
+      "relative_reduction_pct": -0.1254,
+      "share_improved": 0.6424
+    }
+  ],
+  "N4_sharpened_profile": false,
+  "N4_reduced_q_bias": false,
+  "N4_materially_better_fusion": false,
+  "verdict": "CAM008_NEGATIVE_ROBUST_TO_CAMERA_NUISANCE",
+  "scope": "N1-N4 are ORACLE_DIAGNOSTIC_ONLY. The provided focal MAGNITUDE was never used. CAM-EXP-008's own results are unchanged."
+}
