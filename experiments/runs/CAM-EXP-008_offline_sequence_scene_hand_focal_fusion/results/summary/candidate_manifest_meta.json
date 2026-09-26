@@ -1,0 +1,19 @@
+{
+  "mode": "FULL_DURATION_64_APPROXIMATION",
+  "manifest": "cam_exp_008_candidate_frames_v1.csv.gz",
+  "sha256": "1d924b8d33794f100efef06c02e05dfc7d135202ac2961c1511fd238e0585e50",
+  "rows": 6677,
+  "views": 154,
+  "physical_cameras": 40,
+  "sequences": 5,
+  "frames_per_view": {
+    "min": 1,
+    "median": 51,
+    "max": 64,
+    "total": 6677
+  },
+  "scene_prediction_rows_reused": 6677,
+  "scene_prediction_source": "CAM-EXP-004.1 extended_frame_predictions (anycalib_gen_radial), reused read-only; no new inference",
+  "eligibility": "existing QC pass, chosen, not the all-zero pattern, on a camera marked usable_for_camera_benchmark, intersected with the frozen 64-frame grid",
+  "target_blind": true
+}

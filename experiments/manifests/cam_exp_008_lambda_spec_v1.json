@@ -1,0 +1,17 @@
+{
+  "spec_id": "cam_exp_008_lambda_spec_v1",
+  "created_before_reference_focal_evaluation": true,
+  "grid": [
+    0.0,
+    0.01,
+    0.03,
+    0.1,
+    0.3,
+    1.0,
+    3.0,
+    10.0
+  ],
+  "selection": "grouped CV over TRAINING physical cameras only, inside each outer fold. The held-out camera's reference focal never influences lambda.",
+  "inner_objective": "median relative focal error against the dataset-provided reference focal of the inner validation cameras",
+  "lambda_zero_is_S0": true
+}

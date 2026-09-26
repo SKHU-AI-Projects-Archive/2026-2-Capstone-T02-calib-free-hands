@@ -1,0 +1,28 @@
+{
+  "status": "FULL_SEQUENCE_COMPUTE_BLOCKER",
+  "decision": "ALL_COMMON was attempted and abandoned on measured throughput; the run proceeds on FULL_DURATION_64_APPROXIMATION, which is NEVER called 'full sequence'.",
+  "all_common_size": {
+    "candidate_frames": 30031,
+    "views": 157,
+    "physical_cameras": 40,
+    "sequences": 5,
+    "median_frames_per_view": 162
+  },
+  "measured_throughput": {
+    "anycalib_scene_predictions": "~0.75 views/min -> ~3.5 h for 157 views (0.17 s/frame model time plus video decode)",
+    "other_camera_only_reference_3d": "~0.5 views/min -> ~5 h for 157 views",
+    "hand_focal_profiles": "~1.5 h real + ~1.5 h wrong-frame control, from the CAM-EXP-006 measured PnP rate at 161 grid points",
+    "total_estimate_hours": 8
+  },
+  "pre_registered_threshold": "spec section 13: report a blocker if new AnyCalib inference exceeds 100,000 frames OR the reasonable runtime estimate exceeds 6 GPU-hours",
+  "which_criterion_fired": "runtime: ~8 h estimated, above the 6 h threshold. The frame-count criterion did NOT fire (30,031 frames, well under 100,000).",
+  "what_was_NOT_done": "no arbitrary subsampling of ALL_COMMON was performed. The partial ALL_COMMON caches (9 scene views, 6 reference-3D views) are discarded and contribute to no result.",
+  "fallback": {
+    "name": "FULL_DURATION_64_APPROXIMATION",
+    "what": "the frozen CAM-EXP-004.1 64-frame grid, which is spread across the whole recording duration by farthest-point insertion in time",
+    "why_cheap": "AnyCalib predictions for these exact frames already exist in CAM-EXP-004.1 results/raw/extended_frame_predictions.csv.gz at 100 % success, so NO new scene inference is required",
+    "wording_rule": "this must never be described as 'the full sequence'. It is a 64-frame approximation spanning the full duration.",
+    "what_is_unaffected": "the primary paired comparison. S0 and S1 still use identical frames, identical scene predictions and identical nuisance parameters; only the hand term differs. The frame-count experiment still covers N=8/16/32/64 nested.",
+    "what_is_affected": "the claim about how much temporal evidence a whole video provides. N=ALL_COMMON is not measured."
+  }
+}

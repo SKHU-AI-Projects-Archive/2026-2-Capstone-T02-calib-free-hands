@@ -1,0 +1,14 @@
+{
+  "spec_id": "cam_exp_008_pose_diversity_spec_v1",
+  "created_before_reference_focal_evaluation": true,
+  "descriptor": "root-relative reference 3D hand, scale-normalised by its own bone-length sum, then global rotation removed by Procrustes alignment to the view's medoid pose. What remains is articulation only.",
+  "distance": "Euclidean distance between aligned, scale-normalised joint configurations",
+  "DIVERSE_N": "greedy farthest-point selection, seeded at the medoid",
+  "LOW_DIVERSITY_N": "the N poses nearest the medoid",
+  "N_values": [
+    16,
+    32
+  ],
+  "target_independence": "no reference focal, no focal error and no fusion outcome takes any part in selection",
+  "interpretation_rule": "diversity is judged by the PAIRED incremental gain G = err(scene-only) - err(scene+hand) within each subset, never by comparing scene+hand errors across subsets, because the subsets contain different frames"
+}

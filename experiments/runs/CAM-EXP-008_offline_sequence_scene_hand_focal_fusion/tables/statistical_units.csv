@@ -1,0 +1,7 @@
+level,role
+joint,repeated observation within a hand
+hand,repeated observation within a frame
+frame,repeated observation within a sequence
+SEQUENCE_CAMERA_UNIT,STATISTICAL UNIT
+physical camera,GENERALISATION GROUP and bootstrap cluster
+sequence,secondary shift axis (LOSO)

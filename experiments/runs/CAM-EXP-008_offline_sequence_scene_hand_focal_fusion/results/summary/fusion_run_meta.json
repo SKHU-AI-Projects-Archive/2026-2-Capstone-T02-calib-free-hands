@@ -1,0 +1,35 @@
+{
+  "views": 154,
+  "rows": 23520,
+  "subsets": [
+    "ALL_COMMON",
+    "DIVERSE16",
+    "DIVERSE32",
+    "LOW16",
+    "LOW32",
+    "N16",
+    "N32",
+    "N64",
+    "N8"
+  ],
+  "conditions": [
+    "C1",
+    "C2",
+    "C3",
+    "H0",
+    "S0",
+    "S1"
+  ],
+  "lambdas": [
+    0.0,
+    0.01,
+    0.03,
+    0.1,
+    0.3,
+    1.0,
+    3.0,
+    10.0
+  ],
+  "paired_identity": "S0 and S1 share frame_hash, scene_hash and grid_hash by construction: they are computed once per (view, subset) and reused for every condition",
+  "target_blind": true
+}

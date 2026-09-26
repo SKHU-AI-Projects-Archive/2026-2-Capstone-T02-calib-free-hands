@@ -1,0 +1,8 @@
+{
+  "views": 154,
+  "hand_observations": 12860,
+  "camera_under_test_ever_an_inlier": 0,
+  "non_circularity": "PASS",
+  "min_paired_joints": 12,
+  "target_blind": true
+}

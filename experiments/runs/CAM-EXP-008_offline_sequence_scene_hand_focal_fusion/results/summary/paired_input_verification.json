@@ -1,0 +1,27 @@
+{
+  "rows_checked": 980,
+  "views": 151,
+  "subsets": [
+    "ALL_COMMON",
+    "DIVERSE16",
+    "DIVERSE32",
+    "LOW16",
+    "LOW32",
+    "N16",
+    "N32",
+    "N64",
+    "N8"
+  ],
+  "same_frames_all": true,
+  "same_scene_all": true,
+  "same_grid_all": true,
+  "same_scene_nuisance_all": true,
+  "C3_flat_hand_reproduces_S0": true,
+  "failures": [],
+  "verdict": "PAIRED_INPUT_IDENTITY_HELD",
+  "circularity": {
+    "camera_under_test_ever_an_inlier_of_its_own_reference_3d": 0,
+    "non_circularity": "PASS"
+  },
+  "meaning": "S0 and S1 are computed from one shared per-(view, subset) scene cost and one shared candidate grid. The hand term is the only thing switched on, so any difference in the estimate is attributable to it."
+}
