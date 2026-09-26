@@ -1,5 +1,11 @@
 # CAM-EXP-006.1 — validation protocol
 
+> **Scope of this document.** Sections 1–10 describe the protocol **as frozen
+> before any result was seen**. Section 11 lists the analyses added *after* the
+> primary result. Nothing in sections 1–10 was added or edited after results
+> existed. Full account:
+> [`analysis_provenance.md`](analysis_provenance.md).
+
 Frozen in `experiments/manifests/cam_exp_0061_validation_spec_v1.json` and
 `cam_exp_0061_real_conditions_v1.json`, both with
 `created_before_results = true`, before any CAM-006.1 result existed.
@@ -89,9 +95,16 @@ A `CAM006_NEGATIVE_RESULT_STRONGLY_VALIDATED` · B `..._VALIDATED_WITH_CAVEATS`
 `CAM006_FRAME_WEIGHTING_MATERIALLY_AFFECTED_RESULT` · E
 `CAM006_SOLVER_NOT_VALIDATED` · F `CAM006_INCONCLUSIVE`
 
-Verdict C requires identifiability to be **restored**, not merely improved.
-That distinction is what separates B from C here, and it is applied in
-`src/final_verdict.py` rather than left to the numeric trigger alone.
+The frozen specification supplies these **labels** and the four numeric
+thresholds above. It does **not** supply an operational rule for choosing
+between B and C.
+
+The rule actually applied — that verdict C requires identifiability to be
+*restored* rather than merely improved, operationalised in
+`src/final_verdict.py` as R5 error <= 10 %, identifiable >= 50 % and a tracking
+CI excluding zero — was written **after** the results were seen. It is
+therefore a `POST_HOC_INTERPRETIVE_VERDICT`, not a pre-registered test. See
+[`analysis_provenance.md`](analysis_provenance.md) §3.
 
 ## 10. Constant-rig focal oracle
 
@@ -101,3 +114,23 @@ the post-hoc CAM-005 finding. The confound was discovered post hoc in CAM-005
 and was therefore already known when CAM-006 began, so in CAM-006 and
 CAM-006.1 it is genuinely pre-registered. The self-contradictory label
 `PRE_REGISTERED_POST_HOC` is not used.
+
+
+## 11. Post-hoc extensions added after the primary result
+
+These were **not** in the frozen specification. They are mechanism and
+sensitivity diagnostics, added to understand why the pre-registered real-data
+test failed. They are not confirmatory evidence for the primary verdict.
+
+| addition | role | why it was added |
+| --- | --- | --- |
+| distance x 1 px noise sweep | `POST_HOC_MECHANISM_DIAGNOSTIC` | the frozen noiseless distance sweep returned 0.12 % at every distance, so it could not show how lost identifiability becomes focal error |
+| REAL_REGIME_MATCHED (4.12x diameter, 7.21 px noise) | `POST_HOC_MECHANISM_DIAGNOSTIC` | both constants were measured from results, so the condition could not have been specified in advance |
+| reference-3D perturbation sweep (0.5–5 % of hand diameter) | `POST_HOC_SENSITIVITY_DIAGNOSTIC` | added after the matched condition under-predicted the real failure |
+| B-vs-C usability cutoff | `POST_HOC_INTERPRETIVE_VERDICT` | the frozen spec gave verdict labels but no operational B/C rule |
+
+One implementation correction was made during analysis: the first reference-3D
+perturbation diagnostic perturbed both the solver's 3D input and the
+image-generation geometry, leaving them self-consistent. It was detected before
+interpretation and replaced; its output is not used as a result anywhere. See
+[`analysis_provenance.md`](analysis_provenance.md) §4.2.
