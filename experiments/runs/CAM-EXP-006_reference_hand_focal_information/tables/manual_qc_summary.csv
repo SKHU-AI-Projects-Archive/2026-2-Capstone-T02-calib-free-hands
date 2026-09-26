@@ -1,0 +1,13 @@
+metric,count,share_of_200
+cases_reviewed,200,1.0
+RGB_MATCH,200,1.0
+2D_ON_CORRECT_HAND,200,1.0
+HAND_SIDE_CORRECT,193,0.965
+HAND_SIDE_unverifiable,7,0.035
+MAJOR_2D_FAILURE,0,0.0
+MAJOR_OCCLUSION,7,0.035
+LOCO_3D_REPROJECTION_PLAUSIBLE,200,1.0
+NOT_REVIEWABLE,0,0.0
+loco_ok,200,1.0
+loco_reproj_median_px,7.21,
+loco_reproj_p90_px,13.034,

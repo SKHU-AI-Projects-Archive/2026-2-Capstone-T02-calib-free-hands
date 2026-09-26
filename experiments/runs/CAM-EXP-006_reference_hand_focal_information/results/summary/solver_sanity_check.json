@@ -1,0 +1,14 @@
+{
+  "purpose": "distinguish a FLAT profile from a BROKEN solver",
+  "views_checked": 141,
+  "median_objective_at_profile_minimum_px": 6.031,
+  "median_objective_at_true_focal_px": 6.827,
+  "median_objective_at_gamma_0p25_px": 10.713,
+  "median_objective_at_gamma_5p0_px": 6.531,
+  "median_ratio_true_over_min": 1.1142,
+  "median_argmin_gamma": 1.3315,
+  "median_true_gamma": 0.7207,
+  "verdict": "SOLVER_CORRECT_PROFILE_FLAT",
+  "reading": "at the true focal the objective is only ~11 % above the profile minimum, so the solver is not broken. But a focal about seven times too large fits the same data slightly BETTER than the true one. The reprojection objective therefore does not distinguish the focal: this is the weak-perspective degeneracy, in which a small object at moderate depth trades focal against distance almost exactly.",
+  "gt_usage": "GT focal is read here for a DIAGNOSTIC ONLY; it never feeds back into the solver, the manifests or any reported estimate"
+}

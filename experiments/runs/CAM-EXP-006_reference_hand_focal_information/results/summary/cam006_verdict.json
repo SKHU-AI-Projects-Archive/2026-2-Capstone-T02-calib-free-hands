@@ -1,0 +1,84 @@
+{
+  "constant_rig_focal_px": 921.611,
+  "main_n16": {
+    "condition": "MAIN",
+    "n_frames": 16,
+    "n_views": 175,
+    "median_rel_focal_err_pct": 202.1629,
+    "ci95_lo": 150.6586,
+    "ci95_hi": 305.38,
+    "mean_rel_focal_err_pct": 279.4457,
+    "mean_signed_log_err": 1.04709,
+    "share_flat_profile": 0.8686,
+    "share_boundary": 0.2571,
+    "share_identifiable": 0.04
+  },
+  "main_n1": {
+    "condition": "MAIN",
+    "n_frames": 1,
+    "n_views": 175,
+    "median_rel_focal_err_pct": 109.9684,
+    "ci95_lo": 72.1959,
+    "ci95_hi": 178.1329,
+    "mean_rel_focal_err_pct": 226.8726,
+    "mean_signed_log_err": 0.81406,
+    "share_flat_profile": 0.6514,
+    "share_boundary": 0.1657,
+    "share_identifiable": 0.1543
+  },
+  "controls_n16_median_rel_focal_err_pct": {
+    "JOINT_PERMUTATION": 462.2309,
+    "WRONG_POSE": 201.377,
+    "PLANARIZED": 59.9734
+  },
+  "comparators": [
+    {
+      "comparator": "ANYCALIB_N8",
+      "role": "SINGLE_IMAGE_BASELINE",
+      "n_views": 175,
+      "median_rel_focal_err_pct": 9.9662,
+      "ci95_lo": 7.6771,
+      "ci95_hi": 11.2467
+    },
+    {
+      "comparator": "GEOCALIB_N8",
+      "role": "SINGLE_IMAGE_BASELINE",
+      "n_views": 175,
+      "median_rel_focal_err_pct": 11.2833,
+      "ci95_lo": 9.2445,
+      "ci95_hi": 13.8633
+    },
+    {
+      "comparator": "E2_N8",
+      "role": "FROZEN_EXPLORATORY_ENSEMBLE_not_a_proposed_method",
+      "n_views": 175,
+      "median_rel_focal_err_pct": 6.3715,
+      "ci95_lo": 5.12,
+      "ci95_hi": 8.5387
+    },
+    {
+      "comparator": "CONSTANT_RIG_FOCAL_ORACLE",
+      "role": "PRE_REGISTERED_POST_HOC_ORACLE_SANITY_CONTROL",
+      "n_views": 175,
+      "median_rel_focal_err_pct": 0.8473,
+      "ci95_lo": 0.5249,
+      "ci95_hi": 1.1078
+    }
+  ],
+  "paired_main16_minus_constant_oracle": {
+    "median_pp": 200.1037,
+    "ci95_lo": 148.8902,
+    "ci95_hi": 304.8602,
+    "interpretation": "negative means the reference-hand solver beats the constant oracle"
+  },
+  "H1_reference_hand_carries_focal_information": false,
+  "H2_the_information_is_geometric": false,
+  "H3_more_frames_help": false,
+  "decision_tags": [
+    "D_SIGNAL_EXPLAINED_BY_SINGLE_FOCAL_RIG_CONFOUND",
+    "B_REFERENCE_HAND_FOCAL_INFORMATION_ABSENT",
+    "F_SATURATED_BY_FEW_FRAMES",
+    "E_WEAKLY_IDENTIFIABLE"
+  ],
+  "scope_reminder": "this is an INTERNAL_REFERENCE_HAND_DIAGNOSTIC and an UPPER BOUND under an oracle reference hand; it is not a deployable calibration method and its numbers must never be quoted as achievable performance"
+}

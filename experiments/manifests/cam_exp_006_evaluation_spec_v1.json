@@ -1,0 +1,60 @@
+{
+  "spec_id": "cam_exp_006_evaluation_spec_v1",
+  "seed": 20260926,
+  "unit_of_aggregation": "(sequence, camera) view; frames are NEVER pooled across sequences",
+  "primary_metric": "relative focal error in percent, 100 * |f_hat - f_ref| / f_ref, where f_ref is GT_EFFECTIVE_FOCAL = the dataset-provided native fx",
+  "secondary_metrics": [
+    "signed log error log(f_hat / f_ref)",
+    "per-view bias and within-view spread, decomposed as in CAM-EXP-004",
+    "share of views flagged FLAT_PROFILE or BOUNDARY_SOLUTION"
+  ],
+  "frame_counts": [
+    1,
+    2,
+    4,
+    8,
+    16
+  ],
+  "uncertainty": "cluster bootstrap over the 40 physical cameras, 10000 iterations, 95 % percentile interval",
+  "comparators": [
+    {
+      "id": "ANYCALIB_N8",
+      "role": "PRIMARY_SINGLE_IMAGE_BASELINE"
+    },
+    {
+      "id": "GEOCALIB_N8",
+      "role": "SECONDARY_SINGLE_IMAGE_BASELINE"
+    },
+    {
+      "id": "E2_N8",
+      "role": "FROZEN_EXPLORATORY_ENSEMBLE, not a proposed method"
+    },
+    {
+      "id": "CONSTANT_RIG_FOCAL_ORACLE",
+      "role": "PRE_REGISTERED_POST_HOC_ORACLE_SANITY_CONTROL",
+      "what": "predict, for every view, the median GT reference focal of the whole rig",
+      "why": "the GigaHands rig has a single-focal confound (SINGLE_FOCAL_RIG_CONFOUND, reference focal CV 1.90 % across 175 views). Any method that does not beat this constant has demonstrated no per-view focal information at all.",
+      "not_a_method": "it uses the evaluation targets and could not be formed without them"
+    }
+  ],
+  "pre_registered_thresholds": {
+    "H1_reference_hand_carries_focal_information": "the main condition must beat CONSTANT_RIG_FOCAL_ORACLE on median relative focal error, with a cluster-bootstrap 95 % interval on the paired difference that excludes zero",
+    "H2_the_information_is_geometric": "every control must be worse than the main condition by at least a factor of 2 in median relative focal error",
+    "H3_more_frames_help": "N = 16 must beat N = 1 by at least 2 percentage points of median relative focal error"
+  },
+  "decision_tags": {
+    "A": "REFERENCE_HAND_FOCAL_INFORMATION_CONFIRMED",
+    "B": "REFERENCE_HAND_FOCAL_INFORMATION_ABSENT",
+    "C": "SIGNAL_PRESENT_BUT_NOT_GEOMETRIC (a control also succeeds)",
+    "D": "SIGNAL_EXPLAINED_BY_SINGLE_FOCAL_RIG_CONFOUND (the constant oracle is not beaten)",
+    "E": "WEAKLY_IDENTIFIABLE (a large share of FLAT_PROFILE or BOUNDARY_SOLUTION flags)",
+    "F": "SATURATED_BY_FEW_FRAMES (H3 fails)",
+    "G": "BLOCKED (the solve could not be run as specified)",
+    "H": "INCONCLUSIVE_UNDER_THIS_RIG"
+  },
+  "honesty_rules": [
+    "a result opposite to the hypothesis is reported unchanged",
+    "no frame, view, threshold or grid point is chosen by looking at the focal error",
+    "the ceiling reported here is an UPPER BOUND under an oracle reference hand and must never be described as achievable performance"
+  ]
+}

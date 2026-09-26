@@ -1,0 +1,13 @@
+{
+  "n_cases": 200,
+  "pool_size": 10246,
+  "n_strata": 111,
+  "seed": 20260926,
+  "n_contact_sheets": 17,
+  "panels_missing": [],
+  "strata_definition": "sequence | anatomical side | existing QC label | existing triangulation-reprojection bin | temporal position bin",
+  "selection_rule": "round-robin over strata, preferring the least-used physical camera among the next six candidates",
+  "target_independence": "no calibration result, focal error or solver output took any part in the selection",
+  "audit_reprojection": "the magenta overlay uses provided camera parameters and is AUDIT VISUALISATION ONLY; never an input to the CAM-006 focal solver",
+  "manifest_sha256": "5ed666447d3b861e37b3c112f4f13ca434b1506e8133fc49d398bee9c27bd50c"
+}
