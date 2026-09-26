@@ -7,6 +7,18 @@ REAL GIGAHANDS PHASE: NOT RUN
   (pre-registered consequence of a failed synthetic gate)
 ```
 
+> **SUPERSEDED FOR INTERPRETATION — see CAM-EXP-009.1.** The synthetic negative
+> result below was produced with a solver later found to contain three faults:
+> the distortion was removed twice, the held-out score compared a pinhole
+> prediction against raw distorted pixels, and the alternating fit was stopped
+> after 6 iterations (a ~0.4 px residual remained at the TRUE focal). With
+> those corrected, the same objective recovers the true focal to 0.035 % rather
+> than failing at the 50 % grid boundary, and both negative controls degrade to
+> 50 % as a genuine signal should. **The numbers in this report are unchanged
+> and remain on record as what that code produced; the geometric conclusion
+> drawn from them does not stand.** See
+> `CAM-EXP-009_1_bilateral_solver_validation/`.
+
 **One sentence:** The naive version of the idea — comparing the two hands'
 fixed reference bone lengths — is provably useless because it does not depend
 on the focal at all (measured range exactly **0**); the repaired version, which
@@ -157,7 +169,13 @@ primary fail would be a search, not a test.
 
 The gate rule was fixed before results: if the bilateral objective cannot
 identify a known focal on clean synthetic data, the GigaHands phase does not
-run. It failed, so it did not run. The GigaHands reference focal was never
+run. It failed, so it did not run.
+
+*Provenance correction (CAM-EXP-009.1).* This formal gate was written **after**
+the preliminary focal-dependence audit had already revealed the boundary
+minimum. It was frozen before the full distance/noise/asymmetry sweep, but not
+before all synthetic evidence, and should not be described as fully
+result-blind. The GigaHands reference focal was never
 read by this experiment — see `tables/leakage_audit.csv`.
 
 This is the intended function of a synthetic gate: it cost a few minutes of
