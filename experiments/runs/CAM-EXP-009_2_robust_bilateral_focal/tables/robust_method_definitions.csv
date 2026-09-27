@@ -1,0 +1,10 @@
+method,robust,formula,note
+M0_BASELINE_RAW_L1,0,"mean_b |p_L,b - p_R,b|","closest to CAM-EXP-009.1; the comparison baseline, not a robust method"
+M1_LOG_L1,0,"mean_b |log(p_L,b+eps) - log(p_R,b+eps)|",relative rather than absolute mismatch; large and small bones made comparable
+M2_LOG_MEDIAN,1,median_b |d_b|,a few strongly asymmetric bones cannot dominate
+M3_LOG_TRIMMED,1,mean of the smallest 80 % of |d_b| (4 of 20 dropped),trim fraction frozen at 0.20
+M4_HUBER_001,1,"mean huber(d, 0.01)","quadratic below tau, linear above"
+M4_HUBER_002,1,"mean huber(d, 0.02)",
+M4_HUBER_005,1,"mean huber(d, 0.05)",
+M5_FINGER_INTERNAL_RATIO,1,median_b |log r_L - log r_R| with r normalised inside each finger,tolerant to a per-finger length difference between the sides
+M6_FINGER_HUBER,1,"mean huber(finger-internal d, 0.02)",

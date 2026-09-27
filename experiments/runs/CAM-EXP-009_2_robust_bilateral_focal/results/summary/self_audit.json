@@ -1,0 +1,13 @@
+{
+  "banned_phrases": [],
+  "gt_focal_passed_to_solver": [],
+  "forbidden_dof_used": [],
+  "cam0091_solver_modified": [],
+  "dev_test_seed_overlap": [],
+  "manifest_hashes_match": {
+    "cam_exp_0092_robust_candidate_spec_v1.json": true,
+    "cam_exp_0092_synthetic_dev_trials_v1.csv.gz": true,
+    "cam_exp_0092_synthetic_test_trials_v1.csv.gz": true
+  },
+  "ALL_CLEAN": true
+}
