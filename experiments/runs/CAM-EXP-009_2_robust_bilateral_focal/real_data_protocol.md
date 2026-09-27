@@ -37,8 +37,8 @@ that could not be read either way.
    this the bilateral premise is not established on real data at all.
 
 4. **R0–R4 camera-nuisance conditions**, as in CAM-EXP-008: how much of any
-   result survives realistic error in the principal point and distortion, which
-   are not primary inputs here.
+   result survives pre-specified perturbation of the principal point and
+   distortion, which are not primary inputs here.
 
 5. **LOCO** (leave-one-physical-camera-out, 40 folds) as the primary protocol,
    LOSO (5 folds) secondary. Statistical unit `(sequence, camera)`

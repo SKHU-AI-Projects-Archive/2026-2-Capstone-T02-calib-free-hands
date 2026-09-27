@@ -39,10 +39,11 @@ So the user's bilateral idea was **not** refuted by experiment 9. It was never
 properly tested.
 
 Two important cautions remain, and they are not small. This is synthetic data
-where the hands are geometrically perfect. The moment real left–right asymmetry
-is introduced the bilateral signal decays quickly, and it is also more
-sensitive to measurement noise than the simpler single-hand approach. And none
-of this has been run on real GigaHands data.
+where the hands are geometrically perfect. As soon as synthetic left–right
+mismatch is introduced the bilateral signal decays quickly, and it is also more
+sensitive to measurement noise than the simpler single-hand approach. How much
+mismatch real hands exhibit was not measured here. And none of this has been
+run on real GigaHands data.
 
 ## 2. The three faults, confirmed at source
 
@@ -100,8 +101,15 @@ Only after all five passed was the corrected sweep run.
 
 ## 5. The corrected result
 
-Moderate perspective (4× hand diameters), realistic distortion, noiseless,
-8 trials, 161-point grid, true focal at q = 1.0:
+*`DIST_REAL` is a single fixed radial-distortion coefficient vector used
+throughout the synthetic runs. It is one plausible lens, not a measured
+distribution of deployment distortion, and its provenance is not recorded in
+the source. Elsewhere in this run it is referred to as "realistic distortion";
+read that as "non-zero, plausibly scaled distortion", not as a measured
+deployment value.*
+
+Moderate perspective (4× hand diameters), non-zero radial distortion
+(`DIST_REAL`), noiseless, 8 trials, 161-point grid, true focal at q = 1.0:
 
 | objective | recovered q | focal error | boundary rate |
 | --- | ---: | ---: | ---: |
@@ -139,8 +147,8 @@ work.
 
 This is the part that tempers the positive result.
 
-**Real asymmetry breaks it.** Held-out reprojection is unaffected; the
-bilateral term is not:
+**Sensitivity to bilateral mismatch.** Synthetic bilateral mismatch degrades
+the bilateral objective, while held-out reprojection is unaffected:
 
 | bilateral asymmetry | bilateral focal error | held-out focal error |
 | ---: | ---: | ---: |
@@ -149,9 +157,15 @@ bilateral term is not:
 | 2 % | **12.0 %** | 0.04 % |
 | 5 % | **29.3 %** | 0.04 % |
 
-Human hands are not symmetric to within 1 %. At a plausible 2 % the bilateral
-objective is already outside its own 5 % gate while the single-hand temporal
-objective is untouched.
+This synthetic sensitivity analysis shows that even a 1–2 % bilateral
+bone-proportion mismatch can materially affect focal recovery: at the 2 %
+synthetic mismatch condition the bilateral objective is already outside its own
+5 % gate, while the single-hand temporal objective is untouched.
+
+**The actual distribution of left–right anatomical asymmetry in the target
+population has not been established by this experiment.** These are synthetic
+mismatch levels imposed by the generator, not measured human asymmetry, so they
+do not by themselves tell us which level real hands exhibit.
 
 **Noise hurts it more than the single-hand objective:**
 
@@ -210,8 +224,8 @@ present.
 **Do not jump to the GigaHands real phase yet.** Two things should be settled
 first, and both are cheap:
 
-1. **An asymmetry-tolerant formulation.** At 2 % asymmetry the objective is
-   already out of tolerance. A side-scale nuisance, or a robust per-bone
+1. **An asymmetry-tolerant formulation.** At the 2 % synthetic mismatch
+   condition the objective is already out of tolerance. A side-scale nuisance, or a robust per-bone
    weighting, would need to be designed and re-validated synthetically before
    it is worth spending real-data compute.
 2. **A correctly specified low-dimensional shape model** (template scaling,

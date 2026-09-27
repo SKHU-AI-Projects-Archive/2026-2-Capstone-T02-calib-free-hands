@@ -22,8 +22,14 @@ objective frame-paired — otherwise there is nothing to shuffle.
 it was measured at `COMBINED_MODERATE` with 8 subjects. It was not run across
 the stress grid, and not on the clean cell — where the cue does recover the
 focal exactly and C2 might well degrade as it should. So the claim is
-specifically "at moderate stress the residual preference is not bilateral", not
-"the cue is never bilateral".
+specifically "at `COMBINED_MODERATE` the correct same-subject pairing had no
+measurable advantage over a subject-swapped control", not "the cue is never
+bilateral" and not "same-subject geometry carries no information".
+
+A second limit: the synthetic subjects come from one generator with a shared
+bone-length distribution, so the swapped right hand is a different draw from the
+same anatomy family rather than anatomically unrelated geometry. The control
+breaks the intended pairing; it does not remove all shared structure.
 
 Running C2 across the grid would be a reasonable pre-registered follow-up. It
 must be pre-registered, not run now to see whether it rescues the verdict.
@@ -74,3 +80,18 @@ did not, because nothing came close to that floor under stress.
 - Anything about real GigaHands data. `REAL_FOCAL_PHASE_NOT_RUN`.
 - Whether the observed synthetic behaviour transfers to real data at all. The
   generator uses the solver's own hand and camera model.
+
+## 8. `self_audit.py`'s solver check is directory-scoped, not source-scoped
+
+`check_solver_unmodified()` runs `git status --porcelain` over the whole
+`CAM-EXP-009_1_bilateral_solver_validation/` directory, so it reports a hit for
+**any** uncommitted change there — including documentation. After the
+documentation-only narrowing that followed commit `ab835e9`, re-running the
+audit against an unstaged working tree will therefore show
+`cam0091_solver_modified` listing `report.md` and `OPEN_ISSUES.md`, and
+`ALL_CLEAN: false`, even though no solver source changed.
+
+`results/summary/self_audit.json` remains the version produced by the original
+run and was not overwritten. The audit script was not modified. To verify the
+solver source specifically, diff `CAM-EXP-009_1_bilateral_solver_validation/src`
+rather than the run directory; it is unchanged.

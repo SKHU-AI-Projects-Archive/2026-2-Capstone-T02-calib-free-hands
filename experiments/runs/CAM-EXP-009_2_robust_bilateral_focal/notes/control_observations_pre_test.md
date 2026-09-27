@@ -65,3 +65,27 @@ The synthetic gate requires the controls to degrade. On this evidence C2 does
 not. Whatever the TEST numbers show, the control outcome must be carried into
 the verdict rather than set aside, and the real-data phase decision follows the
 pre-registered rule.
+
+---
+
+## Appendix — wording correction (documentation-only, after commit `ab835e9`)
+
+**The body of this note above is left exactly as it was written**, because its
+evidential value is that it was recorded before the TEST run finished. Nothing
+in it has been edited.
+
+Two phrases in §2 above are broader than the evidence supports, and the
+narrowed readings in `report.md` §5 supersede them for interpretation:
+
+- "the bilateral correspondence the method is built on is entirely absent" —
+  the synthetic subjects are drawn from one generator with a shared bone-length
+  distribution, so a swapped right hand is a different draw from the same
+  anatomy family, not anatomically unrelated geometry. C2 breaks the *intended
+  same-subject pairing*; it does not remove all shared structure.
+- "the focal preference is not coming from left–right correspondence" — this
+  was measured at `COMBINED_MODERATE` only. The correct statement is that at
+  that condition the same-subject pairing had no measurable advantage over the
+  subject-swap control. It does not establish anything about the clean
+  condition or other stress regimes.
+
+No number in this note changed.

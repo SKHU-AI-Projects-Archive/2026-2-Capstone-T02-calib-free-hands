@@ -4,7 +4,7 @@
 
 | id | issue |
 | --- | --- |
-| `BILATERAL_FRAGILE_TO_REAL_ASYMMETRY` | the bilateral objective is exact under perfect symmetry but reaches 12.0 % focal error at 2 % bilateral asymmetry and 29.3 % at 5 %, while the single-hand held-out objective stays at 0.04 %. Human hands are not symmetric to within 1 %. This is the main obstacle to using the idea. |
+| `BILATERAL_FRAGILE_TO_REAL_ASYMMETRY` | the bilateral objective is exact under perfect symmetry but reaches 12.0 % focal error at 2 % bilateral asymmetry and 29.3 % at 5 %, while the single-hand held-out objective stays at 0.04 %. These are synthetic mismatch levels imposed by the generator; the actual left-right asymmetry distribution of human hands was not measured by this experiment. Sensitivity at this scale is the main obstacle to using the idea. |
 | `BILATERAL_MORE_NOISE_SENSITIVE` | at 1 px 2D noise the bilateral error is 8.2 % against the held-out objective's 2.7 %. A real reference articulation is noisy. |
 | `DOF_GROUPING_IS_MISSPECIFIED` | the D10 and D5 groupings force bones within a group to be EQUAL in length, which no real hand satisfies. Their poor performance is model bias, not evidence about constrained anatomy. A template-scaling parameterisation was not tested. |
 | `SYNTHETIC_ONLY` | nothing here has been run on GigaHands. |
