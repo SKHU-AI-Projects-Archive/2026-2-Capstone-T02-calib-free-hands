@@ -1,0 +1,37 @@
+{
+  "experiment": "CAM-EXP-009.3",
+  "title": "Real Reference-Geometry Bilateral Separability Diagnostic",
+  "estimates_focal": false,
+  "manifests": {
+    "cam_exp_0093_geometry_spec_v1.json": "2f6cce51b9d9aac16f926a251b2ba8575d291b14c1712203c1bd215e9f9523e2",
+    "cam_exp_0093_controls_spec_v1.json": "6d67b5687fcfe42517019923f820a2877704fe151e5bbd46895eab861e1ebe81",
+    "cam_exp_0093_permutation_spec_v1.json": "848496164e9ccf465e525ee71f07e2fdcc1ccccb1571205203f7b3599141e139",
+    "cam_exp_0093_eligible_units_v1.csv.gz": "f8a7bb8580a1e18d28633af23b7bf9c8133093c87d9cd9ecacf3838eca0e2571",
+    "cam_exp_0093_repeatability_split_v1.csv.gz": "f2aa58ab619dca00b55cc2ea04565e0c60c8981960d84d33e44679865541e0b0",
+    "cam_exp_0093_identity_mapping_v1.csv": "ddd5db4dd47c408b39dc411f77349220d6bcde19815d4cc729c58d25b1a4b386"
+  },
+  "primary_distance": "median_b |z_A,b - z_B,b|",
+  "topology_bones": 20,
+  "identity_status": "SAME_SUBJECT_PROVENANCE_UNRESOLVED",
+  "population": {
+    "sequences": 5,
+    "candidate_participants": 4,
+    "physical_cameras": 40,
+    "sequence_camera_units": 177
+  },
+  "gate": {
+    "same_over_cross_ratio": 0.8,
+    "nearest_margin_fraction": 0.75,
+    "s_sep_min": 1.0,
+    "control_degradation_pct": 20.0,
+    "control_top1_drop_pp": 20.0,
+    "strong_ratio": 0.6,
+    "strong_nearest_fraction": 0.9,
+    "min_participants_for_power": 8,
+    "alpha": 0.05
+  },
+  "bootstrap": {
+    "n": 10000,
+    "cluster": "sequence"
+  }
+}

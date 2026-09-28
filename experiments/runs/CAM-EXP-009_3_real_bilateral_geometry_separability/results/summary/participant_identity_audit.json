@@ -1,0 +1,25 @@
+{
+  "n_sequences": 5,
+  "sequences": [
+    "p36-tea-0010",
+    "p41-boxing-0021",
+    "p41-plant-0004",
+    "p44-dog-0004",
+    "p52-instrument-0034"
+  ],
+  "candidate_participant_groups": {
+    "p36": 1,
+    "p41": 2,
+    "p44": 1,
+    "p52": 1
+  },
+  "n_candidate_participants": 4,
+  "participants_with_multiple_sequences": {
+    "p41": 2
+  },
+  "shipped_metadata_files_scanned": 262,
+  "shipped_files_documenting_participant": [],
+  "identity_resolved": false,
+  "STATUS": "SAME_SUBJECT_PROVENANCE_UNRESOLVED",
+  "why": "Identity is graded from shipped evidence only. A MANO `shapes` vector is present per sequence in params/*.json, but using a fitted hand-shape parameter to DEFINE subject identity and then measuring hand-shape similarity would be circular, so it is explicitly not used as an identity source."
+}

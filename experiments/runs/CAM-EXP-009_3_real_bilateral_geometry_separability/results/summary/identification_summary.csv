@@ -1,0 +1,3 @@
+direction,top1_accuracy_pct,chance_pct,n_trials,median_n_candidates
+LEFT_TO_RIGHT,56.02836879432624,25.0,141,4.0
+RIGHT_TO_LEFT,51.388888888888886,25.0,144,4.0

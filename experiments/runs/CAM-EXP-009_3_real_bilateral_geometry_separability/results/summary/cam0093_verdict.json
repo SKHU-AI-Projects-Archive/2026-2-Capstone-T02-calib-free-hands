@@ -1,0 +1,154 @@
+{
+  "contrast_naming": "WITHIN_SEQUENCE vs CROSS_SEQUENCE. Participant identity could not be established from shipped evidence, so this is NOT reported as same-subject vs cross-subject.",
+  "population": {
+    "sequences": 5,
+    "candidate_participants": 4,
+    "physical_cameras": 40,
+    "sequence_camera_units": 177,
+    "eligible_rows": 48831
+  },
+  "distances": {
+    "D_repeat_median": 0.010870781111511407,
+    "D_repeat_ci": [
+      0.0075914988215473045,
+      0.015126393988542652
+    ],
+    "D_view_repeat_median": 0.01130090226506586,
+    "D_within_median": 0.02828635713459926,
+    "D_within_ci": [
+      0.02099850764222233,
+      0.0458886363327613
+    ],
+    "D_cross_median": 0.04579350960303963,
+    "D_cross_ci": [
+      0.03414940140497458,
+      0.06384377940978525
+    ],
+    "ratio_within_over_cross": 0.6176935853966891,
+    "separation": 0.017507152468440368,
+    "S_sep": 1.610477875403222
+  },
+  "sequence_level": {
+    "within": {
+      "p36-tea-0010": 0.052101920568904836,
+      "p41-boxing-0021": 0.018242507056121515,
+      "p41-plant-0004": 0.023081813754177727,
+      "p44-dog-0004": 0.026832479764130834,
+      "p52-instrument-0034": 0.030913681400416837
+    },
+    "cross": {
+      "p36-tea-0010": 0.04941290942562149,
+      "p41-plant-0004": 0.032446133029321644,
+      "p52-instrument-0034": 0.046609234898028595,
+      "p41-boxing-0021": 0.07596589407185173,
+      "p44-dog-0004": 0.02950392666298296
+    },
+    "repeat": {
+      "p36-tea-0010": 0.01264463791523951,
+      "p41-boxing-0021": 0.009099316819770165,
+      "p41-plant-0004": 0.01546055458055251,
+      "p44-dog-0004": 0.01620320252233065,
+      "p52-instrument-0034": 0.0065564953518371105
+    }
+  },
+  "margins": {
+    "frac_m_nearest_positive": 0.5368421052631579,
+    "frac_m_median_positive": 0.7543859649122807,
+    "by_direction": {
+      "LEFT_TO_RIGHT": {
+        "median_m_nearest": 0.0021221863680942477,
+        "median_m_median": 0.01108750885091947,
+        "frac_m_nearest_positive": 0.5602836879432624,
+        "n": 141
+      },
+      "RIGHT_TO_LEFT": {
+        "median_m_nearest": 0.0007086580608083315,
+        "median_m_median": 0.018770945734990607,
+        "frac_m_nearest_positive": 0.5138888888888888,
+        "n": 144
+      }
+    }
+  },
+  "identification": {
+    "combined_top1_pct": 53.68421052631579,
+    "chance_pct": 25.0,
+    "by_direction": {
+      "LEFT_TO_RIGHT": {
+        "top1_accuracy_pct": 56.02836879432624,
+        "chance_pct": 25.0,
+        "n_trials": 141,
+        "median_n_candidates": 4.0
+      },
+      "RIGHT_TO_LEFT": {
+        "top1_accuracy_pct": 51.388888888888886,
+        "chance_pct": 25.0,
+        "n_trials": 144,
+        "median_n_candidates": 4.0
+      }
+    }
+  },
+  "controls": [
+    {
+      "control": "C0_CORRECT_MAPPING",
+      "median_d_within": "0.02828635713459926",
+      "n_within": "145",
+      "top1_accuracy_pct": "56.02836879432624",
+      "n_identification_trials": "141",
+      "degradation_pct_vs_correct": "",
+      "top1_drop_pp": ""
+    },
+    {
+      "control": "C1_BONE_MAPPING_PERMUTATION",
+      "median_d_within": "0.27064659404993296",
+      "n_within": "145",
+      "top1_accuracy_pct": "41.843971631205676",
+      "n_identification_trials": "141",
+      "degradation_pct_vs_correct": "856.809647711348",
+      "top1_drop_pp": "14.184397163120565"
+    }
+  ],
+  "permutation": {
+    "test": "exact permutation over sequence relabelings",
+    "n_sequences": 5,
+    "n_relabelings": 120,
+    "statistic": "median(CROSS) - median(WITHIN), camera-matched",
+    "observed": 0.017406075056827675,
+    "null_median": -0.006420413977345829,
+    "null_max": 0.01753092286350111,
+    "p_value_one_sided": 0.016666666666666666,
+    "identity_permutation_included_in_null": true,
+    "note": "with 5 sequences the smallest attainable p-value is 1/120 = 0.0083, and the permutation unit is the SEQUENCE, of which there are only 5. The test is therefore weak by construction regardless of the outcome."
+  },
+  "cross_sequence_same_candidate_participant": {
+    "median_same_side": 0.08515836494633577,
+    "median_opposite_side": 0.07704079787245577,
+    "n": 96,
+    "caveat": "one sequence pair only; descriptive, and its subject relationship is exactly what is unverified"
+  },
+  "criteria": {
+    "c1_ratio": true,
+    "c2_nearest_margin": false,
+    "c3_s_sep": true,
+    "c4_bone_control": true,
+    "c5_permutation_direction": true
+  },
+  "SUPPORTED": false,
+  "STRONG": false,
+  "VERDICT_TAGS": [
+    "REAL_REFERENCE_BILATERAL_SIGNAL_WEAK",
+    "SUBJECT_SEPARABILITY_UNDERPOWERED",
+    "SAME_SUBJECT_PROVENANCE_UNRESOLVED"
+  ],
+  "underpowered": true,
+  "thresholds": {
+    "same_over_cross_ratio": 0.8,
+    "nearest_margin_fraction": 0.75,
+    "s_sep_min": 1.0,
+    "control_degradation_pct": 20.0,
+    "control_top1_drop_pp": 20.0,
+    "strong_ratio": 0.6,
+    "strong_nearest_fraction": 0.9,
+    "min_participants_for_power": 8,
+    "alpha": 0.05
+  }
+}

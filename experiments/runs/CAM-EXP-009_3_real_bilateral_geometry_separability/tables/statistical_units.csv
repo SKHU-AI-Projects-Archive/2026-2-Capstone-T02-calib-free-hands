@@ -1,0 +1,5 @@
+level,independent,note
+frame,NO,frames within a unit are highly correlated
+sequence-camera,NO,49 cameras observe the same hands; not independent people
+sequence,PARTIAL,primary aggregation level
+candidate participant,UNVERIFIED,identity provenance unresolved; only 4 candidate groups

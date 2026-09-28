@@ -1,0 +1,29 @@
+{
+  "qc_source": "gigahands_demo_qc_v1.csv.gz",
+  "qc_statuses_accepted": [
+    "PASS_STRICT",
+    "PASS_SINGLE_HAND"
+  ],
+  "total_qc_rows": 108240,
+  "eligible_rows": 48831,
+  "total_sequences": 5,
+  "unique_candidate_participants": 4,
+  "physical_cameras": 40,
+  "sequence_camera_units": 177,
+  "usable_left_frames": 22252,
+  "usable_right_frames": 26579,
+  "side_units_ge_min_frames": 315,
+  "units_with_both_sides_sufficient": 145,
+  "cameras_per_sequence": {
+    "p36-tea-0010": 40,
+    "p41-boxing-0021": 38,
+    "p41-plant-0004": 29,
+    "p44-dog-0004": 37,
+    "p52-instrument-0034": 33
+  },
+  "frames_per_unit": {
+    "min": 1,
+    "median": 133.0,
+    "max": 332
+  }
+}

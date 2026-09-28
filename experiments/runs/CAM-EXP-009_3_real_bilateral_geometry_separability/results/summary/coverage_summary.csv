@@ -1,0 +1,12 @@
+metric,value
+qc_source,gigahands_demo_qc_v1.csv.gz
+total_qc_rows,108240
+eligible_rows,48831
+total_sequences,5
+unique_candidate_participants,4
+physical_cameras,40
+sequence_camera_units,177
+usable_left_frames,22252
+usable_right_frames,26579
+side_units_ge_min_frames,315
+units_with_both_sides_sufficient,145

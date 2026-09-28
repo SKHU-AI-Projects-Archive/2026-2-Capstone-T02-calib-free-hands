@@ -1,0 +1,12 @@
+{
+  "python": "3.11.7",
+  "platform": "Windows-10-10.0.26200-SP0",
+  "venv": "experiments/.venv (numpy, opencv, matplotlib; no sklearn)",
+  "reconstruction_source": "CAM-EXP-001.3 src/loco.py, imported unchanged",
+  "qc_source": "gigahands_demo_qc_v1.csv.gz (focal-free)",
+  "git_commit": "cd1937a9ae7750fdec3a52253134610dda9a2722",
+  "git_branch": "kjh",
+  "numpy": "2.4.6",
+  "cv2": "5.0.0",
+  "matplotlib": "3.11.2"
+}

@@ -1,0 +1,7 @@
+criterion,passed
+c1_ratio,True
+c2_nearest_margin,False
+c3_s_sep,True
+c4_bone_control,True
+c5_permutation_direction,True
+VERDICT,REAL_REFERENCE_BILATERAL_SIGNAL_WEAK;SUBJECT_SEPARABILITY_UNDERPOWERED;SAME_SUBJECT_PROVENANCE_UNRESOLVED

@@ -1,0 +1,10 @@
+metric,value
+D_repeat_median,0.010870781111511407
+D_view_repeat_median,0.01130090226506586
+D_within_median,0.02828635713459926
+D_cross_median,0.04579350960303963
+ratio_within_over_cross,0.6176935853966891
+S_sep,1.610477875403222
+frac_m_nearest_positive,0.5368421052631579
+top1_pct,53.68421052631579
+chance_pct,25.0

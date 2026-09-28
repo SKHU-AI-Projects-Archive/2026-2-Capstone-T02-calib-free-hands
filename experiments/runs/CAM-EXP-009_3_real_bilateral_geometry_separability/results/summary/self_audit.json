@@ -1,0 +1,29 @@
+{
+  "banned_phrases": [],
+  "focal_contamination": [],
+  "topology": {
+    "n_bones": 20,
+    "forbidden_pairs_used": [],
+    "all_connected_single_parent": true
+  },
+  "circularity": {
+    "available": true,
+    "target_camera_in_reference_count": 0,
+    "clean": true
+  },
+  "historical_runs_modified": [],
+  "manifest_hashes_match": {
+    "cam_exp_0093_geometry_spec_v1.json": true,
+    "cam_exp_0093_controls_spec_v1.json": true,
+    "cam_exp_0093_permutation_spec_v1.json": true,
+    "cam_exp_0093_eligible_units_v1.csv.gz": true,
+    "cam_exp_0093_repeatability_split_v1.csv.gz": true,
+    "cam_exp_0093_identity_mapping_v1.csv": true
+  },
+  "branch": {
+    "branch": "kjh",
+    "on_kjh": true,
+    "main_sha": "5eec191cf635adc619db4c597a662989700fb3a6"
+  },
+  "ALL_CLEAN": true
+}
