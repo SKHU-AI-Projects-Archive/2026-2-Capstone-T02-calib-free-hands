@@ -1,0 +1,146 @@
+{
+  "source_run": "experiments\\runs\\CAM-EXP-009_3_real_bilateral_geometry_separability",
+  "source_run_last_commit": "1b92dc1",
+  "expected_commit_prefix": "1b92dc1",
+  "commit_matches_expected": true,
+  "source_run_working_tree_dirty": false,
+  "reference_reconstruction_rerun": false,
+  "artifacts": [
+    {
+      "artifact": "cam0093_verdict.json",
+      "path": "experiments\\runs\\CAM-EXP-009_3_real_bilateral_geometry_separability\\results\\summary\\cam0093_verdict.json",
+      "size_bytes": 5088,
+      "sha256": "1ae54ec7f198ecb24992193d2f87d7a4535a5ae2ccd5776e85250c91cf663187",
+      "rows": "",
+      "role": "source of truth, reused unmodified"
+    },
+    {
+      "artifact": "control_summary.csv",
+      "path": "experiments\\runs\\CAM-EXP-009_3_real_bilateral_geometry_separability\\results\\summary\\control_summary.csv",
+      "size_bytes": 296,
+      "sha256": "f0349488585a47806b0f001e776a92394fe7fb8362bf418f44786e7fc188d5c4",
+      "rows": 2,
+      "role": "source of truth, reused unmodified"
+    },
+    {
+      "artifact": "cross_subject_distances.csv.gz",
+      "path": "experiments\\runs\\CAM-EXP-009_3_real_bilateral_geometry_separability\\results\\raw\\cross_subject_distances.csv.gz",
+      "size_bytes": 12947,
+      "sha256": "37f9ab968a5817d6f21a68a972efeede430408e355033f1edc25236ea3ead660",
+      "rows": 532,
+      "role": "source of truth, reused unmodified"
+    },
+    {
+      "artifact": "frame_bone_vectors.csv.gz",
+      "path": "experiments\\runs\\CAM-EXP-009_3_real_bilateral_geometry_separability\\results\\raw\\frame_bone_vectors.csv.gz",
+      "size_bytes": 2589114,
+      "sha256": "2d8a301a8a145c74d9dbba5d6e65cc713f2ba46b8db77711aeeb884aee9b5aa9",
+      "rows": 13903,
+      "role": "source of truth, reused unmodified"
+    },
+    {
+      "artifact": "geometry_templates.csv.gz",
+      "path": "experiments\\runs\\CAM-EXP-009_3_real_bilateral_geometry_separability\\results\\raw\\geometry_templates.csv.gz",
+      "size_bytes": 172379,
+      "sha256": "4f88fbafb62db90a6fad5269253980862add08027193ee68ed16049be17b5142",
+      "rows": 914,
+      "role": "source of truth, reused unmodified"
+    },
+    {
+      "artifact": "identification.csv.gz",
+      "path": "experiments\\runs\\CAM-EXP-009_3_real_bilateral_geometry_separability\\results\\raw\\identification.csv.gz",
+      "size_bytes": 1316,
+      "sha256": "d1287f4505b599aaa7767dac4b54c7c0746e1456c25ed9c08e24fd86144edc45",
+      "rows": 285,
+      "role": "source of truth, reused unmodified"
+    },
+    {
+      "artifact": "margins.csv.gz",
+      "path": "experiments\\runs\\CAM-EXP-009_3_real_bilateral_geometry_separability\\results\\raw\\margins.csv.gz",
+      "size_bytes": 13903,
+      "sha256": "0ece5b40c6ee23f824618b8448b9976fd7a412cedf637f42d6c5bef2c92c03f4",
+      "rows": 285,
+      "role": "source of truth, reused unmodified"
+    },
+    {
+      "artifact": "reference_circularity_audit.csv.gz",
+      "path": "experiments\\runs\\CAM-EXP-009_3_real_bilateral_geometry_separability\\results\\raw\\reference_circularity_audit.csv.gz",
+      "size_bytes": 47855,
+      "sha256": "1ff4ce0c27858b95ff7f0691dd0f0a043ba3e2d8697e820c7f5b63fd108e5f04",
+      "rows": 14015,
+      "role": "source of truth, reused unmodified"
+    },
+    {
+      "artifact": "reference_geometry_audit.json",
+      "path": "experiments\\runs\\CAM-EXP-009_3_real_bilateral_geometry_separability\\results\\summary\\reference_geometry_audit.json",
+      "size_bytes": 371,
+      "sha256": "c555c12d40981a893f8c1bd4a87fa258087c77e1705404435b13e01c0ce0b901",
+      "rows": "",
+      "role": "source of truth, reused unmodified"
+    },
+    {
+      "artifact": "repeatability_distances.csv.gz",
+      "path": "experiments\\runs\\CAM-EXP-009_3_real_bilateral_geometry_separability\\results\\raw\\repeatability_distances.csv.gz",
+      "size_bytes": 16343,
+      "sha256": "cc501252c007ef8472e44e67a6d952672cbb8885d04aaaa03839c52eb937fbd4",
+      "rows": 295,
+      "role": "source of truth, reused unmodified"
+    },
+    {
+      "artifact": "same_subject_distances.csv.gz",
+      "path": "experiments\\runs\\CAM-EXP-009_3_real_bilateral_geometry_separability\\results\\raw\\same_subject_distances.csv.gz",
+      "size_bytes": 9566,
+      "sha256": "61901f42db29a184b7f0dba6d75ce123a80bb7d675658291d3497fef1e1a58ee",
+      "rows": 145,
+      "role": "source of truth, reused unmodified"
+    },
+    {
+      "artifact": "view_repeatability_distances.csv.gz",
+      "path": "experiments\\runs\\CAM-EXP-009_3_real_bilateral_geometry_separability\\results\\raw\\view_repeatability_distances.csv.gz",
+      "size_bytes": 65031,
+      "sha256": "ee5694a1ef2e13db5d9c443f0766926cad0608a5ec9c71476e245b94e9149546",
+      "rows": 4813,
+      "role": "source of truth, reused unmodified"
+    }
+  ],
+  "missing_artifacts": [],
+  "fact_checks": [
+    {
+      "fact": "reconstructions_attempted",
+      "expected": 14015,
+      "actual": 14015,
+      "match": 1
+    },
+    {
+      "fact": "frame_vectors",
+      "expected": 13903,
+      "actual": 13903,
+      "match": 1
+    },
+    {
+      "fact": "target_camera_in_reference_count",
+      "expected": 0,
+      "actual": 0,
+      "match": 1
+    },
+    {
+      "fact": "n_bones_in_representation",
+      "expected": 20,
+      "actual": 20,
+      "match": 1
+    },
+    {
+      "fact": "absolute_scale_removed_sum_p_eq_1",
+      "expected": 1,
+      "actual": 1,
+      "match": 1
+    },
+    {
+      "fact": "max_frames_per_unit<=48",
+      "expected": 48,
+      "actual": 48,
+      "match": 1
+    }
+  ],
+  "ALL_OK": true
+}

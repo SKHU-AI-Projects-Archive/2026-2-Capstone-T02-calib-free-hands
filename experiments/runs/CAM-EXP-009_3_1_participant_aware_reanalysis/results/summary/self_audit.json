@@ -1,0 +1,32 @@
+{
+  "banned_phrases": [],
+  "focal_contamination": [],
+  "identity": {
+    "status": "OFFICIAL_PARTICIPANT_MAPPING_VERIFIED",
+    "source_is_official": true,
+    "mano_excluded": true,
+    "p41_two_sessions_same_participant": true
+  },
+  "source_reuse": {
+    "reference_reconstruction_rerun": false,
+    "all_facts_ok": true,
+    "source_run_clean": true
+  },
+  "v1_reproduced": true,
+  "cross_participant_excludes_same_participant": true,
+  "permutation": {
+    "blocks": 4,
+    "n_permutations": 24,
+    "p41_same_block": true,
+    "ok": true
+  },
+  "historical_modified": [],
+  "cam0093_manifests_modified": [],
+  "branch": {
+    "branch": "kjh",
+    "on_kjh": true
+  },
+  "underpowered_declared": true,
+  "labeled_post_result": true,
+  "ALL_CLEAN": true
+}

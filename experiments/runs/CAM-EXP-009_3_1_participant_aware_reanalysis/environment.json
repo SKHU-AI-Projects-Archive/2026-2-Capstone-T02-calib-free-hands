@@ -1,0 +1,11 @@
+{
+  "python": "3.11.7",
+  "platform": "Windows-10-10.0.26200-SP0",
+  "venv": "experiments/.venv (numpy, matplotlib)",
+  "analysis_type": "post-result reanalysis; no reconstruction re-run",
+  "source_run_commit": "1b92dc1",
+  "git_commit": "1b92dc10968138c306f8c26ad36632b8c719ecb6",
+  "git_branch": "kjh",
+  "numpy": "2.4.6",
+  "matplotlib": "3.11.2"
+}

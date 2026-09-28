@@ -1,0 +1,7 @@
+fact,expected,actual,match
+reconstructions_attempted,14015,14015,1
+frame_vectors,13903,13903,1
+target_camera_in_reference_count,0,0,1
+n_bones_in_representation,20,20,1
+absolute_scale_removed_sum_p_eq_1,1,1,1
+max_frames_per_unit<=48,48,48,1

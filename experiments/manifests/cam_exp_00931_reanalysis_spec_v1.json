@@ -1,0 +1,63 @@
+{
+  "experiment": "CAM-EXP-009.3.1",
+  "title": "Participant-Aware Reanalysis of Real Bilateral Geometry Separability",
+  "analysis_type": "post-result provenance correction and participant-aware reanalysis",
+  "created_after_cam0093_results": true,
+  "created_before_distance_results": false,
+  "is_preregistered_confirmatory_experiment": false,
+  "new_success_thresholds_invented": false,
+  "estimates_focal": false,
+  "reference_reconstruction_rerun": false,
+  "source_run": "experiments\\runs\\CAM-EXP-009_3_real_bilateral_geometry_separability",
+  "source_run_commit": "1b92dc1",
+  "identity_source": "OFFICIAL_GIGAHANDS_README_NAMING_CONVENTION",
+  "identity_status": "OFFICIAL_PARTICIPANT_MAPPING_VERIFIED",
+  "n_sequences": 5,
+  "n_participants": 4,
+  "multi_session_participants": {
+    "p41": [
+      "p41-boxing-0021",
+      "p41-plant-0004"
+    ]
+  },
+  "primary_distance": "median_b |log(p_A,b+1e-8) - log(p_B,b+1e-8)|  (unchanged from CAM-EXP-009.3)",
+  "quantities_kept_separate": [
+    "D_REPEAT",
+    "D_VIEW_REPEAT",
+    "D_WITHIN_SESSION",
+    "D_SAME_PARTICIPANT_CROSS_SESSION",
+    "D_CROSS_PARTICIPANT"
+  ],
+  "weighting": {
+    "camera_views_are_not_participants": true,
+    "p41_sessions_equal_weight_one_participant": true,
+    "cross_participant_pair_equal_weight": true,
+    "p41_x_p41_excluded_from_cross_participant": true
+  },
+  "permutation": {
+    "blocks": 4,
+    "n": 24,
+    "role": "supporting only",
+    "floor": 0.041666666666666664
+  },
+  "bootstrap": {
+    "cluster": "participant",
+    "n_clusters": 4,
+    "n": 10000,
+    "role": "supplemental, unstable"
+  },
+  "power": {
+    "n_participants": 4,
+    "bar": 8,
+    "underpowered": true
+  },
+  "never_used": [
+    "dataset reference focal",
+    "AnyCalib",
+    "GeoCalib",
+    "E2",
+    "candidate focal grid",
+    "MANO shapes as identity source",
+    "the FINAL_CONFIRMATORY_HOLDOUT"
+  ]
+}

@@ -1,0 +1,38 @@
+{
+  "STATUS": "OFFICIAL_PARTICIPANT_MAPPING_VERIFIED",
+  "official_source_title": "GigaHands official repository README",
+  "official_source_url": "https://github.com/Kristen-Z/GigaHands",
+  "raw_url": "https://raw.githubusercontent.com/Kristen-Z/GigaHands/main/README.md",
+  "access_date": "2026-09-28",
+  "snapshot_path": "notes\\gigahands_README_snapshot.md",
+  "snapshot_sha256": "7082c858e8b8b00ba16977ea40f4f570fd07a51526c30cb60a45a77c71483a56",
+  "verbatim_directory_lines": [
+    "p<participant id>-<scene>-<squence",
+    "p<participant id>-<scene>/",
+    "p<participant id>-<scene>_<squence"
+  ],
+  "verbatim_scale_line_fragment": "56 subjects",
+  "why_this_is_not_filename_intuition": "The README's own directory specification names the field: it writes the take directory as `p<participant id>-<scene>-<squence id>/`. The token `p` is therefore a dataset-defined identifier prefix whose semantics the dataset documents, not a pattern guessed from a filename. The local layout `demo_all/raw/hand_pose/p36-tea-0010/` matches that specification exactly.",
+  "identity_source_excludes": [
+    "MANO shapes similarity (circular: defines identity from hand shape, then measures hand-shape similarity)",
+    "filename intuition",
+    "any CAM-EXP-009.3 assumption"
+  ],
+  "mapping": {
+    "p36-tea-0010": "p36",
+    "p41-boxing-0021": "p41",
+    "p41-plant-0004": "p41",
+    "p44-dog-0004": "p44",
+    "p52-instrument-0034": "p52"
+  },
+  "n_sequences": 5,
+  "n_participants": 4,
+  "multi_session_participants": {
+    "p41": [
+      "p41-boxing-0021",
+      "p41-plant-0004"
+    ]
+  },
+  "supersedes": "CAM-EXP-009.3's SAME_SUBJECT_PROVENANCE_UNRESOLVED, which was the correct outcome of a LOCAL-FILE-ONLY audit. The local files genuinely contain no participant field; the convention is documented upstream.",
+  "power_note": "Verifying identity does not fix statistical power. 4 participants remains below the pre-set bar of 8."
+}
