@@ -1,0 +1,13 @@
+{
+  "test_reference_focal": {
+    "min": 880.8878728388629,
+    "max": 988.9626996691507,
+    "median": 922.8053584811512,
+    "cv_pct": 1.7516378725396844,
+    "relative_span_pct": 11.711551719657168
+  },
+  "rig_median_train_only_median_err_pct": 0.8688392312846828,
+  "fraction_M3_corrections_toward_rig_median": 0.9024390243902439,
+  "n_units_corrected": 123,
+  "caveat": "GigaHands uses a narrow-focal capture rig. A constant is a strong baseline here, so a positive result on this dataset cannot establish general camera generalisation."
+}

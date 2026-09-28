@@ -1,0 +1,20 @@
+{
+  "C_WRONG_BONE": {
+    "definition": "right-hand bone indices permuted WITHIN each finger before the hand score",
+    "why_within_finger": "a global shuffle would also destroy the coarse bone-size ordering",
+    "frozen_before_results": true
+  },
+  "RIG_MEDIAN_TRAIN_ONLY": {
+    "definition": "median reference focal of the TRAIN physical cameras, applied to the TEST camera",
+    "role": "DATASET_CONFOUND_DIAGNOSTIC, not a deployment method",
+    "uses_test_focal": false
+  },
+  "REF_FOCAL_ORACLE": {
+    "definition": "the TEST reference focal itself",
+    "role": "UPPER_DIAGNOSTIC for absolute-3D only, not an estimator"
+  },
+  "H_ONLY": {
+    "definition": "hand score only, no scene term",
+    "role": "diagnostic, not a deployment baseline"
+  }
+}

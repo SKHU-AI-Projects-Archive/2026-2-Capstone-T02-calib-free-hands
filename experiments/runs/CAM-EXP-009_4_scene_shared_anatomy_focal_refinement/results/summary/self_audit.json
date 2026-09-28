@@ -1,0 +1,26 @@
+{
+  "phase_abc_focal_leakage": [],
+  "scene_reader_strips_gt": true,
+  "absolute3d_uses_only_extrinsics": true,
+  "frozen_predictions_unchanged": true,
+  "opened_log_matches": true,
+  "prior": {
+    "gigahands_used": false,
+    "wilor_used_as_source": false,
+    "absolute_size_removed": true,
+    "source_is_mano": true
+  },
+  "p_seq_refit_per_unit": true,
+  "participant_template_carried_over": false,
+  "only_unit_directions_from_network": true,
+  "camera_split_consistent": true,
+  "reference3d_circularity_clean": true,
+  "banned_phrases": [],
+  "historical_modified": [],
+  "branch": {
+    "branch": "kjh",
+    "on_kjh": true
+  },
+  "external_holdout_opened": false,
+  "ALL_CLEAN": true
+}

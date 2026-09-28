@@ -1,0 +1,16 @@
+phase,script,train_reference_focal_loaded,test_reference_focal_loaded,purpose,allowed
+A/B/C,audit_sources.py,NO,NO,label-free processing,YES
+A/B/C,build_mano_prior.py,NO,NO,label-free processing,YES
+A/B/C,build_units.py,NO,NO,label-free processing,YES
+A/B/C,cache_wilor_predictions.py,NO,NO,label-free processing,YES
+A/B/C,common.py,NO,NO,label-free processing,YES
+D-I,evaluate_ablations.py,YES,NO,reads scored results only,YES
+D-I,evaluate_absolute_3d.py,YES,YES,oracle diagnostic + reference 3D,YES
+D-I,evaluate_focal.py,YES,YES,"TEST, after predictions frozen",YES
+D-I,figures.py,NO,NO,reads scored results only,YES
+A/B/C,joint_anatomy_solver.py,NO,NO,label-free processing,YES
+D-I,run_controls.py,NO,NO,label-free processing,YES
+A/B/C,run_real_label_free.py,NO,NO,label-free processing,YES
+A/B/C,run_synthetic_gate.py,NO,NO,label-free processing,YES
+D-I,self_audit.py,NO,NO,audit,YES
+D-I,tune_fusion_nested.py,YES,NO,TRAIN cameras only,YES

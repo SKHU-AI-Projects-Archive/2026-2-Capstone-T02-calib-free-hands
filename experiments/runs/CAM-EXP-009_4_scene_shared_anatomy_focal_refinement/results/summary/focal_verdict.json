@@ -1,0 +1,21 @@
+{
+  "CAM0094_FOCAL_INCREMENTAL_SIGNAL": false,
+  "criteria": {
+    "M3_below_M0": true,
+    "relative_reduction_ge_10pct": false,
+    "paired_median_gain_positive": true,
+    "bootstrap_lower_bound_positive": true
+  },
+  "n_units": 123,
+  "n_cameras": 36,
+  "M0_median_err_pct": 8.076667543246256,
+  "M3_median_err_pct": 7.744145108350211,
+  "relative_reduction_pct": 4.117074686008356,
+  "paired_median_gain_pp": 0.6511888373478243,
+  "paired_gain_ci95": [
+    0.6379274906883765,
+    0.6685269446174074
+  ],
+  "cluster": "PHYSICAL CAMERA",
+  "n_boot": 10000
+}

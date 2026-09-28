@@ -1,0 +1,13 @@
+{
+  "fusion_lambda_grid": [
+    0.0,
+    0.25,
+    0.5,
+    1.0,
+    2.0,
+    4.0
+  ],
+  "lambda_0_is_scene_only_sanity": true,
+  "selected_on": "TRAIN physical cameras only; the TEST reference focal is never used",
+  "frozen_before_real_focal_results": true
+}

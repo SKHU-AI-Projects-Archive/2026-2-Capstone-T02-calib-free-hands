@@ -1,0 +1,70 @@
+{
+  "experiment": "CAM-EXP-009.4",
+  "title": "Sequence-Level Scene + Shared-Hand-Anatomy Focal Refinement",
+  "primary_comparison": "M3_SCENE_SHARED_GENERIC_FULL vs M0_SCENE_ONLY",
+  "created_after_cam00931_results": true,
+  "created_before_cam0094_real_focal_results": true,
+  "units": {
+    "total": 175,
+    "eligible": 127,
+    "cameras": 37,
+    "participants": 4,
+    "sequences": 5
+  },
+  "frames": {
+    "scene_primary": 32,
+    "hand_primary": 32,
+    "nested_counts": [
+      8,
+      16,
+      32,
+      64
+    ],
+    "min_frames_per_side": 8,
+    "selection": "evenly spaced by frame index; never by performance"
+  },
+  "gate": {
+    "synthetic_clean_focal_err_pct": 1.0,
+    "synthetic_moderate_focal_err_pct": 5.0,
+    "synthetic_wrong_bone_degradation_pp": 10.0,
+    "synthetic_boundary_rate": 0.25,
+    "focal_relative_reduction_pct": 10.0,
+    "abs3d_root_reduction_pct": 10.0,
+    "abs3d_mpjpe_reduction_pct": 5.0,
+    "root_aligned_tolerance_mm": 2.0
+  },
+  "compute": {
+    "measured_wilor_seconds_per_frame": 0.3,
+    "unique_frames_to_infer": 6948,
+    "estimated_wilor_minutes": 35,
+    "hand_frames_cached_per_side": 32,
+    "frame_count_curve_runnable": [
+      8,
+      16,
+      32
+    ],
+    "N64_DECISION": "SKIPPED. Decided from measured runtime BEFORE any focal result: caching 64 hand frames per side would double the inference and the per-unit solver cost, and the solver cost scales with frames x 81 candidates x 2 sides. N=32 remains PRIMARY and 8/16 remain secondary, exactly as specified. This condition is NOT removed after seeing a result.",
+    "scene_frame_counts_runnable": [
+      8,
+      16,
+      32,
+      64
+    ],
+    "measured_minutes_per_unit_3_variants": 1.47,
+    "phase_c_estimated_hours": 3.11,
+    "CONTROL_SCOPE_DECISION": "C_WRONG_BONE is run for M3_SCENE_SHARED_GENERIC_FULL ONLY. Decided from measured runtime BEFORE any real focal result: running the control for all three hand variants would roughly double total compute to ~6.2 h. The control's purpose is to test whether the FULL method's hand score uses real anatomical bone correspondence, which M3 alone answers. No condition is removed after seeing a result."
+  },
+  "manifests": {
+    "cam_exp_0094_method_spec_v1.json": "4e1e6a446d9550635a226a5075c041a7b6b1e8a0d062a19241ae6cca1a00225e",
+    "cam_exp_0094_units_v1.csv.gz": "ec6e78f38d66706c4cb605779ddeeda74becc85478797b5ec5c27f07eafeabc0",
+    "cam_exp_0094_scene_frames_v1.csv.gz": "d8c8a71df149e0c5e39c511f8d636c039c4fae30854a0bbaba02efd5ce6893af",
+    "cam_exp_0094_hand_frames_v1.csv.gz": "3966e2c6d2415d0a716a285e8493772cac870d4bf432dffae3a77ff253635833",
+    "cam_exp_0094_hand_split_v1.csv.gz": "06ed62b33792866580df2cf191816614a98447a981188ff8afef3f709673d70c",
+    "cam_exp_0094_outer_camera_folds_v1.csv": "d2dfce086038b9450781df909985843a20e02b6f30e4baff685ebb2605a411ed",
+    "cam_exp_0094_fusion_lambda_grid_v1.json": "c7355cd80574d4b66348bdc18b615891518494571bc7a4aa20cd587cbcbf1c0f",
+    "cam_exp_0094_focal_search_grid_v1.json": "a9732c29f8735393f8ca7c383523a3fe4a06dfe624dab0ab0b832db4aa7ff95b",
+    "cam_exp_0094_controls_spec_v1.json": "8da1e1475916354a150de7f5414fedf74769f837a2589301d74d8350d043d0aa",
+    "cam_exp_0094_synthetic_spec_v1.json": "d9c6a73084243ffe2d525ab41d4f7e9906ca40b6fd7591d2e952c83c8776b094",
+    "cam_exp_0094_generic_mano_prior_v1.json": "8240f0b1e1d031151b570b69907b1b10707aef606585c59a3fb5ab823f4d681c"
+  }
+}
