@@ -1,0 +1,29 @@
+{
+  "source_run": "CAM-EXP-009_4_scene_shared_anatomy_focal_refinement",
+  "source_commit_expected": "1c36d92",
+  "n_units_matched": 123,
+  "metrics": [
+    {
+      "metric": "wrist_root_error_mm",
+      "CAM0094_median_mm": 74.95001841897356,
+      "CAM010_median_mm": 74.95001841897356,
+      "abs_diff_mm": 0.0,
+      "median_per_unit_abs_diff_mm": 0.0,
+      "max_per_unit_abs_diff_mm": 0.0,
+      "tolerance_mm": 1.0,
+      "PASS": 1
+    },
+    {
+      "metric": "root_depth_error_mm",
+      "CAM0094_median_mm": 53.457422380292165,
+      "CAM010_median_mm": 53.457422380292165,
+      "abs_diff_mm": 0.0,
+      "median_per_unit_abs_diff_mm": 0.0,
+      "max_per_unit_abs_diff_mm": 0.0,
+      "tolerance_mm": 1.0,
+      "PASS": 1
+    }
+  ],
+  "ALL_REPRODUCED": true,
+  "tolerance_mm": 1.0
+}

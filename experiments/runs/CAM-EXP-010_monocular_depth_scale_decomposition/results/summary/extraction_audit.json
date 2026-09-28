@@ -1,0 +1,8 @@
+{
+  "frames": 7168,
+  "units": 123,
+  "target_camera_in_reference_count": 0,
+  "circularity_clean": true,
+  "reference_focal_role": "ORACLE DIAGNOSTIC input, not deployable",
+  "world_to_camera_transform": "extrinsics R,t only; target focal not used in the transform"
+}

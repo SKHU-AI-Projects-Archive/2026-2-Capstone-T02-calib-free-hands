@@ -1,0 +1,3 @@
+metric,CAM0094_median_mm,CAM010_median_mm,abs_diff_mm,median_per_unit_abs_diff_mm,max_per_unit_abs_diff_mm,tolerance_mm,PASS
+wrist_root_error_mm,74.95001841897356,74.95001841897356,0.0,0.0,0.0,1.0,1
+root_depth_error_mm,53.457422380292165,53.457422380292165,0.0,0.0,0.0,1.0,1

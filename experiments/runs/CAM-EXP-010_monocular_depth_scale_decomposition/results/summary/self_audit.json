@@ -1,0 +1,32 @@
+{
+  "all_corrections_are_oracle_diagnostics": true,
+  "forbidden_metric_anchor_in_source": [],
+  "split_deterministic": true,
+  "split_counts": {
+    "FIT": 3516,
+    "EVAL": 3652
+  },
+  "oracle_rows_are_eval_only": true,
+  "circularity": 0,
+  "cam0094_reproduced": true,
+  "identifiability_tests_pass": true,
+  "identifiability_tests_present": [
+    "ANATOMY_SCALE_FREE_TEST",
+    "BILATERAL_SCALE_TEST",
+    "GLOBAL_SCALE_INVARIANCE_TEST",
+    "MULTI_FRAME_SCALE_TEST"
+  ],
+  "learned_vs_geometric_separated": true,
+  "reused_cam0094_wilor_cache": true,
+  "no_new_wilor_cache_here": true,
+  "banned_phrases": [],
+  "historical_modified": [],
+  "old_manifests_modified": [],
+  "branch": {
+    "branch": "kjh",
+    "on_kjh": true
+  },
+  "external_holdout_opened": false,
+  "source_artifacts_present": true,
+  "ALL_CLEAN": true
+}

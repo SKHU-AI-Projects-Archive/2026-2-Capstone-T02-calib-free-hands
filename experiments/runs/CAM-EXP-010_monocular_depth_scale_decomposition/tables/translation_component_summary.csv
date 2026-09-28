@@ -1,0 +1,13 @@
+component,value
+n_frames,7168
+median_abs_dx_mm,23.966215153889024
+median_abs_dy_mm,22.75345210817556
+median_abs_dz_mm,58.03295956727695
+median_xy_error_mm,42.186239873206446
+median_depth_error_mm,58.03295956727695
+median_root_error_mm,78.33072918917517
+signed_median_dz_mm,-27.015833919388747
+p75_depth_error_mm,94.62028656218985
+p90_depth_error_mm,140.00577551190221
+depth_share_of_root_error_pct,74.08709221526914
+xy_share_of_root_error_pct,53.85656473505207

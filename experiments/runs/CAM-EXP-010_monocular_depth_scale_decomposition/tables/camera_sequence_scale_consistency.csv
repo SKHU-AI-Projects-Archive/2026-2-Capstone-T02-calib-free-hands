@@ -1,0 +1,6 @@
+metric,value
+n_pairs,177
+median_abs_log_ratio_same_camera_diff_sequence,0.08784045720735781
+median_abs_log_ratio_same_participant,0.09208259249463016
+n_same_participant_pairs,21
+caveat,"GigaHands ties camera, rig and session together, so a stable residual is described as camera-ASSOCIATED, never as caused by the camera."

@@ -1,0 +1,15 @@
+{
+  "SEQUENCE_DEPTH_SCALE_STABLE": true,
+  "DEPTH_OFFSET_ADDS_VALUE": true,
+  "MULTIPLICATIVE_SCALE_DOMINATES": false,
+  "O6_absolute_vs_root_aligned_gap_mm": 1.1927062502081753e-06,
+  "O6_consistency_ok": true,
+  "thresholds": {
+    "seq_scale_depth_reduction_pct": 25.0,
+    "seq_scale_root_reduction_pct": 15.0,
+    "affine_adds_value_pct": 10.0,
+    "root_oracle_mpjpe_tolerance_mm": 2.0,
+    "scale_invariance_tol_px": 1e-06
+  },
+  "all_corrections_are_oracle_diagnostics": true
+}

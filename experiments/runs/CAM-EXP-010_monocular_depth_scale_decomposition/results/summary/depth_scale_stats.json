@@ -1,0 +1,11 @@
+{
+  "n_units": 123,
+  "median_alpha": 1.0340919528561214,
+  "alpha_p25": 0.9768200840165397,
+  "alpha_p75": 1.109505733450428,
+  "across_unit_mad_log_alpha": 0.09711534810795536,
+  "median_within_unit_mad_log_z_ratio": 0.05244365873940322,
+  "median_within_unit_cv": 0.06433747421621551,
+  "within_over_across_spread": 0.5400141147731439,
+  "reading": "within_over_across_spread << 1 would mean the depth-scale error is nearly constant inside a video and differs between videos, i.e. a sequence-shared bias. Near or above 1 means frame-to-frame depth variation is as large as the between-video difference."
+}
