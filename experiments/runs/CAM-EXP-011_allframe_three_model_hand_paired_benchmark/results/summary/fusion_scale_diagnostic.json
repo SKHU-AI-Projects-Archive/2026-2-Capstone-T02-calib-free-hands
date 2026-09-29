@@ -1,0 +1,24 @@
+{
+  "recorded": "BEFORE the test reference focal was opened",
+  "sigma_scene_median": 0.02,
+  "sigma_scene_note": "equals the frozen floor for most videos: with all 381 frames AnyCalib's frame-to-frame log-MAD is below 0.02, so the scene term is very steep",
+  "one_grid_step_scene_penalty_median": 0.1303,
+  "one_grid_step_hand_delta_median": 0.00974,
+  "lambda_needed_to_move_one_step": 13.4,
+  "frozen_lambda_grid_max": 4.0,
+  "fraction_videos_moved": {
+    "0.0": 0.0,
+    "0.25": 0.0,
+    "0.5": 0.007,
+    "1.0": 0.013,
+    "2.0": 0.02,
+    "4.0": 0.098
+  },
+  "normalized_hand_score_range_in_window_median": 1.99,
+  "reading": "The hand score is NOT flat - it varies about 2x across the candidate window. What dominates is the scene term: with every frame of a 381-frame video the per-frame MAD sits at the frozen floor, making the scene penalty steep relative to the hand term's LOCAL slope near q=1. Under the pre-registered lambda grid (max 4) the hand term therefore rarely changes the chosen candidate.",
+  "decision": "The lambda grid and the sigma definition are pre-registered (spec section 32, inherited from CAM-EXP-009.4) and are NOT widened now. Inflating lambda after seeing that the term is inert would be tuning the protocol to manufacture a non-null result. The measured movement rate is reported as part of the finding so the size of the gain is interpretable.",
+  "two_bugs_fixed_before_this": [
+    "q_grid did not contain q=1.0 exactly, so lambda=0 did not reproduce scene-only (-0.65 % offset); now snapped to exactly 1.0",
+    "the hand score was normalised over the whole absolute grid (~12x range) instead of the candidate window, matching CAM-EXP-009.4"
+  ]
+}

@@ -1,0 +1,9 @@
+{
+  "cam_exp_011_method_spec_v1.json": "6a5c9ad25ee7bca901b06621a6975b0cca8b2cf1af578614b79099fa3bf5c9a5",
+  "cam_exp_011_allframe_manifest_v1.csv.gz": "8481a86acbaa285c9026435137ee90e11bfe3bd4812b17a750b1f37c61bfa876",
+  "cam_exp_011_outer_camera_folds_v1.csv": "735a0039a10e9bcb5c7ef636fca7bf6bb0c7906f78228226a94fddc90c5dedb1",
+  "cam_exp_011_usable_cameras_v1.csv": "a86111b0c05c9c1fd40b9c810717531ebe4f10f742be9a4b4ddf397003402ed3",
+  "cam_exp_011_hand_coverage_rule_v1.json": "fc29d50cc6d665da95f046fa36c9be6533a070922ac3291a4b975a7820e76984",
+  "cam_exp_011_common_set_rule_v1.json": "a3e2412ed1c63518b82d35f16fa7bf11d8cf2b4e56c809614ae1f95eb56ccc88",
+  "cam_exp_011_lambda_grid_v1.json": "c2535e1f8d6daaddbf97ca44adf1b1ae1a3c06d4f873de9199e3fe834eb07a99"
+}

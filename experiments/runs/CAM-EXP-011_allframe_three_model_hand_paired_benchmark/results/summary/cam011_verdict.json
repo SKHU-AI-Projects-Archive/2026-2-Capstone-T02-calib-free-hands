@@ -1,0 +1,103 @@
+{
+  "n_paired_videos": 151,
+  "primary_frame_set": "STRICT",
+  "main_table": [
+    {
+      "Model": "AnyCalib",
+      "Scene only": 16.02,
+      "Scene + Hand": 16.02,
+      "Gain": 0.0,
+      "Relative improvement": 0.0,
+      "N videos": 151
+    },
+    {
+      "Model": "GeoCalib",
+      "Scene only": 21.35,
+      "Scene + Hand": 21.35,
+      "Gain": 0.0,
+      "Relative improvement": 0.0,
+      "N videos": 151
+    },
+    {
+      "Model": "Perspective Fields",
+      "Scene only": 19.5,
+      "Scene + Hand": 19.5,
+      "Gain": 0.0,
+      "Relative improvement": 0.0,
+      "N videos": 151
+    }
+  ],
+  "paired": [
+    {
+      "model": "ANYCALIB",
+      "display": "AnyCalib",
+      "n_videos": 151,
+      "scene_only_median_pct": 16.019384628613487,
+      "scene_plus_hand_median_pct": 16.019384628613487,
+      "gain_pp": 0.0,
+      "relative_reduction_pct": 0.0,
+      "paired_median_gain_pp": 0.0,
+      "ci95_low": 0.0,
+      "ci95_high": 0.0,
+      "win_rate_pct": 0.6622516556291391,
+      "median_hand_focal_shift_pct": 0.0
+    },
+    {
+      "model": "GEOCALIB",
+      "display": "GeoCalib",
+      "n_videos": 151,
+      "scene_only_median_pct": 21.353323190510505,
+      "scene_plus_hand_median_pct": 21.353323190510505,
+      "gain_pp": 0.0,
+      "relative_reduction_pct": 0.0,
+      "paired_median_gain_pp": 0.0,
+      "ci95_low": 0.0,
+      "ci95_high": 0.0,
+      "win_rate_pct": 0.0,
+      "median_hand_focal_shift_pct": 0.0
+    },
+    {
+      "model": "PERSPECTIVE_FIELDS",
+      "display": "Perspective Fields",
+      "n_videos": 151,
+      "scene_only_median_pct": 19.49578337839903,
+      "scene_plus_hand_median_pct": 19.49578337839903,
+      "gain_pp": 0.0,
+      "relative_reduction_pct": 0.0,
+      "paired_median_gain_pp": 0.0,
+      "ci95_low": 0.0,
+      "ci95_high": 0.0,
+      "win_rate_pct": 8.609271523178808,
+      "median_hand_focal_shift_pct": 0.0
+    }
+  ],
+  "accuracy_precision": [
+    {
+      "Model": "AnyCalib",
+      "median_abs_error_pct": 16.019384628613487,
+      "median_signed_bias_pct": 14.662769419581817,
+      "median_within_video_spread_pct": 3.9110243967795277,
+      "bias_direction": "over-estimates",
+      "precision_rank": 1
+    },
+    {
+      "Model": "GeoCalib",
+      "median_abs_error_pct": 21.353323190510505,
+      "median_signed_bias_pct": 15.84662784813474,
+      "median_within_video_spread_pct": 14.707465641308293,
+      "bias_direction": "over-estimates",
+      "precision_rank": 2
+    },
+    {
+      "Model": "Perspective Fields",
+      "median_abs_error_pct": 19.49578337839903,
+      "median_signed_bias_pct": -11.23517546968774,
+      "median_within_video_spread_pct": 15.809538362405995,
+      "bias_direction": "under-estimates",
+      "precision_rank": 3
+    }
+  ],
+  "all_three_same_direction": true,
+  "all_three_improved": false,
+  "note": "one video = one vote; frames are repeated observations inside a video, not independent samples"
+}

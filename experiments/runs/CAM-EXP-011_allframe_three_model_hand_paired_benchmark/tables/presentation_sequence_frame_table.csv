@@ -1,0 +1,7 @@
+Sequence,Total frames/video,Usable cameras,Total usable RGB frames,Scene experiment frames,Hand-usable frames (any),Hand-usable per camera (median),Hand-usable L / R
+Tea,381,40,15225,15225,12313,308,9939 / 10729
+Boxing,366,40,14658,14658,12979,324,10650 / 10840
+Plant,174,40,6962,6962,5197,130,4713 / 4386
+Dog,337,40,13493,13493,11717,293,8731 / 8624
+Instrument,139,15,2085,2085,2085,139,1821 / 1661
+TOTAL,,175,52423,52423,44291,,35854 / 36240

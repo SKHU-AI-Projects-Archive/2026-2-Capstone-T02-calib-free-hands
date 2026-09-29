@@ -1,0 +1,42 @@
+{
+  "smoke_frames": 60,
+  "total_scene_input_frames": 52423,
+  "per_model": [
+    {
+      "model": "ANYCALIB",
+      "adapter": "anycalib",
+      "historical_key": "AnyCalib[anycalib_pinhole/pinhole]",
+      "load_seconds": 0.01,
+      "frames": 60,
+      "successes": 60,
+      "seconds_per_frame": 0.0964,
+      "frames_per_second": 10.37,
+      "estimated_hours_for_all_frames": 1.4
+    },
+    {
+      "model": "GEOCALIB",
+      "adapter": "geocalib",
+      "historical_key": "GeoCalib[pinhole]",
+      "load_seconds": 0.0,
+      "frames": 60,
+      "successes": 60,
+      "seconds_per_frame": 0.2921,
+      "frames_per_second": 3.42,
+      "estimated_hours_for_all_frames": 4.25
+    },
+    {
+      "model": "PERSPECTIVE_FIELDS",
+      "adapter": "pf_centered",
+      "historical_key": "PerspectiveFields[centered]",
+      "load_seconds": 0.0,
+      "frames": 60,
+      "successes": 60,
+      "seconds_per_frame": 0.066,
+      "frames_per_second": 15.15,
+      "estimated_hours_for_all_frames": 0.96
+    }
+  ],
+  "estimated_total_hours_three_models": 6.61,
+  "gpu": "NVIDIA GeForce RTX 4060 Ti",
+  "policy": "Runtime is measured to size the plan. Frames are NOT reduced because a model is slow; all usable RGB frames are processed."
+}

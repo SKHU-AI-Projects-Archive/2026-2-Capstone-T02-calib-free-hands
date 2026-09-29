@@ -1,0 +1,79 @@
+{
+  "experiment": "CAM-EXP-011",
+  "title": "All-Frame Three-Model Scene-vs-Hand Paired Focal Benchmark",
+  "created_before_cam011_focal_results": true,
+  "question": "On the same videos, does adding whole-video hand structure to an existing scene focal estimator reduce focal error?",
+  "models": {
+    "ANYCALIB": {
+      "adapter": "anycalib",
+      "historical_key": "AnyCalib[anycalib_pinhole/pinhole]",
+      "display": "AnyCalib"
+    },
+    "GEOCALIB": {
+      "adapter": "geocalib",
+      "historical_key": "GeoCalib[pinhole]",
+      "display": "GeoCalib"
+    },
+    "PERSPECTIVE_FIELDS": {
+      "adapter": "pf_centered",
+      "historical_key": "PerspectiveFields[centered]",
+      "display": "Perspective Fields"
+    }
+  },
+  "conditions": [
+    "SCENE_ONLY",
+    "SCENE_PLUS_HAND"
+  ],
+  "frame_policy": "ALL usable RGB frames; no 8/16/32/64 sampling in the primary result",
+  "historical_context": "CAM-EXP-003 used 8 uniformly spaced frames and CAM-EXP-004.1 extended to 64 and found scene aggregation largely saturated. Neither is treated as an error; this run answers the whole-video question directly.",
+  "evaluation_unit": "sequence-camera video; one video, one focal, one vote. Frames are repeated observations inside a video, never independent samples.",
+  "aggregation": "exp(median(log f_i)) over a video's valid frames",
+  "scalar_focal": "sqrt(fx*fy), unchanged from CAM-EXP-003/005/008",
+  "hand_correction": "generic hand anatomy correction, equivalent to CAM-EXP-009.4's M1_SCENE_GENERIC_INDEPENDENT: neutral MANO prior, 20 connected bones, absolute size removed, WiLoR 2D observations and unit bone directions, network bone LENGTHS discarded, LEFT/RIGHT anatomy independent",
+  "shared_anatomy_M3_used": false,
+  "why_not_M3": "CAM-EXP-009.4 measured the shared-anatomy term's contribution as exactly 0.000 pp under the tested parameterisation",
+  "hand_correction_identical_across_models": true,
+  "only_difference_between_models": "the scene focal evidence",
+  "evaluation": {
+    "outer_split_unit": "PHYSICAL CAMERA",
+    "n_outer_folds": 5,
+    "cluster": "PHYSICAL CAMERA",
+    "bootstrap": 10000,
+    "primary_metric": "median relative focal error (%)",
+    "mean_is_not_primary": true
+  },
+  "candidate_grid": {
+    "q_min": 0.5,
+    "q_max": 1.5,
+    "q_n": 81
+  },
+  "counts": {
+    "sequences": 5,
+    "usable_videos": 175,
+    "scene_input_frames": 52423,
+    "expected_historical_total": 52445,
+    "measured_total": 52423
+  },
+  "never_used": [
+    "reference focal for frame selection",
+    "reference focal for hand availability",
+    "reference focal for model success filtering",
+    "test focal for lambda selection",
+    "reference 3D inside the hand correction",
+    "result-based camera or unit exclusion"
+  ],
+  "compute": {
+    "measured_scene_seconds_per_frame": {
+      "ANYCALIB": 0.096,
+      "GEOCALIB": 0.292,
+      "PERSPECTIVE_FIELDS": 0.066
+    },
+    "estimated_scene_hours_total": 6.61,
+    "measured_hand_score_seconds_per_video_single_thread": 660,
+    "hand_score_single_thread_hours": 32.1,
+    "RESOLUTION": "Sharded across 8 CPU worker processes over disjoint videos. This is pure parallelism: identical code, identical frames, identical candidate grid, identical parameters - only the work is divided. NO frame was dropped and no sampling was introduced because of runtime, per the spec. Decided and recorded BEFORE any focal result existed.",
+    "hand_score_sharded_estimated_hours": 4.0,
+    "hand_frames_policy": "ALL hand-available frames per video; no 8/16/32/64 sampling",
+    "decided_before_focal_results": true
+  }
+}

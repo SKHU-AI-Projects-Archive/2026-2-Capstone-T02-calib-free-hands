@@ -1,0 +1,4 @@
+model,adapter,historical_key,load_seconds,frames,successes,seconds_per_frame,frames_per_second,estimated_hours_for_all_frames
+ANYCALIB,anycalib,AnyCalib[anycalib_pinhole/pinhole],0.01,60,60,0.0964,10.37,1.4
+GEOCALIB,geocalib,GeoCalib[pinhole],0.0,60,60,0.2921,3.42,4.25
+PERSPECTIVE_FIELDS,pf_centered,PerspectiveFields[centered],0.0,60,60,0.066,15.15,0.96

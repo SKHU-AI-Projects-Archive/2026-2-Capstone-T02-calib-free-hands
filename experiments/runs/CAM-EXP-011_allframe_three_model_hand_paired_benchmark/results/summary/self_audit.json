@@ -1,0 +1,35 @@
+{
+  "phase_abc_focal_leakage": [],
+  "frozen_predictions_unchanged": true,
+  "opened_log_matches": true,
+  "usable_videos": 175,
+  "usable_per_sequence": {
+    "p36-tea-0010": 40,
+    "p41-boxing-0021": 40,
+    "p41-plant-0004": 40,
+    "p44-dog-0004": 40,
+    "p52-instrument-0034": 15
+  },
+  "matches_historical_175": true,
+  "p52_not_reintroduced": true,
+  "all_five_sequences": true,
+  "frame_manifest_rows": 52423,
+  "every_video_frame_0_to_n_minus_1": true,
+  "no_subsampling_in_primary": true,
+  "frame_index_convention": "0-based video frame index",
+  "shared_anatomy_M3_used": false,
+  "hand_score_grid_absolute": true,
+  "hand_score_computed_once_per_video": true,
+  "hand_quality_does_not_filter_scene": true,
+  "one_prediction_per_video_condition": true,
+  "camera_fold_unique": true,
+  "banned_phrases": [],
+  "historical_modified": [],
+  "old_manifests_modified": [],
+  "branch": {
+    "branch": "kjh",
+    "on_kjh": true
+  },
+  "external_holdout_opened": false,
+  "ALL_CLEAN": true
+}

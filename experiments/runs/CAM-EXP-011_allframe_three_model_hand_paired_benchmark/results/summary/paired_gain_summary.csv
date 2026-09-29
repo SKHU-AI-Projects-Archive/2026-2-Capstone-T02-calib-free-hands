@@ -1,0 +1,4 @@
+model,display,n_videos,scene_only_median_pct,scene_plus_hand_median_pct,gain_pp,relative_reduction_pct,paired_median_gain_pp,ci95_low,ci95_high,win_rate_pct,median_hand_focal_shift_pct
+ANYCALIB,AnyCalib,151,16.019384628613487,16.019384628613487,0.0,0.0,0.0,0.0,0.0,0.6622516556291391,0.0
+GEOCALIB,GeoCalib,151,21.353323190510505,21.353323190510505,0.0,0.0,0.0,0.0,0.0,0.0,0.0
+PERSPECTIVE_FIELDS,Perspective Fields,151,19.49578337839903,19.49578337839903,0.0,0.0,0.0,0.0,0.0,8.609271523178808,0.0

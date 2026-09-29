@@ -1,0 +1,7 @@
+{
+  "min_hand_frames_per_side": 8,
+  "source": "inherited from CAM-EXP-009.4; not re-chosen here",
+  "hand_availability_source": "frozen CAM-EXP-001.3 QC (PASS_STRICT / PASS_SINGLE_HAND, triangulation_success=1)",
+  "hand_quality_does_not_filter_scene_frames": true,
+  "frozen_before_focal_results": true
+}
