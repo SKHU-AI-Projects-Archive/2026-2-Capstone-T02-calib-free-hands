@@ -1,0 +1,24 @@
+{
+  "tolerance_frac_of_iqr": 0.01,
+  "per_video": [
+    {
+      "sequence": "p36-tea-0010",
+      "camera": "brics-odroid-001_cam0",
+      "f_scene": 1191.546650250242,
+      "n_global_points_in_window": 112,
+      "median_abs_err": 2.0892357687710833e-07,
+      "max_abs_err": 3.3019223589433877e-06,
+      "curve_iqr": 0.0015162506558634126,
+      "median_err_frac_of_iqr": 0.00013778960363129342,
+      "max_err_frac_of_iqr": 0.0021776889897291707,
+      "argmin_q_direct": 1.5,
+      "argmin_q_interp": 1.5,
+      "argmin_step_diff": 0
+    }
+  ],
+  "median_err_frac_of_iqr": 0.00013778960363129342,
+  "max_argmin_step_diff": 0,
+  "meets_tolerance": true,
+  "frozen_before_results": true,
+  "reference_focal_read": false
+}

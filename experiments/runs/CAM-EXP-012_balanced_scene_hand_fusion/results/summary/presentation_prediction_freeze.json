@@ -1,0 +1,22 @@
+{
+  "frozen_predictions_file": "frozen_test_predictions.csv.gz",
+  "frozen_predictions_sha256": "75ae3167d2586dd783e8773e8ae40e331b5ebd2b567eb0d9964dea325471a4f9",
+  "n_rows": 1836,
+  "n_videos": 153,
+  "rows_by_condition": {
+    "SCENE_ONLY": 459,
+    "SCENE_PLUS_CORRECT_HAND": 459,
+    "CORRECT_HAND_LAMBDA1": 459,
+    "SCENE_PLUS_SHUFFLED_HAND": 459
+  },
+  "rows_by_model": {
+    "ANYCALIB": 612,
+    "GEOCALIB": 612,
+    "PERSPECTIVE_FIELDS": 612
+  },
+  "test_reference_focal_opened": false,
+  "wrong_bone_control": "PENDING",
+  "git_head": "2a8bc078a5f179d040f6b9dabc2f9c8d7e0fce77",
+  "timestamp_utc": "2026-09-30T17:09:23Z",
+  "note": "Predictions frozen before any OUTER TEST reference focal was read. evaluate_presentation.py verifies this hash before opening the focal."
+}

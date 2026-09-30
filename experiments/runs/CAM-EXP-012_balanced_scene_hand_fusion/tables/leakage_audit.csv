@@ -1,0 +1,9 @@
+check,result
+reference focal used to build the primary set,NO
+reference focal used inside the hand curves,NO
+reference focal used for alpha,NO
+OUTER TEST focal used for lambda selection,NO
+result-based camera or video exclusion,NO
+shuffled control retuned,NO
+predictions frozen before test focal opened,YES
+reserved confirmatory holdout opened,NO

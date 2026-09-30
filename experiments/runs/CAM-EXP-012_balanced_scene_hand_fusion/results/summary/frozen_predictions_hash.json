@@ -1,0 +1,6 @@
+{
+  "file": "frozen_test_predictions.csv.gz",
+  "sha256": "75ae3167d2586dd783e8773e8ae40e331b5ebd2b567eb0d9964dea325471a4f9",
+  "n_rows": 1836,
+  "note": "frozen BEFORE any OUTER TEST reference focal was opened"
+}

@@ -1,0 +1,172 @@
+{
+  "status": "PRIMARY PRESENTATION ANALYSIS COMPLETE; FULL CONTROL ANALYSIS PENDING",
+  "cam012_complete": false,
+  "wrong_bone_control": "PENDING",
+  "n_paired_videos": 153,
+  "main_table": [
+    {
+      "Model": "AnyCalib",
+      "Scene_only_median_error_pct": 16.019,
+      "Scene_plus_correct_hand_median_error_pct": 16.447,
+      "Gain_of_medians_pp": -0.428,
+      "Paired_median_gain_pp": -0.459,
+      "Paired_mean_gain_pp": -0.496,
+      "Relative_gain_pct": -2.67,
+      "Win_rate_pct": 9.2,
+      "Tie_rate_pct": 20.3,
+      "Loss_rate_pct": 70.6,
+      "CI95_low": -0.492,
+      "CI95_high": -0.441,
+      "N_videos": 153
+    },
+    {
+      "Model": "GeoCalib",
+      "Scene_only_median_error_pct": 21.912,
+      "Scene_plus_correct_hand_median_error_pct": 25.167,
+      "Gain_of_medians_pp": -3.254,
+      "Paired_median_gain_pp": 0.0,
+      "Paired_mean_gain_pp": -2.601,
+      "Relative_gain_pct": -14.85,
+      "Win_rate_pct": 19.6,
+      "Tie_rate_pct": 41.8,
+      "Loss_rate_pct": 38.6,
+      "CI95_low": 0.0,
+      "CI95_high": 0.0,
+      "N_videos": 153
+    },
+    {
+      "Model": "Perspective Fields",
+      "Scene_only_median_error_pct": 19.888,
+      "Scene_plus_correct_hand_median_error_pct": 20.211,
+      "Gain_of_medians_pp": -0.322,
+      "Paired_median_gain_pp": 0.0,
+      "Paired_mean_gain_pp": -1.758,
+      "Relative_gain_pct": -1.62,
+      "Win_rate_pct": 47.1,
+      "Tie_rate_pct": 22.9,
+      "Loss_rate_pct": 30.1,
+      "CI95_low": 0.0,
+      "CI95_high": 0.31,
+      "N_videos": 153
+    }
+  ],
+  "control_table": [
+    {
+      "Model": "AnyCalib",
+      "Scene": 16.019,
+      "Correct_Hand": 16.447,
+      "Shuffled_Hand": 16.495,
+      "Wrong_Bone": "PENDING",
+      "Correct_vs_Shuffled_advantage_pp": 0.0,
+      "CI95_low": 0.0,
+      "CI95_high": 0.0,
+      "N": 153
+    },
+    {
+      "Model": "GeoCalib",
+      "Scene": 21.912,
+      "Correct_Hand": 25.167,
+      "Shuffled_Hand": 24.439,
+      "Wrong_Bone": "PENDING",
+      "Correct_vs_Shuffled_advantage_pp": 0.0,
+      "CI95_low": 0.0,
+      "CI95_high": 0.0,
+      "N": 153
+    },
+    {
+      "Model": "Perspective Fields",
+      "Scene": 19.888,
+      "Correct_Hand": 20.211,
+      "Shuffled_Hand": 19.558,
+      "Wrong_Bone": "PENDING",
+      "Correct_vs_Shuffled_advantage_pp": 0.0,
+      "CI95_low": 0.0,
+      "CI95_high": 0.0,
+      "N": 153
+    }
+  ],
+  "movement_table": [
+    {
+      "Model": "AnyCalib",
+      "Median_shift_pct": 0.4063,
+      "moved_gt0_pct": 79.7,
+      "ge_0.25_pct": 79.7,
+      "ge_0.5_pct": 30.1,
+      "ge_1_pct": 11.1,
+      "ge_2_pct": 5.9
+    },
+    {
+      "Model": "GeoCalib",
+      "Median_shift_pct": 0.4063,
+      "moved_gt0_pct": 58.2,
+      "ge_0.25_pct": 58.2,
+      "ge_0.5_pct": 39.2,
+      "ge_1_pct": 31.4,
+      "ge_2_pct": 25.5
+    },
+    {
+      "Model": "Perspective Fields",
+      "Median_shift_pct": 0.8142,
+      "moved_gt0_pct": 77.1,
+      "ge_0.25_pct": 77.1,
+      "ge_0.5_pct": 56.2,
+      "ge_1_pct": 45.1,
+      "ge_2_pct": 35.3
+    }
+  ],
+  "verdicts": [
+    {
+      "Model": "AnyCalib",
+      "HAND_ON_NUMERICAL_GAIN_SUPPORTED": false,
+      "CORRECT_VS_SHUFFLED_SIGNAL_SUPPORTED": false,
+      "CORRECT_HAND_SPECIFIC_SIGNAL_SUPPORTED": "PENDING_WRONG_BONE"
+    },
+    {
+      "Model": "GeoCalib",
+      "HAND_ON_NUMERICAL_GAIN_SUPPORTED": false,
+      "CORRECT_VS_SHUFFLED_SIGNAL_SUPPORTED": false,
+      "CORRECT_HAND_SPECIFIC_SIGNAL_SUPPORTED": "PENDING_WRONG_BONE"
+    },
+    {
+      "Model": "Perspective Fields",
+      "HAND_ON_NUMERICAL_GAIN_SUPPORTED": false,
+      "CORRECT_VS_SHUFFLED_SIGNAL_SUPPORTED": false,
+      "CORRECT_HAND_SPECIFIC_SIGNAL_SUPPORTED": "PENDING_WRONG_BONE"
+    }
+  ],
+  "paired": [
+    {
+      "model": "ANYCALIB",
+      "median_gain_pp": -0.45906905851727586,
+      "mean_gain_pp": -0.49598116864404657,
+      "ci95_low": -0.49201463070999196,
+      "ci95_high": -0.44126283557926893,
+      "win_pct": 9.15032679738562,
+      "tie_pct": 20.26143790849673,
+      "loss_pct": 70.58823529411765,
+      "n": 153
+    },
+    {
+      "model": "GEOCALIB",
+      "median_gain_pp": 0.0,
+      "mean_gain_pp": -2.601198870815414,
+      "ci95_low": 0.0,
+      "ci95_high": 0.0,
+      "win_pct": 19.607843137254903,
+      "tie_pct": 41.83006535947712,
+      "loss_pct": 38.56209150326798,
+      "n": 153
+    },
+    {
+      "model": "PERSPECTIVE_FIELDS",
+      "median_gain_pp": 0.0,
+      "mean_gain_pp": -1.757696503397803,
+      "ci95_low": 0.0,
+      "ci95_high": 0.31022997428372534,
+      "win_pct": 47.05882352941176,
+      "tie_pct": 22.875816993464056,
+      "loss_pct": 30.065359477124183,
+      "n": 153
+    }
+  ]
+}

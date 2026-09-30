@@ -1,0 +1,30 @@
+{
+  "block_size": 8,
+  "min_obs_per_fold_per_side": 4,
+  "usable_videos": 175,
+  "primary_videos": 153,
+  "excluded": 22,
+  "exclusion_counts": {
+    "INSUFFICIENT_RIGHT_IN_A_FOLD": 6,
+    "INSUFFICIENT_LEFT_IN_A_FOLD": 6,
+    "NO_USABLE_HAND": 7,
+    "INSUFFICIENT_BOTH_SIDES_IN_A_FOLD": 3
+  },
+  "per_sequence_primary": {
+    "Tea": 39,
+    "Boxing": 36,
+    "Plant": 29,
+    "Dog": 37,
+    "Instrument": 12
+  },
+  "checks": {
+    "primary_plus_excluded_equals_usable": true
+  },
+  "global_grid": {
+    "f_min": 126.1790077431918,
+    "f_max": 7280.187007167295,
+    "n": 401
+  },
+  "q_grid_n": 201,
+  "q_contains_exact_one": true
+}

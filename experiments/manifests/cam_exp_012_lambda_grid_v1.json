@@ -1,0 +1,14 @@
+{
+  "lambda_grid": [
+    0.125,
+    0.25,
+    0.5,
+    1.0,
+    2.0,
+    4.0,
+    8.0
+  ],
+  "lambda_zero_is_a_candidate": false,
+  "why": "Hand ON must contribute. lambda = 0 exists only as an implementation sanity test, never as a tuning candidate; if every positive lambda is worse on TRAIN, the least-bad positive lambda is selected rather than falling back to 0.",
+  "frozen_before_test_focal_results": true
+}

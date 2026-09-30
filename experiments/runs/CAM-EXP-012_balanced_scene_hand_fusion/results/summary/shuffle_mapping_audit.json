@@ -1,0 +1,23 @@
+{
+  "constraints": [
+    "different video",
+    "different sequence",
+    "different physical camera",
+    "same resolution",
+    "same outer partition"
+  ],
+  "participant_preference": "different participant preferred, relaxed only if no valid donor exists",
+  "deterministic": "SHA-256 ordering; no runtime RNG",
+  "checks": {
+    "n_videos": 153,
+    "with_donor": 153,
+    "no_self_pair": true,
+    "no_same_sequence": true,
+    "no_same_camera": true,
+    "same_partition_only": true,
+    "participant_relaxations": 0,
+    "different_participant_rate": 1.0
+  },
+  "frozen_before_test_focal": true,
+  "sha256": "a55544013914e23d0967377dcad01b472f423edffa476ab374efb889d6d53945"
+}

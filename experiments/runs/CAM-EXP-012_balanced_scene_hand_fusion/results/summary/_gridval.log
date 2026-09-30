@@ -1,0 +1,4 @@
+  direct q-grid done 23.8 min
+  global-grid subset done 36.7 min
+p36-tea-0010 brics-odroid-001_cam0  median err 0.000138 x IQR  max 0.00218  argmin step diff 0  (112 global pts in window)
+MEETS TOLERANCE: True

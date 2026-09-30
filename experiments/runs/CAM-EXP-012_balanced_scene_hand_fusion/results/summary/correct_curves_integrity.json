@@ -1,0 +1,22 @@
+{
+  "expected_primary_videos": 153,
+  "curves_on_disk": 153,
+  "curves_valid": 153,
+  "missing": [],
+  "n_missing": 0,
+  "extra": [],
+  "duplicates": false,
+  "unreadable_or_bad": [],
+  "metadata_problems": [],
+  "shard_logs_found": 8,
+  "shard_logs_finished": 8,
+  "checks": {
+    "A_all_expected_present": true,
+    "B_count_matches": true,
+    "C_all_readable_and_finite": true,
+    "D_all_shards_finished": true,
+    "E_no_duplicates_no_extra": true,
+    "F_crossfit_metadata_ok": true
+  },
+  "CORRECT_HAND_CURVES_COMPLETE": true
+}

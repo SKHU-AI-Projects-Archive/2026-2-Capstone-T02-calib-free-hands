@@ -1,0 +1,9 @@
+{
+  "cam_exp_012_temporal_crossfit_v1.csv.gz": "8c0c22f35d9765d5a475c0bd25112afb720af67150811805293aa695f7a8e7d9",
+  "cam_exp_012_primary_video_set_v1.csv": "58672df6d1552c97280666107f8bd449935a2d5ece1f28eabdbdfcf4fff1bc0b",
+  "cam_exp_012_global_focal_grid_v1.json": "4bbac2cbc3f8a77367316d1017b46811567333a3ac32b11ca21f2855d50a4521",
+  "cam_exp_012_q_grid_v1.json": "4172831f301bab582f00bbef4a6c37e5f024a057a3a35a23e68aae0d68e2c0ef",
+  "cam_exp_012_outer_camera_folds_v1.csv": "f7ee5590e19724f47fbe68e111151d6e7d18f4d0c3b62437d38fdda07558427f",
+  "cam_exp_012_inner_camera_folds_v1.csv": "a0682988e81478696c65522b1e466a97b7e6c849ab1a909a0263e656b0729af9",
+  "cam_exp_012_lambda_grid_v1.json": "65b1bfd1e179fcd2c2d4f53e42f09477a79b5a5d46d68c67f3bdb14178a37b34"
+}
