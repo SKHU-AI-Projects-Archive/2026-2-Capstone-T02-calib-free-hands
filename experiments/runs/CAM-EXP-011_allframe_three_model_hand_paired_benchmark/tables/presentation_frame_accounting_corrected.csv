@@ -1,0 +1,7 @@
+Sequence,Frames/video range,Median frames/video,Usable cameras,Scene input frames,Any-hand available frames,Left available side-observations,Right available side-observations,Actual hand-score-used frames,Final paired videos
+Tea,380-381,381,40,15225,12313,9939,10729,12281,39
+Boxing,366-367,366,40,14658,12979,10650,10840,12392,36
+Plant,174-175,174,40,6962,5197,4713,4386,4805,27
+Dog,336-338,337,40,13493,11717,8731,8624,11447,37
+Instrument,139,139,15,2085,2085,1821,1661,1668,12
+TOTAL,,,175,52423,44291,35854,36240,42593,151

@@ -13,7 +13,9 @@ RESULT  NO_MEASURABLE_CHANGE_FROM_HAND_STRUCTURE
 **One sentence.** Every usable RGB frame of all five sequences was processed by
 all three scene estimators (52,423 frames each, zero failures), the same frozen
 generic hand-structure correction was attached to each, and on the identical
-paired video set the median focal error **did not change for any of the three**.
+paired video set the **median focal error did not improve for any of the
+three**. Some individual videos did move — 20 of 151 for Perspective Fields —
+but not enough to shift the median.
 
 ## 1. 쉬운 설명
 
@@ -21,28 +23,38 @@ paired video set the median focal error **did not change for any of the three**.
 다시 평가하고, 각 model에 **동일한** 손 구조 correction을 붙여 같은 영상에서
 비교했습니다.
 
-결과는 **세 모델 모두 변화 없음**입니다.
+결과는 **세 모델 모두 median 개선 0.00 pp**입니다. 이것은 median 수준의
+진술이며, 개별 영상은 일부 움직였습니다(AnyCalib 1개, GeoCalib 0개,
+Perspective Fields 20개 중 13개 개선·7개 악화).
 
-왜 그런지도 확인했습니다. 영상 한 편의 모든 frame을 쓰면 scene 추정이 매우
-안정적이 되어(AnyCalib의 frame 간 흩어짐이 약 3.9 %), fusion에서 scene 항이
-매우 가파르게 됩니다. 손 항이 후보 focal을 한 칸 움직이려면 λ ≈ 13.4가 필요한데,
-사전에 고정한 λ 범위는 최대 4였습니다. 그리고 **TRAIN 데이터에서 λ를 고르게
-했더니 15개 fold 중 11개에서 λ = 0을 선택**했습니다. 즉 절차 스스로 "손 항이
-도움이 안 된다"고 판단하고 꺼버린 것입니다.
+측정된 사실은 이렇습니다. 이번 all-frame 조건에서 scene score는 고정된 sigma
+floor(중앙값 0.02)에서 동작했고, 후보 한 칸에 대한 scene penalty(0.1303)가 같은
+구간의 hand penalty(0.00974)보다 훨씬 컸습니다. 한 칸을 움직이려면 λ ≈ 13.4가
+필요한데 사전 고정 λ 범위는 최대 4였습니다. 그리고 **TRAIN 데이터에서 λ를 고르게
+했더니 15개 fold 중 11개에서 λ = 0을 선택**했습니다.
+
+다만 **이 실험은 frame 수 자체를 통제 변수로 비교하지 않았으므로**, "frame을
+많이 써서 손 정보가 약해졌다"고 말할 수는 없습니다. N = 8 / 64 / all을 동일
+조건에서 비교하는 별도 실험이 필요합니다.
 
 중요한 점: 손 점수가 평평해서가 아닙니다. 손 점수는 후보 구간에서 약 2배
 변합니다. scene 항이 그보다 훨씬 가파른 것입니다.
 
 ## 2. Q1–Q9 — the dataset, measured not assumed
 
-| Sequence | Total frames/video | Usable cameras | Scene frames used | WiLoR hand-usable (L / R) |
-| --- | ---: | ---: | ---: | ---: |
-| Tea | 381 | 40 | 15,225 | — |
-| Boxing | 366 | 40 | 14,658 | — |
-| Plant | 174 | 40 | 6,962 | — |
-| Dog | 337 | 40 | 13,493 | — |
-| Instrument | 139 | 15 | 2,085 | — |
-| **TOTAL** | | **175** | **52,423** | **35,854 / 36,240** |
+| Sequence | Frames/video (range, median) | Usable cameras | Scene frames used | Any-hand frames | Hand-score-used frames |
+| --- | --- | ---: | ---: | ---: | ---: |
+| Tea | 380–381 (381) | 40 | 15,225 | 12,313 | 12,281 |
+| Boxing | 366–367 (366) | 40 | 14,658 | 12,979 | 12,392 |
+| Plant | 174–175 (174) | 40 | 6,962 | 5,197 | 4,805 |
+| Dog | 336–338 (337) | 40 | 13,493 | 11,717 | 11,447 |
+| Instrument | 139 | 15 | 2,085 | 2,085 | 1,668 |
+| **TOTAL** | | **175** | **52,423** | **44,291** | **42,593** |
+
+Video lengths vary between cameras inside a sequence, so a single number per
+sequence is a **median**, not an exact length. Left/right side observations
+(35,854 / 36,240) double-count the 27,803 two-handed frames and are therefore
+*side observations*, not frames.
 
 - **Q1** All five sequences included.
 - **Q2/Q3** Frame counts and camera counts measured from the videos.
@@ -97,9 +109,28 @@ trivially: the strict-common and model-native results are the same numbers.
 ## 5. Q22–Q23 — paired set
 
 **Q22/Q23: 151 of 175 videos** are in the `GLOBAL_6_CONDITION_COMMON_VIDEO_SET`
-— videos with a result in all six conditions. The 24 missing are hand-branch
-ineligible (no hand, or fewer than 8 usable frames on a side), never removed
-for performance.
+— videos with a result in all six conditions. The 24 excluded, each with exactly
+one primary reason (`tables/paired_set_accounting.csv`, 151 + 24 = 175
+machine-checked):
+
+| primary reason | videos |
+| --- | ---: |
+| INSUFFICIENT_LEFT_HAND_FRAMES | 7 |
+| NO_USABLE_HAND | 7 |
+| INSUFFICIENT_RIGHT_HAND_FRAMES | 6 |
+| INSUFFICIENT_BOTH_SIDES | 2 |
+| HAND_GRID_DOES_NOT_COVER_CANDIDATE_WINDOW | 2 |
+
+None was removed for performance. The last two are a design limitation worth
+naming: the hand score lives on a fixed absolute grid of 400–2400 px, and for
+two `p41-plant-0004` videos GeoCalib's scene focal is extreme (4853 px, 252 px),
+so the candidate window falls entirely outside that grid. The video is dropped
+from all six conditions equally, so the pairing holds — but the exclusion is
+correlated with GeoCalib producing an extreme estimate.
+
+Coverage comes in two kinds, not interchangeable: frame-level hand coverage
+**84.5 %** (44,291 / 52,423) and video-level paired coverage **86.3 %**
+(151 / 175).
 
 ## 6. Q24–Q34 — the main result
 
@@ -124,8 +155,10 @@ Secondary metrics are unchanged too (mean, p75, p90, ≤5 %, ≤10 %) except for
 Perspective Fields' p75, which moves from 28.14 to 28.58 — a handful of videos
 shifted by one grid step in the unhelpful direction.
 
-**Q33/Q34: all three are in the same direction — no change.** The result is not
-"it helped one model and not another".
+**Q33/Q34: none of the three shows a median improvement.** The result is not
+"it helped one model and not another". The phrase "same direction" is avoided
+here because all three medians are exactly 0.00 pp, so there is no direction to
+speak of.
 
 ## 7. Why the change is zero — the mechanism, measured before the focal was opened
 
@@ -155,9 +188,12 @@ turned the hand term off after finding it did not help on TRAIN cameras.
 pre-registered; enlarging λ to manufacture movement would be tuning the protocol
 to the outcome.
 
-There is a real and slightly counter-intuitive finding here: **using more frames
-narrows the room for an auxiliary cue**, because it tightens the scene aggregate
-that the cue would have to overcome.
+**What this does not show.** CAM-EXP-011 did not compare an identical hand
+fusion at N = 8, N = 64 and all frames under otherwise matched conditions, so
+**frame count is not identified as the cause** of this scale imbalance. The
+measured facts are the sigma floor, the two penalties and the lambda threshold
+above; attributing them to "using more frames" would be an inference this run
+does not support. Isolating N requires a separate controlled-N experiment.
 
 ## 8. Q35–Q36 — per sequence
 
@@ -231,8 +267,10 @@ Neither fix changed the conclusion, but reporting a null from a pipeline with a
 
 **Establishes.** On the evaluated 151-video GigaHands paired set, using every
 usable RGB frame, attaching this frozen generic hand-structure correction to
-AnyCalib, GeoCalib or Perspective Fields produced **no measurable change** in
-median focal error, and the nested tuning selected λ = 0 in most folds. The
+AnyCalib, GeoCalib or Perspective Fields produced **no median improvement**
+(0.00 pp for each), and the nested tuning selected λ = 0 in 11 of 15 folds.
+Unit-level movement was small but non-zero: 1 video for AnyCalib, 0 for
+GeoCalib, 20 for Perspective Fields (13 better, 7 worse). The
 scene-only characterisation of the three estimators reproduces CAM-EXP-003.
 
 **Does not establish** that hand geometry carries no camera information.
@@ -243,6 +281,33 @@ in the all-frame regime where the scene term is at its tightest.
 
 **Does not compare the three estimators.** The purpose was OFF vs ON within each
 model. No model is described as best.
+
+## 12b. Post-run documentation and accounting correction
+
+Applied after commit `0c523d6`. **No inference was re-run, no prediction was
+regenerated and no focal number changed.** What changed:
+
+1. **Paired-set accounting made exact.** An earlier draft explained the 24
+   excluded videos as "15 insufficient + 8 no usable hand", which sums to 23 and
+   was wrong on both counts. The audited ledger gives 7 / 7 / 6 / 2 / 2 = 24,
+   with one primary reason per video and 151 + 24 = 175 machine-checked.
+   `tables/paired_set_accounting.csv`.
+2. **Video lengths reported as ranges.** Frame counts vary between cameras
+   inside a sequence, so a single number per sequence is a median, not an exact
+   length. `tables/presentation_frame_accounting_corrected.csv`.
+3. **Hand-available vs hand-used separated.** 44,291 frames have a usable hand;
+   **42,593** entered the hand objective. Left/right counts are *side
+   observations* and double-count two-handed frames.
+4. **Causal wording about frame count removed** (§7). N was not manipulated in
+   a controlled way, so frame count is not identified as the cause.
+5. **"No change" narrowed to the median** (§6, §12). GeoCalib's predictions were
+   unchanged; AnyCalib moved 1 video and Perspective Fields moved 20.
+6. **152 vs 153 resolved** from the artefacts: 153 is correct; 152 came from a
+   shard index that omitted one video computed before sharding began.
+
+A cheap re-verification on the frozen artefacts confirms λ = 0 still reproduces
+the scene-only focal exactly (153 videos, 0 mismatches, max relative difference
+0.000e+00).
 
 ## 13. Limitations
 

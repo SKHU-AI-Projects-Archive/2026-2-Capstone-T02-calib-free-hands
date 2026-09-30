@@ -23,6 +23,26 @@
   "hand_quality_does_not_filter_scene": true,
   "one_prediction_per_video_condition": true,
   "camera_fold_unique": true,
+  "accounting": {
+    "ledger_rows": 175,
+    "ledger_is_175": true,
+    "paired": 151,
+    "excluded": 24,
+    "paired_plus_excluded_is_175": true,
+    "paired_matches_manifest": true,
+    "reason_counts_sum_matches": true,
+    "every_excluded_has_one_reason": true,
+    "reasons": {
+      "INSUFFICIENT_RIGHT_HAND_FRAMES": 6,
+      "INSUFFICIENT_LEFT_HAND_FRAMES": 7,
+      "NO_USABLE_HAND": 7,
+      "HAND_GRID_DOES_NOT_COVER_CANDIDATE_WINDOW": 2,
+      "INSUFFICIENT_BOTH_SIDES": 2
+    }
+  },
+  "accounting_ok": true,
+  "all_paired_have_six_predictions": true,
+  "scene_rows_52423": true,
   "banned_phrases": [],
   "historical_modified": [],
   "old_manifests_modified": [],

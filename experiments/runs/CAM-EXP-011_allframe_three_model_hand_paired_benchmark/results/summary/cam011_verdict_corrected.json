@@ -1,0 +1,143 @@
+{
+  "n_paired_videos": 151,
+  "primary_frame_set": "STRICT",
+  "main_table": [
+    {
+      "Model": "AnyCalib",
+      "Scene only": 16.02,
+      "Scene + Hand": 16.02,
+      "Gain": 0.0,
+      "Relative improvement": 0.0,
+      "N videos": 151
+    },
+    {
+      "Model": "GeoCalib",
+      "Scene only": 21.35,
+      "Scene + Hand": 21.35,
+      "Gain": 0.0,
+      "Relative improvement": 0.0,
+      "N videos": 151
+    },
+    {
+      "Model": "Perspective Fields",
+      "Scene only": 19.5,
+      "Scene + Hand": 19.5,
+      "Gain": 0.0,
+      "Relative improvement": 0.0,
+      "N videos": 151
+    }
+  ],
+  "paired": [
+    {
+      "model": "ANYCALIB",
+      "display": "AnyCalib",
+      "n_videos": 151,
+      "scene_only_median_pct": 16.019384628613487,
+      "scene_plus_hand_median_pct": 16.019384628613487,
+      "gain_pp": 0.0,
+      "relative_reduction_pct": 0.0,
+      "paired_median_gain_pp": 0.0,
+      "ci95_low": 0.0,
+      "ci95_high": 0.0,
+      "win_rate_pct": 0.6622516556291391,
+      "median_hand_focal_shift_pct": 0.0
+    },
+    {
+      "model": "GEOCALIB",
+      "display": "GeoCalib",
+      "n_videos": 151,
+      "scene_only_median_pct": 21.353323190510505,
+      "scene_plus_hand_median_pct": 21.353323190510505,
+      "gain_pp": 0.0,
+      "relative_reduction_pct": 0.0,
+      "paired_median_gain_pp": 0.0,
+      "ci95_low": 0.0,
+      "ci95_high": 0.0,
+      "win_rate_pct": 0.0,
+      "median_hand_focal_shift_pct": 0.0
+    },
+    {
+      "model": "PERSPECTIVE_FIELDS",
+      "display": "Perspective Fields",
+      "n_videos": 151,
+      "scene_only_median_pct": 19.49578337839903,
+      "scene_plus_hand_median_pct": 19.49578337839903,
+      "gain_pp": 0.0,
+      "relative_reduction_pct": 0.0,
+      "paired_median_gain_pp": 0.0,
+      "ci95_low": 0.0,
+      "ci95_high": 0.0,
+      "win_rate_pct": 8.609271523178808,
+      "median_hand_focal_shift_pct": 0.0
+    }
+  ],
+  "accuracy_precision": [
+    {
+      "Model": "AnyCalib",
+      "median_abs_error_pct": 16.019384628613487,
+      "median_signed_bias_pct": 14.662769419581817,
+      "median_within_video_spread_pct": 3.9110243967795277,
+      "bias_direction": "over-estimates",
+      "precision_rank": 1
+    },
+    {
+      "Model": "GeoCalib",
+      "median_abs_error_pct": 21.353323190510505,
+      "median_signed_bias_pct": 15.84662784813474,
+      "median_within_video_spread_pct": 14.707465641308293,
+      "bias_direction": "over-estimates",
+      "precision_rank": 2
+    },
+    {
+      "Model": "Perspective Fields",
+      "median_abs_error_pct": 19.49578337839903,
+      "median_signed_bias_pct": -11.23517546968774,
+      "median_within_video_spread_pct": 15.809538362405995,
+      "bias_direction": "under-estimates",
+      "precision_rank": 3
+    }
+  ],
+  "all_three_improved": false,
+  "note": "one video = one vote; frames are repeated observations inside a video, not independent samples",
+  "_correction_note": "Derivative of cam011_verdict.json after the post-run accounting correction. Numbers are unchanged. The field 'all_three_same_direction' in the original is ill-defined when all three gains are exactly 0.00 pp and should not be quoted; use 'no median improvement for any of the three' instead.",
+  "all_three_same_direction_DEPRECATED": true,
+  "no_median_improvement_for_any": true,
+  "unit_level_movement": {
+    "ANYCALIB": {
+      "n_paired": 151,
+      "units_moved": 1,
+      "units_improved": 1,
+      "units_worsened": 0,
+      "median_shift_pct_among_moved": 0.7244267128700541,
+      "max_shift_pct": 0.7244267128700541
+    },
+    "GEOCALIB": {
+      "n_paired": 151,
+      "units_moved": 0,
+      "units_improved": 0,
+      "units_worsened": 0,
+      "median_shift_pct_among_moved": 0.0,
+      "max_shift_pct": 0.0
+    },
+    "PERSPECTIVE_FIELDS": {
+      "n_paired": 151,
+      "units_moved": 20,
+      "units_improved": 13,
+      "units_worsened": 7,
+      "median_shift_pct_among_moved": 0.7244267128700557,
+      "max_shift_pct": 4.960732107300747
+    }
+  },
+  "paired_accounting": {
+    "total_usable": 175,
+    "paired": 151,
+    "excluded": 24,
+    "exclusion_counts": {
+      "INSUFFICIENT_RIGHT_HAND_FRAMES": 6,
+      "INSUFFICIENT_LEFT_HAND_FRAMES": 7,
+      "NO_USABLE_HAND": 7,
+      "HAND_GRID_DOES_NOT_COVER_CANDIDATE_WINDOW": 2,
+      "INSUFFICIENT_BOTH_SIDES": 2
+    }
+  }
+}

@@ -1,0 +1,28 @@
+{
+  "total_usable_videos": 175,
+  "videos_with_any_hand_frame": 168,
+  "videos_with_no_usable_hand": 7,
+  "hand_score_cache_files_on_disk": 168,
+  "hand_score_cache_eligible": 153,
+  "hand_score_index_rows": 167,
+  "hand_score_index_eligible": 152,
+  "shard_index_files": 8,
+  "shard_index_rows_total": 167,
+  "coverage_rule_pass": 153,
+  "scene_coverage_rule_pass": 175,
+  "six_condition_complete": 151,
+  "final_paired": 151,
+  "excluded": 24,
+  "exclusion_counts": {
+    "INSUFFICIENT_RIGHT_HAND_FRAMES": 6,
+    "INSUFFICIENT_LEFT_HAND_FRAMES": 7,
+    "NO_USABLE_HAND": 7,
+    "HAND_GRID_DOES_NOT_COVER_CANDIDATE_WINDOW": 2,
+    "INSUFFICIENT_BOTH_SIDES": 2
+  },
+  "checks": {
+    "paired_plus_excluded_equals_175": true,
+    "exclusion_reason_counts_sum_equals_excluded": true,
+    "every_excluded_has_one_reason": true
+  }
+}

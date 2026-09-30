@@ -4,6 +4,7 @@ from __future__ import annotations
 import re
 import subprocess
 import sys
+import collections
 from collections import defaultdict
 from pathlib import Path
 
@@ -22,6 +23,11 @@ PHASE_ABC = {"c011_common.py", "audit_dataset_frames.py",
 
 BANNED = [
     "cam-exp-003 was wrong", "cam-003 was wrong",
+    "more frames made", "using more frames narrows",
+    "narrows the room for an auxiliary cue",
+    "tightened the thing the auxiliary cue",
+    "did not change for any of the three",
+    "all three in the same direction",
     "52,445 independent samples", "52445 independent samples",
     "independent samples", "hand geometry definitely improves focal",
     "best model", "the winner is",
@@ -120,6 +126,45 @@ def main():
     res["camera_fold_unique"] = len(folds) == len(set(
         c["camera"] for c in usable))
 
+    # ---- accounting consistency (post-run correction checks)
+    ledger = read_csv(TAB / "paired_set_accounting.csv")
+    excl = read_csv(TAB / "paired_set_exclusions.csv")
+    pairedm = read_csv(TAB / "paired_unit_manifest.csv")
+    n_paired = sum(1 for r in ledger if r["final_paired_set"] == "1")
+    reasons = collections.Counter(r["reason"] for r in excl)
+    res["accounting"] = {
+        "ledger_rows": len(ledger),
+        "ledger_is_175": len(ledger) == 175,
+        "paired": n_paired,
+        "excluded": len(excl),
+        "paired_plus_excluded_is_175": n_paired + len(excl) == 175,
+        "paired_matches_manifest": n_paired == len(pairedm),
+        "reason_counts_sum_matches": sum(reasons.values()) == len(excl),
+        "every_excluded_has_one_reason": all(e["reason"] for e in excl),
+        "reasons": dict(reasons),
+    }
+    res["accounting_ok"] = all([
+        res["accounting"]["ledger_is_175"],
+        res["accounting"]["paired_plus_excluded_is_175"],
+        res["accounting"]["paired_matches_manifest"],
+        res["accounting"]["reason_counts_sum_matches"],
+        res["accounting"]["every_excluded_has_one_reason"]])
+
+    # every paired video must have all six predictions
+    six = collections.defaultdict(set)
+    for r in read_csv(RAW / "final_six_condition_predictions.csv.gz"):
+        if r["frame_set"] == "STRICT" and r["f_pred"] not in ("", "nan"):
+            six[(r["sequence"], r["camera"])].add((r["model"],
+                                                   r["condition"]))
+    need = {(m, c) for m in MODELS
+            for c in ("SCENE_ONLY", "SCENE_PLUS_HAND")}
+    res["all_paired_have_six_predictions"] = all(
+        six[(r["sequence"], r["camera"])] >= need for r in pairedm)
+
+    # scene row counts
+    res["scene_rows_52423"] = len(read_csv(
+        MANIFESTS / "cam_exp_011_allframe_manifest_v1.csv.gz")) >= 52423
+
     # ---- prose
     res["banned_phrases"] = [
         {"file": p.name, "phrase": b} for p in RUN_DIR.glob("*.md")
@@ -173,6 +218,8 @@ def main():
         and res["frozen_predictions_unchanged"] is not False
         and res["one_prediction_per_video_condition"] is not False
         and res["camera_fold_unique"]
+        and res["accounting_ok"] and res["all_paired_have_six_predictions"]
+        and res["scene_rows_52423"]
         and not res["banned_phrases"] and not res["historical_modified"]
         and not res["old_manifests_modified"] and res["branch"]["on_kjh"])
 

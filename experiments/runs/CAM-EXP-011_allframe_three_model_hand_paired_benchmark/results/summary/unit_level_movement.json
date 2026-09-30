@@ -1,0 +1,26 @@
+{
+  "ANYCALIB": {
+    "n_paired": 151,
+    "units_moved": 1,
+    "units_improved": 1,
+    "units_worsened": 0,
+    "median_shift_pct_among_moved": 0.7244267128700541,
+    "max_shift_pct": 0.7244267128700541
+  },
+  "GEOCALIB": {
+    "n_paired": 151,
+    "units_moved": 0,
+    "units_improved": 0,
+    "units_worsened": 0,
+    "median_shift_pct_among_moved": 0.0,
+    "max_shift_pct": 0.0
+  },
+  "PERSPECTIVE_FIELDS": {
+    "n_paired": 151,
+    "units_moved": 20,
+    "units_improved": 13,
+    "units_worsened": 7,
+    "median_shift_pct_among_moved": 0.7244267128700557,
+    "max_shift_pct": 4.960732107300747
+  }
+}
