@@ -1,0 +1,5 @@
+analysis,unit_used_originally,correct_unit,status
+CAM-EXP-003 single-frame benchmark,frame (1400),view (175),point estimates unaffected; CIs were not the headline there
+CAM-EXP-003.1 paired distortion comparisons,frame (1400),view (175),re-analysed here; see cam0031_statistical_reanalysis.csv
+CAM-EXP-004 aggregation / ensemble,view (175),view (175),already correct; extended here to camera and sequence clusters
+cluster counts,-,-,"1400 frames, 175 (sequence,camera) views, 40 unique physical camera ids, 5 sequences"

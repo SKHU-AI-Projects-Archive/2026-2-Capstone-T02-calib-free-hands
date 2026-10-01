@@ -1,0 +1,51 @@
+{
+  "spec_id": "cam_exp_008_controls_spec_v1",
+  "created_before_reference_focal_evaluation": true,
+  "conditions": [
+    {
+      "id": "S0",
+      "name": "SCENE_ONLY_PAIRED",
+      "lambda": 0.0,
+      "hand_term": false,
+      "role": "PAIRED BASELINE",
+      "note": "its minimum is exactly f_scene by construction"
+    },
+    {
+      "id": "S1",
+      "name": "SCENE_PLUS_REAL_HAND_GEOMETRY",
+      "lambda": "nested-CV selected",
+      "hand_term": true,
+      "role": "PRIMARY TEST"
+    },
+    {
+      "id": "H0",
+      "name": "HAND_ONLY_DIAGNOSTIC",
+      "lambda": "inf",
+      "hand_term": true,
+      "role": "DIAGNOSTIC, not the headline method",
+      "note": "argmin L_hand alone; comparable to the CAM-006 family"
+    },
+    {
+      "id": "C1",
+      "name": "SCENE_PLUS_WRONG_FRAME_HAND",
+      "hand_term": true,
+      "role": "NEGATIVE CONTROL",
+      "note": "same sequence, same anatomical side, deterministically offset frame: hand size and person preserved, pose correspondence destroyed"
+    },
+    {
+      "id": "C2",
+      "name": "SCENE_PLUS_VIEW_SHUFFLED_HAND_PROFILE",
+      "hand_term": true,
+      "role": "NEGATIVE CONTROL",
+      "note": "hand profiles permuted across views within a fold; scene estimate untouched"
+    },
+    {
+      "id": "C3",
+      "name": "SCENE_PLUS_FLAT_HAND",
+      "hand_term": true,
+      "role": "SANITY",
+      "note": "L_hand == 0; must reproduce S0 exactly"
+    }
+  ],
+  "decisive_rule": "if S1 beats S0 but C1 or C2 gains similarly, the gain is not attributed to hand geometry"
+}

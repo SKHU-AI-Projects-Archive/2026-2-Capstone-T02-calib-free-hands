@@ -1,0 +1,9 @@
+threshold,value
+triangulation_inlier_px,6.0
+min_inliers_for_reconstruction,4
+same_hand_reprojection_px,16.0
+provided3d_mpjpe_mm,10.0
+qc_min_inlier_cameras,8
+min_ray_angle_deg,30.0
+identity_margin_factor,3.0
+identity_min_gap_px,30.0

@@ -1,0 +1,19 @@
+{
+  "spec_id": "cam_exp_007_latent_spec_v1",
+  "created_before_target_analysis": true,
+  "model": "AnyHand-WiLoR",
+  "layer_path": "model.backbone",
+  "which_output": "index 3 of the backbone's returned tuple (vit_out)",
+  "chosen_because": "it is the image encoder's final feature map, immediately before the MANO and camera heads consume it. Chosen from architecture semantics with no target read.",
+  "only_one_layer": "exactly one layer is frozen. Probing several and reporting the best would be selection on the result.",
+  "tensor_shape": "(B, 1280, 16, 12)",
+  "pooling": "global average pool over the spatial axes -> (B, 1280)",
+  "extraction": "forward hook; model source unmodified",
+  "verification": "a bit-identity check confirms the hook does not change the model's own outputs",
+  "dimension_reduction": {
+    "method": "PCA by SVD, fit on TRAINING-FOLD views only",
+    "primary_dim": 32,
+    "actual_dim": "min(32, n_train_views - 2, input_dim)",
+    "not_tuned": "the dimension is never changed after seeing test performance; 16 and 64 are secondary sensitivity only"
+  }
+}

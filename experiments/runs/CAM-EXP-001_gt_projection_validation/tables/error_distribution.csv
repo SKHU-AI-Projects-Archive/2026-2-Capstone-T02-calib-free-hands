@@ -1,0 +1,3 @@
+dataset,n,mean_px,median_px,p90_px,p95_px,max_px,rmse_px,frac_joints_under_1px,frac_joints_under_2px,frac_joints_under_5px,frac_joints_under_10px,frac_joints_under_20px,frac_joints_under_50px,frac_joints_under_100px,frac_joints_under_200px,frac_joints_under_500px
+assemblyhands,504,0.0,0.0,0.0,0.0,0.0,0.0,1.0,1.0,1.0,1.0,1.0,1.0,1.0,1.0,1.0
+gigahands,157451,177.2883,13.171,687.695,820.972,1457.6369,338.2082,0.013,0.0499,0.2235,0.4316,0.5734,0.6601,0.6976,0.7345,0.8224

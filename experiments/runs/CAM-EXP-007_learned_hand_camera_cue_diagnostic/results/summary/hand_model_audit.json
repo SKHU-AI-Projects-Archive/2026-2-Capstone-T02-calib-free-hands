@@ -1,0 +1,41 @@
+{
+  "model": "AnyHand-WiLoR (WiLoR architecture, AnyHand fine-tuned checkpoint)",
+  "entry_point": "rgb_predictor.AnyHandPredictor, backend 'wilor'",
+  "model_class": "WiLoR/wilor/models/wilor.py :: WiLoR (pl.LightningModule)",
+  "detector": "WiLoR YOLO hand detector (models/detector.pt)",
+  "checkpoints": {
+    "wilor": {
+      "path": "models/anyhand_wilor.ckpt",
+      "exists": true,
+      "bytes": 2565031198,
+      "sha256": "9709eca6e77fb77d2cfcf6ee641660f98dca6941e9fc1cf7a5be19fe62164b77"
+    },
+    "detector": {
+      "path": "models/detector.pt",
+      "exists": true,
+      "bytes": 53582271,
+      "sha256": "5ef3df44e42d2db52d4ffe91f83a22ce9925e2acc9abebf453f2c5d22e380033"
+    }
+  },
+  "forward_path": "WiLoR.forward_step: backbone(x[:,:,:,32:-32]) -> (temp_mano_params, pred_cam, pred_mano_feats, vit_out); refine_net(vit_out, ...) -> (pred_mano_params, pred_cam)",
+  "latent_tap": {
+    "layer": "model.backbone",
+    "which_output": "index 3 of the returned tuple (vit_out)",
+    "why": "the image encoder's final feature map, before the MANO and camera heads consume it. Chosen on architecture semantics before any target was read.",
+    "tensor_shape": "(B, 1280, 16, 12)",
+    "pooling": "global average pool over the two spatial axes -> (B, 1280)",
+    "extraction_method": "forward hook; no model source is modified"
+  },
+  "preprocessing": "ViTDetDataset crop around the detector box, rescale_factor 2.0, model input 256x192 after the [:, :, :, 32:-32] crop inside forward_step",
+  "modifications_to_model_source": "none",
+  "cam002_cache_reuse": {
+    "decision": "NOT_REUSED",
+    "cache": "experiments/runs/CAM-EXP-002_camera_focal_sensitivity/cache/hand_inference (1189 frames, 135 views)",
+    "reason": "it stores no pred_cam, no mano_pose, no box_size and no latent - three of the four primary feature groups - and its frames do not lie on the frozen CAM-006 16-frame grid. Partial reuse would mix frame sets across feature groups, so CAM-007 runs its own inference. The historical cache is not modified."
+  },
+  "forbidden_outputs": [
+    "cam_t / pred_cam_t",
+    "focal_length",
+    "vertices (absolute)"
+  ]
+}

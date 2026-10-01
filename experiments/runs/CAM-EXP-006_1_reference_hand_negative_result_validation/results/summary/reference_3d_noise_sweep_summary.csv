@@ -1,0 +1,6 @@
+reference_3d_noise_frac_of_diameter,noise_px,n_trials,median_rel_focal_err_pct,mean_rel_focal_err_pct,p90_rel_focal_err_pct,share_within_1pct,share_within_5pct,share_within_10pct,share_flat_profile,share_boundary,share_identifiable,median_profile_width,median_curvature
+0.0,0.0,100,0.1242,0.1239,0.1271,1.0,1.0,1.0,0.0,0.0,1.0,0.1248,0.045895
+0.005,0.0,100,14.6167,18.5997,36.6274,0.06,0.24,0.38,0.01,0.0,0.99,0.2996,0.037525
+0.01,0.0,100,25.7218,59.2402,103.4466,0.03,0.11,0.21,0.09,0.03,0.91,0.3245,0.037303
+0.02,0.0,100,48.6061,113.5048,343.0375,0.03,0.06,0.11,0.17,0.1,0.83,0.2996,0.045073
+0.05,0.0,100,63.204,136.2416,611.1111,0.0,0.01,0.04,0.41,0.29,0.59,0.1748,0.050063

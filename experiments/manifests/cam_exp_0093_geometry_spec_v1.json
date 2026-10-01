@@ -1,0 +1,217 @@
+{
+  "experiment": "CAM-EXP-009.3",
+  "title": "Real Reference-Geometry Bilateral Separability Diagnostic",
+  "estimates_focal": false,
+  "created_before_distance_results": true,
+  "research_question": "In the GigaHands reference geometry, is a sequence's LEFT normalised bone structure closer to its OWN RIGHT than to a RIGHT from a different sequence?",
+  "geometry_source": {
+    "name": "OTHER_CAMERA_ONLY_REFERENCE_3D",
+    "code": "CAM-EXP-001.3 src/loco.py, reused unchanged",
+    "target_camera_excluded_before_reconstruction": true,
+    "threshold_px": 8.0,
+    "min_inlier_cameras": 4
+  },
+  "topology": {
+    "n_bones": 20,
+    "bones": [
+      [
+        0,
+        1
+      ],
+      [
+        1,
+        2
+      ],
+      [
+        2,
+        3
+      ],
+      [
+        3,
+        4
+      ],
+      [
+        0,
+        5
+      ],
+      [
+        5,
+        6
+      ],
+      [
+        6,
+        7
+      ],
+      [
+        7,
+        8
+      ],
+      [
+        0,
+        9
+      ],
+      [
+        9,
+        10
+      ],
+      [
+        10,
+        11
+      ],
+      [
+        11,
+        12
+      ],
+      [
+        0,
+        13
+      ],
+      [
+        13,
+        14
+      ],
+      [
+        14,
+        15
+      ],
+      [
+        15,
+        16
+      ],
+      [
+        0,
+        17
+      ],
+      [
+        17,
+        18
+      ],
+      [
+        18,
+        19
+      ],
+      [
+        19,
+        20
+      ]
+    ],
+    "verified": "connected bones only; arbitrary joint pairs such as 4-8, 4-12 or 8-20 span no bone and are excluded"
+  },
+  "representation": {
+    "step1": "20 connected bone lengths per frame per hand",
+    "step2": "p_b = l_b / sum_b l_b  (absolute hand size removed)",
+    "step3": "z_b = log(p_b + 1e-8)  (eps frozen, matches CAM-009.2)",
+    "template": "bone-wise median of z over a unit's eligible frames"
+  },
+  "primary_distance": "median_b |z_A,b - z_B,b|",
+  "secondary_distances": [
+    "mean_abs_log",
+    "raw_proportion_l1",
+    "cosine",
+    "finger_internal"
+  ],
+  "eligibility": {
+    "source": "gigahands_demo_qc_v1.csv.gz (frozen CAM-EXP-001.3 QC)",
+    "accepted_qc_status": [
+      "PASS_STRICT",
+      "PASS_SINGLE_HAND"
+    ],
+    "requires_triangulation_success": true,
+    "min_frames_per_side": 8,
+    "min_frames_per_repeatability_half": 8,
+    "max_frames_per_unit": 48,
+    "frame_cap_rule": "evenly spaced by frame index; deterministic and target-independent",
+    "no_performance_based_filtering": "frames are never removed for having a large left/right distance, an unusual bone, or any metric outcome"
+  },
+  "repeatability_split": "SHA-256 parity of (sequence|camera|hand|frame); deterministic and independent of fit quality",
+  "identity": {
+    "STATUS": "SAME_SUBJECT_PROVENANCE_UNRESOLVED",
+    "consequence": "the primary contrast is stated as WITHIN_SEQUENCE vs CROSS_SEQUENCE, not same-subject vs cross-subject",
+    "ambiguous_pairs_excluded_from_primary_cross": [
+      [
+        "p41-boxing-0021",
+        "p41-plant-0004"
+      ]
+    ],
+    "ambiguous_pair_reported_as": "CROSS_SEQUENCE_SAME_CANDIDATE_PARTICIPANT_DIAGNOSTIC"
+  },
+  "cross_pairing": {
+    "camera_matched": true,
+    "why": "so that WITHIN and CROSS comparisons are not separated artificially by camera/view reconstruction differences",
+    "unmatched_pairs": "secondary only",
+    "aggregation": "camera views are NEVER counted as independent participants; distances are aggregated to sequence-camera, then sequence level"
+  },
+  "controls": {
+    "C1_BONE_MAPPING_PERMUTATION": {
+      "definition": "right-hand bone indices permuted WITHIN each finger before the distance is taken",
+      "permutation": [
+        0,
+        1,
+        3,
+        2,
+        6,
+        4,
+        7,
+        5,
+        9,
+        11,
+        8,
+        10,
+        15,
+        13,
+        12,
+        14,
+        18,
+        16,
+        19,
+        17
+      ],
+      "why_within_finger": "a global shuffle would also destroy the coarse size ordering of the bones, so its degradation could be explained without any anatomical correspondence",
+      "expected": "WITHIN_SEQUENCE distance increases",
+      "frozen_before_results": true
+    },
+    "C2_SEQUENCE_LABEL_PERMUTATION": {
+      "definition": "right-hand sequence labels permuted across sequences, camera structure preserved",
+      "n_permutations": 10000,
+      "exact_if_small": "with 5 sequences all 5! = 120 relabelings are enumerable, so the null is computed EXACTLY rather than sampled",
+      "expected": "the within-sequence advantage disappears",
+      "frozen_before_results": true
+    }
+  },
+  "statistics": {
+    "permutation": "exact over sequence relabelings (5! = 120)",
+    "bootstrap": {
+      "n": 10000,
+      "cluster": "sequence"
+    },
+    "primary_unit": "sequence-camera, aggregated to sequence"
+  },
+  "gate": {
+    "same_over_cross_ratio": 0.8,
+    "nearest_margin_fraction": 0.75,
+    "s_sep_min": 1.0,
+    "control_degradation_pct": 20.0,
+    "control_top1_drop_pp": 20.0,
+    "strong_ratio": 0.6,
+    "strong_nearest_fraction": 0.9,
+    "min_participants_for_power": 8,
+    "alpha": 0.05
+  },
+  "underpowered_rule": "if unique participants < 8, tag SUBJECT_SEPARABILITY_UNDERPOWERED, report descriptively, and do not conclude from a p-value alone",
+  "compute": {
+    "measured_seconds_per_reconstruction": 0.122,
+    "planned_reconstructions": 14015,
+    "estimated_minutes": 28.5,
+    "fixed_from_runtime_before_any_result": true
+  },
+  "never_used": [
+    "dataset reference focal",
+    "AnyCalib",
+    "GeoCalib",
+    "E2",
+    "any candidate focal grid",
+    "scene fusion",
+    "WiLoR or any learned hand latent",
+    "the FINAL_CONFIRMATORY_HOLDOUT"
+  ]
+}

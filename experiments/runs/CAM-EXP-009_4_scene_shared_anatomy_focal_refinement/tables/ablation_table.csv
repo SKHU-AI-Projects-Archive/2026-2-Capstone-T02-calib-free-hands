@@ -1,0 +1,4 @@
+comparison,n,median_A,median_B,median_paired_gain_pp,relative_reduction_pct
+generic prior contribution (M3 - M2),123,7.744145108350211,8.281831934064547,0.0,6.492365819484224
+shared sequence anatomy contribution (M3 - M1),123,7.744145108350211,7.744145108350211,0.0,0.0
+PRIMARY (M3 - M0),123,7.744145108350211,8.076667543246256,0.6511888373478243,4.117074686008356

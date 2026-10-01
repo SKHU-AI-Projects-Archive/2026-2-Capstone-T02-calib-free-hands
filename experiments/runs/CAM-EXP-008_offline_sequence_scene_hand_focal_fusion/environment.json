@@ -1,0 +1,40 @@
+{
+  "experiment": "CAM-EXP-008_offline_sequence_scene_hand_focal_fusion",
+  "analysis_env": {
+    "venv": "experiments/.venv",
+    "python": "3.11.7",
+    "numpy": "2.4.6",
+    "opencv": "5.0.0",
+    "scipy": "1.17.1"
+  },
+  "scene_model_env": {
+    "venv": "experiments/.venv-calib",
+    "torch": "2.1.2+cu121",
+    "cuda": "12.1",
+    "gpu": "NVIDIA GeForce RTX 4060 Ti"
+  },
+  "scene_model": "AnyCalib anycalib_gen / radial:2",
+  "scene_predictions": "REUSED from CAM-EXP-004.1 extended_frame_predictions.csv.gz (read-only); no new scene inference was run",
+  "pnp": "cv2.solvePnP SOLVEPNP_SQPNP primary, IPPE then ITERATIVE fallback (provenance: CAM-EXP-006.1 validated implementation)",
+  "reference_3d": "CAM-EXP-001.3 loco.py reconstruct(), reused unchanged",
+  "os": "Windows 10 (10.0.26200)",
+  "git_branch": "kjh",
+  "git_parent_commit": "2f28f07",
+  "seed": 20260929,
+  "focal_grid": {
+    "q_min": 0.5,
+    "q_max": 1.5,
+    "n": 161
+  },
+  "lambdas": [
+    0.0,
+    0.01,
+    0.03,
+    0.1,
+    0.3,
+    1.0,
+    3.0,
+    10.0
+  ],
+  "determinism": "all subset selection, shuffles and grids are seeded or deterministic"
+}

@@ -1,0 +1,11 @@
+{
+  "path": "experiments/manifests/gigahands_demo_cam_exp_0041_64frames_v1.csv.gz",
+  "sha256": "c79f9b2961d9da10f1202924edb65451addebd0dba34ad8036686f1238ef4244",
+  "n_rows": 11200,
+  "n_views": 175,
+  "grid": "np.linspace(0, n_valid_frames-1, 64).astype(int), deduplicated",
+  "nested_sets": "8 < 16 < 32 < 64 by farthest-point insertion seeded with the frozen CAM-EXP-003 8-frame set",
+  "views_where_old_8_is_exact_subset": 175,
+  "views_with_full_nesting": 175,
+  "selection_inputs": "video length only - no GT, no predictions, no hand annotation, no scene content"
+}

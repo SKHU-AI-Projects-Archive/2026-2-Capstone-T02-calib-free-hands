@@ -1,0 +1,227 @@
+{
+  "experiment": "CAM-EXP-009.2",
+  "frozen_before_any_dev_result": true,
+  "solver": {
+    "source": "CAM-EXP-009_1_bilateral_solver_validation/src/corrected_bone_fitter.py",
+    "imported_unchanged": true,
+    "convention": "UNDISTORT_ONCE_INTERNAL",
+    "dof": "D20 only",
+    "dof_exclusion": "CAM-EXP-009.1's D10/D5 groupings force equal bone lengths within a group, which no real hand satisfies. They are NOT reused here."
+  },
+  "grid": {
+    "q_min": 0.5,
+    "q_max": 1.5,
+    "q_n": 161,
+    "expressed_relative_to": "PIPELINE_BASELINE_FOCAL, never the true focal"
+  },
+  "frames": {
+    "n_frames": 12,
+    "min_fit_frames": 3,
+    "split": "frame parity: even = FIT, odd = EVAL"
+  },
+  "methods": [
+    "M0_BASELINE_RAW_L1",
+    "M1_LOG_L1",
+    "M2_LOG_MEDIAN",
+    "M3_LOG_TRIMMED",
+    "M4_HUBER_001",
+    "M4_HUBER_002",
+    "M4_HUBER_005",
+    "M5_FINGER_INTERNAL_RATIO",
+    "M6_FINGER_HUBER"
+  ],
+  "method_definitions": [
+    {
+      "method": "M0_BASELINE_RAW_L1",
+      "robust": 0,
+      "formula": "mean_b |p_L,b - p_R,b|",
+      "note": "closest to CAM-EXP-009.1; the comparison baseline, not a robust method"
+    },
+    {
+      "method": "M1_LOG_L1",
+      "robust": 0,
+      "formula": "mean_b |log(p_L,b+eps) - log(p_R,b+eps)|",
+      "note": "relative rather than absolute mismatch; large and small bones made comparable"
+    },
+    {
+      "method": "M2_LOG_MEDIAN",
+      "robust": 1,
+      "formula": "median_b |d_b|",
+      "note": "a few strongly asymmetric bones cannot dominate"
+    },
+    {
+      "method": "M3_LOG_TRIMMED",
+      "robust": 1,
+      "formula": "mean of the smallest 80 % of |d_b| (4 of 20 dropped)",
+      "note": "trim fraction frozen at 0.20"
+    },
+    {
+      "method": "M4_HUBER_001",
+      "robust": 1,
+      "formula": "mean huber(d, 0.01)",
+      "note": "quadratic below tau, linear above"
+    },
+    {
+      "method": "M4_HUBER_002",
+      "robust": 1,
+      "formula": "mean huber(d, 0.02)",
+      "note": ""
+    },
+    {
+      "method": "M4_HUBER_005",
+      "robust": 1,
+      "formula": "mean huber(d, 0.05)",
+      "note": ""
+    },
+    {
+      "method": "M5_FINGER_INTERNAL_RATIO",
+      "robust": 1,
+      "formula": "median_b |log r_L - log r_R| with r normalised inside each finger",
+      "note": "tolerant to a per-finger length difference between the sides"
+    },
+    {
+      "method": "M6_FINGER_HUBER",
+      "robust": 1,
+      "formula": "mean huber(finger-internal d, 0.02)",
+      "note": ""
+    }
+  ],
+  "method_family_closed": "M0-M6 are frozen here. No loss, no tau and no trim fraction may be added after a result is seen.",
+  "r_LR_redundancy_audit": {
+    "max_abs_score_change_under_global_right_scale": 5.684341886080802e-14,
+    "redundant": true,
+    "reason": "p_L and p_R are each normalised to sum 1, so a global LEFT/RIGHT scale ratio is absorbed by the normalisation and cannot change any score. A separate r_LR nuisance parameter is therefore NOT introduced."
+  },
+  "asymmetry_is_subject_level": "Bilateral asymmetry is drawn once per synthetic subject and held fixed for the whole sequence. The two hands are never assumed identical.",
+  "sparse_bones": [
+    2,
+    7,
+    10,
+    17
+  ],
+  "base_bone_lengths_m": [
+    0.04,
+    0.035,
+    0.03,
+    0.025,
+    0.085,
+    0.04,
+    0.025,
+    0.02,
+    0.08,
+    0.045,
+    0.028,
+    0.021,
+    0.075,
+    0.04,
+    0.026,
+    0.02,
+    0.07,
+    0.032,
+    0.02,
+    0.017
+  ],
+  "dev": {
+    "cells": [
+      "DEV_CLEAN",
+      "DEV_ASYM_DENSE_02",
+      "DEV_ASYM_SPARSE_05",
+      "DEV_ASYM_FINGER_03",
+      "DEV_NOISE_1PX",
+      "DEV_ARTIC_1DEG",
+      "DEV_COMBINED_MODERATE"
+    ],
+    "subjects_per_cell": 8,
+    "trials": 56,
+    "purpose": "select exactly one method; never reported as evidence of performance"
+  },
+  "test": {
+    "cells": [
+      "TEST_CLEAN",
+      "TEST_ASYM_GLOBAL_01",
+      "TEST_ASYM_GLOBAL_02",
+      "TEST_ASYM_GLOBAL_05",
+      "TEST_ASYM_DENSE_01",
+      "TEST_ASYM_DENSE_02",
+      "TEST_ASYM_DENSE_05",
+      "TEST_ASYM_SPARSE_01",
+      "TEST_ASYM_SPARSE_02",
+      "TEST_ASYM_SPARSE_05",
+      "TEST_ASYM_FINGER_01",
+      "TEST_ASYM_FINGER_02",
+      "TEST_ASYM_FINGER_05",
+      "TEST_NOISE_0.5PX",
+      "TEST_NOISE_1.0PX",
+      "TEST_NOISE_2.0PX",
+      "TEST_ARTIC_0.5DEG",
+      "TEST_ARTIC_1.0DEG",
+      "TEST_ARTIC_2.0DEG",
+      "TEST_MISSING_10",
+      "TEST_MISSING_20",
+      "TEST_VIS_75",
+      "TEST_VIS_50",
+      "TEST_VIS_25",
+      "TEST_DIST_2X",
+      "TEST_DIST_8X",
+      "TEST_DIST_16X",
+      "TEST_COMBINED_MODERATE",
+      "TEST_COMBINED_STRONG"
+    ],
+    "subjects_primary": 16,
+    "subjects_secondary": 8,
+    "trials": 400,
+    "methods_run": "the DEV winner and M0_BASELINE_RAW_L1"
+  },
+  "controls": [
+    {
+      "control": "C0_CORRECT",
+      "expect": "best of the controls",
+      "note": "correct bone correspondence; the reference the others degrade from"
+    },
+    {
+      "control": "C1_WRONG_BONE_MAPPING",
+      "expect": "degrade",
+      "note": "right-hand bones permuted within each finger before comparison"
+    },
+    {
+      "control": "C2_SUBJECT_SWAP",
+      "expect": "degrade",
+      "note": "right hand taken from a DIFFERENT synthetic subject"
+    },
+    {
+      "control": "C3_TEMPORAL_SHUFFLE",
+      "expect": "degrade or flat",
+      "note": "right-hand frames paired with unrelated left-hand frames"
+    },
+    {
+      "control": "C4_FIXED_LENGTH_INVARIANT",
+      "expect": "exactly flat",
+      "note": "CAM-EXP-009's naive formulation; bone lengths held fixed, so the score cannot depend on the candidate focal"
+    }
+  ],
+  "gate": {
+    "clean_focal_err_pct": 1.0,
+    "moderate_focal_err_pct": 5.0,
+    "relative_reduction_vs_M0_pct": 30.0,
+    "weak_relative_reduction_pct": 20.0,
+    "boundary_rate": 0.1,
+    "fit_eval_diff_pct": 5.0,
+    "control_degradation_pp": 10.0,
+    "control_within5_drop_pp": 20.0,
+    "real_relative_reduction_pct": 10.0,
+    "real_within5_gain_pp": 5.0
+  },
+  "compute": {
+    "measured_seconds_per_trial": 10.9,
+    "dev_estimated_minutes": 10.2,
+    "test_estimated_hours": 1.21,
+    "counts_fixed_from_runtime_before_any_result": true
+  },
+  "real_phase_rule": "The GigaHands phase runs only if the synthetic gate passes. If it fails, the recorded status is REAL_FOCAL_PHASE_NOT_RUN.",
+  "never_used": [
+    "the true/reference focal as an optimisation input",
+    "GT principal point or distortion as a primary input",
+    "any absolute hand-size prior",
+    "the FINAL_CONFIRMATORY_HOLDOUT"
+  ]
+}

@@ -1,0 +1,2 @@
+control,status,n_views,median_rel_focal_err_pct,ci95_lo,ci95_hi,p90_rel_focal_err_pct,signed_median_focal_err_pct,within_5pct,within_10pct,within_20pct,estimate_cv_pct,reference_cv_pct,tracking_spearman
+CONSTANT_RIG_FOCAL_ORACLE,"ORACLE_SANITY_CONTROL, not deployable",151,0.9326,0.5302,1.042,3.0285,0.0,0.9934,1.0,1.0,0.0,1.733,nan

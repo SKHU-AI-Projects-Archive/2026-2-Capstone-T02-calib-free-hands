@@ -1,0 +1,7 @@
+condition,target_camera_2d_used_in_hand_objective,target_camera_2d_used_in_reference_3d,target_camera_extrinsic_used,target_camera_reference_focal_used_in_optimization,GT_distortion_used,GT_principal_point_used,scene_prediction_used,allowed_primary
+S0,NO,NO,NO,NO,NO,NO,YES,YES
+S1,YES,NO,NO,NO,NO,NO,YES,YES
+H0,YES,NO,NO,NO,NO,NO,YES,DIAGNOSTIC_OR_CONTROL
+C1,YES,NO,NO,NO,NO,NO,YES,DIAGNOSTIC_OR_CONTROL
+C2,YES,NO,NO,NO,NO,NO,YES,DIAGNOSTIC_OR_CONTROL
+C3,NO,NO,NO,NO,NO,NO,YES,DIAGNOSTIC_OR_CONTROL

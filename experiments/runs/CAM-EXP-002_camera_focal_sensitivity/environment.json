@@ -1,0 +1,39 @@
+{
+  "experiment": "CAM-EXP-002_camera_focal_sensitivity",
+  "date": "2026-09-22T13:50:57.136200+00:00",
+  "os": "Windows 10 (10.0.26200)",
+  "machine": "AMD64",
+  "analysis_python": "3.11.7",
+  "numpy_version": "2.4.6",
+  "matplotlib_version": "3.11.2",
+  "inference_environment": {
+    "venv": "experiments/.venv-anyhand (git-ignored)",
+    "torch": "2.1.2+cu121",
+    "numpy": "1.26.4",
+    "gpu": "NVIDIA GeForce RTX 4060 Ti (16 GB), CUDA available",
+    "note": "kept separate because the pipeline pins numpy<2; the analysis environment and all CAM-EXP-001.x results are unaffected",
+    "extra_fixes": [
+      "PYOPENGL_PLATFORM=win32 so WiLoR's renderer import does not try EGL on Windows",
+      "working directory set to the repo root because model_config_wilor.yaml uses './mano_data/...'"
+    ]
+  },
+  "model": {
+    "checkpoint": "models/anyhand_wilor.ckpt",
+    "backend": "wilor",
+    "detector": "models/detector.pt"
+  },
+  "git_branch": "kjh",
+  "git_commit": "bf74e0cb8372c9c2a509816066ab7a02cbd33a62",
+  "git_dirty": true,
+  "sweep": {
+    "per_hand": 17680,
+    "per_frame": 8296,
+    "assoc_failures": 16,
+    "unique_hands": 2210
+  },
+  "summaries": {
+    "per_alpha": 8,
+    "sensitivity": 7
+  },
+  "depth_ratio_max_deviation": 0.0
+}

@@ -1,0 +1,8 @@
+check,result
+reference focal used for frame selection,NO
+reference focal used for hand availability,NO
+reference focal used for model success filtering,NO
+test focal used for lambda selection,NO
+reference 3D used inside the hand correction,NO
+result-based camera or video exclusion,NO
+predictions frozen before test focal opened,YES

@@ -1,0 +1,8 @@
+{
+  "frames_attempted": 2800,
+  "frames_with_hand": 2429,
+  "views": 175,
+  "latent_dim": 1280,
+  "frames_with_pred_cam": 2429,
+  "target_blind": true
+}

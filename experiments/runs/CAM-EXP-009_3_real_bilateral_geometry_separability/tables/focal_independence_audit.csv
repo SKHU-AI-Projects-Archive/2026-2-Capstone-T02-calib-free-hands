@@ -1,0 +1,7 @@
+component,reference_focal_loaded,AnyCalib_loaded,focal_candidate_grid_used,allowed
+reference focal / gt_fx,NO,NO,NO,NO
+AnyCalib inference,NO,NO,NO,NO
+GeoCalib inference,NO,NO,NO,NO
+E2 / scene fusion,NO,NO,NO,NO
+candidate focal sweep,NO,NO,NO,NO
+OTHER_CAMERA_ONLY_REFERENCE_3D (historical calibration dependency),NO,NO,NO,YES

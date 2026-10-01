@@ -1,0 +1,1733 @@
+{
+  "spec_id": "cam_exp_007_outer_splits_v1",
+  "created_before_target_analysis": true,
+  "built_from": "physical camera and sequence membership only; no target value was read",
+  "n_views": 175,
+  "LOCO_PHYSICAL_CAMERA": {
+    "role": "PRIMARY",
+    "n_folds": 40,
+    "folds": [
+      {
+        "fold": 0,
+        "held_out_physical_camera": "brics-odroid-001_cam0",
+        "test_views": [
+          [
+            "p36-tea-0010",
+            "brics-odroid-001_cam0"
+          ],
+          [
+            "p41-boxing-0021",
+            "brics-odroid-001_cam0"
+          ],
+          [
+            "p41-plant-0004",
+            "brics-odroid-001_cam0"
+          ],
+          [
+            "p44-dog-0004",
+            "brics-odroid-001_cam0"
+          ]
+        ],
+        "n_test_views": 4
+      },
+      {
+        "fold": 1,
+        "held_out_physical_camera": "brics-odroid-001_cam1",
+        "test_views": [
+          [
+            "p36-tea-0010",
+            "brics-odroid-001_cam1"
+          ],
+          [
+            "p41-boxing-0021",
+            "brics-odroid-001_cam1"
+          ],
+          [
+            "p41-plant-0004",
+            "brics-odroid-001_cam1"
+          ],
+          [
+            "p44-dog-0004",
+            "brics-odroid-001_cam1"
+          ]
+        ],
+        "n_test_views": 4
+      },
+      {
+        "fold": 2,
+        "held_out_physical_camera": "brics-odroid-002_cam0",
+        "test_views": [
+          [
+            "p36-tea-0010",
+            "brics-odroid-002_cam0"
+          ],
+          [
+            "p41-boxing-0021",
+            "brics-odroid-002_cam0"
+          ],
+          [
+            "p41-plant-0004",
+            "brics-odroid-002_cam0"
+          ],
+          [
+            "p44-dog-0004",
+            "brics-odroid-002_cam0"
+          ],
+          [
+            "p52-instrument-0034",
+            "brics-odroid-002_cam0"
+          ]
+        ],
+        "n_test_views": 5
+      },
+      {
+        "fold": 3,
+        "held_out_physical_camera": "brics-odroid-006_cam0",
+        "test_views": [
+          [
+            "p36-tea-0010",
+            "brics-odroid-006_cam0"
+          ],
+          [
+            "p41-boxing-0021",
+            "brics-odroid-006_cam0"
+          ],
+          [
+            "p41-plant-0004",
+            "brics-odroid-006_cam0"
+          ],
+          [
+            "p44-dog-0004",
+            "brics-odroid-006_cam0"
+          ]
+        ],
+        "n_test_views": 4
+      },
+      {
+        "fold": 4,
+        "held_out_physical_camera": "brics-odroid-007_cam0",
+        "test_views": [
+          [
+            "p36-tea-0010",
+            "brics-odroid-007_cam0"
+          ],
+          [
+            "p41-boxing-0021",
+            "brics-odroid-007_cam0"
+          ],
+          [
+            "p41-plant-0004",
+            "brics-odroid-007_cam0"
+          ],
+          [
+            "p44-dog-0004",
+            "brics-odroid-007_cam0"
+          ],
+          [
+            "p52-instrument-0034",
+            "brics-odroid-007_cam0"
+          ]
+        ],
+        "n_test_views": 5
+      },
+      {
+        "fold": 5,
+        "held_out_physical_camera": "brics-odroid-007_cam1",
+        "test_views": [
+          [
+            "p36-tea-0010",
+            "brics-odroid-007_cam1"
+          ],
+          [
+            "p41-boxing-0021",
+            "brics-odroid-007_cam1"
+          ],
+          [
+            "p41-plant-0004",
+            "brics-odroid-007_cam1"
+          ],
+          [
+            "p44-dog-0004",
+            "brics-odroid-007_cam1"
+          ],
+          [
+            "p52-instrument-0034",
+            "brics-odroid-007_cam1"
+          ]
+        ],
+        "n_test_views": 5
+      },
+      {
+        "fold": 6,
+        "held_out_physical_camera": "brics-odroid-008_cam0",
+        "test_views": [
+          [
+            "p36-tea-0010",
+            "brics-odroid-008_cam0"
+          ],
+          [
+            "p41-boxing-0021",
+            "brics-odroid-008_cam0"
+          ],
+          [
+            "p41-plant-0004",
+            "brics-odroid-008_cam0"
+          ],
+          [
+            "p44-dog-0004",
+            "brics-odroid-008_cam0"
+          ]
+        ],
+        "n_test_views": 4
+      },
+      {
+        "fold": 7,
+        "held_out_physical_camera": "brics-odroid-009_cam1",
+        "test_views": [
+          [
+            "p36-tea-0010",
+            "brics-odroid-009_cam1"
+          ],
+          [
+            "p41-boxing-0021",
+            "brics-odroid-009_cam1"
+          ],
+          [
+            "p41-plant-0004",
+            "brics-odroid-009_cam1"
+          ],
+          [
+            "p44-dog-0004",
+            "brics-odroid-009_cam1"
+          ]
+        ],
+        "n_test_views": 4
+      },
+      {
+        "fold": 8,
+        "held_out_physical_camera": "brics-odroid-010_cam0",
+        "test_views": [
+          [
+            "p36-tea-0010",
+            "brics-odroid-010_cam0"
+          ],
+          [
+            "p41-boxing-0021",
+            "brics-odroid-010_cam0"
+          ],
+          [
+            "p41-plant-0004",
+            "brics-odroid-010_cam0"
+          ],
+          [
+            "p44-dog-0004",
+            "brics-odroid-010_cam0"
+          ]
+        ],
+        "n_test_views": 4
+      },
+      {
+        "fold": 9,
+        "held_out_physical_camera": "brics-odroid-010_cam1",
+        "test_views": [
+          [
+            "p36-tea-0010",
+            "brics-odroid-010_cam1"
+          ],
+          [
+            "p41-boxing-0021",
+            "brics-odroid-010_cam1"
+          ],
+          [
+            "p41-plant-0004",
+            "brics-odroid-010_cam1"
+          ],
+          [
+            "p44-dog-0004",
+            "brics-odroid-010_cam1"
+          ]
+        ],
+        "n_test_views": 4
+      },
+      {
+        "fold": 10,
+        "held_out_physical_camera": "brics-odroid-011_cam0",
+        "test_views": [
+          [
+            "p36-tea-0010",
+            "brics-odroid-011_cam0"
+          ],
+          [
+            "p41-boxing-0021",
+            "brics-odroid-011_cam0"
+          ],
+          [
+            "p41-plant-0004",
+            "brics-odroid-011_cam0"
+          ],
+          [
+            "p44-dog-0004",
+            "brics-odroid-011_cam0"
+          ]
+        ],
+        "n_test_views": 4
+      },
+      {
+        "fold": 11,
+        "held_out_physical_camera": "brics-odroid-012_cam0",
+        "test_views": [
+          [
+            "p36-tea-0010",
+            "brics-odroid-012_cam0"
+          ],
+          [
+            "p41-boxing-0021",
+            "brics-odroid-012_cam0"
+          ],
+          [
+            "p41-plant-0004",
+            "brics-odroid-012_cam0"
+          ],
+          [
+            "p44-dog-0004",
+            "brics-odroid-012_cam0"
+          ]
+        ],
+        "n_test_views": 4
+      },
+      {
+        "fold": 12,
+        "held_out_physical_camera": "brics-odroid-012_cam1",
+        "test_views": [
+          [
+            "p36-tea-0010",
+            "brics-odroid-012_cam1"
+          ],
+          [
+            "p41-boxing-0021",
+            "brics-odroid-012_cam1"
+          ],
+          [
+            "p41-plant-0004",
+            "brics-odroid-012_cam1"
+          ],
+          [
+            "p44-dog-0004",
+            "brics-odroid-012_cam1"
+          ],
+          [
+            "p52-instrument-0034",
+            "brics-odroid-012_cam1"
+          ]
+        ],
+        "n_test_views": 5
+      },
+      {
+        "fold": 13,
+        "held_out_physical_camera": "brics-odroid-014_cam1",
+        "test_views": [
+          [
+            "p36-tea-0010",
+            "brics-odroid-014_cam1"
+          ],
+          [
+            "p41-boxing-0021",
+            "brics-odroid-014_cam1"
+          ],
+          [
+            "p41-plant-0004",
+            "brics-odroid-014_cam1"
+          ],
+          [
+            "p44-dog-0004",
+            "brics-odroid-014_cam1"
+          ]
+        ],
+        "n_test_views": 4
+      },
+      {
+        "fold": 14,
+        "held_out_physical_camera": "brics-odroid-015_cam0",
+        "test_views": [
+          [
+            "p36-tea-0010",
+            "brics-odroid-015_cam0"
+          ],
+          [
+            "p41-boxing-0021",
+            "brics-odroid-015_cam0"
+          ],
+          [
+            "p41-plant-0004",
+            "brics-odroid-015_cam0"
+          ],
+          [
+            "p44-dog-0004",
+            "brics-odroid-015_cam0"
+          ]
+        ],
+        "n_test_views": 4
+      },
+      {
+        "fold": 15,
+        "held_out_physical_camera": "brics-odroid-015_cam1",
+        "test_views": [
+          [
+            "p36-tea-0010",
+            "brics-odroid-015_cam1"
+          ],
+          [
+            "p41-boxing-0021",
+            "brics-odroid-015_cam1"
+          ],
+          [
+            "p41-plant-0004",
+            "brics-odroid-015_cam1"
+          ],
+          [
+            "p44-dog-0004",
+            "brics-odroid-015_cam1"
+          ],
+          [
+            "p52-instrument-0034",
+            "brics-odroid-015_cam1"
+          ]
+        ],
+        "n_test_views": 5
+      },
+      {
+        "fold": 16,
+        "held_out_physical_camera": "brics-odroid-016_cam0",
+        "test_views": [
+          [
+            "p36-tea-0010",
+            "brics-odroid-016_cam0"
+          ],
+          [
+            "p41-boxing-0021",
+            "brics-odroid-016_cam0"
+          ],
+          [
+            "p41-plant-0004",
+            "brics-odroid-016_cam0"
+          ],
+          [
+            "p44-dog-0004",
+            "brics-odroid-016_cam0"
+          ],
+          [
+            "p52-instrument-0034",
+            "brics-odroid-016_cam0"
+          ]
+        ],
+        "n_test_views": 5
+      },
+      {
+        "fold": 17,
+        "held_out_physical_camera": "brics-odroid-017_cam0",
+        "test_views": [
+          [
+            "p36-tea-0010",
+            "brics-odroid-017_cam0"
+          ],
+          [
+            "p41-boxing-0021",
+            "brics-odroid-017_cam0"
+          ],
+          [
+            "p41-plant-0004",
+            "brics-odroid-017_cam0"
+          ],
+          [
+            "p44-dog-0004",
+            "brics-odroid-017_cam0"
+          ]
+        ],
+        "n_test_views": 4
+      },
+      {
+        "fold": 18,
+        "held_out_physical_camera": "brics-odroid-017_cam1",
+        "test_views": [
+          [
+            "p36-tea-0010",
+            "brics-odroid-017_cam1"
+          ],
+          [
+            "p41-boxing-0021",
+            "brics-odroid-017_cam1"
+          ],
+          [
+            "p41-plant-0004",
+            "brics-odroid-017_cam1"
+          ],
+          [
+            "p44-dog-0004",
+            "brics-odroid-017_cam1"
+          ]
+        ],
+        "n_test_views": 4
+      },
+      {
+        "fold": 19,
+        "held_out_physical_camera": "brics-odroid-019_cam1",
+        "test_views": [
+          [
+            "p36-tea-0010",
+            "brics-odroid-019_cam1"
+          ],
+          [
+            "p41-boxing-0021",
+            "brics-odroid-019_cam1"
+          ],
+          [
+            "p41-plant-0004",
+            "brics-odroid-019_cam1"
+          ],
+          [
+            "p44-dog-0004",
+            "brics-odroid-019_cam1"
+          ]
+        ],
+        "n_test_views": 4
+      },
+      {
+        "fold": 20,
+        "held_out_physical_camera": "brics-odroid-020_cam0",
+        "test_views": [
+          [
+            "p36-tea-0010",
+            "brics-odroid-020_cam0"
+          ],
+          [
+            "p41-boxing-0021",
+            "brics-odroid-020_cam0"
+          ],
+          [
+            "p41-plant-0004",
+            "brics-odroid-020_cam0"
+          ],
+          [
+            "p44-dog-0004",
+            "brics-odroid-020_cam0"
+          ]
+        ],
+        "n_test_views": 4
+      },
+      {
+        "fold": 21,
+        "held_out_physical_camera": "brics-odroid-020_cam1",
+        "test_views": [
+          [
+            "p36-tea-0010",
+            "brics-odroid-020_cam1"
+          ],
+          [
+            "p41-boxing-0021",
+            "brics-odroid-020_cam1"
+          ],
+          [
+            "p41-plant-0004",
+            "brics-odroid-020_cam1"
+          ],
+          [
+            "p44-dog-0004",
+            "brics-odroid-020_cam1"
+          ]
+        ],
+        "n_test_views": 4
+      },
+      {
+        "fold": 22,
+        "held_out_physical_camera": "brics-odroid-021_cam0",
+        "test_views": [
+          [
+            "p36-tea-0010",
+            "brics-odroid-021_cam0"
+          ],
+          [
+            "p41-boxing-0021",
+            "brics-odroid-021_cam0"
+          ],
+          [
+            "p41-plant-0004",
+            "brics-odroid-021_cam0"
+          ],
+          [
+            "p44-dog-0004",
+            "brics-odroid-021_cam0"
+          ],
+          [
+            "p52-instrument-0034",
+            "brics-odroid-021_cam0"
+          ]
+        ],
+        "n_test_views": 5
+      },
+      {
+        "fold": 23,
+        "held_out_physical_camera": "brics-odroid-021_cam1",
+        "test_views": [
+          [
+            "p36-tea-0010",
+            "brics-odroid-021_cam1"
+          ],
+          [
+            "p41-boxing-0021",
+            "brics-odroid-021_cam1"
+          ],
+          [
+            "p41-plant-0004",
+            "brics-odroid-021_cam1"
+          ],
+          [
+            "p44-dog-0004",
+            "brics-odroid-021_cam1"
+          ]
+        ],
+        "n_test_views": 4
+      },
+      {
+        "fold": 24,
+        "held_out_physical_camera": "brics-odroid-022_cam0",
+        "test_views": [
+          [
+            "p36-tea-0010",
+            "brics-odroid-022_cam0"
+          ],
+          [
+            "p41-boxing-0021",
+            "brics-odroid-022_cam0"
+          ],
+          [
+            "p41-plant-0004",
+            "brics-odroid-022_cam0"
+          ],
+          [
+            "p44-dog-0004",
+            "brics-odroid-022_cam0"
+          ]
+        ],
+        "n_test_views": 4
+      },
+      {
+        "fold": 25,
+        "held_out_physical_camera": "brics-odroid-022_cam1",
+        "test_views": [
+          [
+            "p36-tea-0010",
+            "brics-odroid-022_cam1"
+          ],
+          [
+            "p41-boxing-0021",
+            "brics-odroid-022_cam1"
+          ],
+          [
+            "p41-plant-0004",
+            "brics-odroid-022_cam1"
+          ],
+          [
+            "p44-dog-0004",
+            "brics-odroid-022_cam1"
+          ]
+        ],
+        "n_test_views": 4
+      },
+      {
+        "fold": 26,
+        "held_out_physical_camera": "brics-odroid-023_cam0",
+        "test_views": [
+          [
+            "p36-tea-0010",
+            "brics-odroid-023_cam0"
+          ],
+          [
+            "p41-boxing-0021",
+            "brics-odroid-023_cam0"
+          ],
+          [
+            "p41-plant-0004",
+            "brics-odroid-023_cam0"
+          ],
+          [
+            "p44-dog-0004",
+            "brics-odroid-023_cam0"
+          ],
+          [
+            "p52-instrument-0034",
+            "brics-odroid-023_cam0"
+          ]
+        ],
+        "n_test_views": 5
+      },
+      {
+        "fold": 27,
+        "held_out_physical_camera": "brics-odroid-024_cam0",
+        "test_views": [
+          [
+            "p36-tea-0010",
+            "brics-odroid-024_cam0"
+          ],
+          [
+            "p41-boxing-0021",
+            "brics-odroid-024_cam0"
+          ],
+          [
+            "p41-plant-0004",
+            "brics-odroid-024_cam0"
+          ],
+          [
+            "p44-dog-0004",
+            "brics-odroid-024_cam0"
+          ],
+          [
+            "p52-instrument-0034",
+            "brics-odroid-024_cam0"
+          ]
+        ],
+        "n_test_views": 5
+      },
+      {
+        "fold": 28,
+        "held_out_physical_camera": "brics-odroid-024_cam1",
+        "test_views": [
+          [
+            "p36-tea-0010",
+            "brics-odroid-024_cam1"
+          ],
+          [
+            "p41-boxing-0021",
+            "brics-odroid-024_cam1"
+          ],
+          [
+            "p41-plant-0004",
+            "brics-odroid-024_cam1"
+          ],
+          [
+            "p44-dog-0004",
+            "brics-odroid-024_cam1"
+          ]
+        ],
+        "n_test_views": 4
+      },
+      {
+        "fold": 29,
+        "held_out_physical_camera": "brics-odroid-025_cam0",
+        "test_views": [
+          [
+            "p36-tea-0010",
+            "brics-odroid-025_cam0"
+          ],
+          [
+            "p41-boxing-0021",
+            "brics-odroid-025_cam0"
+          ],
+          [
+            "p41-plant-0004",
+            "brics-odroid-025_cam0"
+          ],
+          [
+            "p44-dog-0004",
+            "brics-odroid-025_cam0"
+          ]
+        ],
+        "n_test_views": 4
+      },
+      {
+        "fold": 30,
+        "held_out_physical_camera": "brics-odroid-025_cam1",
+        "test_views": [
+          [
+            "p36-tea-0010",
+            "brics-odroid-025_cam1"
+          ],
+          [
+            "p41-boxing-0021",
+            "brics-odroid-025_cam1"
+          ],
+          [
+            "p41-plant-0004",
+            "brics-odroid-025_cam1"
+          ],
+          [
+            "p44-dog-0004",
+            "brics-odroid-025_cam1"
+          ],
+          [
+            "p52-instrument-0034",
+            "brics-odroid-025_cam1"
+          ]
+        ],
+        "n_test_views": 5
+      },
+      {
+        "fold": 31,
+        "held_out_physical_camera": "brics-odroid-026_cam0",
+        "test_views": [
+          [
+            "p36-tea-0010",
+            "brics-odroid-026_cam0"
+          ],
+          [
+            "p41-boxing-0021",
+            "brics-odroid-026_cam0"
+          ],
+          [
+            "p41-plant-0004",
+            "brics-odroid-026_cam0"
+          ],
+          [
+            "p44-dog-0004",
+            "brics-odroid-026_cam0"
+          ]
+        ],
+        "n_test_views": 4
+      },
+      {
+        "fold": 32,
+        "held_out_physical_camera": "brics-odroid-026_cam1",
+        "test_views": [
+          [
+            "p36-tea-0010",
+            "brics-odroid-026_cam1"
+          ],
+          [
+            "p41-boxing-0021",
+            "brics-odroid-026_cam1"
+          ],
+          [
+            "p41-plant-0004",
+            "brics-odroid-026_cam1"
+          ],
+          [
+            "p44-dog-0004",
+            "brics-odroid-026_cam1"
+          ]
+        ],
+        "n_test_views": 4
+      },
+      {
+        "fold": 33,
+        "held_out_physical_camera": "brics-odroid-027_cam0",
+        "test_views": [
+          [
+            "p36-tea-0010",
+            "brics-odroid-027_cam0"
+          ],
+          [
+            "p41-boxing-0021",
+            "brics-odroid-027_cam0"
+          ],
+          [
+            "p41-plant-0004",
+            "brics-odroid-027_cam0"
+          ],
+          [
+            "p44-dog-0004",
+            "brics-odroid-027_cam0"
+          ],
+          [
+            "p52-instrument-0034",
+            "brics-odroid-027_cam0"
+          ]
+        ],
+        "n_test_views": 5
+      },
+      {
+        "fold": 34,
+        "held_out_physical_camera": "brics-odroid-027_cam1",
+        "test_views": [
+          [
+            "p36-tea-0010",
+            "brics-odroid-027_cam1"
+          ],
+          [
+            "p41-boxing-0021",
+            "brics-odroid-027_cam1"
+          ],
+          [
+            "p41-plant-0004",
+            "brics-odroid-027_cam1"
+          ],
+          [
+            "p44-dog-0004",
+            "brics-odroid-027_cam1"
+          ],
+          [
+            "p52-instrument-0034",
+            "brics-odroid-027_cam1"
+          ]
+        ],
+        "n_test_views": 5
+      },
+      {
+        "fold": 35,
+        "held_out_physical_camera": "brics-odroid-028_cam0",
+        "test_views": [
+          [
+            "p36-tea-0010",
+            "brics-odroid-028_cam0"
+          ],
+          [
+            "p41-boxing-0021",
+            "brics-odroid-028_cam0"
+          ],
+          [
+            "p41-plant-0004",
+            "brics-odroid-028_cam0"
+          ],
+          [
+            "p44-dog-0004",
+            "brics-odroid-028_cam0"
+          ],
+          [
+            "p52-instrument-0034",
+            "brics-odroid-028_cam0"
+          ]
+        ],
+        "n_test_views": 5
+      },
+      {
+        "fold": 36,
+        "held_out_physical_camera": "brics-odroid-029_cam0",
+        "test_views": [
+          [
+            "p36-tea-0010",
+            "brics-odroid-029_cam0"
+          ],
+          [
+            "p41-boxing-0021",
+            "brics-odroid-029_cam0"
+          ],
+          [
+            "p41-plant-0004",
+            "brics-odroid-029_cam0"
+          ],
+          [
+            "p44-dog-0004",
+            "brics-odroid-029_cam0"
+          ]
+        ],
+        "n_test_views": 4
+      },
+      {
+        "fold": 37,
+        "held_out_physical_camera": "brics-odroid-029_cam1",
+        "test_views": [
+          [
+            "p36-tea-0010",
+            "brics-odroid-029_cam1"
+          ],
+          [
+            "p41-boxing-0021",
+            "brics-odroid-029_cam1"
+          ],
+          [
+            "p41-plant-0004",
+            "brics-odroid-029_cam1"
+          ],
+          [
+            "p44-dog-0004",
+            "brics-odroid-029_cam1"
+          ]
+        ],
+        "n_test_views": 4
+      },
+      {
+        "fold": 38,
+        "held_out_physical_camera": "brics-odroid-030_cam0",
+        "test_views": [
+          [
+            "p36-tea-0010",
+            "brics-odroid-030_cam0"
+          ],
+          [
+            "p41-boxing-0021",
+            "brics-odroid-030_cam0"
+          ],
+          [
+            "p41-plant-0004",
+            "brics-odroid-030_cam0"
+          ],
+          [
+            "p44-dog-0004",
+            "brics-odroid-030_cam0"
+          ],
+          [
+            "p52-instrument-0034",
+            "brics-odroid-030_cam0"
+          ]
+        ],
+        "n_test_views": 5
+      },
+      {
+        "fold": 39,
+        "held_out_physical_camera": "brics-odroid-030_cam1",
+        "test_views": [
+          [
+            "p36-tea-0010",
+            "brics-odroid-030_cam1"
+          ],
+          [
+            "p41-boxing-0021",
+            "brics-odroid-030_cam1"
+          ],
+          [
+            "p41-plant-0004",
+            "brics-odroid-030_cam1"
+          ],
+          [
+            "p44-dog-0004",
+            "brics-odroid-030_cam1"
+          ],
+          [
+            "p52-instrument-0034",
+            "brics-odroid-030_cam1"
+          ]
+        ],
+        "n_test_views": 5
+      }
+    ]
+  },
+  "LOSO_SEQUENCE": {
+    "role": "SECONDARY - content/sequence shift, NOT a new-camera test",
+    "n_folds": 5,
+    "folds": [
+      {
+        "fold": 0,
+        "held_out_sequence": "p36-tea-0010",
+        "test_views": [
+          [
+            "p36-tea-0010",
+            "brics-odroid-001_cam0"
+          ],
+          [
+            "p36-tea-0010",
+            "brics-odroid-001_cam1"
+          ],
+          [
+            "p36-tea-0010",
+            "brics-odroid-002_cam0"
+          ],
+          [
+            "p36-tea-0010",
+            "brics-odroid-006_cam0"
+          ],
+          [
+            "p36-tea-0010",
+            "brics-odroid-007_cam0"
+          ],
+          [
+            "p36-tea-0010",
+            "brics-odroid-007_cam1"
+          ],
+          [
+            "p36-tea-0010",
+            "brics-odroid-008_cam0"
+          ],
+          [
+            "p36-tea-0010",
+            "brics-odroid-009_cam1"
+          ],
+          [
+            "p36-tea-0010",
+            "brics-odroid-010_cam0"
+          ],
+          [
+            "p36-tea-0010",
+            "brics-odroid-010_cam1"
+          ],
+          [
+            "p36-tea-0010",
+            "brics-odroid-011_cam0"
+          ],
+          [
+            "p36-tea-0010",
+            "brics-odroid-012_cam0"
+          ],
+          [
+            "p36-tea-0010",
+            "brics-odroid-012_cam1"
+          ],
+          [
+            "p36-tea-0010",
+            "brics-odroid-014_cam1"
+          ],
+          [
+            "p36-tea-0010",
+            "brics-odroid-015_cam0"
+          ],
+          [
+            "p36-tea-0010",
+            "brics-odroid-015_cam1"
+          ],
+          [
+            "p36-tea-0010",
+            "brics-odroid-016_cam0"
+          ],
+          [
+            "p36-tea-0010",
+            "brics-odroid-017_cam0"
+          ],
+          [
+            "p36-tea-0010",
+            "brics-odroid-017_cam1"
+          ],
+          [
+            "p36-tea-0010",
+            "brics-odroid-019_cam1"
+          ],
+          [
+            "p36-tea-0010",
+            "brics-odroid-020_cam0"
+          ],
+          [
+            "p36-tea-0010",
+            "brics-odroid-020_cam1"
+          ],
+          [
+            "p36-tea-0010",
+            "brics-odroid-021_cam0"
+          ],
+          [
+            "p36-tea-0010",
+            "brics-odroid-021_cam1"
+          ],
+          [
+            "p36-tea-0010",
+            "brics-odroid-022_cam0"
+          ],
+          [
+            "p36-tea-0010",
+            "brics-odroid-022_cam1"
+          ],
+          [
+            "p36-tea-0010",
+            "brics-odroid-023_cam0"
+          ],
+          [
+            "p36-tea-0010",
+            "brics-odroid-024_cam0"
+          ],
+          [
+            "p36-tea-0010",
+            "brics-odroid-024_cam1"
+          ],
+          [
+            "p36-tea-0010",
+            "brics-odroid-025_cam0"
+          ],
+          [
+            "p36-tea-0010",
+            "brics-odroid-025_cam1"
+          ],
+          [
+            "p36-tea-0010",
+            "brics-odroid-026_cam0"
+          ],
+          [
+            "p36-tea-0010",
+            "brics-odroid-026_cam1"
+          ],
+          [
+            "p36-tea-0010",
+            "brics-odroid-027_cam0"
+          ],
+          [
+            "p36-tea-0010",
+            "brics-odroid-027_cam1"
+          ],
+          [
+            "p36-tea-0010",
+            "brics-odroid-028_cam0"
+          ],
+          [
+            "p36-tea-0010",
+            "brics-odroid-029_cam0"
+          ],
+          [
+            "p36-tea-0010",
+            "brics-odroid-029_cam1"
+          ],
+          [
+            "p36-tea-0010",
+            "brics-odroid-030_cam0"
+          ],
+          [
+            "p36-tea-0010",
+            "brics-odroid-030_cam1"
+          ]
+        ],
+        "n_test_views": 40
+      },
+      {
+        "fold": 1,
+        "held_out_sequence": "p41-boxing-0021",
+        "test_views": [
+          [
+            "p41-boxing-0021",
+            "brics-odroid-001_cam0"
+          ],
+          [
+            "p41-boxing-0021",
+            "brics-odroid-001_cam1"
+          ],
+          [
+            "p41-boxing-0021",
+            "brics-odroid-002_cam0"
+          ],
+          [
+            "p41-boxing-0021",
+            "brics-odroid-006_cam0"
+          ],
+          [
+            "p41-boxing-0021",
+            "brics-odroid-007_cam0"
+          ],
+          [
+            "p41-boxing-0021",
+            "brics-odroid-007_cam1"
+          ],
+          [
+            "p41-boxing-0021",
+            "brics-odroid-008_cam0"
+          ],
+          [
+            "p41-boxing-0021",
+            "brics-odroid-009_cam1"
+          ],
+          [
+            "p41-boxing-0021",
+            "brics-odroid-010_cam0"
+          ],
+          [
+            "p41-boxing-0021",
+            "brics-odroid-010_cam1"
+          ],
+          [
+            "p41-boxing-0021",
+            "brics-odroid-011_cam0"
+          ],
+          [
+            "p41-boxing-0021",
+            "brics-odroid-012_cam0"
+          ],
+          [
+            "p41-boxing-0021",
+            "brics-odroid-012_cam1"
+          ],
+          [
+            "p41-boxing-0021",
+            "brics-odroid-014_cam1"
+          ],
+          [
+            "p41-boxing-0021",
+            "brics-odroid-015_cam0"
+          ],
+          [
+            "p41-boxing-0021",
+            "brics-odroid-015_cam1"
+          ],
+          [
+            "p41-boxing-0021",
+            "brics-odroid-016_cam0"
+          ],
+          [
+            "p41-boxing-0021",
+            "brics-odroid-017_cam0"
+          ],
+          [
+            "p41-boxing-0021",
+            "brics-odroid-017_cam1"
+          ],
+          [
+            "p41-boxing-0021",
+            "brics-odroid-019_cam1"
+          ],
+          [
+            "p41-boxing-0021",
+            "brics-odroid-020_cam0"
+          ],
+          [
+            "p41-boxing-0021",
+            "brics-odroid-020_cam1"
+          ],
+          [
+            "p41-boxing-0021",
+            "brics-odroid-021_cam0"
+          ],
+          [
+            "p41-boxing-0021",
+            "brics-odroid-021_cam1"
+          ],
+          [
+            "p41-boxing-0021",
+            "brics-odroid-022_cam0"
+          ],
+          [
+            "p41-boxing-0021",
+            "brics-odroid-022_cam1"
+          ],
+          [
+            "p41-boxing-0021",
+            "brics-odroid-023_cam0"
+          ],
+          [
+            "p41-boxing-0021",
+            "brics-odroid-024_cam0"
+          ],
+          [
+            "p41-boxing-0021",
+            "brics-odroid-024_cam1"
+          ],
+          [
+            "p41-boxing-0021",
+            "brics-odroid-025_cam0"
+          ],
+          [
+            "p41-boxing-0021",
+            "brics-odroid-025_cam1"
+          ],
+          [
+            "p41-boxing-0021",
+            "brics-odroid-026_cam0"
+          ],
+          [
+            "p41-boxing-0021",
+            "brics-odroid-026_cam1"
+          ],
+          [
+            "p41-boxing-0021",
+            "brics-odroid-027_cam0"
+          ],
+          [
+            "p41-boxing-0021",
+            "brics-odroid-027_cam1"
+          ],
+          [
+            "p41-boxing-0021",
+            "brics-odroid-028_cam0"
+          ],
+          [
+            "p41-boxing-0021",
+            "brics-odroid-029_cam0"
+          ],
+          [
+            "p41-boxing-0021",
+            "brics-odroid-029_cam1"
+          ],
+          [
+            "p41-boxing-0021",
+            "brics-odroid-030_cam0"
+          ],
+          [
+            "p41-boxing-0021",
+            "brics-odroid-030_cam1"
+          ]
+        ],
+        "n_test_views": 40
+      },
+      {
+        "fold": 2,
+        "held_out_sequence": "p41-plant-0004",
+        "test_views": [
+          [
+            "p41-plant-0004",
+            "brics-odroid-001_cam0"
+          ],
+          [
+            "p41-plant-0004",
+            "brics-odroid-001_cam1"
+          ],
+          [
+            "p41-plant-0004",
+            "brics-odroid-002_cam0"
+          ],
+          [
+            "p41-plant-0004",
+            "brics-odroid-006_cam0"
+          ],
+          [
+            "p41-plant-0004",
+            "brics-odroid-007_cam0"
+          ],
+          [
+            "p41-plant-0004",
+            "brics-odroid-007_cam1"
+          ],
+          [
+            "p41-plant-0004",
+            "brics-odroid-008_cam0"
+          ],
+          [
+            "p41-plant-0004",
+            "brics-odroid-009_cam1"
+          ],
+          [
+            "p41-plant-0004",
+            "brics-odroid-010_cam0"
+          ],
+          [
+            "p41-plant-0004",
+            "brics-odroid-010_cam1"
+          ],
+          [
+            "p41-plant-0004",
+            "brics-odroid-011_cam0"
+          ],
+          [
+            "p41-plant-0004",
+            "brics-odroid-012_cam0"
+          ],
+          [
+            "p41-plant-0004",
+            "brics-odroid-012_cam1"
+          ],
+          [
+            "p41-plant-0004",
+            "brics-odroid-014_cam1"
+          ],
+          [
+            "p41-plant-0004",
+            "brics-odroid-015_cam0"
+          ],
+          [
+            "p41-plant-0004",
+            "brics-odroid-015_cam1"
+          ],
+          [
+            "p41-plant-0004",
+            "brics-odroid-016_cam0"
+          ],
+          [
+            "p41-plant-0004",
+            "brics-odroid-017_cam0"
+          ],
+          [
+            "p41-plant-0004",
+            "brics-odroid-017_cam1"
+          ],
+          [
+            "p41-plant-0004",
+            "brics-odroid-019_cam1"
+          ],
+          [
+            "p41-plant-0004",
+            "brics-odroid-020_cam0"
+          ],
+          [
+            "p41-plant-0004",
+            "brics-odroid-020_cam1"
+          ],
+          [
+            "p41-plant-0004",
+            "brics-odroid-021_cam0"
+          ],
+          [
+            "p41-plant-0004",
+            "brics-odroid-021_cam1"
+          ],
+          [
+            "p41-plant-0004",
+            "brics-odroid-022_cam0"
+          ],
+          [
+            "p41-plant-0004",
+            "brics-odroid-022_cam1"
+          ],
+          [
+            "p41-plant-0004",
+            "brics-odroid-023_cam0"
+          ],
+          [
+            "p41-plant-0004",
+            "brics-odroid-024_cam0"
+          ],
+          [
+            "p41-plant-0004",
+            "brics-odroid-024_cam1"
+          ],
+          [
+            "p41-plant-0004",
+            "brics-odroid-025_cam0"
+          ],
+          [
+            "p41-plant-0004",
+            "brics-odroid-025_cam1"
+          ],
+          [
+            "p41-plant-0004",
+            "brics-odroid-026_cam0"
+          ],
+          [
+            "p41-plant-0004",
+            "brics-odroid-026_cam1"
+          ],
+          [
+            "p41-plant-0004",
+            "brics-odroid-027_cam0"
+          ],
+          [
+            "p41-plant-0004",
+            "brics-odroid-027_cam1"
+          ],
+          [
+            "p41-plant-0004",
+            "brics-odroid-028_cam0"
+          ],
+          [
+            "p41-plant-0004",
+            "brics-odroid-029_cam0"
+          ],
+          [
+            "p41-plant-0004",
+            "brics-odroid-029_cam1"
+          ],
+          [
+            "p41-plant-0004",
+            "brics-odroid-030_cam0"
+          ],
+          [
+            "p41-plant-0004",
+            "brics-odroid-030_cam1"
+          ]
+        ],
+        "n_test_views": 40
+      },
+      {
+        "fold": 3,
+        "held_out_sequence": "p44-dog-0004",
+        "test_views": [
+          [
+            "p44-dog-0004",
+            "brics-odroid-001_cam0"
+          ],
+          [
+            "p44-dog-0004",
+            "brics-odroid-001_cam1"
+          ],
+          [
+            "p44-dog-0004",
+            "brics-odroid-002_cam0"
+          ],
+          [
+            "p44-dog-0004",
+            "brics-odroid-006_cam0"
+          ],
+          [
+            "p44-dog-0004",
+            "brics-odroid-007_cam0"
+          ],
+          [
+            "p44-dog-0004",
+            "brics-odroid-007_cam1"
+          ],
+          [
+            "p44-dog-0004",
+            "brics-odroid-008_cam0"
+          ],
+          [
+            "p44-dog-0004",
+            "brics-odroid-009_cam1"
+          ],
+          [
+            "p44-dog-0004",
+            "brics-odroid-010_cam0"
+          ],
+          [
+            "p44-dog-0004",
+            "brics-odroid-010_cam1"
+          ],
+          [
+            "p44-dog-0004",
+            "brics-odroid-011_cam0"
+          ],
+          [
+            "p44-dog-0004",
+            "brics-odroid-012_cam0"
+          ],
+          [
+            "p44-dog-0004",
+            "brics-odroid-012_cam1"
+          ],
+          [
+            "p44-dog-0004",
+            "brics-odroid-014_cam1"
+          ],
+          [
+            "p44-dog-0004",
+            "brics-odroid-015_cam0"
+          ],
+          [
+            "p44-dog-0004",
+            "brics-odroid-015_cam1"
+          ],
+          [
+            "p44-dog-0004",
+            "brics-odroid-016_cam0"
+          ],
+          [
+            "p44-dog-0004",
+            "brics-odroid-017_cam0"
+          ],
+          [
+            "p44-dog-0004",
+            "brics-odroid-017_cam1"
+          ],
+          [
+            "p44-dog-0004",
+            "brics-odroid-019_cam1"
+          ],
+          [
+            "p44-dog-0004",
+            "brics-odroid-020_cam0"
+          ],
+          [
+            "p44-dog-0004",
+            "brics-odroid-020_cam1"
+          ],
+          [
+            "p44-dog-0004",
+            "brics-odroid-021_cam0"
+          ],
+          [
+            "p44-dog-0004",
+            "brics-odroid-021_cam1"
+          ],
+          [
+            "p44-dog-0004",
+            "brics-odroid-022_cam0"
+          ],
+          [
+            "p44-dog-0004",
+            "brics-odroid-022_cam1"
+          ],
+          [
+            "p44-dog-0004",
+            "brics-odroid-023_cam0"
+          ],
+          [
+            "p44-dog-0004",
+            "brics-odroid-024_cam0"
+          ],
+          [
+            "p44-dog-0004",
+            "brics-odroid-024_cam1"
+          ],
+          [
+            "p44-dog-0004",
+            "brics-odroid-025_cam0"
+          ],
+          [
+            "p44-dog-0004",
+            "brics-odroid-025_cam1"
+          ],
+          [
+            "p44-dog-0004",
+            "brics-odroid-026_cam0"
+          ],
+          [
+            "p44-dog-0004",
+            "brics-odroid-026_cam1"
+          ],
+          [
+            "p44-dog-0004",
+            "brics-odroid-027_cam0"
+          ],
+          [
+            "p44-dog-0004",
+            "brics-odroid-027_cam1"
+          ],
+          [
+            "p44-dog-0004",
+            "brics-odroid-028_cam0"
+          ],
+          [
+            "p44-dog-0004",
+            "brics-odroid-029_cam0"
+          ],
+          [
+            "p44-dog-0004",
+            "brics-odroid-029_cam1"
+          ],
+          [
+            "p44-dog-0004",
+            "brics-odroid-030_cam0"
+          ],
+          [
+            "p44-dog-0004",
+            "brics-odroid-030_cam1"
+          ]
+        ],
+        "n_test_views": 40
+      },
+      {
+        "fold": 4,
+        "held_out_sequence": "p52-instrument-0034",
+        "test_views": [
+          [
+            "p52-instrument-0034",
+            "brics-odroid-002_cam0"
+          ],
+          [
+            "p52-instrument-0034",
+            "brics-odroid-007_cam0"
+          ],
+          [
+            "p52-instrument-0034",
+            "brics-odroid-007_cam1"
+          ],
+          [
+            "p52-instrument-0034",
+            "brics-odroid-012_cam1"
+          ],
+          [
+            "p52-instrument-0034",
+            "brics-odroid-015_cam1"
+          ],
+          [
+            "p52-instrument-0034",
+            "brics-odroid-016_cam0"
+          ],
+          [
+            "p52-instrument-0034",
+            "brics-odroid-021_cam0"
+          ],
+          [
+            "p52-instrument-0034",
+            "brics-odroid-023_cam0"
+          ],
+          [
+            "p52-instrument-0034",
+            "brics-odroid-024_cam0"
+          ],
+          [
+            "p52-instrument-0034",
+            "brics-odroid-025_cam1"
+          ],
+          [
+            "p52-instrument-0034",
+            "brics-odroid-027_cam0"
+          ],
+          [
+            "p52-instrument-0034",
+            "brics-odroid-027_cam1"
+          ],
+          [
+            "p52-instrument-0034",
+            "brics-odroid-028_cam0"
+          ],
+          [
+            "p52-instrument-0034",
+            "brics-odroid-030_cam0"
+          ],
+          [
+            "p52-instrument-0034",
+            "brics-odroid-030_cam1"
+          ]
+        ],
+        "n_test_views": 15
+      }
+    ]
+  }
+}

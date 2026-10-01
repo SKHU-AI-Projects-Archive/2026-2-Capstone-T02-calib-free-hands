@@ -1,0 +1,12 @@
+{
+  "python": "3.11.7",
+  "platform": "Windows-10-10.0.26200-SP0",
+  "venv": "experiments/.venv (numpy, opencv, matplotlib; no sklearn)",
+  "solver_source": "CAM-EXP-009_1_bilateral_solver_validation/src/corrected_bone_fitter.py",
+  "solver_imported_unchanged": true,
+  "git_commit": "2679e07d2160833524975599f0039edf34f77194",
+  "git_branch": "kjh",
+  "numpy": "2.4.6",
+  "cv2": "5.0.0",
+  "matplotlib": "3.11.2"
+}

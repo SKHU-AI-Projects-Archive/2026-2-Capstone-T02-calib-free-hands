@@ -1,0 +1,7 @@
+{
+  "purpose": "pre-registered processing order for the 16/32/64-frame extension",
+  "rule": "per-sequence random permutation with numpy default_rng(20260923), then round-robin across the 5 sequences so that ANY PREFIX of this order is stratified by sequence",
+  "why_an_order_and_not_a_fixed_n": "inference cost is ~2 s per frame per view-pair; the order is frozen before any result is seen, and the report states how far down it the run got. Nothing about which views are processed depends on their results.",
+  "seed": 20260923,
+  "n_views_total": 175
+}

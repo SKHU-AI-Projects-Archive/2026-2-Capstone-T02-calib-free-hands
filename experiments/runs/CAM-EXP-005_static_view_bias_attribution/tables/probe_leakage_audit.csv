@@ -1,0 +1,51 @@
+feature,group,available_at_deployment,uses_GT,uses_hand_annotation,uses_hand_prediction,uses_camera_ID,uses_sequence_ID,allowed_in_primary_probe,note
+edge_density,F_SCENE_GEOM,yes,no,no,no,no,no,yes,
+grad_mag_mean,F_SCENE_GEOM,yes,no,no,no,no,no,yes,
+grad_mag_p90,F_SCENE_GEOM,yes,no,no,no,no,no,yes,
+grad_orientation_entropy,F_SCENE_GEOM,yes,no,no,no,no,no,yes,
+line_count,F_SCENE_GEOM,yes,no,no,no,no,no,yes,
+long_line_count,F_SCENE_GEOM,yes,no,no,no,no,no,yes,
+total_line_length_over_area,F_SCENE_GEOM,yes,no,no,no,no,no,yes,
+median_norm_line_length,F_SCENE_GEOM,yes,no,no,no,no,no,yes,
+horizontal_line_fraction,F_SCENE_GEOM,yes,no,no,no,no,no,yes,
+vertical_line_fraction,F_SCENE_GEOM,yes,no,no,no,no,no,yes,
+diagonal_line_fraction,F_SCENE_GEOM,yes,no,no,no,no,no,yes,
+line_orientation_entropy,F_SCENE_GEOM,yes,no,no,no,no,no,yes,
+dominant_line_orientation_strength,F_SCENE_GEOM,yes,no,no,no,no,no,yes,
+corner_count_over_area,F_SCENE_GEOM,yes,no,no,no,no,no,yes,
+vp_consensus_strength,F_SCENE_GEOM,yes,no,no,no,no,no,yes,
+orthogonal_line_support,F_SCENE_GEOM,yes,no,no,no,no,no,yes,
+gray_mean,F_IMAGE_GLOBAL,yes,no,no,no,no,no,yes,
+gray_std,F_IMAGE_GLOBAL,yes,no,no,no,no,no,yes,
+gray_entropy,F_IMAGE_GLOBAL,yes,no,no,no,no,no,yes,
+saturation_mean,F_IMAGE_GLOBAL,yes,no,no,no,no,no,yes,
+saturation_std,F_IMAGE_GLOBAL,yes,no,no,no,no,no,yes,
+local_contrast,F_IMAGE_GLOBAL,yes,no,no,no,no,no,yes,
+laplacian_variance,F_IMAGE_GLOBAL,yes,no,no,no,no,no,yes,
+border_edge_density,F_BORDER_SCENE,yes,no,no,no,no,no,yes,
+border_line_count,F_BORDER_SCENE,yes,no,no,no,no,no,yes,
+border_long_line_count,F_BORDER_SCENE,yes,no,no,no,no,no,yes,
+border_horizontal_line_fraction,F_BORDER_SCENE,yes,no,no,no,no,no,yes,
+border_vertical_line_fraction,F_BORDER_SCENE,yes,no,no,no,no,no,yes,
+border_line_orientation_entropy,F_BORDER_SCENE,yes,no,no,no,no,no,yes,
+border_grad_mag_mean,F_BORDER_SCENE,yes,no,no,no,no,no,yes,
+border_gray_std,F_BORDER_SCENE,yes,no,no,no,no,no,yes,
+self_pred_focal_px,F_MODEL_SELF,yes,no,no,no,no,no,yes,"includes the predicted focal, which is mathematically related to the target - reported separately from the scene-only groups"
+self_pred_focal_log_iqr,F_MODEL_SELF,yes,no,no,no,no,no,yes,"includes the predicted focal, which is mathematically related to the target - reported separately from the scene-only groups"
+self_pred_k1,F_MODEL_SELF,yes,no,no,no,no,no,yes,"includes the predicted focal, which is mathematically related to the target - reported separately from the scene-only groups"
+self_pred_k2,F_MODEL_SELF,yes,no,no,no,no,no,yes,"includes the predicted focal, which is mathematically related to the target - reported separately from the scene-only groups"
+self_pred_k1_iqr,F_MODEL_SELF,yes,no,no,no,no,no,yes,"includes the predicted focal, which is mathematically related to the target - reported separately from the scene-only groups"
+self_pp_offset_norm,F_MODEL_SELF,yes,no,no,no,no,no,yes,"includes the predicted focal, which is mathematically related to the target - reported separately from the scene-only groups"
+self_pp_offset_iqr,F_MODEL_SELF,yes,no,no,no,no,no,yes,"includes the predicted focal, which is mathematically related to the target - reported separately from the scene-only groups"
+self_fx_over_fy,F_MODEL_SELF,yes,no,no,no,no,no,yes,"includes the predicted focal, which is mathematically related to the target - reported separately from the scene-only groups"
+disagree_abs_log_any_vs_geo,MODEL_DISAGREEMENT,yes,no,no,no,no,no,yes,needs a second calibration model at deployment time
+disagree_signed_log_any_vs_geo,MODEL_DISAGREEMENT,yes,no,no,no,no,no,yes,needs a second calibration model at deployment time
+disagree_log_iqr,MODEL_DISAGREEMENT,yes,no,no,no,no,no,yes,needs a second calibration model at deployment time
+physical_camera_one_hot,D_CAMERA_ID,no,no,no,no,yes,no,NO - diagnostic ceiling only,a new deployment camera has no id in any lookup table
+sequence_one_hot,D_SEQUENCE_ID,no,no,no,no,no,yes,NO - diagnostic ceiling only,a new deployment camera has no id in any lookup table
+gt_k1,ORACLE_CAMERA_PROPERTY,no,yes,no,no,no,no,NO - ORACLE_DIAGNOSTIC_ONLY,descriptive association only; the reference focal in particular is inside the target definition and is never a predictor
+gt_k2,ORACLE_CAMERA_PROPERTY,no,yes,no,no,no,no,NO - ORACLE_DIAGNOSTIC_ONLY,descriptive association only; the reference focal in particular is inside the target definition and is never a predictor
+gt_principal_point_offset,ORACLE_CAMERA_PROPERTY,no,yes,no,no,no,no,NO - ORACLE_DIAGNOSTIC_ONLY,descriptive association only; the reference focal in particular is inside the target definition and is never a predictor
+gt_fx_over_fy,ORACLE_CAMERA_PROPERTY,no,yes,no,no,no,no,NO - ORACLE_DIAGNOSTIC_ONLY,descriptive association only; the reference focal in particular is inside the target definition and is never a predictor
+gt_camera_orientation_descriptor,ORACLE_CAMERA_PROPERTY,no,yes,no,no,no,no,NO - ORACLE_DIAGNOSTIC_ONLY,descriptive association only; the reference focal in particular is inside the target definition and is never a predictor
+gt_reference_focal,ORACLE_CAMERA_PROPERTY,no,yes,no,no,no,no,NO - ORACLE_DIAGNOSTIC_ONLY,descriptive association only; the reference focal in particular is inside the target definition and is never a predictor

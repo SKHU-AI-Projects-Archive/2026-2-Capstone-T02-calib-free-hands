@@ -1,0 +1,60 @@
+{
+  "generic_positive_control": {
+    "n_trials": 100,
+    "median_rel_focal_err_pct": 0.1248,
+    "mean_rel_focal_err_pct": 0.1246,
+    "p90_rel_focal_err_pct": 0.1273,
+    "share_within_1pct": 1.0,
+    "share_within_5pct": 1.0,
+    "share_within_10pct": 1.0,
+    "share_flat_profile": 0.0,
+    "share_boundary": 0.0,
+    "share_identifiable": 1.0,
+    "median_profile_width": 0.025,
+    "median_curvature": 0.175073
+  },
+  "hand_positive_control": {
+    "n_trials": 100,
+    "median_rel_focal_err_pct": 0.1243,
+    "mean_rel_focal_err_pct": 0.1243,
+    "p90_rel_focal_err_pct": 0.1291,
+    "share_within_1pct": 1.0,
+    "share_within_5pct": 1.0,
+    "share_within_10pct": 1.0,
+    "share_flat_profile": 0.0,
+    "share_boundary": 0.0,
+    "share_identifiable": 1.0,
+    "median_profile_width": 0.025,
+    "median_curvature": 0.123337
+  },
+  "pass_conditions": {
+    "median_rel_focal_err_pct <= 1.0": true,
+    "share_within_5pct >= 0.95": true,
+    "share_flat_profile <= 0.05": true,
+    "share_boundary <= 0.05": true
+  },
+  "generic_positive_control_passed": true,
+  "hand_positive_control_passed": true,
+  "identifiability_degrades_with_distance": true,
+  "identifiability_measure": "profile width and flat-profile share; the noiseless focal error stays low at every distance because an exact 2D observation pins the minimum of even a very flat curve. Identifiability is about how sharply the objective distinguishes focals, which is what width measures.",
+  "distance_sweep_noise1px_median_err_pct": [
+    2.9783,
+    6.5792,
+    20.0868,
+    49.2861,
+    64.4444,
+    101.5677
+  ],
+  "focal_error_degrades_with_distance_under_1px_noise": true,
+  "identifiability_degrades_with_flattening": true,
+  "distance_profile_width_first_last": [
+    0.025,
+    2.9957
+  ],
+  "planarity_profile_width_first_last": [
+    0.025,
+    0.4993
+  ],
+  "verdict": "SOLVER_VALIDATED",
+  "scope": "synthetic evidence validates the implementation and the theory. It says nothing on its own about whether focal is recoverable from real GigaHands hands."
+}

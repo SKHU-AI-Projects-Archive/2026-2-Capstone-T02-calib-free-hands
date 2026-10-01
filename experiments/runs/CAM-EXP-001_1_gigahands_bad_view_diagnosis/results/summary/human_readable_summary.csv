@@ -1,0 +1,14 @@
+question,answer
+How many GigaHands views were examined?,8000 views (sequence x camera x frame x hand) from CAM-EXP-001
+How many views have no usable 2D annotation at all?,"1879 (23.5%) - every GT 2D joint is exactly (0,0) with confidence 1.0"
+How many views agree well?,3516 (44.0%) at <= 10.0 px median
+How many views genuinely disagree?,920 (11.5%) at >= 60.224 px median
+Is our camera model wrong?,"No evidence of that. No flip, axis swap, lag or distortion setting repairs the bad views, and the projection lands on a real hand."
+What do the bad views actually show?,Mostly the annotation describing the other hand: in 0.7772 of bad views with both hands present the annotation sits within one hand-width of the hand we did NOT project.
+Most likely root cause,"Annotation-side failure in GigaHands keypoints_2d: undetected hands written as (0,0) sentinels, plus left/right identity swaps."
+What should downstream experiments do?,"Drop (0,0) sentinel rows, and filter or re-associate per-view 2D by agreement with the multi-view 3D before using it as a reference."
+Failure-mode share: A_no_detection_sentinel,0.6625
+Failure-mode share: F_structural_mismatch,0.19
+Failure-mode share: B_shape_preserved_wrong_placement,0.0775
+Failure-mode share: D_partial_joint_corruption,0.0525
+Failure-mode share: C_whole_view_translation,0.0175

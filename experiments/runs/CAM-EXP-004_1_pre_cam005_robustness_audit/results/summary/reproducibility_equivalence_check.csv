@@ -1,0 +1,3 @@
+model,n_frames_compared,max_abs_rel_diff_pct,median_abs_rel_diff_pct,n_exceeding_0.01pct,verdict
+anycalib_gen_radial,1400,0.0,0.0,0,BIT_STABLE
+geocalib_distorted_radial,1400,453.54135761655374,0.7909988946179092,1377,DIVERGENT

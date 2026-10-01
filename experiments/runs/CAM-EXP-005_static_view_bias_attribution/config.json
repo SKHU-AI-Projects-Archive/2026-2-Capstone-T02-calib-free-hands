@@ -1,0 +1,102 @@
+{
+  "experiment": "CAM-EXP-005_static_view_bias_attribution",
+  "question": "why does a calibration model predict a consistently high or low focal for a particular static (sequence, camera) view, and can any deployable RGB cue recover that bias on a camera it has never seen?",
+  "evidence_language": "ASSOCIATION / ATTRIBUTION / PREDICTIVE SIGNAL. No causal claim is made or implied.",
+  "not_in_scope": [
+    "a new calibration model",
+    "modifying the frozen E2 definition",
+    "hand cues of any kind (CAM-EXP-006)",
+    "opening the final confirmatory holdout"
+  ],
+  "primary_model": {
+    "name": "AnyCalib anycalib_gen + radial:2",
+    "why": "strongest single-family deployable baseline and verified bit-deterministic in CAM-EXP-004.1, so no run-to-run variation enters the primary target",
+    "source": "frozen CAM-EXP-004.1 predictions; no new inference"
+  },
+  "primary_target": {
+    "definition": "e_v = median_t log( f_pred(v,t) / f_ref(v) )",
+    "f_ref": "dataset-provided reference focal, GT_EFFECTIVE_FOCAL = GT_NATIVE_FX in the validated original-image pixel convention (CAM-EXP-002 focal_usage_audit.md)",
+    "frames": "the frozen 64-frame nested set per view",
+    "status": "ANALYSIS TARGET for attribution; not a deployment estimator",
+    "secondary": "abs(e_v) and the conventional relative focal error %"
+  },
+  "secondary_model": {
+    "name": "frozen E2 (exploratory ensemble)",
+    "status": "secondary only; contains GeoCalib, which is not run-to-run deterministic. Its definition is NOT modified here.",
+    "source": "frozen CAM-EXP-004.1 predictions"
+  },
+  "statistical_units": {
+    "observation": "(sequence, camera) static view, n=175",
+    "association_bootstrap": "physical camera cluster, n=40, 10000 iterations",
+    "sensitivity": "sequence cluster, n=5 - sensitivity only",
+    "never": "frames are repeated observations; 64x175 is never treated as 11,200 independent samples"
+  },
+  "forbidden_features_in_primary_probe": [
+    "provided 2D or 3D hand annotation",
+    "hand joint geometry",
+    "MANO pose or shape",
+    "predicted hand joints or depth",
+    "hand detector output",
+    "ground-truth focal, distortion, principal point or extrinsics",
+    "physical camera id",
+    "sequence id"
+  ],
+  "oracle_diagnostics_allowed_but_labelled": [
+    "provided k1,k2,p1,p2",
+    "principal point offset",
+    "fx/fy",
+    "camera pose descriptors",
+    "camera-id and sequence-id identity models"
+  ],
+  "frozen_manifests": {
+    "cam_exp_005_scene_feature_spec_v1.json": "experiments/manifests/cam_exp_005_scene_feature_spec_v1.json",
+    "cam_exp_005_probe_spec_v1.json": "experiments/manifests/cam_exp_005_probe_spec_v1.json",
+    "cam_exp_005_outer_splits_v1.json": "experiments/manifests/cam_exp_005_outer_splits_v1.json"
+  },
+  "frozen_manifest_sha256": {
+    "cam_exp_005_scene_feature_spec_v1.json": "f78d17c1010faddfb89f2e0d1c958990176c8a9fece5319de9b2ac520b18fd3b",
+    "cam_exp_005_probe_spec_v1.json": "8560f8261689b292955e46b9214bef9c42bac1f17cc12487e3cb94a29fff8bb1",
+    "cam_exp_005_outer_splits_v1.json": "cbae5b319d22d27e109a39ddb912a784a056671d288ee8f24bf42ae3456707ec"
+  },
+  "created_before_target_analysis": true,
+  "outer_validation": {
+    "A_LOSO": "leave one sequence out, 5 folds - CONTENT/SEQUENCE SHIFT test, not a new-camera test",
+    "B_LOCO": "leave one physical camera out, 40 folds - NEW CAMERA test and the PRIMARY decision criterion"
+  },
+  "probe": {
+    "model": "Ridge",
+    "alpha_grid": [
+      0.01,
+      0.1,
+      1,
+      10,
+      100
+    ],
+    "alpha_selection": "GroupKFold by physical camera INSIDE the training fold only",
+    "preprocessing": "training-fold median imputation and standardisation only",
+    "seed": 20260924,
+    "status": "LINEAR PROBE DIAGNOSTIC - not a proposed calibration method"
+  },
+  "decision_thresholds_fixed_before_results": {
+    "primary_criterion": "Leave-One-Physical-Camera-Out, against the P0 mean-bias baseline",
+    "A_relative_median_error_reduction_pct": 10.0,
+    "B_within_5pct_gain_pp": 5.0,
+    "direction_must_hold_under": "physical-camera cluster bootstrap"
+  },
+  "controls": {
+    "CONSTANT_RIG_FOCAL_ORACLE": "ignores the image entirely and outputs the training folds' median reference focal. Added because this rig's reference focal is nearly constant; a probe that does not beat it has not shown a calibration signal."
+  },
+  "hypotheses": {
+    "H1": "the signed bias of one physical camera repeats across sequences",
+    "H2": "physical camera identity describes more of the bias than sequence identity",
+    "H3": "some deployable RGB scene-geometry feature is associated with the signed bias",
+    "H4": "a usable cue must also improve prediction on a held-out physical camera",
+    "H5": "improvement only under LOSO would point to same-rig / repeated-camera structure",
+    "H6": "a strong oracle camera-property association that RGB cannot recover would mean the viewpoint information exists but is not recoverable by current deployable features",
+    "H7": "if no deployable cue predicts new-camera bias, the case for hand cues (CAM-EXP-006) is strengthened"
+  },
+  "read_only": [
+    "CAM-EXP-001 .. CAM-EXP-004.1",
+    "experiments/report_prep/progress_report_v1"
+  ]
+}

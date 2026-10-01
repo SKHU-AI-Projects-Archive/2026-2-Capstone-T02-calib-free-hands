@@ -1,0 +1,5 @@
+metric,cam009_original,cam0091_corrected
+"bilateral recovered q (moderate perspective, noiseless)",1.5,1.0004
+bilateral median focal error %,50.0,0.035
+bilateral boundary rate,0.95,0.0
+held-out reprojection median focal error %,50.0,0.035

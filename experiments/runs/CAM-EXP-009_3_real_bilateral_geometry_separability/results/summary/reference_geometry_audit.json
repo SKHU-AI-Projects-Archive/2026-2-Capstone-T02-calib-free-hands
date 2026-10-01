@@ -1,0 +1,8 @@
+{
+  "reconstructions_attempted": 14015,
+  "reconstructions_ok": 13903,
+  "frame_vectors_written": 13903,
+  "target_camera_in_reference_count": 0,
+  "circularity_clean": true,
+  "note": "target_camera_in_reference_count must be 0: the camera under test is excluded before reconstruction, so it can never appear among the inlier cameras of its own reference hand."
+}

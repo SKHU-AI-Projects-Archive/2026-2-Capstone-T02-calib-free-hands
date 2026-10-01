@@ -1,0 +1,66 @@
+{
+  "spec_id": "cam_exp_0061_real_conditions_v1",
+  "created_before_results": true,
+  "conditions": [
+    {
+      "id": "R0",
+      "name": "ORIGINAL_REPRODUCTION",
+      "aggregation": "CAM006_ORIGINAL_HAND_WEIGHTED",
+      "principal_point": "image centre",
+      "distortion": "none",
+      "focal": "scalar, fx = fy",
+      "role": "reproduce CAM-EXP-006 exactly",
+      "deployable": true
+    },
+    {
+      "id": "R1",
+      "name": "FRAME_BALANCED",
+      "aggregation": "CAM0061_FRAME_BALANCED",
+      "principal_point": "image centre",
+      "distortion": "none",
+      "focal": "scalar, fx = fy",
+      "role": "isolate the hand-weighting mismatch",
+      "deployable": true
+    },
+    {
+      "id": "R2",
+      "name": "FRAME_BALANCED_GT_PP_ORACLE",
+      "aggregation": "CAM0061_FRAME_BALANCED",
+      "principal_point": "provided cx, cy",
+      "distortion": "none",
+      "focal": "scalar, fx = fy",
+      "role": "ORACLE_DIAGNOSTIC_ONLY",
+      "deployable": false
+    },
+    {
+      "id": "R3",
+      "name": "FRAME_BALANCED_GT_DIST_ORACLE",
+      "aggregation": "CAM0061_FRAME_BALANCED",
+      "principal_point": "image centre",
+      "distortion": "provided k1, k2, p1, p2",
+      "focal": "scalar, fx = fy",
+      "role": "ORACLE_DIAGNOSTIC_ONLY",
+      "deployable": false
+    },
+    {
+      "id": "R4",
+      "name": "FRAME_BALANCED_GT_PP_DIST_ORACLE",
+      "aggregation": "CAM0061_FRAME_BALANCED",
+      "principal_point": "provided cx, cy",
+      "distortion": "provided k1, k2, p1, p2",
+      "focal": "scalar, fx = fy",
+      "role": "ORACLE_DIAGNOSTIC_ONLY",
+      "deployable": false
+    },
+    {
+      "id": "R5",
+      "name": "FULL_CAMERA_MODEL_ORACLE_EXCEPT_FOCAL",
+      "aggregation": "CAM0061_FRAME_BALANCED",
+      "principal_point": "provided cx, cy",
+      "distortion": "provided k1, k2, p1, p2",
+      "focal": "unknown scalar fx; fy = (provided fy / provided fx) * fx. The RATIO is supplied, the MAGNITUDE never is",
+      "role": "ORACLE_DIAGNOSTIC_ONLY - the strongest diagnostic: if every other camera parameter is known exactly, is the focal magnitude identifiable from one hand?",
+      "deployable": false
+    }
+  ]
+}

@@ -1,0 +1,2 @@
+n_compared_frames,n_metric_pairs,median_abs_diff_px,p95_abs_diff_px,max_abs_diff_px,case_agreement_rate
+15,23,0.7236,1.7295,2.5962,0.9667

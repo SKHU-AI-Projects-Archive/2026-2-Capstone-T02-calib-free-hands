@@ -1,0 +1,12 @@
+{
+  "blocks": [
+    "p36",
+    "p41",
+    "p44",
+    "p52"
+  ],
+  "n_permutations": 24,
+  "p41_sessions_in_same_block": true,
+  "created_after_cam0093_results": true,
+  "role": "supporting only"
+}

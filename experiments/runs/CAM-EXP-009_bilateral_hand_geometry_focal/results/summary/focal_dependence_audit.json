@@ -1,0 +1,23 @@
+{
+  "claim_1_fixed_length_bilateral_is_focal_invariant": {
+    "value_range_over_+-50pct_focal_sweep": 0.0,
+    "is_invariant": true,
+    "meaning": "the fixed reference lengths do not change when the candidate focal changes, so this naive loss has zero derivative with respect to f and cannot estimate a focal. This is why CAM-EXP-009 does NOT use it."
+  },
+  "claim_2_candidate_conditioned_bilateral_varies_with_focal": {
+    "value_range_over_+-50pct_focal_sweep": 0.0049720594607822405,
+    "relative_dynamic_range": 1.9675013205871437,
+    "argmin_q": 1.5,
+    "varies": true,
+    "meaning": "refitting the bone proportions at every candidate focal makes the bilateral agreement depend on f, so it can in principle carry focal information."
+  },
+  "synthetic_setting": {
+    "f_true": 900.0,
+    "n_frames": 14,
+    "asymmetry": 0.0,
+    "noise_px": 0.0,
+    "distance_over_diameter": 4.0,
+    "note": "noiseless, perfectly symmetric, moderate perspective - the most favourable case. If the objective is flat here it will be flat everywhere."
+  },
+  "verdict": "FOCAL_DEPENDENCE_CONFIRMED"
+}

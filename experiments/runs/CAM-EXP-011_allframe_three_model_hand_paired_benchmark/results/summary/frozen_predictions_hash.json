@@ -1,0 +1,6 @@
+{
+  "file": "final_six_condition_predictions.csv.gz",
+  "sha256": "487a08868d18859d44b6cff26ebdb588246d9e07043827b0f47e4c04fe249ead",
+  "n_rows": 1968,
+  "note": "frozen BEFORE any TEST reference focal was opened"
+}

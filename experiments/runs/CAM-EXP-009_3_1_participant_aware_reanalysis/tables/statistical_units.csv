@@ -1,0 +1,6 @@
+level,independent,note
+frame,NO,pooled into a template
+sequence-camera,NO,40+ cameras observe the same two hands
+sequence / session,PARTIAL,5 sequences; shares participant for p41
+participant,YES,"PRIMARY inference unit; n=4, below the bar of 8"
+participant x session,N/A,only p41 has 2 sessions; cross-session question has n=1

@@ -1,0 +1,33 @@
+{
+  "test": "does AnyCam's own induce_flow_dist distinguish focal candidates?",
+  "code_under_test": "anycam.trainer.induce_flow_dist and make_proj_from_focal_length, official repo, commit e609cc8a9e4ee8f78cf2ce39ebeb86b35e82d10d",
+  "candidate_grid": "the package defaults: 32 candidates, focal_min 0.1, focal_max 4.0, LOG_FOCAL_LENGTH_BIAS 1.8",
+  "results": [
+    {
+      "condition": "STATIC_IDENTITY_POSE",
+      "n_focal_candidates": 32,
+      "focal_candidate_min": 0.09999997913837433,
+      "focal_candidate_max": 4.0,
+      "max_abs_induced_flow": 1.7881393432617188e-07,
+      "mean_abs_induced_flow": 1.772244573317039e-08,
+      "spread_across_candidates": 2.7265514290775172e-09,
+      "relative_spread": 0.15383867919445038,
+      "candidates_distinguishable": 0,
+      "interpretation": "the focal-scoring objective is flat across every candidate, so the focal length is not identifiable from this signal"
+    },
+    {
+      "condition": "MOVING_CAMERA",
+      "n_focal_candidates": 32,
+      "focal_candidate_min": 0.09999997913837433,
+      "focal_candidate_max": 4.0,
+      "max_abs_induced_flow": 2.3936030864715576,
+      "mean_abs_induced_flow": 0.04471360892057419,
+      "spread_across_candidates": 0.22306479513645172,
+      "relative_spread": 4.988745212554932,
+      "candidates_distinguishable": 1,
+      "interpretation": "candidates produce different induced flow, so the focal is identifiable from this signal"
+    }
+  ],
+  "verdict": "NOT_IDENTIFIABLE_UNDER_STATIC_CAMERA",
+  "status": "SUPPLEMENTARY_STATIC_STRESS_TEST (mechanistic variant)"
+}

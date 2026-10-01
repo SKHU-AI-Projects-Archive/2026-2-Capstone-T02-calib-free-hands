@@ -1,0 +1,13 @@
+{
+  "lambda_grid": [
+    0.0,
+    0.25,
+    0.5,
+    1.0,
+    2.0,
+    4.0
+  ],
+  "selected_on": "TRAIN physical cameras only, per base model; the tuning procedure is identical for all three models",
+  "test_focal_used": false,
+  "frozen_before_focal_results": true
+}

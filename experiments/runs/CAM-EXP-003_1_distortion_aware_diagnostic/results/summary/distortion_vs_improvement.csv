@@ -1,0 +1,8 @@
+model_run,n_cameras,pearson_r,pearson_p,spearman_r,spearman_p,abs_k1_min,abs_k1_max,note
+anycalib_dist_radial,40,0.0067,0.967308,-0.0278,0.864947,0.34205,0.43068,correlation only - not evidence of causation
+anycalib_gen_radial,40,0.0108,0.947249,0.0197,0.903966,0.34205,0.43068,correlation only - not evidence of causation
+geocalib_distorted_radial,40,-0.0015,0.992809,0.0386,0.812831,0.34205,0.43068,correlation only - not evidence of causation
+undist_anycalib_pinhole,40,0.1452,0.371425,0.1871,0.24778,0.34205,0.43068,correlation only - not evidence of causation
+undist_geocalib_pinhole,40,0.0888,0.585785,0.0403,0.804809,0.34205,0.43068,correlation only - not evidence of causation
+undist_pf_centered,40,-0.0334,0.83805,0.0428,0.793256,0.34205,0.43068,correlation only - not evidence of causation
+undist_pf_uncentered,40,-0.042,0.796946,0.0463,0.77645,0.34205,0.43068,correlation only - not evidence of causation

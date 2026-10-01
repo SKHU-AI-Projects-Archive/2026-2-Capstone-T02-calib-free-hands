@@ -1,0 +1,12 @@
+sequence,camera,frame,stage,reason
+p36-tea-0010,brics-odroid-027_cam0,85,detector,no hand detected
+p36-tea-0010,brics-odroid-027_cam0,90,detector,no hand detected
+p36-tea-0010,brics-odroid-027_cam0,91,detector,no hand detected
+p36-tea-0010,brics-odroid-027_cam0,94,detector,no hand detected
+p36-tea-0010,brics-odroid-027_cam0,95,detector,no hand detected
+p36-tea-0010,brics-odroid-027_cam0,98,detector,no hand detected
+p36-tea-0010,brics-odroid-027_cam0,99,detector,no hand detected
+p36-tea-0010,brics-odroid-027_cam0,100,detector,no hand detected
+p36-tea-0010,brics-odroid-029_cam1,347,detector,no hand detected
+p41-plant-0004,brics-odroid-012_cam1,9,detector,no hand detected
+p41-plant-0004,brics-odroid-014_cam1,50,detector,no hand detected

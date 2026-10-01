@@ -1,0 +1,19 @@
+stage,category,n
+"CAM-EXP-001.2 census (stride 20, heuristic)",good,2386
+"CAM-EXP-001.2 census (stride 20, heuristic)",invalid_2d_zero,1333
+"CAM-EXP-001.2 census (stride 20, heuristic)",medium,1119
+"CAM-EXP-001.2 census (stride 20, heuristic)",likely_hand_identity_error,518
+"CAM-EXP-001.2 census (stride 20, heuristic)",bad_unexplained,204
+"CAM-EXP-001.2 census (stride 20, heuristic)",not_chosen,40
+"CAM-EXP-001.3 QC (all chosen frames, triangulation)",EXCLUDE,49173
+"CAM-EXP-001.3 QC (all chosen frames, triangulation)",PASS_SINGLE_HAND,16005
+"CAM-EXP-001.3 QC (all chosen frames, triangulation)",PASS_STRICT,32826
+"CAM-EXP-001.3 QC (all chosen frames, triangulation)",REVIEW,10236
+CAM-EXP-001.3 adjudicated case,BAD_2D_GEOMETRY,15611
+CAM-EXP-001.3 adjudicated case,CONFIRMED_2D_HAND_IDENTITY_SWAP,7101
+CAM-EXP-001.3 adjudicated case,CONFIRMED_2D_HAND_IDENTITY_SWAP_UNVERIFIED_3D,9
+CAM-EXP-001.3 adjudicated case,MULTIVIEW_CONFIRMED_GOOD,48860
+CAM-EXP-001.3 adjudicated case,NOT_CHOSEN_FRAME,600
+CAM-EXP-001.3 adjudicated case,NO_USABLE_2D_ANNOTATION,25852
+CAM-EXP-001.3 adjudicated case,UNRESOLVED_INSUFFICIENT_GEOMETRY,10207
+note,"001.2 sampled every 20th frame and judged by heuristic; 001.3 covers every chosen frame and judges by independent triangulation, so counts are not directly comparable",

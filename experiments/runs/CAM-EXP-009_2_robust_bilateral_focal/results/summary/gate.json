@@ -1,0 +1,99 @@
+{
+  "selected_method": "M4_HUBER_005",
+  "baseline": "M0_BASELINE_RAW_L1",
+  "headline": {
+    "clean_median_err_pct_eval": 0.2721135844519722,
+    "moderate_median_err_pct_eval": 10.77510696305588,
+    "moderate_M0_median_err_pct_eval": 15.577229004613002,
+    "moderate_relative_reduction_vs_M0_pct": 30.82783234511757,
+    "fit_vs_eval_abs_diff_pct": 1.865580147294006
+  },
+  "bootstrap_ci_2p5_97p5": {
+    "TEST_CLEAN|winner": {
+      "median_err_pct": 0.2721135844519722,
+      "lo": 0.2721135844519722,
+      "hi": 0.2721135844519722
+    },
+    "TEST_CLEAN|M0": {
+      "median_err_pct": 0.2721135844519722,
+      "lo": 0.2721135844519722,
+      "hi": 0.2721135844519722
+    },
+    "TEST_COMBINED_MODERATE|winner": {
+      "median_err_pct": 10.77510696305588,
+      "lo": 7.022453232224455,
+      "hi": 21.688077267622223
+    },
+    "TEST_COMBINED_MODERATE|M0": {
+      "median_err_pct": 15.577229004613002,
+      "lo": 10.160351547896438,
+      "hi": 22.756157204671695
+    }
+  },
+  "controls": {
+    "C0_CORRECT": {
+      "median_err_pct": 7.409129617426938,
+      "within5_pct": 37.5,
+      "boundary_rate": 0.125,
+      "curve_range": 0.35248304277197584
+    },
+    "C1_WRONG_BONE_MAPPING": {
+      "median_err_pct": 44.44444444444444,
+      "within5_pct": 0.0,
+      "boundary_rate": 0.875,
+      "curve_range": 0.24498239828136725
+    },
+    "C2_SUBJECT_SWAP": {
+      "median_err_pct": 6.843272517358027,
+      "within5_pct": 37.5,
+      "boundary_rate": 0.0,
+      "curve_range": 0.2431612643418175
+    },
+    "C3_TEMPORAL_SHUFFLE": {
+      "median_err_pct": 6.843272517358027,
+      "within5_pct": 37.5,
+      "boundary_rate": 0.0,
+      "curve_range": 0.2431612643418175
+    },
+    "C4_FIXED_LENGTH_INVARIANT": {
+      "median_err_pct": 44.44444444444444,
+      "within5_pct": 0.0,
+      "boundary_rate": 1.0,
+      "curve_range": 0.0
+    }
+  },
+  "control_notes": {
+    "C3_TEMPORAL_SHUFFLE": "CONTROL_VACUOUS_BY_CONSTRUCTION - the objective never pairs a left frame with a right frame, so there is no temporal pairing to destroy; C3 collapses exactly onto C2. Carries no evidential weight.",
+    "C4_FIXED_LENGTH_INVARIANT": "Oracle diagnostic; handed the true bone lengths and not runnable on real data."
+  },
+  "gate": {
+    "g1_clean_identifiable": true,
+    "g2_moderate_identifiable": false,
+    "g3_beats_M0_on_moderate": true,
+    "g4_boundary_rate_ok": true,
+    "g5_fit_eval_consistent": true,
+    "g6_wrong_mapping_degrades": true,
+    "g7_subject_swap_degrades": false,
+    "g8_fixed_length_flat": true
+  },
+  "required_gates": [
+    "g2_moderate_identifiable",
+    "g3_beats_M0_on_moderate",
+    "g6_wrong_mapping_degrades",
+    "g7_subject_swap_degrades"
+  ],
+  "GATE_PASSED": false,
+  "real_phase": "REAL_FOCAL_PHASE_NOT_RUN",
+  "thresholds": {
+    "clean_focal_err_pct": 1.0,
+    "moderate_focal_err_pct": 5.0,
+    "relative_reduction_vs_M0_pct": 30.0,
+    "weak_relative_reduction_pct": 20.0,
+    "boundary_rate": 0.1,
+    "fit_eval_diff_pct": 5.0,
+    "control_degradation_pp": 10.0,
+    "control_within5_drop_pp": 20.0,
+    "real_relative_reduction_pct": 10.0,
+    "real_within5_gain_pp": 5.0
+  }
+}

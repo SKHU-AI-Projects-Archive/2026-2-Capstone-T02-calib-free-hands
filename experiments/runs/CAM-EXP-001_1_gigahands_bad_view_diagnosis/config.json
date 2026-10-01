@@ -1,0 +1,44 @@
+{
+  "experiment": "CAM-EXP-001.1_gigahands_bad_view_diagnosis",
+  "purpose": "identify, as far as the available evidence allows, why some GigaHands views reproject badly in CAM-EXP-001",
+  "input": {
+    "cam_exp_001_raw_csv": "experiments/runs/CAM-EXP-001_gt_projection_validation/results/raw/reprojection_per_joint.csv.gz",
+    "reused_read_only": true,
+    "dataset_re_read": "only for lag, distortion, flip, hand-identity and figures"
+  },
+  "view_classification_rule": {
+    "otsu_threshold_px": 30.112,
+    "good_max_median_px": 10.0,
+    "bad_min_median_px": 60.224,
+    "rule": "Otsu split on log10(per-view median error) over non-sentinel views; good = median <= min(otsu/2, 10), bad = median >= max(otsu*2, 50), medium in between, zero-sentinel separate.",
+    "counts": {
+      "medium": 1685,
+      "bad": 920,
+      "good": 3516,
+      "zero_sentinel": 1879
+    },
+    "n_non_sentinel": 6090
+  },
+  "confidence_filter": "keypoints_2d confidence >= 0.5 (as in CAM-EXP-001)",
+  "lag_sweep_range": [
+    -5,
+    5
+  ],
+  "max_views_per_class_for_dataset_re_read": 200,
+  "hypotheses": {
+    "H1": "plain 2D detection failure",
+    "H2": "frame synchronisation / temporal lag",
+    "H3": "camera mapping / camera parameter mis-assignment",
+    "H4": "distortion model misuse",
+    "H5": "coordinate system / axis / flip misinterpretation",
+    "H6": "sequence-specific or hand-specific concentration",
+    "H7": "hand identity swap in the 2D annotation (added after inspecting figures)"
+  },
+  "support_scale": [
+    "supported",
+    "partially supported",
+    "insufficient evidence",
+    "close to rejected"
+  ],
+  "note": "Thresholds are derived from the observed distribution (Otsu on log per-view median error), not fixed in code."
+}

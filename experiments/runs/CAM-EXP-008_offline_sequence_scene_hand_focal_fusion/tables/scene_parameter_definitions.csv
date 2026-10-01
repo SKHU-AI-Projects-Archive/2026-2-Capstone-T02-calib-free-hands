@@ -1,0 +1,8 @@
+parameter,definition,used_in,source
+f_scene,median per-frame pred_fx,S0 and S1,AnyCalib anycalib_gen/radial:2
+r_fy,median(pred_fy / pred_fx),S0 and S1,same
+cx,median(pred_cx),S0 and S1,same
+cy,median(pred_cy),S0 and S1,same
+k1,median(k1),S0 and S1,same
+k2,median(k2),S0 and S1,same
+sigma_scene,"max(1.4826*MAD(log pred_fx), 0.02)",S0 and S1,same

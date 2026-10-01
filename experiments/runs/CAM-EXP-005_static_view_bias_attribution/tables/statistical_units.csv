@@ -1,0 +1,6 @@
+analysis,unit,n,note
+per-view bias target,"(sequence, camera) static view",175,"median over the frozen 64-frame set; frames are repeated observations, never independent samples"
+association bootstrap,physical camera cluster,40,all views of a drawn camera enter together
+sensitivity bootstrap,sequence,5,"5 clusters - sensitivity only, not a trustworthy CI"
+outer validation A,sequence fold,5,content/sequence shift test; the same physical camera can appear in train and test
+outer validation B,physical camera group,40,new-camera test; no view of the held-out camera is in train

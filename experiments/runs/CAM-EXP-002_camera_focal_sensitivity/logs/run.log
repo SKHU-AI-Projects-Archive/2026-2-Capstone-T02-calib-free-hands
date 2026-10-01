@@ -1,0 +1,8 @@
+2026-09-22 22:50:47,459 INFO === CAM-EXP-002 focal sensitivity ===
+2026-09-22 22:50:47,467 INFO step 1: focal sweep on cached inference
+2026-09-22 22:50:54,692 INFO   {'per_hand': 17680, 'per_frame': 8296, 'assoc_failures': 16, 'unique_hands': 2210}
+2026-09-22 22:50:54,692 INFO step 2: summaries
+2026-09-22 22:50:54,958 INFO   {'per_alpha': 8, 'sensitivity': 7}
+2026-09-22 22:50:54,958 INFO step 3: figures
+2026-09-22 22:50:57,122 INFO   {'max_depth_ratio_deviation': np.float64(0.0)}
+2026-09-22 22:50:57,250 INFO done -> experiments/runs/CAM-EXP-002_camera_focal_sensitivity

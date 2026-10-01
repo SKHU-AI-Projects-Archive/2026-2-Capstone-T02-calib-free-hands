@@ -1,0 +1,11 @@
+# audit images: 249 MB of rendered panels and contact sheets.
+# Regenerate with src/build_manual_qc.py + src/assemble_manual_qc.py.
+# The human labels themselves live in the committed manifest
+# experiments/manifests/cam_exp_006_manual_hand_qc_v1.csv
+manual_qc/panels/
+manual_qc/contact_sheets/
+
+# derived reconstruction cache, rebuilt by src/build_reference_3d.py
+cache/
+
+__pycache__/

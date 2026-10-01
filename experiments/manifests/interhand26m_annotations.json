@@ -1,0 +1,75 @@
+{
+  "dataset": "InterHand2.6M",
+  "prepared_date": "2026-09-22",
+  "root_path": "experiments/datasets/interhand26m",
+  "file_count": 30,
+  "total_bytes": 1712934601,
+  "total_gb": 1.5953,
+  "extension_histogram": {
+    "json": 28,
+    "txt": 2
+  },
+  "archives": [
+    {
+      "path": "experiments/datasets/_downloads/interhand26m/InterHand2.6M.annotations.5.fps.zip",
+      "size_bytes": 206010915,
+      "sha256": "B7DAE49CAF2700597593F8949E286E73AF83D3836B10187BEAC1A313BEE2031D",
+      "listing_ok": true,
+      "entries": 34,
+      "integrity": "ok (CRC verified)"
+    }
+  ],
+  "status": "prepared",
+  "notes": [
+    "annotations only (5 fps release); no images downloaded",
+    "ships NO independent 2D keypoint annotation - official 2D is the projection itself",
+    "independent 2D signal for validation is the per-image bbox",
+    "camera convention: X_cam = camrot @ (X_world - campos), millimetres, no distortion"
+  ],
+  "components": [
+    "annotations"
+  ],
+  "annotation_sets": {
+    "all": [
+      "test",
+      "train"
+    ],
+    "human_annot": [
+      "test",
+      "train"
+    ],
+    "machine_annot": [
+      "test",
+      "train",
+      "val"
+    ]
+  },
+  "selected_for_cam_exp_001": "human_annot/test",
+  "important_files": [
+    {
+      "path": "experiments/datasets/interhand26m/annotations/skeleton.txt",
+      "size_bytes": 657,
+      "sha256": "456414C85B8A00379E0A7D55099C7E2F1CE346D7580FD136AA051ACE72C150A3",
+      "role": "skeleton.txt"
+    },
+    {
+      "path": "experiments/datasets/interhand26m/annotations/subject.txt",
+      "size_bytes": 798,
+      "sha256": "26A2A96931F4AB2687DE5175B2DE0FC548E61DE4778EE610A84AE1239EF1CB7C",
+      "role": "subject.txt"
+    },
+    {
+      "path": "experiments/datasets/interhand26m/annotations/human_annot/InterHand2.6M_test_camera.json",
+      "size_bytes": 90834,
+      "sha256": "6C0163C6A5F0BCFB3147A988EDECD7F2AEA08D4FBBF6B58BC9DC1CC0652E6526",
+      "role": "human_annot/InterHand2.6M_test_camera.json"
+    }
+  ],
+  "gt": {
+    "camera": true,
+    "joints_3d": true,
+    "joints_2d": false,
+    "rgb_video": false
+  },
+  "ready_for_cam_exp_001": true
+}

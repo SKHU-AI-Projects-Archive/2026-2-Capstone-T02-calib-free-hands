@@ -1,0 +1,4 @@
+estimator,N,cam_exp_004_median_pct,cam_exp_0041_rerun_median_pct,median_diff_pp,cam_exp_004_within5_pct,cam_exp_0041_rerun_within5_pct,cam_exp_004_within10_pct,cam_exp_0041_rerun_within10_pct,note
+anycalib_gen,8,9.89,9.89,0.0,20.0,20.0,51.4,51.4,"independent re-run on the identical 8 frames, same environment"
+geocalib_distorted,8,11.184,10.86,-0.324,21.1,22.3,41.7,43.4,"independent re-run on the identical 8 frames, same environment"
+E2_frozen,8,6.138,6.46,0.322,38.3,40.0,68.6,68.0,"independent re-run on the identical 8 frames, same environment"

@@ -1,0 +1,11 @@
+{
+  "cam_exp_0094_method_spec_v1.json": "e71296e85dba6508da9ddaead5a5b4d7c35487f9c268442acf7f6884751bcf9b",
+  "cam_exp_0094_units_v1.csv.gz": "ec6e78f38d66706c4cb605779ddeeda74becc85478797b5ec5c27f07eafeabc0",
+  "cam_exp_0094_scene_frames_v1.csv.gz": "d8c8a71df149e0c5e39c511f8d636c039c4fae30854a0bbaba02efd5ce6893af",
+  "cam_exp_0094_hand_frames_v1.csv.gz": "3966e2c6d2415d0a716a285e8493772cac870d4bf432dffae3a77ff253635833",
+  "cam_exp_0094_hand_split_v1.csv.gz": "06ed62b33792866580df2cf191816614a98447a981188ff8afef3f709673d70c",
+  "cam_exp_0094_outer_camera_folds_v1.csv": "d2dfce086038b9450781df909985843a20e02b6f30e4baff685ebb2605a411ed",
+  "cam_exp_0094_fusion_lambda_grid_v1.json": "c7355cd80574d4b66348bdc18b615891518494571bc7a4aa20cd587cbcbf1c0f",
+  "cam_exp_0094_focal_search_grid_v1.json": "a9732c29f8735393f8ca7c383523a3fe4a06dfe624dab0ab0b832db4aa7ff95b",
+  "cam_exp_0094_controls_spec_v1.json": "8da1e1475916354a150de7f5414fedf74769f837a2589301d74d8350d043d0aa"
+}

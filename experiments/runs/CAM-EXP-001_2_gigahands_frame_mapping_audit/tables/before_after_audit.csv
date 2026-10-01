@@ -1,0 +1,9 @@
+metric,cam_exp_001_1,cam_exp_001_2,note
+good,3516,2386,"diagnostic bands, not the final quality gate"
+medium,1685,1119,"diagnostic bands, not the final quality gate"
+bad,920,722,"diagnostic bands, not the final quality gate"
+invalid_2d_zero,,1333,"diagnostic bands, not the final quality gate"
+likely_hand_identity_error,,518,"diagnostic bands, not the final quality gate"
+unresolved,,204,"diagnostic bands, not the final quality gate"
+not_chosen,,40,"diagnostic bands, not the final quality gate"
+zero_sentinel / invalid_2d_zero,1879,1333,"different sampling: 001.1 used the CAM-EXP-001 frame subset, 001.2 strides the full chosen-frame range"

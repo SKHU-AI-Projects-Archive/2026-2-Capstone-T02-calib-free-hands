@@ -1,0 +1,10 @@
+{
+  "manifest": "cam_exp_008_frame_subsets_v1.csv.gz",
+  "sha256": "fb33ba16680da6dd03fa337a4c1b03ce5b27ac05966c5182c31a1c4cf9e19f04",
+  "rows": 24989,
+  "views": 154,
+  "nesting_violations": 0,
+  "nested_selection": "farthest-point insertion in time, seeded at the sequence midpoint",
+  "diversity_views": 106,
+  "target_blind": true
+}

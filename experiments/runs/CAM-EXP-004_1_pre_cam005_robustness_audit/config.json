@@ -1,0 +1,76 @@
+{
+  "experiment": "CAM-EXP-004.1_pre_cam005_robustness_audit",
+  "purpose": "not a new calibration method. It hardens the CAM-EXP-001..004 results that CAM-EXP-005 will build on, and fixes in writing what is confirmed and what is still exploratory.",
+  "prior_runs": "CAM-EXP-001 .. CAM-EXP-004 are read-only; no file of theirs was modified",
+  "parent_commit": "19e78f2",
+  "statistics": {
+    "problem": "CAM-EXP-003.1 bootstrapped over 1400 frames, but 8 frames of one static camera are not 8 independent observations of that camera's calibration error",
+    "resampling_units": {
+      "LEGACY_FRAME_BOOTSTRAP": "1400 frames - kept, labelled, not deleted",
+      "VIEW_CLUSTER": "175 (sequence,camera) clusters - primary",
+      "PHYSICAL_CAMERA_CLUSTER": "40 unique physical camera ids - same lens across takes",
+      "SEQUENCE_CLUSTER": "5 sequences - SENSITIVITY ANALYSIS ONLY, too few clusters for a trustworthy CI"
+    },
+    "n_bootstrap": 10000,
+    "seed": 20260923,
+    "point_estimates": "unchanged - only the uncertainty around them is recomputed"
+  },
+  "e2_freeze": {
+    "spec": "experiments/manifests/cam_exp_004_e2_frozen_spec_v1.json",
+    "rule": "the E2 formula, its members and its aggregation are frozen; CAM-EXP-005/006 may not modify them"
+  },
+  "loso": {
+    "protocol": "leave one sequence out; pick the best of E1-E5 on the 4 training sequences, evaluate that pick on the held-out one",
+    "status": "RETROSPECTIVE_INTERNAL_VALIDATION - never called an independent test"
+  },
+  "frame_count_extension": {
+    "manifest": "experiments/manifests/gigahands_demo_cam_exp_0041_64frames_v1.csv.gz",
+    "sha256": "c79f9b2961d9da10f1202924edb65451addebd0dba34ad8036686f1238ef4244",
+    "views": 175,
+    "frames_per_view": 64,
+    "total_frames": 11200,
+    "grid": "np.linspace(0, n_valid_frames-1, 64).astype(int) - the CAM-EXP-003 8-frame grid refined 8x; because 63 = 9*7 the original 8 frames are an EXACT subset",
+    "nested_sets": "8 < 16 < 32 < 64 by deterministic farthest-point insertion seeded with the frozen 8",
+    "selection_inputs": "video length only. NOT GT focal, NOT model predictions, NOT hand annotation, NOT scene content",
+    "processing_order": "results/summary/extension_view_order.csv - per-sequence random permutation (seed 20260923) interleaved round-robin, so any prefix is stratified; frozen before any result was seen",
+    "aggregation": "frozen from CAM-EXP-004: AnyCalib median, GeoCalib median, E2 per the frozen spec. NO new aggregator was invented.",
+    "models": [
+      "AnyCalib anycalib_gen + radial:2",
+      "GeoCalib distorted + radial"
+    ],
+    "pf_excluded": "PerspectiveFields was not re-run: it was clearly weakest in CAM-EXP-004 and no claim here depends on it",
+    "saturation_labels": [
+      "CONFIRMED_SATURATION",
+      "SLOW_CONTINUED_GAIN",
+      "LATE_GAIN",
+      "MODEL_DEPENDENT"
+    ]
+  },
+  "anycam": {
+    "intent": "SUPPLEMENTARY_STATIC_STRESS_TEST, never a benchmark and never an equal baseline",
+    "official_repo": "https://github.com/Brummi/anycam",
+    "commit": "e609cc8a9e4ee8f78cf2ce39ebeb86b35e82d10d",
+    "checkpoint": "fwimbauer/anycam_v1_seq8 pytorch_model.bin (official HuggingFace location used by the repo's own hubconf.py)",
+    "interpretation_rule": "if no focal information is recoverable, say the official formulation is not identifiable in our static-camera condition - never 'AnyCam is bad'"
+  },
+  "provenance": {
+    "manifest": "experiments/manifests/external_model_provenance_v1.json",
+    "requirement": "exact commit SHA, not 'main'; checkpoint SHA256; inference command; output convention",
+    "lock": "requirements-calibration-frozen.txt (pip freeze of .venv-calib)"
+  },
+  "holdout": {
+    "manifest": "experiments/manifests/final_confirmatory_holdout_v1.json",
+    "rule": "no holdout result may influence method choice, ensemble membership, weights, thresholds or cue rules; structural sanity checks allowed and logged"
+  },
+  "development_protocol": "experiments/manifests/development_validation_split_v1.json",
+  "out_of_scope": [
+    "scene-aware calibration",
+    "hand-aware calibration",
+    "learning ensemble weights",
+    "modifying E2",
+    "starting CAM-EXP-005 or 006",
+    "touching the final holdout",
+    "new CAM-EXP-002 sensitivity experiments",
+    "large-scale hand QC relabeling"
+  ]
+}

@@ -1,0 +1,16 @@
+{
+  "spec_id": "cam_exp_008_focal_grid_v1",
+  "created_before_reference_focal_evaluation": true,
+  "parameterisation": "q = f / f_scene",
+  "q_min": 0.5,
+  "q_max": 1.5,
+  "n_points": 161,
+  "spacing": "log-uniform",
+  "why": "this experiment refines a scene anchor, it does not solve for the focal from scratch. The range is wide relative to AnyCalib's known error scale while avoiding the meaningless large-focal plateau CAM-EXP-006 mapped.",
+  "secondary_sensitivity": {
+    "q_min": 0.25,
+    "q_max": 2.0,
+    "role": "SECONDARY only"
+  },
+  "refinement": "parabolic interpolation in log-q on the three grid points around an interior minimum; a boundary minimum is reported as BOUNDARY and not refined"
+}

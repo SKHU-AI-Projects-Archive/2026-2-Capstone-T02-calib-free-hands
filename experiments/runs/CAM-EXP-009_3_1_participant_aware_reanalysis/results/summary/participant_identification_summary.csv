@@ -1,0 +1,4 @@
+direction,n_participants,top1_accuracy_pct,chance_pct,n_correct
+LEFT_TO_RIGHT,4,50.0,25.0,2
+RIGHT_TO_LEFT,4,50.0,25.0,2
+COMBINED,8,50.0,25.0,4

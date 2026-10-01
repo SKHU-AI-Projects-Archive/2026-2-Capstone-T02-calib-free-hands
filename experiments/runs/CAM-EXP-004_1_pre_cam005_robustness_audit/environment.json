@@ -1,0 +1,40 @@
+{
+  "experiment": "CAM-EXP-004.1_pre_cam005_robustness_audit",
+  "date": "2026-09-23T07:16:51.020127+00:00",
+  "os": "Windows 10 (10.0.26200)",
+  "gpu": "NVIDIA GeForce RTX 4060 Ti (16 GB)",
+  "analysis_env": {
+    "venv": "experiments/.venv",
+    "python": "3.11.7",
+    "numpy": "2.4.6"
+  },
+  "model_env": {
+    "venv": "experiments/.venv-calib",
+    "python": "3.11",
+    "torch": "2.1.2+cu121",
+    "cuda": "12.1",
+    "numpy": "1.26.4",
+    "kornia": "0.7.2",
+    "note": "identical to the environment that produced CAM-EXP-003/003.1/004; see requirements-calibration-frozen.txt"
+  },
+  "anycam_env": {
+    "venv": "experiments/.venv-anycam (git-ignored)",
+    "status": "end-to-end path BLOCKED_IMPLEMENTATION_ON_WINDOWS; only the mechanistic identifiability test ran",
+    "detail": "anycam_static_stress_test.md"
+  },
+  "provenance": "experiments/manifests/external_model_provenance_v1.json",
+  "git_branch": "kjh",
+  "git_parent_commit": "19e78f2",
+  "reproduce": [
+    "python src/cluster_stats.py",
+    "python src/e2_freeze_and_loso.py",
+    "python src/build_manifest64.py",
+    "python src/run_extended.py --views results/summary/extension_view_order.csv   # repeat until done",
+    "python src/evaluate_extension.py",
+    "python src/determinism_check.py",
+    "python src/provenance.py",
+    "python src/plan_holdout_and_splits.py",
+    "python src/figures.py"
+  ],
+  "determinism_warning": "GeoCalib is NOT reproducible run to run; see OPEN_ISSUES.md item 3. AnyCalib is bit-stable."
+}

@@ -1,0 +1,13 @@
+{
+  "scene_frames": 52423,
+  "wilor_attempted": 52423,
+  "left_available": 35854,
+  "right_available": 36240,
+  "both_available": 27803,
+  "none_available": 8132,
+  "any_available": 44291,
+  "duplicate_handedness_frames": 2151,
+  "reused_cache": 6948,
+  "new_inference": 45475,
+  "note": "hand availability never removes an RGB frame from the scene benchmark"
+}

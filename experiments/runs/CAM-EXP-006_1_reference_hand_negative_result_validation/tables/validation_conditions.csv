@@ -1,0 +1,7 @@
+id,name,aggregation,principal_point,distortion,focal,role,deployable
+R0,ORIGINAL_REPRODUCTION,CAM006_ORIGINAL_HAND_WEIGHTED,image centre,none,"scalar, fx = fy",reproduce CAM-EXP-006 exactly,True
+R1,FRAME_BALANCED,CAM0061_FRAME_BALANCED,image centre,none,"scalar, fx = fy",isolate the hand-weighting mismatch,True
+R2,FRAME_BALANCED_GT_PP_ORACLE,CAM0061_FRAME_BALANCED,"provided cx, cy",none,"scalar, fx = fy",ORACLE_DIAGNOSTIC_ONLY,False
+R3,FRAME_BALANCED_GT_DIST_ORACLE,CAM0061_FRAME_BALANCED,image centre,"provided k1, k2, p1, p2","scalar, fx = fy",ORACLE_DIAGNOSTIC_ONLY,False
+R4,FRAME_BALANCED_GT_PP_DIST_ORACLE,CAM0061_FRAME_BALANCED,"provided cx, cy","provided k1, k2, p1, p2","scalar, fx = fy",ORACLE_DIAGNOSTIC_ONLY,False
+R5,FULL_CAMERA_MODEL_ORACLE_EXCEPT_FOCAL,CAM0061_FRAME_BALANCED,"provided cx, cy","provided k1, k2, p1, p2","unknown scalar fx; fy = (provided fy / provided fx) * fx. The RATIO is supplied, the MAGNITUDE never is","ORACLE_DIAGNOSTIC_ONLY - the strongest diagnostic: if every other camera parameter is known exactly, is the focal magnitude identifiable from one hand?",False

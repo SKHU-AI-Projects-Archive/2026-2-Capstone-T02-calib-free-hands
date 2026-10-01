@@ -1,0 +1,15 @@
+{
+  "views": 154,
+  "L_hand_max_px": {
+    "median": 1.8815,
+    "p10": 0.6163,
+    "p90": 9.6522
+  },
+  "hand_preferred_q": {
+    "median": 1.1837,
+    "p10": 0.7309,
+    "p90": 1.5
+  },
+  "share_at_grid_boundary": 0.2273,
+  "reading": "the hand term is both SHALLOW and BIASED. Over a focal range of +-50 % the whole hand reprojection excess is a median 1.88 px, so it carries very little discriminative weight against the scene prior. And its preferred focal sits a median 18 % ABOVE the scene estimate, with 21 % of views preferring the grid boundary, so where it does push it pushes in a systematically wrong direction rather than toward the reference focal."
+}

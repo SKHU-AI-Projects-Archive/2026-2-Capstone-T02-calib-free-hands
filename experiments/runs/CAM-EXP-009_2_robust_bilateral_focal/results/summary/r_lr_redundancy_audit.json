@@ -1,0 +1,5 @@
+{
+  "max_abs_score_change_under_global_right_scale": 5.684341886080802e-14,
+  "redundant": true,
+  "reason": "p_L and p_R are each normalised to sum 1, so a global LEFT/RIGHT scale ratio is absorbed by the normalisation and cannot change any score. A separate r_LR nuisance parameter is therefore NOT introduced."
+}

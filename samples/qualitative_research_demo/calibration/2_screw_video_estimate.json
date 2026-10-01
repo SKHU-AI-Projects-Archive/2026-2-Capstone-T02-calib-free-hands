@@ -1,0 +1,43 @@
+{
+  "video": "2_screw.mp4",
+  "width": 1920,
+  "height": 1080,
+  "fps": 30.0,
+  "n_frames_total": 364,
+  "calibration_frames": [
+    0,
+    51,
+    103,
+    155,
+    207,
+    259,
+    311,
+    363
+  ],
+  "frame_selection": "uniform over the clip; no content, model output or ground truth was consulted",
+  "anycalib": {
+    "checkpoint": "anycalib_gen",
+    "camera_model": "radial:2",
+    "aggregation": "median over the calibration frames (the frozen CAM-EXP-004 rule)",
+    "video_focal_px": 1555.52587890625
+  },
+  "geocalib": {
+    "weights": "distorted",
+    "camera_model": "radial",
+    "aggregation": "median over the calibration frames",
+    "video_focal_px": 1955.0132446289062,
+    "note": "GeoCalib is not run-to-run deterministic on identical input (CAM-EXP-004.1). This is one execution, used as-is."
+  },
+  "e2_frozen": {
+    "spec": "experiments/manifests/cam_exp_004_e2_frozen_spec_v1.json",
+    "definition": "per frame sqrt(f_anycalib * f_geocalib), then median over frames",
+    "video_focal_px": 1738.5362938432531,
+    "status": "frozen exploratory ensemble - not a proposed method"
+  },
+  "caveat": "These clips have NO dataset-provided camera calibration. No estimate here may be called a ground-truth, correct or true focal; they are model estimates.",
+  "what_the_hand_pipeline_consumes": {
+    "focal": "yes - only through tz = 2f/(s*box_size)",
+    "principal_point": "NOT consumed; rgb_predictor uses the image centre (W/2, H/2)",
+    "distortion": "NOT consumed; predicted by the calibration model but never propagated into the hand 3D"
+  }
+}

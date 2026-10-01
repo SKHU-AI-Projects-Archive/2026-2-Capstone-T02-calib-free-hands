@@ -1,0 +1,11 @@
+candidate,official_repo,checkpoint_or_weights,camera_model,status,note
+AnyCalib distortion-aware (dist),https://github.com/javrtg/AnyCalib,anycalib_dist.pt (official GitHub release v1.0.0),radial:2 (fx fy cx cy k1 k2),RUN_SUCCESS,1400/1400 frames 0 failures
+AnyCalib distortion-aware (gen),https://github.com/javrtg/AnyCalib,anycalib_gen.pt (official GitHub release v1.0.0),radial:2 (fx fy cx cy k1 k2),RUN_SUCCESS,1400/1400 frames 0 failures; best focal accuracy of this run
+GeoCalib distortion-aware,https://github.com/cvg/GeoCalib,geocalib-distorted.tar (official GitHub release v1.0),radial (f cx cy k1 k2),RUN_SUCCESS,1400/1400 frames 0 failures
+PerspectiveFields distortion-aware,https://github.com/jinlinyi/PerspectiveFields,none released,n/a,NO_DISTORTION_VARIANT,the released Paramnet checkpoints output roll pitch vfov rel_focal (+rel cx cy) with no distortion term; no substitute was used
+AnyCalib GT-undistorted pinhole,https://github.com/javrtg/AnyCalib,anycalib_pinhole.pt,pinhole,RUN_SUCCESS,condition C oracle diagnostic
+GeoCalib GT-undistorted pinhole,https://github.com/cvg/GeoCalib,geocalib-pinhole.tar,pinhole,RUN_SUCCESS,condition C oracle diagnostic
+PerspectiveFields GT-undistorted,https://github.com/jinlinyi/PerspectiveFields,Paramnet-360Cities-edina-{centered uncentered},n/a (pinhole-equivalent),RUN_SUCCESS,condition C oracle diagnostic; model unchanged only the image is undistorted
+AnyCalib division / kb / eucm,https://github.com/javrtg/AnyCalib,available,division kb ucm eucm fov,NOT_RUN_BY_CHOICE,different parameterisation from the OpenCV GT; would need a conversion and is not what the GT lens is
+GeoCalib simple_divisional,https://github.com/cvg/GeoCalib,geocalib-distorted.tar,simple_divisional,NOT_RUN_BY_CHOICE,division model - not directly comparable to the OpenCV GT coefficients
+AnyCam,https://github.com/Brummi/anycam,not installed,n/a,OUT_OF_SCOPE_SINGLE_FRAME,video method; excluded from this single-frame diagnostic as in CAM-EXP-003

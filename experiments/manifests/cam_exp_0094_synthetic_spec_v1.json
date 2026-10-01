@@ -1,0 +1,33 @@
+{
+  "conditions": [
+    "S0_CLEAN",
+    "S1_MODERATE",
+    "S2_WRONG_BONE",
+    "S3_GENERIC_OFF"
+  ],
+  "moderate_definition": {
+    "dist_over_diam": 4,
+    "asym_kind": "dense",
+    "asym": 0.02,
+    "noise_px": 1.0,
+    "artic_deg": 1.0,
+    "missing": 0.1,
+    "visibility": 0.75
+  },
+  "moderate_source": "CAM-EXP-009.2 COMBINED_MODERATE, reused unchanged",
+  "n_trials": 8,
+  "f_nominal": 1000.0,
+  "lambda_generic": 1.0,
+  "lambda_side": 1.0,
+  "gate_thresholds": {
+    "synthetic_clean_focal_err_pct": 1.0,
+    "synthetic_moderate_focal_err_pct": 5.0,
+    "synthetic_wrong_bone_degradation_pp": 10.0,
+    "synthetic_boundary_rate": 0.25,
+    "focal_relative_reduction_pct": 10.0,
+    "abs3d_root_reduction_pct": 10.0,
+    "abs3d_mpjpe_reduction_pct": 5.0,
+    "root_aligned_tolerance_mm": 2.0
+  },
+  "frozen_before_real_focal_results": true
+}

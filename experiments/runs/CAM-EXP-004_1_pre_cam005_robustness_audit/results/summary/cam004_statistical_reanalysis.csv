@@ -1,0 +1,19 @@
+source,comparison,statistic,aggregate,resampling_unit,value,ci_lo,ci_hi,excludes_zero,n_views,n_clusters,interpretation
+CAM-EXP-004,E2_perframe_geomean vs anycalib_gen (N=8),median_rel_err_improvement_pp,median,VIEW_CLUSTER,2.2332744279910983,1.3232168269140616,2.9990133180571092,1,175,175,primary
+CAM-EXP-004,E2_perframe_geomean vs anycalib_gen (N=8),median_rel_err_improvement_pp,median,PHYSICAL_CAMERA_CLUSTER,2.2332744279910983,0.7971150732466299,3.2628694788894688,1,175,40,primary
+CAM-EXP-004,E2_perframe_geomean vs anycalib_gen (N=8),median_rel_err_improvement_pp,median,SEQUENCE_CLUSTER,2.2332744279910983,0.6615388868713419,3.2002483535812685,1,175,5,sensitivity analysis only - 5 clusters
+CAM-EXP-004,E2_perframe_geomean vs anycalib_gen (N=8),within_5_delta_indicator,mean,VIEW_CLUSTER,18.285714285714285,9.142857142857142,27.42857142857143,1,175,175,primary
+CAM-EXP-004,E2_perframe_geomean vs anycalib_gen (N=8),within_5_delta_indicator,mean,PHYSICAL_CAMERA_CLUSTER,18.285714285714285,6.779661016949152,29.310344827586203,1,175,40,primary
+CAM-EXP-004,E2_perframe_geomean vs anycalib_gen (N=8),within_5_delta_indicator,mean,SEQUENCE_CLUSTER,18.285714285714285,8.799999999999999,24.0,1,175,5,sensitivity analysis only - 5 clusters
+CAM-EXP-004,E2_perframe_geomean vs anycalib_gen (N=8),within_10_delta_indicator,mean,VIEW_CLUSTER,17.142857142857142,8.571428571428571,26.285714285714285,1,175,175,primary
+CAM-EXP-004,E2_perframe_geomean vs anycalib_gen (N=8),within_10_delta_indicator,mean,PHYSICAL_CAMERA_CLUSTER,17.142857142857142,6.321839080459771,27.906976744186046,1,175,40,primary
+CAM-EXP-004,E2_perframe_geomean vs anycalib_gen (N=8),within_10_delta_indicator,mean,SEQUENCE_CLUSTER,17.142857142857142,7.333333333333333,27.500000000000004,1,175,5,sensitivity analysis only - 5 clusters
+CAM-EXP-004,E2_perframe_geomean vs anycalib_gen (N=8),signed_bias_primary_pct,median,VIEW_CLUSTER,-9.25106535547641,-10.4296427875744,-7.958135630576449,1,175,175,primary
+CAM-EXP-004,E2_perframe_geomean vs anycalib_gen (N=8),signed_bias_primary_pct,median,PHYSICAL_CAMERA_CLUSTER,-9.25106535547641,-10.906237754846867,-7.634958266200705,1,175,40,primary
+CAM-EXP-004,E2_perframe_geomean vs anycalib_gen (N=8),signed_bias_primary_pct,median,SEQUENCE_CLUSTER,-9.25106535547641,-10.486297334883343,-8.240718658682407,1,175,5,sensitivity analysis only - 5 clusters
+CAM-EXP-004,E2_perframe_geomean vs anycalib_gen (N=8),signed_bias_e2_pct,median,VIEW_CLUSTER,-2.361123545670076,-3.6035271981038592,-0.6931691719662342,1,175,175,primary
+CAM-EXP-004,E2_perframe_geomean vs anycalib_gen (N=8),signed_bias_e2_pct,median,PHYSICAL_CAMERA_CLUSTER,-2.361123545670076,-4.057351680512149,-0.19833883055019297,1,175,40,primary
+CAM-EXP-004,E2_perframe_geomean vs anycalib_gen (N=8),signed_bias_e2_pct,median,SEQUENCE_CLUSTER,-2.361123545670076,-3.895348660079007,-0.8714770250226775,1,175,5,sensitivity analysis only - 5 clusters
+CAM-EXP-004,E2_perframe_geomean vs geocalib_distorted (N=8),e2_vs_geocalib_improvement_pp,median,VIEW_CLUSTER,4.875516178936737,3.108195543344985,7.17427843142,1,175,175,primary
+CAM-EXP-004,E2_perframe_geomean vs geocalib_distorted (N=8),e2_vs_geocalib_improvement_pp,median,PHYSICAL_CAMERA_CLUSTER,4.875516178936737,2.6577781932909597,7.861844910388308,1,175,40,primary
+CAM-EXP-004,E2_perframe_geomean vs geocalib_distorted (N=8),e2_vs_geocalib_improvement_pp,median,SEQUENCE_CLUSTER,4.875516178936737,3.108195543344985,6.477036226718711,1,175,5,sensitivity analysis only - 5 clusters

@@ -1,0 +1,10 @@
+field,legacy,current,verdict
+frame,0,0,SAME
+bbox,[123.   0. 634. 280.],[123.   0. 634. 280.],"SAME (single inference, reused)"
+detector score,0.813449,0.813449,SAME
+root-relative joints (sum |.|),2.486116409,2.486116409,SAME (bit-identical array)
+kp2d (sum |.|),10388.341797,10388.341797,SAME
+focal [px],7500.0,1738.54,DIFFERENT
+cam_t tx [m],-0.142856,-0.142856,SAME (tx carries no focal)
+cam_t tz [m],2.309239,0.535293,DIFFERENT (tz proportional to focal)
+wrist absolute Z [m],2.315434,0.541487,DIFFERENT

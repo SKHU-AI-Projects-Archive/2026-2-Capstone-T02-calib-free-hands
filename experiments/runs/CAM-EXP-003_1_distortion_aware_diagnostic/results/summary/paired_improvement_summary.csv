@@ -1,0 +1,8 @@
+model_run,baseline,condition,n_paired,median_improvement_pct_points,mean_improvement_pct_points,ci95_low,ci95_high,fraction_improved,fraction_worsened,median_improvement_by_camera_min,median_improvement_by_camera_max
+anycalib_dist_radial,anycalib (raw pinhole),B_RAW_DISTORTION_AWARE,1400,5.0624,6.341,4.1758,5.6616,0.6521,0.3479,-14.1975,42.3327
+anycalib_gen_radial,anycalib (raw pinhole),B_RAW_DISTORTION_AWARE,1400,6.5371,7.6661,5.8585,7.3193,0.7064,0.2936,-13.0565,42.8403
+geocalib_distorted_radial,geocalib (raw pinhole),B_RAW_DISTORTION_AWARE,1400,8.5292,10.7572,7.0267,10.0807,0.6557,0.3443,-28.9155,104.6941
+undist_anycalib_pinhole,anycalib (raw pinhole),C_GT_UNDISTORTED_PINHOLE,1400,5.3165,6.5509,4.7814,5.714,0.7607,0.2393,-4.9376,27.215
+undist_geocalib_pinhole,geocalib (raw pinhole),C_GT_UNDISTORTED_PINHOLE,1400,10.2024,18.4936,8.289,11.8911,0.6757,0.3243,-14.3548,87.8183
+undist_pf_centered,pf_centered (raw pinhole),C_GT_UNDISTORTED_PINHOLE,1400,-4.6585,-7.7844,-6.3933,-3.4218,0.4021,0.5979,-40.7033,14.5141
+undist_pf_uncentered,pf_uncentered (raw pinhole),C_GT_UNDISTORTED_PINHOLE,1400,7.4006,11.387,5.0551,9.5588,0.6086,0.3914,-31.4437,67.3682

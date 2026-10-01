@@ -1,0 +1,15 @@
+{
+  "experiment": "CAM-EXP-006.1_reference_hand_negative_result_validation",
+  "python": "3.11.7",
+  "numpy": "2.4.6",
+  "opencv": "5.0.0",
+  "scipy": "1.17.1",
+  "matplotlib": "3.11.2",
+  "os": "Windows 10 (10.0.26200)",
+  "analysis_env": "experiments/.venv",
+  "git_branch": "kjh",
+  "git_parent_commit": "dc1551a",
+  "synthetic_seed": 20260927,
+  "pnp_backends": "SOLVEPNP_SQPNP primary; SOLVEPNP_IPPE then SOLVEPNP_ITERATIVE only on cv2.error (coplanar input)",
+  "determinism": "every synthetic trial is generated from numpy default_rng with a frozen seed"
+}

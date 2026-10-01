@@ -1,0 +1,4 @@
+Model,Scene,Correct_Hand,Shuffled_Hand,Wrong_Bone,Correct_vs_Shuffled_advantage_pp,CI95_low,CI95_high,N
+AnyCalib,16.019,16.447,16.495,PENDING,0.0,0.0,0.0,153
+GeoCalib,21.912,25.167,24.439,PENDING,0.0,0.0,0.0,153
+Perspective Fields,19.888,20.211,19.558,PENDING,0.0,0.0,0.0,153

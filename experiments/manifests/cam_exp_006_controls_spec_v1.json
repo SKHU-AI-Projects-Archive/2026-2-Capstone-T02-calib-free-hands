@@ -1,0 +1,26 @@
+{
+  "spec_id": "cam_exp_006_controls_spec_v1",
+  "seed": 20260926,
+  "purpose": "a focal that can be read off a hand must come from the hand's 3D SHAPE. These controls destroy that shape in three different ways while leaving everything else identical. If the solver still recovers the focal under a control, the signal is not geometric and the positive result is an artefact.",
+  "controls": [
+    {
+      "id": "JOINT_PERMUTATION",
+      "what": "randomly permute the 21 reference-3D joints before the solve, keeping the 2D order fixed",
+      "destroys": "the joint correspondence, hence all shape information",
+      "expected_if_signal_is_real": "the solver should fail or return a flat, uninformative profile"
+    },
+    {
+      "id": "WRONG_POSE",
+      "what": "replace the reference 3D by the reference 3D of the SAME hand in a DIFFERENT, temporally distant frame of the same view",
+      "destroys": "the match between 3D pose and 2D observation, while keeping a real hand's scale and bone lengths",
+      "expected_if_signal_is_real": "large focal error; this is the sharpest control because hand SIZE is preserved"
+    },
+    {
+      "id": "PLANARIZED",
+      "what": "orthogonally project the reference 3D onto its own best-fit plane before the solve",
+      "destroys": "the depth extent that makes perspective, hence focal, observable at all",
+      "expected_if_signal_is_real": "the profile should become flat or the optimum should run to the grid boundary, because a planar target cannot separate focal from depth"
+    }
+  ],
+  "reporting_rule": "every control is reported with the same metrics as the main condition, in the same table, whatever the outcome"
+}

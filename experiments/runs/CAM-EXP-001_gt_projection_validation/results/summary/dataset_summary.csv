@@ -1,0 +1,6 @@
+dataset,samples,joints_total,joints_valid,joints_in_image,joints_with_gt2d,valid_in_image_rate,valid_positive_depth_rate,all_n,all_mean_px,all_median_px,all_p90_px,all_p95_px,all_max_px,all_rmse_px,inimg_n,inimg_mean_px,inimg_median_px,inimg_p90_px,inimg_p95_px,inimg_max_px,inimg_rmse_px,inimg_frac_under_1px,inimg_frac_under_2px,inimg_frac_under_5px,inimg_frac_under_10px,inimg_frac_under_20px,inimg_frac_under_50px,bbox_inside_rate,has_gt_2d
+gigahands,8000,168000,168000,157676,168000,0.9385,1.0,168000,203.1219,15.2298,730.7166,855.8903,21221.1727,379.8174,157451,177.2883,13.171,687.695,820.972,1457.6369,338.2082,0.013,0.0499,0.2235,0.4316,0.5734,0.6601,,1
+interhand26m,1816,38136,35676,35687,0,1.0,1.0,0,,,,,,,0,,,,,,,,,,,,,0.9997,0
+hanco,160,3360,3360,3360,0,1.0,1.0,0,,,,,,,0,,,,,,,,,,,,,,0
+assemblyhands,32,672,672,504,660,0.75,0.9821,660,0.0,0.0,0.0001,0.0001,0.0011,0.0001,504,0.0,0.0,0.0,0.0,0.0,0.0,1.0,1.0,1.0,1.0,1.0,1.0,,1
+assemblyhands_eccv24,0,0,0,0,0,,,0,,,,,,,0,,,,,,,,,,,,,,0

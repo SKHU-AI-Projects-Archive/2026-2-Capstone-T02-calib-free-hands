@@ -1,0 +1,9 @@
+{
+  "primary_test": "exact permutation over sequence relabelings",
+  "n_sequences": 5,
+  "n_relabelings": 120,
+  "statistic": "median(CROSS) - median(WITHIN), sequence-level",
+  "n_permutations_if_sampled": 10000,
+  "seed_namespace": "CAM0093_PERM",
+  "frozen_before_results": true
+}

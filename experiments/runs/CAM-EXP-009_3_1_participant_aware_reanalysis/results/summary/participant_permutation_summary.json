@@ -1,0 +1,14 @@
+{
+  "test": "exact permutation over PARTICIPANT blocks",
+  "n_participant_blocks": 4,
+  "n_permutations": 24,
+  "p41_sessions_move_as_one_block": true,
+  "statistic": "median(different-participant) - median(same-participant), camera-matched",
+  "observed": 0.009845734957705354,
+  "null_median": 0.0013419872108287323,
+  "null_max": 0.013214111068438616,
+  "p_value_one_sided": 0.08333333333333333,
+  "identity_permutation_included_in_null": true,
+  "smallest_attainable_p": 0.041666666666666664,
+  "interpretation": "SUPPORTING ONLY. With 4 participant blocks the floor is 1/24 = 0.0417 and the test is coarse. No conclusion in this reanalysis rests on it."
+}

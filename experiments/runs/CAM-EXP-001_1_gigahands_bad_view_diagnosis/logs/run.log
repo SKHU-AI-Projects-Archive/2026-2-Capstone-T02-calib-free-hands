@@ -1,0 +1,19 @@
+2026-09-22 18:54:25,514 INFO === CAM-EXP-001.1 GigaHands bad-view diagnosis ===
+2026-09-22 18:54:25,565 INFO branch=kjh commit=0c154835
+2026-09-22 18:54:25,565 INFO input (read-only): experiments/runs/CAM-EXP-001_gt_projection_validation/results/raw/reprojection_per_joint.csv.gz
+2026-09-22 18:54:25,567 INFO step 1: per-view statistics and case selection
+2026-09-22 18:54:27,672 INFO views=8000  classes={'medium': 1685, 'bad': 920, 'good': 3516, 'zero_sentinel': 1879}  otsu=30.11 px
+2026-09-22 18:54:28,391 INFO view classes: {'medium': 1685, 'bad': 920, 'good': 3516, 'zero_sentinel': 1879} (otsu=30.11 px)
+2026-09-22 18:54:28,391 INFO step 2: hypothesis tests H1..H7
+2026-09-22 18:54:28,478 INFO re-reading 1099 views from disk for hypothesis tests (600 sampled + partners)
+2026-09-22 18:54:30,132 INFO loaded 1099 views
+2026-09-22 18:54:30,845 INFO step 3: figures
+2026-09-22 18:54:35,822 INFO loaded 24 case views for figures
+2026-09-22 18:55:02,138 INFO H1 H1 plain 2D detection failure                           -> supported
+2026-09-22 18:55:02,138 INFO H2 H2 frame synchronisation / temporal lag                 -> close to rejected
+2026-09-22 18:55:02,138 INFO H3 H3 camera mapping / camera parameter mis-assignment     -> close to rejected as a calibration fault; camera-dependent visibility is real
+2026-09-22 18:55:02,138 INFO H4 H4 distortion model misuse                              -> close to rejected
+2026-09-22 18:55:02,138 INFO H5 H5 coordinate system / axis / flip misinterpretation    -> close to rejected (as a camera-convention fault)
+2026-09-22 18:55:02,138 INFO H6 H6 sequence-specific or hand-specific concentration     -> partially supported
+2026-09-22 18:55:02,139 INFO H7 H7 hand identity swap in the 2D annotation              -> supported for a substantial share of non-sentinel bad views
+2026-09-22 18:55:02,139 INFO done -> experiments/runs/CAM-EXP-001_1_gigahands_bad_view_diagnosis

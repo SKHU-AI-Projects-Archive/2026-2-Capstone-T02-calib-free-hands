@@ -1,0 +1,60 @@
+{
+  "kp2d_rows_eq_rgb_frames": false,
+  "kp3d_rows_eq_max_chosen_plus1": true,
+  "repro_videos_eq_union": true,
+  "params_eq_union": true,
+  "timestamps_eq_rgb_frames": false,
+  "sequences": {
+    "p36-tea-0010": {
+      "take": "010",
+      "union": 359,
+      "intersect": 344,
+      "kp3d_rows": 375,
+      "params": 359,
+      "repro2d": 359,
+      "repro3d": 359,
+      "mano_vid": 359
+    },
+    "p41-boxing-0021": {
+      "take": "021",
+      "union": 361,
+      "intersect": 361,
+      "kp3d_rows": 361,
+      "params": 361,
+      "repro2d": 361,
+      "repro3d": 361,
+      "mano_vid": 361
+    },
+    "p41-plant-0004": {
+      "take": "004",
+      "union": 169,
+      "intersect": 169,
+      "kp3d_rows": 169,
+      "params": -1,
+      "repro2d": 169,
+      "repro3d": 169,
+      "mano_vid": 169
+    },
+    "p44-dog-0004": {
+      "take": "004",
+      "union": 331,
+      "intersect": 331,
+      "kp3d_rows": 331,
+      "params": 331,
+      "repro2d": 331,
+      "repro3d": 331,
+      "mano_vid": 331
+    },
+    "p52-instrument-0034": {
+      "take": "034",
+      "union": 133,
+      "intersect": 133,
+      "kp3d_rows": 133,
+      "params": 133,
+      "repro2d": 133,
+      "repro3d": 133,
+      "mano_vid": 133
+    }
+  },
+  "n_cameras_audited": 200
+}

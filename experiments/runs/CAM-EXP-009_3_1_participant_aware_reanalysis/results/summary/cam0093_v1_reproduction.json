@@ -1,0 +1,96 @@
+{
+  "source_commit": "1b92dc1",
+  "tolerance": 1e-09,
+  "metrics": [
+    {
+      "metric": "D_repeat",
+      "EXPECTED": 0.010870781111511407,
+      "RECOMPUTED": 0.010870781111511407,
+      "ABS_DIFF": 0.0,
+      "TOLERANCE": 1e-09,
+      "PASS": 1
+    },
+    {
+      "metric": "D_view_repeat",
+      "EXPECTED": 0.01130090226506586,
+      "RECOMPUTED": 0.01130090226506586,
+      "ABS_DIFF": 0.0,
+      "TOLERANCE": 1e-09,
+      "PASS": 1
+    },
+    {
+      "metric": "D_within",
+      "EXPECTED": 0.02828635713459926,
+      "RECOMPUTED": 0.02828635713459926,
+      "ABS_DIFF": 0.0,
+      "TOLERANCE": 1e-09,
+      "PASS": 1
+    },
+    {
+      "metric": "D_cross",
+      "EXPECTED": 0.04579350960303963,
+      "RECOMPUTED": 0.04579350960303963,
+      "ABS_DIFF": 0.0,
+      "TOLERANCE": 1e-09,
+      "PASS": 1
+    },
+    {
+      "metric": "ratio_within_over_cross",
+      "EXPECTED": 0.6176935853966891,
+      "RECOMPUTED": 0.6176935853966891,
+      "ABS_DIFF": 0.0,
+      "TOLERANCE": 1e-09,
+      "PASS": 1
+    },
+    {
+      "metric": "S_sep",
+      "EXPECTED": 1.610477875403222,
+      "RECOMPUTED": 1.610477875403222,
+      "ABS_DIFF": 0.0,
+      "TOLERANCE": 1e-09,
+      "PASS": 1
+    },
+    {
+      "metric": "frac_m_nearest_positive",
+      "EXPECTED": 0.5368421052631579,
+      "RECOMPUTED": 0.5368421052631579,
+      "ABS_DIFF": 0.0,
+      "TOLERANCE": 1e-09,
+      "PASS": 1
+    },
+    {
+      "metric": "top1_combined_pct",
+      "EXPECTED": 53.68421052631579,
+      "RECOMPUTED": 53.68421052631579,
+      "ABS_DIFF": 0.0,
+      "TOLERANCE": 1e-09,
+      "PASS": 1
+    },
+    {
+      "metric": "C0_median_d_within",
+      "EXPECTED": 0.02828635713459926,
+      "RECOMPUTED": 0.02828635713459926,
+      "ABS_DIFF": 0.0,
+      "TOLERANCE": 1e-09,
+      "PASS": 1
+    },
+    {
+      "metric": "C1_median_d_within",
+      "EXPECTED": 0.27064659404993296,
+      "RECOMPUTED": 0.27064659404993296,
+      "ABS_DIFF": 0.0,
+      "TOLERANCE": 1e-09,
+      "PASS": 1
+    },
+    {
+      "metric": "C1_degradation_pct",
+      "EXPECTED": 856.809647711348,
+      "RECOMPUTED": 856.809647711348,
+      "ABS_DIFF": 0.0,
+      "TOLERANCE": 1e-09,
+      "PASS": 1
+    }
+  ],
+  "ALL_REPRODUCED": true,
+  "note": "recomputed from CAM-EXP-009.3's stored distance tables; no reference 3D was recomputed"
+}

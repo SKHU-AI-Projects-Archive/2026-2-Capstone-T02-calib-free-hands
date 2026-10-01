@@ -1,0 +1,17 @@
+2026-09-22 14:45:16,435 INFO CAM-EXP-001 start (mode=full) commit=224ea50f branch=kjh
+2026-09-22 14:45:16,439 INFO [gigahands] streaming samples
+2026-09-22 14:45:25,686 INFO [gigahands] 8000 samples, 168000 valid joints, 168000 with GT 2D
+2026-09-22 14:45:25,686 INFO [interhand26m] streaming samples
+2026-09-22 14:45:28,242 INFO [interhand26m] 1816 samples, 35676 valid joints, 0 with GT 2D
+2026-09-22 14:45:28,242 INFO [hanco] streaming samples
+2026-09-22 14:45:28,443 INFO [hanco] 160 samples, 3360 valid joints, 0 with GT 2D
+2026-09-22 14:45:28,443 INFO [assemblyhands] streaming samples
+2026-09-22 14:45:28,713 INFO [assemblyhands] 32 samples, 672 valid joints, 660 with GT 2D
+2026-09-22 14:45:28,713 INFO [assemblyhands_eccv24] streaming samples
+2026-09-22 14:45:34,142 INFO [assemblyhands_eccv24] 0 samples, 0 valid joints, 0 with GT 2D
+2026-09-22 14:45:34,715 INFO SUMMARY gigahands: valid=168000 gt2d=168000 median_inimg=13.171 p90=687.695 in_img_rate=0.9385 pos_depth=1.0 bbox_rate=
+2026-09-22 14:45:34,715 INFO SUMMARY interhand26m: valid=35676 gt2d=0 median_inimg= p90= in_img_rate=1.0 pos_depth=1.0 bbox_rate=0.9997
+2026-09-22 14:45:34,715 INFO SUMMARY hanco: valid=3360 gt2d=0 median_inimg= p90= in_img_rate=1.0 pos_depth=1.0 bbox_rate=
+2026-09-22 14:45:34,715 INFO SUMMARY assemblyhands: valid=672 gt2d=660 median_inimg=0.0 p90=0.0 in_img_rate=0.75 pos_depth=0.9821 bbox_rate=
+2026-09-22 14:45:34,715 INFO SUMMARY assemblyhands_eccv24: valid=0 gt2d=0 median_inimg= p90= in_img_rate= pos_depth= bbox_rate=
+2026-09-22 14:45:34,715 INFO CAM-EXP-001 done -> experiments/runs/CAM-EXP-001_gt_projection_validation

@@ -1,0 +1,38 @@
+{
+  "spec_id": "cam_exp_007_control_spec_v1",
+  "created_before_target_analysis": true,
+  "controls": [
+    {
+      "id": "C1",
+      "name": "ANYCALIB_FOCAL_PRIOR_CONTROL",
+      "features": [
+        "log_f_anycalib"
+      ],
+      "role": "SINGLE_FOCAL_PRIOR_CONFOUND_CONTROL",
+      "is_hand_signal": 0,
+      "why": "the target is log(f_any / f_ref). Handing the probe log(f_any) lets it exploit the rig's narrow reference-focal prior and look excellent without any camera cue. Never counted as hand signal, and never mixed into a primary hand feature set."
+    },
+    {
+      "id": "C2",
+      "name": "HAND_FEATURE_VIEW_SHUFFLE",
+      "role": "PRIMARY_NEGATIVE_CONTROL",
+      "is_hand_signal": 0,
+      "rule": "within each outer fold, permute the feature ROWS among training views and, separately, among held-out views. Targets are never shuffled. Permutation is within-sequence where a sequence has at least 4 views in that partition, otherwise within the whole partition.",
+      "n_seeds": 10
+    },
+    {
+      "id": "C3",
+      "name": "RANDOM_FEATURE_CONTROL",
+      "role": "SECONDARY_CONTROL",
+      "is_hand_signal": 0,
+      "rule": "deterministic Gaussian features of matched dimension, seeded per view id"
+    },
+    {
+      "id": "C4",
+      "name": "TRAIN_TARGET_SHUFFLE",
+      "role": "SECONDARY_CONTROL",
+      "is_hand_signal": 0,
+      "rule": "shuffle training targets only; test targets stay true"
+    }
+  ]
+}

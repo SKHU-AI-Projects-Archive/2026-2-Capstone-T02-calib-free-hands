@@ -1,0 +1,6 @@
+sequence,n_hands,PIPELINE_BASELINE_abs_z_error_mm_median,PIPELINE_BASELINE_root_xyz_error_mm_median,GT_x1.00_abs_z_error_mm_median,GT_x1.00_root_xyz_error_mm_median,GT_x1.10_abs_z_error_mm_median,GT_x1.10_root_xyz_error_mm_median,GT_x0.90_abs_z_error_mm_median,GT_x0.90_root_xyz_error_mm_median
+p36-tea-0010,565,3169.241,3170.245,33.137,53.772,78.995,89.963,79.076,90.99
+p41-boxing-0021,562,2630.073,2630.222,66.078,90.307,49.375,78.597,115.233,133.296
+p41-plant-0004,472,2395.296,2396.012,82.738,101.017,46.593,72.737,132.941,145.844
+p44-dog-0004,409,3138.725,3138.731,54.46,65.106,122.714,125.118,44.091,63.326
+p52-instrument-0034,202,3027.64,3027.68,44.611,64.025,52.326,71.087,82.002,88.383

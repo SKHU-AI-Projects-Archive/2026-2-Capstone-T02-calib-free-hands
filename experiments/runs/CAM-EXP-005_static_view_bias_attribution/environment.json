@@ -1,0 +1,38 @@
+{
+  "experiment": "CAM-EXP-005_static_view_bias_attribution",
+  "date": "2026-09-23T15:59:38.027225+00:00",
+  "os": "Windows 10 (10.0.26200)",
+  "analysis_env": {
+    "venv": "experiments/.venv-calib (has scikit-learn)",
+    "python": "3.11.7",
+    "numpy": "1.26.4",
+    "scipy": "1.17.1",
+    "scikit-learn": "1.9.1",
+    "opencv": "4.10.0",
+    "pandas": "not used",
+    "statsmodels": "not used - the descriptive models are plain least squares in src/build_targets.py"
+  },
+  "feature_extraction": {
+    "venv": "experiments/.venv",
+    "line_detector": "cv2.createLineSegmentDetector (LSD)",
+    "determinism": "deterministic for a fixed input; orthogonality sampler seed 0, analysis seed 20260924"
+  },
+  "model_inference": "NONE. Every calibration prediction is read from the frozen CAM-EXP-004.1 outputs.",
+  "inputs": {
+    "predictions": "experiments/runs/CAM-EXP-004_1_pre_cam005_robustness_audit/results/raw/extended_frame_predictions.csv.gz",
+    "frames_manifest": "experiments/manifests/gigahands_demo_cam_exp_0041_64frames_v1.csv.gz"
+  },
+  "new_dependencies": "none installed for this run; scikit-learn was already present in .venv-calib",
+  "git_branch": "kjh",
+  "git_parent_commit": "105b4bf152371f7754af69a31db639e16988a2f9",
+  "reproduce": [
+    "python src/build_targets.py",
+    "python src/extrinsic_audit.py",
+    "python src/freeze_specs.py",
+    "python src/extract_scene_features.py  # repeat until done",
+    "python src/build_view_features.py",
+    "python src/associations.py",
+    "python src/probe.py  # .venv-calib",
+    "python src/figures.py"
+  ]
+}

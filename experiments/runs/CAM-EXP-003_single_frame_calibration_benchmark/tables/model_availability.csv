@@ -1,0 +1,9 @@
+model,official_repo,commit_or_tag,checkpoint,license,status,note
+AnyCalib,https://github.com/javrtg/AnyCalib,main (pip install from git; ICCV 2025),anycalib_pinhole.pt from GitHub release v1.0.0 (1.19 GB),see repo,RUN_SUCCESS,ran on all 1400 frames with 0 failures
+GeoCalib,https://github.com/cvg/GeoCalib,main (pip install from git; ECCV 2024),geocalib-pinhole.tar from GitHub release v1.0 (111 MB),see repo,RUN_SUCCESS,required kornia==0.7.2; the newer kornia has a TorchScript incompatibility with torch 2.1.2
+PerspectiveFields (uncentered),https://github.com/jinlinyi/PerspectiveFields,d54be737d6eacfb9d39a2b7079a494924b45bb6c,Paramnet-360Cities-edina-uncentered (official HF),see repo,RUN_SUCCESS,installed with --no-deps; albumentations pulls stringzilla which has no Windows wheel and is not needed for inference
+PerspectiveFields (centered),https://github.com/jinlinyi/PerspectiveFields,d54be737d6eacfb9d39a2b7079a494924b45bb6c,Paramnet-360Cities-edina-centered (official HF),see repo,RUN_SUCCESS,reported vfov is inconsistent with its own focal head - see the convention audit
+AnyCam,https://github.com/Brummi/anycam,not installed,not downloaded,see repo,OUT_OF_SCOPE_SINGLE_FRAME,video method (poses + intrinsics from casual video); running it on one still frame would not be the published method. Candidate for CAM-EXP-004
+DEMO_FIXED_5000,n/a (this repository),CAM-EXP-002 audit,none,n/a,RUN_SUCCESS,deployed AnyHand/WiLoR assumption f = 1000/256*max(W H) = 5000 px
+IMAGE_CENTER_PP,n/a,n/a,none,n/a,RUN_SUCCESS,principal-point reference only; predicts no focal
+ORACLE_GT,n/a,n/a,none,n/a,RUN_SUCCESS,reference line only - never ranked as an estimator

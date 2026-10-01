@@ -1,0 +1,13 @@
+{
+  "video": "1_insert.mp4",
+  "width": 1920,
+  "height": 1080,
+  "fps": 30.0,
+  "frames": 953,
+  "duration_sec": 31.77,
+  "codec": "h264",
+  "median_bg_shift_px_between_sampled_frames": 0.81,
+  "p90_bg_shift_px": 18.11,
+  "camera_motion_status": "MOSTLY_STATIC",
+  "scope": "primary target for the static-camera demo"
+}

@@ -1,0 +1,54 @@
+{
+  "CAM0094_ABSOLUTE_3D_IMPROVED": false,
+  "DOWNSTREAM_IMPLEMENTATION_REVIEW": false,
+  "root_aligned_median_change_mm": 0.0,
+  "paired": {
+    "wrist_root_error_mm": {
+      "n_units": 123,
+      "M0_median": 100.73718632891351,
+      "M3_median": 97.39485102485924,
+      "relative_reduction_pct": 3.3178763730221035,
+      "paired_median_gain_mm": 2.9395369144620105,
+      "ci95": [
+        2.320053964119122,
+        3.5386123595087047
+      ]
+    },
+    "root_depth_error_mm": {
+      "n_units": 123,
+      "M0_median": 84.18201848455736,
+      "M3_median": 80.64372245647816,
+      "relative_reduction_pct": 4.203149427604043,
+      "paired_median_gain_mm": 3.599873671078285,
+      "ci95": [
+        2.807021229771806,
+        3.9977773714045526
+      ]
+    },
+    "absolute_mpjpe_mm": {
+      "n_units": 123,
+      "M0_median": 99.77902701236007,
+      "M3_median": 99.13574935643459,
+      "relative_reduction_pct": 0.6447022738012889,
+      "paired_median_gain_mm": 3.209243574277835,
+      "ci95": [
+        2.7665249124263758,
+        3.5911961248421704
+      ]
+    },
+    "root_aligned_mpjpe_mm": {
+      "n_units": 123,
+      "M0_median": 34.104839908429085,
+      "M3_median": 34.104839908429085,
+      "relative_reduction_pct": 0.0,
+      "paired_median_gain_mm": 0.0,
+      "ci95": [
+        0.0,
+        0.0
+      ]
+    }
+  },
+  "target_camera_in_reference_count": 0,
+  "circularity_clean": true,
+  "camera_equation": "tz(f) = cam_t[2] * f / f_pipeline; tx, ty unchanged (CAM-EXP-002 audit)"
+}

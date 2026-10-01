@@ -1,0 +1,20 @@
+step,file,lines,symbol,expression_or_role,coordinate_system,focal_dependent,notes
+1_config,models/model_config_wilor.yaml,EXTRA.FOCAL_LENGTH,FOCAL_LENGTH,1000,training convention constant,n/a,not a measured focal
+2_config,models/model_config_wilor.yaml,MODEL.IMAGE_SIZE,IMAGE_SIZE,256,crop input resolution,n/a,network input side length
+3_focal_def,rgb_predictor.py,407-411,scaled_focal,FOCAL_LENGTH / IMAGE_SIZE * max(W H),original full-image pixels,yes,virtual focal; 1000/256*1280 = 5000 px for 1280x720
+4_focal_def_hamer,rgb_predictor.py,446-450,scaled_focal,same expression for the HaMeR backend,original full-image pixels,yes,identical convention
+5_no_resize,rgb_predictor.py,404-405,W H,taken from img_bgr.shape directly,original full-image pixels,no,no image resize anywhere in the predictor
+6_bbox,rgb_predictor.py,204/418,rescale_factor,enlarges the detector box before cropping,original full-image pixels,no,affects box_size not the focal
+7_dataset,rgb_predictor.py,414-419,ViTDetDataset,builds the square crop and box_center/box_size,original full-image pixels,no,crop geometry only
+8_network,WiLoR/wilor/models/wilor.py,117,focal_length,EXTRA.FOCAL_LENGTH broadcast to the batch,crop/training convention,yes,used inside the model head
+9_network,WiLoR/wilor/models/wilor.py,138,pred_cam_t,2*focal/(IMAGE_SIZE*pred_cam[:,0]),crop convention,yes,same 2f/(s*size) form as the full-image version
+10_network,WiLoR/wilor/models/wilor.py,157,perspective_projection,focal_length / MODEL.IMAGE_SIZE,normalised crop,yes,training normalisation mirrored by scaled_focal
+11_refine,WiLoR/wilor/models/heads/refinement_net.py,172-176,refine_net,2*focal/(img_feat_size*pred_cam),feature-map crop,yes,internal refinement only
+12_translation,rgb_predictor.py,972,tz,tz = 2.0 * focal_length / (s * box_size),camera-space metres,YES,tz is exactly proportional to the focal
+13_translation,rgb_predictor.py,973,tx,tx = tx_crop + 2.0*(cx_box - W/2)/(s*box_size),camera-space metres,NO,focal does not appear
+14_translation,rgb_predictor.py,974,ty,ty = ty_crop + 2.0*(cy_box - H/2)/(s*box_size),camera-space metres,NO,focal does not appear
+15_principal_point,rgb_predictor.py,969-970,cx_img cy_img,image centre W/2 H/2,original full-image pixels,no,calibrated cx/cy never used
+16_store,rgb_predictor.py,560,HandPrediction.focal_length,stores scaled_focal per prediction,original full-image pixels,yes,reported downstream
+17_local_joints,rgb_predictor.py,527-537,keypoints_3d,MANO joints with x-flip for left hands,root-relative metres,NO,absolute joints are keypoints_3d + cam_t
+18_projection,rgb_predictor.py,905-916,project_3d_to_2d,u = f*x/z + W/2,original full-image pixels,yes,same virtual focal and image-centre principal point
+19_invariance,rgb_predictor.py,972-974,-,u = tx*s*B/2 + W/2 after substitution,original full-image pixels,cancels,projected 2D is invariant to the focal; only metric depth changes

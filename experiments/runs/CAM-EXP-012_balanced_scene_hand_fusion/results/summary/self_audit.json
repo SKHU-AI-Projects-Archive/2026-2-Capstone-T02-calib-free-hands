@@ -1,0 +1,58 @@
+{
+  "pre_label_focal_leakage": [],
+  "primary_videos": 153,
+  "correct_curves_complete": true,
+  "curves_on_disk": 153,
+  "wrong_bone_curves": 0,
+  "wrong_bone_control": "PENDING",
+  "global_grid_points": 401,
+  "q_grid_points": 201,
+  "q_grid_contains_exact_one": true,
+  "lambda_grid": [
+    0.125,
+    0.25,
+    0.5,
+    1.0,
+    2.0,
+    4.0,
+    8.0
+  ],
+  "lambda_zero_excluded": true,
+  "lambda_grid_matches_code": true,
+  "shuffled_donors": 153,
+  "shuffled_never_self": true,
+  "shuffled_never_same_sequence": true,
+  "shuffled_never_same_camera": true,
+  "one_prediction_per_video_condition": true,
+  "conditions_present": [
+    "CORRECT_HAND_LAMBDA1",
+    "SCENE_ONLY",
+    "SCENE_PLUS_CORRECT_HAND",
+    "SCENE_PLUS_SHUFFLED_HAND"
+  ],
+  "wrong_bone_rows_absent": true,
+  "each_video_tested_once": true,
+  "n_test_videos": 153,
+  "camera_fold_consistent": true,
+  "camera_folds_disjoint": true,
+  "shuffled_reuses_alpha_and_lambda": true,
+  "lambda_at_boundary_cells": 12,
+  "lambda_cells": 15,
+  "frozen_predictions_unchanged": true,
+  "frozen_before_focal_opened": true,
+  "focal_open_record_exists": true,
+  "cam012_not_claimed_complete": true,
+  "specific_signal_pending": true,
+  "banned_phrases": [],
+  "historical_modified": [],
+  "old_manifests_modified": [],
+  "branch": {
+    "branch": "kjh",
+    "on_kjh": true
+  },
+  "stray_untracked_runs_results": [
+    "?? experiments/runs/results/"
+  ],
+  "external_holdout_opened": false,
+  "ALL_CLEAN": true
+}

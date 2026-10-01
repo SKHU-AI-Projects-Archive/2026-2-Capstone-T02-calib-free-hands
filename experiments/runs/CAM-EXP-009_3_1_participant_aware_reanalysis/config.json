@@ -1,0 +1,43 @@
+{
+  "experiment": "CAM-EXP-009.3.1",
+  "analysis_type": "post-result provenance correction and participant-aware reanalysis",
+  "created_after_cam0093_results": true,
+  "manifests": {
+    "cam_exp_00931_participant_mapping_v1.csv": "64452d5f98c4027c7298f9a20b5040023af71784ebdc49f87f69fb8d12fee8da",
+    "cam_exp_00931_reanalysis_spec_v1.json": "e887d340762f74cb2bfa88de6d5ba6980db6e2dbd41a90ae702d6e849db8a675",
+    "cam_exp_00931_source_artifacts_v1.json": "b44efd160110f5544ec285ad3faa2d531ff04a17eeae101377131e03016db46d",
+    "cam_exp_00931_permutation_spec_v1.json": "d2a63220107593eb7c1b1639c437305ada06893feb302b87510c6cfb43b2b97d"
+  },
+  "identity_status": "OFFICIAL_PARTICIPANT_MAPPING_VERIFIED",
+  "n_participants": 4,
+  "distances": {
+    "D_repeat": 0.010870781111511407,
+    "D_view_repeat": 0.01130090226506586,
+    "D_within_session_all_units": 0.02828635713459926,
+    "D_within_session_participant_equal_weight": 0.028873080582273836,
+    "D_cross_participant_all_pairs": 0.045692432191426935,
+    "D_cross_participant_pair_equal_weight": 0.04937336862194708,
+    "D_cross_participant_LEFT_TO_RIGHT": 0.047265497524568545,
+    "D_cross_participant_RIGHT_TO_LEFT": 0.0470623637710017,
+    "ratio_within_over_cross": 0.5847905741120405,
+    "separation_over_repeatability": 1.8858155480625813,
+    "bootstrap_within_ci_participant_cluster": [
+      0.022321269916644737,
+      0.0490765969988316
+    ],
+    "bootstrap_cross_ci_participant_cluster": [
+      0.042510634113671175,
+      0.049199977496440006
+    ],
+    "bootstrap_caveat": "4 participant clusters; supplemental and unstable"
+  },
+  "tags": [
+    "OFFICIAL_PARTICIPANT_MAPPING_VERIFIED",
+    "PARTICIPANT_REANALYSIS_UNDERPOWERED",
+    "WITHIN_SESSION_BILATERAL_SEPARATION_PRESENT",
+    "CROSS_SESSION_STABILITY_NOT_SUPPORTED_FOR_P41",
+    "GENERIC_BONE_IDENTITY_SIGNAL_STRONG",
+    "SUBJECT_SPECIFIC_PRIOR_NOT_JUSTIFIED",
+    "SEQUENCE_SPECIFIC_SHARED_ANATOMY_REMAINS_PLAUSIBLE"
+  ]
+}

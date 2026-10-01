@@ -1,0 +1,82 @@
+{
+  "historical_commit": "0c523d6",
+  "correction_type": "documentation_and_accounting_only",
+  "expensive_inference_rerun": false,
+  "scene_models_rerun": false,
+  "wilor_rerun": false,
+  "hand_score_rerun": false,
+  "primary_predictions_changed": false,
+  "primary_metrics_changed": false,
+  "frozen_manifests_modified": false,
+  "issues_corrected": [
+    "paired set exclusion accounting: earlier text said 15+8=23; audited ledger gives 7/7/6/2/2=24 with 151+24=175 machine-checked",
+    "frame-count presentation: single number per sequence replaced by range + median, because video lengths vary between cameras",
+    "hand-available vs hand-score-used terminology: 44,291 available vs 42,593 actually used; left/right are side observations that double-count two-handed frames",
+    "frame-count causal overstatement removed: N was not manipulated in a controlled way, so frame count is not identified as the cause of the scene/hand scale imbalance",
+    "aggregate-zero wording narrowed to the median: GeoCalib 0/151 moved, AnyCalib 1/151, Perspective Fields 20/151 (13 better, 7 worse)",
+    "152 vs 153 resolved from artefacts: 153 correct; 152 was a shard index missing one pre-shard video",
+    "'all three same direction' phrasing removed as ill-defined when all three gains are exactly 0.00 pp"
+  ],
+  "accounting": {
+    "total_usable_videos": 175,
+    "final_paired": 151,
+    "excluded": 24,
+    "exclusion_counts": {
+      "INSUFFICIENT_RIGHT_HAND_FRAMES": 6,
+      "INSUFFICIENT_LEFT_HAND_FRAMES": 7,
+      "NO_USABLE_HAND": 7,
+      "HAND_GRID_DOES_NOT_COVER_CANDIDATE_WINDOW": 2,
+      "INSUFFICIENT_BOTH_SIDES": 2
+    },
+    "hand_score_computable": 153,
+    "frame_level_hand_coverage_pct": 84.5,
+    "video_level_paired_coverage_pct": 86.3
+  },
+  "unit_level_movement": {
+    "ANYCALIB": {
+      "n_paired": 151,
+      "units_moved": 1,
+      "units_improved": 1,
+      "units_worsened": 0,
+      "median_shift_pct_among_moved": 0.7244267128700541,
+      "max_shift_pct": 0.7244267128700541
+    },
+    "GEOCALIB": {
+      "n_paired": 151,
+      "units_moved": 0,
+      "units_improved": 0,
+      "units_worsened": 0,
+      "median_shift_pct_among_moved": 0.0,
+      "max_shift_pct": 0.0
+    },
+    "PERSPECTIVE_FIELDS": {
+      "n_paired": 151,
+      "units_moved": 20,
+      "units_improved": 13,
+      "units_worsened": 7,
+      "median_shift_pct_among_moved": 0.7244267128700557,
+      "max_shift_pct": 4.960732107300747
+    }
+  },
+  "lambda0_identity_recheck": {
+    "videos": 153,
+    "mismatches": 0,
+    "max_rel_diff": 0.0
+  },
+  "main_result_unchanged": {
+    "AnyCalib": [
+      16.02,
+      16.02
+    ],
+    "GeoCalib": [
+      21.35,
+      21.35
+    ],
+    "Perspective Fields": [
+      19.5,
+      19.5
+    ],
+    "units": "median relative focal error %",
+    "paired_videos": 151
+  }
+}

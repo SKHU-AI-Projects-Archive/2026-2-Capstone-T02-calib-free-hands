@@ -1,0 +1,45 @@
+{
+  "anycalib_gen": {
+    "median_N8": 9.889594236305198,
+    "median_N64": 9.966151731813436,
+    "relative_drop_8_to_64_pct": -0.7741217048844308,
+    "within5_N8": 20.0,
+    "within5_N64": 20.57142857142857,
+    "within5_gain_pp": 0.5714285714285694,
+    "significant_steps_16_32_64": [
+      0,
+      0,
+      0
+    ],
+    "verdict": "CONFIRMED_SATURATION"
+  },
+  "geocalib_distorted": {
+    "median_N8": 10.860051396453267,
+    "median_N64": 11.283305407604685,
+    "relative_drop_8_to_64_pct": -3.8973481404484525,
+    "within5_N8": 22.285714285714285,
+    "within5_N64": 22.285714285714285,
+    "within5_gain_pp": 0.0,
+    "significant_steps_16_32_64": [
+      0,
+      0,
+      0
+    ],
+    "verdict": "CONFIRMED_SATURATION"
+  },
+  "E2_frozen": {
+    "median_N8": 6.460291347893832,
+    "median_N64": 6.739518400478775,
+    "relative_drop_8_to_64_pct": -4.322205262088931,
+    "within5_N8": 40.0,
+    "within5_N64": 40.0,
+    "within5_gain_pp": 0.0,
+    "significant_steps_16_32_64": [
+      0,
+      0,
+      0
+    ],
+    "verdict": "CONFIRMED_SATURATION"
+  },
+  "OVERALL": "CONFIRMED_SATURATION"
+}

@@ -1,0 +1,137 @@
+{
+  "analysis_type": "post-result provenance correction and participant-aware reanalysis",
+  "created_after_cam0093_results": true,
+  "not_a_preregistered_confirmatory_experiment": true,
+  "identity": {
+    "status": "OFFICIAL_PARTICIPANT_MAPPING_VERIFIED",
+    "source": "https://github.com/Kristen-Z/GigaHands",
+    "n_participants": 4,
+    "multi_session": {
+      "p41": [
+        "p41-boxing-0021",
+        "p41-plant-0004"
+      ]
+    }
+  },
+  "source_reuse": {
+    "reference_reconstruction_rerun": false,
+    "v1_metrics_reproduced": true,
+    "tolerance": 1e-09
+  },
+  "distances": {
+    "D_repeat": 0.010870781111511407,
+    "D_view_repeat": 0.01130090226506586,
+    "D_within_session_all_units": 0.02828635713459926,
+    "D_within_session_participant_equal_weight": 0.028873080582273836,
+    "D_cross_participant_all_pairs": 0.045692432191426935,
+    "D_cross_participant_pair_equal_weight": 0.04937336862194708,
+    "D_cross_participant_LEFT_TO_RIGHT": 0.047265497524568545,
+    "D_cross_participant_RIGHT_TO_LEFT": 0.0470623637710017,
+    "ratio_within_over_cross": 0.5847905741120405,
+    "separation_over_repeatability": 1.8858155480625813,
+    "bootstrap_within_ci_participant_cluster": [
+      0.022321269916644737,
+      0.0490765969988316
+    ],
+    "bootstrap_cross_ci_participant_cluster": [
+      0.042510634113671175,
+      0.049199977496440006
+    ],
+    "bootstrap_caveat": "4 participant clusters; supplemental and unstable"
+  },
+  "per_participant_within_session": {
+    "p36": 0.052101920568904836,
+    "p41": 0.02066216040514962,
+    "p44": 0.026832479764130834,
+    "p52": 0.030913681400416837
+  },
+  "p41_cross_session": {
+    "same_side_pooled": 0.08515836494633577,
+    "opposite_side_pooled": 0.07704079787245577,
+    "p41_within_session": 0.021134518223971943,
+    "cross_participant_reference": 0.045692432191426935,
+    "stability_supported": false,
+    "caveat": "ONE participant. No population claim follows."
+  },
+  "participant_identification": {
+    "top1": {
+      "LEFT_TO_RIGHT": 50.0,
+      "RIGHT_TO_LEFT": 50.0,
+      "COMBINED": 50.0
+    },
+    "chance_pct": 25.0,
+    "caveat": "4 participants, 4 queries per direction; descriptive only"
+  },
+  "permutation": {
+    "test": "exact permutation over PARTICIPANT blocks",
+    "n_participant_blocks": 4,
+    "n_permutations": 24,
+    "p41_sessions_move_as_one_block": true,
+    "statistic": "median(different-participant) - median(same-participant), camera-matched",
+    "observed": 0.009845734957705354,
+    "null_median": 0.0013419872108287323,
+    "null_max": 0.013214111068438616,
+    "p_value_one_sided": 0.08333333333333333,
+    "identity_permutation_included_in_null": true,
+    "smallest_attainable_p": 0.041666666666666664,
+    "interpretation": "SUPPORTING ONLY. With 4 participant blocks the floor is 1/24 = 0.0417 and the test is coarse. No conclusion in this reanalysis rests on it."
+  },
+  "bone_mapping_control": {
+    "correct": 0.02828635713459926,
+    "permuted": 0.27064659404993296,
+    "degradation_pct": 856.809647711348
+  },
+  "power": {
+    "n_participants": 4,
+    "bar": 8,
+    "underpowered": true,
+    "note": "verifying identity does not fix power"
+  },
+  "cam0093_historical_verdict": [
+    "REAL_REFERENCE_BILATERAL_SIGNAL_WEAK",
+    "SUBJECT_SEPARABILITY_UNDERPOWERED",
+    "SAME_SUBJECT_PROVENANCE_UNRESOLVED"
+  ],
+  "supersedes": "CAM-EXP-009.3 remains valid as a within-sequence vs cross-sequence analysis; its participant-provenance interpretation is superseded by this reanalysis.",
+  "claims": [
+    {
+      "claim": "same sequence L/R closer than cross sequence",
+      "status": "SUPPORTED",
+      "evidence": "within-session 0.02887 vs cross-participant 0.04937 (ratio 0.585); reproduced exactly from CAM-EXP-009.3"
+    },
+    {
+      "claim": "same participant L/R generally closer than different participants",
+      "status": "UNDERPOWERED",
+      "evidence": "true at participant-equal weighting (ratio 0.585), but n=4 participants, participant-block permutation p=0.0833 (floor 0.0417), and the effect is not separable from session context"
+    },
+    {
+      "claim": "same participant geometry persists across sessions",
+      "status": "NOT_SUPPORTED_FOR_P41",
+      "evidence": "p41 cross-session same-side 0.08516 and opposite-side 0.07704, both LARGER than cross-participant 0.04569 and far larger than p41 within-session 0.02113"
+    },
+    {
+      "claim": "generic corresponding bone identity matters",
+      "status": "SUPPORTED",
+      "evidence": "within-finger bone permutation degrades the distance by +857% (0.0283 -> 0.2706)"
+    },
+    {
+      "claim": "strong subject-specific shared anatomy prior justified",
+      "status": "NO",
+      "evidence": "the only same-participant cross-session comparison available is farther apart than different participants, so a person-level template is not supported by this data"
+    },
+    {
+      "claim": "sequence-specific shared anatomy remains plausible",
+      "status": "YES",
+      "evidence": "within-session bilateral separation is present and 1.89x the reference repeatability; it simply is not attributable to a persistent person-level signature"
+    }
+  ],
+  "TAGS": [
+    "OFFICIAL_PARTICIPANT_MAPPING_VERIFIED",
+    "PARTICIPANT_REANALYSIS_UNDERPOWERED",
+    "WITHIN_SESSION_BILATERAL_SEPARATION_PRESENT",
+    "CROSS_SESSION_STABILITY_NOT_SUPPORTED_FOR_P41",
+    "GENERIC_BONE_IDENTITY_SIGNAL_STRONG",
+    "SUBJECT_SPECIFIC_PRIOR_NOT_JUSTIFIED",
+    "SEQUENCE_SPECIFIC_SHARED_ANATOMY_REMAINS_PLAUSIBLE"
+  ]
+}

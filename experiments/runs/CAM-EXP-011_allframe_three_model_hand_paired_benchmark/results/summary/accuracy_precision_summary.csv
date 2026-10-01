@@ -1,0 +1,4 @@
+Model,median_abs_error_pct,median_signed_bias_pct,median_within_video_spread_pct,bias_direction,precision_rank
+AnyCalib,16.019384628613487,14.662769419581817,3.9110243967795277,over-estimates,1
+GeoCalib,21.353323190510505,15.84662784813474,14.707465641308293,over-estimates,2
+Perspective Fields,19.49578337839903,-11.23517546968774,15.809538362405995,under-estimates,3

@@ -1,0 +1,7 @@
+id,name,lambda,hand_term,role,note
+S0,SCENE_ONLY_PAIRED,0.0,False,PAIRED BASELINE,its minimum is exactly f_scene by construction
+S1,SCENE_PLUS_REAL_HAND_GEOMETRY,nested-CV selected,True,PRIMARY TEST,
+H0,HAND_ONLY_DIAGNOSTIC,inf,True,"DIAGNOSTIC, not the headline method",argmin L_hand alone; comparable to the CAM-006 family
+C1,SCENE_PLUS_WRONG_FRAME_HAND,,True,NEGATIVE CONTROL,"same sequence, same anatomical side, deterministically offset frame: hand size and person preserved, pose correspondence destroyed"
+C2,SCENE_PLUS_VIEW_SHUFFLED_HAND_PROFILE,,True,NEGATIVE CONTROL,hand profiles permuted across views within a fold; scene estimate untouched
+C3,SCENE_PLUS_FLAT_HAND,,True,SANITY,L_hand == 0; must reproduce S0 exactly

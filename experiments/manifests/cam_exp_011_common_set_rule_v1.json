@@ -1,0 +1,9 @@
+{
+  "min_scene_coverage_fraction": 0.8,
+  "THREE_MODEL_COMMON_SCENE_FRAMES": "frames where all three scene models returned a valid focal",
+  "GLOBAL_6_CONDITION_COMMON_VIDEO_SET": "videos with a result in all six conditions",
+  "primary_reported_result": "STRICT_COMMON_FRAME_RESULT",
+  "secondary": "MODEL_NATIVE_ALLFRAME_RESULT",
+  "no_performance_based_exclusion": true,
+  "frozen_before_focal_results": true
+}

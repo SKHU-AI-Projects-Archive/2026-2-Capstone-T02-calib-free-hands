@@ -1,0 +1,73 @@
+{
+  "experiment": "CAM-EXP-003.1_distortion_aware_diagnostic",
+  "question": "how much of the single-frame focal error measured in CAM-EXP-003 was caused by using a pinhole camera model on lenses that have real radial distortion",
+  "not_in_scope": [
+    "new calibration method",
+    "fine-tuning",
+    "multi-frame aggregation (CAM-EXP-004)",
+    "hand geometry as a calibration cue"
+  ],
+  "frames": {
+    "manifest": "experiments/manifests/gigahands_demo_cam_exp_003_frames_v1.csv.gz",
+    "reused_unchanged_from": "CAM-EXP-003",
+    "n_frames": 1400,
+    "n_views": 175,
+    "note": "identical frames to CAM-EXP-003 so every comparison is paired"
+  },
+  "conditions": {
+    "A_RAW_PINHOLE": {
+      "description": "raw image + pinhole camera model",
+      "source": "CAM-EXP-003 predictions reused verbatim, not re-run",
+      "runs": [
+        "anycalib",
+        "geocalib",
+        "pf_centered",
+        "pf_uncentered"
+      ]
+    },
+    "B_RAW_DISTORTION_AWARE": {
+      "description": "raw image + official distortion-aware variant",
+      "deployable": true,
+      "runs": [
+        "anycalib_dist_radial (anycalib_dist, cam_id=radial:2)",
+        "anycalib_gen_radial (anycalib_gen, cam_id=radial:2)",
+        "geocalib_distorted_radial (weights=distorted, radial)"
+      ]
+    },
+    "C_GT_UNDISTORTED_PINHOLE": {
+      "description": "image undistorted with the GT distortion, then the unchanged pinhole models",
+      "deployable": false,
+      "why": "needs the ground-truth distortion, so it is an oracle diagnostic only and is never reported as deployment performance",
+      "undistortion": {
+        "function": "cv2.undistort with K_new from cv2.getOptimalNewCameraMatrix",
+        "alpha": 0.0,
+        "output_size": "original 1280x720 (no crop, no black border)",
+        "ground_truth_used": "K_new, NOT the original K",
+        "median_K_new_fx_over_orig_fx": 0.7734
+      },
+      "runs": [
+        "undist_anycalib_pinhole",
+        "undist_geocalib_pinhole",
+        "undist_pf_centered",
+        "undist_pf_uncentered"
+      ]
+    }
+  },
+  "metrics": "identical to CAM-EXP-003 - run_benchmark.to_row is imported and reused so 'relative focal error' means the same thing",
+  "paired_statistics": {
+    "unit": "per frame, same image in both conditions",
+    "reported": [
+      "median improvement in percentage points",
+      "fraction improved / worsened",
+      "nonparametric paired bootstrap 95% CI (2000 resamples)",
+      "per-camera median improvement"
+    ]
+  },
+  "distortion_comparison": "see distortion_model_audit.md; AnyCalib and GeoCalib radial k1/k2 share the OpenCV convention so coefficients are compared directly",
+  "thresholds_pct": [
+    5,
+    10,
+    20
+  ],
+  "why_5_pct": "imported from CAM-EXP-002: 5 % focal error ~ 32.8 mm of depth displacement on this data. Nothing here measures depth."
+}

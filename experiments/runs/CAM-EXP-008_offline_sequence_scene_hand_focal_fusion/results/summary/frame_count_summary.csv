@@ -1,0 +1,5 @@
+protocol,subset,condition,n_views,S0_median_err_pct,S1_median_err_pct,S0_within5,S1_within5,median_paired_gain_pp,gain_ci_lo,gain_ci_hi,relative_reduction_pct,within5_gain_pp,share_views_improved,S1_estimate_cv_pct,reference_cv_pct,S1_tracking_spearman,S0_tracking_spearman,median_lambda
+LOCO_PHYSICAL_CAMERA,N16,S1,133,8.6111,8.976,0.218,0.2331,0.0557,0.0276,0.0931,-4.2376,1.51,0.6391,7.96,1.731,0.0642,0.0724,3.0
+LOCO_PHYSICAL_CAMERA,N32,S1,106,9.775,9.168,0.1698,0.2264,0.1512,0.0212,0.3495,6.2097,5.66,0.6981,7.914,1.709,0.0877,0.0697,10.0
+LOCO_PHYSICAL_CAMERA,N64,S1,23,10.2432,10.2431,0.1739,0.1739,0.0002,-0.0,0.1842,0.001,0.0,0.6957,7.615,1.803,0.1038,0.1472,10.0
+LOCO_PHYSICAL_CAMERA,N8,S1,143,9.0195,8.7408,0.2028,0.2238,0.1097,0.0531,0.1689,3.09,2.1,0.6503,7.711,1.757,0.1314,0.1254,10.0

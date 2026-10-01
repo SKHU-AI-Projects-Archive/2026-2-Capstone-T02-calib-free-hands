@@ -1,0 +1,42 @@
+{
+  "experiment": "CAM-EXP-003.1_distortion_aware_diagnostic",
+  "date": "2026-09-23T01:45:35.743892+00:00",
+  "os": "Windows 10 (10.0.26200)",
+  "gpu": "NVIDIA GeForce RTX 4060 Ti (16 GB)",
+  "analysis_python": "3.11.7",
+  "analysis_numpy": "2.4.6",
+  "model_environment": {
+    "venv": "experiments/.venv-calib (git-ignored, shared with CAM-EXP-003)",
+    "python": "3.11",
+    "torch": "2.1.2+cu121",
+    "cuda": "12.1",
+    "numpy": "1.26.4",
+    "opencv": "4.10.0.84",
+    "kornia": "0.7.2"
+  },
+  "checkpoints": {
+    "anycalib_dist": "anycalib_dist.pt, official GitHub release v1.0.0",
+    "anycalib_gen": "anycalib_gen.pt, official GitHub release v1.0.0",
+    "anycalib_pinhole": "anycalib_pinhole.pt, official GitHub release v1.0.0",
+    "geocalib_distorted": "geocalib-distorted.tar, official release v1.0",
+    "geocalib_pinhole": "geocalib-pinhole.tar, official release v1.0",
+    "perspective_fields": "Paramnet-360Cities-edina-{centered,uncentered}"
+  },
+  "repos": {
+    "AnyCalib": "https://github.com/javrtg/AnyCalib (main, pip install from git)",
+    "GeoCalib": "https://github.com/cvg/GeoCalib (main, pip install from git)",
+    "PerspectiveFields": "https://github.com/jinlinyi/PerspectiveFields @ d54be737d6eacfb9d39a2b7079a494924b45bb6c"
+  },
+  "frame_manifest_sha256_32": "58c95f231b7f157aa388c1bddee578ad",
+  "condition_a_source": "experiments/runs/CAM-EXP-003_single_frame_calibration_benchmark/results/raw",
+  "git_branch": "kjh",
+  "git_commit": "4d3e16dcdb4aaf60561b57ac3651c279854c8ca6",
+  "git_dirty": true,
+  "reproduce": [
+    "python src/undistort_frames.py                       # condition C cache",
+    "python src/run_conditions.py --model <key> [--start N --count M]",
+    "python src/evaluate.py",
+    "python src/figures.py"
+  ],
+  "note": "the CAM-EXP-003 lossless PNG frame cache is reused; no video is re-decoded, so conditions A/B see bit-identical pixels"
+}

@@ -33,3 +33,48 @@ Thumbs.db
 .vscode/
 .idea/
 *.swp
+
+# ── Camera research datasets / caches ───────────────────────────────────────
+experiments/datasets/
+experiments/cache/
+
+# Large per-run artifacts
+experiments/runs/**/artifacts/
+experiments/runs/**/tmp/
+# Safety net: dataset archives / videos must never be committed from anywhere
+experiments/**/*.zip
+experiments/**/*.tar
+experiments/**/*.tar.gz
+experiments/**/*.tgz
+experiments/**/*.7z
+experiments/datasets/**
+experiments/**/*.mp4
+
+# Per-run inference caches (large, regenerable by re-running the pipeline)
+experiments/runs/**/cache/
+# Pipeline inference environment (torch + numpy<2), kept out of the analysis venv
+experiments/.venv-anyhand/
+
+# Calibration-model inference environment (CAM-EXP-003)
+experiments/.venv-calib/
+
+# AnyCam applicability testing environment (CAM-EXP-004.1); its official
+# inference path cannot run on Windows, see that run's anycam_static_stress_test.md
+experiments/.venv-anycam/
+
+# Qualitative research demo (samples/qualitative_research_demo): the rendered
+# videos, the still frames and the hand-inference cache are large and fully
+# regenerable from the scripts. The metadata, calibration numbers and CSVs are
+# small and ARE committed.
+samples/qualitative_research_demo/cache/
+samples/qualitative_research_demo/legacy/
+samples/qualitative_research_demo/anycalib/
+samples/qualitative_research_demo/e2/
+samples/qualitative_research_demo/comparison/
+samples/qualitative_research_demo/comparison_frames/
+samples/qualitative_research_demo/BEST_COMPARISON.mp4
+experiments/runs/CAM-EXP-009_2_robust_bilateral_focal/cache/
+experiments/runs/CAM-EXP-009_3_real_bilateral_geometry_separability/cache/
+experiments/runs/CAM-EXP-009_4_scene_shared_anatomy_focal_refinement/cache/
+experiments/runs/CAM-EXP-010_monocular_depth_scale_decomposition/cache/
+experiments/runs/CAM-EXP-011_allframe_three_model_hand_paired_benchmark/cache/

@@ -1,0 +1,8 @@
+item,status
+same sequence L/R closer than cross sequence,SUPPORTED
+same participant L/R generally closer than different participants,UNDERPOWERED
+same participant geometry persists across sessions,NOT_SUPPORTED_FOR_P41
+generic corresponding bone identity matters,SUPPORTED
+strong subject-specific shared anatomy prior justified,NO
+sequence-specific shared anatomy remains plausible,YES
+TAGS,OFFICIAL_PARTICIPANT_MAPPING_VERIFIED;PARTICIPANT_REANALYSIS_UNDERPOWERED;WITHIN_SESSION_BILATERAL_SEPARATION_PRESENT;CROSS_SESSION_STABILITY_NOT_SUPPORTED_FOR_P41;GENERIC_BONE_IDENTITY_SIGNAL_STRONG;SUBJECT_SPECIFIC_PRIOR_NOT_JUSTIFIED;SEQUENCE_SPECIFIC_SHARED_ANATOMY_REMAINS_PLAUSIBLE

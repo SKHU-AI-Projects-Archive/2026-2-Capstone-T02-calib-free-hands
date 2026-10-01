@@ -1,0 +1,6 @@
+sequence,expected_frames_per_video,measured_frames_per_video,frames_match,expected_usable_cameras,measured_usable_cameras,cameras_match
+p36-tea-0010,381,381,1,40,40,1
+p41-boxing-0021,367,366,0,40,40,1
+p41-plant-0004,174,174,1,40,40,1
+p44-dog-0004,337,337,1,40,40,1
+p52-instrument-0034,139,139,1,15,15,1

@@ -1,0 +1,67 @@
+{
+  "primary_verdict_code": "B",
+  "primary_verdict": "CAM006_NEGATIVE_RESULT_VALIDATED_WITH_CAVEATS",
+  "synthetic_solver_verdict": "SOLVER_VALIDATED",
+  "reproduction_verdict": "REPRODUCTION_OK",
+  "frame_weighting_verdict": "FRAME_WEIGHTING_NON_MATERIAL",
+  "camera_model_verdict": "CAMERA_MODEL_MISMATCH_MATERIAL",
+  "full_oracle_restored_usable_identifiability": false,
+  "why_not_verdict_C": "the pre-registered CAMERA_MODEL_MISMATCH_MATERIAL trigger did fire, on the error-reduction criterion. But verdict C requires identifiability to be RESTORED, and it was not: R5 still shows 50.0 % median error, 77 % flat profiles, 14 % cleanly identifiable views, and a tracking correlation whose interval includes zero. The camera model explains much of the MAGNITUDE of CAM-006's headline number without overturning its DIRECTION.",
+  "key_numbers": {
+    "R0_N16_median_err_pct": 202.1629,
+    "R1_N16_median_err_pct": 203.1257,
+    "R5_N16_median_err_pct": 49.9582,
+    "R5_N16_flat_share": 0.7714,
+    "R5_N16_identifiable_share": 0.1371,
+    "constant_rig_focal_oracle_pct": 0.8473,
+    "real_distance_over_diameter_median": 4.1164,
+    "real_dZ_over_Z_median": 0.14986
+  },
+  "scientific_claim_status": [
+    {
+      "cam006_claim": "the reference hand does not identify the focal under this formulation",
+      "status": "UPHELD",
+      "evidence": "R5, with the true principal point, distortion and fy/fx ratio, still gives 50.0 % median error, 77 % flat profiles and no positive tracking correlation",
+      "action": "keep, with the scope narrowed"
+    },
+    {
+      "cam006_claim": "202 % median relative focal error at N=16",
+      "status": "REPRODUCED_BUT_MISATTRIBUTED",
+      "evidence": "R0 reproduces it exactly (202.16 %), but correcting only the camera model brings it to 50.0 %. Most of the headline magnitude was unmodelled lens distortion, not hand geometry.",
+      "action": "report both numbers; stop quoting 202 % as the size of the geometric limit"
+    },
+    {
+      "cam006_claim": "the limit is geometric, not a modelling shortfall",
+      "status": "OVERSTATED",
+      "evidence": "modelling mattered a great deal: supplying the provided distortion cut the error by about 75 % in relative terms. What survives is that even a fully correct camera model leaves the focal unidentified.",
+      "action": "replace with a scoped statement"
+    },
+    {
+      "cam006_claim": "it will not be fixed by a better hand model",
+      "status": "NOT_SUPPORTED_AS_STATED",
+      "evidence": "the synthetic reference-3D sweep shows focal error rising steeply with reference-hand error - about 26 % focal error at a 3D error of 1 % of hand diameter - so hand accuracy does influence this problem, it is simply not sufficient on its own",
+      "action": "narrow to 'improving hand-geometry accuracy alone is unlikely to resolve the ambiguity in this formulation'"
+    },
+    {
+      "cam006_claim": "a predicted hand cannot carry more focal information than the oracle hand",
+      "status": "LOGICALLY_TOO_STRONG",
+      "evidence": "a learned hand model can encode training priors, image appearance and camera priors that are not present in explicit 3D geometry. The CAM-006 result constrains the same profiled-PnP estimator, not every hand-derived cue.",
+      "action": "replace with the narrower statement about this estimator"
+    },
+    {
+      "cam006_claim": "the planarized control beating the main condition shows the signal is absent",
+      "status": "WEAK_EVIDENCE",
+      "evidence": "that control necessarily ran a different PnP back-end. The synthetic planarity sweep is the clean evidence and supports the same direction.",
+      "action": "demote to sensitivity evidence"
+    },
+    {
+      "cam006_claim": "PRE_REGISTERED_POST_HOC_ORACLE_SANITY_CONTROL",
+      "status": "SELF_CONTRADICTORY_LABEL",
+      "evidence": "the confound was found post hoc in CAM-005 and was therefore already known when CAM-006 began, so in CAM-006 it is simply pre-registered",
+      "action": "rename to PRE_REGISTERED_IN_CAM006_ORACLE_SANITY_CONTROL, motivated by the CAM-005 post-hoc finding"
+    }
+  ],
+  "plain_summary": "WAS THE CAM-EXP-006 RESULT REAL?  Yes in direction, no in attribution.\n\n1. The solver is fine. On synthetic scenes where the focal IS recoverable it lands within 0.12 % of the true focal, 100 % of trials inside 5 %.\n2. The suspected frame-weighting bug is real but harmless: 1.0 pp change.\n3. The big one: CAM-006 ignored the rig's lens distortion (k1 about -0.39). Supplying it drops the error from 203 % to 50 %. CAM-006's headline 202 % overstated the geometric limit.\n4. But even with the true principal point, distortion and fy/fx ratio, the focal is still not identifiable: 77 % of profiles are flat, only 14 % are clean, the estimates do not track the true focal, and a single constant beats it (0.85 % versus 50 %).\n5. Why: the hands sit about 4.1 hand-diameters from the camera with a relative depth extent of only 0.15. That is a weak-perspective regime, and the reference hand itself carries error.\n\nVERDICT B: CAM006_NEGATIVE_RESULT_VALIDATED_WITH_CAVEATS",
+  "scope_statement": "Under the evaluated GigaHands imaging regime and this profiled-PnP formulation, other-camera-only reference hand geometry does not provide enough perspective information to identify the focal reliably, even when the rest of the camera model is supplied exactly. This does not establish that hand geometry carries no camera information in other regimes, nor that learned hand-derived features encoding camera priors are ruled out.",
+  "cam007_recommendation": "REDESIGN, not simply proceed and not abandon. Repeating the same profiled-PnP focal estimator with a noisier predicted hand is low priority: the oracle hand already fails, and the synthetic reference-3D sweep shows a noisier hand makes it worse. But a learned model can encode image and camera priors that explicit 3D geometry does not, so learned hand-derived camera cues are NOT ruled out. CAM-007 should be restated around that different question."
+}

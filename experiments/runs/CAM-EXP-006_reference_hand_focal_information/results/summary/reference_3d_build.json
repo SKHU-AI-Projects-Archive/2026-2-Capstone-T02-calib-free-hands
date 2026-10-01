@@ -1,0 +1,10 @@
+{
+  "cases": 5600,
+  "usable_for_solver": 4271,
+  "usable_share": 0.7627,
+  "median_paired_joints_when_usable": 21.0,
+  "camera_under_test_ever_an_inlier": 0,
+  "non_circularity": "PASS",
+  "min_ok_joints_required": 12,
+  "cache": "reference_3d_v1.npz"
+}

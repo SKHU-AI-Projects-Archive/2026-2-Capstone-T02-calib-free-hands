@@ -1,0 +1,17 @@
+{
+  "manifest": "cam_exp_006_reference_hand_frames_v1.csv.gz",
+  "n_views": 175,
+  "frame_counts": [
+    1,
+    2,
+    4,
+    8,
+    16
+  ],
+  "rows": 2800,
+  "nesting_verified": true,
+  "source_grid": "gigahands_demo_cam_exp_0041_64frames_v1.csv.gz",
+  "ordering": "farthest-point insertion order frozen in CAM-EXP-004.1 (grid_pos)",
+  "selection_independence": "frames were ordered before any CAM-006 solver ran; no focal error, no GT focal and no solver output took any part",
+  "sha256": "abd9e16163e926b7dae323fa3888d62bcbcb92bd950b738b6b17dc6dc9622243"
+}

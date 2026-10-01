@@ -1,0 +1,16 @@
+check,description,status,violations,detail
+Q1,no additive causal decomposition wording,PASS,0,
+Q2,distance x noise diagnostic not labelled pre-registered,PASS,0,
+Q3,reference-3D perturbation not labelled pre-registered,PASS,0,
+Q3b,REAL_REGIME_MATCHED not labelled pre-registered,PASS,0,
+Q4,B-vs-C cutoff not presented as pre-registered,PASS,0,cutoff_present_in_frozen_spec=False
+Q4b,POST_HOC_INTERPRETIVE_VERDICT label present,PASS,0,
+Q6_CAM006_raw,results/raw: no pre-existing file changed,PASS,0,changed=0 added=0
+Q6_CAM006_summary,results/summary: no pre-existing file changed,PASS,0,changed=0 added=0
+Q6_CAM006_figures,CAM-EXP-006_reference_hand_focal_information/figures: no pre-existing file changed,PASS,0,changed=0 added=0
+Q7_CAM0061_raw,results/raw: no pre-existing file changed,PASS,0,changed=0 added=0
+Q7_CAM0061_summary,results/summary: no pre-existing file changed,PASS,0,changed=0 added=0
+Q7_CAM0061_figures,CAM-EXP-006_1_reference_hand_negative_result_validation/figures: no pre-existing file changed,PASS,0,changed=0 added=0
+Q5_CAM0061_tables,CAM-EXP-006_1_reference_hand_negative_result_validation/tables: no pre-existing file changed,PASS,0,changed=0 added=1 (provenance_quality_checks.csv)
+Q8,frozen manifests byte-identical,PASS,0,changed=0
+Q9,"CAM-007 = REDESIGN, not universally ruled out",PASS,0,

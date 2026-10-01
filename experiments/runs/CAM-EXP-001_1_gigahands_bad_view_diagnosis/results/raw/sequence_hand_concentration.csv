@@ -1,0 +1,8 @@
+group_kind,group,n,sentinel_rate,bad_rate_excl_sentinel
+sequence,p36-tea-0010/010,1600,0.2412,0.1499
+sequence,p41-boxing-0021/021,1600,0.2456,0.1201
+sequence,p41-plant-0004/004,1600,0.3094,0.0534
+sequence,p44-dog-0004/004,1600,0.2394,0.2654
+sequence,p52-instrument-0034/034,1600,0.1388,0.1531
+hand,left,4000,0.2375,0.141
+hand,right,4000,0.2323,0.1596

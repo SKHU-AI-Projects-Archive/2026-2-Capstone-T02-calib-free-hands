@@ -1,0 +1,26 @@
+{
+  "experiment": "CAM-EXP-009.1_bilateral_solver_validation",
+  "analysis_env": {
+    "venv": "experiments/.venv",
+    "python": "3.11.7",
+    "numpy": "2.4.6",
+    "opencv": "5.0.0"
+  },
+  "os": "Windows 10 (10.0.26200)",
+  "git_branch": "kjh",
+  "git_parent_commit": "3bfc604",
+  "PYTHONHASHSEED": "not relied upon; condition seeds come from sha256",
+  "alternating_iterations": 32,
+  "pnp": "cv2.solvePnP SQPNP primary, IPPE then ITERATIVE fallback",
+  "distortion_convention": "UNDISTORT_ONCE_INTERNAL",
+  "phases_executed": [
+    "implementation audit",
+    "gates G0-G4",
+    "corrected synthetic sweep",
+    "DOF ablation",
+    "controls"
+  ],
+  "phases_not_executed": [
+    "real GigaHands bilateral phase"
+  ]
+}

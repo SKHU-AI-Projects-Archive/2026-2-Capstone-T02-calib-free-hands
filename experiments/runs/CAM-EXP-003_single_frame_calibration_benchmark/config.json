@@ -1,0 +1,75 @@
+{
+  "experiment": "CAM-EXP-003_single_frame_calibration_benchmark",
+  "question": "how accurately can existing single-image calibration models recover the physical focal of a static workspace camera from one RGB frame",
+  "not_in_scope": [
+    "developing a calibration model",
+    "fine-tuning",
+    "multi-frame aggregation (CAM-EXP-004)",
+    "using hand geometry as a calibration cue"
+  ],
+  "frame_manifest": {
+    "path": "experiments/manifests/gigahands_demo_cam_exp_003_frames_v1.csv.gz",
+    "frozen_before_any_model_ran": true,
+    "source": "experiments/manifests/gigahands_demo_camera_benchmark_v1.csv.gz (usable_for_camera_benchmark == 1)",
+    "rule": "every usable sequence x camera view, 8 frames evenly spaced over the annotated frame range; no duplicates; selection never uses any calibration model output and never uses hand-annotation quality",
+    "seed": 20260923,
+    "n_views": 175,
+    "n_frames": 1400
+  },
+  "fairness": [
+    "identical frames for every model, read from one lossless PNG cache",
+    "failures are recorded as rows with success=0, never dropped",
+    "success-only AND coverage-aware threshold rates are both reported",
+    "ORACLE_GT is a reference line and is excluded from rankings"
+  ],
+  "thresholds_pct": [
+    5,
+    10,
+    20
+  ],
+  "why_5_pct": "CAM-EXP-002 measured on this same data that a 5 % focal error displaces the reconstructed hand by ~32.8 mm in depth; below that the focal stops dominating the pipeline's own residual error. The 5 % figure is a target taken from that experiment, not a depth error measured here.",
+  "models": [
+    {
+      "key": "anycalib",
+      "repo": "https://github.com/javrtg/AnyCalib",
+      "variant": "anycalib_pinhole / cam_id=pinhole"
+    },
+    {
+      "key": "geocalib",
+      "repo": "https://github.com/cvg/GeoCalib",
+      "variant": "pinhole"
+    },
+    {
+      "key": "pf_uncentered",
+      "repo": "https://github.com/jinlinyi/PerspectiveFields",
+      "variant": "Paramnet-360Cities-edina-uncentered"
+    },
+    {
+      "key": "pf_centered",
+      "repo": "https://github.com/jinlinyi/PerspectiveFields",
+      "variant": "Paramnet-360Cities-edina-centered"
+    },
+    {
+      "key": "demo_fixed",
+      "repo": "this repository",
+      "variant": "f = 1000/256*max(W,H) = 5000 px (CAM-EXP-002 audit)"
+    },
+    {
+      "key": "image_center_pp",
+      "repo": "n/a",
+      "variant": "cx=W/2, cy=H/2 (principal-point reference)"
+    },
+    {
+      "key": "oracle_gt",
+      "repo": "n/a",
+      "variant": "ground truth (reference only)"
+    }
+  ],
+  "not_run": {
+    "anycam": "OUT_OF_SCOPE_SINGLE_FRAME - video method; see model_output_convention_audit.md"
+  },
+  "focal_conventions": "see model_output_convention_audit.md and tables/model_output_conversion.csv",
+  "gt_convention": "GigaHands optim_params.txt intrinsics in original 1280x720 pixels, validated in CAM-EXP-001; primary metric against gt_fx with the gt_fy error stored per row",
+  "distortion": "images are fed RAW; no model variant used predicts distortion, so no distortion comparison is made",
+  "runtime_note": "frames are decoded once into a lossless PNG cache; reported runtimes are model inference plus cache read, measured on the same machine for every model"
+}

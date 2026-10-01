@@ -1,0 +1,7 @@
+REFERENCE FOCAL OPENED
+timestamp_utc: 2026-09-28T06:37:27Z
+git_head: 221dc2c1270ff008705f6ebcaa8a1e565bedc8ed
+frozen_test_predictions_sha256: 957b7ca23b4f8d45962d925c6a98d1f602841052dc05f65cfbcac854a6715834
+method_spec_sha256: 4e1e6a446d9550635a226a5075c041a7b6b1e8a0d062a19241ae6cca1a00225e
+lambda_selection_sha256: 0664fc851da8415b804600e6d0377f755fa7e26f73592f9135e69ca992bc61cf
+After this point no method prediction may be regenerated.

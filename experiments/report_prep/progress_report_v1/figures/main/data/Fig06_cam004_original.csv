@@ -1,0 +1,13 @@
+estimator,N,n_views,median_rel_err_pct,within_5_pct,source_run
+anycalib_gen,1,175,9.618,18.86,CAM-EXP-004 original run
+anycalib_gen,2,175,9.618,18.86,CAM-EXP-004 original run
+anycalib_gen,4,175,9.767,20.0,CAM-EXP-004 original run
+anycalib_gen,8,175,9.89,20.0,CAM-EXP-004 original run
+geocalib_distorted,1,175,13.366,14.29,CAM-EXP-004 original run
+geocalib_distorted,2,175,13.366,17.14,CAM-EXP-004 original run
+geocalib_distorted,4,175,11.652,20.57,CAM-EXP-004 original run
+geocalib_distorted,8,175,11.184,21.14,CAM-EXP-004 original run
+E2_frozen,1,175,7.756,34.29,CAM-EXP-004 original run
+E2_frozen,2,175,7.422,35.43,CAM-EXP-004 original run
+E2_frozen,4,175,6.607,38.29,CAM-EXP-004 original run
+E2_frozen,8,175,6.138,38.29,CAM-EXP-004 original run

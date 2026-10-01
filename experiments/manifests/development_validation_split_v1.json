@@ -1,0 +1,75 @@
+{
+  "id": "GIGAHANDS_DEVELOPMENT_VALIDATION_PROTOCOL_V1",
+  "frozen_on": "2026-09-23",
+  "applies_from": "CAM-EXP-005",
+  "dataset": "GigaHands demo, 175 (sequence, camera) views",
+  "structure": {
+    "p36-tea-0010": 40,
+    "p41-boxing-0021": 40,
+    "p41-plant-0004": 40,
+    "p44-dog-0004": 40,
+    "p52-instrument-0034": 15
+  },
+  "protocol": "LEAVE_ONE_SEQUENCE_OUT",
+  "why_not_a_fixed_two_way_split": "there are only 5 sequences, and they are unbalanced (40/40/40/40/15 views). Any fixed 2-way split either puts a single sequence in validation - 15 to 40 views, and in the worst case the one small, atypical sequence - or leaves too little for development. Leave-one-sequence-out uses every sequence as validation exactly once, keeps the sequence as the unit of independence, and reports 5 held-out numbers instead of one lucky one. The retrospective E2 audit in this run already shows how much that spread matters: the held-out median ranged 5.73-8.80 % across folds.",
+  "rules": [
+    "method selection, thresholds and any tuning may only use the 4 training-fold sequences of the fold being evaluated",
+    "the held-out sequence's results may be reported but never used to choose anything",
+    "report all 5 held-out numbers, not only their mean",
+    "the view (sequence, camera) is the statistical unit inside a fold; frames are never independent samples",
+    "a method that needs a single headline number reports the mean of the 5 held-out folds, with the range"
+  ],
+  "folds": [
+    {
+      "held_out_sequence": "p36-tea-0010",
+      "n_heldout_views": 40,
+      "training_sequences": [
+        "p41-boxing-0021",
+        "p41-plant-0004",
+        "p44-dog-0004",
+        "p52-instrument-0034"
+      ]
+    },
+    {
+      "held_out_sequence": "p41-boxing-0021",
+      "n_heldout_views": 40,
+      "training_sequences": [
+        "p36-tea-0010",
+        "p41-plant-0004",
+        "p44-dog-0004",
+        "p52-instrument-0034"
+      ]
+    },
+    {
+      "held_out_sequence": "p41-plant-0004",
+      "n_heldout_views": 40,
+      "training_sequences": [
+        "p36-tea-0010",
+        "p41-boxing-0021",
+        "p44-dog-0004",
+        "p52-instrument-0034"
+      ]
+    },
+    {
+      "held_out_sequence": "p44-dog-0004",
+      "n_heldout_views": 40,
+      "training_sequences": [
+        "p36-tea-0010",
+        "p41-boxing-0021",
+        "p41-plant-0004",
+        "p52-instrument-0034"
+      ]
+    },
+    {
+      "held_out_sequence": "p52-instrument-0034",
+      "n_heldout_views": 15,
+      "training_sequences": [
+        "p36-tea-0010",
+        "p41-boxing-0021",
+        "p41-plant-0004",
+        "p44-dog-0004"
+      ]
+    }
+  ],
+  "status_of_numbers_produced_this_way": "RETROSPECTIVE_INTERNAL_VALIDATION - same rig, same 5 sequences. It is not, and must not be called, an independent test."
+}

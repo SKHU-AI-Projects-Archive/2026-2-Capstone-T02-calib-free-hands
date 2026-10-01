@@ -1,0 +1,12 @@
+{
+  "test": "exact permutation over sequence relabelings",
+  "n_sequences": 5,
+  "n_relabelings": 120,
+  "statistic": "median(CROSS) - median(WITHIN), camera-matched",
+  "observed": 0.017406075056827675,
+  "null_median": -0.006420413977345829,
+  "null_max": 0.01753092286350111,
+  "p_value_one_sided": 0.016666666666666666,
+  "identity_permutation_included_in_null": true,
+  "note": "with 5 sequences the smallest attainable p-value is 1/120 = 0.0083, and the permutation unit is the SEQUENCE, of which there are only 5. The test is therefore weak by construction regardless of the outcome."
+}

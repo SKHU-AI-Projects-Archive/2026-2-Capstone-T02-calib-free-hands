@@ -1,0 +1,12 @@
+{
+  "experiment": "CAM-EXP-009.1",
+  "title": "Bilateral Bone-Fitting Solver Validation and Corrected Synthetic Re-Test",
+  "kind": "SOLVER_VALIDATION",
+  "verdict": "CAM009_FAILURE_WAS_IMPLEMENTATION_ARTIFACT",
+  "cam009_status": "SUPERSEDED_FOR_INTERPRETATION_DUE_TO_SOLVER_VALIDATION_ISSUE",
+  "real_data_phase": "NOT RUN",
+  "frozen_manifests": {
+    "cam_exp_0091_solver_validation_spec_v1.json": "57054da297f1e17f43d9b41b0fd553a9dfe43f62ef4fa769209c91daefdf41d8"
+  },
+  "external_holdout": "InterHand2.6M / HanCo remain reserved and UNOPENED"
+}

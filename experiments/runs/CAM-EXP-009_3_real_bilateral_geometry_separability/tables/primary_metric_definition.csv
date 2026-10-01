@@ -1,0 +1,6 @@
+name,tier,formula,note
+D_primary,PRIMARY,"median_b |log(p_L,b+1e-8) - log(p_R,b+1e-8)|",one primary metric; secondaries are sensitivity only
+mean_abs_log,SECONDARY,"mean_b |z_A,b - z_B,b|",
+raw_proportion_l1,SECONDARY,"mean_b |p_A,b - p_B,b|",
+cosine,SECONDARY,"1 - cos(p_A, p_B)",
+finger_internal,SECONDARY,"median_b |log r_A - log r_B|, r normalised per finger",

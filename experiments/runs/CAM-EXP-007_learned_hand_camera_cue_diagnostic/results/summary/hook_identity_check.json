@@ -1,0 +1,8 @@
+{
+  "frames_tested": 4,
+  "hands_compared": 5,
+  "max_abs_difference": 0.0,
+  "bit_identical": true,
+  "verdict": "HOOKS_DO_NOT_ALTER_MODEL_OUTPUT",
+  "note": "forward hooks returning None cannot modify the output by PyTorch semantics; this confirms it empirically on real frames rather than assuming it."
+}

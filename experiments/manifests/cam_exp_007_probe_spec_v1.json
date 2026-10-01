@@ -1,0 +1,216 @@
+{
+  "spec_id": "cam_exp_007_probe_spec_v1",
+  "created_before_target_analysis": true,
+  "target": {
+    "source": "CAM-EXP-005 results/raw/view_targets.csv.gz, column anycalib_signed_log_bias",
+    "definition": "e_v = median_t log( f_AnyCalib(v,t) / f_ref(v) ) for the AnyCalib anycalib_gen radial:2 condition, reused EXACTLY as frozen in CAM-EXP-005",
+    "why_not_focal_directly": "the rig's reference focal has CV 1.90 %, so predicting the focal itself rewards emitting a constant (SINGLE_FOCAL_RIG_CONFOUND)"
+  },
+  "correction_diagnostic": {
+    "formula": "f_corrected = f_anycalib / exp(bias_hat)",
+    "label": "LINEAR_PROBE_CORRECTION_DIAGNOSTIC",
+    "not_a_method": true
+  },
+  "model": {
+    "type": "ridge regression, closed form",
+    "alphas": [
+      0.01,
+      0.1,
+      1.0,
+      10.0,
+      100.0
+    ],
+    "alpha_selection": "grouped CV inside the training fold only; the outer test is never consulted",
+    "no_new_network": true
+  },
+  "preprocessing_order": [
+    "training-fold median imputation",
+    "training-fold standardisation",
+    "training-fold PCA for latent groups",
+    "inner grouped CV alpha selection",
+    "full training fit",
+    "predict the held-out physical camera"
+  ],
+  "probes": [
+    {
+      "id": "P0",
+      "name": "BASELINE_TRAINING_MEAN",
+      "groups": [],
+      "status": "baseline"
+    },
+    {
+      "id": "P1",
+      "name": "F0_HAND_VISIBILITY_AND_BOX",
+      "groups": [
+        "F0"
+      ],
+      "status": "deployable"
+    },
+    {
+      "id": "P2",
+      "name": "F1_CAMERA_HEAD_OUTPUT",
+      "groups": [
+        "F1"
+      ],
+      "status": "deployable"
+    },
+    {
+      "id": "P3",
+      "name": "F2_EXPLICIT_HAND_GEOMETRY",
+      "groups": [
+        "F2"
+      ],
+      "status": "deployable"
+    },
+    {
+      "id": "P4",
+      "name": "F3_TEMPORAL_HAND_STABILITY",
+      "groups": [
+        "F3"
+      ],
+      "status": "deployable"
+    },
+    {
+      "id": "P5",
+      "name": "ALL_EXPLICIT_HAND_OUTPUTS",
+      "groups": [
+        "F0",
+        "F1",
+        "F2",
+        "F3"
+      ],
+      "status": "deployable"
+    },
+    {
+      "id": "P6",
+      "name": "LEARNED_HAND_LATENT",
+      "groups": [
+        "F4"
+      ],
+      "status": "deployable"
+    },
+    {
+      "id": "P7",
+      "name": "ALL_EXPLICIT_PLUS_LATENT",
+      "groups": [
+        "F0",
+        "F1",
+        "F2",
+        "F3",
+        "F4"
+      ],
+      "status": "deployable"
+    },
+    {
+      "id": "P8",
+      "name": "SCENE_PLUS_ALL_EXPLICIT",
+      "groups": [
+        "SCENE",
+        "F0",
+        "F1",
+        "F2",
+        "F3"
+      ],
+      "status": "deployable"
+    },
+    {
+      "id": "P9",
+      "name": "SCENE_PLUS_LATENT",
+      "groups": [
+        "SCENE",
+        "F4"
+      ],
+      "status": "deployable"
+    },
+    {
+      "id": "P10",
+      "name": "SCENE_PLUS_ALL_HAND",
+      "groups": [
+        "SCENE",
+        "F0",
+        "F1",
+        "F2",
+        "F3",
+        "F4"
+      ],
+      "status": "deployable"
+    }
+  ],
+  "baselines": [
+    {
+      "id": "B0",
+      "name": "RAW_ANYCALIB",
+      "deployable": 1,
+      "what": "AnyCalib's view focal with no correction"
+    },
+    {
+      "id": "B1",
+      "name": "GLOBAL_BIAS_CORRECTED_ANYCALIB",
+      "deployable": 1,
+      "what": "subtract the training folds' median signed log bias; one constant, no per-view information",
+      "role": "PRIMARY_PRACTICAL_BASELINE"
+    },
+    {
+      "id": "B2",
+      "name": "CAM005_FROZEN_SCENE_BASELINE",
+      "deployable": 1,
+      "what": "CAM-EXP-005's deployable scene-only feature set P6 (scene geometry + image global + border), reused unchanged",
+      "note": "CAM-005's P4 and P7 are NOT used: they contain the model's own prediction, which is exactly the confound C1 isolates"
+    },
+    {
+      "id": "B3",
+      "name": "TRAINING_FOLD_CONSTANT_REFERENCE_ORACLE",
+      "deployable": 0,
+      "what": "emit the training cameras' median reference focal",
+      "role": "ORACLE_SANITY_CONTROL",
+      "uses_training_target_labels": 1
+    }
+  ],
+  "statistical_unit": "(sequence, camera) static view",
+  "generalisation_group": "physical camera",
+  "bootstrap": "physical-camera cluster bootstrap, 10000 iterations",
+  "comparison_rule": "every paired comparison runs on the COMMON hand-feature-eligible view set; results are also reported on the full benchmark",
+  "hypotheses": {
+    "H1": "some frozen hand-model explicit output is associated with the AnyCalib residual bias",
+    "H2": "if that signal is a deployable camera cue it must beat B1 under leave-one-physical-camera-out",
+    "H3": "simple box/crop/pred_cam cues and the deep latent may carry different amounts of information",
+    "H4": "if the latent beats the explicit outputs, the network holds a camera/image prior not exposed in its explicit geometry",
+    "H5": "if real hand-view correspondence matters, real features must beat view-shuffled features",
+    "H6": "improvement under LOSO but failure under LOCO-camera indicates same-rig repetition rather than a generalisable cue",
+    "H7": "scene+hand beating scene-only means hand features add information beyond CAM-005's scene cues",
+    "H8": "if nothing beats B1 and the scene baseline, no usable residual-bias signal was detected in this frozen model"
+  },
+  "success_criteria": {
+    "primary_protocol": "LOCO_PHYSICAL_CAMERA",
+    "HAND_DERIVED_SIGNAL_PROMISING": {
+      "condition_1": "versus B1: median relative focal error reduced by >= 10 % relative, OR within +-5 % rate up by >= 5 percentage points",
+      "condition_2": "bias-prediction Spearman positive with a stable physical-camera cluster-bootstrap direction; strong form requires the CI lower bound > 0",
+      "condition_3": "clearly better than HAND_FEATURE_VIEW_SHUFFLE",
+      "condition_4": "the corrected focal is not a constant collapse",
+      "all_four_required": true
+    },
+    "SCENE_PLUS_HAND_SIGNAL_PROMISING": {
+      "condition_1": "versus B2 scene-only: >= 10 % relative median error reduction OR +5 pp within +-5 %",
+      "condition_2": "bias correlation improves in the same direction"
+    },
+    "LATENT_CAMERA_SIGNAL_PROMISING": {
+      "condition": "a latent-containing group (P6, P7, P9, P10) passes the primary thresholds, beats shuffle, holds under LOCO-camera, and is not a constant collapse"
+    },
+    "CONSTANT_COLLAPSE": {
+      "fires_if": "median error low AND corrected-focal CV near zero AND no focal tracking",
+      "consequence": "not counted as hand signal"
+    }
+  },
+  "decision_tags": {
+    "A": "EXPLICIT_HAND_CAMERA_CUE_PROMISING",
+    "B": "LATENT_CAMERA_SIGNAL_PROMISING",
+    "C": "LATENT_ONLY_CAMERA_SIGNAL",
+    "D": "HAND_SIGNAL_INCREMENTAL_TO_SCENE",
+    "E": "RIG_REPETITION_SIGNAL_ONLY",
+    "F": "SINGLE_FOCAL_PRIOR_CONFOUND",
+    "G": "SHUFFLE_CONTROL_NOT_DEGRADED",
+    "H": "NO_GENERALIZABLE_HAND_DERIVED_SIGNAL",
+    "I": "HAND_FEATURE_COVERAGE_LIMITED",
+    "J": "LATENT_EXTRACTION_UNAVAILABLE"
+  }
+}

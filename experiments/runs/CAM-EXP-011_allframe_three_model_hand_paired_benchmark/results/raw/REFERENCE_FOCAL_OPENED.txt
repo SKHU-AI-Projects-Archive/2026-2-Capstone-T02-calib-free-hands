@@ -1,0 +1,7 @@
+REFERENCE FOCAL OPENED
+timestamp_utc: 2026-09-29T22:19:35Z
+git_head: 8fac95e935daa4177d0d17ed9a69ff098c5e73d2
+frozen_predictions_sha256: 487a08868d18859d44b6cff26ebdb588246d9e07043827b0f47e4c04fe249ead
+frame_manifest_sha256: 8481a86acbaa285c9026435137ee90e11bfe3bd4812b17a750b1f37c61bfa876
+lambda_selection_sha256: 6beeecefb233eb4309708cecf78f3ecde2a88b08659ead606b083654e262723b
+After this point no prediction may be regenerated.

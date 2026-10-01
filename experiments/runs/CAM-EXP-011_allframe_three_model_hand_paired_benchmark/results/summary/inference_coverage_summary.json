@@ -1,0 +1,12 @@
+{
+  "videos": 175,
+  "scene_input_frames": 52423,
+  "per_model_valid_frames": {
+    "ANYCALIB": 52423,
+    "GEOCALIB": 52423,
+    "PERSPECTIVE_FIELDS": 52423
+  },
+  "three_model_common_frames": 52423,
+  "videos_with_hand_score": 153,
+  "min_scene_coverage_rule": 0.8
+}

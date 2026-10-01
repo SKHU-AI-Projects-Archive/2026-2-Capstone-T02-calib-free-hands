@@ -1,0 +1,6 @@
+video,width,height,fps,frames,duration_sec,codec,median_bg_shift_px_between_sampled_frames,p90_bg_shift_px,camera_motion_status,scope
+1_insert.mp4,1920,1080,30.0,953,31.77,h264,0.81,18.11,MOSTLY_STATIC,primary target for the static-camera demo
+2_screw.mp4,1920,1080,30.0,364,12.13,h264,0.22,4.5,STATIC_CAMERA,primary target for the static-camera demo
+3_weld.mp4,1080,1920,30.006,1761,58.69,hevc,30.41,77.5,MOVING_CAMERA,OUT_OF_SCOPE_FOR_STATIC_AGGREGATION
+4_assemble.mp4,1080,1920,30.004,570,19.0,hevc,14.83,38.45,MOVING_CAMERA,OUT_OF_SCOPE_FOR_STATIC_AGGREGATION
+5_fold.mp4,1634,908,30.0,502,16.73,h264,17.52,36.49,MOVING_CAMERA,OUT_OF_SCOPE_FOR_STATIC_AGGREGATION

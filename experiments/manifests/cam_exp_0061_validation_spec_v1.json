@@ -1,0 +1,154 @@
+{
+  "spec_id": "cam_exp_0061_validation_spec_v1",
+  "created_before_results": true,
+  "seed": 20260927,
+  "purpose": "validate, not extend. CAM-EXP-006.1 builds no new calibration method.",
+  "rig_camera_model_reference": {
+    "fy_over_fx_median": 0.99867,
+    "cx_minus_W2_median": 0.02,
+    "cy_minus_H2_median": -23.62,
+    "k1_median": -0.39218,
+    "k2_median": 0.13298,
+    "p1_median": 0.000538,
+    "p2_median": -0.000224
+  },
+  "frame_balanced": {
+    "id": "CAM0061_FRAME_BALANCED",
+    "step_1_joint_to_hand": "median over joints of the reprojection error in px",
+    "step_2_hands_to_frame": "median over the usable hands in that frame, so a one-hand frame and a two-hand frame each count as exactly one frame",
+    "step_3_frames_to_view": "mean, in log space, of the per-frame scores - UNCHANGED from CAM-EXP-006",
+    "changed_relative_to_cam006": "hand weighting only; nothing else",
+    "secondary_sensitivity_only": "STRICT_MEDIAN_FRAME_SENSITIVITY (median rather than mean across frames)"
+  },
+  "synthetic": {
+    "seed": 20260927,
+    "image": {
+      "W": 1280,
+      "H": 720
+    },
+    "f_true_px": 900.0,
+    "grid": "identical to CAM-EXP-006: 121 log-uniform points, gamma in [0.25, 5.0], gamma = f / max(W, H)",
+    "n_trials_per_condition": 100,
+    "suites": {
+      "SYNTH_GENERIC_STRONG_PERSPECTIVE": {
+        "points": 20,
+        "shape": "deterministic non-coplanar random cloud in a unit box, rejected and redrawn if its best-fit-plane residual is degenerate",
+        "distance_over_diameter": 2.5,
+        "noise_px": 0.0,
+        "distortion": "none",
+        "principal_point": "centre"
+      },
+      "SYNTH_HAND_STRONG_PERSPECTIVE": {
+        "shape": "root-relative OTHER_CAMERA_ONLY_REFERENCE_3D hands, sampled deterministically at uniform stride from the frozen CAM-006 manifest order",
+        "selection_independence": "stride sampling over the manifest order; no focal error and no GT focal took any part",
+        "distance_over_diameter": 2.5,
+        "noise_px": 0.0,
+        "distortion": "none",
+        "principal_point": "centre"
+      }
+    },
+    "sweeps": {
+      "distance_over_diameter": [
+        2,
+        3,
+        5,
+        10,
+        20,
+        40
+      ],
+      "depth_scale": [
+        1.0,
+        0.75,
+        0.5,
+        0.25,
+        0.1,
+        0.0
+      ],
+      "noise_px": [
+        0.0,
+        0.5,
+        1.0,
+        2.0
+      ],
+      "principal_point": [
+        "CENTER_PP",
+        "OFFCENTER_PP_SOLVER_ASSUMES_CENTRE",
+        "OFFCENTER_PP_SOLVER_GIVEN_TRUE_PP"
+      ],
+      "distortion": [
+        "D0_none_none",
+        "D1_distorted_solver_assumes_none",
+        "D2_distorted_solver_given_true"
+      ]
+    },
+    "offcenter_pp_offset_px": {
+      "dx": 40.0,
+      "dy": -24.0
+    },
+    "distortion_coefficients": [
+      -0.39218,
+      0.13298,
+      0.000538,
+      -0.000224
+    ],
+    "distortion_provenance": "median over the 245 provided GigaHands cameras; rig metadata, target-independent",
+    "safety": "every trial checks that all points have Z > 0 in the camera frame and project inside a generous image margin",
+    "primary_analysis_for_planarity": "depth_scale 0.25 and 0.1; the exactly coplanar 0.0 endpoint is diagnostic only because it forces a different PnP back-end",
+    "pass_conditions_SYNTH_GENERIC_STRONG_PERSPECTIVE_noiseless": {
+      "median_rel_focal_err_pct_max": 1.0,
+      "share_within_5pct_min": 0.95,
+      "share_flat_profile_max": 0.05,
+      "share_boundary_max": 0.05,
+      "minimum_must_be_interior": true
+    },
+    "rule": "noise-sweep results are never used to tune a real-data threshold"
+  },
+  "thresholds": [
+    {
+      "id": "FRAME_WEIGHTING_MATERIAL",
+      "comparison": "R0 vs R1",
+      "fires_if": "median relative focal error changes by >= 10 percentage points, OR flat-profile share changes by >= 10 pp, OR cleanly-identifiable share changes by >= 10 pp",
+      "otherwise": "FRAME_WEIGHTING_NON_MATERIAL"
+    },
+    {
+      "id": "CAMERA_MODEL_MISMATCH_MATERIAL",
+      "comparison": "R1 vs R5",
+      "fires_if": "median relative focal error falls by >= 25 % in relative terms, OR identifiable share rises by >= 20 pp, OR flat share falls by >= 20 pp, OR focal tracking correlation becomes materially positive with a cluster-bootstrap CI excluding zero",
+      "otherwise": "CAMERA_MODEL_MISMATCH_NON_MATERIAL"
+    },
+    {
+      "id": "REPRODUCTION_MISMATCH",
+      "comparison": "R0 vs CAM-EXP-006",
+      "fires_if": "N=16 median relative focal error differs by more than 5 percentage points from 202.16 %, or the flat share differs by more than 5 pp from 86.86 %",
+      "otherwise": "REPRODUCTION_OK"
+    },
+    {
+      "id": "UNDERPOWERED_STRESS_SUBSET",
+      "comparison": "S2 / S5 subsets",
+      "fires_if": "fewer than 20 views or fewer than 8 physical cameras",
+      "otherwise": "stress subset reportable"
+    }
+  ],
+  "verdict_taxonomy": {
+    "A": "CAM006_NEGATIVE_RESULT_STRONGLY_VALIDATED",
+    "B": "CAM006_NEGATIVE_RESULT_VALIDATED_WITH_CAVEATS",
+    "C": "CAM006_CAMERA_MODEL_MISMATCH_EXPLAINS_RESULT",
+    "D": "CAM006_FRAME_WEIGHTING_MATERIALLY_AFFECTED_RESULT",
+    "E": "CAM006_SOLVER_NOT_VALIDATED",
+    "F": "CAM006_INCONCLUSIVE"
+  },
+  "constant_rig_focal_oracle": {
+    "name": "CONSTANT_RIG_FOCAL_ORACLE",
+    "status": "ORACLE_SANITY_CONTROL",
+    "registration": "PRE_REGISTERED_IN_CAM006_1_ORACLE_SANITY_CONTROL",
+    "motivation": "MOTIVATED_BY_CAM005_POST_HOC_FINDING",
+    "history": "the constant-rig focal confound was discovered post hoc in CAM-EXP-005. It was therefore already known before CAM-EXP-006 began, and is a genuinely pre-registered control in CAM-006 and CAM-006.1. The self-contradictory label 'PRE_REGISTERED_POST_HOC' must not be used."
+  },
+  "separation_rule": "synthetic results validate the implementation and the theory; real GigaHands results are the empirical evidence. They are reported in separate tables and figures and are never substituted for one another.",
+  "honesty_rules": [
+    "a result that overturns CAM-EXP-006 is reported unchanged",
+    "a result that supports CAM-EXP-006 is not generalised beyond the evaluated GigaHands regime and this profiled-PnP formulation",
+    "GT focal MAGNITUDE is never a solver input in any condition",
+    "the real PLANARIZED control is sensitivity evidence only, because its PnP back-end differs"
+  ]
+}

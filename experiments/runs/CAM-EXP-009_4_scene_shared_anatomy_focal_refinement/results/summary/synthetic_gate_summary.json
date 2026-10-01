@@ -1,0 +1,45 @@
+{
+  "conditions": {
+    "S0_CLEAN": {
+      "n": 8,
+      "median_err_pct": 0.2721135844519722,
+      "boundary_rate": 0.0
+    },
+    "S1_MODERATE": {
+      "n": 8,
+      "median_err_pct": 3.419620773744157,
+      "boundary_rate": 0.0
+    },
+    "S2_WRONG_BONE": {
+      "n": 8,
+      "median_err_pct": 36.54083266098922,
+      "boundary_rate": 0.375
+    },
+    "S3_GENERIC_OFF": {
+      "n": 8,
+      "median_err_pct": 9.024155519044989,
+      "boundary_rate": 0.0
+    }
+  },
+  "wrong_bone_degradation_pp": 33.12121188724506,
+  "generic_prior_ablation_delta_pp": 5.604534745300832,
+  "lambda_generic": 1.0,
+  "lambda_side": 1.0,
+  "lambda_selected_on": "SYNTHETIC ONLY; never on the real reference focal",
+  "gate": {
+    "G0_projection_roundtrip": true,
+    "G1_clean_le_1pct": true,
+    "G2_moderate_le_5pct": true,
+    "G3_wrong_bone_degrades": true,
+    "G4_boundary_ok": true
+  },
+  "required": [
+    "G1_clean_le_1pct",
+    "G2_moderate_le_5pct",
+    "G3_wrong_bone_degrades"
+  ],
+  "GATE_PASSED": true,
+  "real_phase": "REAL_PHASE_ELIGIBLE",
+  "meaning": "Passing means the implementation is sane enough to justify the real evaluation. It does NOT mean the method works on real data.",
+  "runtime_min": 9.175648192564646
+}

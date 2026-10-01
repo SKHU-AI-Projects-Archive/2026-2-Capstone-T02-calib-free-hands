@@ -1,0 +1,12 @@
+{
+  "H_ONLY_median_err_pct": 37.150083367623694,
+  "H_ONLY_role": "diagnostic, NOT a deployment baseline",
+  "hand_boundary_rate": 0.967479674796748,
+  "median_hand_score_range": 0.0014767224460071312,
+  "anatomy_magnitudes": {
+    "median_norm_a": 0.05526761191455421,
+    "median_norm_delta_L": 0.06084995397484143,
+    "median_norm_delta_R": 0.06103364331007995,
+    "reading": "||a|| near 0 would mean p_seq collapsed onto the generic prior; ||delta|| >> ||a|| would mean the shared anatomy is effectively inactive"
+  }
+}

@@ -1,0 +1,8 @@
+{
+  "q_min": 0.5,
+  "q_max": 1.5,
+  "q_n": 81,
+  "anchored_on": "the unit's own scene-only focal estimate",
+  "boundary_is_reported_not_clipped": true,
+  "frozen_before_real_focal_results": true
+}

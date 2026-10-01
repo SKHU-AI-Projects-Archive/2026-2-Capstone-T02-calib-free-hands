@@ -1,0 +1,4 @@
+Model,Scene_only_median_error_pct,Scene_plus_correct_hand_median_error_pct,Gain_of_medians_pp,Paired_median_gain_pp,Paired_mean_gain_pp,Relative_gain_pct,Win_rate_pct,Tie_rate_pct,Loss_rate_pct,CI95_low,CI95_high,N_videos
+AnyCalib,16.019,16.447,-0.428,-0.459,-0.496,-2.67,9.2,20.3,70.6,-0.492,-0.441,153
+GeoCalib,21.912,25.167,-3.254,0.0,-2.601,-14.85,19.6,41.8,38.6,0.0,0.0,153
+Perspective Fields,19.888,20.211,-0.322,0.0,-1.758,-1.62,47.1,22.9,30.1,0.0,0.31,153

@@ -1,0 +1,8 @@
+{
+  "cam_exp_0093_geometry_spec_v1.json": "2f6cce51b9d9aac16f926a251b2ba8575d291b14c1712203c1bd215e9f9523e2",
+  "cam_exp_0093_controls_spec_v1.json": "6d67b5687fcfe42517019923f820a2877704fe151e5bbd46895eab861e1ebe81",
+  "cam_exp_0093_permutation_spec_v1.json": "848496164e9ccf465e525ee71f07e2fdcc1ccccb1571205203f7b3599141e139",
+  "cam_exp_0093_eligible_units_v1.csv.gz": "f8a7bb8580a1e18d28633af23b7bf9c8133093c87d9cd9ecacf3838eca0e2571",
+  "cam_exp_0093_repeatability_split_v1.csv.gz": "f2aa58ab619dca00b55cc2ea04565e0c60c8981960d84d33e44679865541e0b0",
+  "cam_exp_0093_identity_mapping_v1.csv": "ddd5db4dd47c408b39dc411f77349220d6bcde19815d4cc729c58d25b1a4b386"
+}

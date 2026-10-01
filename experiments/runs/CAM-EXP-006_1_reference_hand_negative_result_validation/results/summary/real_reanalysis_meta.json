@@ -1,0 +1,8 @@
+{
+  "views": 175,
+  "conditions": 6,
+  "camera_models": 5,
+  "rows": 5250,
+  "gt_focal_magnitude_ever_a_solver_input": false,
+  "note": "R0 and R1 share camera model M_CENTER_NODIST and differ only in aggregation, so the R0->R1 comparison isolates the hand-weighting mismatch exactly."
+}

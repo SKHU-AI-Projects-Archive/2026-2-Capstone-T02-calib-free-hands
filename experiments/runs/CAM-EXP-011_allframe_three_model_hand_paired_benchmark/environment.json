@@ -1,0 +1,11 @@
+{
+  "python": "3.11.7",
+  "scene_venv": "experiments/.venv-calib",
+  "hand_venv": "experiments/.venv-anyhand",
+  "analysis_venv": "experiments/.venv",
+  "models": {
+    "AnyCalib": "AnyCalib[anycalib_pinhole/pinhole]",
+    "GeoCalib": "GeoCalib[pinhole]",
+    "Perspective Fields": "PerspectiveFields[centered]"
+  }
+}

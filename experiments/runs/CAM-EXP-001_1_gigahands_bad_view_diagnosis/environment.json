@@ -1,0 +1,48 @@
+{
+  "experiment": "CAM-EXP-001.1_gigahands_bad_view_diagnosis",
+  "date": "2026-09-22T09:54:28.270810+00:00",
+  "os": "Windows 10 (10.0.26200)",
+  "machine": "AMD64",
+  "python_version": "3.11.7",
+  "numpy_version": "2.4.6",
+  "opencv_version": "5.0.0",
+  "matplotlib_version": "3.11.2",
+  "gpu_used": false,
+  "git_branch": "kjh",
+  "git_commit": "0c154835bda0a761a3a2ae663ee3e9ca80b058aa",
+  "git_dirty": true,
+  "git_remote": "git@github.com:SKHU-AI-Projects-Archive/2026-2-Capstone-T02-calib-free-hands.git",
+  "preflight_checks": {
+    "cam_exp_001_run_dir": "experiments/runs/CAM-EXP-001_gt_projection_validation",
+    "cam_exp_001_raw_csv": "experiments/runs/CAM-EXP-001_gt_projection_validation/results/raw/reprojection_per_joint.csv.gz",
+    "cam_exp_001_raw_csv_exists": true,
+    "gigahands_root": "experiments/datasets/gigahands/demo_all/raw/hand_pose",
+    "gigahands_root_exists": true,
+    "gigahands_sequences": [
+      "p36-tea-0010",
+      "p41-boxing-0021",
+      "p41-plant-0004",
+      "p44-dog-0004",
+      "p52-instrument-0034"
+    ],
+    "shared_src_modules_present": {
+      "datasets": true,
+      "geometry": true,
+      "metrics": true,
+      "visualization": true
+    }
+  },
+  "view_classification": {
+    "otsu_threshold_px": 30.112,
+    "good_max_median_px": 10.0,
+    "bad_min_median_px": 60.224,
+    "rule": "Otsu split on log10(per-view median error) over non-sentinel views; good = median <= min(otsu/2, 10), bad = median >= max(otsu*2, 50), medium in between, zero-sentinel separate.",
+    "counts": {
+      "medium": 1685,
+      "bad": 920,
+      "good": 3516,
+      "zero_sentinel": 1879
+    },
+    "n_non_sentinel": 6090
+  }
+}

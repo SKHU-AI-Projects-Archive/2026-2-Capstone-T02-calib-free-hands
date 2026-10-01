@@ -1,0 +1,10 @@
+{
+  "what": "median relative focal error vs number of aggregated frames, N = 1..64, recomputed for every N from ONE inference run",
+  "why": "CAM-EXP-004 (N<=8) and CAM-EXP-004.1 (N>=8) are separate runs and GeoCalib is not run-to-run deterministic, so splicing them would show a step that is a run boundary rather than a result",
+  "source_predictions": "experiments/runs/CAM-EXP-004_1_pre_cam005_robustness_audit/results/raw/extended_frame_predictions.csv.gz",
+  "aggregation": "frozen CAM-EXP-004 rules, unchanged: AnyCalib median, GeoCalib median, E2 = per-frame geometric mean then median",
+  "subsets": "N<=8: all C(8,N) subsets of the frozen 8-frame set, averaged per view. N>8: the single nested set from the frozen manifest.",
+  "statistical_unit": "view (175)",
+  "cam004_original_kept_separately": "figures/main/data/Fig06_cam004_original.csv and tables/multiframe_run_agreement.csv",
+  "no_new_inference": true
+}

@@ -1,0 +1,27 @@
+{
+  "experiment": "CAM-EXP-008",
+  "title": "Offline Sequence-Level Scene + Hand Geometry Focal Fusion",
+  "kind": "PAIRED_FUSION_INFORMATION_DIAGNOSTIC",
+  "trains_new_network": false,
+  "proposes_calibration_method": false,
+  "mode": "FULL_DURATION_64_APPROXIMATION",
+  "primary_subset": "ALL_COMMON (within the 64-frame grid)",
+  "primary_protocol": "LOCO_PHYSICAL_CAMERA (40 folds)",
+  "unit": "SEQUENCE_CAMERA_UNIT",
+  "frozen_manifests": {
+    "cam_exp_008_candidate_frames_v1.csv.gz": "1d924b8d33794f100efef06c02e05dfc7d135202ac2961c1511fd238e0585e50",
+    "cam_exp_008_controls_spec_v1.json": "73c51ed78928f58e2393d629a7f13b4bc0b40fa6c4f3b312269126c21778630a",
+    "cam_exp_008_focal_grid_v1.json": "8ccc26f0fdfa80e776d65ea8367837893474d4510bdd1736c706ad8b01d58d49",
+    "cam_exp_008_frame_subsets_v1.csv.gz": "fb33ba16680da6dd03fa337a4c1b03ce5b27ac05966c5182c31a1c4cf9e19f04",
+    "cam_exp_008_lambda_spec_v1.json": "80380575e885dc25c2bb5c3377d1d32394464b1af00d8d70752716ce48f692b4",
+    "cam_exp_008_outer_splits_v1.json": "cdb5a0451474a4920ea4954326fae2296049c67e94289d2b2166c9fee23a3a23",
+    "cam_exp_008_pose_diversity_spec_v1.json": "3898162fdf773d214f63e24b2203fa0b3341602e6ddefd9ee4d1fbb3bb91ad5e",
+    "cam_exp_008_scene_hand_spec_v1.json": "342b28b61cd938258d61b04091fdbcf565ee7faa560f55da3dfb3ea8586135f8"
+  },
+  "reused_unchanged": [
+    "CAM-EXP-004.1 64-frame grid and AnyCalib predictions",
+    "CAM-EXP-001.3 loco.py",
+    "CAM-EXP-006.1 PnP fallback chain"
+  ],
+  "external_holdout": "InterHand2.6M / HanCo remain reserved and UNOPENED"
+}

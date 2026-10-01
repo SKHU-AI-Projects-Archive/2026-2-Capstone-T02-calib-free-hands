@@ -1,0 +1,130 @@
+{
+  "bootstrap": {
+    "control_distributions": {
+      "triangulation_median_reproj_px": {
+        "n": 20,
+        "median": 4.7584,
+        "mad": 0.4071,
+        "robust_sigma": 0.6036,
+        "p90": 5.608,
+        "p95": 5.6796,
+        "p99": 5.8159,
+        "max": 5.85
+      },
+      "same_hand_reprojection_px": {
+        "n": 20,
+        "median": 7.74,
+        "mad": 2.0834,
+        "robust_sigma": 3.0888,
+        "p90": 12.087,
+        "p95": 12.24,
+        "p99": 12.4049,
+        "max": 12.4461
+      },
+      "provided3d_mpjpe_mm": {
+        "n": 20,
+        "median": 1.8372,
+        "mad": 0.4792,
+        "robust_sigma": 0.7105,
+        "p90": 4.1571,
+        "p95": 4.2561,
+        "p99": 4.2777,
+        "max": 4.2831
+      },
+      "n_inlier_cameras": {
+        "n": 20,
+        "median": 21.0,
+        "mad": 3.0,
+        "robust_sigma": 4.4478,
+        "p90": 24.0,
+        "p95": 24.0,
+        "p99": 24.0,
+        "max": 24.0
+      },
+      "max_ray_angle_deg": {
+        "n": 20,
+        "median": 164.0199,
+        "mad": 6.1369,
+        "robust_sigma": 9.0986,
+        "p90": 170.5557,
+        "p95": 171.2889,
+        "p99": 174.0,
+        "max": 174.6778
+      }
+    },
+    "thresholds": {
+      "triangulation_inlier_px": 6.0,
+      "min_inliers_for_reconstruction": 4,
+      "same_hand_reprojection_px": 12.4,
+      "provided3d_mpjpe_mm": 10.0,
+      "qc_min_inlier_cameras": 8,
+      "min_ray_angle_deg": 30.0,
+      "identity_margin_factor": 3.0,
+      "identity_min_gap_px": 30.0
+    },
+    "derivation": "Quality thresholds (same_hand_reprojection_px, provided3d_mpjpe_mm) are the p99 of the clean-control distribution measured at the OPERATING configuration, with a floor. Geometric requirements (qc_min_inlier_cameras, min_ray_angle_deg) are conditioning floors clipped to a small range rather than control percentiles, so that a well-conditioned but less redundant frame is not rejected for being less redundant than the cleanest controls. identity_margin_factor is how many times closer the opposite-hand reconstruction must be, and identity_min_gap_px the absolute centroid gap also required."
+  },
+  "control_distributions": {
+    "triangulation_median_reproj_px": {
+      "n": 20,
+      "median": 3.0652,
+      "mad": 0.1789,
+      "robust_sigma": 0.2652,
+      "p90": 3.2787,
+      "p95": 3.2891,
+      "p99": 3.3283,
+      "max": 3.3381
+    },
+    "same_hand_reprojection_px": {
+      "n": 20,
+      "median": 8.3315,
+      "mad": 3.2656,
+      "robust_sigma": 4.8415,
+      "p90": 12.5153,
+      "p95": 13.3077,
+      "p99": 16.0007,
+      "max": 16.6739
+    },
+    "provided3d_mpjpe_mm": {
+      "n": 20,
+      "median": 3.3026,
+      "mad": 0.6968,
+      "robust_sigma": 1.0331,
+      "p90": 6.2438,
+      "p95": 6.5081,
+      "p99": 6.7454,
+      "max": 6.8047
+    },
+    "n_inlier_cameras": {
+      "n": 20,
+      "median": 14.0,
+      "mad": 1.0,
+      "robust_sigma": 1.4826,
+      "p90": 15.0,
+      "p95": 15.05,
+      "p99": 15.81,
+      "max": 16.0
+    },
+    "max_ray_angle_deg": {
+      "n": 20,
+      "median": 132.6474,
+      "mad": 8.2929,
+      "robust_sigma": 12.2951,
+      "p90": 145.3073,
+      "p95": 147.4248,
+      "p99": 148.9717,
+      "max": 149.3584
+    }
+  },
+  "thresholds": {
+    "triangulation_inlier_px": 6.0,
+    "min_inliers_for_reconstruction": 4,
+    "same_hand_reprojection_px": 16.0,
+    "provided3d_mpjpe_mm": 10.0,
+    "qc_min_inlier_cameras": 8,
+    "min_ray_angle_deg": 30.0,
+    "identity_margin_factor": 3.0,
+    "identity_min_gap_px": 30.0
+  },
+  "derivation": "Quality thresholds (same_hand_reprojection_px, provided3d_mpjpe_mm) are the p99 of the clean-control distribution measured at the OPERATING configuration, with a floor. Geometric requirements (qc_min_inlier_cameras, min_ray_angle_deg) are conditioning floors clipped to a small range rather than control percentiles, so that a well-conditioned but less redundant frame is not rejected for being less redundant than the cleanest controls. identity_margin_factor is how many times closer the opposite-hand reconstruction must be, and identity_min_gap_px the absolute centroid gap also required."
+}

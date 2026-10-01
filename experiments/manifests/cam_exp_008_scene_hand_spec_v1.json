@@ -1,0 +1,158 @@
+{
+  "spec_id": "cam_exp_008_scene_hand_spec_v1",
+  "created_before_reference_focal_evaluation": true,
+  "seed": 20260929,
+  "question": "does adding sequence-level hand geometry evidence to a scene calibration anchor estimate the sequence-shared focal better than the scene evidence alone, on exactly the same input?",
+  "deployment_setting": {
+    "input": "one already-recorded video file",
+    "realtime": false,
+    "whole_video_available": true,
+    "one_video": "one continuous recording, one physical camera, no cut, no resolution change, no crop change, no digital zoom",
+    "intrinsics": "shared across the whole sequence",
+    "mount": "tripod / fixed; small vibration allowed, no front->side viewpoint change",
+    "varies_between_factories": [
+      "hand size",
+      "worker",
+      "worktable",
+      "background",
+      "camera",
+      "distance",
+      "scene layout"
+    ]
+  },
+  "unit": "SEQUENCE_CAMERA_UNIT = one (sequence, camera) pair = one offline calibration unit",
+  "shared_vs_varying": {
+    "shared_across_sequence": "K, and specifically the scalar focal f",
+    "free_per_frame": "hand rotation and translation R_t, T_t",
+    "note": "small tripod vibration is NOT modelled as an intrinsics variation"
+  },
+  "primary_parameter": "focal only. fy/fx ratio, principal point and radial distortion are taken from the scene estimator at sequence level and held IDENTICAL in S0 and S1.",
+  "scene_model": "AnyCalib anycalib_gen / radial:2 (deterministic in the CAM-EXP-004.1 reproducibility test)",
+  "scene_focal": "f_scene = median over the common frames of per-frame pred_fx",
+  "scene_nuisance": {
+    "r_fy": "median(pred_fy / pred_fx)",
+    "cx": "median(pred_cx)",
+    "cy": "median(pred_cy)",
+    "k1": "median(k1)",
+    "k2": "median(k2)",
+    "used_in": "BOTH S0 and S1, identically"
+  },
+  "why_distortion_is_modelled": "CAM-EXP-006.1 showed that ignoring this rig's distortion (median k1 -0.392) substantially inflated the focal error. The primary hand objective therefore uses the scene-estimated distortion, never GT.",
+  "scene_cost": {
+    "form": "Huber(log(f / f_scene) / sigma_scene)",
+    "delta": 1.345,
+    "sigma_scene": "1.4826 * MAD(log per-frame pred_fx), floored",
+    "sigma_floor": 0.02,
+    "property": "at lambda = 0 the minimum is exactly f_scene"
+  },
+  "hand_cost": {
+    "per_hand": "median over joints of the reprojection error in px",
+    "per_frame": "median over the hands in that frame, so a two-hand frame does not get double weight (the CAM-EXP-006 aggregation mismatch is not repeated)",
+    "per_sequence": "median over frames",
+    "normalisation": "L_hand(f) = C_hand(f) - min_f C_hand(f), in pixels. NOT per-view min-max normalised, which would amplify a flat profile into false confidence."
+  },
+  "fused": "L_total(f) = L_scene(f) + lambda * L_hand(f)",
+  "hand_geometry_source": {
+    "name": "SEQUENCE_CONSISTENT_REFERENCE_HAND",
+    "base": "OTHER_CAMERA_ONLY_REFERENCE_3D (target camera excluded before reconstruction)",
+    "bone_lengths": "per sequence and anatomical side, the median bone length over the sequence; one worker's bones do not change between frames",
+    "scale": "REMOVED. The template is normalised by its own bone-length sum, so no absolute hand-size prior is used - factories differ in hand size.",
+    "articulation": "per-frame bone DIRECTIONS from the reference reconstruction, re-assembled along the kinematic tree with the shared normalised bone lengths",
+    "status": "INTERNAL ORACLE / INFORMATION CEILING, not deployable"
+  },
+  "why_oracle_hand_first": "CAM-EXP-007 found no usable residual signal in predicted-hand outputs. This run asks the prior question: if the hand geometry were good, would fusing it help at all? If even the ceiling does not help, there is little reason to implement the same formulation with a noisier predicted hand.",
+  "hand_only_is_not_the_method": "H0 may fail while S1 succeeds. Scene narrows the candidate region; the hand only has to express a preference inside it.",
+  "frame_counts": {
+    "nested": [
+      8,
+      16,
+      32,
+      64
+    ],
+    "plus": "ALL_COMMON",
+    "nesting": "N8 subset of N16 subset of N32 subset of N64 subset of ALL_COMMON",
+    "wording": "offline evidence accumulation, NOT realtime update"
+  },
+  "conditions": [
+    {
+      "id": "S0",
+      "name": "SCENE_ONLY_PAIRED",
+      "lambda": 0.0,
+      "hand_term": false,
+      "role": "PAIRED BASELINE",
+      "note": "its minimum is exactly f_scene by construction"
+    },
+    {
+      "id": "S1",
+      "name": "SCENE_PLUS_REAL_HAND_GEOMETRY",
+      "lambda": "nested-CV selected",
+      "hand_term": true,
+      "role": "PRIMARY TEST"
+    },
+    {
+      "id": "H0",
+      "name": "HAND_ONLY_DIAGNOSTIC",
+      "lambda": "inf",
+      "hand_term": true,
+      "role": "DIAGNOSTIC, not the headline method",
+      "note": "argmin L_hand alone; comparable to the CAM-006 family"
+    },
+    {
+      "id": "C1",
+      "name": "SCENE_PLUS_WRONG_FRAME_HAND",
+      "hand_term": true,
+      "role": "NEGATIVE CONTROL",
+      "note": "same sequence, same anatomical side, deterministically offset frame: hand size and person preserved, pose correspondence destroyed"
+    },
+    {
+      "id": "C2",
+      "name": "SCENE_PLUS_VIEW_SHUFFLED_HAND_PROFILE",
+      "hand_term": true,
+      "role": "NEGATIVE CONTROL",
+      "note": "hand profiles permuted across views within a fold; scene estimate untouched"
+    },
+    {
+      "id": "C3",
+      "name": "SCENE_PLUS_FLAT_HAND",
+      "hand_term": true,
+      "role": "SANITY",
+      "note": "L_hand == 0; must reproduce S0 exactly"
+    }
+  ],
+  "statistical_unit": "SEQUENCE_CAMERA_UNIT",
+  "bootstrap": "physical-camera cluster bootstrap, 10000 iterations",
+  "evaluation_target": "dataset-provided reference focal",
+  "success_criteria": {
+    "SCENE_HAND_FUSION_PROMISING": [
+      "S1 vs S0 on the paired common set: median relative focal error down >= 10 % relative, OR within +-5 % up >= 5 pp",
+      "the paired improvement direction holds under the physical-camera cluster bootstrap; strong form requires the CI to exclude zero",
+      "real hand fusion clearly beats the C1 wrong-frame and C2 shuffled controls",
+      "the output is not a constant focal collapse"
+    ],
+    "all_required": true,
+    "SCENE_HAND_FUSION_STRONG": "additionally: controls degrade, the gain is visible on unseen physical cameras, N or pose diversity give a coherent trend, the S2 stress subset keeps the direction, and the secondary E2 anchor agrees"
+  },
+  "decision_tags": {
+    "STRONG": "SCENE_HAND_FUSION_STRONG",
+    "PROMISING": "SCENE_HAND_FUSION_PROMISING",
+    "LOCAL": "HAND_SIGNAL_LOCAL_BUT_NOT_GENERALIZABLE",
+    "DIVERSITY": "POSE_DIVERSITY_SIGNAL_ONLY",
+    "ORACLE": "ORACLE_NUISANCE_REQUIRED",
+    "NONE": "NO_INCREMENTAL_HAND_GEOMETRY_SIGNAL"
+  },
+  "forbidden": [
+    "GT focal as an optimisation input",
+    "GT distortion or GT principal point in the primary condition",
+    "target-camera 2D inside the reference 3D",
+    "target-camera extrinsics",
+    "absolute hand-size prior",
+    "frame selection by focal error, reference focal or fusion outcome",
+    "hand observation filtering by whether it improves the focal",
+    "opening the external confirmatory holdout"
+  ],
+  "honesty_rules": [
+    "a negative result is reported unchanged",
+    "a positive result is scoped to the evaluated GigaHands rig and this formulation, and is never called a deployable method",
+    "if S0 and S1 differ in even one frame, the primary comparison is declared invalid"
+  ]
+}

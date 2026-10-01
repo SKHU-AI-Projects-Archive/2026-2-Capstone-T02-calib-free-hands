@@ -1,0 +1,16 @@
+{
+  "definition": "CAM-EXP-009.4 M1_SCENE_GENERIC_INDEPENDENT, generic anatomy, LEFT/RIGHT independent",
+  "shared_anatomy_M3_used": false,
+  "grid": {
+    "f_min": 400.0,
+    "f_max": 2400.0,
+    "f_n": 81,
+    "absolute": true,
+    "why_absolute": "so the hand evidence is one function of absolute focal, identical for all three scene models"
+  },
+  "lambda_generic": 1.0,
+  "lambda_side": 1.0,
+  "frames_policy": "all hand-available frames of the video",
+  "min_frames_per_side": 8,
+  "reference_focal_read": false
+}

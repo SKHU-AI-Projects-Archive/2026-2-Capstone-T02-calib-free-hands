@@ -1,0 +1,6 @@
+level,role
+bone,element of the fitted proportion vector
+frame,repeated observation within a sequence
+side (left/right),the two things compared
+synthetic trial,STATISTICAL UNIT of this run
+sequence-camera unit,"would be the unit of the real phase, which was NOT run"

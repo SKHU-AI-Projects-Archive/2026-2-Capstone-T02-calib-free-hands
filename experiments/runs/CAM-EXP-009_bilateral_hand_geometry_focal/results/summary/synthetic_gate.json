@@ -1,0 +1,11 @@
+{
+  "g1_bilateral_not_focal_invariant": true,
+  "g2_true_focal_near_minimum_noiseless": false,
+  "g2_best_case_any_distance": 50.0,
+  "g3_held_out_reprojection_identifies_focal": false,
+  "g4_wrong_correspondence_degrades": false,
+  "g5_fixed_length_control_is_flat": true,
+  "boundary_rate_noiseless": 0.95,
+  "near_field_2x_bilateral_err_pct": 50.0,
+  "verdict": "BILATERAL_FOCAL_SIGNAL_NOT_IDENTIFIABLE_SYNTHETICALLY"
+}

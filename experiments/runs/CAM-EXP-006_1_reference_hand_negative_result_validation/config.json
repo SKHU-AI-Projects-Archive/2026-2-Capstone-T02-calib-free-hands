@@ -1,0 +1,24 @@
+{
+  "experiment": "CAM-EXP-006.1",
+  "title": "Validation of the Reference-Hand Focal Negative Result",
+  "kind": "VERIFICATION_EXPERIMENT",
+  "builds_new_method": false,
+  "validates": "CAM-EXP-006",
+  "frozen_manifests": {
+    "cam_exp_0061_validation_spec_v1.json": "afae205d4fdccbc720d83b7e50601fc76dbcd97ac7610db42537ad20a2317bf5",
+    "cam_exp_0061_real_conditions_v1.json": "42c23983191a3736f2b05b17a5ab9d0730aa31164ec27e3bf7319d8c7d29725a",
+    "cam_exp_0061_synthetic_trials_v1.csv.gz": "45ec04553865e51c2fe611e6601411c24b8a0d98e9077f9c71541324fb27b289"
+  },
+  "reused_unchanged": [
+    "CAM-EXP-006 OTHER_CAMERA_ONLY_REFERENCE_3D cache",
+    "CAM-EXP-006 frozen 16-frame manifest",
+    "CAM-EXP-006 200-case manual hand-QC gate",
+    "CAM-EXP-001.3 loco.py reconstruction"
+  ],
+  "manual_qc": {
+    "reused_from": "CAM-EXP-006",
+    "cases_reviewed": 200,
+    "catastrophic_identity_or_association_errors_in_audit_sample": 0,
+    "status": "MANUAL_QC_READINESS_GATE only; single reviewer; NOT a dataset accuracy figure"
+  }
+}

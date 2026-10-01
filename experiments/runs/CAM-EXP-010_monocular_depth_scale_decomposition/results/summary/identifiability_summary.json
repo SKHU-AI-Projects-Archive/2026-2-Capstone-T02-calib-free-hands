@@ -1,0 +1,41 @@
+{
+  "tests": [
+    {
+      "test": "GLOBAL_SCALE_INVARIANCE_TEST",
+      "scales": "0.5;1.0;2.0;5.0",
+      "max_reprojection_difference_px": 5.684341886080802e-14,
+      "tolerance_px": 1e-06,
+      "PASS": 1,
+      "meaning": "identical 2D under a global scale -> scale not identifiable from 2D"
+    },
+    {
+      "test": "MULTI_FRAME_SCALE_TEST",
+      "n_frames": 64,
+      "scales": "0.5;1.0;2.0;5.0",
+      "max_reprojection_difference_px": 1.1368683772161603e-13,
+      "tolerance_px": 1e-06,
+      "PASS": 1,
+      "meaning": "requiring one consistent hand across many frames does NOT break the scale ambiguity"
+    },
+    {
+      "test": "BILATERAL_SCALE_TEST",
+      "scales": "0.5;1.0;2.0;5.0",
+      "max_reprojection_difference_px": 1.1368683772161603e-13,
+      "tolerance_px": 1e-06,
+      "PASS": 1,
+      "meaning": "requiring both hands to be consistent does NOT break the scale ambiguity"
+    },
+    {
+      "test": "ANATOMY_SCALE_FREE_TEST",
+      "scales": "0.5;1.0;2.0;5.0",
+      "max_proportion_difference": 2.7755575615628914e-17,
+      "tolerance_px": 1e-12,
+      "PASS": 1,
+      "meaning": "the sum-normalised bone proportions used in CAM-EXP-009.x carry no absolute size, so they cannot pin the scale"
+    }
+  ],
+  "ALL_INVARIANCE_TESTS_PASS": true,
+  "conclusion": "Under a pinhole camera, scaling all 3D points and the camera translation by a common s leaves every 2D projection unchanged. Neither multi-frame consistency nor bilateral consistency breaks that, and the sum-normalised anatomy used throughout CAM-EXP-009.x is scale-free by construction. So with the deployment's allowed cues - static monocular RGB, unknown worker hand size, no known object or table dimension, no metric anchor, scale-normalised anatomy - the global metric scale is NOT uniquely determined by geometry.",
+  "what_this_does_not_say": "It does not say a monocular camera cannot estimate depth. A network trained on metric data supplies a LEARNED STATISTICAL SCALE PRIOR, which can produce a useful estimate. That is a different thing from GEOMETRIC IDENTIFIABILITY, and the two are never conflated in this report.",
+  "intrinsics_vs_scale": "Correct intrinsics K are not the same as metric world scale. CAM-EXP-009.4's oracle-focal result is the empirical form of this: a perfect focal left a large absolute error."
+}

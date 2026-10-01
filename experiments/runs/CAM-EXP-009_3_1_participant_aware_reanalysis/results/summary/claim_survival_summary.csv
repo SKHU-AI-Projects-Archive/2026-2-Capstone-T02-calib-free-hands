@@ -1,0 +1,7 @@
+claim,status,evidence
+same sequence L/R closer than cross sequence,SUPPORTED,within-session 0.02887 vs cross-participant 0.04937 (ratio 0.585); reproduced exactly from CAM-EXP-009.3
+same participant L/R generally closer than different participants,UNDERPOWERED,"true at participant-equal weighting (ratio 0.585), but n=4 participants, participant-block permutation p=0.0833 (floor 0.0417), and the effect is not separable from session context"
+same participant geometry persists across sessions,NOT_SUPPORTED_FOR_P41,"p41 cross-session same-side 0.08516 and opposite-side 0.07704, both LARGER than cross-participant 0.04569 and far larger than p41 within-session 0.02113"
+generic corresponding bone identity matters,SUPPORTED,within-finger bone permutation degrades the distance by +857% (0.0283 -> 0.2706)
+strong subject-specific shared anatomy prior justified,NO,"the only same-participant cross-session comparison available is farther apart than different participants, so a person-level template is not supported by this data"
+sequence-specific shared anatomy remains plausible,YES,within-session bilateral separation is present and 1.89x the reference repeatability; it simply is not attributable to a persistent person-level signature

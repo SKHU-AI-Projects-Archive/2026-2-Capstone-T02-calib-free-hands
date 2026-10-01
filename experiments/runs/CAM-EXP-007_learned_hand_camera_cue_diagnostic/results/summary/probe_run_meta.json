@@ -1,0 +1,16 @@
+{
+  "views_with_target_and_features": 175,
+  "views_eligible_common_set": 160,
+  "n_scene_features": 31,
+  "n_hand_feature_columns": 78,
+  "group_sizes": {
+    "F0": 20,
+    "F1": 6,
+    "F2": 42,
+    "F3": 10
+  },
+  "latent_dim": 1280,
+  "pca_dim": 32,
+  "prediction_rows": 5120,
+  "control_rows": 5760
+}

@@ -1,0 +1,10 @@
+{
+  "n_frames": 1400,
+  "n_newly_written": 1400,
+  "alpha": 0.0,
+  "new_fx_over_orig_fx": {
+    "median": 0.7734,
+    "min": 0.74415,
+    "max": 0.85472
+  }
+}

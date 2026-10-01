@@ -1,0 +1,11 @@
+{
+  "python": "3.11.7",
+  "platform": "Windows-10-10.0.26200-SP0",
+  "analysis_venv": "experiments/.venv",
+  "inference_venv": "experiments/.venv-anyhand",
+  "scene_estimator": "AnyCalib anycalib_gen/radial:2 (cached, CAM-EXP-004.1)",
+  "hand_network": "AnyHand/WiLoR, models/anyhand_wilor.ckpt",
+  "mano": "mano_data/MANO_RIGHT.pkl via smplx",
+  "git_commit": "221dc2c1270ff008705f6ebcaa8a1e565bedc8ed",
+  "git_branch": "kjh"
+}

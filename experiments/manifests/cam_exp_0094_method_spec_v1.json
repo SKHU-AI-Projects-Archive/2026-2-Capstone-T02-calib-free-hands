@@ -1,0 +1,200 @@
+{
+  "experiment": "CAM-EXP-009.4",
+  "title": "Sequence-Level Scene + Shared-Hand-Anatomy Focal Refinement",
+  "created_after_cam00931_results": true,
+  "created_before_cam0094_real_focal_results": true,
+  "primary_question": "Does adding sequence-specific shared hand anatomy and a generic anatomical prior to a scene-based sequence focal estimate improve focal error, absolute wrist/root 3D error and absolute MPJPE, versus scene-only?",
+  "primary_comparison": "M3_SCENE_SHARED_GENERIC_FULL vs M0_SCENE_ONLY",
+  "methods": [
+    "M0_SCENE_ONLY",
+    "M1_SCENE_GENERIC_INDEPENDENT",
+    "M2_SCENE_SHARED_NO_GENERIC",
+    "M3_SCENE_SHARED_GENERIC_FULL"
+  ],
+  "model": {
+    "p_seq": "softmax(log(p0 + 1e-8) + a)",
+    "p_L": "softmax(log(p_seq + 1e-8) + delta_L)",
+    "p_R": "softmax(log(p_seq + 1e-8) + delta_R)",
+    "p0": "neutral MANO bone proportions (cam_exp_0094_generic_mano_prior_v1.json)",
+    "absolute_hand_size_used": false,
+    "participant_template_carried_over": false,
+    "p_seq_refit_per_unit": true
+  },
+  "scene_branch": {
+    "source": "runs\\CAM-EXP-004_1_pre_cam005_robustness_audit\\results\\raw\\extended_frame_predictions.csv.gz",
+    "model_key": "anycalib_gen_radial",
+    "aggregation": "exp(median(log f_i)) over the unit's scene frames",
+    "focal_scalar": "sqrt(fx*fy), unchanged from CAM-EXP-003/005/008",
+    "nuisance": "the scene estimator's own principal point is used; no GT cx/cy, k1/k2 or fy/fx ratio enters inference"
+  },
+  "hand_branch": {
+    "observations": "target-camera monocular WiLoR: keypoints_2d (original pixels) and root-relative keypoints_3d",
+    "bone_lengths_from_network": "DISCARDED - only unit directions are used",
+    "topology": [
+      [
+        0,
+        1
+      ],
+      [
+        1,
+        2
+      ],
+      [
+        2,
+        3
+      ],
+      [
+        3,
+        4
+      ],
+      [
+        0,
+        5
+      ],
+      [
+        5,
+        6
+      ],
+      [
+        6,
+        7
+      ],
+      [
+        7,
+        8
+      ],
+      [
+        0,
+        9
+      ],
+      [
+        9,
+        10
+      ],
+      [
+        10,
+        11
+      ],
+      [
+        11,
+        12
+      ],
+      [
+        0,
+        13
+      ],
+      [
+        13,
+        14
+      ],
+      [
+        14,
+        15
+      ],
+      [
+        15,
+        16
+      ],
+      [
+        0,
+        17
+      ],
+      [
+        17,
+        18
+      ],
+      [
+        18,
+        19
+      ],
+      [
+        19,
+        20
+      ]
+    ],
+    "solver": "CAM-EXP-009.1 convention: UNDISTORT_ONCE_INTERNAL, 32 alternating iterations, deterministic init",
+    "held_out": "deterministic FIT/EVAL frame split by SHA-256 bucket"
+  },
+  "frames": {
+    "scene_primary": 32,
+    "hand_primary": 32,
+    "nested_counts": [
+      8,
+      16,
+      32,
+      64
+    ],
+    "min_frames_per_side": 8,
+    "selection": "evenly spaced by frame index; never by performance"
+  },
+  "regularisers": {
+    "lambda_generic_grid": [
+      0.1,
+      1.0,
+      10.0
+    ],
+    "lambda_side_grid": [
+      0.1,
+      1.0,
+      10.0
+    ],
+    "selected_on": "SYNTHETIC gate only, never on the real reference focal"
+  },
+  "evaluation": {
+    "outer_split_unit": "PHYSICAL CAMERA",
+    "n_outer_folds": 5,
+    "statistics_cluster": "PHYSICAL CAMERA",
+    "bootstrap": 10000,
+    "focal_metric": "100*|f_pred - f_ref|/f_ref"
+  },
+  "gate": {
+    "synthetic_clean_focal_err_pct": 1.0,
+    "synthetic_moderate_focal_err_pct": 5.0,
+    "synthetic_wrong_bone_degradation_pp": 10.0,
+    "synthetic_boundary_rate": 0.25,
+    "focal_relative_reduction_pct": 10.0,
+    "abs3d_root_reduction_pct": 10.0,
+    "abs3d_mpjpe_reduction_pct": 5.0,
+    "root_aligned_tolerance_mm": 2.0
+  },
+  "units": {
+    "total": 175,
+    "eligible": 127,
+    "cameras": 37,
+    "participants": 4,
+    "sequences": 5
+  },
+  "never_used_in_inference": [
+    "reference / GT focal",
+    "GT principal point",
+    "GT distortion",
+    "GT fy/fx ratio",
+    "absolute average hand size",
+    "known object or table dimensions",
+    "EXIF",
+    "participant anatomy from another recording",
+    "target-camera reference 3D",
+    "the FINAL_CONFIRMATORY_HOLDOUT"
+  ],
+  "compute": {
+    "measured_wilor_seconds_per_frame": 0.3,
+    "unique_frames_to_infer": 6948,
+    "estimated_wilor_minutes": 35,
+    "hand_frames_cached_per_side": 32,
+    "frame_count_curve_runnable": [
+      8,
+      16,
+      32
+    ],
+    "N64_DECISION": "SKIPPED. Decided from measured runtime BEFORE any focal result: caching 64 hand frames per side would double the inference and the per-unit solver cost, and the solver cost scales with frames x 81 candidates x 2 sides. N=32 remains PRIMARY and 8/16 remain secondary, exactly as specified. This condition is NOT removed after seeing a result.",
+    "scene_frame_counts_runnable": [
+      8,
+      16,
+      32,
+      64
+    ],
+    "measured_minutes_per_unit_3_variants": 1.47,
+    "phase_c_estimated_hours": 3.11,
+    "CONTROL_SCOPE_DECISION": "C_WRONG_BONE is run for M3_SCENE_SHARED_GENERIC_FULL ONLY. Decided from measured runtime BEFORE any real focal result: running the control for all three hand variants would roughly double total compute to ~6.2 h. The control's purpose is to test whether the FULL method's hand score uses real anatomical bone correspondence, which M3 alone answers. No condition is removed after seeing a result."
+  }
+}

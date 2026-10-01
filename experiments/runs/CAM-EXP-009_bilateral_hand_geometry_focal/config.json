@@ -1,0 +1,15 @@
+{
+  "experiment": "CAM-EXP-009",
+  "title": "Bilateral Sequence Hand-Geometry Focal Identifiability",
+  "kind": "IDENTIFIABILITY_GATE",
+  "trains_new_network": false,
+  "proposes_calibration_method": false,
+  "verdict": "BILATERAL_FOCAL_SIGNAL_NOT_IDENTIFIABLE_SYNTHETICALLY",
+  "real_data_phase": "NOT RUN (pre-registered consequence)",
+  "frozen_manifests": {
+    "cam_exp_009_bilateral_spec_v1.json": "9a35d7db90fe283b17c9a576246ad068223e315ecd5a5ab95e19a2df0ea4d7b6",
+    "cam_exp_009_bone_correspondence_v1.json": "d2a68b3aa161c17a01ea4f2bd9cffb0b35512798254a98d136ce6a3f38a2f3ae",
+    "cam_exp_009_synthetic_spec_v1.json": "5257800837d75c528d704ca9e3c7f7b1e442c4ddb0f40943420756b8fb69a338"
+  },
+  "external_holdout": "InterHand2.6M / HanCo remain reserved and UNOPENED"
+}

@@ -1,0 +1,16 @@
+Sequence,Model,Scene,Correct,Gain,N
+Tea,AnyCalib,17.826,18.305,-0.479,39
+Tea,GeoCalib,17.787,19.41,-1.622,39
+Tea,Perspective Fields,14.076,15.601,-1.526,39
+Boxing,AnyCalib,14.249,14.711,-0.462,36
+Boxing,GeoCalib,19.921,22.264,-2.343,36
+Boxing,Perspective Fields,20.356,20.227,0.129,36
+Plant,AnyCalib,16.379,16.447,-0.069,29
+Plant,GeoCalib,34.398,34.398,0.0,29
+Plant,Perspective Fields,21.369,20.211,1.159,29
+Dog,AnyCalib,13.008,13.45,-0.442,37
+Dog,GeoCalib,29.583,29.583,0.0,37
+Dog,Perspective Fields,23.643,23.891,-0.248,37
+Instrument,AnyCalib,14.357,14.591,-0.234,12
+Instrument,GeoCalib,11.949,18.653,-6.704,12
+Instrument,Perspective Fields,12.857,15.306,-2.449,12
