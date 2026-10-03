@@ -1,0 +1,3 @@
+[submodule "HandCalib/AnyCalib"]
+	path = HandCalib/AnyCalib
+	url = https://github.com/javrtg/AnyCalib.git
