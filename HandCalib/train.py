@@ -231,10 +231,11 @@ def smoke(config, config_path, batch_size, num_workers, precision, overwrite):
     sync_cuda(device)
     data_load_seconds += time.perf_counter() - val_data_start
     validation_start = time.perf_counter()
-    with torch.no_grad(), autocast_context(precision):
-        val_pred = model(val_batch)
-        val_losses, _ = model.loss(val_pred, val_batch)
-        val_loss = val_losses["total"].mean()
+    with torch.no_grad():
+        with torch.autocast(device_type="cuda", enabled=False):
+            val_pred = model(val_batch)
+            val_losses, _ = model.loss(val_pred, val_batch)
+            val_loss = val_losses["total"].mean()
     sync_cuda(device)
     validation_forward_seconds = time.perf_counter() - validation_start
     if not torch.isfinite(val_loss):
@@ -264,6 +265,7 @@ def smoke(config, config_path, batch_size, num_workers, precision, overwrite):
         "train_frames": len(train), "train_pairs": len(train.pair_indices), "samples_per_epoch": len(train_sampler),
         "validation_frames": len(val), "validation_pairs": len(val.pair_indices),
         "batch_size": batch_size, "num_workers": num_workers, "precision": precision,
+        "training_precision": precision, "validation_precision": "fp32",
         **gpu_metadata(device, selector), "command_line": " ".join(os.sys.argv),
     }
     tensor_shapes = {key: list(value.shape) for key, value in train_batch.items() if isinstance(value, torch.Tensor)}
@@ -294,7 +296,7 @@ def smoke(config, config_path, batch_size, num_workers, precision, overwrite):
                 "02-B Training Smoke", "Model: official AnyCalib training architecture",
                 "Initialization: anycalib_pinhole pretrained", "Supervision: raw RGB + canonical pinhole rays",
                 f"Train batch: {tensor_shapes}", f"Validation batch: {val_shapes}",
-                "Loss finite: YES", "Backward: PASS", f"Finite gradients: {len(finite_gradients)} / {len(gradients)}",
+                "Loss finite: YES", "Validation precision: fp32", "Backward: PASS", f"Finite gradients: {len(finite_gradients)} / {len(gradients)}",
                 "Optimizer step: PASS", "Parameter changed: YES", "Validation pinhole fitting: PASS",
                 f"Peak allocated: {runtime['peak_allocated_mib']:.2f} MiB", f"Peak reserved: {runtime['peak_reserved_mib']:.2f} MiB",
                 f"GPU: {metadata['gpu_name']}", "No full training was run.", "No Test data was used.",
