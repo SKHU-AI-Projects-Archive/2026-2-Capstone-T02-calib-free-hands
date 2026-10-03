@@ -34,7 +34,24 @@ python HandCalib/evaluate.py --config HandCalib/configs/01_anycalib_pretrained.y
 python HandCalib/evaluate.py --config HandCalib/configs/01_anycalib_pretrained.yaml --smoke
 ```
 
-smoke 결과는 `HandCalib/runs/01_anycalib_pretrained/smoke_val/`에 저장되며, 전체 validation/test 평가는 아직 활성화하지 않았습니다.
+smoke 결과는 `HandCalib/runs/01_anycalib_pretrained/smoke_val/`에 저장되며, 전체 평가는 `--test`를 사용자가 명시적으로 실행할 때만 수행됩니다.
+
+### 01 최종 평가 설정
+
+- Model: `anycalib_pinhole`
+- `cam_id`: `pinhole`
+- Test batch size: `2`
+- Test workers: `4`
+- 선택 근거: Test를 보기 전에 Validation benchmark의 `bs1/nw0`, `bs1/nw2`, `bs2/nw2`, `bs4/nw2`, `bs2/nw4`를 비교해 고정했습니다.
+
+최종 Test는 7,667 frame과 49 sequence-camera pair를 모두 사용하며, pair-level equal-weight 결과를 중심으로 해석합니다. 왜곡 계수는 이번 pinhole baseline의 primary metric에 포함하지 않습니다.
+
+```bash
+python HandCalib/evaluate.py --config HandCalib/configs/01_anycalib_pretrained.yaml --test --dry-run
+CUDA_VISIBLE_DEVICES=0 python HandCalib/evaluate.py --config HandCalib/configs/01_anycalib_pretrained.yaml --test
+```
+
+최종 결과는 `HandCalib/runs/01_anycalib_pretrained/test/`에 저장됩니다. `config.yaml`은 설정 snapshot, `metadata.json`은 재현 환경 정보, `runtime.json`은 속도와 자원 사용량, `summary.txt`는 사람이 읽는 요약, `metrics.json`은 frame/pair metric, `pair_summary.csv`와 `clip_summary.csv`는 그룹별 통계, `frame_predictions.csv.gz`는 모든 frame의 source of truth, `telemetry.csv.gz`와 `batch_timings.csv.gz`는 GPU 및 batch timing 원자료입니다.
 
 ## 01 AnyCalib validation benchmark
 

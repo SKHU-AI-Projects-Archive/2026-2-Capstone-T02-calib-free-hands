@@ -15,7 +15,7 @@ FRAME_FIELDS = [
     "rel_fy_error", "max_rel_f_error", "max_rel_c_error",
 ]
 PRED_FIELDS = ("pred_fx", "pred_fy", "pred_cx", "pred_cy")
-ERROR_FIELDS = ("max_rel_f_error", "max_rel_c_error")
+ERROR_FIELDS = ("rel_fx_error", "rel_fy_error", "max_rel_f_error", "max_rel_c_error")
 
 
 def _number(value):
@@ -73,22 +73,26 @@ def _group_summary(rows, include_clip_count=False):
     for field in PRED_FIELDS:
         summary.update(_stats(successful, field))
     for field in ERROR_FIELDS:
-        values = [row[field] for row in successful if row[field] is not None]
-        summary[f"{field}_mean"] = statistics.fmean(values) if values else None
-        summary[f"{field}_median"] = statistics.median(values) if values else None
+        summary.update(_stats(successful, field))
     if include_clip_count:
         for field in PRED_FIELDS:
             summary[f"median_{field}"] = statistics.median([row[field] for row in successful if row[field] is not None]) if successful else None
-        summary["pair_max_rel_f_error"] = _pair_error(summary, "fx", "fy", first)
+        summary["pair_rel_fx_error"] = _pair_component_error(summary, "fx", first)
+        summary["pair_rel_fy_error"] = _pair_component_error(summary, "fy", first)
+        summary["pair_max_rel_f_error"] = max(
+            value for value in (summary["pair_rel_fx_error"], summary["pair_rel_fy_error"])
+            if value is not None
+        ) if summary["pair_rel_fx_error"] is not None and summary["pair_rel_fy_error"] is not None else None
         summary["pair_max_rel_c_error"] = _pair_center_error(summary, first)
     return summary
 
 
-def _pair_error(summary, prefix_x, prefix_y, first):
-    gt_x, gt_y = first["gt_fx"], first["gt_fy"]
-    if summary[f"median_pred_{prefix_x}"] is None or gt_x is None:
+def _pair_component_error(summary, axis, first):
+    gt = first[f"gt_{axis}"]
+    prediction = summary[f"median_pred_{axis}"]
+    if prediction is None or gt is None:
         return None
-    return max(abs(summary[f"median_pred_{prefix_x}"] - gt_x) / abs(gt_x), abs(summary[f"median_pred_{prefix_y}"] - gt_y) / abs(gt_y))
+    return abs(prediction - gt) / abs(gt)
 
 
 def _pair_center_error(summary, first):
@@ -124,14 +128,17 @@ def write_summaries(raw_path, output_dir):
     successful = [row for row in rows if row["success"]]
     frame_level = {"total_frames": len(rows), "successful_frames": len(successful), "success_rate": len(successful) / len(rows) if rows else 0}
     for field in ERROR_FIELDS:
-        values = [row[field] for row in successful if row[field] is not None]
-        frame_level[f"{field}_mean"] = statistics.fmean(values) if values else None
-        frame_level[f"{field}_median"] = statistics.median(values) if values else None
+        frame_level.update(_stats(successful, field))
     pair_level = {"pair_count": len(pair_rows)}
-    for field in ("pair_max_rel_f_error", "pair_max_rel_c_error"):
+    valid_pairs = [row for row in pair_rows if row["pair_max_rel_f_error"] is not None]
+    pair_level["valid_pair_count"] = len(valid_pairs)
+    for field in ("pair_rel_fx_error", "pair_rel_fy_error", "pair_max_rel_f_error", "pair_max_rel_c_error"):
         values = [row[field] for row in pair_rows if row[field] is not None]
         pair_level[f"{field}_mean"] = statistics.fmean(values) if values else None
         pair_level[f"{field}_median"] = statistics.median(values) if values else None
+    within_5 = [row for row in valid_pairs if row["pair_max_rel_f_error"] <= 0.05]
+    pair_level["pair_focal_within_5pct_count"] = len(within_5)
+    pair_level["pair_focal_within_5pct_rate"] = len(within_5) / len(valid_pairs) if valid_pairs else None
     stability_values = [row["pred_fx_std"] for row in pair_rows if row["pred_fx_std"] is not None]
     metrics = {
         "frame_level": frame_level,
