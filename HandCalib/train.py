@@ -439,7 +439,7 @@ def benchmark(config, config_path, batch_size, num_workers, precision, overwrite
     print((output / "summary.txt").read_text(), end="")
 
 
-def _validation_prediction(prediction, batch_size):
+def _validation_prediction(prediction, batch_size, pred_size):
     intrinsics = prediction["intrinsics"]
     if isinstance(intrinsics, (list, tuple)):
         intrinsics = torch.stack([torch.as_tensor(value) for value in intrinsics])
@@ -449,7 +449,6 @@ def _validation_prediction(prediction, batch_size):
     success = torch.as_tensor(prediction["success"]).reshape(-1).detach().cpu().bool()
     if tuple(intrinsics.shape) != (batch_size, 4) or tuple(success.shape) != (batch_size,):
         raise RuntimeError("Validation prediction shape does not match the batch")
-    pred_size = tuple(int(value) for value in prediction["pred_size"])
     return intrinsics, success, pred_size
 
 
@@ -535,7 +534,8 @@ def validate_step0(config, config_path, batch_size=4, num_workers=4, overwrite=F
             with torch.autocast(device_type="cuda", enabled=False):
                 prediction = model(batch)
         sync_cuda(device)
-        pred_intrinsics, success, pred_size = _validation_prediction(prediction, batch_size_actual)
+        pred_size = (int(batch["image"].shape[-2]), int(batch["image"].shape[-1]))
+        pred_intrinsics, success, pred_size = _validation_prediction(prediction, batch_size_actual, pred_size)
         pred_height, pred_width = pred_size
         for offset in range(batch_size_actual):
             meta = {key: _batch_meta_value(values, offset) for key, values in batch["meta"].items()}
