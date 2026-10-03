@@ -76,6 +76,8 @@ CUDA_VISIBLE_DEVICES=<FREE_GPU> python HandCalib/train.py \
 
 Benchmark는 `HandCalib/runs/02_anycalib_finetune/benchmark_train/bsX_nwY_precision/`에 ignored 결과를 기록합니다. `steps.csv`에는 measured step별 loader wait, host-to-device, forward, loss, backward, optimizer step, total 시간이 기록되고, JSON에는 samples/sec, timing mean/median/p95, VRAM peak를 기록합니다. OOM이나 non-finite loss/gradient는 해당 설정의 실패로 기록하며 자동 batch 축소나 precision 변경을 하지 않습니다. Test와 Validation은 사용하지 않습니다.
 
+02-C bounded engineering benchmark completed. Train-only throughput, VRAM margin, stability, loader timing을 기준으로 runtime setting을 선택했습니다: `batch_size=4`, `num_workers=4`, training `bf16`, validation `fp32`. 이는 engineering runtime setting이며 validation 성능이나 학술적 batch-size 우열을 의미하지 않습니다. Test는 사용하지 않았습니다.
+
 ## AnyCalib pretrained smoke test
 
 가중치와 CUDA 환경이 준비되면 validation의 첫 frame 하나만 실행할 수 있습니다. `--dry-run`은 모델과 가중치를 사용하지 않고 설정·데이터 크기만 확인합니다.

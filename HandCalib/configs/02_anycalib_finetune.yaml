@@ -10,7 +10,7 @@ dataset:
   test_split: data/splits/gigahands/test.txt
   train_frames_per_pair: 174
   image_size: null
-  num_workers: null
+  num_workers: 4
 
 model:
   name: AnyCalib
@@ -32,7 +32,8 @@ supervision:
 
 training:
   epochs: null
-  batch_size: null
+  batch_size: 4
+  precision: bf16
 
 optimizer:
   name: null

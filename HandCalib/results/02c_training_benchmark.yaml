@@ -1,0 +1,68 @@
+experiment: 02c_training_benchmark
+status: completed
+purpose: engineering_runtime_selection
+test_data_used: false
+validation_data_used_for_selection: false
+full_training_run: false
+gpu:
+  name: NVIDIA RTX A5000
+  physical_index: 0
+  logical_device: cuda:0
+  uuid: GPU-4503811c-30f5-778d-cc27-397cccee876d
+  pci_bus_id: 00000000:3B:00.0
+  total_vram_mib: 24240.75
+protocol:
+  warmup_steps: 3
+  measure_steps: 10
+  precision: bf16
+runs:
+  run_1:
+    batch_size: 2
+    num_workers: 0
+    status: pass
+    samples_per_second: 4.807837503316264
+    steps_per_second: 2.403918751658132
+    step_total_median_seconds: 0.4272911280859262
+    loader_wait_median_seconds: 0.2627419935306534
+    forward_median_seconds: 0.03273554996121675
+    backward_median_seconds: 0.06267044844571501
+    peak_allocated_mib: 7775.19287109375
+    peak_reserved_mib: 7968.0
+    memory_fraction: 0.3287027010302899
+  run_2:
+    batch_size: 4
+    num_workers: 0
+    status: pass
+    samples_per_second: 5.868549468367644
+    steps_per_second: 1.467137367091911
+    step_total_median_seconds: 0.6829846904147416
+    loader_wait_median_seconds: 0.449771489482373
+    forward_median_seconds: 0.05674935306888074
+    backward_median_seconds: 0.10607883043121547
+    peak_allocated_mib: 10013.17041015625
+    peak_reserved_mib: 10370.0
+    memory_fraction: 0.42779204438806556
+  run_3:
+    batch_size: 4
+    num_workers: 4
+    status: pass
+    samples_per_second: 16.63642441452309
+    steps_per_second: 4.159106103630773
+    step_total_median_seconds: 0.2387537929462269
+    loader_wait_median_seconds: 0.0003279835218563676
+    forward_median_seconds: 0.058500634506344795
+    backward_median_seconds: 0.10665007994975895
+    peak_allocated_mib: 10013.17041015625
+    peak_reserved_mib: 10370.0
+    memory_fraction: 0.42779204438806556
+selection:
+  batch_size: 4
+  num_workers: 4
+  training_precision: bf16
+  validation_precision: fp32
+  selection_reason: >-
+    batch 4 was 22.1% faster than batch 2 and both stayed below the 85% VRAM
+    threshold; worker 4 was 183.5% faster than batch 4 with worker 0.
+repository_commit: 1d0b1316a2495479b75ba934e863a61b25a40c91
+anycalib_commit: 027a8497d893f4b2596f23d6324c05e4b81064ed
+engineering_only: true
