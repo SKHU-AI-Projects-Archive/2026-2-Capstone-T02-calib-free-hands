@@ -43,9 +43,9 @@ Audit의 p90/p95/max는 전체 pixel을 합친 global percentile이 아니라 pa
 
 ### 02-B training smoke pipeline
 
-02-B source 경로는 확정된 canonical pinhole supervision을 official training AnyCalib, official `l1-z1` loss, backward, optimizer one-step, Validation pinhole fitting까지 연결합니다. Dataset은 raw RGB를 official deterministic preprocessing으로 `238x420`으로 만들고, `0.5` pixel-center convention의 canonical ray를 생성합니다. full augmentation과 fine-tuning hyperparameter는 아직 확정하지 않았습니다.
+02-B single-GPU training smoke: **PASS**. 확정된 canonical pinhole supervision이 official training AnyCalib, official `l1-z1` loss, backward, finite/nonzero gradients, AdamW step, parameter update, FP32 Validation pinhole fitting까지 연결됩니다. Dataset은 raw RGB를 official deterministic preprocessing으로 `238x420`으로 만들고, `0.5` pixel-center convention의 canonical ray를 생성합니다. 이 결과는 engineering smoke이며 성능 결과가 아닙니다.
 
-Codex의 CPU 검증은 완료했지만 GPU smoke는 공유 서버의 GPU를 임의로 선택하지 않기 위해 실행하지 않았습니다. 먼저 `nvidia-smi`로 빈 GPU를 확인한 뒤 사용자가 직접 실행합니다.
+02-B smoke는 사용자가 single-GPU 환경에서 성공적으로 실행했습니다. Codex는 공유 서버에서 GPU smoke와 benchmark를 자동 실행하지 않으며, benchmark는 먼저 `nvidia-smi`로 빈 GPU를 확인한 뒤 사용자가 직접 실행합니다.
 
 ```bash
 python HandCalib/train.py \
@@ -63,6 +63,18 @@ CUDA_VISIBLE_DEVICES=<FREE_GPU> python HandCalib/train.py \
 ```
 
 Smoke output은 `HandCalib/runs/02_anycalib_finetune/smoke/`에 저장되며 기본적으로 기존 결과를 덮어쓰지 않습니다. 이 smoke는 성능 평가가 아니고, 한 train batch의 forward/loss/backward/optimizer step과 한 validation batch의 fitting 연결만 확인합니다.
+
+### 02-C training benchmark
+
+02-C는 full training이나 성능 평가가 아니라 Train-only engineering benchmark입니다. 각 실행은 fresh pretrained model, `PairBalancedSampler` epoch 0, warmup 3 steps와 measured 10 steps를 사용합니다. `batch_size`를 먼저 비교하고, 선택 후 `num_workers`, 마지막으로 `bf16`과 `fp32`를 비교합니다. 결과로 최종 설정을 자동 선택하지 않습니다.
+
+```bash
+CUDA_VISIBLE_DEVICES=<FREE_GPU> python HandCalib/train.py \
+  --config HandCalib/configs/02_anycalib_finetune.yaml \
+  --benchmark --batch-size 1 --num-workers 0 --precision bf16
+```
+
+Benchmark는 `HandCalib/runs/02_anycalib_finetune/benchmark_train/bsX_nwY_precision/`에 ignored 결과를 기록합니다. `steps.csv`에는 measured step별 loader wait, host-to-device, forward, loss, backward, optimizer step, total 시간이 기록되고, JSON에는 samples/sec, timing mean/median/p95, VRAM peak를 기록합니다. OOM이나 non-finite loss/gradient는 해당 설정의 실패로 기록하며 자동 batch 축소나 precision 변경을 하지 않습니다. Test와 Validation은 사용하지 않습니다.
 
 ## AnyCalib pretrained smoke test
 
@@ -149,6 +161,6 @@ python tools/download_gigahands_demo.py --check
 
 ## 아직 남은 일
 
-- 02-B GPU smoke 사용자 실행
-- 02-C augmentation, batch size, optimizer와 metric protocol 결정
+- 02-C benchmark 사용자 실행 및 batch size/worker/precision 비교
+- 02-C 결과를 바탕으로 augmentation, optimizer와 metric protocol 결정
 - HandCalib 모델과 학습/evaluation 코드 구현
