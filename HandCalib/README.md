@@ -33,9 +33,13 @@ CAM-EXP-001은 제공 camera와 제공 3D joints를 2D annotation에 재투영�
 - Pair max principal-point error: mean `0.08199870613426849`, median `0.06982756720648872`
 - Focal error within 5%: `4 / 49` (`0.08163265306122448`)
 
-### 02-A supervision audit 계획
+### 02-A supervision protocol 확정
 
-02번은 먼저 Train 147개와 Validation 49개 sequence-camera pair의 supervision geometry를 CPU에서 점검합니다. raw RGB를 full decode하지 않고, OpenCV Brown-Conrady `[k1, k2, p1, p2]`를 반영한 distortion-aware GT ray와 공식 AnyCalib 전처리·pinhole fitting oracle을 비교합니다. Test split은 이 감사에서 사용하지 않으며, audit가 끝나기 전 학습은 시작하지 않습니다.
+02 fine-tuning은 `raw GigaHands RGB`를 입력으로 받고, GigaHands의 `fx/fy/cx/cy`로 만든 canonical pinhole target ray field를 supervision으로 사용합니다. 입력 영상은 raw distorted RGB이며, `k1/k2/p1/p2`는 02 baseline target ray 생성에 사용하지 않습니다. 모델 output과 최종 fitting camera는 `pinhole`입니다.
+
+02-A geometry audit에서는 physical distortion-aware ray를 perfect prediction으로 가정해도 official pinhole fitting 후 focal error median이 Train 약 13.83%, Validation 약 13.94%였고, ±5% pair가 각각 `0/147`, `0/49`였습니다. 따라서 physical distortion-aware supervision은 현재 pinhole focal objective와 구조적으로 맞지 않아 baseline에서 제외하고, `raw RGB + canonical pinhole target rays`를 선택했습니다. 이 판단에 Test 결과는 사용하지 않았습니다.
+
+Audit의 p90/p95/max는 전체 pixel을 합친 global percentile이 아니라 pair별 statistic의 pair-equal mean입니다. center/border angular mean도 함께 보존합니다. 02-B 학습 loader 구현 전 Train/Validation A-oracle과 pretrained/training state_dict strict compatibility를 통과해야 합니다.
 
 ## AnyCalib pretrained smoke test
 
@@ -124,5 +128,5 @@ python tools/download_gigahands_demo.py --check
 
 - AnyCalib 환경과 pretrained baseline 실행
 - fine-tuning protocol, split, metric 확정
-- 02-A supervision audit와 fine-tuning protocol 확정
+- 02-B fine-tuning loader 구현
 - HandCalib 모델과 학습/evaluation 코드 구현

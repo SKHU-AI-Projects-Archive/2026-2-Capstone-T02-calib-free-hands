@@ -8,14 +8,13 @@ import json
 from pathlib import Path
 import platform
 import statistics
-import sys
 
 import cv2
 import torch
 from omegaconf import OmegaConf
 
-from anycalib.cameras import CameraFactory
 from siclib.models.networks.anycalib_net import Calibrator
+from siclib.models.networks.anycalib_net import AnyCalib as TrainingAnyCalib
 
 
 PROJECT_ROOT = Path(__file__).resolve().parent
@@ -155,6 +154,20 @@ def official_pinhole_oracle(calibrator, rays, target_size):
     return prediction["intrinsics"][0].detach().cpu(), bool(prediction["success"][0].item())
 
 
+def oracle_metrics(prediction, target, target_size):
+    rel_f = (prediction[:2] - target[:2]).abs() / target[:2].abs()
+    rel_c = 2 * torch.stack(
+        ((prediction[2] - target[2]).abs() / target_size[1],
+         (prediction[3] - target[3]).abs() / target_size[0])
+    )
+    return {
+        "rel_fx_error": float(rel_f[0]),
+        "rel_fy_error": float(rel_f[1]),
+        "max_rel_f_error": float(rel_f.max()),
+        "max_rel_c_error": float(rel_c.max()),
+    }
+
+
 def audit_pair(pair, calibrator):
     target_size = compute_target_size(pair.height, pair.width)
     rays, transformed, grid = distortion_aware_rays(pair, target_size)
@@ -162,9 +175,11 @@ def audit_pair(pair, calibrator):
     angular = angular_degrees(rays, pinhole)
     center = (grid[:, 0] >= target_size[1] * 0.25) & (grid[:, 0] < target_size[1] * 0.75) & (grid[:, 1] >= target_size[0] * 0.25) & (grid[:, 1] < target_size[0] * 0.75)
     border = ~center
-    oracle, success = official_pinhole_oracle(calibrator, rays, target_size)
-    focal = ((oracle[:2] - transformed[:2]).abs() / transformed[:2].abs()).max()
-    principal = 2 * torch.maximum((oracle[2] - transformed[2]).abs() / target_size[1], (oracle[3] - transformed[3]).abs() / target_size[0])
+    canonical = pinhole_rays(transformed, grid)
+    physical_oracle, physical_success = official_pinhole_oracle(calibrator, rays, target_size)
+    pinhole_oracle, pinhole_success = official_pinhole_oracle(calibrator, canonical, target_size)
+    physical_metrics = oracle_metrics(physical_oracle, transformed, target_size)
+    pinhole_metrics = oracle_metrics(pinhole_oracle, transformed, target_size)
     return {
         "participant": pair.participant, "sequence": pair.sequence, "camera": pair.camera,
         "camera_key": pair.camera_key, "width": pair.width, "height": pair.height,
@@ -174,15 +189,83 @@ def audit_pair(pair, calibrator):
         "angular_p95_deg": stats(angular.tolist())["p95"], "angular_max_deg": stats(angular.tolist())["max"],
         "center_angular_mean_deg": stats(angular[center].tolist())["mean"],
         "border_angular_mean_deg": stats(angular[border].tolist())["mean"],
-        "oracle_success": success, "oracle_fx": float(oracle[0]), "oracle_fy": float(oracle[1]),
-        "oracle_cx": float(oracle[2]), "oracle_cy": float(oracle[3]),
-        "oracle_max_rel_f_error": float(focal), "oracle_max_rel_c_error": float(principal),
-        "oracle_within_5pct": bool(success and focal <= 0.05),
+        "physical_oracle_success": physical_success,
+        "physical_oracle_max_rel_f_error": physical_metrics["max_rel_f_error"],
+        "physical_oracle_max_rel_c_error": physical_metrics["max_rel_c_error"],
+        "physical_oracle_within_5pct": bool(physical_success and physical_metrics["max_rel_f_error"] <= 0.05),
+        "pinhole_oracle_success": pinhole_success,
+        "pinhole_oracle_fx": float(pinhole_oracle[0]), "pinhole_oracle_fy": float(pinhole_oracle[1]),
+        "pinhole_oracle_cx": float(pinhole_oracle[2]), "pinhole_oracle_cy": float(pinhole_oracle[3]),
+        "pinhole_oracle_rel_fx_error": pinhole_metrics["rel_fx_error"],
+        "pinhole_oracle_rel_fy_error": pinhole_metrics["rel_fy_error"],
+        "pinhole_oracle_max_rel_f_error": pinhole_metrics["max_rel_f_error"],
+        "pinhole_oracle_max_rel_c_error": pinhole_metrics["max_rel_c_error"],
+        "pinhole_oracle_within_5pct": bool(pinhole_success and pinhole_metrics["max_rel_f_error"] <= 0.05),
+        "pinhole_oracle_within_0_1pct": bool(pinhole_success and pinhole_metrics["max_rel_f_error"] <= 0.001),
     }
 
 
 def _mean(rows, key):
     return statistics.fmean(row[key] for row in rows)
+
+
+def oracle_summary(rows, prefix):
+    valid = [row for row in rows if row[f"{prefix}_oracle_success"]]
+    focal = f"{prefix}_oracle_max_rel_f_error"
+    center = f"{prefix}_oracle_max_rel_c_error"
+    within_5 = f"{prefix}_oracle_within_5pct"
+    result = {
+        "valid_pair_count": len(valid),
+        "max_rel_f_mean": _mean(valid, focal),
+        "max_rel_f_median": statistics.median(row[focal] for row in valid),
+        "max_rel_f_max": max(row[focal] for row in valid),
+        "max_rel_c_mean": _mean(valid, center),
+        "max_rel_c_median": statistics.median(row[center] for row in valid),
+        "max_rel_c_max": max(row[center] for row in valid),
+        "within_5pct_count": sum(row[within_5] for row in valid),
+        "within_5pct_rate": sum(row[within_5] for row in valid) / len(valid),
+    }
+    if prefix == "pinhole":
+        within_01 = "pinhole_oracle_within_0_1pct"
+        result["within_0_1pct_count"] = sum(row[within_01] for row in valid)
+        result["within_0_1pct_rate"] = sum(row[within_01] for row in valid) / len(valid)
+    return result
+
+
+def validate_config(config_path):
+    path = Path(config_path)
+    candidates = [path] if path.is_absolute() else [Path.cwd() / path, PROJECT_ROOT.parent / path, PROJECT_ROOT / path]
+    for candidate in candidates:
+        if candidate.exists():
+            config = OmegaConf.load(candidate)
+            break
+    else:
+        raise FileNotFoundError(f"Could not find config: {config_path}")
+    expected = {
+        "model.model_id": "anycalib_pinhole",
+        "model.cam_id": "pinhole",
+        "supervision.input": "raw_rgb",
+        "supervision.target": "canonical_pinhole_rays",
+    }
+    for key, value in expected.items():
+        actual = OmegaConf.select(config, key)
+        if actual != value:
+            raise ValueError(f"Config {key} must be {value!r}, found {actual!r}")
+    if OmegaConf.select(config, "supervision.distortion_for_target") is not False:
+        raise ValueError("supervision.distortion_for_target must be false")
+    return config
+
+
+def synthetic_canonical_oracle(calibrator):
+    pair = Pair("synthetic", "synthetic", "pinhole", "synthetic/pinhole", 1280, 720, 913.0, 877.0, 601.0, 319.0, 0.0, 0.0, 0.0, 0.0)
+    target_size = compute_target_size(pair.height, pair.width)
+    transformed, _, _ = transform_spec(pair, target_size)
+    rays = pinhole_rays(transformed, target_pixel_grid(target_size))
+    prediction, success = official_pinhole_oracle(calibrator, rays, target_size)
+    metrics = oracle_metrics(prediction, transformed, target_size)
+    if not success or metrics["max_rel_f_error"] > 0.001:
+        raise RuntimeError(f"Synthetic canonical pinhole oracle failed: {success=}, {metrics=}")
+    return {"target_size": target_size, "success": success, **metrics}
 
 
 def compatibility_report():
@@ -191,16 +274,40 @@ def compatibility_report():
     state = state if isinstance(state, dict) else {}
     state = state.get("model", state.get("state_dict", state))
     dino = Path(torch.hub.get_dir()) / "checkpoints" / "dinov2_vitl14_pretrain.pth"
-    result = {"status": "not_run", "strict_load": None, "pretrained_key_count": len(state), "training_key_count": None, "missing": None, "unexpected": None, "shape_mismatch": None,
-              "pretrained_weight_sha256": sha256_file(weight) if weight.exists() else None}
+    result = {"status": "not_run", "strict_load": None, "pretrained_key_count": len(state), "training_key_count": None, "matching_key_count": None, "missing": None, "unexpected": None, "shape_mismatch": None,
+              "pretrained_weight_sha256": sha256_file(weight) if weight.exists() else None, "dino_path": str(dino)}
     result["reason"] = ("DINOv2 training backbone cache is absent; no download was attempted." if not dino.exists()
-                        else "Static compatibility hook is intentionally not instantiating the training model in this CPU-only preparation step.")
+                        else "")
+    if dino.exists():
+        model_conf = OmegaConf.load(PROJECT_ROOT / "AnyCalib/siclib/configs/model/anycalib.yaml")
+        training_model = TrainingAnyCalib(model_conf)
+        training_state = training_model.state_dict()
+        pretrained_keys = set(state)
+        training_keys = set(training_state)
+        shape_mismatch = sorted(key for key in pretrained_keys & training_keys if state[key].shape != training_state[key].shape)
+        result.update({
+            "status": "pass" if not shape_mismatch and pretrained_keys == training_keys else "fail",
+            "training_key_count": len(training_keys),
+            "matching_key_count": len(pretrained_keys & training_keys),
+            "missing": sorted(training_keys - pretrained_keys),
+            "unexpected": sorted(pretrained_keys - training_keys),
+            "shape_mismatch": shape_mismatch,
+        })
+        try:
+            training_model.load_state_dict(state, strict=True)
+            result["strict_load"] = True
+        except RuntimeError as exc:
+            result["strict_load"] = False
+            result["strict_load_error"] = str(exc)
+        del training_model, training_state
     return result
 
 
-def run(split):
+def run(split, config_path):
+    validate_config(config_path)
     pairs, split_path = load_pairs(split)
     calibrator = Calibrator(OmegaConf.create({"loss": {"name": None}}))
+    synthetic = synthetic_canonical_oracle(calibrator)
     rows = [audit_pair(pair, calibrator) for pair in pairs]
     output = PROJECT_ROOT / "runs/02_anycalib_finetune/supervision_audit"
     output.mkdir(parents=True, exist_ok=True)
@@ -208,13 +315,14 @@ def run(split):
         writer = csv.DictWriter(handle, fieldnames=list(rows[0]))
         writer.writeheader()
         writer.writerows(rows)
-    oracle_valid = [row for row in rows if row["oracle_success"]]
     report = {
         "split": split, "pair_count": len(rows), "target_resolution": TARGET_RESOLUTION,
         "edge_divisible_by": EDGE_DIVISIBLE_BY, "aspect_range": ASPECT_RANGE, "pixel_convention": "pixel centers, offset 0.5",
         "ray_definition": "cv2.undistortPoints Brown-Conrady [k1,k2,p1,p2] then normalize([x,y,1])",
-        "pinhole_comparison": {key: _mean(rows, key) for key in ("angular_mean_deg", "angular_median_deg", "angular_p90_deg", "angular_p95_deg", "angular_max_deg")},
-        "oracle": {"valid_pair_count": len(oracle_valid), "max_rel_f_mean": _mean(oracle_valid, "oracle_max_rel_f_error"), "max_rel_f_median": statistics.median(row["oracle_max_rel_f_error"] for row in oracle_valid), "within_5pct_count": sum(row["oracle_within_5pct"] for row in oracle_valid), "within_5pct_rate": sum(row["oracle_within_5pct"] for row in oracle_valid) / len(oracle_valid)},
+        "pinhole_comparison": {key: _mean(rows, key) for key in ("angular_mean_deg", "angular_median_deg", "angular_p90_deg", "angular_p95_deg", "angular_max_deg", "center_angular_mean_deg", "border_angular_mean_deg")},
+        "physical_distortion_oracle": oracle_summary(rows, "physical"),
+        "canonical_pinhole_oracle": oracle_summary(rows, "pinhole"),
+        "synthetic_canonical_oracle": synthetic,
         "compatibility": compatibility_report(),
         "manifest_sha256": sha256_file(MANIFEST), "split_sha256": sha256_file(split_path),
         "opencv_version": cv2.__version__, "python_version": platform.python_version(), "anycalib_commit": "027a8497d893f4b2596f23d6324c05e4b81064ed",
@@ -227,9 +335,10 @@ def run(split):
         f"Train pairs: {len(rows)}" if split == "train" else "Validation pairs: 49",
         f"Target network geometry: {TARGET_RESOLUTION} pixels, edge divisible by {EDGE_DIVISIBLE_BY}, aspect {ASPECT_RANGE}",
         "Pixel convention: pixel centers with offset 0.5",
-        f"Pinhole vs distortion-aware ray ({split} mean/median/p90/p95/max degrees): {report['pinhole_comparison']}",
-        f"Perfect-ray -> pinhole oracle ({split}) focal mean/median: {report['oracle']['max_rel_f_mean']} / {report['oracle']['max_rel_f_median']}",
-        f"Oracle focal within 5%: {report['oracle']['within_5pct_count']} / {report['oracle']['valid_pair_count']} ({report['oracle']['within_5pct_rate']})",
+        f"Physical distortion-aware ray -> pinhole oracle: {report['physical_distortion_oracle']}",
+        f"Canonical pinhole ray -> pinhole oracle: {report['canonical_pinhole_oracle']}",
+        "Angular p90/p95/max are pair-equal means of per-pair statistics.",
+        "Selected supervision: raw RGB + canonical pinhole target rays",
         f"Weight compatibility: {report['compatibility']}", "No training was run.", "No Test data was used.",
     ]
     (output / f"summary_{split}.txt").write_text("\n".join(summary) + "\n")
@@ -248,7 +357,7 @@ def main():
     parser.add_argument("--config", required=True)
     parser.add_argument("--split", choices=("train", "val"), required=True)
     args = parser.parse_args()
-    run(args.split)
+    run(args.split, args.config)
 
 
 if __name__ == "__main__":

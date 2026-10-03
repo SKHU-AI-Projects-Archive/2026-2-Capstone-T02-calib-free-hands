@@ -1,0 +1,54 @@
+experiment: 02a_supervision_protocol
+status: completed
+test_data_used: false
+selected_supervision: raw_rgb_canonical_pinhole_rays
+input: raw_gigahands_rgb
+target: canonical_pinhole_rays_from_fx_fy_cx_cy
+output_camera_model: pinhole
+distortion_for_target: false
+rejected_for_baseline:
+  physical_distortion_aware_rays:
+    reason: perfect-ray to pinhole oracle mismatch
+    train_max_rel_f_mean: 0.13717014372956995
+    train_max_rel_f_median: 0.1382758617401123
+    train_within_5pct: 0
+    val_max_rel_f_mean: 0.1381929343452259
+    val_max_rel_f_median: 0.13940933346748352
+    val_within_5pct: 0
+canonical_pinhole_oracle:
+  train:
+    success: 147
+    pair_count: 147
+    max_rel_f_mean: 0.0
+    max_rel_f_median: 0.0
+    max_rel_f_max: 0.0
+    max_rel_c_mean: 0.0
+    max_rel_c_median: 0.0
+    max_rel_c_max: 0.0
+    within_5pct: 147
+    within_0_1pct: 147
+  val:
+    success: 49
+    pair_count: 49
+    max_rel_f_mean: 0.0
+    max_rel_f_median: 0.0
+    max_rel_f_max: 0.0
+    max_rel_c_mean: 0.0
+    max_rel_c_median: 0.0
+    max_rel_c_max: 0.0
+    within_5pct: 49
+    within_0_1pct: 49
+weight_compatibility:
+  status: pass
+  strict_load: true
+  pretrained_weight_sha256: e73b174563bcb90dc9a0e348ee64fbb898901d2a1786623e62fc0e3b176a1a38
+  dino_path: /home/junghyub/.cache/torch/hub/checkpoints/dinov2_vitl14_pretrain.pth
+  dino_sha256: d5383ea8f4877b2472eb973e0fd72d557c7da5d3611bd527ceeb1d7162cbf428
+  pretrained_key_count: 399
+  training_key_count: 399
+  matching_key_count: 399
+  missing: 0
+  unexpected: 0
+  shape_mismatch: 0
+repository_commit_before_protocol_finalization: c1868a9d44c16b418f1a4d86e6315ec9380e8839
+anycalib_commit: 027a8497d893f4b2596f23d6324c05e4b81064ed

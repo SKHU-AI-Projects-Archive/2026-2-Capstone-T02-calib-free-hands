@@ -21,12 +21,14 @@ model:
 
 supervision:
   input: raw_rgb
-  target: distortion_aware_gt_ray
+  target: canonical_pinhole_rays
+  intrinsics: [fx, fy, cx, cy]
+  distortion_for_target: false
   camera_model: pinhole
   distortion_model: opencv_brown_conrady
   distortion_coefficients: [k1, k2, p1, p2]
   final_fitting_model: pinhole
-  status: provisional_after_02a_audit
+  status: finalized_after_02a_audit
 
 training:
   epochs: null
