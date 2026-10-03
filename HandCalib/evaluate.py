@@ -104,6 +104,37 @@ def _scalar(value):
     return value.item() if hasattr(value, "item") else value
 
 
+def _normalize_batched_prediction(prediction, batch_size):
+    """Normalize official AnyCalib output while preserving batch order."""
+    intrinsics = prediction["intrinsics"]
+    if isinstance(intrinsics, (list, tuple)):
+        pred_intrinsics = torch.stack([torch.as_tensor(value) for value in intrinsics])
+    else:
+        pred_intrinsics = torch.as_tensor(intrinsics)
+    if pred_intrinsics.ndim == 1:
+        pred_intrinsics = pred_intrinsics.unsqueeze(0)
+    pred_intrinsics = pred_intrinsics.detach().cpu()
+    success = torch.as_tensor(prediction["success"]).reshape(-1).detach().cpu().to(torch.bool)
+    if pred_intrinsics.shape != (batch_size, 4):
+        raise RuntimeError(f"Expected batched pinhole intrinsics shape {(batch_size, 4)}, got {tuple(pred_intrinsics.shape)}")
+    if success.shape != (batch_size,):
+        raise RuntimeError(f"Expected success shape {(batch_size,)}, got {tuple(success.shape)}")
+    pred_size = tuple(int(value) for value in prediction["pred_size"])
+    if len(pred_size) != 2:
+        raise RuntimeError(f"Expected pred_size=(height, width), got {pred_size}")
+    return pred_intrinsics, success, pred_size
+
+
+def _validate_batch(batch):
+    batch_size = int(batch["image"].shape[0])
+    if len(batch["intrinsics"]) != batch_size:
+        raise RuntimeError("Batch image and ground-truth intrinsics lengths differ.")
+    for key, values in batch["meta"].items():
+        if len(values) != batch_size:
+            raise RuntimeError(f"Batch image and metadata field '{key}' lengths differ.")
+    return batch_size
+
+
 def _git_head(path):
     try:
         return subprocess.check_output(["git", "-C", str(path), "rev-parse", "HEAD"], text=True).strip()
@@ -283,46 +314,45 @@ def _benchmark(config, config_path, args):
             loader_wait = time.perf_counter() - wait_start
             if evaluation_start is None:
                 evaluation_start = wait_start
+            batch_size = _validate_batch(batch)
             torch.cuda.synchronize()
             inference_start = time.perf_counter()
             prediction = adapter.predict(batch["image"].to("cuda:0"))
             torch.cuda.synchronize()
             inference_seconds = time.perf_counter() - inference_start
             postprocess_start = time.perf_counter()
-            pred_intrinsics = torch.as_tensor(prediction["intrinsics"]).detach().cpu()
-            success_values = torch.as_tensor(prediction["success"]).detach().cpu().flatten().tolist()
-            if pred_intrinsics.ndim == 1:
-                pred_intrinsics = pred_intrinsics.unsqueeze(0)
-            pred_height, pred_width = (int(value) for value in prediction["pred_size"])
-            for offset, success in enumerate(success_values):
+            pred_intrinsics, success, pred_size = _normalize_batched_prediction(prediction, batch_size)
+            pred_height, pred_width = pred_size
+            for offset in range(batch_size):
+                frame_success = bool(success[offset].item())
                 meta = {key: _scalar(value[offset]) for key, value in batch["meta"].items()}
                 gt = batch["intrinsics"][offset]
                 row = {**meta, **{f"gt_{key}": float(value) for key, value in zip(("fx", "fy", "cx", "cy"), gt)},
-                       "pred_width": pred_width, "pred_height": pred_height, "success": bool(success)}
-                if success:
+                       "pred_width": pred_width, "pred_height": pred_height, "success": frame_success}
+                if frame_success:
                     prediction_values = pred_intrinsics[offset, :4]
                     row.update({f"pred_{key}": float(prediction_values[index]) for index, key in enumerate(("fx", "fy", "cx", "cy"))})
                     row.update({key: float(value) for key, value in camera_errors(prediction_values, gt, meta["width"], meta["height"]).items()})
                 rows.append(row)
-                success_count += int(bool(success))
+                success_count += int(frame_success)
             postprocess_seconds = time.perf_counter() - postprocess_start
             batch_total = time.perf_counter() - wait_start
-            state["frames_done"] += len(success_values)
+            state["frames_done"] += batch_size
             state["success_count"] = success_count
             allocated = torch.cuda.memory_allocated() / 2**20
             reserved = torch.cuda.memory_reserved() / 2**20
             timings.append({
-                "batch_index": len(timings), "first_dataset_index": indices[state["frames_done"] - len(success_values)],
-                "last_dataset_index": indices[state["frames_done"] - 1], "batch_size": len(success_values),
+                "batch_index": len(timings), "first_dataset_index": indices[state["frames_done"] - batch_size],
+                "last_dataset_index": indices[state["frames_done"] - 1], "batch_size": batch_size,
                 "loader_wait_seconds": loader_wait, "inference_seconds": inference_seconds,
                 "postprocess_seconds": postprocess_seconds, "batch_total_seconds": batch_total,
-                "frames_per_second": len(success_values) / batch_total if batch_total else None,
+                "frames_per_second": batch_size / batch_total if batch_total else None,
                 "torch_allocated_mib": allocated, "torch_reserved_mib": reserved,
                 "torch_peak_allocated_mib": torch.cuda.max_memory_allocated() / 2**20,
                 "torch_peak_reserved_mib": torch.cuda.max_memory_reserved() / 2**20,
             })
             latest_gpu = sampler.rows[-1] if sampler.rows else {}
-            progress.update(len(success_values))
+            progress.update(batch_size)
             progress.set_postfix_str(f"success={success_count}/{state['frames_done']} GPU={latest_gpu.get('gpu_util_percent', 'n/a')}% VRAM={latest_gpu.get('gpu_memory_used_mib', 'n/a')}/{latest_gpu.get('gpu_memory_total_mib', 'n/a')}MiB Torch={allocated:.1f}/{reserved:.1f}MiB")
     sampler.stop()
     evaluation_seconds = time.perf_counter() - evaluation_start
