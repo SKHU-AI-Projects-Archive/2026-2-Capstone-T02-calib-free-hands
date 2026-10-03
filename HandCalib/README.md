@@ -17,13 +17,25 @@ CAM-EXP-001은 제공 camera와 제공 3D joints를 2D annotation에 재투영�
 
 ## 실험 로드맵
 
-- [ ] 01번 실험 — 사전학습 AnyCalib 기본 성능 확인
+- [x] 01번 실험 — 사전학습 AnyCalib 기본 성능 확인
 - [ ] 02번 실험 — GigaHands를 이용한 AnyCalib 추가 학습
 - [ ] 03번 실험 — 손 정보 활용을 위한 데이터 확인
 - [ ] 04번 실험 — HandCalib 설계 및 구현
 - [ ] 05번 실험 — HandCalib 학습 및 비교 평가
 
-이번 작업에서는 01번 실험을 실행하지 않았습니다.
+01번 결과는 `HandCalib/results/01_anycalib_pretrained.yaml`에 재현용 요약으로 고정했습니다. 원본 결과와 raw telemetry는 Git에 포함하지 않습니다.
+
+### 01 고정 결과
+
+- Test: `p52`, `p52-instrument-0034`, 7,667 frames, 49 pairs
+- Frame success: `7,667 / 7,667` (`1.0`)
+- Pair max focal error: mean `0.18497205009511505`, median `0.17258688477275663`
+- Pair max principal-point error: mean `0.08199870613426849`, median `0.06982756720648872`
+- Focal error within 5%: `4 / 49` (`0.08163265306122448`)
+
+### 02-A supervision audit 계획
+
+02번은 먼저 Train 147개와 Validation 49개 sequence-camera pair의 supervision geometry를 CPU에서 점검합니다. raw RGB를 full decode하지 않고, OpenCV Brown-Conrady `[k1, k2, p1, p2]`를 반영한 distortion-aware GT ray와 공식 AnyCalib 전처리·pinhole fitting oracle을 비교합니다. Test split은 이 감사에서 사용하지 않으며, audit가 끝나기 전 학습은 시작하지 않습니다.
 
 ## AnyCalib pretrained smoke test
 
@@ -112,4 +124,5 @@ python tools/download_gigahands_demo.py --check
 
 - AnyCalib 환경과 pretrained baseline 실행
 - fine-tuning protocol, split, metric 확정
+- 02-A supervision audit와 fine-tuning protocol 확정
 - HandCalib 모델과 학습/evaluation 코드 구현
