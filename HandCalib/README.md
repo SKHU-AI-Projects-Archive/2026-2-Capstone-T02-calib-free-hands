@@ -36,6 +36,19 @@ python HandCalib/evaluate.py --config HandCalib/configs/01_anycalib_pretrained.y
 
 smoke 결과는 `HandCalib/runs/01_anycalib_pretrained/smoke_val/`에 저장되며, 전체 validation/test 평가는 아직 활성화하지 않았습니다.
 
+## 01 AnyCalib validation benchmark
+
+benchmark는 최종 01 실험 결과가 아니라 throughput과 `batch_size`/`num_workers`를 비교하기 위한 Validation 첫 번째 완전한 RGB clip의 engineering 측정입니다. Test frame이나 Test inference는 사용하지 않습니다. 실제 실행은 사용자가 한 장의 GPU를 지정한 뒤 수행합니다.
+
+```bash
+source .venv/bin/activate
+export CUDA_VISIBLE_DEVICES=<GPU_INDEX>
+python HandCalib/evaluate.py --config HandCalib/configs/01_anycalib_pretrained.yaml --benchmark --batch-size 1 --num-workers 0 --dry-run
+python HandCalib/evaluate.py --config HandCalib/configs/01_anycalib_pretrained.yaml --benchmark --batch-size 1 --num-workers 0
+```
+
+`--batch-size`와 `--num-workers`는 benchmark에서 반드시 명시하며, `1/0`은 최종 선택이 아닌 baseline engineering 설정입니다. 결과는 `HandCalib/runs/01_anycalib_pretrained/benchmark_val/bsX_nwY/`에 저장됩니다. `runtime.json`에는 load/evaluation 시간, FPS, latency percentile, loader 대기, PyTorch memory, GPU telemetry와 rough Test 시간 추정이 들어가고, `telemetry.csv.gz`는 약 1초 간격의 raw GPU 상태, `batch_timings.csv.gz`는 batch별 병목 분석 자료입니다.
+
 ## 폴더 구성
 
 ```text
