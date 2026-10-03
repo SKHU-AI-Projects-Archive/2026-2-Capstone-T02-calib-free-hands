@@ -102,8 +102,27 @@ def move_to_device(value, device):
     return value
 
 
-def sync_cuda():
-    torch.cuda.synchronize()
+def parse_single_cuda_selector(selector):
+    entries = [entry.strip() for entry in selector.split(",")] if selector else []
+    entries = [entry for entry in entries if entry]
+    if len(entries) != 1:
+        raise RuntimeError("--smoke requires exactly one CUDA_VISIBLE_DEVICES entry")
+    return selector
+
+
+def require_single_cuda_device():
+    """사용자 physical selector와 process-local logical device를 분리한다."""
+    selector = parse_single_cuda_selector(os.environ.get("CUDA_VISIBLE_DEVICES"))
+    if not torch.cuda.is_available():
+        raise RuntimeError("--smoke requires CUDA; CPU fallback is disabled")
+    if torch.cuda.device_count() != 1:
+        raise RuntimeError(f"--smoke requires exactly one visible GPU, found {torch.cuda.device_count()}")
+    torch.cuda.set_device(0)
+    return torch.device("cuda:0"), selector
+
+
+def sync_cuda(device):
+    torch.cuda.synchronize(device)
 
 
 def autocast_context(precision):
@@ -114,8 +133,8 @@ def autocast_context(precision):
     return nullcontext()
 
 
-def gpu_metadata():
-    properties = torch.cuda.get_device_properties(0)
+def gpu_metadata(device, selector):
+    properties = torch.cuda.get_device_properties(device)
     try:
         uuid = subprocess.check_output(
             ["nvidia-smi", "--query-gpu=uuid", "--format=csv,noheader,nounits"], text=True
@@ -124,18 +143,16 @@ def gpu_metadata():
         uuid = None
     return {
         "visible_gpu_count": torch.cuda.device_count(),
-        "cuda_visible_devices": os.environ.get("CUDA_VISIBLE_DEVICES"),
-        "gpu_name": torch.cuda.get_device_name(0),
+        "cuda_visible_devices": selector,
+        "logical_device": str(device),
+        "gpu_name": torch.cuda.get_device_name(device),
         "gpu_uuid": uuid,
         "gpu_total_vram_mib": properties.total_memory / (1024**2),
     }
 
 
 def smoke(config, config_path, batch_size, num_workers, precision, overwrite):
-    if not torch.cuda.is_available():
-        raise RuntimeError("--smoke requires CUDA; CPU fallback is disabled")
-    if torch.cuda.device_count() != 1:
-        raise RuntimeError(f"--smoke requires exactly one visible GPU, found {torch.cuda.device_count()}")
+    device, selector = require_single_cuda_device()
     if batch_size != 1:
         raise ValueError("02-B smoke requires batch_size=1")
 
@@ -157,7 +174,6 @@ def smoke(config, config_path, batch_size, num_workers, precision, overwrite):
     train_iter = iter(train_loader)
     val_iter = iter(val_loader)
 
-    device = torch.device("cuda:0")
     torch.cuda.reset_peak_memory_stats(device)
     total_start = time.perf_counter()
     model_start = time.perf_counter()
@@ -168,31 +184,31 @@ def smoke(config, config_path, batch_size, num_workers, precision, overwrite):
     representative = next(parameter for parameter in model.parameters() if parameter.requires_grad)
     before = representative.detach().clone()
 
-    sync_cuda()
+    sync_cuda(device)
     data_start = time.perf_counter()
     train_batch = move_to_device(next(train_iter), device)
-    sync_cuda()
+    sync_cuda(device)
     data_load_seconds = time.perf_counter() - data_start
     optimizer.zero_grad(set_to_none=True)
 
     forward_start = time.perf_counter()
     with autocast_context(precision):
         train_pred = model(train_batch)
-    sync_cuda()
+    sync_cuda(device)
     train_forward_seconds = time.perf_counter() - forward_start
 
     loss_start = time.perf_counter()
     with autocast_context(precision):
         train_losses, _ = model.loss(train_pred, train_batch)
         train_loss = train_losses["total"].mean()
-    sync_cuda()
+    sync_cuda(device)
     loss_seconds = time.perf_counter() - loss_start
     if not torch.isfinite(train_loss) or not train_loss.requires_grad:
         raise RuntimeError("Smoke train loss is not finite or does not require gradients")
 
     backward_start = time.perf_counter()
     train_loss.backward()
-    sync_cuda()
+    sync_cuda(device)
     backward_seconds = time.perf_counter() - backward_start
     gradients = [parameter.grad for parameter in model.parameters() if parameter.grad is not None]
     finite_gradients = [gradient for gradient in gradients if torch.isfinite(gradient).all()]
@@ -202,24 +218,24 @@ def smoke(config, config_path, batch_size, num_workers, precision, overwrite):
 
     step_start = time.perf_counter()
     optimizer.step()
-    sync_cuda()
+    sync_cuda(device)
     optimizer_step_seconds = time.perf_counter() - step_start
     parameter_changed = not torch.equal(before, representative.detach())
     if not parameter_changed:
         raise RuntimeError("Smoke optimizer step did not change the representative parameter")
 
     model.eval()
-    sync_cuda()
+    sync_cuda(device)
     val_data_start = time.perf_counter()
     val_batch = move_to_device(next(val_iter), device)
-    sync_cuda()
+    sync_cuda(device)
     data_load_seconds += time.perf_counter() - val_data_start
     validation_start = time.perf_counter()
     with torch.no_grad(), autocast_context(precision):
         val_pred = model(val_batch)
         val_losses, _ = model.loss(val_pred, val_batch)
         val_loss = val_losses["total"].mean()
-    sync_cuda()
+    sync_cuda(device)
     validation_forward_seconds = time.perf_counter() - validation_start
     if not torch.isfinite(val_loss):
         raise RuntimeError("Smoke validation loss is not finite")
@@ -248,7 +264,7 @@ def smoke(config, config_path, batch_size, num_workers, precision, overwrite):
         "train_frames": len(train), "train_pairs": len(train.pair_indices), "samples_per_epoch": len(train_sampler),
         "validation_frames": len(val), "validation_pairs": len(val.pair_indices),
         "batch_size": batch_size, "num_workers": num_workers, "precision": precision,
-        **gpu_metadata(), "command_line": " ".join(os.sys.argv),
+        **gpu_metadata(device, selector), "command_line": " ".join(os.sys.argv),
     }
     tensor_shapes = {key: list(value.shape) for key, value in train_batch.items() if isinstance(value, torch.Tensor)}
     val_shapes = {key: list(value.shape) for key, value in val_batch.items() if isinstance(value, torch.Tensor)}
