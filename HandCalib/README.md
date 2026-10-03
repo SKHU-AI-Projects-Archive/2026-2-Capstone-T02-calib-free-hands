@@ -25,6 +25,17 @@ CAM-EXP-001은 제공 camera와 제공 3D joints를 2D annotation에 재투영�
 
 이번 작업에서는 01번 실험을 실행하지 않았습니다.
 
+## AnyCalib pretrained smoke test
+
+가중치와 CUDA 환경이 준비되면 validation의 첫 frame 하나만 실행할 수 있습니다. `--dry-run`은 모델과 가중치를 사용하지 않고 설정·데이터 크기만 확인합니다.
+
+```bash
+python HandCalib/evaluate.py --config HandCalib/configs/01_anycalib_pretrained.yaml --dry-run
+python HandCalib/evaluate.py --config HandCalib/configs/01_anycalib_pretrained.yaml --smoke
+```
+
+smoke 결과는 `HandCalib/runs/01_anycalib_pretrained/smoke_val/`에 저장되며, 전체 validation/test 평가는 아직 활성화하지 않았습니다.
+
 ## 폴더 구성
 
 ```text

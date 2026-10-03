@@ -11,7 +11,7 @@ import statistics
 FRAME_FIELDS = [
     "participant", "sequence", "camera", "camera_key", "video_path", "video_name",
     "frame_index", "width", "height", "gt_fx", "gt_fy", "gt_cx", "gt_cy",
-    "pred_fx", "pred_fy", "pred_cx", "pred_cy", "success", "rel_fx_error",
+    "pred_fx", "pred_fy", "pred_cx", "pred_cy", "pred_width", "pred_height", "success", "rel_fx_error",
     "rel_fy_error", "max_rel_f_error", "max_rel_c_error",
 ]
 PRED_FIELDS = ("pred_fx", "pred_fy", "pred_cx", "pred_cy")
@@ -40,8 +40,8 @@ def read_frame_predictions(path):
     with gzip.open(path, "rt", newline="") as handle:
         rows = list(csv.DictReader(handle))
     for row in rows:
-        for field in ("frame_index", "width", "height", "gt_fx", "gt_fy", "gt_cx", "gt_cy", *PRED_FIELDS, "rel_fx_error", "rel_fy_error", *ERROR_FIELDS):
-            row[field] = int(row[field]) if field in ("frame_index", "width", "height") and row[field] else _number(row[field])
+        for field in ("frame_index", "width", "height", "pred_width", "pred_height", "gt_fx", "gt_fy", "gt_cx", "gt_cy", *PRED_FIELDS, "rel_fx_error", "rel_fy_error", *ERROR_FIELDS):
+            row[field] = int(row[field]) if field in ("frame_index", "width", "height", "pred_width", "pred_height") and row[field] else _number(row[field])
         row["success"] = str(row["success"]).lower() in {"1", "true", "yes"}
     return rows
 

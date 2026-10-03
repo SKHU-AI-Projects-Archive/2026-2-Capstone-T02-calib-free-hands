@@ -13,8 +13,13 @@ dataset:
 
 model:
   name: AnyCalib
+  model_id: anycalib_pinhole
+  cam_id: pinhole
   pretrained: true
   checkpoint: null
+
+evaluation:
+  output_dir: runs/01_anycalib_pretrained
 
 training:
   epochs: null
