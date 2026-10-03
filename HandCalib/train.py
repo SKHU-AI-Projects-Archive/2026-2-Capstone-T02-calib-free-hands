@@ -14,8 +14,11 @@ import torch
 from torch.utils.data import DataLoader
 import yaml
 
-PROJECT_ROOT = Path(__file__).resolve().parent
-sys.path.insert(0, str(PROJECT_ROOT / "AnyCalib"))
+REPO_ROOT = Path(__file__).resolve().parent.parent
+HANDCALIB_ROOT = REPO_ROOT / "HandCalib"
+ANYCALIB_ROOT = HANDCALIB_ROOT / "AnyCalib"
+PROJECT_ROOT = HANDCALIB_ROOT
+sys.path.insert(0, str(ANYCALIB_ROOT))
 
 from dataloaders.gigahands import GigaHandsRayDataset, PairBalancedSampler
 from models.anycalib import build_training_anycalib
@@ -36,18 +39,18 @@ def sha256_file(path):
     return digest.hexdigest()
 
 
-def git_output(*args):
-    return subprocess.check_output(["git", "-C", str(PROJECT_ROOT.parent), *args], text=True).strip()
+def git_output(*args, cwd=REPO_ROOT):
+    return subprocess.check_output(["git", "-C", str(cwd), *args], text=True).strip()
 
 
 def resolve_path(path):
     path = Path(path)
     if path.is_absolute():
         return path
-    for candidate in (Path.cwd() / path, PROJECT_ROOT / path, PROJECT_ROOT.parent / path):
+    for candidate in (Path.cwd() / path, REPO_ROOT / path, HANDCALIB_ROOT / path):
         if candidate.exists():
             return candidate
-    return PROJECT_ROOT / path
+    return HANDCALIB_ROOT / path
 
 
 def load_experiment(config_path):
@@ -151,6 +154,23 @@ def gpu_metadata(device, selector):
     }
 
 
+def write_smoke_outputs(output, metadata, smoke_result, runtime, summary, overwrite):
+    serialized = {
+        "metadata.json": json.dumps(metadata, indent=2) + "\n",
+        "smoke.json": json.dumps(smoke_result, indent=2) + "\n",
+        "runtime.json": json.dumps(runtime, indent=2) + "\n",
+        "summary.txt": summary,
+    }
+    output.mkdir(parents=True, exist_ok=True)
+    if overwrite:
+        for path in output.glob("*.json"):
+            path.unlink()
+        for path in output.glob("*.txt"):
+            path.unlink()
+    for name, contents in serialized.items():
+        (output / name).write_text(contents)
+
+
 def smoke(config, config_path, batch_size, num_workers, precision, overwrite):
     device, selector = require_single_cuda_device()
     if batch_size != 1:
@@ -159,12 +179,6 @@ def smoke(config, config_path, batch_size, num_workers, precision, overwrite):
     output = PROJECT_ROOT / "runs/02_anycalib_finetune/smoke"
     if output.exists() and not overwrite:
         raise FileExistsError(f"Smoke output exists; pass --overwrite to replace it: {output}")
-    output.mkdir(parents=True, exist_ok=True)
-    if overwrite:
-        for path in output.glob("*.json"):
-            path.unlink()
-        for path in output.glob("*.txt"):
-            path.unlink()
 
     train, val, _, manifest = make_datasets(config)
     train_sampler = PairBalancedSampler(train, TRAIN_FRAMES_PER_PAIR, seed=config["experiment"]["seed"])
@@ -252,7 +266,7 @@ def smoke(config, config_path, batch_size, num_workers, precision, overwrite):
         "experiment": config["experiment"]["name"], "mode": "training_smoke",
         "repository_commit": git_output("rev-parse", "HEAD"),
         "repository_dirty": bool(git_output("status", "--porcelain")),
-        "anycalib_commit": git_output("-C", "AnyCalib", "rev-parse", "HEAD"),
+        "anycalib_commit": git_output("rev-parse", "HEAD", cwd=ANYCALIB_ROOT),
         "config_sha256": sha256_file(config_path), "manifest_sha256": sha256_file(manifest),
         "train_split_sha256": sha256_file(resolve_path(config["dataset"]["train_split"])),
         "val_split_sha256": sha256_file(resolve_path(config["dataset"]["val_split"])),
@@ -287,22 +301,18 @@ def smoke(config, config_path, batch_size, num_workers, precision, overwrite):
         "validation_forward_seconds": validation_forward_seconds, "total_seconds": total_seconds,
         **memory, "gpu_total_vram_mib": metadata["gpu_total_vram_mib"],
     }
-    (output / "metadata.json").write_text(json.dumps(metadata, indent=2) + "\n")
-    (output / "smoke.json").write_text(json.dumps(smoke_result, indent=2) + "\n")
-    (output / "runtime.json").write_text(json.dumps(runtime, indent=2) + "\n")
-    (output / "summary.txt").write_text(
-        "\n".join(
-            [
-                "02-B Training Smoke", "Model: official AnyCalib training architecture",
-                "Initialization: anycalib_pinhole pretrained", "Supervision: raw RGB + canonical pinhole rays",
-                f"Train batch: {tensor_shapes}", f"Validation batch: {val_shapes}",
-                "Loss finite: YES", "Validation precision: fp32", "Backward: PASS", f"Finite gradients: {len(finite_gradients)} / {len(gradients)}",
-                "Optimizer step: PASS", "Parameter changed: YES", "Validation pinhole fitting: PASS",
-                f"Peak allocated: {runtime['peak_allocated_mib']:.2f} MiB", f"Peak reserved: {runtime['peak_reserved_mib']:.2f} MiB",
-                f"GPU: {metadata['gpu_name']}", "No full training was run.", "No Test data was used.",
-            ]
-        ) + "\n"
-    )
+    summary = "\n".join(
+        [
+            "02-B Training Smoke", "Model: official AnyCalib training architecture",
+            "Initialization: anycalib_pinhole pretrained", "Supervision: raw RGB + canonical pinhole rays",
+            f"Train batch: {tensor_shapes}", f"Validation batch: {val_shapes}",
+            "Loss finite: YES", "Validation precision: fp32", "Backward: PASS", f"Finite gradients: {len(finite_gradients)} / {len(gradients)}",
+            "Optimizer step: PASS", "Parameter changed: YES", "Validation pinhole fitting: PASS",
+            f"Peak allocated: {runtime['peak_allocated_mib']:.2f} MiB", f"Peak reserved: {runtime['peak_reserved_mib']:.2f} MiB",
+            f"GPU: {metadata['gpu_name']}", "No full training was run.", "No Test data was used.",
+        ]
+    ) + "\n"
+    write_smoke_outputs(output, metadata, smoke_result, runtime, summary, overwrite)
     print((output / "summary.txt").read_text(), end="")
 
 
