@@ -17,6 +17,9 @@ import torch
 from torch.utils.data import DataLoader
 import yaml
 
+from utils.metrics import camera_errors
+from utils.results import write_frame_predictions, write_summaries
+
 REPO_ROOT = Path(__file__).resolve().parent.parent
 HANDCALIB_ROOT = REPO_ROOT / "HandCalib"
 ANYCALIB_ROOT = HANDCALIB_ROOT / "AnyCalib"
@@ -34,6 +37,7 @@ EXPECTED_VAL_PAIRS = 49
 TRAIN_FRAMES_PER_PAIR = 174
 BENCHMARK_WARMUP_STEPS = 3
 BENCHMARK_MEASURE_STEPS = 10
+VALIDATION_STEP0_OUTPUT = PROJECT_ROOT / "runs/02_anycalib_finetune/validation_step0"
 
 
 def sha256_file(path):
@@ -78,6 +82,18 @@ def make_train_dataset(config):
     if len(train) != EXPECTED_TRAIN_FRAMES or len(train.pair_indices) != EXPECTED_TRAIN_PAIRS:
         raise RuntimeError(f"Unexpected Train dataset count: {len(train)=}, {len(train.pair_indices)=}")
     return train, root, manifest
+
+
+def make_validation_dataset(config):
+    root = resolve_path(config["dataset"]["root"])
+    manifest = PROJECT_ROOT / "data/manifests/gigahands.csv"
+    val = GigaHandsRayDataset(root, resolve_path(config["dataset"]["val_split"]), manifest)
+    if len(val) != EXPECTED_VAL_FRAMES or len(val.pair_indices) != EXPECTED_VAL_PAIRS:
+        raise RuntimeError(f"Unexpected Validation dataset count: {len(val)=}, {len(val.pair_indices)=}")
+    participants = {sample["row"]["participant"] for sample in val.samples}
+    if participants != {"p36"}:
+        raise RuntimeError(f"Step-0 Validation requires participant p36, found {sorted(participants)}")
+    return val, resolve_path(config["dataset"]["val_split"]), manifest
 
 
 def make_datasets(config):
@@ -423,6 +439,166 @@ def benchmark(config, config_path, batch_size, num_workers, precision, overwrite
     print((output / "summary.txt").read_text(), end="")
 
 
+def _validation_prediction(prediction, batch_size):
+    intrinsics = prediction["intrinsics"]
+    if isinstance(intrinsics, (list, tuple)):
+        intrinsics = torch.stack([torch.as_tensor(value) for value in intrinsics])
+    intrinsics = torch.as_tensor(intrinsics).detach().cpu()
+    if intrinsics.ndim == 1:
+        intrinsics = intrinsics.unsqueeze(0)
+    success = torch.as_tensor(prediction["success"]).reshape(-1).detach().cpu().bool()
+    if tuple(intrinsics.shape) != (batch_size, 4) or tuple(success.shape) != (batch_size,):
+        raise RuntimeError("Validation prediction shape does not match the batch")
+    pred_size = tuple(int(value) for value in prediction["pred_size"])
+    return intrinsics, success, pred_size
+
+
+def _batch_meta_value(values, index):
+    value = values[index]
+    return value.item() if isinstance(value, torch.Tensor) and value.ndim == 0 else value
+
+
+def _step0_metric_aliases(metrics):
+    pair = metrics["pair_level"]
+    frame = metrics["frame_level"]
+    return {
+        "val_pair_max_rel_f_mean": pair["pair_max_rel_f_error_mean"],
+        "val_pair_max_rel_f_median": pair["pair_max_rel_f_error_median"],
+        "val_pair_rel_fx_mean": pair["pair_rel_fx_error_mean"],
+        "val_pair_rel_fx_median": pair["pair_rel_fx_error_median"],
+        "val_pair_rel_fy_mean": pair["pair_rel_fy_error_mean"],
+        "val_pair_rel_fy_median": pair["pair_rel_fy_error_median"],
+        "val_pair_max_rel_c_mean": pair["pair_max_rel_c_error_mean"],
+        "val_pair_max_rel_c_median": pair["pair_max_rel_c_error_median"],
+        "val_pair_within_5pct_count": pair["pair_focal_within_5pct_count"],
+        "val_pair_within_5pct_rate": pair["pair_focal_within_5pct_rate"],
+        "val_frame_total": frame["total_frames"],
+        "val_frame_successful": frame["successful_frames"],
+        "val_frame_failed": frame["total_frames"] - frame["successful_frames"],
+        "val_frame_success_rate": frame["success_rate"],
+        "val_pair_count": pair["pair_count"],
+        "val_valid_pair_count": pair["valid_pair_count"],
+    }
+
+
+def _write_step0_summary(output, metrics, runtime, metadata):
+    aliases = _step0_metric_aliases(metrics)
+    lines = [
+        "02-D.0 Validation step 0",
+        "Mode: pre-finetuning reference",
+        "Model: official training AnyCalib with anycalib_pinhole pretrained weights",
+        "Validation precision: fp32",
+        "Split: Validation / p36",
+        f"Frames: {aliases['val_frame_successful']} successful / {aliases['val_frame_total']} total",
+        f"Pairs: {aliases['val_valid_pair_count']} valid / {aliases['val_pair_count']} total",
+        f"Primary val_pair_max_rel_f_mean: {aliases['val_pair_max_rel_f_mean']}",
+        f"val_pair_max_rel_f_median: {aliases['val_pair_max_rel_f_median']}",
+        f"val_pair_rel_fx_mean/median: {aliases['val_pair_rel_fx_mean']} / {aliases['val_pair_rel_fx_median']}",
+        f"val_pair_rel_fy_mean/median: {aliases['val_pair_rel_fy_mean']} / {aliases['val_pair_rel_fy_median']}",
+        f"val_pair_max_rel_c_mean/median: {aliases['val_pair_max_rel_c_mean']} / {aliases['val_pair_max_rel_c_median']}",
+        f"Within 5% focal: {aliases['val_pair_within_5pct_count']} / {aliases['val_valid_pair_count']} / {aliases['val_pair_within_5pct_rate']}",
+        f"Model load seconds: {runtime['model_load_seconds']:.3f}",
+        f"Validation seconds: {runtime['validation_seconds']:.3f}",
+        f"Frames/sec: {runtime['frames_per_second']:.3f}",
+        f"Peak allocated: {runtime['peak_allocated_mib']:.2f} MiB",
+        f"Peak reserved: {runtime['peak_reserved_mib']:.2f} MiB",
+        f"Repository commit: {metadata['repository_commit']}",
+        f"AnyCalib commit: {metadata['anycalib_commit']}",
+        "No fine-tuning was run.",
+        "Test data was not used.",
+    ]
+    (output / "summary.txt").write_text("\n".join(lines) + "\n")
+
+
+def validate_step0(config, config_path, batch_size=4, num_workers=4, overwrite=False):
+    if batch_size != 4 or num_workers != 4:
+        raise ValueError("step-0 Validation is fixed to batch_size=4 and num_workers=4")
+    device, selector = require_single_cuda_device()
+    if VALIDATION_STEP0_OUTPUT.exists() and not overwrite:
+        raise FileExistsError(f"Validation output exists; pass --overwrite to replace it: {VALIDATION_STEP0_OUTPUT}")
+    val, split_path, manifest = make_validation_dataset(config)
+    loader = DataLoader(val, batch_size=batch_size, shuffle=False, num_workers=num_workers, pin_memory=True, prefetch_factor=2, persistent_workers=True)
+    model_start = time.perf_counter()
+    model, model_info = build_training_anycalib(device=device)
+    model_load_seconds = time.perf_counter() - model_start
+    model.eval()
+    torch.cuda.reset_peak_memory_stats(device)
+    validation_start = time.perf_counter()
+    rows = []
+    success_count = 0
+    iterator = iter(loader)
+    for batch in iterator:
+        batch_size_actual = len(batch["image"])
+        batch = move_to_device(batch, device)
+        sync_cuda(device)
+        with torch.no_grad():
+            with torch.autocast(device_type="cuda", enabled=False):
+                prediction = model(batch)
+        sync_cuda(device)
+        pred_intrinsics, success, pred_size = _validation_prediction(prediction, batch_size_actual)
+        pred_height, pred_width = pred_size
+        for offset in range(batch_size_actual):
+            meta = {key: _batch_meta_value(values, offset) for key, values in batch["meta"].items()}
+            gt = batch["intrinsics"][offset].detach().cpu()
+            frame_success = bool(success[offset].item())
+            row = {
+                "participant": meta["participant"], "sequence": meta["sequence"], "camera": meta["camera"],
+                "camera_key": meta["camera_key"], "video_path": "", "video_name": meta["video_name"],
+                "frame_index": int(meta["frame_index"]), "width": int(meta["target_width"]), "height": int(meta["target_height"]),
+                "gt_fx": float(gt[0]), "gt_fy": float(gt[1]), "gt_cx": float(gt[2]), "gt_cy": float(gt[3]),
+                "pred_width": pred_width, "pred_height": pred_height, "success": frame_success,
+            }
+            if frame_success:
+                pred = pred_intrinsics[offset, :4]
+                row.update({f"pred_{key}": float(pred[index]) for index, key in enumerate(("fx", "fy", "cx", "cy"))})
+                row.update({key: float(value) for key, value in camera_errors(pred, gt, meta["target_width"], meta["target_height"]).items()})
+                success_count += 1
+            rows.append(row)
+    sync_cuda(device)
+    validation_seconds = time.perf_counter() - validation_start
+    gpu = gpu_metadata(device, selector)
+    metrics_output = VALIDATION_STEP0_OUTPUT
+    if metrics_output.exists():
+        shutil.rmtree(metrics_output)
+    metrics_output.mkdir(parents=True, exist_ok=True)
+    raw_path = metrics_output / "frame_predictions.csv.gz"
+    write_frame_predictions(raw_path, rows)
+    metrics = write_summaries(raw_path, metrics_output)
+    metrics.update(_step0_metric_aliases(metrics))
+    metrics["checkpoint_selection"] = {"primary_metric": "val_pair_max_rel_f_mean", "direction": "minimize"}
+    (metrics_output / "metrics.json").write_text(json.dumps(metrics, indent=2) + "\n")
+    shutil.copyfile(config_path, metrics_output / "config.yaml")
+    runtime = {
+        "model_load_seconds": model_load_seconds, "validation_seconds": validation_seconds,
+        "frames_per_second": len(rows) / validation_seconds if validation_seconds else 0,
+        "frames_processed": len(rows), "successful_frames": success_count,
+        "failed_frames": len(rows) - success_count, "success_rate": success_count / len(rows),
+        "batch_size": batch_size, "num_workers": num_workers,
+        "batch_count": len(loader), "peak_allocated_mib": torch.cuda.max_memory_allocated(device) / (1024**2),
+        "peak_reserved_mib": torch.cuda.max_memory_reserved(device) / (1024**2),
+    }
+    metadata = {
+        "experiment": config["experiment"]["name"], "mode": "validation_step0",
+        "repository_commit": git_output("rev-parse", "HEAD"),
+        "repository_dirty": bool(git_output("status", "--porcelain")),
+        "anycalib_commit": git_output("rev-parse", "HEAD", cwd=ANYCALIB_ROOT),
+        "config_sha256": sha256_file(config_path), "manifest_sha256": sha256_file(manifest),
+        "validation_split_sha256": sha256_file(split_path), "dataset_split": "validation",
+        "validation_participant": "p36", "validation_frames": len(rows), "validation_pairs": len(val.pair_indices),
+        "model": "official siclib.models.networks.anycalib_net.AnyCalib",
+        "initialization": "anycalib_pinhole pretrained", "pretrained_weight_sha256": model_info["pretrained_weight_sha256"],
+        "dinov2_weight_sha256": "d5383ea8f4877b2472eb973e0fd72d557c7da5d3611bd527ceeb1d7162cbf428",
+        "model_parameter_count": model_info["parameter_count"], "input_width": 1280, "input_height": 720,
+        "pred_width": 420, "pred_height": 238, "batch_size": batch_size, "num_workers": num_workers,
+        "training_precision": "bf16", "validation_precision": "fp32", "cuda_visible_devices": selector,
+        **gpu, "command_line": " ".join(os.sys.argv), "output_directory": str(metrics_output.relative_to(PROJECT_ROOT)),
+    }
+    (metrics_output / "metadata.json").write_text(json.dumps(metadata, indent=2) + "\n")
+    (metrics_output / "runtime.json").write_text(json.dumps(runtime, indent=2) + "\n")
+    _write_step0_summary(metrics_output, metrics, runtime, metadata)
+    print((metrics_output / "summary.txt").read_text(), end="")
+
+
 def smoke(config, config_path, batch_size, num_workers, precision, overwrite):
     device, selector = require_single_cuda_device()
     if batch_size != 1:
@@ -575,13 +751,14 @@ def parse_args():
     mode.add_argument("--dry-run", action="store_true")
     mode.add_argument("--smoke", action="store_true")
     mode.add_argument("--benchmark", action="store_true")
+    mode.add_argument("--validate-step0", action="store_true")
     parser.add_argument("--batch-size", type=int, default=1)
     parser.add_argument("--num-workers", type=int, default=0)
     parser.add_argument("--precision", choices=("fp32", "bf16"), default="bf16")
     parser.add_argument("--overwrite", action="store_true")
     args = parser.parse_args()
-    if not args.dry_run and not args.smoke and not args.benchmark:
-        parser.error("Full fine-tuning is not enabled yet. Use --dry-run, --smoke, or --benchmark.")
+    if not args.dry_run and not args.smoke and not args.benchmark and not args.validate_step0:
+        parser.error("Full fine-tuning is not enabled yet. Use --dry-run, --smoke, --benchmark, or --validate-step0.")
     return args
 
 
@@ -592,6 +769,8 @@ def main():
         dry_run(config, args.batch_size, args.num_workers)
     elif args.benchmark:
         benchmark(config, config_path, args.batch_size, args.num_workers, args.precision, args.overwrite)
+    elif args.validate_step0:
+        validate_step0(config, config_path, overwrite=args.overwrite)
     else:
         smoke(config, config_path, args.batch_size, args.num_workers, args.precision, args.overwrite)
 
