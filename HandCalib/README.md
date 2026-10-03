@@ -78,6 +78,16 @@ Benchmark는 `HandCalib/runs/02_anycalib_finetune/benchmark_train/bsX_nwY_precis
 
 02-C bounded engineering benchmark completed. Train-only throughput, VRAM margin, stability, loader timing을 기준으로 runtime setting을 선택했습니다: `batch_size=4`, `num_workers=4`, training `bf16`, validation `fp32`. 이는 engineering runtime setting이며 validation 성능이나 학술적 batch-size 우열을 의미하지 않습니다. Test는 사용하지 않았습니다.
 
+### 02-D.0 fine-tuning protocol audit
+
+02-D.0에서는 full fine-tuning을 실행하지 않고, 현재 sampler와 `batch_size=4`의 실제 epoch 길이 및 official AnyCalib recipe를 점검했습니다. `25,578` sampled frames와 `drop_last=False`에서 `6,395` optimizer steps/epoch이며 마지막 batch는 2개입니다. step-0 pretrained Validation은 p36 전체 `18,652` frames와 49 pairs를 FP32로 1회 평가했습니다.
+
+Checkpoint primary metric은 `val_pair_max_rel_f_mean`으로 고정합니다. 각 pair의 frame prediction에서 component-wise median `[fx, fy, cx, cy]`를 만든 뒤 GT와 다시 비교하고, 49개 pair를 동일 가중치로 평균합니다. 보조 metric과 raw predictions는 `HandCalib/runs/02_anycalib_finetune/validation_step0/`에 저장했고, protocol record는 `results/02d0_finetune_protocol_audit.yaml`입니다.
+
+Step-0 결과는 18,652/18,652 frame success, 49/49 valid pairs, primary `0.2087389594`, within 5% focal `4/49`입니다. Validation runtime은 1020.326초, 18.280 frames/sec, peak reserved 1524 MiB였습니다. 이는 pre-finetuning reference이며 성능 결론이나 Test 비교가 아닙니다.
+
+현재 official recipe의 확인값은 AdamW, base LR `6e-5`, backbone scale `0.1`, gradient clip `1.0`, epochs `40`, warmup `1000`, milestones `10000/30000`, gamma `0.3`, best key `angular_error`입니다. optimizer options가 비어 있어 PyTorch AdamW default weight decay는 `0.01`입니다. 이 recipe가 fine-tuning 전용인지 여부는 pinned source만으로 확정하지 않았습니다. epochs, LR, scheduler, validation interval은 다음 protocol 검토에서 결정합니다.
+
 ## AnyCalib pretrained smoke test
 
 가중치와 CUDA 환경이 준비되면 validation의 첫 frame 하나만 실행할 수 있습니다. `--dry-run`은 모델과 가중치를 사용하지 않고 설정·데이터 크기만 확인합니다.

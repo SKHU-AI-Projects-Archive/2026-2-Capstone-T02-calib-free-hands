@@ -1,0 +1,137 @@
+experiment: 02d0_finetune_protocol_audit
+status: completed
+test_data_used: false
+full_training_run: false
+runtime_setting:
+  batch_size: 4
+  num_workers: 4
+  training_precision: bf16
+  validation_precision: fp32
+training_data:
+  train_frames: 44254
+  train_pairs: 147
+  frames_per_pair: 174
+  samples_per_epoch: 25578
+  dataloader_drop_last: false
+  batch_count_per_epoch: 6395
+  last_batch_size: 2
+step_mapping:
+  - epochs: 1
+    optimizer_steps: 6395
+    sampled_frames: 25578
+  - epochs: 2
+    optimizer_steps: 12790
+    sampled_frames: 51156
+  - epochs: 3
+    optimizer_steps: 19185
+    sampled_frames: 76734
+  - epochs: 4
+    optimizer_steps: 25580
+    sampled_frames: 102312
+  - epochs: 5
+    optimizer_steps: 31975
+    sampled_frames: 127890
+  - epochs: 10
+    optimizer_steps: 63950
+    sampled_frames: 255780
+official_recipe:
+  source: HandCalib/AnyCalib/siclib/configs/train/anycalib.yaml
+  optimizer: AdamW
+  base_learning_rate: 0.00006
+  optimizer_options: {}
+  pytorch_adamw_default_weight_decay: 0.01
+  backbone_lr_scale: 0.1
+  gradient_clip_norm: 1.0
+  epochs: 40
+  warmup_steps: 1000
+  warmup_scheduler: LinearLR
+  warmup_start_factor: 0.001
+  milestones: [10000, 30000]
+  scheduler: MultiStepLR
+  gamma: 0.3
+  best_key: angular_error
+  eval_every_iter: 1000
+  recipe_finetuning_specificity: source_does_not_establish
+schedule_position_in_current_dataset:
+  steps_per_epoch: 6395
+  warmup_1000_steps_epoch: 0.1563721658
+  milestone_10000_steps_epoch: 1.5637216575
+  milestone_30000_steps_epoch: 4.6911649726
+checkpoint_selection:
+  primary_metric: val_pair_max_rel_f_mean
+  direction: minimize
+  definition: pair-equal mean of max relative focal error after component-wise median intrinsics per pair
+  secondary_metrics:
+    - val_pair_max_rel_f_median
+    - val_pair_rel_fx_mean
+    - val_pair_rel_fx_median
+    - val_pair_rel_fy_mean
+    - val_pair_rel_fy_median
+    - val_pair_max_rel_c_mean
+    - val_pair_max_rel_c_median
+    - val_pair_within_5pct_count
+    - val_pair_within_5pct_rate
+    - val_frame_success_rate
+step0_validation:
+  dataset: validation
+  participant: p36
+  frames: 18652
+  pairs: 49
+  frame_successful: 18652
+  frame_failed: 0
+  frame_success_rate: 1.0
+  val_pair_max_rel_f_mean: 0.20873895942938595
+  val_pair_max_rel_f_median: 0.20614696300632596
+  val_pair_rel_fx_mean: 0.20446915465725024
+  val_pair_rel_fx_median: 0.20263877223309182
+  val_pair_rel_fy_mean: 0.206230563352838
+  val_pair_rel_fy_median: 0.20062458649296394
+  val_pair_max_rel_c_mean: 0.08002511826263708
+  val_pair_max_rel_c_median: 0.07431229022370667
+  val_pair_within_5pct_count: 4
+  val_pair_within_5pct_rate: 0.08163265306122448
+  batch_size: 4
+  num_workers: 4
+  validation_precision: fp32
+  output: runs/02_anycalib_finetune/validation_step0
+step0_runtime:
+  model_load_seconds: 8.341080999933183
+  validation_seconds: 1020.3257817449048
+  frames_per_second: 18.280435850697
+  peak_allocated_mib: 1450.1689453125
+  peak_reserved_mib: 1524.0
+  batch_count: 4663
+runtime_estimate:
+  training_samples_per_second: 16.63642441452309
+  training_seconds_per_epoch: 1537.4697929484887
+  training_hours_per_epoch: 0.4270749425
+  validation_every_epoch:
+    epochs_3_seconds: 7673.386724080181
+    epochs_3_hours: 2.1314963122
+    epochs_5_seconds: 12788.977873466967
+    epochs_5_hours: 3.5524938537
+  validation_every_2_epochs:
+    epochs_3_seconds: 6653.060942335276
+    epochs_3_hours: 1.8480724840
+    epochs_5_seconds: 10748.326309977158
+    epochs_5_hours: 2.9856461972
+  note: engineering estimate; excludes checkpoint and other overhead
+checkpoint_requirements:
+  model_state_dict: required
+  optimizer_state_dict: required
+  scheduler_state_dict: required
+  epoch: required
+  global_step: required
+  best_validation_metric: required
+  current_validation_metrics: required
+  config_snapshot: required
+  repository_commit: required
+  anycalib_commit: required
+  pretrained_weight_sha256: required
+  dataset_split_hashes: required
+  rng_state: review_for_resume_design
+repository_commit: b62485891825b9f8cf5ea2a7ed10cfe3aa6b8f16
+anycalib_commit: 027a8497d893f4b2596f23d6324c05e4b81064ed
+config_sha256: 02ff23d6173b281da7da87bb99da1e59a749d436975e64767675f9440228cb38
+manifest_sha256: bd803b32f1f17d5c4ae3505ec59a01b63903f6fdb7d20797116412d5ef4ee8d2
+validation_split_sha256: be8397f8ec23a9255ba44202e75be55f5136e7fc05ec95669de5b7d2536edf17
