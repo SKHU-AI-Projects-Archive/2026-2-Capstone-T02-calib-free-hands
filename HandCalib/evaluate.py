@@ -243,7 +243,6 @@ def _benchmark_metadata(config, config_path, split_path, first, clip, batch_size
         "anycalib_commit": _git_head(PROJECT_ROOT / "AnyCalib"),
         "config_sha256": sha256_file(config_path),
         "manifest_sha256": sha256_file(PROJECT_ROOT / "data/manifests/gigahands.csv"),
-        "validation_split_sha256": sha256_file(split_path),
         "python_version": sys.version.split()[0], "torch_version": torch.__version__,
         "torchvision_version": _version("torchvision"), "numpy_version": _version("numpy"),
         "opencv_version": cv2.__version__, "cuda_build_version": torch.version.cuda,
@@ -255,9 +254,6 @@ def _benchmark_metadata(config, config_path, split_path, first, clip, batch_size
         "cudnn_benchmark": torch.backends.cudnn.benchmark, "cudnn_deterministic": torch.backends.cudnn.deterministic,
         "allow_tf32": torch.backends.cuda.matmul.allow_tf32,
         "model_parameter_count": sum(parameter.numel() for parameter in adapter.model.parameters()),
-        "benchmark_split": "validation", "benchmark_sequence": first["sequence"],
-        "benchmark_camera": first["camera"], "benchmark_camera_key": first["camera_key"],
-        "benchmark_video_name": first["video_name"], "benchmark_frames": len(clip),
         "batch_size": batch_size, "num_workers": num_workers,
         "dataloader_prefetch_factor": None if num_workers == 0 else 2,
         "input_width": input_width, "input_height": input_height, "pred_width": None, "pred_height": None,
@@ -273,10 +269,15 @@ def _benchmark_metadata(config, config_path, split_path, first, clip, batch_size
             "test_sequence": first["sequence"], "test_frames": len(clip),
             "test_pairs": len({sample["row"]["camera_key"] for sample in clip.samples}),
             "evaluation_setting_source": "validation_benchmark",
+            "test_split_sha256": sha256_file(split_path),
         })
-        metadata["test_split_sha256"] = metadata.pop("validation_split_sha256")
     else:
-        metadata["dataset_split"] = "validation"
+        metadata.update({
+            "dataset_split": "validation", "validation_split_sha256": sha256_file(split_path),
+            "benchmark_split": "validation", "benchmark_sequence": first["sequence"],
+            "benchmark_camera": first["camera"], "benchmark_camera_key": first["camera_key"],
+            "benchmark_video_name": first["video_name"], "benchmark_frames": len(clip),
+        })
     return metadata
 
 
@@ -334,7 +335,7 @@ def _benchmark(config, config_path, args, final_test=False):
         output_dir = BENCHMARK_ROOT / f"bs{batch_size}_nw{num_workers}"
     if args.dry_run:
         print("mode=test" if final_test else "benchmark mode")
-        print(f"validation_split={split_path}")
+        print(f"{'test_split' if final_test else 'validation_split'}={split_path}")
         print(f"split={'test' if final_test else 'validation'}")
         print(f"participant={first['participant']}")
         print(f"selected_sequence={first['sequence']}")
