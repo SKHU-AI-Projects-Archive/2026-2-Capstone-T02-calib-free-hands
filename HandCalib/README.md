@@ -13,8 +13,6 @@ HandCalib은 손-물체 상호작용 영상의 카메라 보정 방법을 연구
 - [x] 공식 archive와 현재 local dataset의 파일 단위 비교
 - [x] CAM-EXP-001 과거 검증의 목적과 raw dataset 비수정 여부 확인
 - [x] Linux에서 downloader unittest와 실제 공식 archive 설치 검증
-- [x] Windows/macOS용 downloader CI workflow 추가
-
 CAM-EXP-001은 제공 camera와 제공 3D joints를 2D annotation에 재투영해 camera convention, distortion, frame 대응을 확인한 과거 검증입니다. 일부 `(0, 0)` 2D detection과 per-view outlier 패턴을 관찰했지만 raw GigaHands 파일을 수정한 실험은 아닙니다.
 
 ## 실험 로드맵
