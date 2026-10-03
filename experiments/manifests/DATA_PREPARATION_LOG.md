@@ -1,6 +1,6 @@
 # Data Preparation Log — 2026-09-22
 
-Branch `kjh`, repository root `D:\hand-demo`, starting commit `224ea50`.
+Branch `kjh`; the original preparation was recorded from a local workspace.
 This log records what was actually found, moved, extracted, deleted and
 verified, so that a later reader can reconstruct how the current layout
 came about.
@@ -75,7 +75,7 @@ archive is retained and passes an integrity check, the copy is redundant under
 the new layout, and reproducibility is unaffected (any of them can be restored
 by re-extracting the archive). No backup directory, no unique archive, no
 unique annotation, no checkpoint and no original supervisor source was touched.
-`D:\hand-demo-local-backup-20260922` was not inspected, modified or deleted.
+The separate local backup workspace was not inspected, modified or deleted.
 
 **Created**
 - `datasets/reinterhand/README.md` recording the deliberate non-download.

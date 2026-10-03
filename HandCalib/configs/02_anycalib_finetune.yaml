@@ -1,0 +1,28 @@
+experiment:
+  name: 02_anycalib_finetune
+  seed: 42
+
+dataset:
+  name: GigaHands
+  root: datasets/gigahands
+  train_split: data/splits/gigahands/train.txt
+  val_split: data/splits/gigahands/val.txt
+  image_size: null
+  num_workers: null
+
+model:
+  name: AnyCalib
+  pretrained: true
+  checkpoint: null
+
+training:
+  epochs: null
+  batch_size: null
+
+optimizer:
+  name: null
+  lr: null
+  weight_decay: null
+
+scheduler:
+  name: null

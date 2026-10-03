@@ -1,0 +1,88 @@
+# Python bytecode/cache
+__pycache__/
+*.py[cod]
+*$py.class
+
+# Test / linter / type checker caches
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.pyre/
+.hypothesis/
+.coverage
+.coverage.*
+htmlcov/
+
+# Python packaging/build
+build/
+dist/
+*.egg-info/
+.eggs/
+pip-wheel-metadata/
+
+# Virtual environments
+.venv/
+venv/
+env/
+ENV/
+
+# Environment / secrets
+.env
+.env.*
+!.env.example
+
+# Jupyter
+.ipynb_checkpoints/
+
+# IDE/editor
+.idea/
+.vscode/
+*.swp
+*.swo
+*~
+
+# OS metadata
+.DS_Store
+Thumbs.db
+Desktop.ini
+
+# Logs
+*.log
+logs/
+
+# ML experiment trackers
+wandb/
+mlruns/
+tensorboard/
+lightning_logs/
+
+# Model weights / checkpoints
+*.pt
+*.pth
+*.ckpt
+*.onnx
+*.safetensors
+checkpoints/
+weights/
+
+# Generated experiment artifacts
+outputs/
+artifacts/
+
+# Local runtime/temp/cache
+tmp/
+temp/
+.cache/
+
+# Local GigaHands dataset and downloaded data
+data/gigahands/demo_all/
+datasets/gigahands/
+data/cache/
+data/downloads/
+
+# Experiment outputs; keep placeholder for repository structure
+runs/*
+!runs/.gitkeep
+
+# Agent planning scratch from local bootstrapping
+docs/superpowers/
