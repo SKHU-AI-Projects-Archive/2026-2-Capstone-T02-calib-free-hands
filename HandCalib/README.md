@@ -41,6 +41,29 @@ CAM-EXP-001은 제공 camera와 제공 3D joints를 2D annotation에 재투영�
 
 Audit의 p90/p95/max는 전체 pixel을 합친 global percentile이 아니라 pair별 statistic의 pair-equal mean입니다. center/border angular mean도 함께 보존합니다. 02-B 학습 loader 구현 전 Train/Validation A-oracle과 pretrained/training state_dict strict compatibility를 통과해야 합니다.
 
+### 02-B training smoke pipeline
+
+02-B source 경로는 확정된 canonical pinhole supervision을 official training AnyCalib, official `l1-z1` loss, backward, optimizer one-step, Validation pinhole fitting까지 연결합니다. Dataset은 raw RGB를 official deterministic preprocessing으로 `238x420`으로 만들고, `0.5` pixel-center convention의 canonical ray를 생성합니다. full augmentation과 fine-tuning hyperparameter는 아직 확정하지 않았습니다.
+
+Codex의 CPU 검증은 완료했지만 GPU smoke는 공유 서버의 GPU를 임의로 선택하지 않기 위해 실행하지 않았습니다. 먼저 `nvidia-smi`로 빈 GPU를 확인한 뒤 사용자가 직접 실행합니다.
+
+```bash
+python HandCalib/train.py \
+  --config HandCalib/configs/02_anycalib_finetune.yaml \
+  --dry-run \
+  --batch-size 1 \
+  --num-workers 0
+
+CUDA_VISIBLE_DEVICES=<FREE_GPU> python HandCalib/train.py \
+  --config HandCalib/configs/02_anycalib_finetune.yaml \
+  --smoke \
+  --batch-size 1 \
+  --num-workers 0 \
+  --precision bf16
+```
+
+Smoke output은 `HandCalib/runs/02_anycalib_finetune/smoke/`에 저장되며 기본적으로 기존 결과를 덮어쓰지 않습니다. 이 smoke는 성능 평가가 아니고, 한 train batch의 forward/loss/backward/optimizer step과 한 validation batch의 fitting 연결만 확인합니다.
+
 ## AnyCalib pretrained smoke test
 
 가중치와 CUDA 환경이 준비되면 validation의 첫 frame 하나만 실행할 수 있습니다. `--dry-run`은 모델과 가중치를 사용하지 않고 설정·데이터 크기만 확인합니다.
@@ -126,7 +149,6 @@ python tools/download_gigahands_demo.py --check
 
 ## 아직 남은 일
 
-- AnyCalib 환경과 pretrained baseline 실행
-- fine-tuning protocol, split, metric 확정
-- 02-B fine-tuning loader 구현
+- 02-B GPU smoke 사용자 실행
+- 02-C augmentation, batch size, optimizer와 metric protocol 결정
 - HandCalib 모델과 학습/evaluation 코드 구현

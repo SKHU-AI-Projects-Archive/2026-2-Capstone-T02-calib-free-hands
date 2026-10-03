@@ -4,10 +4,17 @@ from collections import defaultdict
 import csv
 from pathlib import Path
 import random
+import sys
 
 import cv2
 import torch
+from omegaconf import OmegaConf
 from torch.utils.data import Dataset, Sampler
+
+sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "AnyCalib"))
+
+from anycalib.cameras import CameraFactory
+from siclib.utils.image_rays import ImagePreprocessor
 
 
 def _resolve_path(path: str, root: Path) -> Path:
@@ -91,6 +98,81 @@ class GigaHandsDataset(Dataset):
                 "camera_key": row["camera_key"], "video_path": row["video_path"],
                 "video_name": row["video_name"], "frame_index": sample["frame_index"],
                 "width": int(row["width"]), "height": int(row["height"]),
+            },
+        }
+
+
+class GigaHandsRayDataset(GigaHandsDataset):
+    """공식 전처리와 canonical pinhole ray를 반환하는 02-B용 Dataset이다."""
+
+    TARGET_RESOLUTION = 102400
+    EDGE_DIVISIBLE_BY = 14
+    ASPECT_RANGE = (0.5, 2.0)
+
+    def __init__(self, root, split_file, manifest_path=None):
+        super().__init__(root, split_file, manifest_path=manifest_path, transform=None)
+        self.camera = CameraFactory.create_from_id("pinhole")
+        self.preprocessor = ImagePreprocessor(
+            OmegaConf.create(
+                {
+                    "edge_divisible_by": self.EDGE_DIVISIBLE_BY,
+                    "random_center": False,
+                    "resize_backend": "kornia",
+                }
+            )
+        )
+
+    @classmethod
+    def compute_target_size(cls, height, width):
+        aspect = max(cls.ASPECT_RANGE[0], min(height / width, cls.ASPECT_RANGE[1]))
+        target_width = (cls.TARGET_RESOLUTION / aspect) ** 0.5
+        target_height = aspect * target_width
+        return (
+            round(target_height / cls.EDGE_DIVISIBLE_BY) * cls.EDGE_DIVISIBLE_BY,
+            round(target_width / cls.EDGE_DIVISIBLE_BY) * cls.EDGE_DIVISIBLE_BY,
+        )
+
+    def __getitem__(self, index):
+        sample = self.samples[index]
+        row = sample["row"]
+        image = read_video_frame(sample["video_path"], sample["frame_index"])
+        target_size = self.compute_target_size(int(row["height"]), int(row["width"]))
+        processed = self.preprocessor(image, target_size, crop=None, change_pix_ar=False)
+        image = processed["image"]
+        params = torch.tensor(
+            [row["fx"], row["fy"], row["cx"], row["cy"]], dtype=torch.float32
+        )
+        params = self.camera.scale_and_shift(
+            params, processed["scale_xy"], processed["shift_xy"], copy=False
+        )
+        height, width = image.shape[-2:]
+        rays, valid = self.camera.ray_grid(height, width, params, offset=0.5)
+        rays = rays.reshape(-1, 3)
+        rays_mask = (
+            torch.ones(height * width, dtype=torch.bool)
+            if valid is None
+            else valid.reshape(-1).bool()
+        )
+        return {
+            "image": image,
+            "rays": rays,
+            "rays_mask": rays_mask,
+            "intrinsics": params,
+            "cam_id": "pinhole",
+            "distortion": torch.tensor(
+                [row["k1"], row["k2"], row["p1"], row["p2"]], dtype=torch.float32
+            ),
+            "meta": {
+                "participant": row["participant"],
+                "sequence": row["sequence"],
+                "camera": row["camera"],
+                "camera_key": row["camera_key"],
+                "video_name": row["video_name"],
+                "frame_index": sample["frame_index"],
+                "width": int(row["width"]),
+                "height": int(row["height"]),
+                "target_width": width,
+                "target_height": height,
             },
         }
 
