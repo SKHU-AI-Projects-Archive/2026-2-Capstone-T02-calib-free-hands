@@ -1,4 +1,4 @@
-from .gigahands import GigaHandsDataset
+from .gigahands import GigaHandsDataset, PairBalancedSampler
 
 
-__all__ = ["GigaHandsDataset"]
+__all__ = ["GigaHandsDataset", "PairBalancedSampler"]

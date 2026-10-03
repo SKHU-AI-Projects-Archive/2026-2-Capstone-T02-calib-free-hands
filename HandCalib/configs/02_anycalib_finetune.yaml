@@ -7,6 +7,8 @@ dataset:
   root: datasets/gigahands
   train_split: data/splits/gigahands/train.txt
   val_split: data/splits/gigahands/val.txt
+  test_split: data/splits/gigahands/test.txt
+  train_frames_per_pair: 174
   image_size: null
   num_workers: null
 

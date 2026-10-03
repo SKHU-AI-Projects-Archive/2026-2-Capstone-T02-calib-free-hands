@@ -1,3 +1,4 @@
 PyYAML
 numpy
 torch
+opencv-python-headless
