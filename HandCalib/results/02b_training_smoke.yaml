@@ -1,0 +1,23 @@
+experiment: 02b_training_smoke
+status: passed
+repository_commit: 5239986e038f9158612bee85dc52da4fa2a32219
+anycalib_commit: 027a8497d893f4b2596f23d6324c05e4b81064ed
+test_data_used: false
+full_training_run: false
+model: official_training_anycalib
+initialization: anycalib_pinhole_pretrained
+supervision: raw_rgb_canonical_pinhole_rays
+training_precision: bf16
+validation_precision: fp32
+batch_size: 1
+num_workers: 0
+gradient:
+  parameter_count: 394
+  finite: 394
+  nonzero: 394
+optimizer_step_success: true
+parameter_changed: true
+validation_fit_success: 1/1
+peak_allocated_mib: 6144.46337890625
+peak_reserved_mib: 6332.0
+engineering_smoke_only: true

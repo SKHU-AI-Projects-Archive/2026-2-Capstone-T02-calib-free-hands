@@ -7,13 +7,21 @@ dataset:
   root: datasets/gigahands
   train_split: null
   val_split: data/splits/gigahands/val.txt
+  test_split: data/splits/gigahands/test.txt
   image_size: null
   num_workers: null
 
 model:
   name: AnyCalib
+  model_id: anycalib_pinhole
+  cam_id: pinhole
   pretrained: true
   checkpoint: null
+
+evaluation:
+  output_dir: runs/01_anycalib_pretrained
+  batch_size: 2
+  num_workers: 4
 
 training:
   epochs: null

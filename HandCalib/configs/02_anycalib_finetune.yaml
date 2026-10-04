@@ -7,22 +7,44 @@ dataset:
   root: datasets/gigahands
   train_split: data/splits/gigahands/train.txt
   val_split: data/splits/gigahands/val.txt
+  test_split: data/splits/gigahands/test.txt
+  train_frames_per_pair: 174
   image_size: null
-  num_workers: null
+  num_workers: 4
 
 model:
   name: AnyCalib
+  model_id: anycalib_pinhole
+  cam_id: pinhole
   pretrained: true
   checkpoint: null
 
+supervision:
+  input: raw_rgb
+  target: canonical_pinhole_rays
+  intrinsics: [fx, fy, cx, cy]
+  distortion_for_target: false
+  camera_model: pinhole
+  distortion_model: opencv_brown_conrady
+  distortion_coefficients: [k1, k2, p1, p2]
+  final_fitting_model: pinhole
+  status: finalized_after_02a_audit
+
 training:
-  epochs: null
-  batch_size: null
+  epochs: 5
+  batch_size: 4
+  precision: bf16
+  validation_every_epochs: 1
+  gradient_clip_norm: 1.0
 
 optimizer:
-  name: null
-  lr: null
-  weight_decay: null
+  name: AdamW
+  lr: 6.0e-5
+  weight_decay: 0.01
+  backbone_lr_scale: 0.1
 
 scheduler:
-  name: null
+  name: official_anycalib_multistep
+  warmup_steps: 1000
+  milestones: [10000, 30000]
+  gamma: 0.3

@@ -1,0 +1,26 @@
+experiment: 01_anycalib_pretrained
+status: frozen
+model_id: anycalib_pinhole
+cam_id: pinhole
+repository_commit: 4b014292845d4e9b4113fba0587c50c47e63fc3d
+anycalib_commit: 027a8497d893f4b2596f23d6324c05e4b81064ed
+split:
+  name: test
+  participant: p52
+  sequence: p52-instrument-0034
+  frames: 7667
+  pairs: 49
+success:
+  frames: 7667
+  rate: 1.0
+pair_metrics:
+  max_focal_error:
+    mean: 0.18497205009511505
+    median: 0.17258688477275663
+  max_principal_point_error:
+    mean: 0.08199870613426849
+    median: 0.06982756720648872
+  focal_within_5pct:
+    count: 4
+    rate: 0.08163265306122448
+provenance: user-provided frozen 01 evaluation record; raw outputs are not tracked

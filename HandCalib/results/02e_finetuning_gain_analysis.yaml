@@ -1,0 +1,89 @@
+experiment: 02e_finetuning_gain_analysis
+status: completed
+no_additional_training: true
+test_used_for_analysis_only: true
+source_of_truth:
+  pretrained_test: runs/01_anycalib_pretrained/test
+  finetuned_test: runs/02_anycalib_finetune/test
+  pair_join_key: camera_key
+  pair_count: 49
+  metric_definition: existing_pair_representative_equal_weight_metrics
+pretrained_test:
+  max_rel_f_mean: 0.18497205009511505
+  max_rel_f_median: 0.17258688477275663
+  max_rel_c_mean: 0.08199870613426849
+  max_rel_c_median: 0.06982756720648872
+  focal_within_5pct: 4
+finetuned_test:
+  max_rel_f_mean: 0.016171892089469387
+  max_rel_f_median: 0.012833040372399147
+  max_rel_c_mean: 0.04068291441383275
+  max_rel_c_median: 0.03448265923394097
+  focal_within_5pct: 49
+pair_analysis:
+  improved_count: 47
+  worsened_count: 2
+  tie_count: 0
+  worsened_pairs:
+    - camera_key: p52-instrument-0034/brics-odroid-004_cam0
+      pretrained_max_rel_f: 0.028951397712165323
+      finetuned_max_rel_f: 0.03822639960537166
+    - camera_key: p52-instrument-0034/brics-odroid-015_cam1
+      pretrained_max_rel_f: 0.02529824479394781
+      finetuned_max_rel_f: 0.03412979318058566
+  threshold_counts:
+    within_1pct: {pretrained: 0, finetuned: 18}
+    within_2pct: {pretrained: 0, finetuned: 35}
+    within_3pct: {pretrained: 2, finetuned: 42}
+    within_5pct: {pretrained: 4, finetuned: 49}
+    within_10pct: {pretrained: 12, finetuned: 49}
+    within_20pct: {pretrained: 29, finetuned: 49}
+bias_analysis:
+  signed_focal_mean:
+    pretrained: {fx: 0.1637518054316978, fy: 0.16798599797005198}
+    finetuned: {fx: 0.010563872587667252, fy: 0.01245723049106365}
+  signed_focal_median:
+    pretrained: {fx: 0.16540740225921993, fy: 0.15805389057426406}
+    finetuned: {fx: 0.010238232516596312, fy: 0.009709391248343476}
+  interpretation: pretrained_has_positive_focal_overestimation_bias_that_is_substantially_reduced
+calibration_distribution:
+  train_participants: [p41, p44]
+  validation_participant: p36
+  test_participant: p52
+  exact_K_overlap_train_validation: 49
+  exact_K_overlap_train_test: 0
+  normalized_feature: [fx_over_width, fy_over_height, cx_over_width, cy_over_height]
+  test_within_train_fx_range: 49
+  test_within_train_fy_range: 49
+  nearest_train_distance_mean: 0.01259860909553039
+  nearest_train_distance_median: 0.011040159886659169
+  nearest_distance_vs_finetuned_error: {pearson: 0.17710019137742464, spearman: 0.13204081632653063}
+  nearest_distance_vs_improvement: {pearson: 0.02707688417772901, spearman: 0.052959183673469384}
+constant_prior_baselines:
+  train_mean_normalized_intrinsics:
+    max_rel_f_mean: 0.015416442550367124
+    max_rel_f_median: 0.014769847929492484
+    focal_within_5pct: 49
+  train_median_normalized_intrinsics:
+    max_rel_f_mean: 0.015345132049880573
+    max_rel_f_median: 0.014547555697271142
+    focal_within_5pct: 49
+  comparison: train_only_constant_priors_are_slightly_better_than_finetuned_on_this_test
+validation_test_gap:
+  validation_primary: 0.006481811295934264
+  test_primary: 0.016171892089469387
+  absolute_gap: 0.009690080793535123
+  ratio: 2.4949649644403036
+main_supported_findings:
+  - fine_tuning_reduces_the_pretrained_gigahands_focal_mismatch
+  - improvement_occurs_on_47_of_49_matched_pairs_but_not_all_pairs
+  - calibration_distribution_prior_is_a_material_explanation_candidate
+limitations:
+  - single_seed_42_descriptive_analysis
+  - one_validation_participant_and_one_test_participant
+  - constant_prior_result_does_not_prove_or_disprove_image_based_geometry_learning
+  - unseen_physical_camera_generalization_is_not_proven
+future_questions:
+  - multi_seed_evaluation
+  - participant_and_calibration_distribution_holdouts
+  - image_content_ablation_against_constant_calibration_priors

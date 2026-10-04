@@ -1,0 +1,78 @@
+experiment: 02f_image_dependence_control
+status: completed
+additional_training: false
+checkpoint:
+  path: HandCalib/runs/02_anycalib_finetune/train/checkpoint_best.pt
+  sha256: 1b87efa27c847886f5987084a95000bccf2491f1abc719efcfa1c232cd8c2d41
+  epoch: 5
+  global_step: 31975
+  best_validation_metric: 0.006481811295934264
+protocol:
+  participant: p52
+  sequence: p52-instrument-0034
+  frames: 7667
+  pairs: 49
+  cam_id: pinhole
+  batch_size: 2
+  num_workers: 4
+  fixed_source: p41-boxing-0021/brics-odroid-001_cam0/frame_0
+  shuffled_mapping: sorted_p52_camera_keys_cyclic_shift_1
+  gt_used_only_for_metrics: true
+conditions:
+  normal:
+    source: HandCalib/runs/02_anycalib_finetune/test
+    mean_max_rel_f: 0.016171892089469384
+    median_max_rel_f: 0.012833040372399147
+    std_max_rel_f: 0.009848854872249804
+    p90_max_rel_f: 0.03228843473881173
+    p95_max_rel_f: 0.03430412337321587
+    max_max_rel_f: 0.03822639960537166
+    within: {1pct: 18, 2pct: 35, 3pct: 42, 5pct: 49, 10pct: 49, 20pct: 49}
+  fixed:
+    source: HandCalib/runs/02_anycalib_finetune/image_dependence_control/fixed
+    mean_max_rel_f: 0.013129484169769385
+    median_max_rel_f: 0.011312369541815593
+    std_max_rel_f: 0.007824937689209591
+    p90_max_rel_f: 0.025526192764820186
+    p95_max_rel_f: 0.02806919817213139
+    max_max_rel_f: 0.030004923572036157
+    within: {1pct: 22, 2pct: 38, 3pct: 48, 5pct: 49, 10pct: 49, 20pct: 49}
+  shuffled:
+    source: HandCalib/runs/02_anycalib_finetune/image_dependence_control/shuffled
+    mean_max_rel_f: 0.01829434839996936
+    median_max_rel_f: 0.01698800144971066
+    std_max_rel_f: 0.011796924427359072
+    p90_max_rel_f: 0.03283765289899915
+    p95_max_rel_f: 0.03778477244959727
+    max_max_rel_f: 0.05297452161768776
+    within: {1pct: 15, 2pct: 29, 3pct: 42, 5pct: 48, 10pct: 49, 20pct: 49}
+  constant_median_prior:
+    source: train_p41_p44_gt_only
+    mean_max_rel_f: 0.015345132049880573
+    median_max_rel_f: 0.014547555697271142
+    std_max_rel_f: 0.008924201411295142
+    p90_max_rel_f: 0.027250447041403024
+    p95_max_rel_f: 0.031633008265467756
+    max_max_rel_f: 0.03475724282162
+    within: {1pct: 14, 2pct: 35, 3pct: 46, 5pct: 49, 10pct: 49, 20pct: 49}
+comparisons:
+  normal_vs_fixed: {normal_better: 18, fixed_better: 31, tie: 0}
+  normal_vs_shuffled: {normal_better: 28, shuffled_better: 21, tie: 0}
+  normal_vs_constant_prior: {normal_better: 24, constant_prior_better: 25, tie: 0}
+prediction_sensitivity:
+  normal_to_fixed:
+    fx_mean_relative_change: 0.0111685509100595
+    fx_median_relative_change: 0.008800541697074522
+    fy_mean_relative_change: 0.011240621245990677
+    fy_median_relative_change: 0.008447102589550419
+  normal_to_shuffled:
+    fx_mean_relative_change: 0.011354430412779927
+    fx_median_relative_change: 0.009899388897320905
+    fy_mean_relative_change: 0.012492906929450967
+    fy_median_relative_change: 0.008955699373305901
+classification: PRIOR-DOMINANT
+interpretation: Image-conditioned signal exists, but the narrow GigaHands calibration prior dominates the primary metric.
+limitations:
+  - one fixed image and one cyclic shuffle
+  - one Test participant and one frozen checkpoint
+  - figures not generated because matplotlib is unavailable in the current environments
