@@ -1,0 +1,85 @@
+experiment: 02d1_finetune_protocol
+status: frozen
+test_data_used: false
+full_finetuning_run: false
+step0_validation_primary: 0.20873895942938595
+lr_candidates:
+  - lr: 0.00006
+    epoch: 1
+    train_completion_status: pass
+    validation_primary: 0.013186317532610006
+    validation_median: 0.012756173192010068
+    within5: 1.0
+    valid_pairs: 49
+    training_seconds: 1623.903
+    validation_seconds: 1026.685
+    output: runs/02_anycalib_finetune/lr_pilot/lr_6e-05
+  - lr: 0.00002
+    epoch: 1
+    train_completion_status: pass
+    validation_primary: 0.013361254070060103
+    validation_median: 0.011578904132914593
+    within5: 1.0
+    valid_pairs: 49
+    training_seconds: 1620.441
+    validation_seconds: 1040.271
+    output: runs/02_anycalib_finetune/lr_pilot/lr_2e-05
+candidate_c:
+  lr: 0.00001
+  executed: false
+  reason: both primary candidates improved over step-0
+selected_lr: 0.00006
+selection_reason: lowest finite val_pair_max_rel_f_mean among eligible candidates
+step0_improvement:
+  absolute: 0.19555264189677593
+  relative: 0.9368286707538619
+optimizer:
+  name: AdamW
+  base_lr: 0.00006
+  backbone_lr_scale: 0.1
+  backbone_lr: 0.000006
+  weight_decay: 0.01
+  gradient_clip_norm: 1.0
+epochs:
+  max: 5
+  optimizer_steps_per_epoch: 6395
+  total_optimizer_steps: 31975
+  reason: bounded maximum duration that includes the 30000-step milestone at approximately 4.69 epochs
+scheduler:
+  implementation: official SequentialLR
+  warmup: LinearLR
+  warmup_steps: 1000
+  warmup_start_factor: 0.001
+  decay: MultiStepLR
+  milestones: [10000, 30000]
+  gamma: 0.3
+  stepping: after_each_optimizer_step
+validation:
+  participant: p36
+  every_epochs: 1
+  precision: fp32
+  best_metric: val_pair_max_rel_f_mean
+  direction: minimize
+  early_stopping: false
+runtime:
+  batch_size: 4
+  num_workers: 4
+  training_precision: bf16
+  expected_training_seconds_per_epoch: 1537.4697929484887
+  expected_validation_seconds: 1020.3257817449048
+  expected_full_training_seconds: 12788.977873466967
+  expected_full_training_hours: 3.5524938537
+initialization:
+  production: fresh_anycalib_pinhole_pretrained
+  pilot_checkpoints_reused: false
+production_train_mode:
+  implemented: true
+  explicit_flag: --train
+  plan_flag: --train-plan
+  executed: false
+locked_hashes:
+  manifest_sha256: bd803b32f1f17d5c4ae3505ec59a01b63903f6fdb7d20797116412d5ef4ee8d
+  train_split_sha256: 8056a182876e16221725874080a6d9008936e3ecd62f6e284f8ed17e00fe48
+  validation_split_sha256: be8397f8ec23a9255ba44202e75be55f5136e7fc05ec95669de5b7d2536edf17
+repository_commit_before_freeze: e26002fabd66412cd8809a0025a9bc96a7f1a97b
+anycalib_commit: 027a8497d893f4b2596f23d6324c05e4b81064ed

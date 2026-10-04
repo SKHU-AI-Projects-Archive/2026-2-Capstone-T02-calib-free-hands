@@ -88,6 +88,14 @@ Step-0 결과는 18,652/18,652 frame success, 49/49 valid pairs, primary `0.2087
 
 현재 official recipe의 확인값은 AdamW, base LR `6e-5`, backbone scale `0.1`, gradient clip `1.0`, epochs `40`, warmup `1000`, milestones `10000/30000`, gamma `0.3`, best key `angular_error`입니다. optimizer options가 비어 있어 PyTorch AdamW default weight decay는 `0.01`입니다. 이 recipe가 fine-tuning 전용인지 여부는 pinned source만으로 확정하지 않았습니다. epochs, LR, scheduler, validation interval은 다음 protocol 검토에서 결정합니다.
 
+### 02-D.1 fine-tuning protocol frozen
+
+두 개의 bounded 1-epoch LR pilot을 fresh `anycalib_pinhole` pretrained에서 실행하고 p36 Validation으로 비교했습니다. Candidate `6e-5`의 `val_pair_max_rel_f_mean`은 `0.0131863175`, Candidate `2e-5`는 `0.0133612541`이어서 `6e-5`를 선택했습니다. 두 후보 모두 step-0 `0.2087389594`보다 개선되었으므로 `1e-5` Candidate C는 실행하지 않았습니다. raw pilot 결과는 Git에서 제외되는 `runs/02_anycalib_finetune/lr_pilot/`에 있습니다. 상세 기록은 `results/02d1_finetune_protocol.yaml`입니다.
+
+고정 protocol은 AdamW, base LR `6e-5`, backbone LR `6e-6` (`x0.1`), weight decay `0.01`, gradient clip norm `1.0`, batch `4`, workers `4`, BF16 training, FP32 Validation입니다. 최대 `5` epochs는 최적 epoch라는 주장이 아니라 현재 GigaHands step scale에서 official `30,000`-step milestone을 포함하는 bounded maximum duration입니다. Scheduler는 official `SequentialLR` semantics의 1000-step `LinearLR` warmup (`start_factor=0.001`) 뒤 `MultiStepLR` milestones `10000/30000`, gamma `0.3`이며 optimizer step마다 진행합니다. Validation은 매 epoch, best checkpoint 기준은 lowest `val_pair_max_rel_f_mean`, early stopping은 없습니다.
+
+Production `--train` 경로와 CPU-safe `--train-plan`을 구현했지만 이번 단계에서는 실행하지 않았습니다. Pilot 모델은 최종 모델로 재사용하지 않으며 02-D.2에서 fresh pretrained initialization으로 full 5-epoch training을 실행합니다. **No full fine-tuning was run. Test data was not used.**
+
 ## AnyCalib pretrained smoke test
 
 가중치와 CUDA 환경이 준비되면 validation의 첫 frame 하나만 실행할 수 있습니다. `--dry-run`은 모델과 가중치를 사용하지 않고 설정·데이터 크기만 확인합니다.

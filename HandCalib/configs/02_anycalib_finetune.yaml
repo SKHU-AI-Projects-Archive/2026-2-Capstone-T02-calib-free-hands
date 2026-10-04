@@ -31,14 +31,20 @@ supervision:
   status: finalized_after_02a_audit
 
 training:
-  epochs: null
+  epochs: 5
   batch_size: 4
   precision: bf16
+  validation_every_epochs: 1
+  gradient_clip_norm: 1.0
 
 optimizer:
-  name: null
-  lr: null
-  weight_decay: null
+  name: AdamW
+  lr: 6.0e-5
+  weight_decay: 0.01
+  backbone_lr_scale: 0.1
 
 scheduler:
-  name: null
+  name: official_anycalib_multistep
+  warmup_steps: 1000
+  milestones: [10000, 30000]
+  gamma: 0.3
