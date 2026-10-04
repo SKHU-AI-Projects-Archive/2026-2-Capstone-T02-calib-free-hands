@@ -125,3 +125,16 @@ python demo\demo_hand_mano.py --input some.jpg --out out\img
 | 표시 | `Left` `Right` 체크박스 | 손별 표시 켜기/끄기 |
 
 3D 패널의 흰 점은 촬영 카메라(원점), 바닥 격자 간격은 0.1 m 입니다. 하단 라벨에 현재 프레임 번호와 양손 손목 깊이(m)가 표시됩니다.
+
+## 02-F AnyCalib image dependence control
+
+고정된 02-D.2 best checkpoint로 p52 Test의 RGB 입력만 통제해 비교했다. 추가 학습은 없었다.
+
+| 조건 | mean max focal error | within 5% |
+|---|---:|---:|
+| Normal | 1.6172% | 49/49 |
+| Fixed image | 1.3129% | 49/49 |
+| Cyclic shuffled image | 1.8294% | 48/49 |
+| Train-only median prior | 1.5345% | 49/49 |
+
+Fixed와 shuffled 모두 prediction 자체는 변했지만, 좁은 GigaHands calibration prior가 primary metric을 강하게 지배했다. 현재 결론은 **PRIOR-DOMINANT**이며 image-conditioned signal이 전혀 없다는 뜻은 아니다. Raw output은 `HandCalib/runs/02_anycalib_finetune/image_dependence_control/`에, 요약 결과는 `HandCalib/results/02f_image_dependence_control.yaml`에 있다.
