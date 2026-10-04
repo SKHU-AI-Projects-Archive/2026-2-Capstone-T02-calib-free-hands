@@ -197,3 +197,9 @@ python tools/download_gigahands_demo.py --check
 - Focal error within 5%: `49/49` (`1.0`)
 
 01 pretrained 기록과 비교하면 pair max focal error mean은 `0.1849720501`에서 `0.0161718921`로 91.26% 감소했고, principal-point mean은 `0.0819987061`에서 `0.0406829144`로 50.39% 감소했습니다. Test data was not used for training or checkpoint selection. p36 Validation과 p52 Test는 서로 다른 participant이므로 이 비교는 participant overlap 주의사항을 함께 기록합니다. 상세 수치는 `results/02d2_finetune_result.yaml`에 있습니다.
+
+## 02-E Fine-tuning gain analysis
+
+추가 학습이나 재추론 없이 기존 p52 Test raw output을 `camera_key`로 matched-pair 분석했습니다. pretrained 대비 fine-tuned pair max focal error는 49개 중 `47개 개선`, `2개 악화`, tie `0개`였습니다. pretrained의 signed focal bias는 양수(`fx 0.163752`, `fy 0.167986`)였고 fine-tuning 후 `fx 0.010564`, `fy 0.012457`로 크게 줄었습니다.
+
+Train-only normalized-intrinsics constant prior도 함께 계산했습니다. Train median prior의 focal mean은 `0.0153451320`으로 fine-tuned `0.0161718921`보다 약간 낮았습니다. 따라서 이번 결과는 GigaHands calibration-distribution prior가 큰 역할을 했을 가능성을 지지하지만, image-based geometry 향상이나 calibration memorization을 단독으로 증명하지 않습니다. unseen physical-camera generalization도 주장하지 않습니다. 상세 pair CSV, figures, 수치 요약은 ignored `runs/02_anycalib_finetune/analysis/`에, tracked 요약은 `results/02e_finetuning_gain_analysis.yaml`에 있습니다.
