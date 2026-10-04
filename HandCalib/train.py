@@ -583,6 +583,7 @@ def _write_validation_outputs(output, rows, config_path, metadata, runtime):
     metrics.update(_step0_metric_aliases(metrics))
     metrics["checkpoint_selection"] = {"primary_metric": "val_pair_max_rel_f_mean", "direction": "minimize"}
     (output / "validation_metrics.json").write_text(json.dumps(metrics, indent=2) + "\n")
+    (output / "metadata.json").write_text(json.dumps(metadata, indent=2) + "\n")
     shutil.copyfile(config_path, output / "config.yaml")
     (output / "runtime.json").write_text(json.dumps(runtime, indent=2) + "\n")
     return metrics
@@ -855,6 +856,8 @@ def _checkpoint_payload(model, optimizer, scheduler, epoch, global_step, best_me
 
 
 def full_train(config, config_path, resume=None):
+    if TRAIN_OUTPUT.exists() and any(TRAIN_OUTPUT.iterdir()) and resume is None:
+        raise FileExistsError(f"Production output exists; pass --resume for an incomplete run: {TRAIN_OUTPUT}")
     device, selector = require_single_cuda_device()
     if config["training"]["epochs"] != FULL_EPOCHS or config["optimizer"]["lr"] is None:
         raise RuntimeError("Final protocol config must freeze epochs=5 and a selected optimizer.lr")
@@ -863,50 +866,78 @@ def full_train(config, config_path, resume=None):
     model, model_info = build_training_anycalib(device=device)
     optimizer = build_finetune_optimizer(model, config["optimizer"]["lr"])
     scheduler = build_finetune_scheduler(optimizer)
-    start_epoch, global_step, best_metric = 0, 0, float("inf")
+    start_epoch, global_step, best_metric, best_epoch = 0, 0, float("inf"), None
     if resume:
         checkpoint = torch.load(resume, map_location=device, weights_only=False)
         model.load_state_dict(checkpoint["model"]); optimizer.load_state_dict(checkpoint["optimizer"]); scheduler.load_state_dict(checkpoint["scheduler"])
-        start_epoch = checkpoint["epoch"] + 1; global_step = checkpoint["global_step"]; best_metric = checkpoint["best_validation_metric"]
+        start_epoch = checkpoint["epoch"]; global_step = checkpoint["global_step"]; best_metric = checkpoint["best_validation_metric"]
+        best_epoch = checkpoint.get("best_epoch")
         _restore_rng_state(checkpoint["rng_state"])
     output = TRAIN_OUTPUT
     output.mkdir(parents=True, exist_ok=True)
     history_path = output / "train_history.csv"
     history_mode = "a" if resume and history_path.exists() else "w"
+    validation_history_path = output / "validation_history.csv"
+    validation_history_mode = "a" if resume and validation_history_path.exists() else "w"
+    run_start = time.perf_counter()
     with history_path.open(history_mode, newline="") as history_handle:
-        writer = csv.DictWriter(history_handle, fieldnames=["epoch", "global_step", "loss", "lr", "backbone_lr"])
+        writer = csv.DictWriter(history_handle, fieldnames=["epoch", "global_step", "train_loss", "learning_rate_non_backbone", "learning_rate_backbone", "training_seconds", "finite_loss_status", "finite_gradient_status"])
         if history_mode == "w": writer.writeheader()
-        validation_history = []
-        for epoch in range(start_epoch, FULL_EPOCHS):
-            sampler.set_epoch(epoch)
-            model.train()
-            for batch in loader:
-                global_step += 1
-                batch = move_to_device(batch, device); optimizer.zero_grad(set_to_none=True)
-                with autocast_context("bf16"):
-                    prediction = model(batch); losses, _ = model.loss(prediction, batch); loss = losses["total"].mean()
-                if not torch.isfinite(loss): raise RuntimeError(f"Non-finite loss at epoch {epoch} step {global_step}")
-                loss.backward()
-                gradients = [p.grad for p in model.parameters() if p.grad is not None]
-                if not gradients or any(not torch.isfinite(g).all() for g in gradients): raise RuntimeError(f"Non-finite gradient at step {global_step}")
-                torch.nn.utils.clip_grad_norm_([p for p in model.parameters() if p.requires_grad], 1.0, error_if_nonfinite=True)
-                optimizer.step(); scheduler.step()
-                writer.writerow({"epoch": epoch + 1, "global_step": global_step, "loss": float(loss.detach().cpu()), "lr": optimizer.param_groups[0]["lr"], "backbone_lr": optimizer.param_groups[1]["lr"]}); history_handle.flush()
-            rows, runtime = evaluate_validation_model(model, val, 4, 4, device)
-            validation_dir = output / f"validation_epoch{epoch + 1}"
-            metadata = {"experiment": config["experiment"]["name"], "mode": "training_validation", "epoch": epoch + 1, "repository_commit": git_output("rev-parse", "HEAD"), "anycalib_commit": git_output("rev-parse", "HEAD", cwd=ANYCALIB_ROOT)}
-            metrics = _write_validation_outputs(validation_dir, rows, config_path, metadata, runtime)
-            aliases = _step0_metric_aliases(metrics); validation_history.append({"epoch": epoch + 1, **aliases})
-            current = aliases["val_pair_max_rel_f_mean"]
-            payload = _checkpoint_payload(model, optimizer, scheduler, epoch, global_step, min(best_metric, current), aliases, config, config_path, model_info)
-            atomic_torch_save(payload, output / "checkpoint_last.pt")
-            if current < best_metric:
-                best_metric = current; payload["best_validation_metric"] = best_metric; atomic_torch_save(payload, output / "checkpoint_best.pt")
-        with (output / "validation_history.csv").open("w", newline="") as handle:
-            if validation_history:
-                writer = csv.DictWriter(handle, fieldnames=list(validation_history[0])); writer.writeheader(); writer.writerows(validation_history)
+        validation_fields = ["epoch", "global_step", "val_pair_max_rel_f_mean", "val_pair_max_rel_f_median", "val_pair_rel_fx_mean", "val_pair_rel_fx_median", "val_pair_rel_fy_mean", "val_pair_rel_fy_median", "val_pair_max_rel_c_mean", "val_pair_max_rel_c_median", "val_pair_within_5pct_count", "val_pair_within_5pct_rate", "val_frame_total", "val_frame_successful", "val_frame_failed", "val_valid_pair_count", "validation_seconds", "is_best"]
+        with validation_history_path.open(validation_history_mode, newline="") as validation_handle:
+            validation_writer = csv.DictWriter(validation_handle, fieldnames=validation_fields)
+            if validation_history_mode == "w": validation_writer.writeheader()
+            for epoch in range(start_epoch, FULL_EPOCHS):
+                epoch_start = time.perf_counter()
+                losses = []
+                finite_loss = True
+                finite_gradient = True
+
+                sampler.set_epoch(epoch)
+                model.train()
+                for batch in loader:
+                    global_step += 1
+                    batch = move_to_device(batch, device); optimizer.zero_grad(set_to_none=True)
+                    with autocast_context("bf16"):
+                        prediction = model(batch); batch_losses, _ = model.loss(prediction, batch); loss = batch_losses["total"].mean()
+                    if not torch.isfinite(loss):
+                        finite_loss = False
+                        raise RuntimeError(f"Non-finite loss at epoch {epoch + 1} step {global_step}")
+                    losses.append(float(loss.detach().cpu()))
+                    loss.backward()
+                    gradients = [p.grad for p in model.parameters() if p.grad is not None]
+                    if not gradients or any(not torch.isfinite(g).all() for g in gradients):
+                        finite_gradient = False
+                        raise RuntimeError(f"Non-finite gradient at epoch {epoch + 1} step {global_step}")
+                    torch.nn.utils.clip_grad_norm_([p for p in model.parameters() if p.requires_grad], 1.0, error_if_nonfinite=True)
+                    optimizer.step(); scheduler.step()
+                training_seconds = time.perf_counter() - epoch_start
+                writer.writerow({"epoch": epoch + 1, "global_step": global_step, "train_loss": sum(losses) / len(losses), "learning_rate_non_backbone": optimizer.param_groups[0]["lr"], "learning_rate_backbone": optimizer.param_groups[1]["lr"], "training_seconds": training_seconds, "finite_loss_status": finite_loss, "finite_gradient_status": finite_gradient}); history_handle.flush()
+                rows, runtime = evaluate_validation_model(model, val, 4, 4, device)
+                validation_dir = output / f"validation_epoch{epoch + 1}"
+                metadata = {"experiment": config["experiment"]["name"], "mode": "training_validation", "epoch": epoch + 1, "repository_commit": git_output("rev-parse", "HEAD"), "anycalib_commit": git_output("rev-parse", "HEAD", cwd=ANYCALIB_ROOT)}
+                metrics = _write_validation_outputs(validation_dir, rows, config_path, metadata, runtime)
+                aliases = _step0_metric_aliases(metrics)
+                current = aliases["val_pair_max_rel_f_mean"]
+                is_best = current < best_metric
+                if is_best:
+                    best_metric = current; best_epoch = epoch + 1
+                validation_row = {"epoch": epoch + 1, "global_step": global_step}
+                validation_row.update({field: aliases[field] for field in validation_fields[2:-2]})
+                validation_row.update({"validation_seconds": runtime["validation_seconds"], "is_best": is_best})
+                validation_writer.writerow(validation_row); validation_handle.flush()
+                payload = _checkpoint_payload(model, optimizer, scheduler, epoch + 1, global_step, best_metric, aliases, config, config_path, model_info)
+                payload["best_epoch"] = best_epoch
+                atomic_torch_save(payload, output / "checkpoint_last.pt")
+                if is_best:
+                    atomic_torch_save(payload, output / "checkpoint_best.pt")
+                print(f"Epoch {epoch + 1} / {FULL_EPOCHS}\nGlobal step: {global_step}\nTrain loss: {sum(losses) / len(losses):.6g}\nValidation primary: {current:.10f}\nBest epoch: {best_epoch}\nBest primary: {best_metric:.10f}\nBest checkpoint updated: {is_best}\nLast checkpoint saved: True\nTraining seconds: {training_seconds:.3f}\nValidation seconds: {runtime['validation_seconds']:.3f}", flush=True)
+    total_seconds = time.perf_counter() - run_start
     (output / "config.yaml").write_text(Path(config_path).read_text())
-    (output / "summary.txt").write_text(f"02-D.2 full fine-tuning\nBest metric: {best_metric}\nTest data was not used.\n")
+    metadata = {"experiment": config["experiment"]["name"], "mode": "full_finetuning", "status": "completed", "epochs_completed": FULL_EPOCHS, "total_optimizer_steps": global_step, "best_epoch": best_epoch, "best_validation_primary": best_metric, "repository_commit": git_output("rev-parse", "HEAD"), "repository_dirty": bool(git_output("status", "--porcelain")), "anycalib_commit": git_output("rev-parse", "HEAD", cwd=ANYCALIB_ROOT), "pretrained_weight_sha256": model_info["pretrained_weight_sha256"], "manifest_sha256": sha256_file(manifest), "train_split_sha256": sha256_file(resolve_path(config["dataset"]["train_split"])), "validation_split_sha256": sha256_file(resolve_path(config["dataset"]["val_split"])), "batch_size": 4, "num_workers": 4, "training_precision": "bf16", "validation_precision": "fp32", "test_data_used": False, "output_directory": str(output.relative_to(PROJECT_ROOT)), **gpu_metadata(device, selector)}
+    (output / "metadata.json").write_text(json.dumps(metadata, indent=2) + "\n")
+    (output / "runtime.json").write_text(json.dumps({"status": "completed", "training_seconds": total_seconds, "optimizer_steps": global_step}, indent=2) + "\n")
+    (output / "summary.txt").write_text(f"02-D.2 full fine-tuning\nStatus: COMPLETED\nEpochs: {FULL_EPOCHS}/{FULL_EPOCHS}\nGlobal steps: {global_step}\nBest epoch: {best_epoch}\nBest metric: {best_metric}\nNo Test data was used during training or checkpoint selection.\n")
 
 
 def smoke(config, config_path, batch_size, num_workers, precision, overwrite):
