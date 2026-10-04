@@ -9,6 +9,7 @@ import json
 import math
 import os
 from pathlib import Path
+import random
 import shutil
 import subprocess
 import sys
@@ -39,6 +40,13 @@ TRAIN_FRAMES_PER_PAIR = 174
 BENCHMARK_WARMUP_STEPS = 3
 BENCHMARK_MEASURE_STEPS = 10
 VALIDATION_STEP0_OUTPUT = PROJECT_ROOT / "runs/02_anycalib_finetune/validation_step0"
+PILOT_ROOT = PROJECT_ROOT / "runs/02_anycalib_finetune/lr_pilot"
+TRAIN_OUTPUT = PROJECT_ROOT / "runs/02_anycalib_finetune/train"
+STEP0_PRIMARY = 0.20873895942938595
+FULL_EPOCHS = 5
+WARMUP_STEPS = 1000
+LR_MILESTONES = [10000, 30000]
+LR_GAMMA = 0.3
 
 
 def sha256_file(path):
@@ -161,6 +169,65 @@ def autocast_context(precision):
             raise RuntimeError("bf16 execution requested but this GPU does not support bf16")
         return torch.autocast(device_type="cuda", dtype=torch.bfloat16)
     return nullcontext()
+
+
+def build_finetune_optimizer(model, learning_rate):
+    """Build official AnyCalib AdamW groups with backbone LR scaled by 0.1."""
+    groups = {1.0: [], 0.1: []}
+    for name, parameter in model.named_parameters():
+        if parameter.requires_grad:
+            groups[0.1 if "backbone" in name else 1.0].append(parameter)
+    if not groups[1.0] or not groups[0.1]:
+        raise RuntimeError("Fine-tuning requires both backbone and non-backbone parameter groups")
+    return torch.optim.AdamW(
+        [
+            {"params": groups[1.0], "lr": learning_rate, "weight_decay": 0.01},
+            {"params": groups[0.1], "lr": learning_rate * 0.1, "weight_decay": 0.01},
+        ],
+        lr=learning_rate,
+    )
+
+
+def build_finetune_scheduler(optimizer):
+    """Use the pinned official SequentialLR schedule, stepped after each optimizer step."""
+    warmup = torch.optim.lr_scheduler.LinearLR(
+        optimizer, start_factor=1e-3, total_iters=WARMUP_STEPS
+    )
+    decay = torch.optim.lr_scheduler.MultiStepLR(
+        optimizer, milestones=LR_MILESTONES, gamma=LR_GAMMA
+    )
+    return torch.optim.lr_scheduler.SequentialLR(
+        optimizer, [warmup, decay], milestones=[WARMUP_STEPS]
+    )
+
+
+def atomic_torch_save(payload, path):
+    path = Path(path)
+    temporary = path.with_suffix(path.suffix + ".tmp")
+    torch.save(payload, temporary)
+    os.replace(temporary, path)
+
+
+def _rng_state():
+    state = {"python": random.getstate(), "torch": torch.get_rng_state()}
+    try:
+        import numpy as np
+        state["numpy"] = np.random.get_state()
+    except ImportError:
+        pass
+    if torch.cuda.is_available():
+        state["torch_cuda"] = torch.cuda.get_rng_state_all()
+    return state
+
+
+def _restore_rng_state(state):
+    random.setstate(state["python"])
+    torch.set_rng_state(state["torch"])
+    if "numpy" in state:
+        import numpy as np
+        np.random.set_state(state["numpy"])
+    if "torch_cuda" in state and torch.cuda.is_available():
+        torch.cuda.set_rng_state_all(state["torch_cuda"])
 
 
 def selected_gpu_query(selector):
@@ -458,6 +525,69 @@ def _batch_meta_value(values, index):
     return value.item() if isinstance(value, torch.Tensor) and value.ndim == 0 else value
 
 
+def evaluate_validation_model(model, val, batch_size, num_workers, device):
+    """Evaluate p36 once in FP32 and return raw rows plus runtime."""
+    loader_kwargs = {
+        "batch_size": batch_size, "shuffle": False, "num_workers": num_workers,
+        "pin_memory": True,
+    }
+    if num_workers:
+        loader_kwargs.update(prefetch_factor=2, persistent_workers=True)
+    loader = DataLoader(val, **loader_kwargs)
+    model.eval()
+    rows = []
+    success_count = 0
+    start = time.perf_counter()
+    for batch in loader:
+        actual_batch_size = len(batch["image"])
+        batch = move_to_device(batch, device)
+        with torch.no_grad(), torch.autocast(device_type="cuda", enabled=False):
+            prediction = model(batch)
+        pred_size = (int(batch["image"].shape[-2]), int(batch["image"].shape[-1]))
+        pred_intrinsics, success, pred_size = _validation_prediction(prediction, actual_batch_size, pred_size)
+        for offset in range(actual_batch_size):
+            meta = {key: _batch_meta_value(values, offset) for key, values in batch["meta"].items()}
+            gt = batch["intrinsics"][offset].detach().cpu()
+            frame_success = bool(success[offset].item())
+            row = {
+                "participant": meta["participant"], "sequence": meta["sequence"],
+                "camera": meta["camera"], "camera_key": meta["camera_key"],
+                "video_path": "", "video_name": meta["video_name"],
+                "frame_index": int(meta["frame_index"]), "width": int(meta["target_width"]),
+                "height": int(meta["target_height"]), "gt_fx": float(gt[0]),
+                "gt_fy": float(gt[1]), "gt_cx": float(gt[2]), "gt_cy": float(gt[3]),
+                "pred_width": pred_size[1], "pred_height": pred_size[0],
+                "success": frame_success,
+            }
+            if frame_success:
+                pred = pred_intrinsics[offset, :4]
+                row.update({f"pred_{key}": float(pred[index]) for index, key in enumerate(("fx", "fy", "cx", "cy"))})
+                row.update({key: float(value) for key, value in camera_errors(pred, gt, meta["target_width"], meta["target_height"]).items()})
+                success_count += 1
+            rows.append(row)
+    sync_cuda(device)
+    seconds = time.perf_counter() - start
+    return rows, {
+        "validation_seconds": seconds, "frames_processed": len(rows),
+        "successful_frames": success_count, "failed_frames": len(rows) - success_count,
+        "success_rate": success_count / len(rows), "batch_count": len(loader),
+    }
+
+
+def _write_validation_outputs(output, rows, config_path, metadata, runtime):
+    output = Path(output)
+    output.mkdir(parents=True, exist_ok=True)
+    raw_path = output / "frame_predictions.csv.gz"
+    write_frame_predictions(raw_path, rows)
+    metrics = write_summaries(raw_path, output)
+    metrics.update(_step0_metric_aliases(metrics))
+    metrics["checkpoint_selection"] = {"primary_metric": "val_pair_max_rel_f_mean", "direction": "minimize"}
+    (output / "validation_metrics.json").write_text(json.dumps(metrics, indent=2) + "\n")
+    shutil.copyfile(config_path, output / "config.yaml")
+    (output / "runtime.json").write_text(json.dumps(runtime, indent=2) + "\n")
+    return metrics
+
+
 def _step0_metric_aliases(metrics):
     pair = metrics["pair_level"]
     frame = metrics["frame_level"]
@@ -598,6 +728,185 @@ def validate_step0(config, config_path, batch_size=4, num_workers=4, overwrite=F
     (metrics_output / "runtime.json").write_text(json.dumps(runtime, indent=2) + "\n")
     _write_step0_summary(metrics_output, metrics, runtime, metadata)
     print((metrics_output / "summary.txt").read_text(), end="")
+
+
+def _loader_for_training(train, seed, batch_size, num_workers):
+    sampler = PairBalancedSampler(train, TRAIN_FRAMES_PER_PAIR, seed=seed)
+    sampler.set_epoch(0)
+    kwargs = {
+        "batch_size": batch_size, "sampler": sampler, "shuffle": False,
+        "num_workers": num_workers, "pin_memory": True, "drop_last": False,
+    }
+    if num_workers:
+        kwargs.update(prefetch_factor=2, persistent_workers=True)
+    return sampler, DataLoader(train, **kwargs)
+
+
+def _validate_candidate(metrics, rows, runtime):
+    aliases = _step0_metric_aliases(metrics)
+    if not math.isfinite(aliases["val_pair_max_rel_f_mean"]):
+        raise RuntimeError("Validation primary metric is not finite")
+    if aliases["val_valid_pair_count"] != EXPECTED_VAL_PAIRS:
+        raise RuntimeError(f"Validation did not produce {EXPECTED_VAL_PAIRS} valid pairs")
+    if aliases["val_frame_successful"] != EXPECTED_VAL_FRAMES:
+        raise RuntimeError("Validation did not successfully evaluate all p36 frames")
+    runtime.update({
+        "validation_primary": aliases["val_pair_max_rel_f_mean"],
+        "validation_median": aliases["val_pair_max_rel_f_median"],
+        "validation_within5": aliases["val_pair_within_5pct_rate"],
+    })
+
+
+def _pilot_summary(lr, metrics, runtime, status):
+    aliases = _step0_metric_aliases(metrics) if metrics else {}
+    lines = [
+        "02-D.1 LR Pilot", f"Status: {status.upper()}", f"Learning rate: {lr}",
+        "Fresh initialization: anycalib_pinhole pretrained", "Epochs: 1",
+        "Seed: 42", "Sampler epoch: 0", "Batch size: 4", "Workers: 4",
+        "Training precision: bf16", "Validation precision: fp32",
+    ]
+    if metrics:
+        lines += [
+            f"Validation primary: {aliases['val_pair_max_rel_f_mean']}",
+            f"Validation median: {aliases['val_pair_max_rel_f_median']}",
+            f"Validation within5: {aliases['val_pair_within_5pct_rate']}",
+            f"Validation pairs: {aliases['val_valid_pair_count']}/{EXPECTED_VAL_PAIRS}",
+        ]
+    lines += [f"Training seconds: {runtime.get('training_seconds', 0):.3f}", f"Validation seconds: {runtime.get('validation_seconds', 0):.3f}", "Pilot model is not a final model.", "Test data was not used."]
+    return "\n".join(lines) + "\n"
+
+
+def lr_pilot(config, config_path, learning_rate):
+    output = PILOT_ROOT / f"lr_{learning_rate:.0e}"
+    if output.exists():
+        raise FileExistsError(f"Pilot output exists; refusing overwrite: {output}")
+    device, selector = require_single_cuda_device()
+    train, val, _, manifest = make_datasets(config)
+    sampler, loader = _loader_for_training(train, config["experiment"]["seed"], 4, 4)
+    model, model_info = build_training_anycalib(device=device)
+    optimizer = build_finetune_optimizer(model, learning_rate)
+    scheduler = build_finetune_scheduler(optimizer)
+    history = []
+    start = time.perf_counter()
+    model.train()
+    for step, batch in enumerate(loader, start=1):
+        batch = move_to_device(batch, device)
+        optimizer.zero_grad(set_to_none=True)
+        with autocast_context("bf16"):
+            prediction = model(batch)
+            losses, _ = model.loss(prediction, batch)
+            loss = losses["total"].mean()
+        if not torch.isfinite(loss):
+            raise RuntimeError(f"Pilot {learning_rate} loss is not finite at step {step}")
+        loss.backward()
+        parameters = [p for p in model.parameters() if p.grad is not None]
+        if not parameters or any(not torch.isfinite(p.grad).all() for p in parameters):
+            raise RuntimeError(f"Pilot {learning_rate} gradient is not finite at step {step}")
+        torch.nn.utils.clip_grad_norm_([p for p in model.parameters() if p.requires_grad], 1.0, error_if_nonfinite=True)
+        optimizer.step()
+        scheduler.step()
+        history.append({"epoch": 1, "step": step, "loss": float(loss.detach().cpu()), "lr": optimizer.param_groups[0]["lr"], "backbone_lr": optimizer.param_groups[1]["lr"]})
+    sync_cuda(device)
+    training_seconds = time.perf_counter() - start
+    rows, runtime = evaluate_validation_model(model, val, 4, 4, device)
+    runtime.update({"status": "pass", "training_seconds": training_seconds, "optimizer_steps": len(loader), "peak_allocated_mib": torch.cuda.max_memory_allocated(device) / (1024**2), "peak_reserved_mib": torch.cuda.max_memory_reserved(device) / (1024**2)})
+    output.mkdir(parents=True)
+    metadata = {
+        "experiment": config["experiment"]["name"], "mode": "lr_pilot", "status": "pass",
+        "learning_rate": learning_rate, "repository_commit": git_output("rev-parse", "HEAD"),
+        "repository_dirty": bool(git_output("status", "--porcelain")), "anycalib_commit": git_output("rev-parse", "HEAD", cwd=ANYCALIB_ROOT),
+        "config_sha256": sha256_file(config_path), "manifest_sha256": sha256_file(manifest),
+        "train_split_sha256": sha256_file(resolve_path(config["dataset"]["train_split"])), "validation_split_sha256": sha256_file(resolve_path(config["dataset"]["val_split"])),
+        "initialization": "fresh anycalib_pinhole pretrained", "pretrained_weight_sha256": model_info["pretrained_weight_sha256"],
+        "optimizer": "AdamW", "weight_decay": 0.01, "backbone_lr_scale": 0.1, "gradient_clip_norm": 1.0,
+        "epochs": 1, "samples_per_epoch": len(sampler), "optimizer_steps": len(loader), "batch_size": 4, "num_workers": 4,
+        "training_precision": "bf16", "validation_precision": "fp32", "validation_participant": "p36", "test_data_used": False,
+        **gpu_metadata(device, selector), "command_line": " ".join(os.sys.argv),
+    }
+    metrics = _write_validation_outputs(output, rows, config_path, metadata, runtime)
+    shutil.copyfile(output / "pair_summary.csv", output / "validation_pair_summary.csv")
+    with (output / "train_history.csv").open("w", newline="") as handle:
+        writer = csv.DictWriter(handle, fieldnames=list(history[0]))
+        writer.writeheader(); writer.writerows(history)
+    (output / "metadata.json").write_text(json.dumps(metadata, indent=2) + "\n")
+    (output / "summary.txt").write_text(_pilot_summary(learning_rate, metrics, runtime, "pass"))
+    print((output / "summary.txt").read_text(), end="")
+
+
+def train_plan(config):
+    train, _, _, _ = make_datasets(config)
+    sampler = PairBalancedSampler(train, TRAIN_FRAMES_PER_PAIR, seed=config["experiment"]["seed"])
+    steps = len(sampler) // 4 + int(len(sampler) % 4 != 0)
+    lr = config["optimizer"]["lr"]
+    print(f"selected_lr = {lr}\nbackbone_lr = {lr * 0.1}\nbatch_size = 4\nnum_workers = 4\nepochs = 5\nsteps_per_epoch = {steps}\ntotal_steps = {steps * 5}\nwarmup_steps = 1000\nmilestones = [10000, 30000]\nvalidation_every_epochs = 1\nbest_metric = val_pair_max_rel_f_mean\noutput = {TRAIN_OUTPUT}")
+
+
+def _checkpoint_payload(model, optimizer, scheduler, epoch, global_step, best_metric, current_metrics, config, config_path, model_info):
+    return {
+        "model": model.state_dict(), "optimizer": optimizer.state_dict(), "scheduler": scheduler.state_dict(),
+        "epoch": epoch, "global_step": global_step, "best_validation_metric": best_metric,
+        "current_validation_metrics": current_metrics, "config_snapshot": config,
+        "repository_commit": git_output("rev-parse", "HEAD"), "anycalib_commit": git_output("rev-parse", "HEAD", cwd=ANYCALIB_ROOT),
+        "pretrained_weight_sha256": model_info["pretrained_weight_sha256"], "config_sha256": sha256_file(config_path),
+        "manifest_sha256": sha256_file(PROJECT_ROOT / "data/manifests/gigahands.csv"),
+        "train_split_sha256": sha256_file(resolve_path(config["dataset"]["train_split"])), "val_split_sha256": sha256_file(resolve_path(config["dataset"]["val_split"])),
+        "rng_state": _rng_state(),
+    }
+
+
+def full_train(config, config_path, resume=None):
+    device, selector = require_single_cuda_device()
+    if config["training"]["epochs"] != FULL_EPOCHS or config["optimizer"]["lr"] is None:
+        raise RuntimeError("Final protocol config must freeze epochs=5 and a selected optimizer.lr")
+    train, val, _, manifest = make_datasets(config)
+    sampler, loader = _loader_for_training(train, config["experiment"]["seed"], 4, 4)
+    model, model_info = build_training_anycalib(device=device)
+    optimizer = build_finetune_optimizer(model, config["optimizer"]["lr"])
+    scheduler = build_finetune_scheduler(optimizer)
+    start_epoch, global_step, best_metric = 0, 0, float("inf")
+    if resume:
+        checkpoint = torch.load(resume, map_location=device, weights_only=False)
+        model.load_state_dict(checkpoint["model"]); optimizer.load_state_dict(checkpoint["optimizer"]); scheduler.load_state_dict(checkpoint["scheduler"])
+        start_epoch = checkpoint["epoch"] + 1; global_step = checkpoint["global_step"]; best_metric = checkpoint["best_validation_metric"]
+        _restore_rng_state(checkpoint["rng_state"])
+    output = TRAIN_OUTPUT
+    output.mkdir(parents=True, exist_ok=True)
+    history_path = output / "train_history.csv"
+    history_mode = "a" if resume and history_path.exists() else "w"
+    with history_path.open(history_mode, newline="") as history_handle:
+        writer = csv.DictWriter(history_handle, fieldnames=["epoch", "global_step", "loss", "lr", "backbone_lr"])
+        if history_mode == "w": writer.writeheader()
+        validation_history = []
+        for epoch in range(start_epoch, FULL_EPOCHS):
+            sampler.set_epoch(epoch)
+            model.train()
+            for batch in loader:
+                global_step += 1
+                batch = move_to_device(batch, device); optimizer.zero_grad(set_to_none=True)
+                with autocast_context("bf16"):
+                    prediction = model(batch); losses, _ = model.loss(prediction, batch); loss = losses["total"].mean()
+                if not torch.isfinite(loss): raise RuntimeError(f"Non-finite loss at epoch {epoch} step {global_step}")
+                loss.backward()
+                gradients = [p.grad for p in model.parameters() if p.grad is not None]
+                if not gradients or any(not torch.isfinite(g).all() for g in gradients): raise RuntimeError(f"Non-finite gradient at step {global_step}")
+                torch.nn.utils.clip_grad_norm_([p for p in model.parameters() if p.requires_grad], 1.0, error_if_nonfinite=True)
+                optimizer.step(); scheduler.step()
+                writer.writerow({"epoch": epoch + 1, "global_step": global_step, "loss": float(loss.detach().cpu()), "lr": optimizer.param_groups[0]["lr"], "backbone_lr": optimizer.param_groups[1]["lr"]}); history_handle.flush()
+            rows, runtime = evaluate_validation_model(model, val, 4, 4, device)
+            validation_dir = output / f"validation_epoch{epoch + 1}"
+            metadata = {"experiment": config["experiment"]["name"], "mode": "training_validation", "epoch": epoch + 1, "repository_commit": git_output("rev-parse", "HEAD"), "anycalib_commit": git_output("rev-parse", "HEAD", cwd=ANYCALIB_ROOT)}
+            metrics = _write_validation_outputs(validation_dir, rows, config_path, metadata, runtime)
+            aliases = _step0_metric_aliases(metrics); validation_history.append({"epoch": epoch + 1, **aliases})
+            current = aliases["val_pair_max_rel_f_mean"]
+            payload = _checkpoint_payload(model, optimizer, scheduler, epoch, global_step, min(best_metric, current), aliases, config, config_path, model_info)
+            atomic_torch_save(payload, output / "checkpoint_last.pt")
+            if current < best_metric:
+                best_metric = current; payload["best_validation_metric"] = best_metric; atomic_torch_save(payload, output / "checkpoint_best.pt")
+        with (output / "validation_history.csv").open("w", newline="") as handle:
+            if validation_history:
+                writer = csv.DictWriter(handle, fieldnames=list(validation_history[0])); writer.writeheader(); writer.writerows(validation_history)
+    (output / "config.yaml").write_text(Path(config_path).read_text())
+    (output / "summary.txt").write_text(f"02-D.2 full fine-tuning\nBest metric: {best_metric}\nTest data was not used.\n")
 
 
 def smoke(config, config_path, batch_size, num_workers, precision, overwrite):
@@ -746,20 +1055,26 @@ def smoke(config, config_path, batch_size, num_workers, precision, overwrite):
 
 
 def parse_args():
-    parser = argparse.ArgumentParser(description="GigaHands 02-B smoke and 02-C benchmark entry point.")
+    parser = argparse.ArgumentParser(description="GigaHands fine-tuning, pilot, smoke, and benchmark entry point.")
     parser.add_argument("--config", required=True)
     mode = parser.add_mutually_exclusive_group()
     mode.add_argument("--dry-run", action="store_true")
     mode.add_argument("--smoke", action="store_true")
     mode.add_argument("--benchmark", action="store_true")
     mode.add_argument("--validate-step0", action="store_true")
+    mode.add_argument("--lr-pilot", choices=("6e-5", "2e-5", "1e-5"))
+    mode.add_argument("--train", action="store_true")
+    mode.add_argument("--train-plan", action="store_true")
     parser.add_argument("--batch-size", type=int, default=1)
     parser.add_argument("--num-workers", type=int, default=0)
     parser.add_argument("--precision", choices=("fp32", "bf16"), default="bf16")
     parser.add_argument("--overwrite", action="store_true")
+    parser.add_argument("--resume")
     args = parser.parse_args()
-    if not args.dry_run and not args.smoke and not args.benchmark and not args.validate_step0:
-        parser.error("Full fine-tuning is not enabled yet. Use --dry-run, --smoke, --benchmark, or --validate-step0.")
+    if not any((args.dry_run, args.smoke, args.benchmark, args.validate_step0, args.lr_pilot, args.train, args.train_plan)):
+        parser.error("Explicit mode required: use --dry-run, --smoke, --benchmark, --validate-step0, --lr-pilot, --train, or --train-plan.")
+    if args.train and args.resume and not Path(args.resume).exists():
+        parser.error(f"resume checkpoint does not exist: {args.resume}")
     return args
 
 
@@ -772,6 +1087,12 @@ def main():
         benchmark(config, config_path, args.batch_size, args.num_workers, args.precision, args.overwrite)
     elif args.validate_step0:
         validate_step0(config, config_path, overwrite=args.overwrite)
+    elif args.lr_pilot:
+        lr_pilot(config, config_path, float(args.lr_pilot))
+    elif args.train_plan:
+        train_plan(config)
+    elif args.train:
+        full_train(config, config_path, args.resume)
     else:
         smoke(config, config_path, args.batch_size, args.num_workers, args.precision, args.overwrite)
 
