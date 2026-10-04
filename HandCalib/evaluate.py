@@ -325,7 +325,7 @@ def _benchmark(config, config_path, args, final_test=False):
         clip = dataset
         indices = list(range(len(dataset)))
         first = dataset.samples[0]["row"]
-        output_dir = TEST_OUTPUT
+        output_dir = PROJECT_ROOT / config["evaluation"].get("output_dir", "runs/01_anycalib_pretrained/test")
     else:
         _require_benchmark_args(args)
         batch_size = args.batch_size
