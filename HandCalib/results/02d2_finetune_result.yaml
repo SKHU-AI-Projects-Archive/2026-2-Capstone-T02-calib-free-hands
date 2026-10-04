@@ -9,6 +9,7 @@ training:
   epochs_completed: 5
   total_optimizer_steps: 31975
   seed: 42
+  epoch_0_pretrained_validation_primary: 0.2087389594
   best_epoch: 5
   best_validation_primary: 0.006481811295934264
   last_validation_primary: 0.006481811295934264
