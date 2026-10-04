@@ -1,0 +1,61 @@
+experiment: 02d2_finetune_result
+status: completed
+model_id: anycalib_pinhole
+cam_id: pinhole
+training:
+  initialization: pretrained_anycalib_pinhole
+  pretrained_weight_sha256: e73b174563bcb90dc9a0e348ee64fbb898901d2a1786623e62fc0e3b176a1a38
+  epochs: 5
+  epochs_completed: 5
+  total_optimizer_steps: 31975
+  seed: 42
+  best_epoch: 5
+  best_validation_primary: 0.006481811295934264
+  last_validation_primary: 0.006481811295934264
+  selection_metric: val_pair_max_rel_f_mean
+  test_data_used_during_training: false
+checkpoints:
+  best: runs/02_anycalib_finetune/train/checkpoint_best.pt
+  last: runs/02_anycalib_finetune/train/checkpoint_last.pt
+test:
+  participant: p52
+  sequence: p52-instrument-0034
+  frames: 7667
+  pairs: 49
+  successful_frames: 7667
+  valid_pairs: 49
+  output_directory: runs/02_anycalib_finetune/test
+  repository_commit: 3e3c312bf7ee8df69a5a75b79e2ff3b70466db67
+  anycalib_commit: 027a8497d893f4b2596f23d6324c05e4b81064ed
+  test_split_sha256: 0c910d6df81fff0051b48db629759a3805484973e4150d959241dcf893201910
+comparison_to_01_pretrained:
+  source_record: results/01_anycalib_pretrained.yaml
+  pretrained:
+    max_focal_error_mean: 0.18497205009511505
+    max_focal_error_median: 0.17258688477275663
+    max_principal_point_error_mean: 0.08199870613426849
+    max_principal_point_error_median: 0.06982756720648872
+    focal_within_5pct_count: 4
+    focal_within_5pct_rate: 0.08163265306122448
+  finetuned:
+    max_focal_error_mean: 0.016171892089469387
+    max_focal_error_median: 0.012833040372399147
+    max_principal_point_error_mean: 0.04068291441383275
+    max_principal_point_error_median: 0.03448265923394097
+    focal_within_5pct_count: 49
+    focal_within_5pct_rate: 1.0
+  improvement:
+    max_focal_error_mean_absolute: 0.16880015800564566
+    max_focal_error_mean_relative_percent: 91.25711582849755
+    max_focal_error_median_absolute: 0.15975384440035748
+    max_focal_error_median_relative_percent: 92.56430151729299
+    max_principal_point_error_mean_absolute: 0.041315791720435736
+    max_principal_point_error_mean_relative_percent: 50.38590688587615
+    max_principal_point_error_median_absolute: 0.03534490797254775
+    max_principal_point_error_median_relative_percent: 50.61741284502796
+    focal_within_5pct_count_delta: 45
+    focal_within_5pct_rate_delta: 0.9183673469387755
+notes:
+  validation_test_participant_overlap: p36_validation_and_p52_test_are_different_participants
+  fixed_seed: 42
+  test_data_was_not_used_for_training_or_checkpoint_selection: true

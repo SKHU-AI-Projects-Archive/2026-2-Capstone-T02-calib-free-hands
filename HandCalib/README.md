@@ -184,3 +184,16 @@ python tools/download_gigahands_demo.py --check
 - 02-C benchmark 사용자 실행 및 batch size/worker/precision 비교
 - 02-C 결과를 바탕으로 augmentation, optimizer와 metric protocol 결정
 - HandCalib 모델과 학습/evaluation 코드 구현
+
+## 02-D.2 AnyCalib 전체 fine-tuning
+
+고정된 프로토콜로 pretrained AnyCalib을 5 epoch 전체 fine-tuning했습니다. p36 Validation에서 `val_pair_max_rel_f_mean`이 가장 낮은 epoch 5를 최종 checkpoint로 선택한 뒤, p52 Test를 한 번 실행했습니다. 학습은 batch size 4, workers 4, seed 42, bf16 학습과 fp32 Validation을 사용했으며 총 optimizer step은 31,975회입니다.
+
+- Best Validation primary: `0.006481811295934264`
+- Checkpoint: `runs/02_anycalib_finetune/train/checkpoint_best.pt`
+- Test: 7,667/7,667 frames, 49/49 valid pairs
+- Test pair max focal error: mean `0.0161718921`, median `0.0128330404`
+- Test pair max principal-point error: mean `0.0406829144`, median `0.0344826592`
+- Focal error within 5%: `49/49` (`1.0`)
+
+01 pretrained 기록과 비교하면 pair max focal error mean은 `0.1849720501`에서 `0.0161718921`로 91.26% 감소했고, principal-point mean은 `0.0819987061`에서 `0.0406829144`로 50.39% 감소했습니다. Test data was not used for training or checkpoint selection. p36 Validation과 p52 Test는 서로 다른 participant이므로 이 비교는 participant overlap 주의사항을 함께 기록합니다. 상세 수치는 `results/02d2_finetune_result.yaml`에 있습니다.
