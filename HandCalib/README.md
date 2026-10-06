@@ -173,6 +173,53 @@ python tools/download_gigahands_demo.py --check
 
 공식 출처: [Brown IVL GigaHands](https://github.com/brown-ivl/GigaHands)
 
+## 02-H.0 InterHand external evaluation preparation
+
+InterHand external evaluation은 Official Test만 사용하고, `(capture, camera)` 360개 calibration unit에서 metadata-only deterministic sampling으로 최대 16 frame씩 선택합니다. frozen manifest는 `data/manifests/interhand_external_test_v1.csv`이며 5,760 frames, manifest SHA256은 `af910a754c3449c258335a3baf574cb2650d8fabe6cc3458ee69cee3f429b750`입니다. 두 모델은 이 manifest, preprocessing, metric, batch 설정을 공유하고 checkpoint만 다릅니다. 현재는 image archive가 없어 `NOT READY`이며 inference는 실행하지 않았습니다.
+
+Image archive를 받은 뒤의 준비 순서는 다음과 같습니다.
+
+```bash
+cd /home/junghyub/2026-2-Capstone-T02-calib-free-hands
+mkdir -p HandCalib/datasets/interhand2.6m/archives/images_5fps_v1.0
+for suffix in {aa..az} {ba..br}; do
+  wget -c "https://github.com/facebookresearch/InterHand2.6M/releases/download/v1.0/InterHand2.6M.images.5.fps.v1.0.tar.part${suffix}" \
+    -P HandCalib/datasets/interhand2.6m/archives/images_5fps_v1.0
+done
+wget -c "https://github.com/facebookresearch/InterHand2.6M/releases/download/v1.0/InterHand2.6M.images.5.fps.v1.0.tar.CHECKSUM" \
+  -P HandCalib/datasets/interhand2.6m/archives/images_5fps_v1.0
+.venv/bin/python HandCalib/tools/verify_interhand_images.py \
+  --archive-dir HandCalib/datasets/interhand2.6m/archives/images_5fps_v1.0 \
+  --manifest HandCalib/data/manifests/interhand_external_test_v1.csv --scan-members
+.venv/bin/python HandCalib/tools/extract_interhand_subset.py \
+  --archive-dir HandCalib/datasets/interhand2.6m/archives/images_5fps_v1.0 \
+  --manifest HandCalib/data/manifests/interhand_external_test_v1.csv \
+  --output-root HandCalib/datasets/interhand2.6m/raw/images
+.venv/bin/python HandCalib/tools/check_interhand_image_readiness.py
+```
+
+Preprocessing은 기존 AnyCalib evaluator 경로를 재사용하며, GT `fx/fy/cx/cy`는 target metric metadata로만 사용합니다. 실제 실행 전에는 다음 dry-run이 `5760/360`을 확인해야 합니다.
+
+```bash
+.venv/bin/python HandCalib/evaluate.py --config HandCalib/configs/02h0_interhand_pretrained.yaml --test --dry-run
+.venv/bin/python HandCalib/evaluate.py --config HandCalib/configs/02h0_interhand_gigahands_finetuned.yaml --test --dry-run
+```
+
+모델 평가는 사용자가 readiness 검증을 끝낸 뒤 직접 실행합니다.
+
+```bash
+# Single GPU, sequential
+CUDA_VISIBLE_DEVICES=3 .venv/bin/python HandCalib/evaluate.py --config HandCalib/configs/02h0_interhand_pretrained.yaml --test
+CUDA_VISIBLE_DEVICES=3 .venv/bin/python HandCalib/evaluate.py --config HandCalib/configs/02h0_interhand_gigahands_finetuned.yaml --test
+
+# Two idle GPUs, independent parallel processes
+CUDA_VISIBLE_DEVICES=3 .venv/bin/python HandCalib/evaluate.py --config HandCalib/configs/02h0_interhand_pretrained.yaml --test &
+CUDA_VISIBLE_DEVICES=1 .venv/bin/python HandCalib/evaluate.py --config HandCalib/configs/02h0_interhand_gigahands_finetuned.yaml --test &
+wait
+```
+
+결과는 각각 `runs/02_interhand_external_eval/pretrained/`와 `runs/02_interhand_external_eval/gigahands_finetuned/`에 저장됩니다. archive/checksum/member mapping, selective extraction, image decode, preprocessing smoke test, old GigaHands regression이 모두 통과하기 전까지는 `NOT READY`입니다.
+
 ## 확인된 데이터
 
 - sequence 5개

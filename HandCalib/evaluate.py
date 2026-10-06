@@ -16,6 +16,7 @@ from torch.utils.data import DataLoader, Subset
 from tqdm import tqdm
 
 from dataloaders.gigahands import GigaHandsDataset
+from dataloaders.interhand26m import InterHand26MDataset
 from models.anycalib import AnyCalibAdapter
 from utils.config import load_config
 from utils.metrics import camera_errors
@@ -86,6 +87,11 @@ def _path_from_config(value):
 
 def _dataset(config, split_name="val"):
     dataset_config = config["dataset"]
+    if dataset_config.get("name", "GigaHands").lower() in {"interhand", "interhand2.6m", "interhand26m"}:
+        if split_name != "test":
+            raise ValueError("InterHand external evaluation only supports the frozen Official Test manifest.")
+        manifest_path = _path_from_config(dataset_config["test_manifest"])
+        return InterHand26MDataset(_path_from_config(dataset_config["image_root"]), manifest_path), manifest_path
     split_path = _path_from_config(dataset_config[f"{split_name}_split"])
     dataset = GigaHandsDataset(
         root=_path_from_config(dataset_config["root"]),
@@ -242,7 +248,7 @@ def _benchmark_metadata(config, config_path, split_path, first, clip, batch_size
         "repository_commit": _git_head(REPO_ROOT), "repository_dirty": _git_dirty(),
         "anycalib_commit": _git_head(PROJECT_ROOT / "AnyCalib"),
         "config_sha256": sha256_file(config_path),
-        "manifest_sha256": sha256_file(PROJECT_ROOT / "data/manifests/gigahands.csv"),
+        "manifest_sha256": sha256_file(split_path if config["dataset"].get("name", "GigaHands").lower() in {"interhand", "interhand2.6m", "interhand26m"} else PROJECT_ROOT / "data/manifests/gigahands.csv"),
         "python_version": sys.version.split()[0], "torch_version": torch.__version__,
         "torchvision_version": _version("torchvision"), "numpy_version": _version("numpy"),
         "opencv_version": cv2.__version__, "cuda_build_version": torch.version.cuda,
@@ -265,12 +271,15 @@ def _benchmark_metadata(config, config_path, split_path, first, clip, batch_size
     }
     if final_test:
         metadata.update({
-            "dataset_split": "test", "test_participant": first["participant"],
-            "test_sequence": first["sequence"], "test_frames": len(clip),
+            "dataset_split": "test", "test_frames": len(clip),
             "test_pairs": len({sample["row"]["camera_key"] for sample in clip.samples}),
             "evaluation_setting_source": "validation_benchmark",
             "test_split_sha256": sha256_file(split_path),
         })
+        if config["dataset"].get("name", "GigaHands").lower() in {"interhand", "interhand2.6m", "interhand26m"}:
+            metadata.update({"test_manifest": str(split_path.relative_to(PROJECT_ROOT)), "test_calibration_units": len(clip.pair_indices)})
+        else:
+            metadata.update({"test_participant": first["participant"], "test_sequence": first["sequence"]})
     else:
         metadata.update({
             "dataset_split": "validation", "validation_split_sha256": sha256_file(split_path),
@@ -334,15 +343,17 @@ def _benchmark(config, config_path, args, final_test=False):
         clip, indices, first = _first_clip(dataset)
         output_dir = BENCHMARK_ROOT / f"bs{batch_size}_nw{num_workers}"
     if args.dry_run:
+        dataset_name = config["dataset"].get("name", "GigaHands")
         print("mode=test" if final_test else "benchmark mode")
         print(f"{'test_split' if final_test else 'validation_split'}={split_path}")
         print(f"split={'test' if final_test else 'validation'}")
-        print(f"participant={first['participant']}")
-        print(f"selected_sequence={first['sequence']}")
-        print(f"selected_camera={first['camera']}")
-        print(f"selected_video_name={first['video_name']}")
+        print(f"dataset={dataset_name}")
+        print(f"participant={first.get('participant', 'n/a')}")
+        print(f"selected_sequence={first.get('sequence', first.get('seq_name', 'n/a'))}")
+        print(f"selected_camera={first.get('camera', 'n/a')}")
+        print(f"selected_video_name={first.get('video_name', first.get('file_name', 'n/a'))}")
         print(f"{'frames' if final_test else 'benchmark_frame_count'}={len(clip)}")
-        print(f"pairs={len({sample['row']['camera_key'] for sample in dataset.samples}) if final_test else 1}")
+        print(f"pairs={len(dataset.pair_indices) if final_test else 1}")
         print(f"batch_size={batch_size}")
         print(f"num_workers={num_workers}")
         print(f"planned_batches={(len(clip) + batch_size - 1) // batch_size}")

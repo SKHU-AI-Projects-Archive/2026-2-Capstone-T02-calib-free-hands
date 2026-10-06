@@ -1,0 +1,20 @@
+experiment:
+  name: 02h0_interhand_gigahands_finetuned
+  seed: 42
+
+dataset:
+  name: InterHand2.6M
+  image_root: datasets/interhand2.6m/raw/images
+  test_manifest: data/manifests/interhand_external_test_v1.csv
+
+model:
+  name: AnyCalib
+  model_id: anycalib_pinhole
+  cam_id: pinhole
+  pretrained: true
+  checkpoint: runs/02_anycalib_finetune/train/checkpoint_best.pt
+
+evaluation:
+  output_dir: runs/02_interhand_external_eval/gigahands_finetuned
+  batch_size: 2
+  num_workers: 4
