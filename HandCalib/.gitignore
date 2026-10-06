@@ -77,6 +77,8 @@ temp/
 # Local GigaHands dataset and downloaded data
 data/gigahands/demo_all/
 datasets/gigahands/
+datasets/interhand2.6m/archives/
+datasets/interhand2.6m/raw/
 data/cache/
 data/downloads/
 

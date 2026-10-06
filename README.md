@@ -138,3 +138,9 @@ python demo\demo_hand_mano.py --input some.jpg --out out\img
 | Train-only median prior | 1.5345% | 49/49 |
 
 Fixed와 shuffled 모두 prediction 자체는 변했지만, 좁은 GigaHands calibration prior가 primary metric을 강하게 지배했다. 현재 결론은 **PRIOR-DOMINANT**이며 image-conditioned signal이 전혀 없다는 뜻은 아니다. Raw output은 `HandCalib/runs/02_anycalib_finetune/image_dependence_control/`에, 요약 결과는 `HandCalib/results/02f_image_dependence_control.yaml`에 있다.
+
+## 02-G InterHand annotation audit
+
+공식 5 fps annotation만 CPU로 감사했다. 최종 annotation root는 `HandCalib/datasets/interhand2.6m/raw/annotations/`이며, 공식 split은 Train=`all`, Validation=`machine_annot`, Test=`all`을 유지한다. Train/Validation/Test calibration unit은 각각 1,114/74/360개이고 모든 annotation image가 camera calibration에 매핑된다.
+
+Train-Test 사이에는 동일 `(capture, camera)` 176개와 exact K 99개가 있어, InterHand Train까지 학습한 뒤 Test를 순수한 unseen-camera 평가로 사용하려면 official split을 유지한 filtered subset이 필요하다. GigaHands Train constant prior의 InterHand Test mean focal error는 약 80.16%로, GigaHands fine-tuned 모델의 InterHand 비교는 **외부 도메인 평가로는 GO WITH LIMITATIONS**이지만 camera-generalization 주장에는 제한이 있다. 상세 결과는 `HandCalib/results/02g_interhand_annotation_audit.yaml`과 ignored `HandCalib/runs/02_interhand_annotation_audit/`에 있다.
