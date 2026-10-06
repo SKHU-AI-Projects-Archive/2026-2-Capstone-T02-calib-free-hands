@@ -154,6 +154,12 @@ HandCalib/
 └── evaluate.py     평가 진입점
 ```
 
+## 02-G.1 InterHand annotation audit completion
+
+`results/02g1_interhand_audit_completion.yaml`은 이미지 없이 수행한 CPU-only 보완 감사입니다. 현재 보관한 `InterHand2.6M.annotations.5.fps.zip`의 JSON에서 image/frame과 annotation record를 분리해 확인했고, 공식 공개 수치 `1,361,062 / 380,125 / 849,160`은 [공식 homepage](https://mks0601.github.io/InterHand2.6M/)의 5fps H+M/M frame totals임을 대조했습니다. local archive는 [GitHub v1.0 release asset](https://github.com/facebookresearch/InterHand2.6M/releases/tag/v1.0)으로 2020-11-26에 업로드되었으며, homepage의 2021-03-22 v1.0 image release와 byte-equivalence는 확인하지 않았습니다.
+
+공식 [loader와 projection code](https://github.com/facebookresearch/InterHand2.6M/blob/main/data/InterHand2.6M/dataset.py)의 `world2cam`과 `cam2pixel` convention으로 annotation-only projection을 재현했습니다. `data.json`에는 직접 비교할 2D joint field가 없어 pixel reprojection error는 산출하지 않았지만, `width/height`, focal, principal point 좌표계와 기존 FOV 계산은 일관됩니다. GigaHands Train prior의 약 80% focal error는 **GigaHands-fine-tuned AnyCalib 모델 성능이 아니라 constant calibration prior diagnostic**입니다. 따라서 InterHand 외부 평가는 `GO WITH LIMITATIONS`, Train을 사용한 camera-generalization 주장은 공식 split overlap 때문에 filtered subset을 권장합니다. 이번 감사에서도 이미지 다운로드, model inference, training, fine-tuning은 실행하지 않았습니다.
+
 ## GigaHands 데이터 준비
 
 ```bash
