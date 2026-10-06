@@ -1,0 +1,96 @@
+# Image-free integrity completion record for the frozen 02-H.0 protocol.
+base_commit: 1f16c34979709ff7d754de6d92a592e62aa2dbf8
+audit_commit: recorded_by_this_commit
+manifest_path: data/manifests/interhand_external_test_v1.csv
+manifest_sha: af910a754c3449c258335a3baf574cb2650d8fabe6cc3458ee69cee3f429b750
+selected_frames: 5760
+calibration_units: 360
+frames_per_unit: {min: 16, max: 16}
+official_test_only: true
+duplicate_image_id: 0
+sampling_rule: "sort (seq_name, frame_idx, image_id); midpoint quantile; nearest-unused collision resolution"
+sampling_estimand: "deterministic subsample over Official Test frame distribution; not sequence-balanced"
+sequence_coverage_summary:
+  full_test_images: 352897
+  full_unique_sequences: {min: 11, median: 101.0, mean: 73.025, max: 109}
+  selected_unique_sequences: {min: 9, median: 14.0, mean: 13.180555555555555, max: 16}
+  coverage_ratio: {min: 0.12962962962962962, p10: 0.1326530612244898, median: 0.14728532922603005, mean: 0.39371819267478275, p90: 0.9166666666666666, max: 1.0}
+  selected_one_sequence_only_units: 0
+  selected_max_sequence_share: {min: 0.0625, median: 0.125, mean: 0.15208333333333332, max: 0.25}
+manifest_regeneration: {status: PASS, method: cmp, byte_identical: true}
+download_command_status:
+  primary: "gh release download v1.0 --repo facebookresearch/InterHand2.6M"
+  primary_executed: false
+  gh_cli_available: false
+  official_release_api_metadata: PASS
+  official_asset_parts: 44
+  official_first_part: partaa
+  official_last_part: partbr
+  checksum_asset: InterHand2.6M.images.5.fps.v1.0.tar.CHECKSUM
+  curl_fallback: documented_with_exact_python_suffix_generation
+archive_expected_parts: 44
+archive_expected_bytes: 81718036480
+archive_mapping:
+  frozen_manifest: {expected: 5760, checked: pending_archive}
+  official_test: {expected: 352897, checked: pending_archive}
+  ordering: "explicit partaa..partbr list"
+  checksum_semantics: "per-part checksum lines; reconstructed tar checksum is not assumed"
+  selective_extraction: "frozen manifest only; regular files only; traversal/link escape rejected"
+legacy_compatibility_verdict: PASS_WITH_LIMITATIONS
+legacy_compatibility_scope:
+  static_parent_current_evaluate_audit: PASS
+  legacy_gigahands_dry_run: PASS
+  heavy_inference_repeated: false
+  training_repeated: false
+evaluator_semantics_verdict: PASS_STATIC_AUDIT
+evaluator_semantics:
+  shared_metric_and_aggregation: "camera_errors plus per-unit median, equal-weight unit metric"
+  gt_intrinsics_to_model_input: false
+  failure_policy: "all frame rows retained; failed frames are counted and excluded from successful metric values"
+GT_leakage_verdict: PASS_STATIC_AUDIT
+metadata_round_trip:
+  scope: metadata-level intrinsic transform/inverse only
+  fx: {mean_abs_error: 0.0, max_abs_error: 0.0}
+  fy: {mean_abs_error: 0.0, max_abs_error: 0.0}
+  cx: {mean_abs_error: 4.184307221698368e-15, max_abs_error: 2.842170943040401e-14}
+  cy: {mean_abs_error: 1.0184445879228103e-14, max_abs_error: 2.842170943040401e-14}
+actual_image_validation_state: PENDING_IMAGE_ARCHIVE
+checkpoint_hashes:
+  pretrained_sha256: e73b174563bcb90dc9a0e348ee64fbb898901d2a1786623e62fc0e3b176a1a38
+  finetuned_sha256: 1b87efa27c847886f5987084a95000bccf2491f1abc719efcfa1c232cd8c2d41
+  finetuned_epoch: 5
+  finetuned_global_step: 31975
+  modified_during_audit: false
+critical_findings: []
+high_findings:
+  - id: H-01
+    finding: "Previous README used shell brace expansion {aa..az} {ba..br}, which does not produce the intended two-letter suffix set."
+    impact: "The image download could omit or misname official archive parts."
+    fix: "Primary gh release download plus exact Python-generated curl fallback."
+    status: fixed
+medium_findings:
+  - id: M-01
+    finding: "Previous README hard-coded CUDA_VISIBLE_DEVICES=3 and =1."
+    impact: "Could select a busy or incorrect GPU on a shared server."
+    fix: "nvidia-smi inspection and user-selected GPU placeholders; no auto-selection."
+    status: fixed
+  - id: M-02
+    finding: "gh CLI is unavailable in this environment."
+    impact: "gh command execution could not be locally smoke-tested."
+    fix: "Official GitHub release API metadata checked; download remains unexecuted."
+    status: documented
+low_findings:
+  - id: L-01
+    finding: "Previous readiness helper defaulted to an eight-image smoke sample."
+    impact: "A default run could not establish all 5760 image gates."
+    fix: "Default now checks every frozen manifest row; --limit remains an explicit smoke option."
+    status: fixed
+readiness_state: READY_FOR_IMAGE_DOWNLOAD
+inference_run: false
+pending_after_download:
+  - verify all 44 parts and per-part CHECKSUM
+  - scan full Official Test and frozen manifest member mappings
+  - selectively extract exactly 5760 images
+  - decode all 5760 images and verify annotation dimensions/channels
+  - run actual preprocessing and K consistency checks
+  - user-selected GPU evaluation

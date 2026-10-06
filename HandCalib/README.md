@@ -119,7 +119,9 @@ smoke 결과는 `HandCalib/runs/01_anycalib_pretrained/smoke_val/`에 저장되�
 
 ```bash
 python HandCalib/evaluate.py --config HandCalib/configs/01_anycalib_pretrained.yaml --test --dry-run
-CUDA_VISIBLE_DEVICES=0 python HandCalib/evaluate.py --config HandCalib/configs/01_anycalib_pretrained.yaml --test
+nvidia-smi
+GPU_ID=<physical GPU number selected by the user>
+CUDA_VISIBLE_DEVICES="$GPU_ID" python HandCalib/evaluate.py --config HandCalib/configs/01_anycalib_pretrained.yaml --test
 ```
 
 최종 결과는 `HandCalib/runs/01_anycalib_pretrained/test/`에 저장됩니다. `config.yaml`은 설정 snapshot, `metadata.json`은 재현 환경 정보, `runtime.json`은 속도와 자원 사용량, `summary.txt`는 사람이 읽는 요약, `metrics.json`은 frame/pair metric, `pair_summary.csv`와 `clip_summary.csv`는 그룹별 통계, `frame_predictions.csv.gz`는 모든 frame의 source of truth, `telemetry.csv.gz`와 `batch_timings.csv.gz`는 GPU 및 batch timing 원자료입니다.
@@ -177,20 +179,54 @@ python tools/download_gigahands_demo.py --check
 
 InterHand external evaluation은 Official Test만 사용하고, `(capture, camera)` 360개 calibration unit에서 metadata-only deterministic sampling으로 최대 16 frame씩 선택합니다. frozen manifest는 `data/manifests/interhand_external_test_v1.csv`이며 5,760 frames, manifest SHA256은 `af910a754c3449c258335a3baf574cb2650d8fabe6cc3458ee69cee3f429b750`입니다. 두 모델은 이 manifest, preprocessing, metric, batch 설정을 공유하고 checkpoint만 다릅니다. 현재는 image archive가 없어 `NOT READY`이며 inference는 실행하지 않았습니다.
 
-Image archive를 받은 뒤의 준비 순서는 다음과 같습니다.
+Sampling estimand는 Official Test frame distribution 전반의 deterministic subsample이며 sequence-balanced estimator가 아닙니다. Calibration unit을 equal weight로 집계하고 각 unit의 frame은 representative prediction에 사용하므로, sequence imbalance만으로 frozen manifest를 교체하지 않습니다. 이번 integrity completion에서 manifest는 변경하지 않았습니다. Metadata-level intrinsic round-trip은 검증했지만 JPEG decode와 actual-image preprocessing/K consistency는 archive 준비 후 pending입니다.
+
+Image archive를 받은 뒤의 준비 순서는 다음과 같습니다. `gh`가 설치되어 있으면 아래 primary 명령을 사용합니다.
 
 ```bash
 cd /home/junghyub/2026-2-Capstone-T02-calib-free-hands
-mkdir -p HandCalib/datasets/interhand2.6m/archives/images_5fps_v1.0
-for suffix in {aa..az} {ba..br}; do
-  wget -c "https://github.com/facebookresearch/InterHand2.6M/releases/download/v1.0/InterHand2.6M.images.5.fps.v1.0.tar.part${suffix}" \
-    -P HandCalib/datasets/interhand2.6m/archives/images_5fps_v1.0
+IMG_DIR="HandCalib/datasets/interhand2.6m/archives/images_5fps_v1.0"
+mkdir -p "$IMG_DIR"
+gh release download v1.0 \
+  --repo facebookresearch/InterHand2.6M \
+  --pattern 'InterHand2.6M.images.5.fps.v1.0.tar.part*' \
+  --pattern 'InterHand2.6M.images.5.fps.v1.0.tar.CHECKSUM' \
+  --dir "$IMG_DIR" \
+  --skip-existing
+```
+
+`gh`가 없는 경우에는 exact suffix를 Python으로 생성하는 curl fallback을 사용합니다. brace expansion을 사용하지 않으며 개수·순서·중복을 확인하고 전송 실패를 반환합니다.
+
+```bash
+cd /home/junghyub/2026-2-Capstone-T02-calib-free-hands
+IMG_DIR="HandCalib/datasets/interhand2.6m/archives/images_5fps_v1.0"
+mkdir -p "$IMG_DIR"
+mapfile -t PARTS < <(.venv/bin/python - <<'PY'
+letters = "abcdefghijklmnopqrstuvwxyz"
+suffixes = [f"part{a}{b}" for a in "ab" for b in letters if not (a == "b" and b > "r")]
+assert len(suffixes) == 44 and suffixes[0] == "partaa" and suffixes[-1] == "partbr"
+assert len(suffixes) == len(set(suffixes))
+print("\n".join(suffixes))
+PY
+)
+test "${#PARTS[@]}" -eq 44
+BASE="https://github.com/facebookresearch/InterHand2.6M/releases/download/v1.0/InterHand2.6M.images.5.fps.v1.0.tar."
+for suffix in "${PARTS[@]}"; do
+  curl -fL --retry 5 --retry-all-errors --connect-timeout 20 --speed-time 60 --speed-limit 1024 -C - \
+    -o "$IMG_DIR/InterHand2.6M.images.5.fps.v1.0.tar.$suffix" "$BASE$suffix"
 done
-wget -c "https://github.com/facebookresearch/InterHand2.6M/releases/download/v1.0/InterHand2.6M.images.5.fps.v1.0.tar.CHECKSUM" \
-  -P HandCalib/datasets/interhand2.6m/archives/images_5fps_v1.0
+curl -fL --retry 5 --retry-all-errors --connect-timeout 20 --speed-time 60 --speed-limit 1024 -C - \
+  -o "$IMG_DIR/InterHand2.6M.images.5.fps.v1.0.tar.CHECKSUM" \
+  "https://github.com/facebookresearch/InterHand2.6M/releases/download/v1.0/InterHand2.6M.images.5.fps.v1.0.tar.CHECKSUM"
+```
+
+```bash
+cd /home/junghyub/2026-2-Capstone-T02-calib-free-hands
 .venv/bin/python HandCalib/tools/verify_interhand_images.py \
   --archive-dir HandCalib/datasets/interhand2.6m/archives/images_5fps_v1.0 \
-  --manifest HandCalib/data/manifests/interhand_external_test_v1.csv --scan-members
+  --manifest HandCalib/data/manifests/interhand_external_test_v1.csv \
+  --full-test-data HandCalib/datasets/interhand2.6m/raw/annotations/all/InterHand2.6M_test_data.json \
+  --scan-members
 .venv/bin/python HandCalib/tools/extract_interhand_subset.py \
   --archive-dir HandCalib/datasets/interhand2.6m/archives/images_5fps_v1.0 \
   --manifest HandCalib/data/manifests/interhand_external_test_v1.csv \
@@ -208,13 +244,18 @@ Preprocessing은 기존 AnyCalib evaluator 경로를 재사용하며, GT `fx/fy/
 모델 평가는 사용자가 readiness 검증을 끝낸 뒤 직접 실행합니다.
 
 ```bash
-# Single GPU, sequential
-CUDA_VISIBLE_DEVICES=3 .venv/bin/python HandCalib/evaluate.py --config HandCalib/configs/02h0_interhand_pretrained.yaml --test
-CUDA_VISIBLE_DEVICES=3 .venv/bin/python HandCalib/evaluate.py --config HandCalib/configs/02h0_interhand_gigahands_finetuned.yaml --test
+# Select a physical GPU after inspecting the server; no fixed GPU number is assumed.
+nvidia-smi
+GPU_ID=<physical GPU number selected by the user>
+CUDA_VISIBLE_DEVICES="$GPU_ID" .venv/bin/python HandCalib/evaluate.py --config HandCalib/configs/02h0_interhand_pretrained.yaml --test
+CUDA_VISIBLE_DEVICES="$GPU_ID" .venv/bin/python HandCalib/evaluate.py --config HandCalib/configs/02h0_interhand_gigahands_finetuned.yaml --test
 
-# Two idle GPUs, independent parallel processes
-CUDA_VISIBLE_DEVICES=3 .venv/bin/python HandCalib/evaluate.py --config HandCalib/configs/02h0_interhand_pretrained.yaml --test &
-CUDA_VISIBLE_DEVICES=1 .venv/bin/python HandCalib/evaluate.py --config HandCalib/configs/02h0_interhand_gigahands_finetuned.yaml --test &
+# Select two different idle physical GPUs after inspecting the server.
+GPU_PRE=<physical GPU number selected for pretrained>
+GPU_FIN=<different physical GPU number selected for fine-tuned>
+test "$GPU_PRE" != "$GPU_FIN"
+CUDA_VISIBLE_DEVICES="$GPU_PRE" .venv/bin/python HandCalib/evaluate.py --config HandCalib/configs/02h0_interhand_pretrained.yaml --test &
+CUDA_VISIBLE_DEVICES="$GPU_FIN" .venv/bin/python HandCalib/evaluate.py --config HandCalib/configs/02h0_interhand_gigahands_finetuned.yaml --test &
 wait
 ```
 

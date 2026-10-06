@@ -23,6 +23,12 @@ def read_manifest(path):
         return list(csv.DictReader(handle))
 
 
+def read_full_test_data(path):
+    with Path(path).open() as handle:
+        data = json.load(handle)
+    return data["images"]
+
+
 def candidate_names(file_name):
     return {file_name, "test/" + file_name, "images/test/" + file_name}
 
@@ -75,6 +81,7 @@ def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--archive-dir", required=True, type=Path)
     parser.add_argument("--manifest", required=True, type=Path)
+    parser.add_argument("--full-test-data", type=Path, help="Canonical Official-Test data JSON for a separate full mapping gate.")
     parser.add_argument("--checksum", type=Path)
     parser.add_argument("--scan-members", action="store_true")
     args = parser.parse_args()
@@ -83,13 +90,18 @@ def main():
     result = {"expected_part_count": 44, "present_part_count": len(paths) - len(missing), "expected_bytes": EXPECTED_BYTES, "present_bytes": sum(path.stat().st_size for path in paths if path.exists()), "missing_parts": missing}
     result["size_matches"] = not missing and result["present_bytes"] == EXPECTED_BYTES
     result["checksum"] = checksum_report(args.checksum or args.archive_dir / "InterHand2.6M.images.5.fps.v1.0.tar.CHECKSUM", paths)
+    result["checksum"]["scope"] = "per-part checksums listed in CHECKSUM; reconstructed tar checksum is not assumed"
     if args.scan_members and not missing:
         members = set(stream_members(paths))
         rows = read_manifest(args.manifest)
         matched = sum(bool(candidate_names(row["file_name"]) & members) for row in rows)
         result.update({"manifest_rows": len(rows), "archive_members": len(members), "manifest_matches": matched, "manifest_missing": len(rows) - matched})
+        if args.full_test_data:
+            full_rows = read_full_test_data(args.full_test_data)
+            full_matched = sum(bool(candidate_names(row["file_name"]) & members) for row in full_rows)
+            result.update({"full_test_rows": len(full_rows), "full_test_matches": full_matched, "full_test_missing": len(full_rows) - full_matched})
     print(json.dumps(result, indent=2))
-    if missing or not result["size_matches"] or result["checksum"]["failed"] or result.get("manifest_missing", 0):
+    if missing or not result["size_matches"] or result["checksum"]["failed"] or result.get("manifest_missing", 0) or result.get("full_test_missing", 0):
         raise SystemExit(1)
 
 

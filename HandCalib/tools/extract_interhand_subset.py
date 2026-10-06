@@ -10,7 +10,8 @@ from verify_interhand_images import candidate_names, part_paths, read_manifest
 
 
 def without_test_prefix(path):
-    return path[5:] if path.startswith("test/") else path
+    path = path[5:] if path.startswith("test/") else path
+    return path[12:] if path.startswith("images/test/") else path
 
 
 def safe_target(root, member_name):
@@ -55,13 +56,16 @@ def main():
     paths = part_paths(args.archive_dir)
     if any(not path.exists() for path in paths):
         raise FileNotFoundError("All 44 image archive parts must exist before extraction")
-    desired = {candidate for row in read_manifest(args.manifest) for candidate in candidate_names("test/" + row["file_name"])}
+    manifest_rows = read_manifest(args.manifest)
+    expected = {row["file_name"] for row in manifest_rows}
+    extracted_names = set()
     extracted = 0
     with MultipartReader(paths) as stream, tarfile.open(fileobj=stream, mode="r|") as archive:
         for member in archive:
-            if member.name not in desired and without_test_prefix(member.name) not in desired:
+            canonical_name = without_test_prefix(member.name)
+            if canonical_name not in expected or canonical_name in extracted_names:
                 continue
-            target = safe_target(args.output_root, "test/" + without_test_prefix(member.name))
+            target = safe_target(args.output_root, "test/" + canonical_name)
             if member.issym() or member.islnk() or not member.isfile():
                 raise RuntimeError("Refusing non-regular selected archive member: %s" % member.name)
             if target.exists():
@@ -75,7 +79,11 @@ def main():
                         break
                     handle.write(chunk)
             extracted += 1
-    print("extracted=%d" % extracted)
+            extracted_names.add(canonical_name)
+    missing = sorted(expected - extracted_names)
+    print("expected=%d extracted=%d missing=%d" % (len(expected), extracted, len(missing)))
+    if missing:
+        raise RuntimeError("Selected manifest members were not extracted: %s" % missing[:5])
 
 
 if __name__ == "__main__":
