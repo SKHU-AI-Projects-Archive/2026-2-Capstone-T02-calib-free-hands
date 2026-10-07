@@ -1,0 +1,83 @@
+schema_version: 1
+base_commit: 63b265c34621f19b0b4680114f8acb35405c7600
+commit_message: "fix: make final evaluation dataset-aware"
+failure: "KeyError: camera_key"
+root_cause: "InterHand samples exposed calibration_unit in row metadata, while evaluator final-Test metadata and stored-output checks required camera_key."
+row_contract_fix:
+  camera_key: "calibration_unit"
+  sequence: "seq_name"
+  video_name: "seq_name"
+  participant: interhand
+summary_generalization: PASS
+checkpoint_provenance_fix: PASS
+dry_run_strengthened: PASS
+dataset_specific_test_contract:
+  interhand:
+    dataset: InterHand2.6M
+    split: Official Test
+    expected_frames: 5760
+    expected_calibration_units: 360
+    frozen_manifest: data/manifests/interhand_external_test_v1.csv
+    frozen_manifest_sha256: af910a754c3449c258335a3baf574cb2650d8fabe6cc3458ee69cee3f429b750
+  gigahands:
+    dataset: GigaHands
+    expected_frames: 7667
+    expected_pairs: 49
+    participant: p52
+    sequence: p52-instrument-0034
+weight_provenance:
+  pretrained:
+    source: official_pretrained
+    sha256: e73b174563bcb90dc9a0e348ee64fbb898901d2a1786623e62fc0e3b176a1a38
+  gigahands_finetuned:
+    source: checkpoint
+    sha256: 1b87efa27c847886f5987084a95000bccf2491f1abc719efcfa1c232cd8c2d41
+    note: "Expected fine-tuned checkpoint is epoch 5/global step 31975."
+precommitted_metrics_status:
+  primary_metric_unchanged: true
+  aggregation_unchanged: true
+  existing_keys_preserved: true
+  secondary_metrics_added:
+    - std
+    - p90
+    - p95
+    - max
+    - within_1pct
+    - within_2pct
+    - within_3pct
+    - within_5pct
+    - within_10pct
+    - within_20pct
+legacy_regression: PASS
+dry_run_results:
+  interhand_pretrained:
+    frames: 5760
+    pairs: 360
+    planned_batches: 2880
+    camera_key_contract: PASS
+    final_test_contract: PASS
+  interhand_finetuned:
+    frames: 5760
+    pairs: 360
+    planned_batches: 2880
+    camera_key_contract: PASS
+    final_test_contract: PASS
+  gigahands_test:
+    frames: 7667
+    pairs: 49
+    participant: p52
+    selected_sequence: p52-instrument-0034
+    planned_batches: 3834
+    camera_key_contract: PASS
+    final_test_contract: PASS
+  gigahands_validation_benchmark:
+    benchmark_frame_count: 381
+    planned_batches: 191
+  training_dry_run: PASS
+  synthetic_result_schema: PASS
+actual_inference_run: false
+output_directory_cleanup:
+  failed_interhand_output_removed: true
+  path: runs/02_interhand_external_eval/pretrained
+  inference_results_created: false
+readiness_state: INTERHAND_FINAL_TEST_PREFLIGHT_PASS

@@ -7,6 +7,8 @@ from collections import defaultdict
 from pathlib import Path
 import statistics
 
+from utils.runtime import percentile
+
 
 FRAME_FIELDS = [
     "participant", "sequence", "camera", "camera_key", "video_path", "video_name",
@@ -57,6 +59,18 @@ def _stats(rows, field):
         f"{field}_median": statistics.median(values),
         f"{field}_variance": variance,
         f"{field}_std": variance**0.5,
+    }
+
+
+def _distribution_stats(values, prefix):
+    if not values:
+        return {f"{prefix}_{name}": None for name in ("std", "p90", "p95", "max")}
+    variance = statistics.pvariance(values)
+    return {
+        f"{prefix}_std": variance**0.5,
+        f"{prefix}_p90": percentile(values, 0.90),
+        f"{prefix}_p95": percentile(values, 0.95),
+        f"{prefix}_max": max(values),
     }
 
 
@@ -136,9 +150,14 @@ def write_summaries(raw_path, output_dir):
         values = [row[field] for row in pair_rows if row[field] is not None]
         pair_level[f"{field}_mean"] = statistics.fmean(values) if values else None
         pair_level[f"{field}_median"] = statistics.median(values) if values else None
+        pair_level.update(_distribution_stats(values, field))
     within_5 = [row for row in valid_pairs if row["pair_max_rel_f_error"] <= 0.05]
     pair_level["pair_focal_within_5pct_count"] = len(within_5)
     pair_level["pair_focal_within_5pct_rate"] = len(within_5) / len(valid_pairs) if valid_pairs else None
+    for threshold in (1, 2, 3, 5, 10, 20):
+        selected = [row for row in valid_pairs if row["pair_max_rel_f_error"] <= threshold / 100]
+        pair_level[f"pair_focal_within_{threshold}pct_count"] = len(selected)
+        pair_level[f"pair_focal_within_{threshold}pct_rate"] = len(selected) / len(valid_pairs) if valid_pairs else None
     stability_values = [row["pred_fx_std"] for row in pair_rows if row["pred_fx_std"] is not None]
     metrics = {
         "frame_level": frame_level,

@@ -41,6 +41,11 @@ class InterHand26MDataset(Dataset):
             for key in ("fx", "fy", "cx", "cy"):
                 row[key] = float(row[key])
             row["image_id"] = int(row["image_id"])
+            # Normalize the row contract once so evaluator code is dataset-agnostic.
+            row["camera_key"] = row["calibration_unit"]
+            row["sequence"] = row["seq_name"]
+            row["video_name"] = row["seq_name"]
+            row["participant"] = "interhand"
             self.pair_indices.setdefault(row["calibration_unit"], []).append(index)
         self._validate_manifest()
 
@@ -52,6 +57,8 @@ class InterHand26MDataset(Dataset):
             raise ValueError("Expected 360 calibration units, found %d" % len(self.pair_indices))
         if any(len(indices) > 16 for indices in self.pair_indices.values()):
             raise ValueError("InterHand manifest exceeds 16 frames per calibration unit")
+        if {sample["row"]["camera_key"] for sample in self.samples} != set(self.pair_indices):
+            raise ValueError("InterHand camera_key alias does not match calibration units")
         for indices in self.pair_indices.values():
             signatures = {tuple(self.samples[index]["row"][key] for key in ("width", "height", "fx", "fy", "cx", "cy")) for index in indices}
             if len(signatures) != 1:

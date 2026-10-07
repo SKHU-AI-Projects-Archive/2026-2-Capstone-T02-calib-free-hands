@@ -249,6 +249,12 @@ Preprocessing은 기존 AnyCalib evaluator 경로를 재사용하며, GT `fx/fy/
 
 모델 평가는 사용자가 readiness 검증을 끝낸 뒤 직접 실행합니다.
 
+## 02-H.1.1 InterHand final-Test compatibility fix
+
+InterHand loader row의 `calibration_unit`을 공통 `camera_key`로 노출하고, `sequence`/`video_name`/`participant` alias를 추가해 기존 evaluator contract와 연결했습니다. Final Test 검증은 dataset별로 InterHand Official Test `5,760/360`과 GigaHands Test `7,667/49`를 확인하며, InterHand frozen manifest SHA256과 실제 weight source/SHA256도 dry-run metadata에 포함합니다. Summary는 config metadata를 사용하고, 결과 writer에는 기존 primary metric/aggregation을 유지한 채 precommitted secondary distribution 및 threshold statistics를 추가했습니다.
+
+이번 수정의 preflight에서는 두 InterHand config와 기존 GigaHands Test, Validation benchmark, 02 training dry-run, synthetic result schema를 검증했습니다. model build, CUDA inference, full Test 실행은 하지 않았습니다. 상세 기록은 `results/02h1_1_interhand_final_test_compatibility.yaml`입니다.
+
 ```bash
 # Select a physical GPU after inspecting the server; no fixed GPU number is assumed.
 nvidia-smi

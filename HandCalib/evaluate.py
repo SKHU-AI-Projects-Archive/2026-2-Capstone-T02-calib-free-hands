@@ -46,6 +46,7 @@ EXPECTED_TEST_SIZE = 7667
 EXPECTED_TEST_PARTICIPANT = "p52"
 EXPECTED_TEST_SEQUENCE = "p52-instrument-0034"
 EXPECTED_TEST_PAIRS = 49
+INTERHAND_TEST_MANIFEST_SHA256 = "af910a754c3449c258335a3baf574cb2650d8fabe6cc3458ee69cee3f429b750"
 TELEMETRY_FIELDS = (
     "elapsed_seconds", "frames_done", "frames_total", "success_count", "telemetry_available",
     "gpu_util_percent", "gpu_memory_used_mib", "gpu_memory_total_mib", "gpu_temperature_c",
@@ -85,9 +86,63 @@ def _path_from_config(value):
     return path if path.is_absolute() else PROJECT_ROOT / path
 
 
+def _is_interhand(config):
+    return config["dataset"].get("name", "GigaHands").lower() in {"interhand", "interhand2.6m", "interhand26m"}
+
+
+def _test_contract(config, dataset, split_path):
+    """Validate the dataset-specific final-Test invariants without building a model."""
+    rows = [sample["row"] for sample in dataset.samples]
+    camera_keys = {row["camera_key"] for row in rows}
+    if _is_interhand(config):
+        expected = {"frames": 5760, "pairs": 360}
+        manifest_sha = sha256_file(split_path)
+        if manifest_sha != INTERHAND_TEST_MANIFEST_SHA256:
+            raise RuntimeError(f"InterHand frozen manifest SHA mismatch: {manifest_sha}")
+        if len(rows) != expected["frames"] or len(camera_keys) != expected["pairs"]:
+            raise RuntimeError(f"InterHand Test contract failed: expected {expected['frames']} frames and {expected['pairs']} camera units, found {len(rows)} and {len(camera_keys)}")
+        if any(row.get("split") != "test" or row.get("dataset") != "InterHand2.6M" for row in rows):
+            raise RuntimeError("InterHand Test contract requires Official Test rows")
+        return {**expected, "scope": "InterHand2.6M Official Test", "manifest_sha256": manifest_sha, "camera_key_contract": "PASS"}
+    expected = {"frames": EXPECTED_TEST_SIZE, "pairs": EXPECTED_TEST_PAIRS}
+    participants = {row["participant"] for row in rows}
+    sequences = {row["sequence"] for row in rows}
+    if len(rows) != expected["frames"] or len(camera_keys) != expected["pairs"]:
+        raise RuntimeError(f"GigaHands Test contract failed: expected {expected['frames']} frames and {expected['pairs']} camera pairs, found {len(rows)} and {len(camera_keys)}")
+    if participants != {EXPECTED_TEST_PARTICIPANT} or sequences != {EXPECTED_TEST_SEQUENCE}:
+        raise RuntimeError(f"Unexpected GigaHands Test scope: participants={sorted(participants)}, sequences={sorted(sequences)}")
+    return {**expected, "scope": f"GigaHands Test / {EXPECTED_TEST_PARTICIPANT}", "manifest_sha256": sha256_file(PROJECT_ROOT / "data/manifests/gigahands.csv"), "camera_key_contract": "PASS"}
+
+
+def _weight_provenance(config, weight_path):
+    checkpoint = config["model"].get("checkpoint")
+    official_sha = sha256_file(weight_path) if weight_path.exists() else None
+    if checkpoint:
+        checkpoint_path = _path_from_config(checkpoint)
+        actual_sha = sha256_file(checkpoint_path) if checkpoint_path.exists() else None
+        return {
+            "model_weight_source": "checkpoint",
+            "model_weight_path": str(checkpoint_path.relative_to(PROJECT_ROOT)),
+            "model_weight_sha256": actual_sha,
+            "actual_checkpoint_path": str(checkpoint_path.relative_to(PROJECT_ROOT)),
+            "actual_checkpoint_sha256": actual_sha,
+            "official_pretrained_cache_path": str(weight_path),
+            "official_pretrained_cache_sha256": official_sha,
+        }
+    return {
+        "model_weight_source": "official_pretrained",
+        "model_weight_path": f"torch.hub.get_dir()/anycalib/{config['model']['model_id']}.pt",
+        "model_weight_sha256": official_sha,
+        "actual_checkpoint_path": None,
+        "actual_checkpoint_sha256": None,
+        "official_pretrained_cache_path": str(weight_path),
+        "official_pretrained_cache_sha256": official_sha,
+    }
+
+
 def _dataset(config, split_name="val"):
     dataset_config = config["dataset"]
-    if dataset_config.get("name", "GigaHands").lower() in {"interhand", "interhand2.6m", "interhand26m"}:
+    if _is_interhand(config):
         if split_name != "test":
             raise ValueError("InterHand external evaluation only supports the frozen Official Test manifest.")
         manifest_path = _path_from_config(dataset_config["test_manifest"])
@@ -248,7 +303,7 @@ def _benchmark_metadata(config, config_path, split_path, first, clip, batch_size
         "repository_commit": _git_head(REPO_ROOT), "repository_dirty": _git_dirty(),
         "anycalib_commit": _git_head(PROJECT_ROOT / "AnyCalib"),
         "config_sha256": sha256_file(config_path),
-        "manifest_sha256": sha256_file(split_path if config["dataset"].get("name", "GigaHands").lower() in {"interhand", "interhand2.6m", "interhand26m"} else PROJECT_ROOT / "data/manifests/gigahands.csv"),
+        "manifest_sha256": sha256_file(split_path if _is_interhand(config) else PROJECT_ROOT / "data/manifests/gigahands.csv"),
         "python_version": sys.version.split()[0], "torch_version": torch.__version__,
         "torchvision_version": _version("torchvision"), "numpy_version": _version("numpy"),
         "opencv_version": cv2.__version__, "cuda_build_version": torch.version.cuda,
@@ -265,7 +320,7 @@ def _benchmark_metadata(config, config_path, split_path, first, clip, batch_size
         "input_width": input_width, "input_height": input_height, "pred_width": None, "pred_height": None,
         "weight_cache_path": f"torch.hub.get_dir()/anycalib/{config['model']['model_id']}.pt",
         "weight_cache_present_before_run": weight_present_before,
-        "pretrained_weight_sha256": sha256_file(weight_path) if weight_path.exists() else None,
+        **_weight_provenance(config, weight_path),
         "command_line": sys.argv, "started_at_utc": started,
         "finished_at_utc": None, "output_directory": str(output_dir.relative_to(PROJECT_ROOT)),
     }
@@ -273,13 +328,13 @@ def _benchmark_metadata(config, config_path, split_path, first, clip, batch_size
         metadata.update({
             "dataset_split": "test", "test_frames": len(clip),
             "test_pairs": len({sample["row"]["camera_key"] for sample in clip.samples}),
-            "evaluation_setting_source": "validation_benchmark",
+            "evaluation_setting_source": "frozen_external_test_protocol" if _is_interhand(config) else "validation_benchmark",
             "test_split_sha256": sha256_file(split_path),
         })
-        if config["dataset"].get("name", "GigaHands").lower() in {"interhand", "interhand2.6m", "interhand26m"}:
-            metadata.update({"test_manifest": str(split_path.relative_to(PROJECT_ROOT)), "test_calibration_units": len(clip.pair_indices)})
+        if _is_interhand(config):
+            metadata.update({"dataset_name": "InterHand2.6M", "test_scope": "InterHand2.6M Official Test", "test_manifest": str(split_path.relative_to(PROJECT_ROOT)), "test_calibration_units": len(clip.pair_indices)})
         else:
-            metadata.update({"test_participant": first["participant"], "test_sequence": first["sequence"]})
+            metadata.update({"dataset_name": "GigaHands", "test_scope": f"GigaHands Test / {first['participant']}", "test_participant": first["participant"], "test_sequence": first["sequence"]})
     else:
         metadata.update({
             "dataset_split": "validation", "validation_split_sha256": sha256_file(split_path),
@@ -297,11 +352,11 @@ def _display(value):
 def _write_summary(output_dir, metadata, runtime, metrics):
     pair = metrics["pair_level"]
     lines = [
-        "Experiment: 01_anycalib_pretrained",
-        "Mode: final_test",
-        "Model: anycalib_pinhole",
-        "Camera model: pinhole",
-        f"Split: Test / {metadata['test_participant']}",
+        f"Experiment: {metadata['experiment']}",
+        f"Mode: {metadata['mode']}",
+        f"Model: {metadata['model_id']}",
+        f"Camera model: {metadata['cam_id']}",
+        f"Split: {metadata['test_scope']}",
         f"Frames: {runtime['frames_processed']}",
         f"Pairs: {pair['pair_count']} / valid {pair['valid_pair_count']}",
         f"Success: {runtime['successful_frames']} / {runtime['frames_processed']} / {runtime['success_rate']:.6f}",
@@ -317,6 +372,8 @@ def _write_summary(output_dir, metadata, runtime, metrics):
         f"  GPU={metadata.get('gpu_name')} batch_size={metadata['batch_size']} num_workers={metadata['num_workers']}",
         f"Repository commit: {metadata['repository_commit']}",
         f"AnyCalib commit: {metadata['anycalib_commit']}",
+        f"Weight source: {metadata['model_weight_source']}",
+        f"Weight SHA256: {metadata['model_weight_sha256']}",
         f"Result directory: {output_dir}",
     ]
     (output_dir / "summary.txt").write_text("\n".join(lines) + "\n")
@@ -334,6 +391,7 @@ def _benchmark(config, config_path, args, final_test=False):
         clip = dataset
         indices = list(range(len(dataset)))
         first = dataset.samples[0]["row"]
+        contract = _test_contract(config, dataset, split_path)
         output_dir = PROJECT_ROOT / config["evaluation"].get("output_dir", "runs/01_anycalib_pretrained/test")
     else:
         _require_benchmark_args(args)
@@ -354,6 +412,14 @@ def _benchmark(config, config_path, args, final_test=False):
         print(f"selected_video_name={first.get('video_name', first.get('file_name', 'n/a'))}")
         print(f"{'frames' if final_test else 'benchmark_frame_count'}={len(clip)}")
         print(f"pairs={len(dataset.pair_indices) if final_test else 1}")
+        if final_test:
+            weight_path = Path(torch.hub.get_dir()) / "anycalib" / f"{config['model']['model_id']}.pt"
+            provenance = _weight_provenance(config, weight_path)
+            print(f"camera_key_contract={contract['camera_key_contract']}")
+            print("final_test_contract=PASS")
+            print(f"manifest_sha256={contract['manifest_sha256']}")
+            print(f"weight_source={provenance['model_weight_source']}")
+            print(f"model_weight_sha256={provenance['model_weight_sha256']}")
         print(f"batch_size={batch_size}")
         print(f"num_workers={num_workers}")
         print(f"planned_batches={(len(clip) + batch_size - 1) // batch_size}")
@@ -489,12 +555,12 @@ def _benchmark(config, config_path, args, final_test=False):
         stored_rows = read_frame_predictions(raw_path)
         with (output_dir / "pair_summary.csv").open(newline="") as handle:
             stored_pairs = list(csv.DictReader(handle))
-        if len(stored_rows) != EXPECTED_TEST_SIZE:
-            raise RuntimeError(f"Expected {EXPECTED_TEST_SIZE} raw Test rows, found {len(stored_rows)}")
-        if len(stored_pairs) != EXPECTED_TEST_PAIRS:
-            raise RuntimeError(f"Expected {EXPECTED_TEST_PAIRS} Test pair rows, found {len(stored_pairs)}")
-        if len({row["camera_key"] for row in stored_rows}) != EXPECTED_TEST_PAIRS:
-            raise RuntimeError("Stored Test rows do not contain the expected 49 camera pairs.")
+        if len(stored_rows) != contract["frames"]:
+            raise RuntimeError(f"Expected {contract['frames']} raw Test rows, found {len(stored_rows)}")
+        if len(stored_pairs) != contract["pairs"]:
+            raise RuntimeError(f"Expected {contract['pairs']} Test pair rows, found {len(stored_pairs)}")
+        if len({row["camera_key"] for row in stored_rows}) != contract["pairs"]:
+            raise RuntimeError(f"Stored Test rows do not contain the expected {contract['pairs']} camera pairs.")
     metadata.update({"pred_width": rows[0]["pred_width"], "pred_height": rows[0]["pred_height"], "finished_at_utc": utc_now()})
     (output_dir / "metadata.json").write_text(json.dumps(metadata, indent=2) + "\n")
     (output_dir / "runtime.json").write_text(json.dumps(runtime, indent=2) + "\n")
