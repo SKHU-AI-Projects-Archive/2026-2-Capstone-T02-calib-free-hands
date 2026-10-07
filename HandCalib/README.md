@@ -267,6 +267,12 @@ Fine-tuned config의 `runs/02_anycalib_finetune/train/checkpoint_best.pt`는 `Ha
 
 상세 기록은 `results/02h1_3_checkpoint_path_resolution.yaml`입니다. 현재 상태는 `FINETUNED_INTERHAND_CONFIG_PATH_READY`입니다.
 
+## 02-H.2 InterHand external generalization diagnostics
+
+완료된 InterHand Official Test 결과만 읽어 post-hoc 분석했습니다. 360개 calibration unit paired join은 `360/360`이며 fine-tuned focal error가 더 낮은 unit `0`, 동일 `0`, pretrained가 더 낮은 unit `360`입니다. focal mean delta는 `+0.274758` (fine-tuned - pretrained), deterministic bootstrap 95% CI는 `[0.268509, 0.281287]`입니다. Principal-point mean delta는 `+0.000297`로 focal 변화보다 작았고, fine-tuned prediction은 GigaHands Train median normalized-focal prior에 `360/360` unit에서 더 가까웠습니다.
+
+분석은 기존 result를 수정하지 않았고 inference/training을 실행하지 않았습니다. figures와 상세 CSV/JSON/Markdown은 ignored `runs/02_interhand_external_eval/diagnostics/`에, compact 기록은 `results/02h2_interhand_external_generalization.yaml`에 있습니다. 이 결과만으로 fine-tuning의 인과적 원인이나 calibration memorization을 증명하지 않습니다.
+
 ```bash
 # Select a physical GPU after inspecting the server; no fixed GPU number is assumed.
 nvidia-smi
