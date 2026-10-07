@@ -255,6 +255,12 @@ InterHand loader row의 `calibration_unit`을 공통 `camera_key`로 노출하�
 
 이번 수정의 preflight에서는 두 InterHand config와 기존 GigaHands Test, Validation benchmark, 02 training dry-run, synthetic result schema를 검증했습니다. model build, CUDA inference, full Test 실행은 하지 않았습니다. 상세 기록은 `results/02h1_1_interhand_final_test_compatibility.yaml`입니다.
 
+## 02-H.1.2 Fine-tuned checkpoint inference compatibility
+
+`checkpoint_best.pt`는 official AnyCalib 배포 weight가 아니라 HandCalib training payload이며, 공식 loader의 `.tar` suffix assertion 때문에 build 전에 실패했습니다. adapter가 payload의 `model` state dict를 직접 로드하도록 최소 수정했고, legacy `.tar` symlink 경로와 399개 state key의 tensor hash equivalence를 확인했습니다. canonical checkpoint의 missing/unexpected key는 각각 `0/0`, parameter coverage는 `100%`입니다. GigaHands validation `p36` 2-frame tiny smoke도 통과했으며, InterHand 5,760-frame fine-tuned Test inference는 실행하지 않았습니다.
+
+상세 기록은 `results/02h1_2_finetuned_checkpoint_inference_compatibility.yaml`입니다. 현재 상태는 `FINETUNED_INTERHAND_READY_FOR_INFERENCE`입니다.
+
 ```bash
 # Select a physical GPU after inspecting the server; no fixed GPU number is assumed.
 nvidia-smi

@@ -26,6 +26,44 @@ def _sha256(path):
     return digest.hexdigest()
 
 
+def _load_training_checkpoint(model, checkpoint_path):
+    """Load a HandCalib training checkpoint with the official loader semantics."""
+    checkpoint_path = Path(checkpoint_path)
+    payload = torch.load(checkpoint_path, map_location="cpu", weights_only=False)
+    if not isinstance(payload, dict) or "model" not in payload:
+        raise RuntimeError(f"Invalid AnyCalib training checkpoint: {checkpoint_path}")
+    state_dict = payload["model"]
+    if not isinstance(state_dict, dict):
+        raise RuntimeError(f"Checkpoint model state_dict is not dict-like: {checkpoint_path}")
+
+    incompatible = model.load_state_dict(state_dict, strict=False)
+    missing_keys = sorted(incompatible.missing_keys)
+    unexpected_keys = sorted(incompatible.unexpected_keys)
+    parameter_keys = {name for name, _ in model.named_parameters()}
+    loaded_parameter_keys = parameter_keys.intersection(state_dict)
+    missing_parameter_keys = sorted(parameter_keys - set(state_dict))
+    if missing_keys or unexpected_keys:
+        raise RuntimeError(
+            "AnyCalib checkpoint state_dict mismatch: "
+            f"missing={missing_keys[:10]}, unexpected={unexpected_keys[:10]}"
+        )
+
+    return {
+        "checkpoint_format": "handcalib_training_checkpoint",
+        "checkpoint_path": str(checkpoint_path),
+        "checkpoint_sha256": _sha256(checkpoint_path),
+        "checkpoint_epoch": payload.get("epoch"),
+        "checkpoint_global_step": payload.get("global_step"),
+        "state_dict_key_count": len(state_dict),
+        "state_dict_missing_keys": missing_keys,
+        "state_dict_unexpected_keys": unexpected_keys,
+        "missing_parameter_keys": missing_parameter_keys,
+        "loaded_parameter_count": len(loaded_parameter_keys),
+        "model_parameter_count": len(parameter_keys),
+        "loaded_parameter_coverage": len(loaded_parameter_keys) / len(parameter_keys),
+    }
+
+
 def build_training_anycalib(weight_path=None, device="cpu"):
     """공식 training AnyCalib를 pretrained weight와 strict하게 연결한다."""
     weight_path = Path(weight_path or Path(torch.hub.get_dir()) / "anycalib" / "anycalib_pinhole.pt")
@@ -65,13 +103,15 @@ class AnyCalibAdapter:
         self.checkpoint = Path(checkpoint) if checkpoint else None
         self.device = torch.device(device)
         self.model = None
+        self.load_info = {}
 
     def build(self):
         if self.checkpoint is not None:
             model = AnyCalib(model_id=None)
-            model.load_weights_from_ckpt(str(self.checkpoint))
+            self.load_info = _load_training_checkpoint(model, self.checkpoint)
         else:
             model = AnyCalib(model_id=self.model_id)
+            self.load_info = {"checkpoint_format": "official_pretrained"}
         self.model = model.to(self.device).eval()
         return self
 

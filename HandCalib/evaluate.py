@@ -321,6 +321,7 @@ def _benchmark_metadata(config, config_path, split_path, first, clip, batch_size
         "weight_cache_path": f"torch.hub.get_dir()/anycalib/{config['model']['model_id']}.pt",
         "weight_cache_present_before_run": weight_present_before,
         **_weight_provenance(config, weight_path),
+        **getattr(adapter, "load_info", {}),
         "command_line": sys.argv, "started_at_utc": started,
         "finished_at_utc": None, "output_directory": str(output_dir.relative_to(PROJECT_ROOT)),
     }
