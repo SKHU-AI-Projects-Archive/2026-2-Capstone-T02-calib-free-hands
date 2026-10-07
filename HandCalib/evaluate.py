@@ -114,11 +114,11 @@ def _test_contract(config, dataset, split_path):
     return {**expected, "scope": f"GigaHands Test / {EXPECTED_TEST_PARTICIPANT}", "manifest_sha256": sha256_file(PROJECT_ROOT / "data/manifests/gigahands.csv"), "camera_key_contract": "PASS"}
 
 
-def _weight_provenance(config, weight_path):
+def _weight_provenance(config, weight_path, checkpoint_path=None):
     checkpoint = config["model"].get("checkpoint")
     official_sha = sha256_file(weight_path) if weight_path.exists() else None
     if checkpoint:
-        checkpoint_path = _path_from_config(checkpoint)
+        checkpoint_path = checkpoint_path or _path_from_config(checkpoint)
         actual_sha = sha256_file(checkpoint_path) if checkpoint_path.exists() else None
         return {
             "model_weight_source": "checkpoint",
@@ -264,9 +264,11 @@ def _smoke(config, config_path, overwrite):
         shutil.rmtree(SMOKE_OUTPUT)
     SMOKE_OUTPUT.mkdir(parents=True)
     sample = dataset[0]
+    checkpoint_value = config["model"].get("checkpoint")
+    checkpoint_path = _path_from_config(checkpoint_value) if checkpoint_value else None
     adapter = AnyCalibAdapter(
         model_id=config["model"]["model_id"], cam_id=config["model"]["cam_id"],
-        checkpoint=config["model"].get("checkpoint"), device="cuda:0",
+        checkpoint=checkpoint_path, device="cuda:0",
     ).build()
     prediction = adapter.predict(sample["image"])
     intrinsics = torch.as_tensor(prediction["intrinsics"]).detach().cpu().flatten()
@@ -320,7 +322,7 @@ def _benchmark_metadata(config, config_path, split_path, first, clip, batch_size
         "input_width": input_width, "input_height": input_height, "pred_width": None, "pred_height": None,
         "weight_cache_path": f"torch.hub.get_dir()/anycalib/{config['model']['model_id']}.pt",
         "weight_cache_present_before_run": weight_present_before,
-        **_weight_provenance(config, weight_path),
+        **_weight_provenance(config, weight_path, getattr(adapter, "checkpoint", None)),
         **getattr(adapter, "load_info", {}),
         "command_line": sys.argv, "started_at_utc": started,
         "finished_at_utc": None, "output_directory": str(output_dir.relative_to(PROJECT_ROOT)),
@@ -444,9 +446,11 @@ def _benchmark(config, config_path, args, final_test=False):
     weight_path = Path(torch.hub.get_dir()) / "anycalib" / f"{config['model']['model_id']}.pt"
     weight_present_before = weight_path.exists()
     model_start = time.perf_counter()
+    checkpoint_value = config["model"].get("checkpoint")
+    checkpoint_path = _path_from_config(checkpoint_value) if checkpoint_value else None
     adapter = AnyCalibAdapter(
         model_id=config["model"]["model_id"], cam_id=config["model"]["cam_id"],
-        checkpoint=config["model"].get("checkpoint"), device="cuda:0",
+        checkpoint=checkpoint_path, device="cuda:0",
     ).build()
     model_load_seconds = time.perf_counter() - model_start
     metadata = _benchmark_metadata(config, config_path, split_path, first, clip, batch_size, num_workers, final_test, token, output_dir, adapter, weight_path, weight_present_before, started_at)

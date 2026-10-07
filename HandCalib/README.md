@@ -261,6 +261,12 @@ InterHand loader row의 `calibration_unit`을 공통 `camera_key`로 노출하�
 
 상세 기록은 `results/02h1_2_finetuned_checkpoint_inference_compatibility.yaml`입니다. 현재 상태는 `FINETUNED_INTERHAND_READY_FOR_INFERENCE`입니다.
 
+## 02-H.1.3 Config-resolved checkpoint path
+
+Fine-tuned config의 `runs/02_anycalib_finetune/train/checkpoint_best.pt`는 `HandCalib` PROJECT_ROOT 기준으로 해석되어야 하므로, evaluator의 기존 `_path_from_config()`를 adapter 전달 전에도 적용했습니다. config-driven build에서 resolved path 존재, checkpoint SHA, epoch/global step, state-dict contract를 다시 확인했고, repository root와 `HandCalib` 내부 실행 위치에서 같은 absolute path가 생성되는 것도 확인했습니다. InterHand full Test inference는 실행하지 않았습니다.
+
+상세 기록은 `results/02h1_3_checkpoint_path_resolution.yaml`입니다. 현재 상태는 `FINETUNED_INTERHAND_CONFIG_PATH_READY`입니다.
+
 ```bash
 # Select a physical GPU after inspecting the server; no fixed GPU number is assumed.
 nvidia-smi
