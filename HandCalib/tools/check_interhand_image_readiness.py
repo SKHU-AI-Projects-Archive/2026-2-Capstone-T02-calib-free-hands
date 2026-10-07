@@ -2,8 +2,10 @@
 
 import argparse
 import csv
+import json
 import math
 import sys
+import statistics
 from pathlib import Path
 
 import torch
@@ -14,6 +16,7 @@ sys.path.insert(0, str(ROOT))
 
 from dataloaders.gigahands import GigaHandsRayDataset
 from dataloaders.interhand26m import read_image
+from anycalib.cameras import CameraFactory
 from siclib.utils.image_rays import ImagePreprocessor
 
 
@@ -30,7 +33,10 @@ def main():
     if args.limit is None and len(rows) != 5760:
         raise RuntimeError("Expected all 5760 frozen manifest rows, found %d" % len(rows))
     preprocessor = ImagePreprocessor(OmegaConf.create({"edge_divisible_by": 14, "random_center": False, "resize_backend": "kornia"}))
+    camera = CameraFactory.create_from_id("pinhole")
     passed = 0
+    errors = {key: [] for key in ("fx", "fy", "cx", "cy")}
+    output_shapes = set()
     for row in rows:
         path = args.image_root / "test" / row["file_name"]
         image = read_image(path)
@@ -43,10 +49,29 @@ def main():
         if not torch.isfinite(processed["image"]).all().item():
             raise RuntimeError("Non-finite preprocessed image: %s" % path)
         values = processed["image"]
+        if values.dtype != torch.float32 or not torch.isfinite(values).all().item():
+            raise RuntimeError("Invalid preprocessed pixel values: %s" % path)
         if values.shape[-2:] != target or not all(math.isfinite(float(value)) for value in processed["scale_xy"]):
             raise RuntimeError("Invalid preprocessing output: %s" % path)
+        output_shapes.add(tuple(int(value) for value in values.shape))
+        original = torch.tensor([float(row[key]) for key in ("fx", "fy", "cx", "cy")])
+        transformed = camera.scale_and_shift(original, processed["scale_xy"], processed["shift_xy"])
+        recovered = camera.reverse_scale_and_shift(transformed, processed["scale_xy"], processed["shift_xy"])
+        for index, key in enumerate(errors):
+            errors[key].append(abs(float(recovered[index] - original[index])))
         passed += 1
-    print("decoded=%d/%d preprocessing=PASS inference=0" % (passed, len(rows)))
+    result = {
+        "decoded": passed,
+        "total": len(rows),
+        "preprocessing": "PASS",
+        "inference": 0,
+        "output_shapes": sorted(output_shapes),
+        "k_round_trip": {
+            key: {"mean_abs_error": statistics.fmean(values), "median_abs_error": statistics.median(values), "max_abs_error": max(values)}
+            for key, values in errors.items()
+        },
+    }
+    print(json.dumps(result, indent=2))
 
 
 if __name__ == "__main__":

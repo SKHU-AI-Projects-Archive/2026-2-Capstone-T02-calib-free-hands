@@ -6,12 +6,9 @@ import os
 import tarfile
 from pathlib import Path
 
-from verify_interhand_images import candidate_names, part_paths, read_manifest
+import cv2
 
-
-def without_test_prefix(path):
-    path = path[5:] if path.startswith("test/") else path
-    return path[12:] if path.startswith("images/test/") else path
+from verify_interhand_images import normalize_member_name, part_paths, read_manifest
 
 
 def safe_target(root, member_name):
@@ -58,18 +55,26 @@ def main():
         raise FileNotFoundError("All 44 image archive parts must exist before extraction")
     manifest_rows = read_manifest(args.manifest)
     expected = {row["file_name"] for row in manifest_rows}
+    dimensions = {row["file_name"]: (int(row["width"]), int(row["height"])) for row in manifest_rows}
     extracted_names = set()
     extracted = 0
+    reused = 0
     with MultipartReader(paths) as stream, tarfile.open(fileobj=stream, mode="r|") as archive:
         for member in archive:
-            canonical_name = without_test_prefix(member.name)
+            canonical_name = normalize_member_name(member.name)
             if canonical_name not in expected or canonical_name in extracted_names:
                 continue
             target = safe_target(args.output_root, "test/" + canonical_name)
             if member.issym() or member.islnk() or not member.isfile():
                 raise RuntimeError("Refusing non-regular selected archive member: %s" % member.name)
             if target.exists():
-                raise FileExistsError("Refusing to overwrite existing file: %s" % target)
+                image = cv2.imread(str(target), cv2.IMREAD_COLOR)
+                expected_width, expected_height = dimensions[canonical_name]
+                if image is None or image.shape[1] != expected_width or image.shape[0] != expected_height:
+                    raise RuntimeError("Existing extracted image is invalid: %s" % target)
+                reused += 1
+                extracted_names.add(canonical_name)
+                continue
             target.parent.mkdir(parents=True, exist_ok=True)
             source = archive.extractfile(member)
             with target.open("wb") as handle:
@@ -81,7 +86,7 @@ def main():
             extracted += 1
             extracted_names.add(canonical_name)
     missing = sorted(expected - extracted_names)
-    print("expected=%d extracted=%d missing=%d" % (len(expected), extracted, len(missing)))
+    print("expected=%d extracted=%d reused=%d missing=%d unexpected=0" % (len(expected), extracted, reused, len(missing)))
     if missing:
         raise RuntimeError("Selected manifest members were not extracted: %s" % missing[:5])
 

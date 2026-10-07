@@ -177,7 +177,7 @@ python tools/download_gigahands_demo.py --check
 
 ## 02-H.0 InterHand external evaluation preparation
 
-InterHand external evaluation은 Official Test만 사용하고, `(capture, camera)` 360개 calibration unit에서 metadata-only deterministic sampling으로 최대 16 frame씩 선택합니다. frozen manifest는 `data/manifests/interhand_external_test_v1.csv`이며 5,760 frames, manifest SHA256은 `af910a754c3449c258335a3baf574cb2650d8fabe6cc3458ee69cee3f429b750`입니다. 두 모델은 이 manifest, preprocessing, metric, batch 설정을 공유하고 checkpoint만 다릅니다. 현재는 image archive가 없어 `NOT READY`이며 inference는 실행하지 않았습니다.
+InterHand external evaluation은 Official Test만 사용하고, `(capture, camera)` 360개 calibration unit에서 metadata-only deterministic sampling으로 최대 16 frame씩 선택합니다. frozen manifest는 `data/manifests/interhand_external_test_v1.csv`이며 5,760 frames, manifest SHA256은 `af910a754c3449c258335a3baf574cb2650d8fabe6cc3458ee69cee3f429b750`입니다. 두 모델은 이 manifest, preprocessing, metric, batch 설정을 공유하고 checkpoint만 다릅니다. 02-H.1에서 image archive integration과 전체 image readiness 검증을 완료했으며 실제 inference는 실행하지 않았습니다.
 
 Sampling estimand는 Official Test frame distribution 전반의 deterministic subsample이며 sequence-balanced estimator가 아닙니다. Calibration unit을 equal weight로 집계하고 각 unit의 frame은 representative prediction에 사용하므로, sequence imbalance만으로 frozen manifest를 교체하지 않습니다. 이번 integrity completion에서 manifest는 변경하지 않았습니다. Metadata-level intrinsic round-trip은 검증했지만 JPEG decode와 actual-image preprocessing/K consistency는 archive 준비 후 pending입니다.
 
@@ -233,6 +233,12 @@ cd /home/junghyub/2026-2-Capstone-T02-calib-free-hands
   --output-root HandCalib/datasets/interhand2.6m/raw/images
 .venv/bin/python HandCalib/tools/check_interhand_image_readiness.py
 ```
+
+## 02-H.1 InterHand image archive integration
+
+공식 5fps archive는 44개 part, 총 `81,718,036,480` bytes이며 per-part MD5 `44/44 PASS`입니다. deadlock-safe member scan으로 frozen manifest `5,760/5,760`, Official Test annotation `352,897/352,897` mapping을 확인했고, 전체 frozen subset만 selective extraction했습니다. 실제 JPEG `5,760/5,760` decode, annotation resolution/channel/finite pixel 검사, 기존 AnyCalib preprocessing과 intrinsic transform/inverse transform도 통과했습니다. 현재 readiness는 `READY_FOR_INFERENCE`입니다.
+
+상세 기록은 `results/02h1_interhand_image_archive_readiness.yaml`에 있습니다. 이 단계에서도 Pretrained 또는 Giga-finetuned model forward/inference는 실행하지 않았습니다.
 
 Preprocessing은 기존 AnyCalib evaluator 경로를 재사용하며, GT `fx/fy/cx/cy`는 target metric metadata로만 사용합니다. 실제 실행 전에는 다음 dry-run이 `5760/360`을 확인해야 합니다.
 

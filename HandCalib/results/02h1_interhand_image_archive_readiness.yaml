@@ -1,0 +1,97 @@
+# Image-validated readiness record. No model forward or inference was run.
+base_commit: c2107a38f1bd039f78cfa03e24a4d22199c85cea
+audit_commit: recorded_by_this_commit
+manifest_path: data/manifests/interhand_external_test_v1.csv
+manifest_sha: af910a754c3449c258335a3baf574cb2650d8fabe6cc3458ee69cee3f429b750
+manifest_changed: false
+archive_dir: datasets/interhand2.6m/archives/images_5fps_v1.0
+archive_part_count: 44
+archive_total_bytes: 81718036480
+official_md5_pass_count: 44
+official_md5_fail_count: 0
+verifier_deadlock_root_cause: "The old producer wrote the whole multipart stream before consuming tar stdout; pipe buffers filled and tar blocked while the producer blocked on stdin.write."
+verifier_fix_summary: "A producer thread streams ordered parts while the main thread consumes stdout and a second thread drains stderr; broken pipe and tar exit status are checked."
+verifier_timing:
+  member_scan_seconds: 78.96
+  checksum_seconds: 129.25
+  selective_extraction_seconds: 124.43
+  selective_reuse_validation_seconds: 128.80
+  archive_members: 2849258
+  progress_output: true
+archive_mapping:
+  full_official_test:
+    annotation_total: 352897
+    found: 352897
+    missing: 0
+    path_ambiguity: 0
+  frozen_manifest:
+    expected: 5760
+    found: 5760
+    missing: 0
+    duplicate_mapping: 0
+    path_ambiguity: 0
+frozen_manifest_rows: 5760
+frozen_archive_found: 5760
+frozen_archive_missing: 0
+extraction:
+  target_root: datasets/interhand2.6m/raw/images
+  expected: 5760
+  extracted_first_run: 5760
+  reused_valid_second_run: 5760
+  missing: 0
+  unexpected: 0
+  overwrite_policy: "existing files are decoded and resolution-checked; invalid files fail; no silent overwrite"
+actual_image_validation:
+  decode_success: 5760
+  decode_failures: 0
+  resolution_matches: 5760
+  resolution_mismatches: 0
+  channel_issues: 0
+  corrupt_images: 0
+  dtype: torch.float32
+  rgb_conversion: "OpenCV BGR to RGB"
+actual_preprocessing_status: PASS
+actual_preprocessing:
+  code_path: "GigaHandsRayDataset.compute_target_size + siclib.utils.image_rays.ImagePreprocessor"
+  tested_images: 5760
+  output_shapes: [[3, 252, 392], [3, 392, 252]]
+  finite_pixels: true
+  k_transform: "anycalib pinhole CameraFactory.scale_and_shift"
+  inverse_k: "anycalib pinhole CameraFactory.reverse_scale_and_shift"
+  k_round_trip:
+    fx: {mean_abs_error: 0.0, median_abs_error: 0.0, max_abs_error: 0.0}
+    fy: {mean_abs_error: 0.0, median_abs_error: 0.0, max_abs_error: 0.0}
+    cx: {mean_abs_error: 1.8225775824652779e-06, median_abs_error: 0.0, max_abs_error: 1.52587890625e-05}
+    cy: {mean_abs_error: 2.966986762152778e-06, median_abs_error: 0.0, max_abs_error: 1.52587890625e-05}
+loader:
+  frames: 5760
+  units: 360
+  missing_paths: 0
+  bad_samples: 0
+  unique_image_ids: 5760
+  sample_contract: PASS
+  gt_leakage: "GT intrinsics returned as metric metadata; model input path is image only"
+evaluator_preflight:
+  pretrained: {status: PASS, frames: 5760, units: 360, batch_size: 2, num_workers: 4}
+  gigahands_finetuned: {status: PASS, frames: 5760, units: 360, batch_size: 2, num_workers: 4}
+  model_forward: false
+  inference: false
+config_parity: "PASS after normalizing run label, checkpoint, and output directory"
+checkpoint_hashes:
+  pretrained_sha256: e73b174563bcb90dc9a0e348ee64fbb898901d2a1786623e62fc0e3b176a1a38
+  finetuned_sha256: 1b87efa27c847886f5987084a95000bccf2491f1abc719efcfa1c232cd8c2d41
+  finetuned_epoch: 5
+  finetuned_global_step: 31975
+  modified_during_audit: false
+legacy_regression:
+  verdict: PASS_WITH_LIMITATIONS
+  checks: [legacy_test_dry_run, legacy_validation_benchmark_dry_run, interhand_preflight_dry_runs, static_evaluate_semantic_audit]
+  heavy_inference_or_training: false
+critical_findings: []
+high_findings:
+  - id: H-01
+    finding: "The original member scanner could deadlock on the stdout pipe."
+    status: fixed_and_verified
+medium_findings: []
+low_findings: []
+readiness_state: READY_FOR_INFERENCE
