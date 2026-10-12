@@ -1,0 +1,31 @@
+# Implementation checklist
+
+- [x] Python package and PySide6 application shell
+- [x] Non-recursive supported-media discovery
+- [x] ffprobe metadata boundary with explicit missing-tool error
+- [x] Main-window drag and drop input
+- [x] FFmpeg subprocess decoder boundary with frame timestamps
+- [x] Project-local bundled FFmpeg option via imageio-ffmpeg
+- [x] Backend-independent frame processing service and canonical result integration
+- [x] Preview encoder boundary with optional audio mapping
+- [x] Queue start/cancel UI bound to QThread lifecycle
+- [x] Sampling and focal aggregation contract
+- [x] Canonical result model with NaN/mask representation
+- [x] NPZ and `run.json` persistence
+- [x] Saved-result viewer with timeline and interactive canvas controls
+- [x] Synthetic multi-frame result fixture tests
+- [x] CSV/JSON export
+- [x] Persistent application settings
+- [x] Processing job lifecycle with cancellation
+- [x] QThread wrapper for non-blocking job execution
+- [x] AnyCalib API adapter and focal extraction/translation regression contract
+- [x] Original WiLoR asset/config boundary adapter
+- [x] Reproducible official WiLoR asset preparation script (MANO intentionally excluded)
+- [x] Project-local CUDA PyTorch runtime and AnyCalib package installation path
+- [x] Core automated tests
+- [x] FFmpeg-backed decoding and sequential frame fallback when ffprobe is unavailable
+- [x] Original AnyCalib backend adapter
+- [x] Original pretrained WiLoR asset/config adapter boundary
+- [x] End-to-end camera-space inference pipeline
+- [x] Result viewer and exports
+- [x] Main-window saved-result reopen action without rerunning inference
