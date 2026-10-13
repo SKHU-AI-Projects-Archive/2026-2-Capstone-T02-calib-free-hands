@@ -327,3 +327,11 @@ wait
 추가 학습이나 재추론 없이 기존 p52 Test raw output을 `camera_key`로 matched-pair 분석했습니다. pretrained 대비 fine-tuned pair max focal error는 49개 중 `47개 개선`, `2개 악화`, tie `0개`였습니다. pretrained의 signed focal bias는 양수(`fx 0.163752`, `fy 0.167986`)였고 fine-tuning 후 `fx 0.010564`, `fy 0.012457`로 크게 줄었습니다.
 
 Train-only normalized-intrinsics constant prior도 함께 계산했습니다. Train median prior의 focal mean은 `0.0153451320`으로 fine-tuned `0.0161718921`보다 약간 낮았습니다. 따라서 이번 결과는 GigaHands calibration-distribution prior가 큰 역할을 했을 가능성을 지지하지만, image-based geometry 향상이나 calibration memorization을 단독으로 증명하지 않습니다. unseen physical-camera generalization도 주장하지 않습니다. 상세 pair CSV, figures, 수치 요약은 ignored `runs/02_anycalib_finetune/analysis/`에, tracked 요약은 `results/02e_finetuning_gain_analysis.yaml`에 있습니다.
+
+## 02-I.0 GigaHands focal coverage feasibility audit
+
+현재 GigaHands 데모 248개 video와 245개 `camera_key`를 대상으로 focal 분포와 균형 실험 가능성을 metadata-only로 감사했습니다. Exact intrinsic/full calibration signature는 각각 147개였고, 기존 `fx` 5-bin count는 `[2, 15, 195, 31, 2]`로 재현됐습니다. 물리 카메라 identity와 실제 장치 수는 확인할 수 없으므로 `not_verifiable`로 기록했습니다.
+
+동일 폭 5-bin을 calibration group 수로 맞추면 최대 10/245개만 남아 235개를 제외해야 합니다. Participant 2/1/1 독립 조건에서 5/7/10-bin은 모든 split/bin에 최소 1개를 배치할 후보가 없었고, 3-bin도 최소 1개를 만족하는 6개 후보 모두 exact full calibration 독립성을 만족하지 못했습니다. 따라서 학습 시 bin weighting은 조건부 후보지만, GigaHands 데모만으로 다양한 focal 구간의 신뢰할 만한 독립 균형 평가를 구성하기에는 부족합니다.
+
+분석 도구는 `tools/audit_gigahands_focal_coverage.py`, 핵심 기록은 `results/02i0_gigahands_focal_coverage_feasibility.yaml`, 상세 표·그림·연구 보고서는 ignored `runs/02_gigahands_focal_coverage_audit/`에 있습니다. 새 split과 평가 지표는 확정하지 않았으며 training과 model inference는 실행하지 않았습니다.
