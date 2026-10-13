@@ -332,6 +332,6 @@ Train-only normalized-intrinsics constant prior도 함께 계산했습니다. Tr
 
 현재 GigaHands 데모 248개 video와 245개 `camera_key`를 대상으로 focal 분포와 균형 실험 가능성을 metadata-only로 감사했습니다. Exact intrinsic/full calibration signature는 각각 147개였고, 기존 `fx` 5-bin count는 `[2, 15, 195, 31, 2]`로 재현됐습니다. 물리 카메라 identity와 실제 장치 수는 확인할 수 없으므로 `not_verifiable`로 기록했습니다.
 
-동일 폭 5-bin을 calibration group 수로 맞추면 최대 10/245개만 남아 235개를 제외해야 합니다. Participant 2/1/1 독립 조건에서 5/7/10-bin은 모든 split/bin에 최소 1개를 배치할 후보가 없었고, 3-bin도 최소 1개를 만족하는 6개 후보 모두 exact full calibration 독립성을 만족하지 못했습니다. 따라서 학습 시 bin weighting은 조건부 후보지만, GigaHands 데모만으로 다양한 focal 구간의 신뢰할 만한 독립 균형 평가를 구성하기에는 부족합니다.
+동일 폭 `fx` 5-bin을 맞추면 `camera_key` 기준 최대 10/245개, exact full signature 기준 최대 10/147개를 사용할 수 있습니다. 3-bin에서는 두 기준이 각각 18개와 12개로 달라집니다. 기존 PairBalancedSampler는 `camera_key`마다 174 frame을 뽑으므로 p41의 반복 signature는 epoch당 348 frame, p44 signature는 174 frame에 노출됩니다. 이는 이미지 중복을 뜻하지 않지만 camera-key 균형과 calibration-frequency 균형이 다름을 보여줍니다. Participant 2/1/1 독립 조건에서 5/7/10-bin은 모든 split/bin에 최소 1개를 배치할 후보가 없었고, 3-bin도 최소 1개를 만족하는 6개 후보 모두 exact full calibration 독립성을 만족하지 못했습니다. 따라서 학습 시 bin weighting은 조건부 후보지만, GigaHands 데모만으로 다양한 focal 구간의 신뢰할 만한 독립 균형 평가를 구성하기에는 부족합니다.
 
 분석 도구는 `tools/audit_gigahands_focal_coverage.py`, 핵심 기록은 `results/02i0_gigahands_focal_coverage_feasibility.yaml`, 상세 표·그림·연구 보고서는 ignored `runs/02_gigahands_focal_coverage_audit/`에 있습니다. 새 split과 평가 지표는 확정하지 않았으며 training과 model inference는 실행하지 않았습니다.

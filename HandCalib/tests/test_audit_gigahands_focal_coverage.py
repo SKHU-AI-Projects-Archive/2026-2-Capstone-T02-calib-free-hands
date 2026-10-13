@@ -122,6 +122,93 @@ class FocalCoverageAuditTests(unittest.TestCase):
         self.assertEqual(coverage["edges"], [0.0, 1.0, 2.0])
         self.assertEqual(coverage["camera_key_counts"], [2, 3])
 
+    def test_balance_by_analysis_unit_separates_camera_keys_and_signatures(self):
+        result = audit.balance_by_analysis_unit(
+            camera_key_counts=[6, 228, 11],
+            exact_full_signature_counts=[4, 134, 9],
+        )
+
+        self.assertEqual(result["camera_key"]["balanced_subset_size"], 18)
+        self.assertEqual(result["exact_full_signature"]["balanced_subset_size"], 12)
+        self.assertEqual(result["camera_key"]["analysis_unit"], "camera_key")
+        self.assertEqual(
+            result["exact_full_signature"]["analysis_unit"],
+            "exact_full_signature",
+        )
+
+    def test_calibration_exposure_summary_counts_repeated_camera_keys(self):
+        repeated = row("p41-seq-a/cam0", "a.mp4", "p41", 100, 90)
+        repeated_second_key = row(
+            "p41-seq-b/cam0", "b.mp4", "p41", 100, 90, sequence="s2"
+        )
+        distinct = row(
+            "p44-seq/cam0",
+            "c.mp4",
+            "p44",
+            900,
+            901,
+        )
+
+        result = audit.calibration_exposure_summary(
+            [repeated, repeated_second_key, distinct], frames_per_camera_key=174
+        )
+
+        self.assertEqual(result["p41"]["camera_key_count"], 2)
+        self.assertEqual(result["p41"]["unique_exact_full_signature_count"], 1)
+        self.assertEqual(result["p41"]["exposures_per_signature"], [348])
+        self.assertEqual(result["p44"]["exposures_per_signature"], [174])
+        self.assertEqual(result["p41"]["total_sampled_frames_per_epoch"], 348)
+
+    def test_compact_result_labels_each_balance_analysis_unit(self):
+        by_unit = audit.balance_by_analysis_unit([6, 228, 11], [4, 134, 9])
+        summary = {
+            "experiment": "x",
+            "status": "complete",
+            "bin_coverage": [],
+            "balancing_feasibility": {
+                "fx_equal_width_3": {
+                    "variable": "fx",
+                    "method": "equal_width",
+                    "bin_count": 3,
+                    **by_unit["camera_key"],
+                    "camera_key_balance": by_unit["camera_key"],
+                    "exact_full_signature_balance": by_unit[
+                        "exact_full_signature"
+                    ],
+                    **audit.flatten_balance_units(by_unit),
+                }
+            },
+        }
+
+        result = audit.compact_result(summary)["balancing_feasibility"]
+
+        self.assertEqual(result["fx_equal_width_3"]["analysis_unit"], "camera_key")
+        self.assertEqual(result["fx_equal_width_3"]["balanced_subset_size"], 18)
+        self.assertEqual(
+            result["fx_equal_width_3"][
+                "exact_full_signature_balanced_subset_size"
+            ],
+            12,
+        )
+
+    def test_scenario_rows_keep_a_consistent_csv_schema(self):
+        rows = audit.scenario_rows(
+            {"macro_evaluation_status": "x", "fx_five_bin_retention": 0.5}
+        )
+
+        self.assertTrue(all(set(item) == set(rows[0]) for item in rows))
+
+    def test_flatten_balance_units_prefixes_csv_fields(self):
+        by_unit = audit.balance_by_analysis_unit([6, 228, 11], [4, 134, 9])
+
+        result = audit.flatten_balance_units(by_unit)
+
+        self.assertEqual(result["camera_key_balanced_subset_size"], 18)
+        self.assertEqual(
+            result["exact_full_signature_balanced_subset_size"], 12
+        )
+        self.assertEqual(result["camera_key_analysis_unit"], "camera_key")
+
 
 if __name__ == "__main__":
     unittest.main()

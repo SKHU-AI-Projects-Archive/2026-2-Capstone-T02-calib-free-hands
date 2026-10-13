@@ -221,6 +221,52 @@ def balance_feasibility(counts):
     }
 
 
+def balance_by_analysis_unit(camera_key_counts, exact_full_signature_counts):
+    camera_key = balance_feasibility(camera_key_counts)
+    camera_key["analysis_unit"] = "camera_key"
+    exact_full_signature = balance_feasibility(exact_full_signature_counts)
+    exact_full_signature["analysis_unit"] = "exact_full_signature"
+    return {
+        "camera_key": camera_key,
+        "exact_full_signature": exact_full_signature,
+    }
+
+
+def flatten_balance_units(by_unit):
+    return {
+        f"{unit}_{field}": value
+        for unit, metrics in by_unit.items()
+        for field, value in metrics.items()
+    }
+
+
+def calibration_exposure_summary(camera_rows, frames_per_camera_key):
+    result = {}
+    for participant in sorted({row["participant"] for row in camera_rows}):
+        rows = unique_rows(
+            [row for row in camera_rows if row["participant"] == participant],
+            "camera_key",
+        )
+        signature_multiplicity = Counter(signature(row, FULL_FIELDS) for row in rows)
+        multiplicities = list(signature_multiplicity.values())
+        exposures = [count * frames_per_camera_key for count in multiplicities]
+        result[participant] = {
+            "camera_key_count": len(rows),
+            "unique_exact_full_signature_count": len(signature_multiplicity),
+            "camera_keys_per_signature_min": min(multiplicities),
+            "camera_keys_per_signature_max": max(multiplicities),
+            "exposures_per_signature": sorted(set(exposures)),
+            "sampled_frames_per_signature_min": min(exposures),
+            "sampled_frames_per_signature_max": max(exposures),
+            "total_sampled_frames_per_epoch": len(rows) * frames_per_camera_key,
+            "signature_count_by_camera_key_multiplicity": {
+                str(count): multiplicities.count(count)
+                for count in sorted(set(multiplicities))
+            },
+        }
+    return result
+
+
 def three_way_capacity(counts, minimum_per_split):
     return all(count >= 3 * minimum_per_split for count in counts)
 
@@ -370,8 +416,10 @@ def balance_table(coverage):
     for (variable, method, bins), rows in sorted(grouped.items()):
         rows.sort(key=lambda row: row["bin_index"])
         counts = [row["camera_key_count"] for row in rows]
+        exact_full_counts = [row["exact_full_signature_count"] for row in rows]
         frames = [row["frame_count"] for row in rows]
-        info = balance_feasibility(counts)
+        by_unit = balance_by_analysis_unit(counts, exact_full_counts)
+        info = by_unit["camera_key"]
         edges = [row["lower_edge"] for row in rows] + [rows[-1]["upper_edge"]]
         camera_frame_counts = defaultdict(int)
         for item in all_manifest_rows:
@@ -387,6 +435,9 @@ def balance_table(coverage):
             "method": method,
             "bin_count": bins,
             **info,
+            "camera_key_balance": by_unit["camera_key"],
+            "exact_full_signature_balance": by_unit["exact_full_signature"],
+            **flatten_balance_units(by_unit),
             "total_frame_count": sum(frames),
             **frame_range,
             "minimum_discarded_frames": sum(frames) - frame_range["maximum_retained_frames"],
@@ -482,7 +533,7 @@ def scenario_rows(summary):
     return [
         {"scenario": "S0", "description": "기존 분할과 원본 분포 유지", "data_retention": 1.0, "training_balance": "no", "evaluation_balance": "existing unit-equal metric", "technical_status": "TECHNICALLY_FEASIBLE", "academic_limit": "focal coverage imbalance remains"},
         {"scenario": "S1", "description": "기존 Test에서 focal-bin macro 후보", "data_retention": 1.0, "training_balance": "no", "evaluation_balance": "bin means receive equal weight", "technical_status": summary["macro_evaluation_status"], "academic_limit": "sparse bins and post-hoc protocol selection"},
-        {"scenario": "S2", "description": "동일 수 calibration group 가상 추출", "data_retention": summary["fx_five_bin_retention"], "training_balance": "group-balanced subset", "evaluation_balance": "possible on retained groups", "technical_status": "CONDITIONALLY_FEASIBLE", "academic_limit": "large information loss and few independent extremes"},
+        {"scenario": "S2", "description": "동일 수 camera_key 가상 추출", "data_retention": summary["fx_five_bin_retention"], "training_balance": "camera-key-balanced subset; signature balance assessed separately", "evaluation_balance": "possible on retained groups", "technical_status": "CONDITIONALLY_FEASIBLE", "academic_limit": "large information loss and few independent extremes"},
         {"scenario": "S3", "description": "원본 Train과 bin-balanced sampling/weighting", "data_retention": 1.0, "training_balance": "weights or repeated exposure", "evaluation_balance": "unchanged unless separately defined", "technical_status": "CONDITIONALLY_FEASIBLE", "academic_limit": "oversampling adds no calibration diversity"},
         {"scenario": "S4", "description": "추가 데이터셋 후보", "data_retention": None, "training_balance": "not evaluated", "evaluation_balance": "requires new protocol", "technical_status": "UNKNOWN", "academic_limit": "domain confounding and new independence audit required"},
     ]
@@ -516,13 +567,20 @@ def compact_result(summary):
             "exact_full_signature_counts": [row["exact_full_signature_count"] for row in rows],
         }
     keep = (
-        "variable", "method", "bin_count", "minimum_bin_count", "maximum_bin_count",
-        "empty_bin_count", "balanced_per_bin", "retained_groups", "discarded_groups",
-        "retention_rate", "discard_rate", "maximum_oversampling_multiplier",
-        "minimum_retained_frames", "maximum_retained_frames", "minimum_discarded_frames",
-        "maximum_discarded_frames", "camera_key_three_way_at_least_1",
-        "camera_key_three_way_at_least_2", "camera_key_three_way_at_least_5",
-        "exact_intrinsic_three_way_at_least_1", "exact_full_three_way_at_least_1",
+        "variable", "method", "bin_count", "analysis_unit", "minimum_bin_count",
+        "maximum_bin_count", "empty_bin_count", "balanced_per_bin",
+        "balanced_subset_size", "retained_groups", "discarded_groups", "retention_rate",
+        "discard_rate", "maximum_oversampling_multiplier", "minimum_retained_frames",
+        "maximum_retained_frames", "minimum_discarded_frames", "maximum_discarded_frames",
+        "camera_key_three_way_at_least_1", "camera_key_three_way_at_least_2",
+        "camera_key_three_way_at_least_5", "exact_intrinsic_three_way_at_least_1",
+        "exact_full_three_way_at_least_1", "exact_full_signature_analysis_unit",
+        "exact_full_signature_minimum_bin_count", "exact_full_signature_maximum_bin_count",
+        "exact_full_signature_empty_bin_count", "exact_full_signature_balanced_per_bin",
+        "exact_full_signature_balanced_subset_size", "exact_full_signature_retained_groups",
+        "exact_full_signature_discarded_groups", "exact_full_signature_retention_rate",
+        "exact_full_signature_discard_rate",
+        "exact_full_signature_maximum_oversampling_multiplier",
     )
     result["balancing_feasibility"] = {
         name: {field: row[field] for field in keep if field in row}
@@ -582,14 +640,14 @@ def plot_figures(output, camera_rows, split_rows, global_edges, balance_rows):
     axis.bar(x - width, [row["minimum_bin_count"] for row in equal_fx], width, label="minimum", color="0.2")
     axis.bar(x, [row["maximum_bin_count"] for row in equal_fx], width, label="maximum", color="0.55")
     axis.bar(x + width, [row["balanced_subset_size"] for row in equal_fx], width, label="balanced subset", color="0.8", edgecolor="black")
-    axis.set_xticks(x, [str(row["bin_count"]) for row in equal_fx]); axis.set_xlabel("Equal-width fx bins"); axis.set_ylabel("Calibration units"); axis.legend()
+    axis.set_xticks(x, [str(row["bin_count"]) for row in equal_fx]); axis.set_xlabel("Equal-width fx bins"); axis.set_ylabel("camera_key units"); axis.legend()
     save_figure(fig, figure_dir / "05_bin_sensitivity")
 
     fig, axis = plt.subplots(figsize=(8, 4.5))
     x = np.arange(len(equal_fx)); retained = [row["retained_groups"] for row in equal_fx]; discarded = [row["discarded_groups"] for row in equal_fx]
     axis.bar(x, retained, label="retained", color="0.25")
     axis.bar(x, discarded, bottom=retained, label="discarded", color="0.8", edgecolor="black")
-    axis.set_xticks(x, [str(row["bin_count"]) for row in equal_fx]); axis.set_xlabel("Equal-width fx bins (hypothetical)"); axis.set_ylabel("Calibration units"); axis.legend()
+    axis.set_xticks(x, [str(row["bin_count"]) for row in equal_fx]); axis.set_xlabel("Equal-width fx bins (hypothetical)"); axis.set_ylabel("camera_key units"); axis.legend()
     save_figure(fig, figure_dir / "06_hypothetical_balance_information_loss")
 
 
@@ -605,6 +663,7 @@ def markdown_report(summary):
     fx = summary["distribution_summary"]["camera_key"]["fx"]
     fy = summary["distribution_summary"]["camera_key"]["fy"]
     five = summary["balancing_feasibility"]["fx_equal_width_5"]
+    sampler = summary["existing_pair_balanced_sampler"]
     independent = summary["participant_split_feasibility"]
     focal_lines = []
     for field in ("fx", "fy", "nfx", "nfy", "hfov_deg", "vfov_deg"):
@@ -614,8 +673,14 @@ def markdown_report(summary):
     for bins in BIN_COUNTS:
         x = summary["balancing_feasibility"][f"fx_equal_width_{bins}"]
         y = summary["balancing_feasibility"][f"fy_equal_width_{bins}"]
-        balance_lines.append(f"| {bins} | fx | {x['minimum_bin_count']} | {x['maximum_bin_count']} | {x['retained_groups']} | {x['discarded_groups']} | {x['retention_rate']:.2%} |")
-        balance_lines.append(f"| {bins} | fy | {y['minimum_bin_count']} | {y['maximum_bin_count']} | {y['retained_groups']} | {y['discarded_groups']} | {y['retention_rate']:.2%} |")
+        for axis, item in (("fx", x), ("fy", y)):
+            camera = item["camera_key_balance"]
+            full = item["exact_full_signature_balance"]
+            balance_lines.append(
+                f"| {bins} | {axis} | {camera['minimum_bin_count']}/{camera['maximum_bin_count']} | "
+                f"{camera['balanced_subset_size']} | {full['minimum_bin_count']}/{full['maximum_bin_count']} | "
+                f"{full['balanced_subset_size']} |"
+            )
     overlap_lines = [f"| {row['left']}-{row['right']} | {row['exact_intrinsic_signature_overlap']} | {row['exact_full_signature_overlap']} | {row['camera_identifier_overlap']} | {row['video_path_overlap']} | {row['physical_camera_overlap']} |" for row in summary["calibration_overlap"]]
     participant_lines = [f"| {bins} | {item['candidate_assignment_count']} | {item['at_least_1_per_split_bin']} | {item['at_least_2_per_split_bin']} | {item['at_least_5_per_split_bin']} | {item['at_least_1_and_exact_full_independent']} |" for bins, item in independent["by_bin_count"].items()]
     scenario_lines = [f"| {row['scenario']} | {row['description']} | {row['technical_status']} | {row['academic_limit']} |" for row in summary["scenario_comparison"]]
@@ -680,11 +745,13 @@ Train 범위에는 Validation과 Test의 fx, fy, nfx, nfy가 각각 49/49개 포
 
 ## 11. 구간 균형 가능성 분석 결과
 
-fx 5-bin의 최소/최대 수는 {five['minimum_bin_count']}/{five['maximum_bin_count']}개다. 비복원 균형 subset은 최대 {five['retained_groups']}개이며 {five['discarded_groups']}개를 제외한다. 이 계산은 가상 가능성 분석이며 실제 split이나 subset을 만들지 않았다.
+fx 5-bin의 camera key 최소/최대 수는 {five['camera_key_balance']['minimum_bin_count']}/{five['camera_key_balance']['maximum_bin_count']}개다. Camera-key 기준 비복원 균형 subset은 최대 {five['camera_key_balance']['balanced_subset_size']}개다. Exact full signature 기준 최소/최대 수는 {five['exact_full_signature_balance']['minimum_bin_count']}/{five['exact_full_signature_balance']['maximum_bin_count']}개이며 균형 subset은 최대 {five['exact_full_signature_balance']['balanced_subset_size']}개다. 이 계산은 가상 가능성 분석이며 실제 split이나 subset을 만들지 않았다.
 
-| Bin 수 | 축 | 최소 bin | 최대 bin | 균형 subset | 제외 group | 유지율 |
-|---:|---|---:|---:|---:|---:|---:|
+| Bin 수 | 축 | camera_key 최소/최대 | camera_key 균형 subset | exact full 최소/최대 | exact full 균형 subset |
+|---:|---|---:|---:|---:|---:|
 {chr(10).join(balance_lines)}
+
+기존 PairBalancedSampler는 `camera_key`마다 epoch당 {sampler['frames_per_camera_key']} frame을 비복원 추출한다. Train에서 p41은 {sampler['train_participant_exposure']['p41']['camera_key_count']}개 camera key와 {sampler['train_participant_exposure']['p41']['unique_exact_full_signature_count']}개 고유 full signature를 가진다. 각 signature가 두 sequence의 camera key에 반복되어 signature당 {sampler['train_participant_exposure']['p41']['sampled_frames_per_signature_min']} frame에 노출된다. p44는 {sampler['train_participant_exposure']['p44']['camera_key_count']}개 camera key와 {sampler['train_participant_exposure']['p44']['unique_exact_full_signature_count']}개 signature가 일대일이므로 signature당 {sampler['train_participant_exposure']['p44']['sampled_frames_per_signature_min']} frame이다. 따라서 p41 signature의 노출은 p44의 {sampler['p41_to_p44_signature_exposure_ratio']:.1f}배다. 서로 다른 sequence의 frame을 사용하므로 이 사실만으로 이미지 중복을 뜻하지 않지만, camera-key 균형은 calibration-frequency 균형과 다르다.
 
 | Bin 수 | 2/1/1 후보 | split/bin 1개 이상 | 2개 이상 | 5개 이상 | 1개 이상 + exact full 독립 |
 |---:|---:|---:|---:|---:|---:|
@@ -808,13 +875,26 @@ def audit(manifest, split_dir, output, result_yaml, overwrite=False):
     macro_status = "CONDITIONALLY_FEASIBLE" if test_macro_fx["status"] == test_macro_fy["status"] == "TECHNICALLY_FEASIBLE" else "TECHNICALLY_INFEASIBLE_FOR_ALL_EXISTING_5_BINS"
     scenario_input = {"macro_evaluation_status": macro_status, "fx_five_bin_retention": five_fx["retention_rate"]}
     scenarios = scenario_rows(scenario_input)
+    train_exposure = calibration_exposure_summary(
+        split_rows["train"], frames_per_camera_key=174
+    )
 
     write_csv(tables / "dataset_inventory.csv", inventory_rows)
     write_csv(tables / "focal_distribution_summary.csv", focal_rows)
     write_csv(tables / "existing_split_distribution.csv", split_distribution)
     write_csv(tables / "calibration_overlap.csv", overlaps)
     write_csv(tables / "bin_coverage.csv", coverage)
-    write_csv(tables / "balance_feasibility.csv", balances)
+    write_csv(
+        tables / "balance_feasibility.csv",
+        [
+            {
+                key: value
+                for key, value in row.items()
+                if key not in ("camera_key_balance", "exact_full_signature_balance")
+            }
+            for row in balances
+        ],
+    )
     write_csv(tables / "scenario_comparison.csv", scenarios)
     write_csv(tables / "participant_split_feasibility.csv", [{**row, **{k: json.dumps(v) for k, v in row.items() if isinstance(v, list)}} for row in participant_candidates])
     write_csv(tables / "two_dimensional_coverage.csv", two_d)
@@ -845,9 +925,21 @@ def audit(manifest, split_dir, output, result_yaml, overwrite=False):
         "bin_coverage": coverage,
         "two_dimensional_coverage": two_d,
         "balancing_feasibility": {f"{row['variable']}_{row['method']}_{row['bin_count']}": row for row in balances},
-        "training_balance_assessment": {"group_subsampling": "conditionally feasible but may discard most central-bin groups", "bin_weighting_or_sampling": "technically feasible without deleting data; repeated exposure does not add independent calibration", "implemented": False},
+        "training_balance_assessment": {"group_subsampling": "conditionally feasible but may discard most central-bin groups", "bin_weighting_or_sampling": "technically feasible without deleting data; repeated exposure does not add independent calibration", "balance_units_reported_separately": ["camera_key", "exact_full_signature"], "implemented": False},
         "evaluation_balance_assessment": {"bin_macro_candidate": "technically computable only where every precommitted target bin is nonempty", "existing_test_fx_five_bin": test_macro_fx, "existing_test_fy_five_bin": test_macro_fy, "data_retention": "all groups can be retained", "limitations": "existing Test has empty global extreme bins; different estimand, sparse-bin uncertainty, post-hoc selection risk", "adopted": False},
-        "existing_pair_balanced_sampler": {"frames_per_camera_key": 174, "sampling": "without replacement within each camera_key per epoch, then globally shuffled", "balances": "frame exposure per camera_key", "does_not_balance": "focal bins or independent calibration signatures"},
+        "existing_pair_balanced_sampler": {
+            "frames_per_camera_key": 174,
+            "sampling": "without replacement within each camera_key per epoch, then globally shuffled",
+            "balances": "frame exposure per camera_key",
+            "does_not_balance": "focal bins or independent calibration signatures",
+            "train_participant_exposure": train_exposure,
+            "p41_to_p44_signature_exposure_ratio": (
+                train_exposure["p41"]["sampled_frames_per_signature_min"]
+                / train_exposure["p44"]["sampled_frames_per_signature_min"]
+            ),
+            "image_duplication_interpretation": "repeated calibration signatures across distinct sequence-camera keys do not by themselves imply duplicate images",
+            "calibration_frequency_interpretation": "camera_key balancing gives repeated signatures proportionally more frame exposure",
+        },
         "participant_split_feasibility": participant_summary,
         "physical_camera_identity_limitations": {"status": "not_verifiable", "confirmed_group_count": 0, "actual_count": "unknown", "camera_identifier_overlap_reported_separately": True, "calibration_overlap_reported_separately": True},
         "statistical_limitations": ["pseudoreplication", "selection_bias", "distribution_mismatch", "calibration_leakage", "sampling_uncertainty", "domain_confounding", "metric_comparability", "post_hoc_protocol_selection"],

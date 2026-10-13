@@ -11,7 +11,7 @@ source_split_hashes:
   train: 8056a182876e16221725874080a6d900893df3e3ecd62f6e284f8ed17e00fe48
   val: be8397f8ec23a9255ba44202e75be55f5136e7fc05ec95669de5b7d2536edf17
   test: 0c910d6df81fff0051b48db629759a3805484973e4150d959241dcf893201910
-repository_commit: eab1d67123fcbb1916b8b8a646d20ae5b9e094a6
+repository_commit: 62489c99b86ee0b2cf4091b2433783d3e7867e83
 dataset_population:
   row_count: 248
   total_frame_count: 70573
@@ -1898,6 +1898,9 @@ two_dimensional_coverage:
 training_balance_assessment:
   group_subsampling: conditionally feasible but may discard most central-bin groups
   bin_weighting_or_sampling: technically feasible without deleting data; repeated exposure does not add independent calibration
+  balance_units_reported_separately:
+  - camera_key
+  - exact_full_signature
   implemented: false
 evaluation_balance_assessment:
   bin_macro_candidate: technically computable only where every precommitted target bin is nonempty
@@ -1918,6 +1921,35 @@ existing_pair_balanced_sampler:
   sampling: without replacement within each camera_key per epoch, then globally shuffled
   balances: frame exposure per camera_key
   does_not_balance: focal bins or independent calibration signatures
+  train_participant_exposure:
+    p41:
+      camera_key_count: 98
+      unique_exact_full_signature_count: 49
+      camera_keys_per_signature_min: 2
+      camera_keys_per_signature_max: 2
+      exposures_per_signature:
+      - 348
+      sampled_frames_per_signature_min: 348
+      sampled_frames_per_signature_max: 348
+      total_sampled_frames_per_epoch: 17052
+      signature_count_by_camera_key_multiplicity:
+        '2': 49
+    p44:
+      camera_key_count: 49
+      unique_exact_full_signature_count: 49
+      camera_keys_per_signature_min: 1
+      camera_keys_per_signature_max: 1
+      exposures_per_signature:
+      - 174
+      sampled_frames_per_signature_min: 174
+      sampled_frames_per_signature_max: 174
+      total_sampled_frames_per_epoch: 8526
+      signature_count_by_camera_key_multiplicity:
+        '1': 49
+  p41_to_p44_signature_exposure_ratio: 2.0
+  image_duplication_interpretation: repeated calibration signatures across distinct sequence-camera keys do not by themselves
+    imply duplicate images
+  calibration_frequency_interpretation: camera_key balancing gives repeated signatures proportionally more frame exposure
 participant_split_feasibility:
   candidate_assignment_count_across_all_bin_counts: 48
   candidate_assignment_count_per_bin_count: 12
@@ -1985,9 +2017,9 @@ scenario_comparison:
   technical_status: TECHNICALLY_INFEASIBLE_FOR_ALL_EXISTING_5_BINS
   academic_limit: sparse bins and post-hoc protocol selection
 - scenario: S2
-  description: 동일 수 calibration group 가상 추출
+  description: 동일 수 camera_key 가상 추출
   data_retention: 0.04081632653061224
-  training_balance: group-balanced subset
+  training_balance: camera-key-balanced subset; signature balance assessed separately
   evaluation_balance: possible on retained groups
   technical_status: CONDITIONALLY_FEASIBLE
   academic_limit: large information loss and few independent extremes
@@ -3019,10 +3051,12 @@ balancing_feasibility:
     variable: fx
     method: equal_width
     bin_count: 3
+    analysis_unit: camera_key
     minimum_bin_count: 6
     maximum_bin_count: 228
     empty_bin_count: 0
     balanced_per_bin: 6
+    balanced_subset_size: 18
     retained_groups: 18
     discarded_groups: 227
     retention_rate: 0.07346938775510205
@@ -3037,14 +3071,27 @@ balancing_feasibility:
     camera_key_three_way_at_least_5: false
     exact_intrinsic_three_way_at_least_1: true
     exact_full_three_way_at_least_1: true
+    exact_full_signature_analysis_unit: exact_full_signature
+    exact_full_signature_minimum_bin_count: 4
+    exact_full_signature_maximum_bin_count: 134
+    exact_full_signature_empty_bin_count: 0
+    exact_full_signature_balanced_per_bin: 4
+    exact_full_signature_balanced_subset_size: 12
+    exact_full_signature_retained_groups: 12
+    exact_full_signature_discarded_groups: 135
+    exact_full_signature_retention_rate: 0.08163265306122448
+    exact_full_signature_discard_rate: 0.9183673469387755
+    exact_full_signature_maximum_oversampling_multiplier: 33.5
   fx_equal_width_5:
     variable: fx
     method: equal_width
     bin_count: 5
+    analysis_unit: camera_key
     minimum_bin_count: 2
     maximum_bin_count: 195
     empty_bin_count: 0
     balanced_per_bin: 2
+    balanced_subset_size: 10
     retained_groups: 10
     discarded_groups: 235
     retention_rate: 0.04081632653061224
@@ -3059,14 +3106,27 @@ balancing_feasibility:
     camera_key_three_way_at_least_5: false
     exact_intrinsic_three_way_at_least_1: false
     exact_full_three_way_at_least_1: false
+    exact_full_signature_analysis_unit: exact_full_signature
+    exact_full_signature_minimum_bin_count: 2
+    exact_full_signature_maximum_bin_count: 111
+    exact_full_signature_empty_bin_count: 0
+    exact_full_signature_balanced_per_bin: 2
+    exact_full_signature_balanced_subset_size: 10
+    exact_full_signature_retained_groups: 10
+    exact_full_signature_discarded_groups: 137
+    exact_full_signature_retention_rate: 0.06802721088435375
+    exact_full_signature_discard_rate: 0.9319727891156463
+    exact_full_signature_maximum_oversampling_multiplier: 55.5
   fx_equal_width_7:
     variable: fx
     method: equal_width
     bin_count: 7
+    analysis_unit: camera_key
     minimum_bin_count: 1
     maximum_bin_count: 166
     empty_bin_count: 0
     balanced_per_bin: 1
+    balanced_subset_size: 7
     retained_groups: 7
     discarded_groups: 238
     retention_rate: 0.02857142857142857
@@ -3081,14 +3141,27 @@ balancing_feasibility:
     camera_key_three_way_at_least_5: false
     exact_intrinsic_three_way_at_least_1: false
     exact_full_three_way_at_least_1: false
+    exact_full_signature_analysis_unit: exact_full_signature
+    exact_full_signature_minimum_bin_count: 1
+    exact_full_signature_maximum_bin_count: 94
+    exact_full_signature_empty_bin_count: 0
+    exact_full_signature_balanced_per_bin: 1
+    exact_full_signature_balanced_subset_size: 7
+    exact_full_signature_retained_groups: 7
+    exact_full_signature_discarded_groups: 140
+    exact_full_signature_retention_rate: 0.047619047619047616
+    exact_full_signature_discard_rate: 0.9523809523809523
+    exact_full_signature_maximum_oversampling_multiplier: 94.0
   fx_equal_width_10:
     variable: fx
     method: equal_width
     bin_count: 10
+    analysis_unit: camera_key
     minimum_bin_count: 1
     maximum_bin_count: 106
     empty_bin_count: 0
     balanced_per_bin: 1
+    balanced_subset_size: 10
     retained_groups: 10
     discarded_groups: 235
     retention_rate: 0.04081632653061224
@@ -3103,14 +3176,27 @@ balancing_feasibility:
     camera_key_three_way_at_least_5: false
     exact_intrinsic_three_way_at_least_1: false
     exact_full_three_way_at_least_1: false
+    exact_full_signature_analysis_unit: exact_full_signature
+    exact_full_signature_minimum_bin_count: 1
+    exact_full_signature_maximum_bin_count: 56
+    exact_full_signature_empty_bin_count: 0
+    exact_full_signature_balanced_per_bin: 1
+    exact_full_signature_balanced_subset_size: 10
+    exact_full_signature_retained_groups: 10
+    exact_full_signature_discarded_groups: 137
+    exact_full_signature_retention_rate: 0.06802721088435375
+    exact_full_signature_discard_rate: 0.9319727891156463
+    exact_full_signature_maximum_oversampling_multiplier: 56.0
   fx_quantile_3:
     variable: fx
     method: quantile
     bin_count: 3
+    analysis_unit: camera_key
     minimum_bin_count: 81
     maximum_bin_count: 83
     empty_bin_count: 0
     balanced_per_bin: 81
+    balanced_subset_size: 243
     retained_groups: 243
     discarded_groups: 2
     retention_rate: 0.9918367346938776
@@ -3125,14 +3211,27 @@ balancing_feasibility:
     camera_key_three_way_at_least_5: true
     exact_intrinsic_three_way_at_least_1: true
     exact_full_three_way_at_least_1: true
+    exact_full_signature_analysis_unit: exact_full_signature
+    exact_full_signature_minimum_bin_count: 43
+    exact_full_signature_maximum_bin_count: 55
+    exact_full_signature_empty_bin_count: 0
+    exact_full_signature_balanced_per_bin: 43
+    exact_full_signature_balanced_subset_size: 129
+    exact_full_signature_retained_groups: 129
+    exact_full_signature_discarded_groups: 18
+    exact_full_signature_retention_rate: 0.8775510204081632
+    exact_full_signature_discard_rate: 0.12244897959183673
+    exact_full_signature_maximum_oversampling_multiplier: 1.2790697674418605
   fx_quantile_5:
     variable: fx
     method: quantile
     bin_count: 5
+    analysis_unit: camera_key
     minimum_bin_count: 47
     maximum_bin_count: 51
     empty_bin_count: 0
     balanced_per_bin: 47
+    balanced_subset_size: 235
     retained_groups: 235
     discarded_groups: 10
     retention_rate: 0.9591836734693877
@@ -3147,14 +3246,27 @@ balancing_feasibility:
     camera_key_three_way_at_least_5: true
     exact_intrinsic_three_way_at_least_1: true
     exact_full_three_way_at_least_1: true
+    exact_full_signature_analysis_unit: exact_full_signature
+    exact_full_signature_minimum_bin_count: 25
+    exact_full_signature_maximum_bin_count: 35
+    exact_full_signature_empty_bin_count: 0
+    exact_full_signature_balanced_per_bin: 25
+    exact_full_signature_balanced_subset_size: 125
+    exact_full_signature_retained_groups: 125
+    exact_full_signature_discarded_groups: 22
+    exact_full_signature_retention_rate: 0.8503401360544217
+    exact_full_signature_discard_rate: 0.14965986394557823
+    exact_full_signature_maximum_oversampling_multiplier: 1.4
   fx_quantile_7:
     variable: fx
     method: quantile
     bin_count: 7
+    analysis_unit: camera_key
     minimum_bin_count: 33
     maximum_bin_count: 37
     empty_bin_count: 0
     balanced_per_bin: 33
+    balanced_subset_size: 231
     retained_groups: 231
     discarded_groups: 14
     retention_rate: 0.9428571428571428
@@ -3169,14 +3281,27 @@ balancing_feasibility:
     camera_key_three_way_at_least_5: true
     exact_intrinsic_three_way_at_least_1: true
     exact_full_three_way_at_least_1: true
+    exact_full_signature_analysis_unit: exact_full_signature
+    exact_full_signature_minimum_bin_count: 18
+    exact_full_signature_maximum_bin_count: 25
+    exact_full_signature_empty_bin_count: 0
+    exact_full_signature_balanced_per_bin: 18
+    exact_full_signature_balanced_subset_size: 126
+    exact_full_signature_retained_groups: 126
+    exact_full_signature_discarded_groups: 21
+    exact_full_signature_retention_rate: 0.8571428571428571
+    exact_full_signature_discard_rate: 0.14285714285714285
+    exact_full_signature_maximum_oversampling_multiplier: 1.3888888888888888
   fx_quantile_10:
     variable: fx
     method: quantile
     bin_count: 10
+    analysis_unit: camera_key
     minimum_bin_count: 23
     maximum_bin_count: 27
     empty_bin_count: 0
     balanced_per_bin: 23
+    balanced_subset_size: 230
     retained_groups: 230
     discarded_groups: 15
     retention_rate: 0.9387755102040817
@@ -3191,14 +3316,27 @@ balancing_feasibility:
     camera_key_three_way_at_least_5: true
     exact_intrinsic_three_way_at_least_1: true
     exact_full_three_way_at_least_1: true
+    exact_full_signature_analysis_unit: exact_full_signature
+    exact_full_signature_minimum_bin_count: 12
+    exact_full_signature_maximum_bin_count: 18
+    exact_full_signature_empty_bin_count: 0
+    exact_full_signature_balanced_per_bin: 12
+    exact_full_signature_balanced_subset_size: 120
+    exact_full_signature_retained_groups: 120
+    exact_full_signature_discarded_groups: 27
+    exact_full_signature_retention_rate: 0.8163265306122449
+    exact_full_signature_discard_rate: 0.1836734693877551
+    exact_full_signature_maximum_oversampling_multiplier: 1.5
   fy_equal_width_3:
     variable: fy
     method: equal_width
     bin_count: 3
+    analysis_unit: camera_key
     minimum_bin_count: 10
     maximum_bin_count: 219
     empty_bin_count: 0
     balanced_per_bin: 10
+    balanced_subset_size: 30
     retained_groups: 30
     discarded_groups: 215
     retention_rate: 0.12244897959183673
@@ -3213,14 +3351,27 @@ balancing_feasibility:
     camera_key_three_way_at_least_5: false
     exact_intrinsic_three_way_at_least_1: true
     exact_full_three_way_at_least_1: true
+    exact_full_signature_analysis_unit: exact_full_signature
+    exact_full_signature_minimum_bin_count: 6
+    exact_full_signature_maximum_bin_count: 129
+    exact_full_signature_empty_bin_count: 0
+    exact_full_signature_balanced_per_bin: 6
+    exact_full_signature_balanced_subset_size: 18
+    exact_full_signature_retained_groups: 18
+    exact_full_signature_discarded_groups: 129
+    exact_full_signature_retention_rate: 0.12244897959183673
+    exact_full_signature_discard_rate: 0.8775510204081632
+    exact_full_signature_maximum_oversampling_multiplier: 21.5
   fy_equal_width_5:
     variable: fy
     method: equal_width
     bin_count: 5
+    analysis_unit: camera_key
     minimum_bin_count: 2
     maximum_bin_count: 197
     empty_bin_count: 0
     balanced_per_bin: 2
+    balanced_subset_size: 10
     retained_groups: 10
     discarded_groups: 235
     retention_rate: 0.04081632653061224
@@ -3235,14 +3386,27 @@ balancing_feasibility:
     camera_key_three_way_at_least_5: false
     exact_intrinsic_three_way_at_least_1: false
     exact_full_three_way_at_least_1: false
+    exact_full_signature_analysis_unit: exact_full_signature
+    exact_full_signature_minimum_bin_count: 2
+    exact_full_signature_maximum_bin_count: 109
+    exact_full_signature_empty_bin_count: 0
+    exact_full_signature_balanced_per_bin: 2
+    exact_full_signature_balanced_subset_size: 10
+    exact_full_signature_retained_groups: 10
+    exact_full_signature_discarded_groups: 137
+    exact_full_signature_retention_rate: 0.06802721088435375
+    exact_full_signature_discard_rate: 0.9319727891156463
+    exact_full_signature_maximum_oversampling_multiplier: 54.5
   fy_equal_width_7:
     variable: fy
     method: equal_width
     bin_count: 7
+    analysis_unit: camera_key
     minimum_bin_count: 1
     maximum_bin_count: 157
     empty_bin_count: 0
     balanced_per_bin: 1
+    balanced_subset_size: 7
     retained_groups: 7
     discarded_groups: 238
     retention_rate: 0.02857142857142857
@@ -3257,14 +3421,27 @@ balancing_feasibility:
     camera_key_three_way_at_least_5: false
     exact_intrinsic_three_way_at_least_1: false
     exact_full_three_way_at_least_1: false
+    exact_full_signature_analysis_unit: exact_full_signature
+    exact_full_signature_minimum_bin_count: 1
+    exact_full_signature_maximum_bin_count: 87
+    exact_full_signature_empty_bin_count: 0
+    exact_full_signature_balanced_per_bin: 1
+    exact_full_signature_balanced_subset_size: 7
+    exact_full_signature_retained_groups: 7
+    exact_full_signature_discarded_groups: 140
+    exact_full_signature_retention_rate: 0.047619047619047616
+    exact_full_signature_discard_rate: 0.9523809523809523
+    exact_full_signature_maximum_oversampling_multiplier: 87.0
   fy_equal_width_10:
     variable: fy
     method: equal_width
     bin_count: 10
+    analysis_unit: camera_key
     minimum_bin_count: 1
     maximum_bin_count: 115
     empty_bin_count: 0
     balanced_per_bin: 1
+    balanced_subset_size: 10
     retained_groups: 10
     discarded_groups: 235
     retention_rate: 0.04081632653061224
@@ -3279,14 +3456,27 @@ balancing_feasibility:
     camera_key_three_way_at_least_5: false
     exact_intrinsic_three_way_at_least_1: false
     exact_full_three_way_at_least_1: false
+    exact_full_signature_analysis_unit: exact_full_signature
+    exact_full_signature_minimum_bin_count: 1
+    exact_full_signature_maximum_bin_count: 61
+    exact_full_signature_empty_bin_count: 0
+    exact_full_signature_balanced_per_bin: 1
+    exact_full_signature_balanced_subset_size: 10
+    exact_full_signature_retained_groups: 10
+    exact_full_signature_discarded_groups: 137
+    exact_full_signature_retention_rate: 0.06802721088435375
+    exact_full_signature_discard_rate: 0.9319727891156463
+    exact_full_signature_maximum_oversampling_multiplier: 61.0
   fy_quantile_3:
     variable: fy
     method: quantile
     bin_count: 3
+    analysis_unit: camera_key
     minimum_bin_count: 80
     maximum_bin_count: 83
     empty_bin_count: 0
     balanced_per_bin: 80
+    balanced_subset_size: 240
     retained_groups: 240
     discarded_groups: 5
     retention_rate: 0.9795918367346939
@@ -3301,14 +3491,27 @@ balancing_feasibility:
     camera_key_three_way_at_least_5: true
     exact_intrinsic_three_way_at_least_1: true
     exact_full_three_way_at_least_1: true
+    exact_full_signature_analysis_unit: exact_full_signature
+    exact_full_signature_minimum_bin_count: 44
+    exact_full_signature_maximum_bin_count: 54
+    exact_full_signature_empty_bin_count: 0
+    exact_full_signature_balanced_per_bin: 44
+    exact_full_signature_balanced_subset_size: 132
+    exact_full_signature_retained_groups: 132
+    exact_full_signature_discarded_groups: 15
+    exact_full_signature_retention_rate: 0.8979591836734694
+    exact_full_signature_discard_rate: 0.10204081632653061
+    exact_full_signature_maximum_oversampling_multiplier: 1.2272727272727273
   fy_quantile_5:
     variable: fy
     method: quantile
     bin_count: 5
+    analysis_unit: camera_key
     minimum_bin_count: 47
     maximum_bin_count: 51
     empty_bin_count: 0
     balanced_per_bin: 47
+    balanced_subset_size: 235
     retained_groups: 235
     discarded_groups: 10
     retention_rate: 0.9591836734693877
@@ -3323,14 +3526,27 @@ balancing_feasibility:
     camera_key_three_way_at_least_5: true
     exact_intrinsic_three_way_at_least_1: true
     exact_full_three_way_at_least_1: true
+    exact_full_signature_analysis_unit: exact_full_signature
+    exact_full_signature_minimum_bin_count: 25
+    exact_full_signature_maximum_bin_count: 35
+    exact_full_signature_empty_bin_count: 0
+    exact_full_signature_balanced_per_bin: 25
+    exact_full_signature_balanced_subset_size: 125
+    exact_full_signature_retained_groups: 125
+    exact_full_signature_discarded_groups: 22
+    exact_full_signature_retention_rate: 0.8503401360544217
+    exact_full_signature_discard_rate: 0.14965986394557823
+    exact_full_signature_maximum_oversampling_multiplier: 1.4
   fy_quantile_7:
     variable: fy
     method: quantile
     bin_count: 7
+    analysis_unit: camera_key
     minimum_bin_count: 33
     maximum_bin_count: 37
     empty_bin_count: 0
     balanced_per_bin: 33
+    balanced_subset_size: 231
     retained_groups: 231
     discarded_groups: 14
     retention_rate: 0.9428571428571428
@@ -3345,14 +3561,27 @@ balancing_feasibility:
     camera_key_three_way_at_least_5: true
     exact_intrinsic_three_way_at_least_1: true
     exact_full_three_way_at_least_1: true
+    exact_full_signature_analysis_unit: exact_full_signature
+    exact_full_signature_minimum_bin_count: 14
+    exact_full_signature_maximum_bin_count: 26
+    exact_full_signature_empty_bin_count: 0
+    exact_full_signature_balanced_per_bin: 14
+    exact_full_signature_balanced_subset_size: 98
+    exact_full_signature_retained_groups: 98
+    exact_full_signature_discarded_groups: 49
+    exact_full_signature_retention_rate: 0.6666666666666666
+    exact_full_signature_discard_rate: 0.3333333333333333
+    exact_full_signature_maximum_oversampling_multiplier: 1.8571428571428572
   fy_quantile_10:
     variable: fy
     method: quantile
     bin_count: 10
+    analysis_unit: camera_key
     minimum_bin_count: 22
     maximum_bin_count: 26
     empty_bin_count: 0
     balanced_per_bin: 22
+    balanced_subset_size: 220
     retained_groups: 220
     discarded_groups: 25
     retention_rate: 0.8979591836734694
@@ -3367,14 +3596,27 @@ balancing_feasibility:
     camera_key_three_way_at_least_5: true
     exact_intrinsic_three_way_at_least_1: true
     exact_full_three_way_at_least_1: true
+    exact_full_signature_analysis_unit: exact_full_signature
+    exact_full_signature_minimum_bin_count: 9
+    exact_full_signature_maximum_bin_count: 19
+    exact_full_signature_empty_bin_count: 0
+    exact_full_signature_balanced_per_bin: 9
+    exact_full_signature_balanced_subset_size: 90
+    exact_full_signature_retained_groups: 90
+    exact_full_signature_discarded_groups: 57
+    exact_full_signature_retention_rate: 0.6122448979591837
+    exact_full_signature_discard_rate: 0.3877551020408163
+    exact_full_signature_maximum_oversampling_multiplier: 2.111111111111111
   nfx_equal_width_3:
     variable: nfx
     method: equal_width
     bin_count: 3
+    analysis_unit: camera_key
     minimum_bin_count: 6
     maximum_bin_count: 228
     empty_bin_count: 0
     balanced_per_bin: 6
+    balanced_subset_size: 18
     retained_groups: 18
     discarded_groups: 227
     retention_rate: 0.07346938775510205
@@ -3389,14 +3631,27 @@ balancing_feasibility:
     camera_key_three_way_at_least_5: false
     exact_intrinsic_three_way_at_least_1: true
     exact_full_three_way_at_least_1: true
+    exact_full_signature_analysis_unit: exact_full_signature
+    exact_full_signature_minimum_bin_count: 4
+    exact_full_signature_maximum_bin_count: 134
+    exact_full_signature_empty_bin_count: 0
+    exact_full_signature_balanced_per_bin: 4
+    exact_full_signature_balanced_subset_size: 12
+    exact_full_signature_retained_groups: 12
+    exact_full_signature_discarded_groups: 135
+    exact_full_signature_retention_rate: 0.08163265306122448
+    exact_full_signature_discard_rate: 0.9183673469387755
+    exact_full_signature_maximum_oversampling_multiplier: 33.5
   nfx_equal_width_5:
     variable: nfx
     method: equal_width
     bin_count: 5
+    analysis_unit: camera_key
     minimum_bin_count: 2
     maximum_bin_count: 195
     empty_bin_count: 0
     balanced_per_bin: 2
+    balanced_subset_size: 10
     retained_groups: 10
     discarded_groups: 235
     retention_rate: 0.04081632653061224
@@ -3411,14 +3666,27 @@ balancing_feasibility:
     camera_key_three_way_at_least_5: false
     exact_intrinsic_three_way_at_least_1: false
     exact_full_three_way_at_least_1: false
+    exact_full_signature_analysis_unit: exact_full_signature
+    exact_full_signature_minimum_bin_count: 2
+    exact_full_signature_maximum_bin_count: 111
+    exact_full_signature_empty_bin_count: 0
+    exact_full_signature_balanced_per_bin: 2
+    exact_full_signature_balanced_subset_size: 10
+    exact_full_signature_retained_groups: 10
+    exact_full_signature_discarded_groups: 137
+    exact_full_signature_retention_rate: 0.06802721088435375
+    exact_full_signature_discard_rate: 0.9319727891156463
+    exact_full_signature_maximum_oversampling_multiplier: 55.5
   nfx_equal_width_7:
     variable: nfx
     method: equal_width
     bin_count: 7
+    analysis_unit: camera_key
     minimum_bin_count: 1
     maximum_bin_count: 166
     empty_bin_count: 0
     balanced_per_bin: 1
+    balanced_subset_size: 7
     retained_groups: 7
     discarded_groups: 238
     retention_rate: 0.02857142857142857
@@ -3433,14 +3701,27 @@ balancing_feasibility:
     camera_key_three_way_at_least_5: false
     exact_intrinsic_three_way_at_least_1: false
     exact_full_three_way_at_least_1: false
+    exact_full_signature_analysis_unit: exact_full_signature
+    exact_full_signature_minimum_bin_count: 1
+    exact_full_signature_maximum_bin_count: 94
+    exact_full_signature_empty_bin_count: 0
+    exact_full_signature_balanced_per_bin: 1
+    exact_full_signature_balanced_subset_size: 7
+    exact_full_signature_retained_groups: 7
+    exact_full_signature_discarded_groups: 140
+    exact_full_signature_retention_rate: 0.047619047619047616
+    exact_full_signature_discard_rate: 0.9523809523809523
+    exact_full_signature_maximum_oversampling_multiplier: 94.0
   nfx_equal_width_10:
     variable: nfx
     method: equal_width
     bin_count: 10
+    analysis_unit: camera_key
     minimum_bin_count: 1
     maximum_bin_count: 106
     empty_bin_count: 0
     balanced_per_bin: 1
+    balanced_subset_size: 10
     retained_groups: 10
     discarded_groups: 235
     retention_rate: 0.04081632653061224
@@ -3455,14 +3736,27 @@ balancing_feasibility:
     camera_key_three_way_at_least_5: false
     exact_intrinsic_three_way_at_least_1: false
     exact_full_three_way_at_least_1: false
+    exact_full_signature_analysis_unit: exact_full_signature
+    exact_full_signature_minimum_bin_count: 1
+    exact_full_signature_maximum_bin_count: 56
+    exact_full_signature_empty_bin_count: 0
+    exact_full_signature_balanced_per_bin: 1
+    exact_full_signature_balanced_subset_size: 10
+    exact_full_signature_retained_groups: 10
+    exact_full_signature_discarded_groups: 137
+    exact_full_signature_retention_rate: 0.06802721088435375
+    exact_full_signature_discard_rate: 0.9319727891156463
+    exact_full_signature_maximum_oversampling_multiplier: 56.0
   nfx_quantile_3:
     variable: nfx
     method: quantile
     bin_count: 3
+    analysis_unit: camera_key
     minimum_bin_count: 81
     maximum_bin_count: 83
     empty_bin_count: 0
     balanced_per_bin: 81
+    balanced_subset_size: 243
     retained_groups: 243
     discarded_groups: 2
     retention_rate: 0.9918367346938776
@@ -3477,14 +3771,27 @@ balancing_feasibility:
     camera_key_three_way_at_least_5: true
     exact_intrinsic_three_way_at_least_1: true
     exact_full_three_way_at_least_1: true
+    exact_full_signature_analysis_unit: exact_full_signature
+    exact_full_signature_minimum_bin_count: 43
+    exact_full_signature_maximum_bin_count: 55
+    exact_full_signature_empty_bin_count: 0
+    exact_full_signature_balanced_per_bin: 43
+    exact_full_signature_balanced_subset_size: 129
+    exact_full_signature_retained_groups: 129
+    exact_full_signature_discarded_groups: 18
+    exact_full_signature_retention_rate: 0.8775510204081632
+    exact_full_signature_discard_rate: 0.12244897959183673
+    exact_full_signature_maximum_oversampling_multiplier: 1.2790697674418605
   nfx_quantile_5:
     variable: nfx
     method: quantile
     bin_count: 5
+    analysis_unit: camera_key
     minimum_bin_count: 47
     maximum_bin_count: 51
     empty_bin_count: 0
     balanced_per_bin: 47
+    balanced_subset_size: 235
     retained_groups: 235
     discarded_groups: 10
     retention_rate: 0.9591836734693877
@@ -3499,14 +3806,27 @@ balancing_feasibility:
     camera_key_three_way_at_least_5: true
     exact_intrinsic_three_way_at_least_1: true
     exact_full_three_way_at_least_1: true
+    exact_full_signature_analysis_unit: exact_full_signature
+    exact_full_signature_minimum_bin_count: 25
+    exact_full_signature_maximum_bin_count: 35
+    exact_full_signature_empty_bin_count: 0
+    exact_full_signature_balanced_per_bin: 25
+    exact_full_signature_balanced_subset_size: 125
+    exact_full_signature_retained_groups: 125
+    exact_full_signature_discarded_groups: 22
+    exact_full_signature_retention_rate: 0.8503401360544217
+    exact_full_signature_discard_rate: 0.14965986394557823
+    exact_full_signature_maximum_oversampling_multiplier: 1.4
   nfx_quantile_7:
     variable: nfx
     method: quantile
     bin_count: 7
+    analysis_unit: camera_key
     minimum_bin_count: 33
     maximum_bin_count: 37
     empty_bin_count: 0
     balanced_per_bin: 33
+    balanced_subset_size: 231
     retained_groups: 231
     discarded_groups: 14
     retention_rate: 0.9428571428571428
@@ -3521,14 +3841,27 @@ balancing_feasibility:
     camera_key_three_way_at_least_5: true
     exact_intrinsic_three_way_at_least_1: true
     exact_full_three_way_at_least_1: true
+    exact_full_signature_analysis_unit: exact_full_signature
+    exact_full_signature_minimum_bin_count: 18
+    exact_full_signature_maximum_bin_count: 25
+    exact_full_signature_empty_bin_count: 0
+    exact_full_signature_balanced_per_bin: 18
+    exact_full_signature_balanced_subset_size: 126
+    exact_full_signature_retained_groups: 126
+    exact_full_signature_discarded_groups: 21
+    exact_full_signature_retention_rate: 0.8571428571428571
+    exact_full_signature_discard_rate: 0.14285714285714285
+    exact_full_signature_maximum_oversampling_multiplier: 1.3888888888888888
   nfx_quantile_10:
     variable: nfx
     method: quantile
     bin_count: 10
+    analysis_unit: camera_key
     minimum_bin_count: 23
     maximum_bin_count: 27
     empty_bin_count: 0
     balanced_per_bin: 23
+    balanced_subset_size: 230
     retained_groups: 230
     discarded_groups: 15
     retention_rate: 0.9387755102040817
@@ -3543,14 +3876,27 @@ balancing_feasibility:
     camera_key_three_way_at_least_5: true
     exact_intrinsic_three_way_at_least_1: true
     exact_full_three_way_at_least_1: true
+    exact_full_signature_analysis_unit: exact_full_signature
+    exact_full_signature_minimum_bin_count: 12
+    exact_full_signature_maximum_bin_count: 18
+    exact_full_signature_empty_bin_count: 0
+    exact_full_signature_balanced_per_bin: 12
+    exact_full_signature_balanced_subset_size: 120
+    exact_full_signature_retained_groups: 120
+    exact_full_signature_discarded_groups: 27
+    exact_full_signature_retention_rate: 0.8163265306122449
+    exact_full_signature_discard_rate: 0.1836734693877551
+    exact_full_signature_maximum_oversampling_multiplier: 1.5
   nfy_equal_width_3:
     variable: nfy
     method: equal_width
     bin_count: 3
+    analysis_unit: camera_key
     minimum_bin_count: 10
     maximum_bin_count: 219
     empty_bin_count: 0
     balanced_per_bin: 10
+    balanced_subset_size: 30
     retained_groups: 30
     discarded_groups: 215
     retention_rate: 0.12244897959183673
@@ -3565,14 +3911,27 @@ balancing_feasibility:
     camera_key_three_way_at_least_5: false
     exact_intrinsic_three_way_at_least_1: true
     exact_full_three_way_at_least_1: true
+    exact_full_signature_analysis_unit: exact_full_signature
+    exact_full_signature_minimum_bin_count: 6
+    exact_full_signature_maximum_bin_count: 129
+    exact_full_signature_empty_bin_count: 0
+    exact_full_signature_balanced_per_bin: 6
+    exact_full_signature_balanced_subset_size: 18
+    exact_full_signature_retained_groups: 18
+    exact_full_signature_discarded_groups: 129
+    exact_full_signature_retention_rate: 0.12244897959183673
+    exact_full_signature_discard_rate: 0.8775510204081632
+    exact_full_signature_maximum_oversampling_multiplier: 21.5
   nfy_equal_width_5:
     variable: nfy
     method: equal_width
     bin_count: 5
+    analysis_unit: camera_key
     minimum_bin_count: 2
     maximum_bin_count: 197
     empty_bin_count: 0
     balanced_per_bin: 2
+    balanced_subset_size: 10
     retained_groups: 10
     discarded_groups: 235
     retention_rate: 0.04081632653061224
@@ -3587,14 +3946,27 @@ balancing_feasibility:
     camera_key_three_way_at_least_5: false
     exact_intrinsic_three_way_at_least_1: false
     exact_full_three_way_at_least_1: false
+    exact_full_signature_analysis_unit: exact_full_signature
+    exact_full_signature_minimum_bin_count: 2
+    exact_full_signature_maximum_bin_count: 109
+    exact_full_signature_empty_bin_count: 0
+    exact_full_signature_balanced_per_bin: 2
+    exact_full_signature_balanced_subset_size: 10
+    exact_full_signature_retained_groups: 10
+    exact_full_signature_discarded_groups: 137
+    exact_full_signature_retention_rate: 0.06802721088435375
+    exact_full_signature_discard_rate: 0.9319727891156463
+    exact_full_signature_maximum_oversampling_multiplier: 54.5
   nfy_equal_width_7:
     variable: nfy
     method: equal_width
     bin_count: 7
+    analysis_unit: camera_key
     minimum_bin_count: 1
     maximum_bin_count: 157
     empty_bin_count: 0
     balanced_per_bin: 1
+    balanced_subset_size: 7
     retained_groups: 7
     discarded_groups: 238
     retention_rate: 0.02857142857142857
@@ -3609,14 +3981,27 @@ balancing_feasibility:
     camera_key_three_way_at_least_5: false
     exact_intrinsic_three_way_at_least_1: false
     exact_full_three_way_at_least_1: false
+    exact_full_signature_analysis_unit: exact_full_signature
+    exact_full_signature_minimum_bin_count: 1
+    exact_full_signature_maximum_bin_count: 87
+    exact_full_signature_empty_bin_count: 0
+    exact_full_signature_balanced_per_bin: 1
+    exact_full_signature_balanced_subset_size: 7
+    exact_full_signature_retained_groups: 7
+    exact_full_signature_discarded_groups: 140
+    exact_full_signature_retention_rate: 0.047619047619047616
+    exact_full_signature_discard_rate: 0.9523809523809523
+    exact_full_signature_maximum_oversampling_multiplier: 87.0
   nfy_equal_width_10:
     variable: nfy
     method: equal_width
     bin_count: 10
+    analysis_unit: camera_key
     minimum_bin_count: 1
     maximum_bin_count: 115
     empty_bin_count: 0
     balanced_per_bin: 1
+    balanced_subset_size: 10
     retained_groups: 10
     discarded_groups: 235
     retention_rate: 0.04081632653061224
@@ -3631,14 +4016,27 @@ balancing_feasibility:
     camera_key_three_way_at_least_5: false
     exact_intrinsic_three_way_at_least_1: false
     exact_full_three_way_at_least_1: false
+    exact_full_signature_analysis_unit: exact_full_signature
+    exact_full_signature_minimum_bin_count: 1
+    exact_full_signature_maximum_bin_count: 61
+    exact_full_signature_empty_bin_count: 0
+    exact_full_signature_balanced_per_bin: 1
+    exact_full_signature_balanced_subset_size: 10
+    exact_full_signature_retained_groups: 10
+    exact_full_signature_discarded_groups: 137
+    exact_full_signature_retention_rate: 0.06802721088435375
+    exact_full_signature_discard_rate: 0.9319727891156463
+    exact_full_signature_maximum_oversampling_multiplier: 61.0
   nfy_quantile_3:
     variable: nfy
     method: quantile
     bin_count: 3
+    analysis_unit: camera_key
     minimum_bin_count: 80
     maximum_bin_count: 83
     empty_bin_count: 0
     balanced_per_bin: 80
+    balanced_subset_size: 240
     retained_groups: 240
     discarded_groups: 5
     retention_rate: 0.9795918367346939
@@ -3653,14 +4051,27 @@ balancing_feasibility:
     camera_key_three_way_at_least_5: true
     exact_intrinsic_three_way_at_least_1: true
     exact_full_three_way_at_least_1: true
+    exact_full_signature_analysis_unit: exact_full_signature
+    exact_full_signature_minimum_bin_count: 44
+    exact_full_signature_maximum_bin_count: 54
+    exact_full_signature_empty_bin_count: 0
+    exact_full_signature_balanced_per_bin: 44
+    exact_full_signature_balanced_subset_size: 132
+    exact_full_signature_retained_groups: 132
+    exact_full_signature_discarded_groups: 15
+    exact_full_signature_retention_rate: 0.8979591836734694
+    exact_full_signature_discard_rate: 0.10204081632653061
+    exact_full_signature_maximum_oversampling_multiplier: 1.2272727272727273
   nfy_quantile_5:
     variable: nfy
     method: quantile
     bin_count: 5
+    analysis_unit: camera_key
     minimum_bin_count: 47
     maximum_bin_count: 51
     empty_bin_count: 0
     balanced_per_bin: 47
+    balanced_subset_size: 235
     retained_groups: 235
     discarded_groups: 10
     retention_rate: 0.9591836734693877
@@ -3675,14 +4086,27 @@ balancing_feasibility:
     camera_key_three_way_at_least_5: true
     exact_intrinsic_three_way_at_least_1: true
     exact_full_three_way_at_least_1: true
+    exact_full_signature_analysis_unit: exact_full_signature
+    exact_full_signature_minimum_bin_count: 25
+    exact_full_signature_maximum_bin_count: 35
+    exact_full_signature_empty_bin_count: 0
+    exact_full_signature_balanced_per_bin: 25
+    exact_full_signature_balanced_subset_size: 125
+    exact_full_signature_retained_groups: 125
+    exact_full_signature_discarded_groups: 22
+    exact_full_signature_retention_rate: 0.8503401360544217
+    exact_full_signature_discard_rate: 0.14965986394557823
+    exact_full_signature_maximum_oversampling_multiplier: 1.4
   nfy_quantile_7:
     variable: nfy
     method: quantile
     bin_count: 7
+    analysis_unit: camera_key
     minimum_bin_count: 33
     maximum_bin_count: 37
     empty_bin_count: 0
     balanced_per_bin: 33
+    balanced_subset_size: 231
     retained_groups: 231
     discarded_groups: 14
     retention_rate: 0.9428571428571428
@@ -3697,14 +4121,27 @@ balancing_feasibility:
     camera_key_three_way_at_least_5: true
     exact_intrinsic_three_way_at_least_1: true
     exact_full_three_way_at_least_1: true
+    exact_full_signature_analysis_unit: exact_full_signature
+    exact_full_signature_minimum_bin_count: 14
+    exact_full_signature_maximum_bin_count: 26
+    exact_full_signature_empty_bin_count: 0
+    exact_full_signature_balanced_per_bin: 14
+    exact_full_signature_balanced_subset_size: 98
+    exact_full_signature_retained_groups: 98
+    exact_full_signature_discarded_groups: 49
+    exact_full_signature_retention_rate: 0.6666666666666666
+    exact_full_signature_discard_rate: 0.3333333333333333
+    exact_full_signature_maximum_oversampling_multiplier: 1.8571428571428572
   nfy_quantile_10:
     variable: nfy
     method: quantile
     bin_count: 10
+    analysis_unit: camera_key
     minimum_bin_count: 22
     maximum_bin_count: 26
     empty_bin_count: 0
     balanced_per_bin: 22
+    balanced_subset_size: 220
     retained_groups: 220
     discarded_groups: 25
     retention_rate: 0.8979591836734694
@@ -3719,3 +4156,14 @@ balancing_feasibility:
     camera_key_three_way_at_least_5: true
     exact_intrinsic_three_way_at_least_1: true
     exact_full_three_way_at_least_1: true
+    exact_full_signature_analysis_unit: exact_full_signature
+    exact_full_signature_minimum_bin_count: 9
+    exact_full_signature_maximum_bin_count: 19
+    exact_full_signature_empty_bin_count: 0
+    exact_full_signature_balanced_per_bin: 9
+    exact_full_signature_balanced_subset_size: 90
+    exact_full_signature_retained_groups: 90
+    exact_full_signature_discarded_groups: 57
+    exact_full_signature_retention_rate: 0.6122448979591837
+    exact_full_signature_discard_rate: 0.3877551020408163
+    exact_full_signature_maximum_oversampling_multiplier: 2.111111111111111
