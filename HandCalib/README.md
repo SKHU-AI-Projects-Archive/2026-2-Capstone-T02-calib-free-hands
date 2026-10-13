@@ -343,3 +343,11 @@ Train-only normalized-intrinsics constant prior도 함께 계산했습니다. Tr
 전체 `fx` 범위는 `743.565–1141.227 px`, `fy`는 `737.099–1146.534 px`로 데모보다 넓어졌습니다. 그러나 equal-width 10-bin에는 빈 구간이 있고, exact calibration 공유 관계로 56명 참가자가 하나의 연결 성분을 이룹니다. 따라서 calibration-level 학습 균형 후보와 사전 고정 bin-macro 기술 평가는 검토할 수 있지만, 참가자와 exact calibration을 동시에 비중복으로 유지하는 엄격한 3-way 평가는 현재 자료로 불가능합니다. 전체 hand-pose 폴더에는 RGB media가 없어서 신규 calibration의 RGB 확보 가능성도 별도 확인이 필요합니다.
 
 분석 도구는 `tools/audit_gigahands_full_focal_coverage.py`, 핵심 기록은 `results/02i1_gigahands_full_focal_coverage.yaml`, metadata manifest·표·그림·보고서는 ignored `runs/02_gigahands_full_focal_coverage/`에 있습니다. 새 split/bin을 확정하지 않았고 training, inference, GPU, 다운로드를 실행하지 않았습니다.
+
+## 02-I.2 GigaHands focal-balanced protocol design
+
+전체 연결 그래프가 하나라는 사실만으로 부분 제외 후보까지 불가능하다고 단정하지 않고, 602개 exact calibration과 11,756개 camera record를 대상으로 P0~P4 분할 조건과 S0~S4 sampling 조건을 metadata-only로 비교했습니다. `P1_COVERAGE`는 참가자·intrinsic·full-calibration overlap을 모두 0으로 유지하면서 602개 signature와 camera record 89.83%를 보존했습니다. 실제 retained participant는 Train/Validation/Test `32/11/11`명입니다. 다만 full-range equal-width 5-bin의 양 끝 signature가 각각 2개뿐이어서 Train·Validation·Test 세 집합이 모두 모든 bin을 포함할 수는 없습니다. 이 후보는 Validation/Test 양끝 coverage를 확보하는 대신 Train 밖 focal 평가 구간이 생깁니다.
+
+가장 엄격한 `P4_RETENTION`은 participant·calibration·camera identifier overlap을 모두 0으로 만들지만 482개 signature와 camera record 55.27%만 유지합니다. `P2_CALIBRATION_STRATIFIED`와 `P3_IDENTIFIER_STRATIFIED`는 전체 metadata record를 보존하지만 참가자 56명이 split 사이에서 반복되므로 participant generalization 평가가 아닙니다. Camera identifier도 확인된 물리 카메라 ID가 아닙니다.
+
+Sampling 후보에서는 S0 camera-key 비례, S1 signature 균등, S2 완전 bin 균형, S3 `alpha=0.5` 부분 균형과 3배 clipping, S4 제한 support를 비교하고, unclipped `alpha=0/0.25/0.5/1.0` 민감도도 기록했습니다. 완전 bin 균형은 희소 signature의 반복과 ESS 감소가 크므로 S3를 실용 후보로 제안하지만 확정하지 않았습니다. 분석 도구는 `tools/design_gigahands_focal_balance_protocol.py`, 핵심 기록은 `results/02i2_gigahands_focal_balance_protocol_design.yaml`, 상세 후보·제외 목록·가중치·RGB 요구·그림·보고서는 ignored `runs/02_gigahands_focal_balance_design/`에 있습니다. 실제 split, bin, sampler, 학습, 추론, RGB 다운로드는 수행하거나 확정하지 않았습니다.
