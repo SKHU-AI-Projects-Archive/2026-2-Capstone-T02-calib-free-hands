@@ -335,3 +335,11 @@ Train-only normalized-intrinsics constant prior도 함께 계산했습니다. Tr
 동일 폭 `fx` 5-bin을 맞추면 `camera_key` 기준 최대 10/245개, exact full signature 기준 최대 10/147개를 사용할 수 있습니다. 3-bin에서는 두 기준이 각각 18개와 12개로 달라집니다. 기존 PairBalancedSampler는 `camera_key`마다 174 frame을 뽑으므로 p41의 반복 signature는 epoch당 348 frame, p44 signature는 174 frame에 노출됩니다. 이는 이미지 중복을 뜻하지 않지만 camera-key 균형과 calibration-frequency 균형이 다름을 보여줍니다. Participant 2/1/1 독립 조건에서 5/7/10-bin은 모든 split/bin에 최소 1개를 배치할 후보가 없었고, 3-bin도 최소 1개를 만족하는 6개 후보 모두 exact full calibration 독립성을 만족하지 못했습니다. 따라서 학습 시 bin weighting은 조건부 후보지만, GigaHands 데모만으로 다양한 focal 구간의 신뢰할 만한 독립 균형 평가를 구성하기에는 부족합니다.
 
 분석 도구는 `tools/audit_gigahands_focal_coverage.py`, 핵심 기록은 `results/02i0_gigahands_focal_coverage_feasibility.yaml`, 상세 표·그림·연구 보고서는 ignored `runs/02_gigahands_focal_coverage_audit/`에 있습니다. 새 split과 평가 지표는 확정하지 않았으며 training과 model inference는 실행하지 않았습니다.
+
+## 02-I.1 GigaHands full focal coverage audit
+
+전체 hand-pose metadata의 236개 `optim_params.txt`, 11,756개 camera row를 strict parse했으며 19-field 형식, 숫자 변환, finite/range, 파일 내부 cam ID/name 중복 검사가 모두 통과했습니다. `p041-boxing`에서 의심됐던 `k2`/`p1` 연결 오류는 실제 파일에서 발견되지 않았습니다. 56명, 236개 sequence, 11,756개 `camera_key`에 exact intrinsic/full calibration signature는 각각 602개이며, 기존 데모의 147개 signature는 모두 포함되고 455개가 추가됐습니다. 물리 카메라 identity는 계속 `not_verifiable`입니다.
+
+전체 `fx` 범위는 `743.565–1141.227 px`, `fy`는 `737.099–1146.534 px`로 데모보다 넓어졌습니다. 그러나 equal-width 10-bin에는 빈 구간이 있고, exact calibration 공유 관계로 56명 참가자가 하나의 연결 성분을 이룹니다. 따라서 calibration-level 학습 균형 후보와 사전 고정 bin-macro 기술 평가는 검토할 수 있지만, 참가자와 exact calibration을 동시에 비중복으로 유지하는 엄격한 3-way 평가는 현재 자료로 불가능합니다. 전체 hand-pose 폴더에는 RGB media가 없어서 신규 calibration의 RGB 확보 가능성도 별도 확인이 필요합니다.
+
+분석 도구는 `tools/audit_gigahands_full_focal_coverage.py`, 핵심 기록은 `results/02i1_gigahands_full_focal_coverage.yaml`, metadata manifest·표·그림·보고서는 ignored `runs/02_gigahands_full_focal_coverage/`에 있습니다. 새 split/bin을 확정하지 않았고 training, inference, GPU, 다운로드를 실행하지 않았습니다.

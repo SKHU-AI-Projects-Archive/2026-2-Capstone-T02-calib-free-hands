@@ -1,0 +1,2060 @@
+experiment: 02i1_gigahands_full_focal_coverage
+status: FULL_METADATA_INTEGRITY_AND_FOCAL_AUDIT_COMPLETE
+scope: GigaHands only; camera metadata analysis; no training, inference, GPU, download, or split creation
+repository_commit_at_analysis: c624b2a4672653d03c78123c2c79775cfd468292
+integrity:
+  status: PASS
+  expected_file_count: 236
+  parsed_file_count: 236
+  parsed_data_row_count: 11756
+  header_field_count: 19
+  malformed_row_count: 0
+  numeric_conversion_error_count: 0
+  non_finite_row_count: 0
+  invalid_range_row_count: 0
+  duplicate_cam_id_within_file_count: 0
+  duplicate_cam_name_within_file_count: 0
+  p041_boxing_format_error: false
+  input_camera_metadata_aggregate_sha256: 8299e9cbc66efed8afa3739a56af837d190464df53871d1899f99678d4753548
+  annotations_v0_exists: true
+  annotations_v0_size_bytes: 2107252
+  annotations_v0_sha256: f8aa22f0b06d7cf3ab4378fcd8eb8ef5f42cbcf0524e386bdd29fca383e5d94a
+population:
+  sequence_count: 236
+  participant_raw_count: 56
+  participant_count: 56
+  camera_row_count: 11756
+  camera_key_count: 11756
+  camera_identifier_count: 51
+  exact_intrinsic_signature_count: 602
+  exact_full_signature_count: 602
+  unique_fx_count: 602
+  unique_fy_count: 602
+  duplicate_calibration_row_count: 11154
+  duplicate_calibration_row_ratio: 0.9487921061585574
+  camera_rows_per_signature_min: 1
+  camera_rows_per_signature_max: 42
+  camera_rows_per_signature_mean: 19.528239202657808
+  signature_count_by_camera_row_multiplicity:
+    1: 102
+    9: 51
+    10: 51
+    14: 49
+    20: 51
+    24: 49
+    27: 100
+    28: 51
+    33: 49
+    42: 49
+  camera_rows_per_sequence_distribution:
+    49: 140
+    51: 96
+demo_overlap:
+  exact_intrinsic_signature_overlap_count: 147
+  exact_full_signature_overlap_count: 147
+  camera_identifier_overlap_count: 49
+  exact_sequence_identity_overlap_count: 0
+  normalized_participant_action_overlap_count: 5
+  participant_overlap_count: 4
+  new_exact_intrinsic_signature_count: 455
+  new_exact_full_signature_count: 455
+  physical_camera_identity: not_verifiable
+range_comparison:
+  demo:
+    fx:
+      count: 245
+      unique_count: 147
+      min: 824.9450073242188
+      max: 1017.0402221679688
+      mean: 924.3413347516741
+      median: 922.7343139648438
+      std_population: 18.935007756200854
+      q01: 879.8726806640625
+      q05: 899.098388671875
+      q10: 905.8577270507812
+      q25: 916.3121948242188
+      q50: 922.7343139648438
+      q75: 932.0266723632812
+      q90: 942.8668823242188
+      q95: 951.805908203125
+      q99: 976.3830883789062
+      iqr: 15.7144775390625
+    fy:
+      count: 245
+      unique_count: 147
+      min: 828.9351806640625
+      max: 1012.888671875
+      mean: 923.0909964425223
+      median: 922.5438842773438
+      std_population: 18.987839161050974
+      q01: 881.6320629882813
+      q05: 894.3316528320313
+      q10: 903.85205078125
+      q25: 914.1321411132812
+      q50: 922.5438842773438
+      q75: 931.8587646484375
+      q90: 941.1697875976563
+      q95: 954.4271484375
+      q99: 973.5716064453125
+      iqr: 17.72662353515625
+    nfx:
+      count: 245
+      unique_count: 147
+      min: 0.6444882869720459
+      max: 0.7945626735687256
+      mean: 0.7221416677747454
+      median: 0.7208861827850341
+      std_population: 0.01479297480953192
+      q01: 0.6874005317687988
+      q05: 0.7024206161499024
+      q10: 0.7077013492584229
+      q25: 0.7158689022064209
+      q50: 0.7208861827850341
+      q75: 0.7281458377838135
+      q90: 0.7366147518157959
+      q95: 0.7435983657836914
+      q99: 0.7627992877960205
+      iqr: 0.012276935577392623
+    nfy:
+      count: 245
+      unique_count: 147
+      min: 1.1512988620334201
+      max: 1.406789822048611
+      mean: 1.2820708283923918
+      median: 1.2813109503851996
+      std_population: 0.026371998834793017
+      q01: 1.2244889763726128
+      q05: 1.2421272956000433
+      q10: 1.255350070529514
+      q25: 1.2696279737684462
+      q50: 1.2813109503851996
+      q75: 1.294248284233941
+      q90: 1.3071802605523004
+      q95: 1.32559326171875
+      q99: 1.3521827867296008
+      iqr: 0.024620310465494732
+    hfov_deg:
+      count: 245
+      unique_count: 147
+      min: 64.36252481844913
+      max: 75.60928437085771
+      mean: 69.41149629669111
+      median: 69.48963930549266
+      std_population: 1.0994280677108104
+      q01: 66.48811827378726
+      q05: 67.83424580982039
+      q10: 68.33582060767213
+      q25: 68.95287451578928
+      q50: 69.48963930549266
+      q75: 69.86489447361805
+      q90: 70.4833831605018
+      q95: 70.88836470891992
+      q99: 72.0626338523267
+      iqr: 0.9120199578287753
+    vfov_deg:
+      count: 245
+      unique_count: 147
+      min: 39.13237132599845
+      max: 46.94985078853774
+      mean: 42.62522488394336
+      median: 42.6339784667715
+      std_population: 0.7990763517612005
+      q01: 40.586202349227015
+      q05: 41.331922811262054
+      q10: 41.8639935995737
+      q25: 42.245549819150995
+      q50: 42.6339784667715
+      q75: 42.99064262394933
+      q90: 43.43431725111192
+      q95: 43.853053532528584
+      q99: 44.423690788605654
+      iqr: 0.7450928047983325
+  full:
+    fx:
+      count: 11756
+      unique_count: 602
+      min: 743.5654907226562
+      max: 1141.226806640625
+      mean: 923.4694103800387
+      median: 921.91162109375
+      std_population: 26.317919028972426
+      q01: 857.6828002929688
+      q05: 892.5274658203125
+      q10: 900.6358337402344
+      q25: 912.3312377929688
+      q50: 921.91162109375
+      q75: 932.2933349609375
+      q90: 943.3913879394531
+      q95: 953.7679443359375
+      q99: 1017.0402221679688
+      iqr: 19.96209716796875
+    fy:
+      count: 11756
+      unique_count: 602
+      min: 737.0989990234375
+      max: 1146.534423828125
+      mean: 922.3178377362408
+      median: 921.74609375
+      std_population: 26.788590995661583
+      q01: 859.202392578125
+      q05: 889.2589111328125
+      q10: 898.969482421875
+      q25: 911.0122680664062
+      q50: 921.74609375
+      q75: 931.8587646484375
+      q90: 944.279052734375
+      q95: 956.49755859375
+      q99: 1012.888671875
+      iqr: 20.84649658203125
+    nfx:
+      count: 11756
+      unique_count: 602
+      min: 0.5809105396270752
+      max: 0.8915834426879883
+      mean: 0.7214604768594052
+      median: 0.7202434539794922
+      std_population: 0.020560874241384707
+      q01: 0.6700646877288818
+      q05: 0.6972870826721191
+      q10: 0.7036217451095581
+      q25: 0.7127587795257568
+      q50: 0.7202434539794922
+      q75: 0.7283541679382324
+      q90: 0.7370245218276978
+      q95: 0.7451312065124511
+      q99: 0.7945626735687256
+      iqr: 0.015595388412475542
+    nfy:
+      count: 11756
+      unique_count: 602
+      min: 1.0237486097547743
+      max: 1.592408921983507
+      mean: 1.28099699685589
+      median: 1.280202907986111
+      std_population: 0.0372063763828633
+      q01: 1.193336656358507
+      q05: 1.2350818210177952
+      q10: 1.2485687255859375
+      q25: 1.2652948167588975
+      q50: 1.280202907986111
+      q75: 1.294248284233941
+      q90: 1.3114986843532985
+      q95: 1.3284688313802084
+      q99: 1.406789822048611
+      iqr: 0.02895346747504335
+    hfov_deg:
+      count: 11756
+      unique_count: 602
+      min: 58.56741718859333
+      max: 81.43832376296784
+      mean: 69.47581470458292
+      median: 69.53751372851599
+      std_population: 1.5042003403231174
+      q01: 64.36252481844913
+      q05: 67.72502103327433
+      q10: 68.30621153433376
+      q25: 68.93757821507621
+      q50: 69.53751372851599
+      q75: 70.09928916789681
+      q90: 70.7958982960811
+      q95: 71.28594810033265
+      q99: 73.46035056174092
+      iqr: 1.1617109528205987
+    vfov_deg:
+      count: 11756
+      unique_count: 602
+      min: 34.86350285327185
+      max: 52.06187297008619
+      mean: 42.671314493162505
+      median: 42.66756301673725
+      std_population: 1.1106800351478843
+      q01: 39.13237132599845
+      q05: 41.24998012943679
+      q10: 41.73801866947707
+      q25: 42.245549819150995
+      q50: 42.66756301673725
+      q75: 43.12437690272213
+      q90: 43.648108355268654
+      q95: 44.07930400930289
+      q99: 45.466709719915386
+      iqr: 0.8788270835711387
+fixed_demo_five_bin_comparison:
+  demo_fx:
+    edges: &id001
+    - 824.9450073242188
+    - 863.3640502929687
+    - 901.7830932617187
+    - 940.2021362304688
+    - 978.6211791992188
+    - 1017.0402221679688
+    camera_key_counts:
+    - 2
+    - 15
+    - 195
+    - 31
+    - 2
+    camera_key_ratios:
+    - 0.00816326530612245
+    - 0.061224489795918366
+    - 0.7959183673469388
+    - 0.12653061224489795
+    - 0.00816326530612245
+    exact_full_signature_counts:
+    - 2
+    - 11
+    - 111
+    - 21
+    - 2
+    exact_full_signature_ratios:
+    - 0.013605442176870748
+    - 0.07482993197278912
+    - 0.7551020408163265
+    - 0.14285714285714285
+    - 0.013605442176870748
+    camera_keys_below_demo_range: 0
+    camera_keys_above_demo_range: 0
+    signatures_below_demo_range: 0
+    signatures_above_demo_range: 0
+  full_fx:
+    edges: *id001
+    camera_key_counts:
+    - 94
+    - 1127
+    - 8931
+    - 1306
+    - 150
+    camera_key_ratios:
+    - 0.007995916978564138
+    - 0.09586594079618918
+    - 0.7596971759101735
+    - 0.11109220823409323
+    - 0.012759441987070432
+    exact_full_signature_counts:
+    - 3
+    - 50
+    - 464
+    - 71
+    - 6
+    exact_full_signature_ratios:
+    - 0.0049833887043189366
+    - 0.08305647840531562
+    - 0.770764119601329
+    - 0.11794019933554817
+    - 0.009966777408637873
+    camera_keys_below_demo_range: 37
+    camera_keys_above_demo_range: 111
+    signatures_below_demo_range: 2
+    signatures_above_demo_range: 6
+  demo_fy:
+    edges: &id002
+    - 828.9351806640625
+    - 865.72587890625
+    - 902.5165771484375
+    - 939.307275390625
+    - 976.0979736328125
+    - 1012.888671875
+    camera_key_counts:
+    - 2
+    - 18
+    - 197
+    - 26
+    - 2
+    camera_key_ratios:
+    - 0.00816326530612245
+    - 0.07346938775510205
+    - 0.8040816326530612
+    - 0.10612244897959183
+    - 0.00816326530612245
+    exact_full_signature_counts:
+    - 2
+    - 14
+    - 109
+    - 20
+    - 2
+    exact_full_signature_ratios:
+    - 0.013605442176870748
+    - 0.09523809523809523
+    - 0.7414965986394558
+    - 0.1360544217687075
+    - 0.013605442176870748
+    camera_keys_below_demo_range: 0
+    camera_keys_above_demo_range: 0
+    signatures_below_demo_range: 0
+    signatures_above_demo_range: 0
+  full_fy:
+    edges: *id002
+    camera_key_counts:
+    - 114
+    - 1417
+    - 8659
+    - 1268
+    - 154
+    camera_key_ratios:
+    - 0.00969717591017353
+    - 0.12053419530452535
+    - 0.7365600544402858
+    - 0.10785981626403539
+    - 0.013099693773392311
+    exact_full_signature_counts:
+    - 5
+    - 67
+    - 446
+    - 70
+    - 6
+    exact_full_signature_ratios:
+    - 0.008305647840531562
+    - 0.11129568106312292
+    - 0.7408637873754153
+    - 0.11627906976744186
+    - 0.009966777408637873
+    camera_keys_below_demo_range: 37
+    camera_keys_above_demo_range: 107
+    signatures_below_demo_range: 2
+    signatures_above_demo_range: 6
+balance_feasibility:
+  fx_equal_width_3:
+    variable: fx
+    method: equal_width
+    bin_count: 3
+    edges:
+    - 743.5654907226562
+    - 876.1192626953125
+    - 1008.6730346679688
+    - 1141.226806640625
+    participant_counts:
+    - 34
+    - 56
+    - 25
+    camera_key:
+      counts:
+      - 179
+      - 11414
+      - 163
+      minimum_bin_count: 163
+      maximum_bin_count: 11414
+      empty_bin_count: 0
+      balanced_per_bin: 163
+      balanced_subset_size: 489
+      discarded_count: 11267
+      retention_rate: 0.04159578087784961
+    exact_full_signature:
+      counts:
+      - 7
+      - 587
+      - 8
+      minimum_bin_count: 7
+      maximum_bin_count: 587
+      empty_bin_count: 0
+      balanced_per_bin: 7
+      balanced_subset_size: 21
+      discarded_count: 581
+      retention_rate: 0.03488372093023256
+  fx_equal_width_5:
+    variable: fx
+    method: equal_width
+    bin_count: 5
+    edges:
+    - 743.5654907226562
+    - 823.09775390625
+    - 902.6300170898437
+    - 982.1622802734375
+    - 1061.6945434570312
+    - 1141.226806640625
+    participant_counts:
+    - 17
+    - 56
+    - 56
+    - 29
+    - 10
+    camera_key:
+      counts:
+      - 37
+      - 1406
+      - 10052
+      - 220
+      - 41
+      minimum_bin_count: 37
+      maximum_bin_count: 10052
+      empty_bin_count: 0
+      balanced_per_bin: 37
+      balanced_subset_size: 185
+      discarded_count: 11571
+      retention_rate: 0.015736645117386865
+    exact_full_signature:
+      counts:
+      - 2
+      - 61
+      - 527
+      - 10
+      - 2
+      minimum_bin_count: 2
+      maximum_bin_count: 527
+      empty_bin_count: 0
+      balanced_per_bin: 2
+      balanced_subset_size: 10
+      discarded_count: 592
+      retention_rate: 0.016611295681063124
+  fx_equal_width_7:
+    variable: fx
+    method: equal_width
+    bin_count: 7
+    edges:
+    - 743.5654907226562
+    - 800.374250139509
+    - 857.1830095563616
+    - 913.9917689732142
+    - 970.800528390067
+    - 1027.6092878069196
+    - 1084.4180472237722
+    - 1141.226806640625
+    participant_counts:
+    - 14
+    - 9
+    - 56
+    - 56
+    - 39
+    - 8
+    - 10
+    camera_key:
+      counts:
+      - 27
+      - 62
+      - 3148
+      - 8183
+      - 267
+      - 28
+      - 41
+      minimum_bin_count: 27
+      maximum_bin_count: 8183
+      empty_bin_count: 0
+      balanced_per_bin: 27
+      balanced_subset_size: 189
+      discarded_count: 11567
+      retention_rate: 0.016076896903708743
+    exact_full_signature:
+      counts:
+      - 1
+      - 3
+      - 151
+      - 433
+      - 10
+      - 2
+      - 2
+      minimum_bin_count: 1
+      maximum_bin_count: 433
+      empty_bin_count: 0
+      balanced_per_bin: 1
+      balanced_subset_size: 7
+      discarded_count: 595
+      retention_rate: 0.011627906976744186
+  fx_equal_width_10:
+    variable: fx
+    method: equal_width
+    bin_count: 10
+    edges:
+    - 743.5654907226562
+    - 783.3316223144532
+    - 823.09775390625
+    - 862.8638854980469
+    - 902.6300170898437
+    - 942.3961486816406
+    - 982.1622802734375
+    - 1021.9284118652345
+    - 1061.6945434570312
+    - 1101.460675048828
+    - 1141.226806640625
+    participant_counts:
+    - 14
+    - 3
+    - 9
+    - 56
+    - 56
+    - 56
+    - 22
+    - 16
+    - 0
+    - 10
+    camera_key:
+      counts:
+      - 27
+      - 10
+      - 94
+      - 1312
+      - 9051
+      - 1001
+      - 164
+      - 56
+      - 0
+      - 41
+      minimum_bin_count: 0
+      maximum_bin_count: 9051
+      empty_bin_count: 1
+      balanced_per_bin: 0
+      balanced_subset_size: 0
+      discarded_count: 11756
+      retention_rate: 0.0
+    exact_full_signature:
+      counts:
+      - 1
+      - 1
+      - 3
+      - 58
+      - 468
+      - 59
+      - 7
+      - 3
+      - 0
+      - 2
+      minimum_bin_count: 0
+      maximum_bin_count: 468
+      empty_bin_count: 1
+      balanced_per_bin: 0
+      balanced_subset_size: 0
+      discarded_count: 602
+      retention_rate: 0.0
+  fx_quantile_3:
+    variable: fx
+    method: quantile
+    bin_count: 3
+    edges:
+    - 743.5654907226562
+    - 916.5215454101562
+    - 929.29248046875
+    - 1141.226806640625
+    participant_counts:
+    - 56
+    - 56
+    - 56
+    camera_key:
+      counts:
+      - 3915
+      - 3914
+      - 3927
+      minimum_bin_count: 3914
+      maximum_bin_count: 3927
+      empty_bin_count: 0
+      balanced_per_bin: 3914
+      balanced_subset_size: 11742
+      discarded_count: 14
+      retention_rate: 0.9988091187478735
+    exact_full_signature:
+      counts:
+      - 189
+      - 195
+      - 218
+      minimum_bin_count: 189
+      maximum_bin_count: 218
+      empty_bin_count: 0
+      balanced_per_bin: 189
+      balanced_subset_size: 567
+      discarded_count: 35
+      retention_rate: 0.9418604651162791
+  fx_quantile_5:
+    variable: fx
+    method: quantile
+    bin_count: 5
+    edges:
+    - 743.5654907226562
+    - 909.0056762695312
+    - 918.9263916015625
+    - 925.953369140625
+    - 935.4832153320312
+    - 1141.226806640625
+    participant_counts:
+    - 56
+    - 56
+    - 56
+    - 56
+    - 56
+    camera_key:
+      counts:
+      - 2338
+      - 2339
+      - 2374
+      - 2349
+      - 2356
+      minimum_bin_count: 2338
+      maximum_bin_count: 2374
+      empty_bin_count: 0
+      balanced_per_bin: 2338
+      balanced_subset_size: 11690
+      discarded_count: 66
+      retention_rate: 0.994385845525689
+    exact_full_signature:
+      counts:
+      - 105
+      - 120
+      - 119
+      - 123
+      - 135
+      minimum_bin_count: 105
+      maximum_bin_count: 135
+      empty_bin_count: 0
+      balanced_per_bin: 105
+      balanced_subset_size: 525
+      discarded_count: 77
+      retention_rate: 0.872093023255814
+  fx_quantile_7:
+    variable: fx
+    method: quantile
+    bin_count: 7
+    edges:
+    - 743.5654907226562
+    - 905.5779418945312
+    - 914.7191162109375
+    - 919.8408203125
+    - 924.8321533203125
+    - 931.3704833984375
+    - 938.5489501953125
+    - 1141.226806640625
+    participant_counts:
+    - 56
+    - 56
+    - 56
+    - 56
+    - 56
+    - 56
+    - 56
+    camera_key:
+      counts:
+      - 1666
+      - 1691
+      - 1679
+      - 1673
+      - 1683
+      - 1675
+      - 1689
+      minimum_bin_count: 1666
+      maximum_bin_count: 1691
+      empty_bin_count: 0
+      balanced_per_bin: 1666
+      balanced_subset_size: 11662
+      discarded_count: 94
+      retention_rate: 0.9920040830214358
+    exact_full_signature:
+      counts:
+      - 73
+      - 88
+      - 81
+      - 83
+      - 92
+      - 90
+      - 95
+      minimum_bin_count: 73
+      maximum_bin_count: 95
+      empty_bin_count: 0
+      balanced_per_bin: 73
+      balanced_subset_size: 511
+      discarded_count: 91
+      retention_rate: 0.8488372093023255
+  fx_quantile_10:
+    variable: fx
+    method: quantile
+    bin_count: 10
+    edges:
+    - 743.5654907226562
+    - 900.6358337402344
+    - 909.0056762695312
+    - 915.1530151367188
+    - 918.9263916015625
+    - 921.91162109375
+    - 925.953369140625
+    - 930.9586791992188
+    - 935.4832153320312
+    - 943.3913879394531
+    - 1141.226806640625
+    participant_counts:
+    - 56
+    - 56
+    - 56
+    - 56
+    - 56
+    - 56
+    - 56
+    - 56
+    - 56
+    - 56
+    camera_key:
+      counts:
+      - 1176
+      - 1162
+      - 1170
+      - 1169
+      - 1201
+      - 1173
+      - 1176
+      - 1173
+      - 1180
+      - 1176
+      minimum_bin_count: 1162
+      maximum_bin_count: 1201
+      empty_bin_count: 0
+      balanced_per_bin: 1162
+      balanced_subset_size: 11620
+      discarded_count: 136
+      retention_rate: 0.9884314392650562
+    exact_full_signature:
+      counts:
+      - 51
+      - 54
+      - 63
+      - 57
+      - 58
+      - 61
+      - 66
+      - 57
+      - 70
+      - 65
+      minimum_bin_count: 51
+      maximum_bin_count: 70
+      empty_bin_count: 0
+      balanced_per_bin: 51
+      balanced_subset_size: 510
+      discarded_count: 92
+      retention_rate: 0.8471760797342193
+  fy_equal_width_3:
+    variable: fy
+    method: equal_width
+    bin_count: 3
+    edges:
+    - 737.0989990234375
+    - 873.5774739583334
+    - 1010.0559488932292
+    - 1146.534423828125
+    participant_counts:
+    - 28
+    - 56
+    - 25
+    camera_key:
+      counts:
+      - 181
+      - 11426
+      - 149
+      minimum_bin_count: 149
+      maximum_bin_count: 11426
+      empty_bin_count: 0
+      balanced_per_bin: 149
+      balanced_subset_size: 447
+      discarded_count: 11309
+      retention_rate: 0.03802313712146989
+    exact_full_signature:
+      counts:
+      - 9
+      - 586
+      - 7
+      minimum_bin_count: 7
+      maximum_bin_count: 586
+      empty_bin_count: 0
+      balanced_per_bin: 7
+      balanced_subset_size: 21
+      discarded_count: 581
+      retention_rate: 0.03488372093023256
+  fy_equal_width_5:
+    variable: fy
+    method: equal_width
+    bin_count: 5
+    edges:
+    - 737.0989990234375
+    - 818.986083984375
+    - 900.8731689453125
+    - 982.76025390625
+    - 1064.6473388671875
+    - 1146.534423828125
+    participant_counts:
+    - 14
+    - 56
+    - 56
+    - 29
+    - 10
+    camera_key:
+      counts:
+      - 27
+      - 1343
+      - 10125
+      - 220
+      - 41
+      minimum_bin_count: 27
+      maximum_bin_count: 10125
+      empty_bin_count: 0
+      balanced_per_bin: 27
+      balanced_subset_size: 135
+      discarded_count: 11621
+      retention_rate: 0.011483497788363389
+    exact_full_signature:
+      counts:
+      - 1
+      - 63
+      - 526
+      - 10
+      - 2
+      minimum_bin_count: 1
+      maximum_bin_count: 526
+      empty_bin_count: 0
+      balanced_per_bin: 1
+      balanced_subset_size: 5
+      discarded_count: 597
+      retention_rate: 0.008305647840531562
+  fy_equal_width_7:
+    variable: fy
+    method: equal_width
+    bin_count: 7
+    edges:
+    - 737.0989990234375
+    - 795.5897739955357
+    - 854.080548967634
+    - 912.5713239397321
+    - 971.0620989118304
+    - 1029.5528738839284
+    - 1088.0436488560267
+    - 1146.534423828125
+    participant_counts:
+    - 14
+    - 9
+    - 56
+    - 56
+    - 29
+    - 8
+    - 10
+    camera_key:
+      counts:
+      - 27
+      - 62
+      - 3110
+      - 8254
+      - 248
+      - 14
+      - 41
+      minimum_bin_count: 14
+      maximum_bin_count: 8254
+      empty_bin_count: 0
+      balanced_per_bin: 14
+      balanced_subset_size: 98
+      discarded_count: 11658
+      retention_rate: 0.008336168764886015
+    exact_full_signature:
+      counts:
+      - 1
+      - 3
+      - 150
+      - 435
+      - 10
+      - 1
+      - 2
+      minimum_bin_count: 1
+      maximum_bin_count: 435
+      empty_bin_count: 0
+      balanced_per_bin: 1
+      balanced_subset_size: 7
+      discarded_count: 595
+      retention_rate: 0.011627906976744186
+  fy_equal_width_10:
+    variable: fy
+    method: equal_width
+    bin_count: 10
+    edges:
+    - 737.0989990234375
+    - 778.0425415039062
+    - 818.986083984375
+    - 859.9296264648438
+    - 900.8731689453125
+    - 941.8167114257812
+    - 982.76025390625
+    - 1023.7037963867188
+    - 1064.6473388671875
+    - 1105.5908813476562
+    - 1146.534423828125
+    participant_counts:
+    - 14
+    - 0
+    - 9
+    - 56
+    - 56
+    - 56
+    - 29
+    - 8
+    - 0
+    - 10
+    camera_key:
+      counts:
+      - 27
+      - 0
+      - 104
+      - 1239
+      - 9095
+      - 1030
+      - 192
+      - 28
+      - 0
+      - 41
+      minimum_bin_count: 0
+      maximum_bin_count: 9095
+      empty_bin_count: 2
+      balanced_per_bin: 0
+      balanced_subset_size: 0
+      discarded_count: 11756
+      retention_rate: 0.0
+    exact_full_signature:
+      counts:
+      - 1
+      - 0
+      - 4
+      - 59
+      - 470
+      - 56
+      - 8
+      - 2
+      - 0
+      - 2
+      minimum_bin_count: 0
+      maximum_bin_count: 470
+      empty_bin_count: 2
+      balanced_per_bin: 0
+      balanced_subset_size: 0
+      discarded_count: 602
+      retention_rate: 0.0
+  fy_quantile_3:
+    variable: fy
+    method: quantile
+    bin_count: 3
+    edges:
+    - 737.0989990234375
+    - 914.6825561523438
+    - 928.0214233398438
+    - 1146.534423828125
+    participant_counts:
+    - 56
+    - 56
+    - 56
+    camera_key:
+      counts:
+      - 3910
+      - 3902
+      - 3944
+      minimum_bin_count: 3902
+      maximum_bin_count: 3944
+      empty_bin_count: 0
+      balanced_per_bin: 3902
+      balanced_subset_size: 11706
+      discarded_count: 50
+      retention_rate: 0.9957468526709765
+    exact_full_signature:
+      counts:
+      - 188
+      - 202
+      - 212
+      minimum_bin_count: 188
+      maximum_bin_count: 212
+      empty_bin_count: 0
+      balanced_per_bin: 188
+      balanced_subset_size: 564
+      discarded_count: 38
+      retention_rate: 0.9368770764119602
+  fy_quantile_5:
+    variable: fy
+    method: quantile
+    bin_count: 5
+    edges:
+    - 737.0989990234375
+    - 907.9642333984375
+    - 917.568115234375
+    - 925.2696533203125
+    - 934.715087890625
+    - 1146.534423828125
+    participant_counts:
+    - 56
+    - 56
+    - 56
+    - 56
+    - 56
+    camera_key:
+      counts:
+      - 2343
+      - 2353
+      - 2354
+      - 2354
+      - 2352
+      minimum_bin_count: 2343
+      maximum_bin_count: 2354
+      empty_bin_count: 0
+      balanced_per_bin: 2343
+      balanced_subset_size: 11715
+      discarded_count: 41
+      retention_rate: 0.9965124191902007
+    exact_full_signature:
+      counts:
+      - 109
+      - 118
+      - 123
+      - 122
+      - 130
+      minimum_bin_count: 109
+      maximum_bin_count: 130
+      empty_bin_count: 0
+      balanced_per_bin: 109
+      balanced_subset_size: 545
+      discarded_count: 57
+      retention_rate: 0.9053156146179402
+  fy_quantile_7:
+    variable: fy
+    method: quantile
+    bin_count: 7
+    edges:
+    - 737.0989990234375
+    - 903.5432739257812
+    - 912.8909301757812
+    - 918.942626953125
+    - 924.031005859375
+    - 929.9429931640625
+    - 938.6231689453125
+    - 1146.534423828125
+    participant_counts:
+    - 56
+    - 56
+    - 56
+    - 56
+    - 56
+    - 56
+    - 56
+    camera_key:
+      counts:
+      - 1663
+      - 1660
+      - 1714
+      - 1653
+      - 1683
+      - 1686
+      - 1697
+      minimum_bin_count: 1653
+      maximum_bin_count: 1714
+      empty_bin_count: 0
+      balanced_per_bin: 1653
+      balanced_subset_size: 11571
+      discarded_count: 185
+      retention_rate: 0.9842633548826132
+    exact_full_signature:
+      counts:
+      - 78
+      - 82
+      - 85
+      - 87
+      - 81
+      - 99
+      - 90
+      minimum_bin_count: 78
+      maximum_bin_count: 99
+      empty_bin_count: 0
+      balanced_per_bin: 78
+      balanced_subset_size: 546
+      discarded_count: 56
+      retention_rate: 0.9069767441860465
+  fy_quantile_10:
+    variable: fy
+    method: quantile
+    bin_count: 10
+    edges:
+    - 737.0989990234375
+    - 898.969482421875
+    - 907.9642333984375
+    - 913.4425048828125
+    - 917.568115234375
+    - 921.74609375
+    - 925.2696533203125
+    - 929.7356567382812
+    - 934.715087890625
+    - 944.279052734375
+    - 1146.534423828125
+    participant_counts:
+    - 56
+    - 56
+    - 56
+    - 56
+    - 56
+    - 56
+    - 56
+    - 56
+    - 56
+    - 56
+    camera_key:
+      counts:
+      - 1159
+      - 1184
+      - 1173
+      - 1180
+      - 1172
+      - 1182
+      - 1156
+      - 1198
+      - 1168
+      - 1184
+      minimum_bin_count: 1156
+      maximum_bin_count: 1198
+      empty_bin_count: 0
+      balanced_per_bin: 1156
+      balanced_subset_size: 11560
+      discarded_count: 196
+      retention_rate: 0.983327662470228
+    exact_full_signature:
+      counts:
+      - 54
+      - 55
+      - 59
+      - 59
+      - 65
+      - 58
+      - 58
+      - 64
+      - 71
+      - 59
+      minimum_bin_count: 54
+      maximum_bin_count: 71
+      empty_bin_count: 0
+      balanced_per_bin: 54
+      balanced_subset_size: 540
+      discarded_count: 62
+      retention_rate: 0.8970099667774086
+  nfx_equal_width_3:
+    variable: nfx
+    method: equal_width
+    bin_count: 3
+    edges:
+    - 0.5809105396270752
+    - 0.6844681739807129
+    - 0.7880258083343505
+    - 0.8915834426879883
+    participant_counts:
+    - 34
+    - 56
+    - 25
+    camera_key:
+      counts:
+      - 179
+      - 11414
+      - 163
+      minimum_bin_count: 163
+      maximum_bin_count: 11414
+      empty_bin_count: 0
+      balanced_per_bin: 163
+      balanced_subset_size: 489
+      discarded_count: 11267
+      retention_rate: 0.04159578087784961
+    exact_full_signature:
+      counts:
+      - 7
+      - 587
+      - 8
+      minimum_bin_count: 7
+      maximum_bin_count: 587
+      empty_bin_count: 0
+      balanced_per_bin: 7
+      balanced_subset_size: 21
+      discarded_count: 581
+      retention_rate: 0.03488372093023256
+  nfx_equal_width_5:
+    variable: nfx
+    method: equal_width
+    bin_count: 5
+    edges:
+    - 0.5809105396270752
+    - 0.6430451202392578
+    - 0.7051797008514404
+    - 0.767314281463623
+    - 0.8294488620758056
+    - 0.8915834426879883
+    participant_counts:
+    - 17
+    - 56
+    - 56
+    - 29
+    - 10
+    camera_key:
+      counts:
+      - 37
+      - 1406
+      - 10052
+      - 220
+      - 41
+      minimum_bin_count: 37
+      maximum_bin_count: 10052
+      empty_bin_count: 0
+      balanced_per_bin: 37
+      balanced_subset_size: 185
+      discarded_count: 11571
+      retention_rate: 0.015736645117386865
+    exact_full_signature:
+      counts:
+      - 2
+      - 61
+      - 527
+      - 10
+      - 2
+      minimum_bin_count: 2
+      maximum_bin_count: 527
+      empty_bin_count: 0
+      balanced_per_bin: 2
+      balanced_subset_size: 10
+      discarded_count: 592
+      retention_rate: 0.016611295681063124
+  nfx_equal_width_7:
+    variable: nfx
+    method: equal_width
+    bin_count: 7
+    edges:
+    - 0.5809105396270752
+    - 0.6252923829214914
+    - 0.6696742262159074
+    - 0.7140560695103236
+    - 0.7584379128047398
+    - 0.8028197560991559
+    - 0.8472015993935721
+    - 0.8915834426879883
+    participant_counts:
+    - 14
+    - 9
+    - 56
+    - 56
+    - 39
+    - 8
+    - 10
+    camera_key:
+      counts:
+      - 27
+      - 62
+      - 3148
+      - 8183
+      - 267
+      - 28
+      - 41
+      minimum_bin_count: 27
+      maximum_bin_count: 8183
+      empty_bin_count: 0
+      balanced_per_bin: 27
+      balanced_subset_size: 189
+      discarded_count: 11567
+      retention_rate: 0.016076896903708743
+    exact_full_signature:
+      counts:
+      - 1
+      - 3
+      - 151
+      - 433
+      - 10
+      - 2
+      - 2
+      minimum_bin_count: 1
+      maximum_bin_count: 433
+      empty_bin_count: 0
+      balanced_per_bin: 1
+      balanced_subset_size: 7
+      discarded_count: 595
+      retention_rate: 0.011627906976744186
+  nfx_equal_width_10:
+    variable: nfx
+    method: equal_width
+    bin_count: 10
+    edges:
+    - 0.5809105396270752
+    - 0.6119778299331665
+    - 0.6430451202392578
+    - 0.6741124105453491
+    - 0.7051797008514404
+    - 0.7362469911575318
+    - 0.767314281463623
+    - 0.7983815717697144
+    - 0.8294488620758056
+    - 0.8605161523818969
+    - 0.8915834426879883
+    participant_counts:
+    - 14
+    - 3
+    - 9
+    - 56
+    - 56
+    - 56
+    - 22
+    - 16
+    - 0
+    - 10
+    camera_key:
+      counts:
+      - 27
+      - 10
+      - 94
+      - 1312
+      - 9051
+      - 1001
+      - 164
+      - 56
+      - 0
+      - 41
+      minimum_bin_count: 0
+      maximum_bin_count: 9051
+      empty_bin_count: 1
+      balanced_per_bin: 0
+      balanced_subset_size: 0
+      discarded_count: 11756
+      retention_rate: 0.0
+    exact_full_signature:
+      counts:
+      - 1
+      - 1
+      - 3
+      - 58
+      - 468
+      - 59
+      - 7
+      - 3
+      - 0
+      - 2
+      minimum_bin_count: 0
+      maximum_bin_count: 468
+      empty_bin_count: 1
+      balanced_per_bin: 0
+      balanced_subset_size: 0
+      discarded_count: 602
+      retention_rate: 0.0
+  nfx_quantile_3:
+    variable: nfx
+    method: quantile
+    bin_count: 3
+    edges:
+    - 0.5809105396270752
+    - 0.7160324573516845
+    - 0.726009750366211
+    - 0.8915834426879883
+    participant_counts:
+    - 56
+    - 56
+    - 56
+    camera_key:
+      counts:
+      - 3915
+      - 3914
+      - 3927
+      minimum_bin_count: 3914
+      maximum_bin_count: 3927
+      empty_bin_count: 0
+      balanced_per_bin: 3914
+      balanced_subset_size: 11742
+      discarded_count: 14
+      retention_rate: 0.9988091187478735
+    exact_full_signature:
+      counts:
+      - 189
+      - 195
+      - 218
+      minimum_bin_count: 189
+      maximum_bin_count: 218
+      empty_bin_count: 0
+      balanced_per_bin: 189
+      balanced_subset_size: 567
+      discarded_count: 35
+      retention_rate: 0.9418604651162791
+  nfx_quantile_5:
+    variable: nfx
+    method: quantile
+    bin_count: 5
+    edges:
+    - 0.5809105396270752
+    - 0.7101606845855712
+    - 0.7179112434387207
+    - 0.7234010696411133
+    - 0.7308462619781494
+    - 0.8915834426879883
+    participant_counts:
+    - 56
+    - 56
+    - 56
+    - 56
+    - 56
+    camera_key:
+      counts:
+      - 2338
+      - 2339
+      - 2374
+      - 2349
+      - 2356
+      minimum_bin_count: 2338
+      maximum_bin_count: 2374
+      empty_bin_count: 0
+      balanced_per_bin: 2338
+      balanced_subset_size: 11690
+      discarded_count: 66
+      retention_rate: 0.994385845525689
+    exact_full_signature:
+      counts:
+      - 105
+      - 120
+      - 119
+      - 123
+      - 135
+      minimum_bin_count: 105
+      maximum_bin_count: 135
+      empty_bin_count: 0
+      balanced_per_bin: 105
+      balanced_subset_size: 525
+      discarded_count: 77
+      retention_rate: 0.872093023255814
+  nfx_quantile_7:
+    variable: nfx
+    method: quantile
+    bin_count: 7
+    edges:
+    - 0.5809105396270752
+    - 0.7074827671051025
+    - 0.7146243095397949
+    - 0.7186256408691406
+    - 0.7225251197814941
+    - 0.7276331901550293
+    - 0.7332413673400879
+    - 0.8915834426879883
+    participant_counts:
+    - 56
+    - 56
+    - 56
+    - 56
+    - 56
+    - 56
+    - 56
+    camera_key:
+      counts:
+      - 1666
+      - 1691
+      - 1679
+      - 1673
+      - 1683
+      - 1675
+      - 1689
+      minimum_bin_count: 1666
+      maximum_bin_count: 1691
+      empty_bin_count: 0
+      balanced_per_bin: 1666
+      balanced_subset_size: 11662
+      discarded_count: 94
+      retention_rate: 0.9920040830214358
+    exact_full_signature:
+      counts:
+      - 73
+      - 88
+      - 81
+      - 83
+      - 92
+      - 90
+      - 95
+      minimum_bin_count: 73
+      maximum_bin_count: 95
+      empty_bin_count: 0
+      balanced_per_bin: 73
+      balanced_subset_size: 511
+      discarded_count: 91
+      retention_rate: 0.8488372093023255
+  nfx_quantile_10:
+    variable: nfx
+    method: quantile
+    bin_count: 10
+    edges:
+    - 0.5809105396270752
+    - 0.7036217451095581
+    - 0.7101606845855712
+    - 0.7149632930755615
+    - 0.7179112434387207
+    - 0.7202434539794922
+    - 0.7234010696411133
+    - 0.7273114681243896
+    - 0.7308462619781494
+    - 0.7370245218276978
+    - 0.8915834426879883
+    participant_counts:
+    - 56
+    - 56
+    - 56
+    - 56
+    - 56
+    - 56
+    - 56
+    - 56
+    - 56
+    - 56
+    camera_key:
+      counts:
+      - 1176
+      - 1162
+      - 1170
+      - 1169
+      - 1201
+      - 1173
+      - 1176
+      - 1173
+      - 1180
+      - 1176
+      minimum_bin_count: 1162
+      maximum_bin_count: 1201
+      empty_bin_count: 0
+      balanced_per_bin: 1162
+      balanced_subset_size: 11620
+      discarded_count: 136
+      retention_rate: 0.9884314392650562
+    exact_full_signature:
+      counts:
+      - 51
+      - 54
+      - 63
+      - 57
+      - 58
+      - 61
+      - 66
+      - 57
+      - 70
+      - 65
+      minimum_bin_count: 51
+      maximum_bin_count: 70
+      empty_bin_count: 0
+      balanced_per_bin: 51
+      balanced_subset_size: 510
+      discarded_count: 92
+      retention_rate: 0.8471760797342193
+  nfy_equal_width_3:
+    variable: nfy
+    method: equal_width
+    bin_count: 3
+    edges:
+    - 1.0237486097547743
+    - 1.2133020471643519
+    - 1.4028554845739294
+    - 1.592408921983507
+    participant_counts:
+    - 28
+    - 56
+    - 25
+    camera_key:
+      counts:
+      - 181
+      - 11426
+      - 149
+      minimum_bin_count: 149
+      maximum_bin_count: 11426
+      empty_bin_count: 0
+      balanced_per_bin: 149
+      balanced_subset_size: 447
+      discarded_count: 11309
+      retention_rate: 0.03802313712146989
+    exact_full_signature:
+      counts:
+      - 9
+      - 586
+      - 7
+      minimum_bin_count: 7
+      maximum_bin_count: 586
+      empty_bin_count: 0
+      balanced_per_bin: 7
+      balanced_subset_size: 21
+      discarded_count: 581
+      retention_rate: 0.03488372093023256
+  nfy_equal_width_5:
+    variable: nfy
+    method: equal_width
+    bin_count: 5
+    edges:
+    - 1.0237486097547743
+    - 1.1374806722005208
+    - 1.2512127346462674
+    - 1.3649447970920139
+    - 1.4786768595377604
+    - 1.592408921983507
+    participant_counts:
+    - 14
+    - 56
+    - 56
+    - 29
+    - 10
+    camera_key:
+      counts:
+      - 27
+      - 1343
+      - 10125
+      - 220
+      - 41
+      minimum_bin_count: 27
+      maximum_bin_count: 10125
+      empty_bin_count: 0
+      balanced_per_bin: 27
+      balanced_subset_size: 135
+      discarded_count: 11621
+      retention_rate: 0.011483497788363389
+    exact_full_signature:
+      counts:
+      - 1
+      - 63
+      - 526
+      - 10
+      - 2
+      minimum_bin_count: 1
+      maximum_bin_count: 526
+      empty_bin_count: 0
+      balanced_per_bin: 1
+      balanced_subset_size: 5
+      discarded_count: 597
+      retention_rate: 0.008305647840531562
+  nfy_equal_width_7:
+    variable: nfy
+    method: equal_width
+    bin_count: 7
+    edges:
+    - 1.0237486097547743
+    - 1.1049857972160217
+    - 1.1862229846772694
+    - 1.2674601721385168
+    - 1.3486973595997644
+    - 1.4299345470610119
+    - 1.5111717345222595
+    - 1.592408921983507
+    participant_counts:
+    - 14
+    - 9
+    - 56
+    - 56
+    - 29
+    - 8
+    - 10
+    camera_key:
+      counts:
+      - 27
+      - 62
+      - 3110
+      - 8254
+      - 248
+      - 14
+      - 41
+      minimum_bin_count: 14
+      maximum_bin_count: 8254
+      empty_bin_count: 0
+      balanced_per_bin: 14
+      balanced_subset_size: 98
+      discarded_count: 11658
+      retention_rate: 0.008336168764886015
+    exact_full_signature:
+      counts:
+      - 1
+      - 3
+      - 150
+      - 435
+      - 10
+      - 1
+      - 2
+      minimum_bin_count: 1
+      maximum_bin_count: 435
+      empty_bin_count: 0
+      balanced_per_bin: 1
+      balanced_subset_size: 7
+      discarded_count: 595
+      retention_rate: 0.011627906976744186
+  nfy_equal_width_10:
+    variable: nfy
+    method: equal_width
+    bin_count: 10
+    edges:
+    - 1.0237486097547743
+    - 1.0806146409776476
+    - 1.1374806722005208
+    - 1.194346703423394
+    - 1.2512127346462674
+    - 1.3080787658691406
+    - 1.3649447970920139
+    - 1.4218108283148871
+    - 1.4786768595377604
+    - 1.5355428907606337
+    - 1.592408921983507
+    participant_counts:
+    - 14
+    - 0
+    - 9
+    - 56
+    - 56
+    - 56
+    - 29
+    - 8
+    - 0
+    - 10
+    camera_key:
+      counts:
+      - 27
+      - 0
+      - 104
+      - 1239
+      - 9095
+      - 1030
+      - 192
+      - 28
+      - 0
+      - 41
+      minimum_bin_count: 0
+      maximum_bin_count: 9095
+      empty_bin_count: 2
+      balanced_per_bin: 0
+      balanced_subset_size: 0
+      discarded_count: 11756
+      retention_rate: 0.0
+    exact_full_signature:
+      counts:
+      - 1
+      - 0
+      - 4
+      - 59
+      - 470
+      - 56
+      - 8
+      - 2
+      - 0
+      - 2
+      minimum_bin_count: 0
+      maximum_bin_count: 470
+      empty_bin_count: 2
+      balanced_per_bin: 0
+      balanced_subset_size: 0
+      discarded_count: 602
+      retention_rate: 0.0
+  nfy_quantile_3:
+    variable: nfy
+    method: quantile
+    bin_count: 3
+    edges:
+    - 1.0237486097547743
+    - 1.2703924391004775
+    - 1.2889186435275608
+    - 1.592408921983507
+    participant_counts:
+    - 56
+    - 56
+    - 56
+    camera_key:
+      counts:
+      - 3910
+      - 3902
+      - 3944
+      minimum_bin_count: 3902
+      maximum_bin_count: 3944
+      empty_bin_count: 0
+      balanced_per_bin: 3902
+      balanced_subset_size: 11706
+      discarded_count: 50
+      retention_rate: 0.9957468526709765
+    exact_full_signature:
+      counts:
+      - 188
+      - 202
+      - 212
+      minimum_bin_count: 188
+      maximum_bin_count: 212
+      empty_bin_count: 0
+      balanced_per_bin: 188
+      balanced_subset_size: 564
+      discarded_count: 38
+      retention_rate: 0.9368770764119602
+  nfy_quantile_5:
+    variable: nfy
+    method: quantile
+    bin_count: 5
+    edges:
+    - 1.0237486097547743
+    - 1.2610614352756075
+    - 1.274400160047743
+    - 1.2850967407226563
+    - 1.2982153998480903
+    - 1.592408921983507
+    participant_counts:
+    - 56
+    - 56
+    - 56
+    - 56
+    - 56
+    camera_key:
+      counts:
+      - 2343
+      - 2353
+      - 2354
+      - 2354
+      - 2352
+      minimum_bin_count: 2343
+      maximum_bin_count: 2354
+      empty_bin_count: 0
+      balanced_per_bin: 2343
+      balanced_subset_size: 11715
+      discarded_count: 41
+      retention_rate: 0.9965124191902007
+    exact_full_signature:
+      counts:
+      - 109
+      - 118
+      - 123
+      - 122
+      - 130
+      minimum_bin_count: 109
+      maximum_bin_count: 130
+      empty_bin_count: 0
+      balanced_per_bin: 109
+      balanced_subset_size: 545
+      discarded_count: 57
+      retention_rate: 0.9053156146179402
+  nfy_quantile_7:
+    variable: nfy
+    method: quantile
+    bin_count: 7
+    edges:
+    - 1.0237486097547743
+    - 1.2549212137858072
+    - 1.267904069688585
+    - 1.2763092041015625
+    - 1.2833763970269096
+    - 1.2915874905056424
+    - 1.303643290201823
+    - 1.592408921983507
+    participant_counts:
+    - 56
+    - 56
+    - 56
+    - 56
+    - 56
+    - 56
+    - 56
+    camera_key:
+      counts:
+      - 1663
+      - 1660
+      - 1714
+      - 1653
+      - 1683
+      - 1686
+      - 1697
+      minimum_bin_count: 1653
+      maximum_bin_count: 1714
+      empty_bin_count: 0
+      balanced_per_bin: 1653
+      balanced_subset_size: 11571
+      discarded_count: 185
+      retention_rate: 0.9842633548826132
+    exact_full_signature:
+      counts:
+      - 78
+      - 82
+      - 85
+      - 87
+      - 81
+      - 99
+      - 90
+      minimum_bin_count: 78
+      maximum_bin_count: 99
+      empty_bin_count: 0
+      balanced_per_bin: 78
+      balanced_subset_size: 546
+      discarded_count: 56
+      retention_rate: 0.9069767441860465
+  nfy_quantile_10:
+    variable: nfy
+    method: quantile
+    bin_count: 10
+    edges:
+    - 1.0237486097547743
+    - 1.2485687255859375
+    - 1.2610614352756075
+    - 1.268670145670573
+    - 1.274400160047743
+    - 1.280202907986111
+    - 1.2850967407226563
+    - 1.2912995232476128
+    - 1.2982153998480903
+    - 1.3114986843532985
+    - 1.592408921983507
+    participant_counts:
+    - 56
+    - 56
+    - 56
+    - 56
+    - 56
+    - 56
+    - 56
+    - 56
+    - 56
+    - 56
+    camera_key:
+      counts:
+      - 1159
+      - 1184
+      - 1173
+      - 1180
+      - 1172
+      - 1182
+      - 1156
+      - 1198
+      - 1168
+      - 1184
+      minimum_bin_count: 1156
+      maximum_bin_count: 1198
+      empty_bin_count: 0
+      balanced_per_bin: 1156
+      balanced_subset_size: 11560
+      discarded_count: 196
+      retention_rate: 0.983327662470228
+    exact_full_signature:
+      counts:
+      - 54
+      - 55
+      - 59
+      - 59
+      - 65
+      - 58
+      - 58
+      - 64
+      - 71
+      - 59
+      minimum_bin_count: 54
+      maximum_bin_count: 71
+      empty_bin_count: 0
+      balanced_per_bin: 54
+      balanced_subset_size: 540
+      discarded_count: 62
+      retention_rate: 0.8970099667774086
+training_balance_assessment:
+  calibration_group_subsampling: possible for nonempty bins but may discard many signatures; equal-width 10-bin has empty
+    bins
+  bin_weighting: retains all rows but does not create independent calibrations and can preserve repeated-signature exposure
+    bias
+  required_unit: exact calibration signature, not frame or camera_key
+  implemented: false
+evaluation_balance_assessment:
+  bin_macro: descriptively possible with precommitted nonempty bins and equal bin weights
+  data_retention: all observations may be retained
+  limitations: sparse-bin uncertainty, repeated calibration, participant/calibration leakage, and changed estimand
+  confirmatory_status: not reliable under current strict-independence failure
+  adopted: false
+independence:
+  participant_count: 56
+  exact_full_signatures_shared_across_participants: 500
+  maximum_participants_per_signature: 14
+  participant_components_under_shared_signature: 1
+  participant_component_sizes:
+  - 56
+  strict_three_way_participant_and_signature_independent_split: IMPOSSIBLE
+  reason: all participants are connected by shared exact full calibration signatures
+rgb_availability:
+  all_local_media_file_count_under_gigahands: 268
+  media_file_count_under_full_hand_poses: 0
+  full_sequence_rgb_status: NOT_FOUND
+  exact_required_video_count: unknown_from_camera_metadata
+  exact_required_download_size: unknown_from_camera_metadata
+  candidate_count: 11756
+physical_camera_identity:
+  status: not_verifiable
+  confirmed_group_count: 0
+  actual_count: unknown
+  camera_identifier_and_calibration_duplicates_reported_separately: true
+decision:
+  training_balance: CONDITIONALLY_FEASIBLE_AT_CALIBRATION_LEVEL_AFTER_RGB_AVAILABILITY_CHECK
+  all_data_bin_macro_evaluation: DESCRIPTIVELY_FEASIBLE_WITH_PRECOMMITTED_BINS_AND_UNCERTAINTY
+  strict_independent_three_way_evaluation: INFEASIBLE_WITH_CURRENT_SHARED_SIGNATURE_GRAPH
+  new_split_finalized: false
+  new_bin_definition_finalized: false
+  training_runs: 0
+  inference_runs: 0
+protection:
+  source_files_preserved: true
+  existing_manifest_split_checkpoint_results_preserved: true
+  source_hash_before: 8299e9cbc66efed8afa3739a56af837d190464df53871d1899f99678d4753548
