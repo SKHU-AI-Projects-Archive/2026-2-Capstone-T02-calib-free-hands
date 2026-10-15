@@ -193,7 +193,8 @@ def summary_row(name, a, chosen, anyc, duration) -> dict:
         return {"video": name, "duration_s": duration, "verdict": "REJECT", "f_hand": None, "unc": None, "fixed": None, "joint": None, "anycalib": None,
                 "reason": a.get("failed")}
     pm = a["per_method"][chosen]
-    return {"video": name, "duration_s": duration, "verdict": pm["verdict"]["verdict"], "f_hand": pm["f"], "unc": pm["f_rel_uncertainty"],
+    edge = " (f 격자 경계)" if a["solutions"][chosen]["at_grid_edge"] else ""
+    return {"video": name, "duration_s": duration, "verdict": pm["verdict"]["verdict"] + edge, "f_hand": pm["f"], "unc": pm["f_rel_uncertainty"],
             "fixed": a["solutions"]["fixed_template"]["f"], "joint": a["solutions"]["joint_delta"]["f"],
             "anycalib": (anyc["models"][next(iter(anyc["models"]))]["summary"]["median"] if anyc else None)}
 
@@ -208,7 +209,10 @@ def report_md(path: Path, ctx: dict) -> None:
     L.append("")
     label = "신뢰 가능한 f" if v == "GOOD" else ("대략적인 f(ROUGH, 신뢰 가능한 f가 아님)" if v == "ROUGH" else "참고용 값(REJECT, 신뢰 가능한 f가 아님)")
     L.append(f"- 판정(손 방식에만 적용): **{v}**")
-    L.append(f"- f_hand ({chosen}): **{f:.1f} px** — {label}, 정규화 해상도 {ctx['W']}×{ctx['H']} 기준")
+    if a["solutions"][chosen]["at_grid_edge"]:
+        L.append(f"- f_hand ({chosen}): **{f:.1f} px = f 격자 경계** (탐색 범위 {a['grid'][0]:.0f}–{a['grid'][-1]:.0f} px) — 내부 최솟값이 없어 추정값으로 쓸 수 없음, {label}")
+    else:
+        L.append(f"- f_hand ({chosen}): **{f:.1f} px** — {label}, 정규화 해상도 {ctx['W']}×{ctx['H']} 기준")
     L.append(f"- 휴리스틱 상대 불확실도 f_rel_uncertainty: {fmt(pm['f_rel_uncertainty'], 1, True)} (보정된 신뢰구간이 아님)")
     L.append(f"- 두 방식 값: fixed_template {a['solutions']['fixed_template']['f']:.1f} px, joint_delta {a['solutions']['joint_delta']['f']:.1f} px "
              f"(δ {a['solutions']['joint_delta']['delta_deg']:.1f}°, φ {a['solutions']['joint_delta']['phi_deg']:.0f}°); 정면 가정 민감도 {fmt(a['method_diff_rel'], 1, True)}")
@@ -219,7 +223,7 @@ def report_md(path: Path, ctx: dict) -> None:
                      f"p10–p90 {s['p10_p90'][0]:.1f}–{s['p10_p90'][1]:.1f}, 정면 {fmt(s['front_median'])} / 기울기 {fmt(s['tilt_median'])}, CV {fmt(s['cv'], 1, True)}")
     else:
         L.append("- AnyCalib: 실행하지 않음")
-    if ctx.get("expected"):
+    if ctx.get("expected") and not a["solutions"][chosen]["at_grid_edge"]:
         e = ctx["expected"]
         L.append(f"- 합성 기준 예상 오차({e['condition']}, 정면 지터 {fmt(e['front_jitter_rel_condition'], 2, True)} vs 영상 {fmt(e['front_jitter_rel_video'], 2, True)}): "
                  f"중앙값 {fmt(e['median_abs'], 1, True)}, p90 {fmt(e['p90_abs'], 1, True)} — {e['note']}")
@@ -234,11 +238,11 @@ def report_md(path: Path, ctx: dict) -> None:
     met = pm["metrics"]
     L.append("| 항목 | 값 | GOOD 통과 | ROUGH 통과 |")
     L.append("|---|---|---|---|")
-    keys = [("detect_rate", "검출률", lambda x: fmt(x, 3)), ("front_frames", "정면 프레임 수", str), ("finger_extension_ok", "손가락 펴짐", str),
+    keys = [("detect_rate", "검출률", lambda x: fmt(x, 3)), ("front_frames", "정면 프레임 수", str), ("finger_extension", "손가락 펴짐", str),
             ("theta_p90", "θ2d p90 (°)", fmt), ("axis_bins", "축 구간(6) 커버", None), ("reproj_rms", "재투영 RMS / 박스", None),
             ("jointset_range", "관절 집합 범위", lambda x: fmt(x, 1, True)), ("bootstrap", "부트스트랩 상대 표준편차", None),
             ("consistency", "일관성 범위", None), ("delta", "|δ| (°)", None), ("sharpness", "프로파일 선명도", None)]
-    vals = {"detect_rate": met["detect_rate"], "front_frames": met["front_frames"], "finger_extension_ok": met["finger_extension_ok"],
+    vals = {"detect_rate": met["detect_rate"], "front_frames": met["front_frames"], "finger_extension": met["finger_extension_ok"],
             "theta_p90": met["theta_p90"], "axis_bins": met["axis_bins6"], "reproj_rms": fmt(met["reproj_rms_rel"], 2, True),
             "jointset_range": met["jointset_range"], "bootstrap": fmt(met["bootstrap_rel_std"], 2, True), "consistency": fmt(met["consistency_range"], 1, True),
             "delta": fmt(abs(met["delta_deg"])), "sharpness": fmt(met["sharpness"], 2)}

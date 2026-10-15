@@ -1,0 +1,40 @@
+# PROPOSED thresholds for experiment 14 - NOT applied. The official runs use the verdict block of 14_hand_template_focal.yaml
+# (fixed 2026-10-15 before the first run). Basis: synthetic study runs/14_hand_template_focal/20261015T035323Z_synthetic
+# (21 conditions x 30 reps, f 1650 px, 1920x1080). Adopting any of these needs a separate decision and a new run.
+basis_study: runs/14_hand_template_focal/20261015T035323Z_synthetic/study.json
+verdict:
+  good:
+    front_frames_min:
+      current: 15
+      proposed: 12
+      reason: >-
+        A 1.0 s front window at detect_fps 15 has exactly 15 frames, so GOOD needs every frame of the window detected with all 17
+        joints visible. The synthetic study used 10 front frames and failed this check in 30/30 reps of every condition; with 30 front
+        frames (front30) GOOD was reached in 10-12/30 reps. 12 leaves room for 3 dropped frames.
+    jointset_range_max:
+      current: 0.04
+      proposed: 0.08
+      reason: >-
+        The palm5 set (5 points) is far noisier than palm_proximal9 / flat17. The median range was 3.5% already in the base condition
+        (1 px noise, median |f error| 0.19%) and 6.2% with 30 front frames (|error| 0.28%), so 0.04 rejects geometrically good cases.
+        With a 3 mm palm arch the range was 89% while the f error was 1.2%: the range mostly measures palm5 sensitivity to non-planarity.
+        A further option (method change, not a threshold) is to compute the range over palm_proximal9 and flat17 only.
+    sharpness_min:
+      current: 1.3
+      proposed: 1.15
+      reason: >-
+        Median sharpness 1.25 at 3 px noise (|error| 0.92%) and 1.13-1.23 for bias 1% / arch 6 mm / noise 0.5% (|error| 1.2-2.0%) fail
+        1.3, while noise 1% of the box (|error| 3.3%) gives 1.03. 1.15 separates these better.
+  rough:
+    jointset_range_max:
+      current: 0.12
+      proposed: 0.25
+      reason: >-
+        Same palm5 effect: arch 3 mm (|error| 1.2%) and bias 1% (1.3%) have ranges 13-89%, so ROUGH rejects them on this item alone.
+        Noise of 1% of the box (|error| 3.3%) gives 28%.
+unchanged_with_reason:
+  reproj_rms_rel_max_good: "0.010 kept: noise 0.5% box -> 0.68% RMS (|error| 1.25%), noise 1% box -> 1.34% RMS (|error| 3.3%); it separates them."
+  bootstrap_rel_std_max_good: "0.03 kept. Note: when f is pinned to a grid edge the bootstrap and consistency spreads are 0 and pass trivially."
+regression_check:
+  - "base / fixed_template median |error| 0.19% vs expected 0.4-0.8% (+-): below the expected range (better than expected)."
+  - "delta15 / fixed_template 11.1% vs expected 8-10% (+-2 %p): inside the tolerance band."

@@ -171,7 +171,7 @@ def process_video(video: Path, cfg: dict, cfg_text: str, cfg_path: str, out_root
             for r_ in a["reason"]:
                 if r_:
                     removed[r_] = removed.get(r_, 0) + 1
-            res.update({"verdict": pm["verdict"]["verdict"], "f_hand_px": pm["f"], "f_rel_uncertainty": pm["f_rel_uncertainty"],
+            res.update({"verdict": pm["verdict"]["verdict"], "f_hand_px": pm["f"], "f_hand_at_grid_edge": a["solutions"][estimator]["at_grid_edge"], "f_rel_uncertainty": pm["f_rel_uncertainty"],
                         "f_fixed_template_px": a["solutions"]["fixed_template"]["f"], "f_joint_delta_px": a["solutions"]["joint_delta"]["f"],
                         "frontal_assumption_sensitivity": a["method_diff_rel"], "derived": dv, "expected_error_synthetic": expected,
                         "removed_frames": removed, "analysis": a, "anycalib": anyc})
@@ -183,12 +183,15 @@ def process_video(video: Path, cfg: dict, cfg_text: str, cfg_path: str, out_root
             RP.per_frame_csv(out / "per_frame.csv", frames, tr, a, estimator, anyc)
             res["figures"] = RP.figures(out, a, times, estimator, anyc)
             log(f"  f_hand ({estimator}) {pm['f']:.1f} px, 판정 {pm['verdict']['verdict']}, 휴리스틱 상대 불확실도 {100 * pm['f_rel_uncertainty']:.1f}%")
+            for m_ in A.METHODS:
+                if a["solutions"][m_]["at_grid_edge"]:
+                    log(f"  경고: {m_} 값은 f 격자 경계({a['solutions'][m_]['f']:.0f} px)입니다(내부 최솟값 없음)")
             log(f"  두 방식: fixed_template {res['f_fixed_template_px']:.1f} px, joint_delta {res['f_joint_delta_px']:.1f} px")
             if pm["verdict"]["verdict"] != "GOOD":
                 for x in pm["advice"]:
                     log(f"  안내: {x}")
         RP.write_json(out / "results.json", res)
-        small = {k: res.get(k) for k in ("video", "estimator", "verdict", "f_hand_px", "f_rel_uncertainty", "f_fixed_template_px", "f_joint_delta_px",
+        small = {k: res.get(k) for k in ("video", "estimator", "verdict", "f_hand_px", "f_hand_at_grid_edge", "f_rel_uncertainty", "f_fixed_template_px", "f_joint_delta_px",
                                          "frontal_assumption_sensitivity")}
         if anyc:
             small["anycalib_median_px"] = {m: d["summary"]["median"] for m, d in anyc["models"].items()}

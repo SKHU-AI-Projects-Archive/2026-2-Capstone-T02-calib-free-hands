@@ -127,6 +127,11 @@ def analyze(kp, mask, present, box, cls, times, size_wh, cfg, front_idx=None, ti
     t0 = time.time()
     sols = {m: E.run(pb, m, grid, ecfg, sigma2) for m in METHODS}
     timings["estimate_s"] = time.time() - t0
+    for m in METHODS:
+        if sols[m]["at_grid_edge"]:
+            edge_side = "상한" if sols[m]["f"] >= grid[-1] * (1 - 1e-6) else "하한"
+            warnings.append(f"{m}: 비용 최소가 f 격자 {edge_side}({sols[m]['f']:.0f} px)에 걸려 내부 최솟값이 없습니다. 이 값은 추정값이 아니라 격자 경계이며, "
+                            "부트스트랩·일관성 값도 경계에 고정되어 변동이 0으로 보일 수 있습니다")
 
     # ---- per-frame bookkeeping
     role = np.array(["none"] * n, dtype=object)
