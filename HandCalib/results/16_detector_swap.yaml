@@ -1,0 +1,72 @@
+experiment: 16_detector_swap
+date: '2026-10-15'
+code_commit: 19c8d57
+code_14: fe93a1c
+run: runs/16_detector_swap/20261015T052008Z
+note: f 값끼리·외부 값과의 비교 수치 없음. 경계에 붙은 f는 '값 없음'. 이 f는 핀홀·주점 중심·왜곡 없음 가정에서 2D 키포인트만으로
+  얻은 추정값이며 정답 데이터와 비교하지 않았다.
+videos:
+  IMG_7141.MOV:
+    wilor_yolo:
+      f_fixed_template_px: null
+      f_fixed_template_status: 값 없음 (상한)
+      f_joint_delta_px: null
+      f_joint_delta_status: 값 없음 (상한)
+      f_rel_uncertainty: null
+      verdict: REJECT
+      interior_minimum_flat17_official: false
+      profile_sharpness_flat17: 1.075
+    mediapipe_hands:
+      f_fixed_template_px: null
+      f_fixed_template_status: 값 없음 (상한)
+      f_joint_delta_px: null
+      f_joint_delta_status: 값 없음 (상한)
+      f_rel_uncertainty: null
+      verdict: REJECT
+      interior_minimum_flat17_official: false
+      profile_sharpness_flat17: 1.0389
+    rtmpose_hand:
+      f_fixed_template_px: 2931.2
+      f_fixed_template_status: value
+      f_joint_delta_px: 2571.1
+      f_joint_delta_status: value
+      f_rel_uncertainty: 0.7152
+      verdict: REJECT
+      interior_minimum_flat17_official: true
+      profile_sharpness_flat17: 1.0103
+    anycalib_median_px:
+      anycalib_pinhole: 1773.2
+      anycalib_gen: 1634.1
+    anycalib_reused_from_14: true
+  IMG_7142.MOV:
+    wilor_yolo:
+      f_fixed_template_px: null
+      f_fixed_template_status: 값 없음 (상한)
+      f_joint_delta_px: null
+      f_joint_delta_status: 값 없음 (상한)
+      f_rel_uncertainty: null
+      verdict: REJECT
+      interior_minimum_flat17_official: false
+      profile_sharpness_flat17: 1.0117
+    mediapipe_hands:
+      f_fixed_template_px: null
+      f_fixed_template_status: 값 없음 (상한)
+      f_joint_delta_px: null
+      f_joint_delta_status: 값 없음 (상한)
+      f_rel_uncertainty: null
+      verdict: REJECT
+      interior_minimum_flat17_official: false
+      profile_sharpness_flat17: 1.005
+    rtmpose_hand:
+      f_fixed_template_px: null
+      f_fixed_template_status: 값 없음 (상한)
+      f_joint_delta_px: null
+      f_joint_delta_status: 값 없음 (상한)
+      f_rel_uncertainty: null
+      verdict: REJECT
+      interior_minimum_flat17_official: false
+      profile_sharpness_flat17: 1.0068
+    anycalib_median_px:
+      anycalib_pinhole: 2296.5
+      anycalib_gen: 2201.1
+    anycalib_reused_from_14: true
