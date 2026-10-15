@@ -1,0 +1,263 @@
+experiment: 14_hand_template_focal
+date: '2026-10-15'
+code_commits:
+  synthetic_study: d26bd28
+  estimate_runs: ba8f5d7
+  note: ba8f5d7 changes reporting only (grid-edge warning, finger-extension row);
+    estimation, verdict and synthetic code unchanged
+config: configs/14_hand_template_focal.yaml (verdict thresholds unchanged; proposals
+  in configs/14_hand_template_focal_proposed_thresholds.yaml, not applied)
+synthetic_study:
+  run: runs/14_hand_template_focal/20261015T035323Z_synthetic
+  conditions: 21
+  reps: 30
+  elapsed_min: 10.3
+  estimator_default: fixed_template
+  adopt_joint_delta: false
+  median_abs_error:
+    base:
+      fixed_template: 0.0019
+      joint_delta: 0.0023
+    delta5:
+      fixed_template: 0.0267
+      joint_delta: 0.0265
+    delta10:
+      fixed_template: 0.0565
+      joint_delta: 0.0636
+    delta15:
+      fixed_template: 0.111
+      joint_delta: 0.0809
+    noise_px3:
+      fixed_template: 0.0092
+      joint_delta: 0.0095
+    noise_rel0.5:
+      fixed_template: 0.0125
+      joint_delta: 0.0093
+    noise_rel1:
+      fixed_template: 0.0329
+      joint_delta: 0.0171
+    noise_rel2:
+      fixed_template: 0.0925
+      joint_delta: 0.0605
+    noise_rel4:
+      fixed_template: 0.2239
+      joint_delta: 0.2236
+    noise_rel6:
+      fixed_template: 0.3187
+      joint_delta: 0.3154
+    heavy_tail:
+      fixed_template: 0.0038
+      joint_delta: 0.0043
+    tilt10_25:
+      fixed_template: 0.0099
+      joint_delta: 0.0093
+    arch3:
+      fixed_template: 0.0116
+      joint_delta: 0.0137
+    arch6:
+      fixed_template: 0.0204
+      joint_delta: 0.0254
+    bias1:
+      fixed_template: 0.0129
+      joint_delta: 0.0126
+    bias3:
+      fixed_template: 0.0766
+      joint_delta: 0.0661
+    front30:
+      fixed_template: 0.0028
+      joint_delta: 0.0027
+    delta5_rel2:
+      fixed_template: 0.0835
+      joint_delta: 0.0738
+    delta10_rel2:
+      fixed_template: 0.1195
+      joint_delta: 0.0869
+    rel2_tilt10_25:
+      fixed_template: 0.5629
+      joint_delta: 0.5615
+    realistic:
+      fixed_template: 0.1486
+      joint_delta: 0.1372
+  p90_abs_error:
+    base:
+      fixed_template: 0.0089
+      joint_delta: 0.009
+    delta5:
+      fixed_template: 0.0571
+      joint_delta: 0.0723
+    delta10:
+      fixed_template: 0.1285
+      joint_delta: 0.144
+    delta15:
+      fixed_template: 0.2252
+      joint_delta: 0.2709
+    noise_px3:
+      fixed_template: 0.0186
+      joint_delta: 0.0227
+    noise_rel0.5:
+      fixed_template: 0.034
+      joint_delta: 0.0282
+    noise_rel1:
+      fixed_template: 0.0669
+      joint_delta: 0.0501
+    noise_rel2:
+      fixed_template: 0.1574
+      joint_delta: 0.1217
+    noise_rel4:
+      fixed_template: 0.4685
+      joint_delta: 0.4679
+    noise_rel6:
+      fixed_template: 0.5474
+      joint_delta: 0.5884
+    heavy_tail:
+      fixed_template: 0.009
+      joint_delta: 0.0089
+    tilt10_25:
+      fixed_template: 0.0277
+      joint_delta: 0.0273
+    arch3:
+      fixed_template: 0.0171
+      joint_delta: 0.0211
+    arch6:
+      fixed_template: 0.0402
+      joint_delta: 0.0429
+    bias1:
+      fixed_template: 0.0446
+      joint_delta: 0.0508
+    bias3:
+      fixed_template: 0.1673
+      joint_delta: 0.165
+    front30:
+      fixed_template: 0.007
+      joint_delta: 0.0058
+    delta5_rel2:
+      fixed_template: 0.1708
+      joint_delta: 0.1641
+    delta10_rel2:
+      fixed_template: 0.2349
+      joint_delta: 0.215
+    rel2_tilt10_25:
+      fixed_template: 0.8288
+      joint_delta: 0.787
+    realistic:
+      fixed_template: 0.2407
+      joint_delta: 0.2231
+  regression:
+  - cond: base
+    median_abs: 0.0019
+    expected:
+    - 0.004
+    - 0.012
+    within: false
+  - cond: noise_px3
+    median_abs: 0.0092
+    expected:
+    - 0.004
+    - 0.012
+    within: true
+  - cond: delta5
+    median_abs: 0.0267
+    expected:
+    - 0.01
+    - 0.05
+    within: true
+  - cond: delta10
+    median_abs: 0.0565
+    expected:
+    - 0.03
+    - 0.1
+    within: true
+  - cond: delta15
+    median_abs: 0.111
+    expected:
+    - 0.06
+    - 0.12
+    within: true
+videos:
+  IMG_7141.MOV:
+    fixed_template:
+      run: runs/14_hand_template_focal/20261015T041034Z_fixed_template/IMG_7141
+      verdict: REJECT
+      f_hand_px: 3072.0
+      f_hand_at_grid_edge: true
+      f_grid_px:
+      - 672.0
+      - 3072.0
+      f_rel_uncertainty_heuristic: 0.3421
+      f_fixed_template_px: 3072.0
+      f_joint_delta_px: 3072.0
+      joint_delta_delta_deg: 15.5
+      jointset_f_px:
+        palm5: 970.1
+        palm_proximal9: 3072.0
+        flat17: 3072.0
+      failed_good:
+      - axis_bins
+      - reproj_rms
+      - jointset_range
+      - sharpness
+      failed_rough:
+      - jointset_range
+      detect_rate: 0.946
+      theta2d_tilt_p90_deg: 71.4
+      axis_bins6: 4
+      reproj_rms_rel: 0.0122
+      box_long_median_px: 1079.6
+      edge_frame_rate: 1.0
+      anycalib_median_px:
+        anycalib_pinhole: 1773.2
+        anycalib_gen: 1634.1
+      timings_s:
+        normalize_s: 26.2
+        frames_s: 10.5
+        detect_s: 0.0
+        analysis_s: 52.1
+        anycalib_s: 48.3
+        total_s: 137.2
+    joint_delta:
+      run: runs/14_hand_template_focal/20261015T041301Z_joint_delta/IMG_7141
+      verdict: REJECT
+      f_hand_px: 3072.0
+      f_hand_at_grid_edge: true
+      f_grid_px:
+      - 672.0
+      - 3072.0
+      f_rel_uncertainty_heuristic: 0.3439
+      f_fixed_template_px: 3072.0
+      f_joint_delta_px: 3072.0
+      joint_delta_delta_deg: 15.5
+      jointset_f_px:
+        palm5: 959.3
+        palm_proximal9: 3072.0
+        flat17: 3072.0
+      failed_good:
+      - axis_bins
+      - reproj_rms
+      - jointset_range
+      - delta
+      - sharpness
+      failed_rough:
+      - jointset_range
+      detect_rate: 0.946
+      theta2d_tilt_p90_deg: 71.4
+      axis_bins6: 4
+      reproj_rms_rel: 0.012
+      box_long_median_px: 1079.6
+      edge_frame_rate: 1.0
+      anycalib_median_px:
+        anycalib_pinhole: 1773.2
+        anycalib_gen: 1634.1
+      timings_s:
+        normalize_s: 27.9
+        frames_s: 10.6
+        detect_s: 0.0
+        analysis_s: 83.5
+        anycalib_s: 48.3
+        total_s: 170.4
+superseded_runs:
+- runs/14_hand_template_focal/20261015T040359Z_fixed_template (report labeling bug;
+  same numbers)
+notes:
+- 이 f는 핀홀·주점 중심·왜곡 없음 가정에서 손 2D 키포인트만으로 얻은 추정값이며 정답 데이터와 비교하지 않았다.
+- 'IMG_7141: 비용이 f 증가에 따라 단조 감소해 격자 상한에 걸림 - 손 방식의 f 추정값 없음(REJECT).'
+- AnyCalib 값은 별도 보고이며 손 방식의 입력·초기값·판정에 쓰지 않았다. f 값끼리의 비교 수치는 만들지 않았다.
