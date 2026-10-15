@@ -254,6 +254,88 @@ videos:
         analysis_s: 83.5
         anycalib_s: 48.3
         total_s: 170.4
+  IMG_7142.MOV:
+    fixed_template:
+      run: runs/14_hand_template_focal/20261015T042407Z_fixed_template/IMG_7142
+      verdict: REJECT
+      f_hand_px: 3072.0
+      f_hand_at_grid_edge: true
+      f_grid_px:
+      - 672.0
+      - 3072.0
+      f_rel_uncertainty_heuristic: 0.3832
+      f_fixed_template_px: 3072.0
+      f_joint_delta_px: 3072.0
+      joint_delta_delta_deg: 18.8
+      jointset_f_px:
+        palm5: 717.6
+        palm_proximal9: 3072.0
+        flat17: 3072.0
+      failed_good:
+      - detect_rate
+      - reproj_rms
+      - jointset_range
+      - sharpness
+      failed_rough:
+      - reproj_rms
+      - jointset_range
+      detect_rate: 0.878
+      theta2d_tilt_p90_deg: 66.4
+      axis_bins6: 6
+      reproj_rms_rel: 0.0272
+      box_long_median_px: 896.3
+      edge_frame_rate: 0.442
+      anycalib_median_px:
+        anycalib_pinhole: 2296.5
+        anycalib_gen: 2201.1
+      timings_s:
+        normalize_s: 15.1
+        frames_s: 7.0
+        detect_s: 7.9
+        analysis_s: 23.3
+        anycalib_s: 36.2
+        total_s: 89.5
+    joint_delta:
+      run: runs/14_hand_template_focal/20261015T042539Z_joint_delta/IMG_7142
+      verdict: REJECT
+      f_hand_px: 3072.0
+      f_hand_at_grid_edge: true
+      f_grid_px:
+      - 672.0
+      - 3072.0
+      f_rel_uncertainty_heuristic: 0.3873
+      f_fixed_template_px: 3072.0
+      f_joint_delta_px: 3072.0
+      joint_delta_delta_deg: 18.8
+      jointset_f_px:
+        palm5: 692.4
+        palm_proximal9: 3072.0
+        flat17: 3072.0
+      failed_good:
+      - detect_rate
+      - reproj_rms
+      - jointset_range
+      - delta
+      - sharpness
+      failed_rough:
+      - reproj_rms
+      - jointset_range
+      detect_rate: 0.878
+      theta2d_tilt_p90_deg: 66.4
+      axis_bins6: 6
+      reproj_rms_rel: 0.027
+      box_long_median_px: 896.3
+      edge_frame_rate: 0.442
+      anycalib_median_px:
+        anycalib_pinhole: 2296.5
+        anycalib_gen: 2201.1
+      timings_s:
+        normalize_s: 17.7
+        frames_s: 6.9
+        detect_s: 0.0
+        analysis_s: 36.9
+        anycalib_s: 36.3
+        total_s: 97.8
 superseded_runs:
 - runs/14_hand_template_focal/20261015T040359Z_fixed_template (report labeling bug;
   same numbers)
@@ -261,3 +343,4 @@ notes:
 - 이 f는 핀홀·주점 중심·왜곡 없음 가정에서 손 2D 키포인트만으로 얻은 추정값이며 정답 데이터와 비교하지 않았다.
 - 'IMG_7141: 비용이 f 증가에 따라 단조 감소해 격자 상한에 걸림 - 손 방식의 f 추정값 없음(REJECT).'
 - AnyCalib 값은 별도 보고이며 손 방식의 입력·초기값·판정에 쓰지 않았다. f 값끼리의 비교 수치는 만들지 않았다.
+- 'IMG_7142(세로 1080x1920): 비용이 f 증가에 따라 단조 감소해 격자 상한에 걸림 - 손 방식의 f 추정값 없음(REJECT).'
