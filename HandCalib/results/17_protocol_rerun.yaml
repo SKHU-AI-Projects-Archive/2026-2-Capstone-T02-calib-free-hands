@@ -1,0 +1,163 @@
+experiment: 17_protocol_rerun
+run: runs/17_protocol_rerun/20261016T053345Z
+code_commit: 8b8f9ab
+git_dirty_at_run: false
+note: 이 f는 핀홀·주점 중심·왜곡 없음 가정에서 2D 키포인트만으로 얻은 추정값이며 정답 데이터와 비교하지 않았다. f 값끼리·외부 값과의
+  비교 수치 없음. 내부 품질 순위이며 정답 f와의 정확도를 뜻하지 않는다.
+videos:
+  IMG_7141.MOV:
+    previous_video: true
+    guide_satisfied: false
+    guide_reasons:
+    - 손 박스/짧은 변 1.00 > 0.5
+    - 가장자리 접촉 100% > 5%
+    - 자동 전환 0.40 s < 2.5 s
+    - θ2d p95 77° > 45°
+    - 축 덮임 4/6 < 5/6
+    detectors:
+      wilor_yolo:
+        f_fixed_template_px: null
+        f_status: 값 없음 (상한)
+        f_joint_delta_px: null
+        f_rel_uncertainty: null
+        verdict: REJECT
+        sharpness_flat17: 1.075
+        quality_rank: 2.0
+      mediapipe_hands:
+        f_fixed_template_px: null
+        f_status: 값 없음 (상한)
+        f_joint_delta_px: null
+        f_rel_uncertainty: null
+        verdict: REJECT
+        sharpness_flat17: 1.0389
+        quality_rank: 3.0
+      rtmpose_hand:
+        f_fixed_template_px: 2931.2
+        f_status: value
+        f_joint_delta_px: 2571.1
+        f_rel_uncertainty: 0.7152
+        verdict: REJECT
+        sharpness_flat17: 1.0103
+        quality_rank: 1.0
+    anycalib_median_px:
+      anycalib_pinhole: 1773.2
+      anycalib_gen: 1634.1
+  IMG_7142.MOV:
+    previous_video: true
+    guide_satisfied: false
+    guide_reasons:
+    - 손 박스/짧은 변 0.83 > 0.5
+    - 가장자리 접촉 44% > 5%
+    - 자동 전환 0.00 s < 2.5 s
+    - θ2d p95 67° > 45°
+    - 기울기 구간 θ2d 중앙값 41°가 20–40° 밖
+    detectors:
+      wilor_yolo:
+        f_fixed_template_px: null
+        f_status: 값 없음 (상한)
+        f_joint_delta_px: null
+        f_rel_uncertainty: null
+        verdict: REJECT
+        sharpness_flat17: 1.0117
+        quality_rank: 1.0
+      mediapipe_hands:
+        f_fixed_template_px: null
+        f_status: 값 없음 (상한)
+        f_joint_delta_px: null
+        f_rel_uncertainty: null
+        verdict: REJECT
+        sharpness_flat17: 1.005
+        quality_rank: 3.0
+      rtmpose_hand:
+        f_fixed_template_px: null
+        f_status: 값 없음 (상한)
+        f_joint_delta_px: null
+        f_rel_uncertainty: null
+        verdict: REJECT
+        sharpness_flat17: 1.0068
+        quality_rank: 2.0
+    anycalib_median_px:
+      anycalib_pinhole: 2296.5
+      anycalib_gen: 2201.1
+  IMG_7145.MOV:
+    previous_video: false
+    guide_satisfied: false
+    guide_reasons:
+    - 손 박스/짧은 변 0.65 > 0.5
+    - 자동 전환 0.00 s < 2.5 s
+    - θ2d p95 53° > 45°
+    - 기울기 구간 θ2d 중앙값 18°가 20–40° 밖
+    detectors:
+      wilor_yolo:
+        f_fixed_template_px: 2468.4
+        f_status: value
+        f_joint_delta_px: null
+        f_rel_uncertainty: 0.3879
+        verdict: REJECT
+        sharpness_flat17: 1.0035
+        quality_rank: 1.0
+      mediapipe_hands:
+        f_fixed_template_px: null
+        f_status: 값 없음 (상한)
+        f_joint_delta_px: null
+        f_rel_uncertainty: null
+        verdict: REJECT
+        sharpness_flat17: 1.0032
+        quality_rank: 3.0
+      rtmpose_hand:
+        f_fixed_template_px: null
+        f_status: 값 없음 (하한)
+        f_joint_delta_px: null
+        f_rel_uncertainty: null
+        verdict: REJECT
+        sharpness_flat17: 1.0701
+        quality_rank: 2.0
+    anycalib_median_px:
+      anycalib_pinhole: 2069.1
+      anycalib_gen: 2011.3
+ranking_summary:
+  mediapipe_hands:
+    mean_rank_guide: null
+    n_guide_videos: 0
+    verdict_counts:
+      GOOD: 0
+      ROUGH: 0
+      REJECT: 3
+    n_edge: 3
+    n_failed: 0
+    category_counts:
+      GOOD: 0
+      ROUGH: 0
+      REJECT: 0
+      EDGE: 3
+      FAILED: 0
+  rtmpose_hand:
+    mean_rank_guide: null
+    n_guide_videos: 0
+    verdict_counts:
+      GOOD: 0
+      ROUGH: 0
+      REJECT: 3
+    n_edge: 2
+    n_failed: 0
+    category_counts:
+      GOOD: 0
+      ROUGH: 0
+      REJECT: 1
+      EDGE: 2
+      FAILED: 0
+  wilor_yolo:
+    mean_rank_guide: null
+    n_guide_videos: 0
+    verdict_counts:
+      GOOD: 0
+      ROUGH: 0
+      REJECT: 3
+    n_edge: 2
+    n_failed: 0
+    category_counts:
+      GOOD: 0
+      ROUGH: 0
+      REJECT: 1
+      EDGE: 2
+      FAILED: 0
