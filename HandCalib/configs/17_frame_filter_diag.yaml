@@ -1,0 +1,28 @@
+experiment:
+  name: 17_frame_filter_diag
+  seed: 42
+
+# Diagnostic (not pre-registered as an official estimator): the 17 pipeline with a frame filter on the tilt phase.
+# Rule fixed 2026-10-16 before the run, from the shooting guide's own thresholds (independent of any reference f):
+#   tilt-phase frames are kept only if theta2d <= theta_max_deg and the hand box does not touch the image border (2 px);
+#   the front window / template and every pipeline setting and verdict threshold stay as in 17.
+filter:
+  theta_max_deg: 45.0
+  exclude_edge: true
+  edge_margin_px: 2.0
+  verdict_detect_rate: original     # detection rate in the verdict = the tracker's own rate (filtered frames are not "missed")
+
+pipeline_config: configs/17_protocol_rerun.yaml   # pipeline, detector conf_min, verdict thresholds (read only)
+sources:                                         # 17 official runs (detections and frame lists reused; nothing re-detected)
+  IMG_7141.MOV: runs/17_protocol_rerun/20261016T053345Z/IMG_7141
+  IMG_7142.MOV: runs/17_protocol_rerun/20261016T053345Z/IMG_7142
+  IMG_7145.MOV: runs/17_protocol_rerun/20261016T053345Z/IMG_7145
+  IMG_7147.MOV: runs/17_protocol_rerun/20261016T064014Z/IMG_7147
+detectors: [wilor_yolo, mediapipe_hands, rtmpose_hand]
+
+# User-provided checkerboard calibration (1080p video, same lens and settings for every video), used ONLY for the comparison
+# table of this diagnostic; never an input to the estimation or the verdict.
+reference_f_px: 1680.0
+
+output:
+  root: runs/17_protocol_rerun
