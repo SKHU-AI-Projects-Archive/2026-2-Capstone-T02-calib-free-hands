@@ -1,0 +1,268 @@
+experiment:
+  name: 17_protocol_rerun
+  seed: 42
+
+# 16's pipeline and detectors (code of branch exp/16-detector-swap, commit below), on videos shot by the protocol.
+detectors: [wilor_yolo, mediapipe_hands, rtmpose_hand]      # any subset
+videos: []                                                  # empty = every video in input_dir
+previous_videos: [IMG_7141.MOV, IMG_7142.MOV]               # processed in 14 / 16; marked "이전 영상"
+
+input_dir: /home/juson/data/hand_focal_videos
+video_extensions: [.mov, .mp4, .m4v, .mkv, .avi]
+
+code_16: {branch: exp/16-detector-swap, commit: 7479f77}
+
+# Shooting-condition check (fixed 2026-10-16 before the first run). Computed on the reference detector, reported for every detector.
+conditions:
+  reference_detector: wilor_yolo
+  box_short_ratio_max: 0.5              # median hand-box long side / image short side
+  edge_rate_max: 0.05                   # frames whose box touches the image border (within 2 px), among detected frames
+  transition_min_s: 2.5                 # 14's automatic front -> tilt transition (theta2d >= 10 deg for 0.5 s); none = fail
+  theta_p95_max_deg: 45.0               # theta2d p95 over the tilt phase
+  theta_tilt_median_range_deg: [20.0, 40.0]
+  axis_bins_min: 5                      # of 6 (14's axis_coverage: theta2d >= 10 deg, >= 2 frames per 30-deg bin)
+  finger_extension_min: 0.9             # front window (14's finger_extension min)
+
+# Detector quality ranking per video (fixed 2026-10-16 before the first run). Internal indicators only, not accuracy.
+ranking:
+  category_order: [GOOD, ROUGH, REJECT, EDGE, FAILED]   # EDGE: fixed_template f on the grid edge (below REJECT); FAILED: no analysis
+  keys:                                 # applied in order after the category
+    - {name: sharpness, source: profiles.flat17.official.sharpness, better: higher}
+    - {name: f_rel_uncertainty, better: lower}         # not computable (edge) = worst
+    - {name: reproj_rms_rel, better: lower}
+    - {name: detect_rate, better: higher}
+  ties: average                         # exactly equal keys share the mean of their positions
+  mean_over: guide_satisfied            # mean rank over the videos that satisfy every condition
+
+reuse_14:                               # read only: 14's frame lists, YOLO detection cache and AnyCalib values for the previous videos
+  official:
+    IMG_7141.MOV: runs/14_hand_template_focal/20261015T041034Z_fixed_template/IMG_7141
+    IMG_7142.MOV: runs/14_hand_template_focal/20261015T042407Z_fixed_template/IMG_7142
+  detection_cache: runs/14_hand_template_focal/detection_cache
+  synthetic_study: runs/14_hand_template_focal/20261015T035323Z_synthetic/study.json
+  reuse_anycalib: true
+
+detector_settings:
+  wilor_yolo:
+    model: WiLoR hand detector (YOLO pose, detector.pt)
+    weights: /home/juson/models/wilor_original/detector.pt
+    python: /home/juson/project/MonoDETR/.venv/bin/python
+    device: '0'
+    conf: 0.3
+    iou: 0.3
+    imgsz: null
+    conf_min: 0.5
+    remap: null
+    license: WiLoR repository license (not re-checked here)
+    training_labels: 확인 불가
+  mediapipe_hands:
+    model: MediaPipe Hand Landmarker (hand_landmarker.task float16/1)
+    package: mediapipe==0.10.21
+    weights: /home/juson/models/mediapipe/hand_landmarker.task
+    weights_url: https://storage.googleapis.com/mediapipe-models/hand_landmarker/hand_landmarker/float16/1/hand_landmarker.task
+    python: /home/juson/venvs/det_mediapipe/bin/python
+    device: cpu
+    num_hands: 2
+    min_hand_detection_confidence: 0.5
+    min_hand_presence_confidence: 0.5
+    box_margin: 0.1
+    conf_min: 0.5
+    remap: null
+    license: Apache-2.0
+    training_labels: 실제 영상 약 3만 장에 사람이 21점 주석 + 합성 렌더 손의 GT 3D 관절 투영 (arXiv:2006.10214 §3)
+  rtmpose_hand:
+    model: RTMPose-m Hand5 (rtmpose-m_simcc-hand5_pt-aic-coco_210e-256x256-74fb594_20230320, ONNX)
+    package: rtmlib==0.0.16, onnxruntime==1.20.1
+    weights: /home/juson/models/rtmpose/rtmpose-m_hand5/20230831/rtmpose_onnx/rtmpose-m_simcc-hand5_pt-aic-coco_210e-256x256-74fb594_20230320/end2end.onnx
+    weights_url: https://download.openmmlab.com/mmpose/v1/projects/rtmposev1/onnx_sdk/rtmpose-m_simcc-hand5_pt-aic-coco_210e-256x256-74fb594_20230320.zip
+    python: /home/juson/venvs/det_rtmpose/bin/python
+    device: cpu
+    input_size:
+    - 256
+    - 256
+    box_source: wilor_yolo
+    box_scale: 1.25
+    conf_min: 0.3
+    remap: null
+    license: Apache-2.0
+    training_labels: Hand5 = COCO-WholeBody-Hand, OneHand10K, FreiHAND2d, RHD2d, Halpe (MMPose 문서). 데이터셋별 라벨 생성 방식은 문서로 재확인하지 못함
+  sapiens:
+    enabled: false
+
+# ---- pipeline: the same values as 16 (= 14)
+pipeline:
+  experiment:
+    name: 17_protocol_rerun
+    seed: 42
+  input_dir: /home/juson/data/hand_focal_videos
+  video_extensions:
+  - .mov
+  - .mp4
+  - .m4v
+  - .mkv
+  - .avi
+  min_duration_s: 5.0
+  normalize:
+    long_side: 1920
+    max_fps: 60
+    sdr_target: bt709
+    hdr_path:
+    - zscale_tonemap
+    - colorspace
+    codec: ffv1
+  frames:
+    detect_fps: 15
+    tmp_dir: null
+  detector:
+    name: mock
+    mock_npz: null
+    classes:
+      0: left
+      1: right
+    cache: true
+  tracking:
+    init_window_s: 1.0
+    iou_min: 0.3
+    conf_min: 0.5
+    smoothing:
+      enabled: false
+      window: 3
+  phases:
+    phase_mode: nominal
+    front_phase_s: 3.0
+    front_skip_s: 0.5
+    front_window_s: 1.0
+    front_min_detect_rate: 0.9
+    finger_extension_min: 0.9
+    auto_theta_deg: 10.0
+    auto_sustain_s: 0.5
+    auto_warn_diff_s: 1.0
+  joints:
+    sets:
+      palm4:
+      - 0
+      - 5
+      - 9
+      - 13
+      palm5:
+      - 0
+      - 5
+      - 9
+      - 13
+      - 17
+      palm_proximal9:
+      - 0
+      - 5
+      - 6
+      - 9
+      - 10
+      - 13
+      - 14
+      - 17
+      - 18
+      flat17:
+      - 0
+      - 5
+      - 6
+      - 7
+      - 8
+      - 9
+      - 10
+      - 11
+      - 12
+      - 13
+      - 14
+      - 15
+      - 16
+      - 17
+      - 18
+      - 19
+      - 20
+    estimate_set: flat17
+    uncertainty_sets:
+    - palm5
+    - palm_proximal9
+    - flat17
+    template_align_iters: 4
+  estimate:
+    estimator: fixed_template
+    synthetic_study_result: null
+    principal_point: center
+    distortion: null
+    f_grid_n: 60
+    f_ratio_range:
+    - 0.35
+    - 1.6
+    huber_rel: 0.02
+    min_points: 4
+    joint_delta:
+      delta_grid_deg:
+      - 0
+      - 4
+      - 8
+      - 12
+      - 16
+      - 20
+      phi_n: 6
+      delta_prior_deg: 8.0
+      prior_weight: auto
+      nm_max_iter: 300
+  anycalib:
+    enabled: true
+    model_id: anycalib_pinhole
+    cam_id: pinhole
+    stride: 1
+    device: cuda:0
+    extra_models:
+    - anycalib_gen
+    offline_env:
+      HF_HUB_OFFLINE: '1'
+      TRANSFORMERS_OFFLINE: '1'
+    torch_hub_dir: ~/.cache/torch/hub
+  uncertainty:
+    n_bootstrap: 30
+    block_frames: 10
+    time_budget_s: 600
+  verdict:
+    good:
+      detect_rate_min: 0.9
+      front_frames_min: 15
+      finger_extension_required: true
+      theta_p90_min_deg: 25.0
+      axis_bins_min: 5
+      reproj_rms_rel_max: 0.01
+      jointset_range_max: 0.04
+      bootstrap_rel_std_max: 0.03
+      consistency_range_max: 0.06
+      delta_abs_max_deg: 12.0
+      sharpness_min: 1.3
+    rough:
+      detect_rate_min: 0.7
+      theta_p90_min_deg: 12.0
+      axis_bins_min: 3
+      reproj_rms_rel_max: 0.025
+      jointset_range_max: 0.12
+    min_target_frames: 20
+  target_sizes:
+  - - 1920
+    - 1080
+  - - 1280
+    - 720
+  - - 3840
+    - 2160
+  output:
+    root: runs/17_protocol_rerun
+    results_yaml: results/17_protocol_rerun.yaml
+
+profiles:
+  extended_ratio_range: [0.2, 5.0]
+  extended_n: 90
+  joint_sets: [palm4, palm5, palm_proximal9, flat17]
+
+diff2d:
+  theta_bins_deg: [0, 30, 45, 60, 91]
+  same_hand_iou_min: 0.3
+
+output:
+  root: runs/17_protocol_rerun
+  results_yaml: results/17_protocol_rerun.yaml
