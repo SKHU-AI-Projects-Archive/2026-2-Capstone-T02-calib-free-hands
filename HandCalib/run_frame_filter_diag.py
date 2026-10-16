@@ -55,9 +55,12 @@ def official(run_dir: Path):
 def main(argv=None):
     ap = argparse.ArgumentParser()
     ap.add_argument("--config", required=True)
+    ap.add_argument("--source", action="append", default=None, help="VIDEO=RUN_DIR; replaces the yaml sources (repeatable)")
     a = ap.parse_args(argv)
     text = Path(a.config).read_text()
     cfg = yaml.safe_load(text)
+    if a.source:
+        cfg["sources"] = dict(x.split("=", 1) for x in a.source)
     c17 = yaml.safe_load(resolve(cfg["pipeline_config"]).read_text())
     out = resolve(cfg["output"]["root"]) / f"{RUN14.utc_stamp()}_diag_framefilter"
     out.mkdir(parents=True)
@@ -89,7 +92,7 @@ def main(argv=None):
     lines = summary(res, cfg, ref)
     (out / "summary.md").write_text("\n".join(lines) + "\n")
     (out / "diagnostic.json").write_text(json.dumps(RP.jsonable(res), ensure_ascii=False))
-    (out / "metadata.json").write_text(json.dumps(RP.jsonable(PV.build(text, a.config, {"pipeline_config_sha256": PV.sha256_text(resolve(cfg["pipeline_config"]).read_text()),
+    (out / "metadata.json").write_text(json.dumps(RP.jsonable(PV.build(text, a.config, {"sources": cfg["sources"], "pipeline_config_sha256": PV.sha256_text(resolve(cfg["pipeline_config"]).read_text()),
                                                                                          "elapsed_s": time.time() - t0})), ensure_ascii=False, indent=1))
     for ln in lines:
         log(ln)
