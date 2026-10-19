@@ -1,0 +1,43 @@
+experiment: 18_same_session_check
+run: runs/18_same_session_check/20261019T022006Z
+code_commit: c996b05
+git_dirty_at_run: false
+gpu:
+  CUDA_VISIBLE_DEVICES: '1'
+  gpus_at_start:
+  - 0, NVIDIA RTX A5000, 9 MiB
+  - 1, NVIDIA RTX A5000, 9 MiB
+  - 2, NVIDIA RTX A5000, 9 MiB
+  - 3, NVIDIA RTX A5000, 9 MiB
+note: 이 f는 핀홀·주점 중심·왜곡 없음 가정에서 2D 키포인트만으로 얻은 추정값이며 정답 데이터와 비교하지 않았다. 비교 수치는 summary.md에만
+  있다.
+videos:
+  IMG_7155.MOV:
+    segments:
+      hand_s:
+      - 0.0
+      - 13.3
+      board_s:
+      - 13.8
+      - 22.6
+    checkerboard:
+      f_reference_px: 1646.5
+      f_model_E_px: 1557.6
+      verdict: REJECT
+    hand_guide_satisfied: false
+    detectors:
+      wilor_yolo:
+        f_fixed_template_px: 1872.8
+        f_status: value
+        verdict: REJECT
+      mediapipe_hands:
+        f_fixed_template_px: 1230.8
+        f_status: value
+        verdict: REJECT
+      rtmpose_hand:
+        f_fixed_template_px: 987.3
+        f_status: value
+        verdict: REJECT
+    anycalib_median_px:
+      anycalib_pinhole: 2031.4
+      anycalib_gen: 2055.9
