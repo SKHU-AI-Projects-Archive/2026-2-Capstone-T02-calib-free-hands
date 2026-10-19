@@ -191,6 +191,41 @@ videos:
     run: runs/17_protocol_rerun/20261016T083019Z
     code_commit: e440378
     device_note: CUDA_VISIBLE_DEVICES=1 (GPU 0 in use by another user)
+  IMG_7157.MOV:
+    previous_video: false
+    guide_satisfied: false
+    guide_reasons:
+    - 손 박스/짧은 변 0.55 > 0.5
+    detectors:
+      wilor_yolo:
+        f_fixed_template_px: 2740.2
+        f_status: value
+        f_joint_delta_px: null
+        f_rel_uncertainty: 0.1876
+        verdict: REJECT
+        sharpness_flat17: 1.0028
+        quality_rank: 3.0
+      mediapipe_hands:
+        f_fixed_template_px: 2245.6
+        f_status: value
+        f_joint_delta_px: 1951.3
+        f_rel_uncertainty: 0.2201
+        verdict: REJECT
+        sharpness_flat17: 1.0089
+        quality_rank: 2.0
+      rtmpose_hand:
+        f_fixed_template_px: 1708.4
+        f_status: value
+        f_joint_delta_px: 1645.2
+        f_rel_uncertainty: 0.2328
+        verdict: REJECT
+        sharpness_flat17: 1.0123
+        quality_rank: 1.0
+    anycalib_median_px:
+      anycalib_pinhole: 1911.0
+      anycalib_gen: 2034.1
+    run: runs/17_protocol_rerun/20261019T024522Z
+    code_commit: 70345c0
 ranking_summary:
   mediapipe_hands:
     mean_rank_guide: null
@@ -294,6 +329,57 @@ additional_runs:
   git_dirty_at_run: false
   videos:
   - IMG_7148.MOV
+  ranking_summary:
+    mediapipe_hands:
+      mean_rank_guide: null
+      n_guide_videos: 0
+      verdict_counts:
+        GOOD: 0
+        ROUGH: 0
+        REJECT: 1
+      n_edge: 0
+      n_failed: 0
+      category_counts:
+        GOOD: 0
+        ROUGH: 0
+        REJECT: 1
+        EDGE: 0
+        FAILED: 0
+    rtmpose_hand:
+      mean_rank_guide: null
+      n_guide_videos: 0
+      verdict_counts:
+        GOOD: 0
+        ROUGH: 0
+        REJECT: 1
+      n_edge: 0
+      n_failed: 0
+      category_counts:
+        GOOD: 0
+        ROUGH: 0
+        REJECT: 1
+        EDGE: 0
+        FAILED: 0
+    wilor_yolo:
+      mean_rank_guide: null
+      n_guide_videos: 0
+      verdict_counts:
+        GOOD: 0
+        ROUGH: 0
+        REJECT: 1
+      n_edge: 0
+      n_failed: 0
+      category_counts:
+        GOOD: 0
+        ROUGH: 0
+        REJECT: 1
+        EDGE: 0
+        FAILED: 0
+- run: runs/17_protocol_rerun/20261019T024522Z
+  code_commit: 70345c0
+  git_dirty_at_run: false
+  videos:
+  - IMG_7157.MOV
   ranking_summary:
     mediapipe_hands:
       mean_rank_guide: null
