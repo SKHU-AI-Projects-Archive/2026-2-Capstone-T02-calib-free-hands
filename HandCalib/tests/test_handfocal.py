@@ -509,7 +509,7 @@ class SwapWorkers(unittest.TestCase):
 # ====================================================================================================
 
 C = CFG17["conditions"]
-RUN16 = ROOT / "runs/16_detector_swap/20261015T053136Z"
+RUN17 = ROOT / "runs/17_protocol_rerun/20261016T053345Z"       # official 17 run that includes IMG_7141
 
 
 def trajectory(W=1920, H=1080, box_ratio=0.4, x0=700, theta_amp=30.0, theta_noise=3.0, seed=0):
@@ -603,9 +603,9 @@ def cfg17_tmp(root: Path, **kw):
     return c
 
 
-@unittest.skipUnless(VID.exists() and RUN16.exists(), "IMG_7141 and the 16 run needed")
+@unittest.skipUnless(VID.exists() and RUN17.exists(), "IMG_7141 and the official 17 run needed")
 class ProtocolRuns(unittest.TestCase):
-    def test_yaml_detector_and_video_selection_reproduces_16(self):
+    def test_yaml_detector_and_video_selection_reproduces_17(self):
         with tempfile.TemporaryDirectory() as d:
             d = Path(d)
             cp = d / "c.yaml"
@@ -614,11 +614,11 @@ class ProtocolRuns(unittest.TestCase):
             self.assertEqual([v["video"] for v in vids], ["IMG_7141.MOV"])
             self.assertEqual(list(vids[0]["detectors"]), ["wilor_yolo"])
             r17 = json.loads((root / "IMG_7141" / "wilor_yolo" / "results.json").read_text())
-            r16 = json.loads((RUN16 / "IMG_7141" / "wilor_yolo" / "results.json").read_text())
-            self.assertEqual(r17["verdict"], r16["verdict"])
-            self.assertEqual(r17["f_hand_at_grid_edge"], r16["f_hand_at_grid_edge"])
-            self.assertAlmostEqual(r17["f_hand_px"], r16["f_hand_px"], places=6)
-            self.assertAlmostEqual(r17["f_joint_delta_px"], r16["f_joint_delta_px"], places=6)
+            ref = json.loads((RUN17 / "IMG_7141" / "wilor_yolo" / "results.json").read_text())
+            self.assertEqual(r17["verdict"], ref["verdict"])
+            self.assertEqual(r17["f_hand_at_grid_edge"], ref["f_hand_at_grid_edge"])
+            self.assertAlmostEqual(r17["f_hand_px"], ref["f_hand_px"], places=6)
+            self.assertAlmostEqual(r17["f_joint_delta_px"], ref["f_joint_delta_px"], places=6)
             rep = (root / "report.md").read_text()
             self.assertIn("값 없음 (상한)", rep)
             self.assertIn("계산 불가", rep)
