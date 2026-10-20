@@ -2265,3 +2265,214 @@ def board_verdict(m, vc):
     g, r = ok(vc["good"]), ok(vc["rough"])
     v = "GOOD" if all(g.values()) else ("ROUGH" if all(r.values()) else "REJECT")
     return {"verdict": v, "failed_good": [k for k, x in g.items() if not x], "failed_rough": [k for k, x in r.items() if not x]}
+
+
+# ====================================================================================================
+# pseg  (experiment 20: front -> tilt transition detection; new section, 17's functions above are used unchanged)
+# The legacy rule (analyze's auto_transition: theta2d >= auto_theta_deg for auto_sustain_s) fires on keypoint noise because theta2d = arccos(s2 / s1)
+# is hypersensitive near 0 deg. linear_d uses d = 1 - s2 / s1 (= 1 - cos(theta2d)) against a per-video noise floor taken from the front window,
+# a median-smoothed copy of d (segmentation only) and a keypoint-motion condition. Optional, default-off: exclude large-tilt frames, exclude the wrist.
+# ====================================================================================================
+
+def affine_ratio(T: np.ndarray, P: np.ndarray) -> float:
+    """s2 / s1 of the linear part of the least-squares affine map template T -> observation P (rotation and uniform scale cancel in the ratio)."""
+    A = np.c_[T, np.ones(len(T))]
+    M, *_ = np.linalg.lstsq(A, P, rcond=None)
+    S = np.linalg.svd(M[:2].T, compute_uv=False)
+    return float(np.clip(S[1] / S[0], 0.0, 1.0)) if S[0] > 0 else 0.0
+
+
+def pseg_series(kp, mask, present, box, times, T, est_ids):
+    """Per-frame d = 1 - s2 / s1 and the keypoint speed v (1 / s): mean joint displacement between consecutive frames / hand-box long side / dt."""
+    t = np.asarray(times, float)
+    n = len(t)
+    d = np.full(n, np.nan)
+    v = np.full(n, np.nan)
+    bl = box_long(np.asarray(box, float))
+    for i in range(n):
+        if present[i]:
+            vis = mask[i][est_ids]
+            if vis.sum() >= 6:
+                d[i] = 1.0 - affine_ratio(T[vis], kp[i][est_ids][vis])
+        if i > 0 and present[i] and present[i - 1] and t[i] > t[i - 1]:
+            m = mask[i][est_ids] & mask[i - 1][est_ids]
+            if m.sum() >= 4:
+                disp = float(np.linalg.norm(kp[i][est_ids][m] - kp[i - 1][est_ids][m], axis=-1).mean())
+                v[i] = disp / max(float(np.nanmean([bl[i], bl[i - 1]])), 1e-9) / float(t[i] - t[i - 1])
+    return d, v
+
+
+def pseg_median_filter(times, x, window_s: float) -> np.ndarray:
+    """Centred running median over |t - t_i| <= window_s / 2 (NaN ignored). Used for the segmentation only."""
+    t = np.asarray(times, float)
+    x = np.asarray(x, float)
+    out = np.full(len(x), np.nan)
+    for i in range(len(x)):
+        w = x[np.abs(t - t[i]) <= window_s / 2 + 1e-9]
+        w = w[np.isfinite(w)]
+        if len(w):
+            out[i] = float(np.median(w))
+    return out
+
+
+def pseg_transition(times, present, kp, mask, box, T, est_ids, front_idx, p: dict) -> dict:
+    """First time after the front window at which the smoothed d stays above d_thr for sustain_s (and, with use_motion, the keypoint speed exceeds
+    v_thr within motion_window_s of that start). Returns t_transition (None if not found), d0, d_thr, v0, v_thr and the series."""
+    t = np.asarray(times, float)
+    d, v = pseg_series(kp, mask, present, box, t, T, est_ids)
+    fw = [int(i) for i in front_idx]
+    dw, vw = d[fw], v[fw]
+    if not np.isfinite(dw).any():
+        return {"t_transition": None, "failed": "정면 창에서 d를 계산할 수 없음"}
+    d0 = float(np.nanpercentile(dw, p["noise_percentile"]))
+    v0 = float(np.nanpercentile(vw, p["noise_percentile"])) if np.isfinite(vw).any() else float("nan")
+    d_thr = max(p["k_d"] * d0, 1.0 - math.cos(math.radians(p["theta_min_deg"])))
+    v_thr = p["k_v"] * v0
+    ds = pseg_median_filter(t, d, p["median_window_s"])
+    ok = np.isfinite(ds) & (ds > d_thr)
+    t_end = float(t[fw[-1]])
+    cand = np.flatnonzero(t > t_end)
+    skipped, found, motion_v = [], None, None
+    pos = 0
+    while pos < len(cand):
+        i = cand[pos]
+        if ok[i]:
+            j = np.flatnonzero((t >= t[i]) & (t < t[i] + p["sustain_s"]))
+            if len(j) and ok[j].all():
+                mot = True
+                if p["use_motion"]:
+                    w = np.flatnonzero(np.abs(t - t[i]) <= p["motion_window_s"] + 1e-9)
+                    vv = v[w][np.isfinite(v[w])]
+                    motion_v = float(vv.max()) if len(vv) else None
+                    mot = bool(motion_v is not None and np.isfinite(v_thr) and motion_v > v_thr)
+                if mot:
+                    found = float(t[i])
+                    break
+                skipped.append(float(t[i]))
+                while pos < len(cand) and ok[cand[pos]]:
+                    pos += 1
+                continue
+        pos += 1
+    return {"t_transition": found, "d0": d0, "d_thr": float(d_thr), "v0": v0, "v_thr": float(v_thr), "front_end_s": t_end,
+            "motion_v_at_start": motion_v, "skipped_no_motion_s": skipped, "series": {"t": t.tolist(), "d": d.tolist(), "d_smooth": ds.tolist(), "v": v.tolist()}}
+
+
+def pseg_wrist_cfg(pcfg: dict) -> dict:
+    """The pipeline settings with joint 0 (wrist) removed from every joint set (template and f estimation)."""
+    c = copy.deepcopy(pcfg)
+    for k, ids in c["joints"]["sets"].items():
+        c["joints"]["sets"][k] = [j for j in ids if j != 0]
+    return c
+
+
+def pseg_tilt_keep(times, present, theta, tilt_start, max_tilt_deg) -> np.ndarray:
+    """True for frames the f estimate may use: tilt-phase frames whose theta2d exceeds max_tilt_deg are dropped (frames without theta2d are left to the analysis)."""
+    t = np.asarray(times, float)
+    th = np.asarray(theta, float)
+    bad = (t >= tilt_start) & np.isfinite(th) & (th > max_tilt_deg)
+    return np.asarray(present, bool) & ~bad
+
+
+def pseg_f_summary(a: dict, present_orig, pcfg: dict, extra: dict | None = None) -> dict:
+    """Compact result of one analysis: f of both estimators (grid edge -> side), verdict (detection rate = the original tracker rate), sharpness."""
+    if "per_method" not in a:
+        return {"failed": a.get("failed", "분석 실패"), **(extra or {})}
+    pm = a["per_method"]["fixed_template"]
+    hi = a["grid"][-1]
+    sol = {m: {"f": a["solutions"][m]["f"], "at_grid_edge": a["solutions"][m]["at_grid_edge"],
+               "side": None if not a["solutions"][m]["at_grid_edge"] else ("상한" if a["solutions"][m]["f"] >= hi * (1 - 1e-6) else "하한")} for m in ("fixed_template", "joint_delta")}
+    met = dict(pm["metrics"])
+    met["detect_rate"] = float(np.asarray(present_orig, bool).mean())
+    j = judge(met, pcfg["verdict"])
+    return {"solutions": sol, "verdict": j["verdict"], "failed_good": j["failed_good"], "failed_rough": j["failed_rough"], "tilt_start_s": a["tilt_start_s"],
+            "n_front_used": a["n_front_used"], "n_tilt_used": a["n_tilt_used"], "f_rel_uncertainty": pm["f_rel_uncertainty"], "bootstrap_rel_std": pm["bootstrap"]["rel_std"],
+            "sharpness": pm["diagnostics"]["sharpness"], "reproj_rms_rel": pm["diagnostics"]["reproj_rms_rel"], "theta_tilt": a["theta_tilt"], **(extra or {})}
+
+
+def pseg_analyze(kp, mask, present, box, cls, times, size_wh, cfg: dict, c20: dict, ccfg: dict, seed: int | None = None, method: str = "linear_d") -> dict:
+    """One tracked hand: 17's analysis (unchanged call), both transition detectors, the shooting-guide check with each, and the optional variants."""
+    W, H = size_wh
+    seed = int(cfg["experiment"]["seed"]) if seed is None else seed
+    p = c20
+    est_ids = list(cfg["joints"]["sets"][cfg["joints"]["estimate_set"]])
+    cache = {}
+
+    def run(cfg_use, tilt_start, pres, key):
+        if key not in cache:
+            cache[key] = analyze(kp, mask, pres, box, cls, times, size_wh, cfg_use, tilt_start=tilt_start, methods_full=("fixed_template",), seed=seed)
+        return cache[key]
+    a0 = run(cfg, None, present, (False, None, False))
+    if "per_method" not in a0:
+        return {"failed": a0.get("failed", "분석 실패")}
+    theta = np.array([np.nan if x is None else x for x in a0["theta2d_deg"]], float)
+    t_legacy = a0.get("auto_transition_s")
+    lin = pseg_transition(times, present, kp, mask, box, np.array(a0["template"]), est_ids, a0["front_window"]["idx"], p)
+    t_lin = lin["t_transition"]
+    guides = {}
+    for name, tv in (("legacy_theta", t_legacy), ("linear_d", t_lin)):
+        m = metrics_from_arrays(times, present, box, W, H, theta, a0["role"], tv, a0.get("front_jitter_rel"), a0["axis_coverage"]["bins"], a0["finger_extension"]["min"])
+        g = conditions_check(m, ccfg)
+        guides[name] = {"transition_s": tv, "guide": g["guide"], "reasons": g["reasons"], "items": g["items"]}
+    lin_nm = lin                                              # diagnostic column: the same detector with the motion condition off
+    if p["use_motion"]:
+        lin_nm = pseg_transition(times, present, kp, mask, box, np.array(a0["template"]), est_ids, a0["front_window"]["idx"], {**p, "use_motion": False})
+    m_nm = metrics_from_arrays(times, present, box, W, H, theta, a0["role"], lin_nm["t_transition"], a0.get("front_jitter_rel"), a0["axis_coverage"]["bins"],
+                               a0["finger_extension"]["min"])
+    g_nm = conditions_check(m_nm, ccfg)
+    t_sel = t_lin if method == "linear_d" else t_legacy
+    out = {"default": pseg_f_summary(a0, present, cfg, {"front_window": [a0["front_window"].get("t0"), a0["front_window"].get("t1")],
+                                                       "auto_transition_s": t_legacy}),
+           "legacy_theta": {"t_transition": t_legacy, **guides["legacy_theta"]},
+           "linear_d": {k: lin.get(k) for k in ("t_transition", "d0", "d_thr", "v0", "v_thr", "front_end_s", "motion_v_at_start", "skipped_no_motion_s", "failed")} | guides["linear_d"],
+           "linear_d_no_motion": {"t_transition": lin_nm["t_transition"], "guide": g_nm["guide"], "reasons": g_nm["reasons"]},
+           "method": method, "t_selected": t_sel, "guide_selected": guides[method]["guide"], "variants": {},
+           "series": {**lin.get("series", {}), "theta": theta.tolist(), "front": [a0["front_window"].get("t0"), a0["front_window"].get("t1")]}}
+    for name, ov in (p.get("variants") or {}).items():
+        o = {"phase_mode": "nominal", "exclude_large_tilt": bool(p["exclude_large_tilt"]), "exclude_wrist": bool(p["exclude_wrist"]), **ov}
+        cfg_use = pseg_wrist_cfg(cfg) if o["exclude_wrist"] else cfg
+        ts = None
+        if o["phase_mode"] == "auto":
+            if t_sel is None:
+                out["variants"][name] = {"skipped": "전환 시각을 검출하지 못함", "options": o}
+                continue
+            ts = t_sel
+        base = run(cfg_use, ts, present, (o["exclude_wrist"], ts, False))
+        res, n_before, n_after = base, None, None
+        if o["exclude_large_tilt"] and "per_method" in base:
+            th = np.array([np.nan if x is None else x for x in base["theta2d_deg"]], float)
+            keep = pseg_tilt_keep(times, present, th, base["tilt_start_s"], p["max_tilt_deg"])
+            n_before = int((np.asarray(present, bool) & (np.asarray(times) >= base["tilt_start_s"])).sum())
+            n_after = int((keep & (np.asarray(times) >= base["tilt_start_s"])).sum())
+            res = run(cfg_use, ts, keep, (o["exclude_wrist"], ts, True))
+        out["variants"][name] = pseg_f_summary(res, present, cfg_use, {"options": o, "n_tilt_before": n_before, "n_tilt_after": n_after})
+    return out
+
+
+def pseg_job(args) -> dict:
+    """(video, detector) job for the process pool: load the 17 run's frame list and detections, analyse, compare with 17's own result."""
+    video, det, run_dir, pcfg, c20, ccfg, conf_min, method = args
+    os.environ.setdefault("OMP_NUM_THREADS", "1")
+    cv2.setNumThreads(1)
+    pc = copy.deepcopy(pcfg)
+    pc["tracking"]["conf_min"] = float(conf_min)
+    d = Path(run_dir) / det
+    res = json.loads((d / "results.json").read_text())
+    dets = load_detections(d / "detections.npz")
+    frames = res["frames"]["list"]
+    check_alignment(frames, dets)
+    W, H = res["normalization"]["output"]["display_w"], res["normalization"]["output"]["display_h"]
+    times = np.array([r["time_s"] for r in frames])
+    tr = track(dets, times, (W, H), pc["tracking"], front_start_s=float(pc["phases"]["front_skip_s"]))
+    out = pseg_analyze(tr["kp"], tr["mask"], tr["present"], tr["box"], tr["cls"], times, (W, H), pc, c20, ccfg, method=method)
+    out.update({"video": video, "detector": det, "size": [W, H], "n_frames": len(frames)})
+    if "default" in out and "solutions" in out["default"]:
+        s = out["default"]["solutions"]
+        a17 = res.get("analysis", {})
+        same = {"f_fixed_template": abs(s["fixed_template"]["f"] - res.get("f_hand_px", np.nan)) <= 1e-6 * max(1.0, abs(s["fixed_template"]["f"])),
+                "f_joint_delta": abs(s["joint_delta"]["f"] - res.get("f_joint_delta_px", np.nan)) <= 1e-6 * max(1.0, abs(s["joint_delta"]["f"])),
+                "verdict": out["default"]["verdict"] == res.get("verdict"),
+                "legacy_transition": (out["legacy_theta"]["t_transition"] is None and a17.get("auto_transition_s") is None) or
+                                     (out["legacy_theta"]["t_transition"] is not None and a17.get("auto_transition_s") is not None and
+                                      abs(out["legacy_theta"]["t_transition"] - a17["auto_transition_s"]) < 1e-9)}
+        out["same_as_17"] = {**same, "all": bool(all(same.values())), "f_17": res.get("f_hand_px"), "verdict_17": res.get("verdict")}
+    return out

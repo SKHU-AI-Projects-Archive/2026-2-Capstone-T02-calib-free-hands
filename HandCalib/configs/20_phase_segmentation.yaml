@@ -1,0 +1,239 @@
+experiment:
+  name: 20_phase_segmentation
+  seed: 42
+
+# Front -> tilt transition detection. legacy_theta = 17's rule (theta2d >= auto_theta_deg for auto_sustain_s), unchanged.
+# linear_d = the corrected rule: d = 1 - s2/s1 (linear in the noise; d = 1 - cos(theta2d)) against a per-video noise floor, median smoothing,
+# and a keypoint-motion condition. The f estimate itself is never changed here (only the diagnostic variants below switch things on).
+transition_method: linear_d          # legacy_theta | linear_d  (the transition used for the guide verdict and for the auto variant)
+videos: [IMG_7147.MOV, IMG_7148.MOV, IMG_7157.MOV, IMG_7158.MOV, IMG_7180.MOV]
+detectors: [wilor_yolo, mediapipe_hands, rtmpose_hand]
+code_17: {branch: feature/hand-template-focal, commit: f147a06, modules: [HandCalib/handfocal.py, HandCalib/run.py]}
+sources:                             # 17 official runs (detections and frame lists reused; nothing is re-detected, no video is read)
+  IMG_7147.MOV: runs/17_protocol_rerun/20261016T064014Z/IMG_7147
+  IMG_7148.MOV: runs/17_protocol_rerun/20261016T083019Z/IMG_7148
+  IMG_7157.MOV: runs/17_protocol_rerun/20261019T024522Z/IMG_7157
+  IMG_7158.MOV: runs/17_protocol_rerun/20261019T030703Z/IMG_7158
+  IMG_7180.MOV: runs/17_protocol_rerun/20261020T015845Z/IMG_7180
+
+# Fixed 2026-10-20 before the first run.
+phase_segmentation:
+  noise_percentile: 95               # d0 / v0 = this percentile over the front-window frames
+  k_d: 3.0                           # d_thr = max(k_d * d0, 1 - cos(theta_min_deg))
+  theta_min_deg: 15.0
+  median_window_s: 0.3               # centred running median of d (segmentation only; the f estimate never sees it)
+  sustain_s: 0.5                     # smoothed d must stay above d_thr for this long (same rule as legacy: every sample in [t, t + sustain_s))
+  use_motion: true                   # also require the keypoint speed to exceed v_thr around the start of that stretch
+  k_v: 3.0                           # v_thr = k_v * v0
+  motion_window_s: 0.3               # max of v within +-this of the start must exceed v_thr
+  # optional features (off by default: results are then identical to 17)
+  exclude_large_tilt: false          # drop tilt-phase frames with theta2d > max_tilt_deg from the f estimate
+  max_tilt_deg: 45.0
+  exclude_wrist: false               # drop joint 0 from the template and the f-estimation joint sets
+  variants:                          # diagnostic variants (summary.md only); each overrides the switches above
+    auto_phase: {phase_mode: auto}                       # tilt phase starts at the transition of transition_method
+    max_tilt: {exclude_large_tilt: true}
+    no_wrist: {exclude_wrist: true}
+    max_tilt_no_wrist: {exclude_large_tilt: true, exclude_wrist: true}
+
+# Manual transition times (seconds), filled in by the user. Empty = no manual reference (never filled in automatically).
+manual_transition_s:
+  IMG_7147.MOV: null
+  IMG_7148.MOV: null
+  IMG_7157.MOV: null
+  IMG_7158.MOV: null
+  IMG_7180.MOV: null
+manual_tolerance_s: 0.3              # target: linear_d within this of the manual time
+
+workers: 15                          # parallel (video, detector) jobs
+reference_f_px: 1680.0               # user's checkerboard value: summary.md comparison only; never an estimation input
+
+# Shooting-guide thresholds: the same values as 17 (written anew)
+conditions:
+  reference_detector: wilor_yolo
+  box_short_ratio_max: 0.5
+  edge_rate_max: 0.05
+  transition_min_s: 2.5
+  theta_p95_max_deg: 45.0
+  theta_tilt_median_range_deg:
+  - 20.0
+  - 40.0
+  axis_bins_min: 5
+  finger_extension_min: 0.9
+
+# ---- pipeline settings: the same values as 17 (written anew)
+pipeline:
+  experiment:
+    name: 20_phase_segmentation
+    seed: 42
+  input_dir: /home/juson/data/hand_focal_videos
+  video_extensions:
+  - .mov
+  - .mp4
+  - .m4v
+  - .mkv
+  - .avi
+  min_duration_s: 5.0
+  normalize:
+    long_side: 1920
+    max_fps: 60
+    sdr_target: bt709
+    hdr_path:
+    - zscale_tonemap
+    - colorspace
+    codec: ffv1
+  frames:
+    detect_fps: 15
+    tmp_dir: null
+  detector:
+    name: mock
+    mock_npz: null
+    classes:
+      0: left
+      1: right
+    cache: true
+  tracking:
+    init_window_s: 1.0
+    iou_min: 0.3
+    conf_min: 0.5
+    smoothing:
+      enabled: false
+      window: 3
+  phases:
+    phase_mode: nominal
+    front_phase_s: 3.0
+    front_skip_s: 0.5
+    front_window_s: 1.0
+    front_min_detect_rate: 0.9
+    finger_extension_min: 0.9
+    auto_theta_deg: 10.0
+    auto_sustain_s: 0.5
+    auto_warn_diff_s: 1.0
+  joints:
+    sets:
+      palm4:
+      - 0
+      - 5
+      - 9
+      - 13
+      palm5:
+      - 0
+      - 5
+      - 9
+      - 13
+      - 17
+      palm_proximal9:
+      - 0
+      - 5
+      - 6
+      - 9
+      - 10
+      - 13
+      - 14
+      - 17
+      - 18
+      flat17:
+      - 0
+      - 5
+      - 6
+      - 7
+      - 8
+      - 9
+      - 10
+      - 11
+      - 12
+      - 13
+      - 14
+      - 15
+      - 16
+      - 17
+      - 18
+      - 19
+      - 20
+    estimate_set: flat17
+    uncertainty_sets:
+    - palm5
+    - palm_proximal9
+    - flat17
+    template_align_iters: 4
+  estimate:
+    estimator: fixed_template
+    synthetic_study_result: null
+    principal_point: center
+    distortion: null
+    f_grid_n: 60
+    f_ratio_range:
+    - 0.35
+    - 1.6
+    huber_rel: 0.02
+    min_points: 4
+    joint_delta:
+      delta_grid_deg:
+      - 0
+      - 4
+      - 8
+      - 12
+      - 16
+      - 20
+      phi_n: 6
+      delta_prior_deg: 8.0
+      prior_weight: auto
+      nm_max_iter: 300
+  anycalib:
+    enabled: true
+    model_id: anycalib_pinhole
+    cam_id: pinhole
+    stride: 1
+    device: cuda:0
+    extra_models:
+    - anycalib_gen
+    offline_env:
+      HF_HUB_OFFLINE: '1'
+      TRANSFORMERS_OFFLINE: '1'
+    torch_hub_dir: ~/.cache/torch/hub
+  uncertainty:
+    n_bootstrap: 30
+    block_frames: 10
+    time_budget_s: 600
+  verdict:
+    good:
+      detect_rate_min: 0.9
+      front_frames_min: 15
+      finger_extension_required: true
+      theta_p90_min_deg: 25.0
+      axis_bins_min: 5
+      reproj_rms_rel_max: 0.01
+      jointset_range_max: 0.04
+      bootstrap_rel_std_max: 0.03
+      consistency_range_max: 0.06
+      delta_abs_max_deg: 12.0
+      sharpness_min: 1.3
+    rough:
+      detect_rate_min: 0.7
+      theta_p90_min_deg: 12.0
+      axis_bins_min: 3
+      reproj_rms_rel_max: 0.025
+      jointset_range_max: 0.12
+    min_target_frames: 20
+  target_sizes:
+  - - 1920
+    - 1080
+  - - 1280
+    - 720
+  - - 3840
+    - 2160
+  output:
+    root: runs/20_phase_segmentation
+    results_yaml: results/20_phase_segmentation.yaml
+
+detector_settings:
+  wilor_yolo:
+    conf_min: 0.5
+  mediapipe_hands:
+    conf_min: 0.5
+  rtmpose_hand:
+    conf_min: 0.3
+
+output:
+  root: runs/20_phase_segmentation
+  results_yaml: results/20_phase_segmentation.yaml

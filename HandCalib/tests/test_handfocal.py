@@ -26,6 +26,7 @@ import run                                         # noqa: E402
 CFG17 = yaml.safe_load((ROOT / "configs/17_protocol_rerun.yaml").read_text())
 CFGFF = yaml.safe_load((ROOT / "configs/17_frame_filter_diag.yaml").read_text())
 CFG18 = yaml.safe_load((ROOT / "configs/18_same_session_check.yaml").read_text())
+CFG20 = yaml.safe_load((ROOT / "configs/20_phase_segmentation.yaml").read_text())
 PIPE = CFG17["pipeline"]                           # the 14 pipeline settings (identical in 16, 17 and 18)
 SYN = {"f_px": 1650, "image": [1920, 1080], "distance_mm": 350, "front_frames": 10, "tilt_frames": 40}     # 14's synthetic camera
 BASE_COND = {"name": "base", "delta_deg": 0, "noise": {"px": 1.0}, "heavy_tail": False, "tilt_range_deg": [25, 50], "arch_mm": 0,
@@ -795,6 +796,177 @@ class SessionEndToEnd(unittest.TestCase):
             for key in ("ISO6709", "com.apple.quicktime", '"make"', '"model"'):
                 self.assertNotIn(key, texts)
             self.assertIn("summary.md", [p.name for p in root.iterdir()])
+
+
+# ====================================================================================================
+# phase segmentation (20)
+# ====================================================================================================
+
+RUN17_7158 = ROOT / CFG20["sources"]["IMG_7158.MOV"]
+EST_IDS = list(PIPE["joints"]["sets"][PIPE["joints"]["estimate_set"]])
+
+
+def pseg_seq(tilt_fn, seconds=8.0, fps=15.0, noise=0.3, seed=0, f=1650.0, W=1920, H=1080, dist=600.0, spike=None):
+    """Planar-hand keypoint track at 15 fps: tilt_fn(t) -> (theta deg, azimuth deg); spike = (t0, t1, theta) overrides the tilt in that interval."""
+    rng = np.random.default_rng(seed)
+    t = np.arange(0, seconds, 1.0 / fps)
+    P = hf.synth_hand_points(0.0)
+    P[:, 1] += 95.0
+    ids = [0] + list(range(5, 21))
+    kp = np.full((len(t), 21, 2), np.nan)
+    for i, ti in enumerate(t):
+        th, az = tilt_fn(ti)
+        if spike is not None and spike[0] <= ti < spike[1]:
+            th, az = spike[2], 20.0
+        kp[i, ids] = hf.synth_project(P[ids], hf.synth_pose(th, az, 0.0), np.array([0.0, 0.0, dist]), f, W / 2, H / 2) + rng.normal(0, noise, (17, 2))
+    kp[:, 1:5] = kp[:, [5]] + np.array([-40.0, 20.0])
+    n = len(t)
+    mask, present = np.ones((n, 21), bool), np.ones(n, bool)
+    box = np.c_[np.nanmin(kp, 1) - 10, np.nanmax(kp, 1) + 10]
+    return t, kp, mask, present, box
+
+
+def pseg_detect(seq, p=None):
+    """The transition steps of hf.pseg_analyze without the (slow) f estimates: front window, template, linear_d transition."""
+    t, kp, mask, present, box = seq
+    fw = hf.front_window(t, present, kp, mask, box, PIPE["phases"])
+    fr = [int(i) for i in fw["idx"] if present[i] and mask[i][EST_IDS].all()]
+    T = hf.template_build(kp[fr][:, EST_IDS], int(PIPE["joints"]["template_align_iters"]))["template"]
+    return hf.pseg_transition(t, present, kp, mask, box, T, EST_IDS, fw["idx"], p or CFG20["phase_segmentation"])
+
+
+class PsegSynthetic(unittest.TestCase):
+    def test_still_sequence_has_no_transition(self):
+        r = pseg_detect(pseg_seq(lambda t: (0.0, 0.0), noise=0.5, seed=1))
+        self.assertIsNone(r["t_transition"])
+        self.assertGreater(r["d_thr"], 0.0)
+
+    def test_ramp_from_t0_is_found_within_0_3_s(self):
+        """Tilt rising from 0 to 30 deg over 0.4 s from t0: the transition is found within 0.3 s of t0 (theta has to reach ~15-20 deg first, then at most
+        one 15 fps frame of delay), for several azimuths and noise seeds."""
+        t0 = 4.0
+        for az in (0.0, 70.0, 110.0, 160.0):
+            for seed in (2, 5):
+                r = pseg_detect(pseg_seq(lambda t: (float(np.clip(30.0 * (t - t0) / 0.4, 0.0, 30.0)), az), seed=seed))
+                self.assertIsNotNone(r["t_transition"], (az, seed))
+                self.assertGreaterEqual(r["t_transition"], t0 - 1e-6)
+                self.assertLessEqual(r["t_transition"], t0 + 0.3, (az, seed, r["t_transition"]))
+
+    def test_slow_ramp_needs_the_motion_condition_off(self):
+        """A 1 s ramp has little keypoint speed at its start: with the default motion condition it can be missed; without it the transition is found
+        where d crosses its threshold (a documented property of the rule, not a tuning target)."""
+        t0 = 4.0
+        sq = pseg_seq(lambda t: (float(np.clip(30.0 * (t - t0) / 1.0, 0.0, 30.0)), 20.0), seed=2)
+        r = pseg_detect(sq, dict(CFG20["phase_segmentation"], use_motion=False))
+        self.assertIsNotNone(r["t_transition"])
+        self.assertTrue(t0 + 0.4 <= r["t_transition"] <= t0 + 0.8, r["t_transition"])
+
+    def test_short_spike_is_not_a_transition(self):
+        r = pseg_detect(pseg_seq(lambda t: (0.0, 0.0), seed=3, spike=(5.0, 5.2, 30.0)))
+        self.assertIsNone(r["t_transition"])
+
+    def test_motion_condition_rejects_a_drift_without_motion_and_can_be_switched_off(self):
+        """A tilt change that happens with (almost) no keypoint motion at its start is rejected by the motion condition and found without it."""
+        seq = pseg_seq(lambda t: (0.0, 0.0), seed=4)
+        t, kp, mask, present, box = seq
+        base = pseg_detect(seq)
+        self.assertIsNone(base["t_transition"])
+        p = dict(CFG20["phase_segmentation"], use_motion=True, k_v=1e6)          # an unreachable speed threshold
+        sq = pseg_seq(lambda t: (float(np.clip(30.0 * (t - 4.0) / 0.5, 0.0, 30.0)), 20.0), seed=2)
+        self.assertIsNone(pseg_detect(sq, p)["t_transition"])
+        self.assertIsNotNone(pseg_detect(sq, dict(p, use_motion=False))["t_transition"])
+
+
+class PsegFunctions(unittest.TestCase):
+    def test_d_is_one_minus_cos_theta(self):
+        rng = np.random.default_rng(0)
+        T = rng.normal(size=(17, 2)) * 60
+        for th in (0.0, 10.0, 25.0, 50.0):
+            c, s = np.cos(np.radians(40)), np.sin(np.radians(40))
+            Rm = np.array([[c, -s], [s, c]])
+            P = (1.7 * (Rm @ np.diag([1.0, np.cos(np.radians(th))]) @ T.T)).T + [300.0, 200.0]        # tilt = compression along one axis, plus a similarity
+            self.assertAlmostEqual(1.0 - hf.affine_ratio(T, P), 1.0 - np.cos(np.radians(th)), places=9)
+
+    def test_median_filter_removes_short_spikes_only(self):
+        t = np.arange(0, 4, 1 / 15)
+        x = np.zeros(len(t))
+        x[20:23] = 1.0                                     # 0.2 s
+        self.assertLessEqual(int((hf.pseg_median_filter(t, x, 0.3) > 0.5).sum()), 3)      # a 0.2 s spike stays <= 3 samples (< the 0.5 s sustain)
+        self.assertEqual(int((hf.pseg_median_filter(t, np.r_[x[:20], np.zeros(len(x) - 20)], 0.3) > 0.5).sum()), 0)
+        x1 = np.zeros(len(t))
+        x1[20] = 1.0                                                                    # a single-frame spike is removed completely
+        self.assertEqual(float(hf.pseg_median_filter(t, x1, 0.3).max()), 0.0)
+        y = np.zeros(len(t))
+        y[20:35] = 1.0                                     # 1 s
+        self.assertEqual(hf.pseg_median_filter(t, y, 0.3)[27], 1.0)
+        self.assertEqual(hf.pseg_median_filter(t, y, 0.3)[5], 0.0)
+
+    def test_tilt_keep_and_wrist_cfg(self):
+        t = np.array([1.0, 2.0, 3.0, 4.0, 5.0])
+        present = np.ones(5, bool)
+        theta = np.array([60.0, 30.0, 50.0, 40.0, np.nan])
+        keep = hf.pseg_tilt_keep(t, present, theta, 3.0, 45.0)
+        self.assertEqual(keep.tolist(), [True, True, False, True, True])            # only tilt-phase frames above 45 deg are dropped
+        c = hf.pseg_wrist_cfg(PIPE)
+        self.assertTrue(all(0 not in ids for ids in c["joints"]["sets"].values()))
+        self.assertIn(0, PIPE["joints"]["sets"]["flat17"])                          # the original settings are untouched
+
+
+@unittest.skipUnless(RUN17_7158.exists(), "the official 17 run of IMG_7158 is needed")
+class PsegReal(unittest.TestCase):
+    """17's own detections: legacy_theta and the default f / verdict reproduce 17 exactly (options off)."""
+
+    @classmethod
+    def setUpClass(cls):
+        c20 = dict(CFG20["phase_segmentation"], variants={})
+        cls.job = hf.pseg_job(("IMG_7158.MOV", "mediapipe_hands", str(RUN17_7158), PIPE, c20, CFG20["conditions"], 0.5, "legacy_theta"))
+
+    def test_legacy_theta_transition_and_default_f_match_17(self):
+        s = self.job["same_as_17"]
+        self.assertTrue(s["legacy_transition"] and s["f_fixed_template"] and s["f_joint_delta"] and s["verdict"], s)
+        self.assertAlmostEqual(self.job["legacy_theta"]["t_transition"], 2.5333333333, places=6)
+        self.assertEqual(self.job["t_selected"], self.job["legacy_theta"]["t_transition"])
+
+    def test_legacy_guide_matches_17(self):
+        r17 = json.loads((RUN17_7158.parent / "results.json").read_text())
+        ref = [v for v in r17["videos"] if v["video"] == "IMG_7158.MOV"][0]["conditions"]["by_detector"]["mediapipe_hands"]
+        self.assertEqual(self.job["legacy_theta"]["guide"], ref["guide"])
+        self.assertEqual(self.job["legacy_theta"]["reasons"], ref["reasons"])
+
+    def test_both_rules_and_diagnostics_are_reported(self):
+        for k in ("t_transition", "d0", "d_thr", "v0", "v_thr", "guide"):
+            self.assertIn(k, self.job["linear_d"])
+        self.assertIn("t_transition", self.job["linear_d_no_motion"])
+        self.assertEqual(self.job["variants"], {})
+
+
+@unittest.skipUnless(RUN17_7158.exists(), "the official 17 run of IMG_7158 is needed")
+class PsegEndToEnd(unittest.TestCase):
+    def test_outputs_and_no_location_or_device_tags(self):
+        with tempfile.TemporaryDirectory() as d:
+            d = Path(d)
+            cfg = copy.deepcopy(CFG20)
+            cfg["phase_segmentation"]["variants"] = {"max_tilt": {"exclude_large_tilt": True}}
+            cfg["workers"] = 1
+            cfg["output"]["root"] = str(d / "runs")
+            cfg["output"]["results_yaml"] = str(d / "r20.yaml")                     # never the tracked results file
+            cp = d / "c.yaml"
+            cp.write_text(yaml.safe_dump(cfg, allow_unicode=True))
+            root, jobs = run.pseg_main(["--config", str(cp), "--videos", "IMG_7158.MOV", "--detectors", "mediapipe_hands", "--out", str(d / "o")])
+            for f in ("report.md", "summary.md", "results.json", "metadata.json", "log.txt"):
+                self.assertTrue((root / f).exists(), f)
+            self.assertTrue((root / "figures" / "IMG_7158_mediapipe_hands.png").exists())
+            y = run.pseg_results_yaml(root, cfg)
+            self.assertEqual(Path(y), d / "r20.yaml")
+            texts = "".join(p.read_text(errors="ignore") for p in list(root.rglob("*")) + [Path(y)] if p.is_file() and p.suffix in (".json", ".yaml", ".md", ".csv", ".txt"))
+            for val in FAKE_TAGS.values():
+                self.assertNotIn(val, texts)
+            for key in ("ISO6709", "com.apple.quicktime", '"make"', '"model"'):
+                self.assertNotIn(key, texts)
+            self.assertIn("수동 기준이 없다", (root / "report.md").read_text())          # the manual slots are empty and are never filled in
+            self.assertNotIn("1680", Path(y).read_text())                              # the comparison with the reference f is in summary.md only
+            self.assertIn("1680", (root / "summary.md").read_text())
+            self.assertEqual(sorted(jobs[0]["variants"]), ["max_tilt"])
 
 
 if __name__ == "__main__":
