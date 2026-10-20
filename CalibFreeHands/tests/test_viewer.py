@@ -1,4 +1,6 @@
 import numpy as np
+from PySide6.QtCore import QEvent, QPointF, Qt
+from PySide6.QtGui import QKeyEvent, QMouseEvent
 from PySide6.QtWidgets import QCheckBox
 
 from calibfreehands.pipeline import CanonicalResult, save_result
@@ -98,3 +100,101 @@ def test_fit_uses_visible_two_hand_bounds_and_handles_empty_result(qapp):
     np.testing.assert_allclose(view.fit_center, (points.min(axis=0) + points.max(axis=0)) / 2)
     empty = _viewer_result(); empty.detected[:] = False; empty.keypoints_2d[:] = np.nan; empty.keypoints_3d[:] = np.nan; empty.mano_vertices[:] = np.nan
     assert not _GLResultView(LoadedResult(empty))._frame_camera()
+
+
+def _mouse_press():
+    return QMouseEvent(
+        QEvent.Type.MouseButtonPress,
+        QPointF(5, 5),
+        QPointF(5, 5),
+        Qt.MouseButton.LeftButton,
+        Qt.MouseButton.LeftButton,
+        Qt.KeyboardModifier.NoModifier,
+    )
+
+
+def _key_press(key):
+    return QKeyEvent(QEvent.Type.KeyPress, key, Qt.KeyboardModifier.NoModifier)
+
+
+def test_mesh_opacity_controls_both_meshes_without_changing_vertices(tmp_path, qapp):
+    result = _viewer_result()
+    before_vertices = result.mano_vertices.copy()
+    npz, _ = save_result(result, tmp_path, {"schema_version": 1})
+    from calibfreehands.visualization.viewer import ResultViewer
+
+    viewer = ResultViewer(npz)
+    assert viewer.mesh_opacity_slider.value() == 60
+    assert all(np.isclose(mesh.opts["color"][3], 0.6) for mesh in viewer.gl_view.meshes)
+
+    viewer.mesh_opacity_slider.setValue(20)
+    assert all(np.isclose(mesh.opts["color"][3], 0.2) for mesh in viewer.gl_view.meshes)
+    viewer.slider.setValue(1)
+    assert all(np.isclose(mesh.opts["color"][3], 0.2) for mesh in viewer.gl_view.meshes)
+
+    viewer.mesh_opacity_slider.setValue(100)
+    assert all(np.isclose(mesh.opts["color"][3], 1.0) for mesh in viewer.gl_view.meshes)
+    np.testing.assert_array_equal(result.mano_vertices, before_vertices)
+    viewer.close()
+
+
+def test_legacy_result_disables_mesh_opacity(tmp_path, qapp):
+    result = _viewer_result(mesh=False)
+    npz, _ = save_result(result, tmp_path, {"schema_version": 1})
+    from calibfreehands.visualization.viewer import ResultViewer
+
+    viewer = ResultViewer(npz)
+    assert not viewer.mesh_opacity_slider.isEnabled()
+    viewer.close()
+
+
+def test_axis_length_is_sixty_five_percent_of_grid_size(qapp):
+    from calibfreehands.visualization.viewer import LoadedResult, _GLResultView
+
+    view = _GLResultView(LoadedResult(_viewer_result()))
+    expected_axis_length = 9.0 * 0.65
+    assert np.isclose(np.linalg.norm(view.axis.pos[1] - view.axis.pos[0]), expected_axis_length)
+    label_position = np.asarray(view.axis_labels[0].pos)
+    assert np.isclose(np.linalg.norm(label_position - view.fit_center), expected_axis_length * 1.08)
+
+
+def test_click_context_routes_arrows_without_mutating_frame_in_orbit_mode(tmp_path, qapp):
+    result = _viewer_result()
+    npz, _ = save_result(result, tmp_path, {"schema_version": 1})
+    from calibfreehands.visualization.viewer import ResultViewer
+
+    viewer = ResultViewer(npz)
+    viewer.eventFilter(viewer.gl_view, _mouse_press())
+    assert viewer._arrow_mode == "orbit"
+    frame = viewer.slider.value()
+    for key in (Qt.Key.Key_Left, Qt.Key.Key_Right, Qt.Key.Key_Up, Qt.Key.Key_Down):
+        before = (viewer.gl_view.opts["azimuth"], viewer.gl_view.opts["elevation"])
+        assert viewer.eventFilter(viewer.gl_view, _key_press(key))
+        after = (viewer.gl_view.opts["azimuth"], viewer.gl_view.opts["elevation"])
+        assert after != before
+    assert viewer.slider.value() == frame
+
+    viewer.slider.setValue(1)
+    viewer.eventFilter(viewer.overlay, _mouse_press())
+    assert viewer._arrow_mode == "frame"
+    assert viewer.eventFilter(viewer.overlay, _key_press(Qt.Key.Key_Left))
+    assert viewer.slider.value() == 0
+    assert viewer.eventFilter(viewer.overlay, _key_press(Qt.Key.Key_Right))
+    assert viewer.slider.value() == 1
+    assert viewer.eventFilter(viewer.overlay, _key_press(Qt.Key.Key_Up))
+    assert viewer.slider.value() == 1
+    viewer.close()
+
+
+def test_space_toggles_playback_in_both_click_contexts(tmp_path, qapp):
+    npz, _ = save_result(_viewer_result(), tmp_path, {"schema_version": 1})
+    from calibfreehands.visualization.viewer import ResultViewer
+
+    viewer = ResultViewer(npz)
+    viewer.eventFilter(viewer.gl_view, _mouse_press())
+    assert viewer.eventFilter(viewer.gl_view, _key_press(Qt.Key.Key_Space))
+    assert viewer.timer.isActive()
+    viewer.eventFilter(viewer.overlay, _mouse_press())
+    assert viewer.eventFilter(viewer.overlay, _key_press(Qt.Key.Key_Space))
+    assert not viewer.timer.isActive()
+    viewer.close()

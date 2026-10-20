@@ -44,6 +44,8 @@
 - [x] P0.2 shared display-transform regression test
 - [x] P1-A viewer mesh/grid/axis toggle, auto-fit and raw-data immutability tests
 - [x] P1-A native Qt viewer construction for `1_insert` and `5_fold_p0` results
+- [x] P1-A.1 viewer opacity, axis-length and click-context keyboard routing tests
+- [x] P1-A.1 native Qt interaction checks for `1_insert` and `5_fold_p0` results
 - [x] Official WiLoR checkpoint and detector downloaded outside protected source tree
 - [x] Official model asset setup script with network access
 - [ ] Interactive viewer/manual validation

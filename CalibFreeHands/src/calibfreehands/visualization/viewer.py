@@ -10,8 +10,8 @@ import pyqtgraph.opengl as gl
 from pyqtgraph.opengl import shaders
 from pyqtgraph.opengl.items.GLLinePlotItem import GLLinePlotItem
 from pyqtgraph.opengl.items.GLScatterPlotItem import GLScatterPlotItem
-from PySide6.QtCore import Qt, QTimer, QPointF, QLineF
-from PySide6.QtGui import QGuiApplication, QImage, QPainter, QPen, QKeySequence, QShortcut
+from PySide6.QtCore import QEvent, Qt, QTimer, QPointF, QLineF
+from PySide6.QtGui import QGuiApplication, QImage, QPainter, QPen
 from PySide6.QtWidgets import QCheckBox, QHBoxLayout, QLabel, QPushButton, QSlider, QSplitter, QVBoxLayout, QWidget
 
 from calibfreehands.media.ffmpeg import FFmpegDecoder
@@ -100,6 +100,9 @@ class _GLResultView(gl.GLViewWidget):
         _reset_gl_shader_cache(); super().__init__(); self.loaded = loaded; self.frame = 0
         self.show_joints = self.show_bones = self.show_left = self.show_right = self.show_grid = self.show_axis = True
         self.show_mesh = loaded.has_mesh_topology
+        self.mesh_opacity = 0.6
+        self.hand_colors = ((0.1, 0.9, 1), (1, 0.8, 0.1))
+        self.setFocusPolicy(Qt.FocusPolicy.StrongFocus)
         self.grids = [gl.GLGridItem(color=(120, 140, 160, 55)) for _ in range(3)]
         for grid in self.grids: self.addItem(grid)
         self.axis = gl.GLLinePlotItem(mode="lines", width=2, antialias=True)
@@ -109,10 +112,18 @@ class _GLResultView(gl.GLViewWidget):
         self.fit_center = None; self.fit_distance = 1.2; self.setCameraPosition(distance=self.fit_distance)
         self.joints = [gl.GLScatterPlotItem(), gl.GLScatterPlotItem()]
         self.bones = [gl.GLLinePlotItem(mode="lines", width=2, antialias=True), gl.GLLinePlotItem(mode="lines", width=2, antialias=True)]
-        self.meshes = [gl.GLMeshItem(smooth=False, drawEdges=False), gl.GLMeshItem(smooth=False, drawEdges=False)]
+        self.meshes = [gl.GLMeshItem(smooth=False, drawEdges=False, glOptions="translucent"), gl.GLMeshItem(smooth=False, drawEdges=False, glOptions="translucent")]
         for item in (*self.joints, *self.bones, *self.meshes): self.addItem(item); item.setVisible(False)
+        self.set_mesh_opacity(self.mesh_opacity)
         self.set_frame(0)
         self._frame_camera(self._first_detected_frame(), reset_orientation=True)
+    def mousePressEvent(self, event):
+        self.setFocus(Qt.FocusReason.MouseFocusReason)
+        super().mousePressEvent(event)
+    def set_mesh_opacity(self, opacity):
+        self.mesh_opacity = float(np.clip(opacity, 0.1, 1.0))
+        for hand_i, mesh in enumerate(self.meshes): mesh.setColor((*self.hand_colors[hand_i], self.mesh_opacity))
+        self.update()
     def _first_detected_frame(self):
         detected = self.loaded.result.detected
         return int(np.flatnonzero(detected.any(axis=1))[0]) if detected.any() else self.frame
@@ -134,11 +145,11 @@ class _GLResultView(gl.GLViewWidget):
             if rotation: grid.rotate(*rotation)
             grid.translate(*center)
         directions = np.eye(3, dtype=np.float32) @ RAW_TO_VIEW.T
-        axis_size = size * 0.35
+        axis_size = size * 0.65
         positions = np.concatenate([np.stack((center, center + direction * axis_size)) for direction in directions])
         colors = np.repeat(np.asarray(((1, 0.2, 0.2, 1), (0.2, 1, 0.2, 1), (0.3, 0.5, 1, 1)), dtype=np.float32), 2, axis=0)
         self.axis.setData(pos=np.ascontiguousarray(positions, dtype=np.float32), color=colors, mode="lines")
-        for label, direction in zip(self.axis_labels, directions): label.setData(pos=center + direction * axis_size * 1.1)
+        for label, direction in zip(self.axis_labels, directions): label.setData(pos=center + direction * axis_size * 1.08)
     def _frame_camera(self, frame=None, reset_orientation=False):
         finite = self._geometry(self.frame if frame is None else frame)
         if not len(finite): return False
@@ -166,7 +177,7 @@ class _GLResultView(gl.GLViewWidget):
         self.axis.setVisible(self.show_axis)
         for label in self.axis_labels: label.setVisible(self.show_axis)
     def set_frame(self, frame):
-        self.frame = max(0, min(frame, self.loaded.frame_count - 1)); result = self.loaded.result; colors = ((0.1, 0.9, 1, 1), (1, 0.8, 0.1, 1))
+        self.frame = max(0, min(frame, self.loaded.frame_count - 1)); result = self.loaded.result; colors = tuple((*color, 1) for color in self.hand_colors)
         for hand_i in range(2):
             visible = bool(result.detected[self.frame, hand_i]) and not (hand_i == 0 and not self.show_left) and not (hand_i == 1 and not self.show_right)
             for item in (self.joints[hand_i], self.bones[hand_i], self.meshes[hand_i]): item.setVisible(False)
@@ -182,7 +193,7 @@ class _GLResultView(gl.GLViewWidget):
                 vertices = np.asarray(result.mano_vertices[self.frame, hand_i]) @ RAW_TO_VIEW.T; faces = result.mano_faces[hand_i] if result.mano_faces.ndim == 3 else result.mano_faces
                 vertices = np.ascontiguousarray(vertices, dtype=np.float32); faces = np.ascontiguousarray(faces, dtype=np.int32)
                 if np.isfinite(vertices).all() and faces.ndim == 2 and faces.shape[1] == 3 and faces.min() >= 0 and faces.max() < len(vertices):
-                    self.meshes[hand_i].setMeshData(meshdata=gl.MeshData(vertexes=vertices, faces=faces)); self.meshes[hand_i].setColor(colors[hand_i]); self.meshes[hand_i].setVisible(True)
+                    self.meshes[hand_i].setMeshData(meshdata=gl.MeshData(vertexes=vertices, faces=faces)); self.meshes[hand_i].setColor((*self.hand_colors[hand_i], self.mesh_opacity)); self.meshes[hand_i].setVisible(True)
         self._update_reference_visibility(); self.update()
 
 
@@ -190,6 +201,7 @@ class ResultViewer(QWidget):
     def __init__(self, result_path: Path):
         super().__init__(); self.loaded = load_npz_result(result_path); self.setWindowTitle("CalibFreeHands — Result"); self.setMinimumSize(960, 640)
         screen = QGuiApplication.primaryScreen().availableGeometry(); self.resize(min(1400, int(screen.width() * .8)), min(900, int(screen.height() * .8)))
+        self._arrow_mode = "frame"
         self.overlay = _OverlayCanvas(self.loaded); self.gl_view = _GLResultView(self.loaded); split = QSplitter(Qt.Orientation.Horizontal); split.addWidget(self.overlay); split.addWidget(self.gl_view); split.setSizes([600, 600])
         self.slider = QSlider(Qt.Orientation.Horizontal); self.slider.setRange(0, max(0, self.loaded.frame_count - 1)); self.slider.valueChanged.connect(self._set_frame)
         self.status = QLabel(); self.coordinate_info = QLabel("Camera space · metres   X: image right   Y: image down   Z: forward   ·   View centered on hands · raw coordinates unchanged")
@@ -197,17 +209,49 @@ class ResultViewer(QWidget):
         for label, attr in (("Joint", "show_joints"), ("Bone", "show_bones"), ("Left Hand", "show_left"), ("Right Hand", "show_right"), ("Grid", "show_grid"), ("Axis", "show_axis")):
             check = QCheckBox(label); check.setChecked(getattr(self.gl_view, attr)); check.toggled.connect(lambda value, a=attr: self._toggle(a, value)); visibility.addWidget(check)
         mesh = QCheckBox("Mesh"); mesh.setChecked(self.gl_view.show_mesh); mesh.setEnabled(self.loaded.has_mesh_topology); mesh.setToolTip("MANO mesh topology is unavailable for this result" if not self.loaded.has_mesh_topology else ""); mesh.toggled.connect(lambda value: self._toggle("show_mesh", value)); visibility.addWidget(mesh)
-        previous = QPushButton("Previous"); previous.clicked.connect(lambda: self.slider.setValue(max(0, self.slider.value() - 1))); play = QPushButton("Play / Pause"); play.clicked.connect(self._play); nxt = QPushButton("Next"); nxt.clicked.connect(lambda: self.slider.setValue(min(self.loaded.frame_count - 1, self.slider.value() + 1))); reset = QPushButton("Reset Camera"); reset.clicked.connect(self.gl_view.reset_camera)
+        opacity_label = QLabel("Opacity")
+        self.mesh_opacity_slider = QSlider(Qt.Orientation.Horizontal); self.mesh_opacity_slider.setRange(10, 100); self.mesh_opacity_slider.setValue(60); self.mesh_opacity_slider.setEnabled(self.loaded.has_mesh_topology); self.mesh_opacity_slider.setMaximumWidth(120)
+        self.mesh_opacity_value = QLabel("60%")
+        self.mesh_opacity_slider.valueChanged.connect(self._set_mesh_opacity)
+        opacity_label.setEnabled(self.loaded.has_mesh_topology); self.mesh_opacity_value.setEnabled(self.loaded.has_mesh_topology)
+        visibility.addWidget(opacity_label); visibility.addWidget(self.mesh_opacity_slider); visibility.addWidget(self.mesh_opacity_value)
+        previous = QPushButton("Previous"); previous.clicked.connect(self._previous); play = QPushButton("Play / Pause"); play.clicked.connect(self._play); nxt = QPushButton("Next"); nxt.clicked.connect(self._next_frame)
         for text, callback in (("Front", self.gl_view.front_view), ("Side", self.gl_view.side_view), ("Top", self.gl_view.top_view), ("Fit Hands", self.gl_view.fit_hands), ("Reset View", self.gl_view.reset_camera)):
             button = QPushButton(text); button.clicked.connect(callback); view.addWidget(button)
         playback.addWidget(previous); playback.addWidget(play); playback.addWidget(nxt)
         layout = QVBoxLayout(self); layout.addWidget(split, 1); layout.addWidget(self.slider); layout.addLayout(visibility); layout.addLayout(view); layout.addLayout(playback); layout.addWidget(self.status); layout.addWidget(self.coordinate_info)
-        for key, callback in (("Space", self._play), ("Left", lambda: self.slider.setValue(max(0, self.slider.value() - 1))), ("Right", lambda: self.slider.setValue(min(self.loaded.frame_count - 1, self.slider.value() + 1)))): QShortcut(QKeySequence(key), self, activated=callback)
+        self.installEventFilter(self)
+        for widget in self.findChildren(QWidget): widget.installEventFilter(self)
         self._update_status()
     def _toggle(self, attr, value):
         if hasattr(self.overlay, attr): setattr(self.overlay, attr, value)
         setattr(self.gl_view, attr, value); self.overlay.update(); self.gl_view.set_frame(self.slider.value())
     def _set_frame(self, frame): self.overlay.set_frame(frame); self.gl_view.set_frame(frame); self._update_status()
+    def _set_mesh_opacity(self, percent):
+        self.mesh_opacity_value.setText(f"{percent}%"); self.gl_view.set_mesh_opacity(percent / 100)
+    def _previous(self): self.slider.setValue(max(0, self.slider.value() - 1))
+    def _next_frame(self): self.slider.setValue(min(self.loaded.frame_count - 1, self.slider.value() + 1))
+    def _is_gl_viewport(self, widget):
+        while widget is not None:
+            if widget is self.gl_view: return True
+            widget = widget.parentWidget()
+        return False
+    def eventFilter(self, watched, event):
+        if event.type() == QEvent.Type.MouseButtonPress:
+            self._arrow_mode = "orbit" if self._is_gl_viewport(watched) else "frame"
+        elif event.type() == QEvent.Type.KeyPress:
+            key = event.key()
+            if key == Qt.Key.Key_Space:
+                self._play(); event.accept(); return True
+            if watched is self.slider and key in (Qt.Key.Key_Left, Qt.Key.Key_Right): return False
+            if self._arrow_mode == "orbit" and key in (Qt.Key.Key_Left, Qt.Key.Key_Right, Qt.Key.Key_Up, Qt.Key.Key_Down):
+                azimuth, elevation = {Qt.Key.Key_Left: (-3, 0), Qt.Key.Key_Right: (3, 0), Qt.Key.Key_Up: (0, -3), Qt.Key.Key_Down: (0, 3)}[key]
+                self.gl_view.orbit(azimuth, elevation); event.accept(); return True
+            if self._arrow_mode == "frame":
+                if key == Qt.Key.Key_Left: self._previous(); event.accept(); return True
+                if key == Qt.Key.Key_Right: self._next_frame(); event.accept(); return True
+                if key in (Qt.Key.Key_Up, Qt.Key.Key_Down): event.accept(); return True
+        return super().eventFilter(watched, event)
     def _play(self): self.timer.stop() if self.timer.isActive() else self.timer.start(100)
     def _next(self): self.slider.setValue((self.slider.value() + 1) % max(1, self.loaded.frame_count))
     def _update_status(self):

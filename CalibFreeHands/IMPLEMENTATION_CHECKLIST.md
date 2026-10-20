@@ -39,3 +39,4 @@
 - [x] P0.2 GL item data validation and persistent per-hand item updates
 - [x] P0.2 Qt OpenGL shader-cache reset across repeated viewer contexts
 - [x] P1-A viewer mesh-state synchronization, camera-space references, fit and view presets
+- [x] P1-A.1 viewer mesh opacity, expanded axes and click-context keyboard controls
