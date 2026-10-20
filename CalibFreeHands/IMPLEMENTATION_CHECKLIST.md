@@ -41,3 +41,4 @@
 - [x] P1-A viewer mesh-state synchronization, camera-space references, fit and view presets
 - [x] P1-A.1 viewer mesh opacity, expanded axes and click-context keyboard controls
 - [x] P1-A.2 opaque/translucent mesh state switching and compact sample-count controls
+- [x] P1-B MANO parameter preservation and calibration provenance trace

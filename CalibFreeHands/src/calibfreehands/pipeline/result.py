@@ -26,6 +26,7 @@ class CanonicalResult:
     schema_version: int = 1
     video_focal_px: float | None = None
     media_metadata: dict | None = None
+    calibration_metadata: dict | None = None
 
     def __post_init__(self) -> None:
         frames = len(self.frame_indices)

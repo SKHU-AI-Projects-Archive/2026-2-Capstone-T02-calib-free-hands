@@ -48,9 +48,12 @@
 - [x] P1-A.1 native Qt interaction checks for `1_insert` and `5_fold_p0` results
 - [x] P1-A.2 mesh render-mode/sample-count control regression tests
 - [x] P1-A.2 native Qt checks for mesh render-state switching and sample-count enablement
+- [x] P1-B synthetic MANO NPZ round-trip and calibration provenance trace regression tests
+- [x] P1-B legacy NPZ reload without MANO parameters
 - [x] Official WiLoR checkpoint and detector downloaded outside protected source tree
 - [x] Official model asset setup script with network access
 - [ ] Interactive viewer/manual validation
+- [ ] P1-B new original WiLoR run confirming MANO parameter persistence in a fresh real result
 - [ ] `git diff` final review
 
 Known remaining validation gap: interactive Windows GUI and visual viewer controls

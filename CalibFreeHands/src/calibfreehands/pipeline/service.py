@@ -57,6 +57,8 @@ def process_frames(frames: list[DecodedFrame], calibrator: CalibrationBackend, p
     camera_translation = np.full((frame_count, 2, 3), np.nan, np.float32)
     mano_vertices = None
     mano_faces = None
+    mano_pose = None
+    mano_shape = None
     frame_focal = np.full(frame_count, video_focal, np.float32)
     for frame_pos, frame in enumerate(frames):
         if cancelled and cancelled(): raise InterruptedError("Processing cancelled during reconstruction")
@@ -72,15 +74,42 @@ def process_frames(frames: list[DecodedFrame], calibrator: CalibrationBackend, p
                 if mano_vertices is None:
                     mano_vertices = np.full((frame_count, 2, *estimate.vertices_relative.shape), np.nan, np.float32)
                 mano_vertices[frame_pos, hand] = estimate.vertices_relative + estimate.camera_translation
+            for field_name in ("mano_pose", "mano_shape"):
+                value = getattr(estimate, field_name)
+                if value is None:
+                    continue
+                value = np.asarray(value, dtype=np.float32)
+                stored = mano_pose if field_name == "mano_pose" else mano_shape
+                if stored is None:
+                    stored = np.full((frame_count, 2, *value.shape), np.nan, np.float32)
+                elif stored.shape[2:] != value.shape:
+                    raise ValueError(f"{field_name} shape changed from {stored.shape[2:]} to {value.shape}")
+                stored[frame_pos, hand] = value
+                if field_name == "mano_pose":
+                    mano_pose = stored
+                else:
+                    mano_shape = stored
             if estimate.mano_faces is not None and mano_faces is None:
                 faces = np.asarray(estimate.mano_faces, dtype=np.int32)
                 mano_faces = np.stack((faces[:, [0, 2, 1]], faces), axis=0) if faces.ndim == 2 else faces
         if progress: progress("Reconstructing hands", frame_pos + 1, frame_count)
+    def json_float(value):
+        value = float(value)
+        return value if np.isfinite(value) else None
+    calibration_metadata = {
+        "sampling_mode": sampling_mode, "requested_sample_count": int(sample_count),
+        "actual_sample_count": int(len(sample_ids)), "aggregation": aggregation,
+        "frame_indices": [int(frames[int(index)].index) for index in sample_ids],
+        "timestamps_s": [json_float(frames[int(index)].timestamp_s) for index in sample_ids],
+        "focal_px": [json_float(value) for value in sampled_focals],
+        "aggregated_focal_px": json_float(video_focal),
+    }
     return CanonicalResult(np.array([frame.index for frame in frames]), np.array([frame.timestamp_s for frame in frames]),
                            keypoints_2d, keypoints_3d, detected, frame_focal,
                            (frames[0].rgb.shape[1], frames[0].rgb.shape[0]), mano_vertices, mano_faces,
-                           confidence, bbox, camera_translation=camera_translation, video_focal_px=video_focal,
-                           media_metadata={"frame_count": frame_count})
+                           confidence, bbox, mano_pose=mano_pose, mano_shape=mano_shape,
+                           camera_translation=camera_translation, video_focal_px=video_focal,
+                           media_metadata={"frame_count": frame_count}, calibration_metadata=calibration_metadata)
 
 
 def process_and_save(frames: list[DecodedFrame], calibrator: CalibrationBackend, pose: PoseBackend,
@@ -97,6 +126,8 @@ def process_and_save(frames: list[DecodedFrame], calibrator: CalibrationBackend,
                                                  "principal_point_applied": False,
                                                  "distortion_applied": False},
                   "runtime": runtime_metadata(), "outputs": ["results.npz", "run.json"]}
+    if result.calibration_metadata is not None:
+        provenance["calibration"] = result.calibration_metadata
     input_path = settings.get("input_path")
     if input_path and Path(input_path).is_file():
         provenance["input_path"] = str(Path(input_path).resolve())
