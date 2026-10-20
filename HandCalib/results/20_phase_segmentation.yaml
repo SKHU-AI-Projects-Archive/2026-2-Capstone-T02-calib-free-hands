@@ -1,0 +1,813 @@
+experiment: 20_phase_segmentation
+run: runs/20_phase_segmentation/20261020T035326Z
+code_commit: fb341e2
+git_dirty_at_run: false
+transition_method: linear_d
+note: 전환 시각 검출과 가이드 판정을 다시 낸 실험이다. f 추정 방식과 판정 문턱값은 바꾸지 않았다. 기준 f와의 비교 수치는 summary.md에만
+  있다.
+videos:
+  IMG_7147.MOV:
+    manual_transition_s: null
+    detectors:
+      wilor_yolo:
+        transition_legacy_theta_s: 0.0
+        transition_linear_d_s: 3.1333333333333333
+        transition_linear_d_no_motion_s: 3.1333333333333333
+        d0: 0.00596
+        d_thr: 0.03407
+        v0: 0.04728
+        v_thr: 0.14183
+        guide_satisfied_legacy_theta: false
+        guide_satisfied_linear_d: false
+        guide_reasons_legacy_theta:
+        - 손 박스/짧은 변 0.64 > 0.5
+        - 자동 전환 0.00 s < 2.5 s
+        - θ2d p95 87° > 45°
+        guide_reasons_linear_d:
+        - 손 박스/짧은 변 0.64 > 0.5
+        - θ2d p95 87° > 45°
+        default:
+          f_fixed_template_px: null
+          f_status: 값 없음 (상한)
+          f_joint_delta_px: null
+          verdict: REJECT
+          tilt_start_s: 3.0
+          n_tilt_frames: 84
+        same_as_17: true
+        variants:
+          auto_phase:
+            f_fixed_template_px: null
+            f_status: 값 없음 (상한)
+            f_joint_delta_px: null
+            verdict: REJECT
+            tilt_start_s: 3.133
+            n_tilt_frames: 82
+          max_tilt:
+            f_fixed_template_px: 2435.2
+            f_status: value
+            f_joint_delta_px: 2342.2
+            verdict: REJECT
+            tilt_start_s: 3.0
+            n_tilt_frames: 62
+          no_wrist:
+            f_fixed_template_px: 1692.2
+            f_status: value
+            f_joint_delta_px: 1939.0
+            verdict: REJECT
+            tilt_start_s: 3.0
+            n_tilt_frames: 84
+          max_tilt_no_wrist:
+            f_fixed_template_px: 1785.5
+            f_status: value
+            f_joint_delta_px: 2685.3
+            verdict: REJECT
+            tilt_start_s: 3.0
+            n_tilt_frames: 62
+      mediapipe_hands:
+        transition_legacy_theta_s: 0.0
+        transition_linear_d_s: null
+        transition_linear_d_no_motion_s: 2.933333333333333
+        d0: 0.01145
+        d_thr: 0.03435
+        v0: 0.06616
+        v_thr: 0.19847
+        guide_satisfied_legacy_theta: false
+        guide_satisfied_linear_d: false
+        guide_reasons_legacy_theta:
+        - 손 박스/짧은 변 0.59 > 0.5
+        - 자동 전환 0.00 s < 2.5 s
+        - θ2d p95 89° > 45°
+        guide_reasons_linear_d:
+        - 손 박스/짧은 변 0.59 > 0.5
+        - 자동 전환 없음
+        - θ2d p95 89° > 45°
+        default:
+          f_fixed_template_px: null
+          f_status: 값 없음 (상한)
+          f_joint_delta_px: null
+          verdict: REJECT
+          tilt_start_s: 3.0
+          n_tilt_frames: 84
+        same_as_17: true
+        variants:
+          auto_phase:
+            skipped: 전환 시각을 검출하지 못함
+          max_tilt:
+            f_fixed_template_px: 1998.5
+            f_status: value
+            f_joint_delta_px: 1923.0
+            verdict: REJECT
+            tilt_start_s: 3.0
+            n_tilt_frames: 63
+          no_wrist:
+            f_fixed_template_px: 1661.6
+            f_status: value
+            f_joint_delta_px: null
+            verdict: REJECT
+            tilt_start_s: 3.0
+            n_tilt_frames: 84
+          max_tilt_no_wrist:
+            f_fixed_template_px: 1939.8
+            f_status: value
+            f_joint_delta_px: 2611.0
+            verdict: REJECT
+            tilt_start_s: 3.0
+            n_tilt_frames: 62
+      rtmpose_hand:
+        transition_legacy_theta_s: 0.0
+        transition_linear_d_s: 3.2
+        transition_linear_d_no_motion_s: 3.2
+        d0: 0.00818
+        d_thr: 0.03407
+        v0: 0.05969
+        v_thr: 0.17907
+        guide_satisfied_legacy_theta: false
+        guide_satisfied_linear_d: false
+        guide_reasons_legacy_theta:
+        - 손 박스/짧은 변 0.64 > 0.5
+        - 자동 전환 0.00 s < 2.5 s
+        - θ2d p95 86° > 45°
+        guide_reasons_linear_d:
+        - 손 박스/짧은 변 0.64 > 0.5
+        - θ2d p95 86° > 45°
+        default:
+          f_fixed_template_px: 975.1
+          f_status: value
+          f_joint_delta_px: 708.9
+          verdict: REJECT
+          tilt_start_s: 3.0
+          n_tilt_frames: 84
+        same_as_17: true
+        variants:
+          auto_phase:
+            f_fixed_template_px: 975.1
+            f_status: value
+            f_joint_delta_px: 709.1
+            verdict: REJECT
+            tilt_start_s: 3.2
+            n_tilt_frames: 81
+          max_tilt:
+            f_fixed_template_px: 1876.1
+            f_status: value
+            f_joint_delta_px: 1520.3
+            verdict: REJECT
+            tilt_start_s: 3.0
+            n_tilt_frames: 63
+          no_wrist:
+            f_fixed_template_px: 1606.4
+            f_status: value
+            f_joint_delta_px: 1732.5
+            verdict: REJECT
+            tilt_start_s: 3.0
+            n_tilt_frames: 84
+          max_tilt_no_wrist:
+            f_fixed_template_px: 1814.6
+            f_status: value
+            f_joint_delta_px: 3001.6
+            verdict: REJECT
+            tilt_start_s: 3.0
+            n_tilt_frames: 62
+  IMG_7148.MOV:
+    manual_transition_s: null
+    detectors:
+      wilor_yolo:
+        transition_legacy_theta_s: 0.4666666666666667
+        transition_linear_d_s: 6.333333333333333
+        transition_linear_d_no_motion_s: 4.466666666666667
+        d0: 0.02307
+        d_thr: 0.06922
+        v0: 0.08716
+        v_thr: 0.26149
+        guide_satisfied_legacy_theta: false
+        guide_satisfied_linear_d: false
+        guide_reasons_legacy_theta:
+        - 손 박스/짧은 변 0.60 > 0.5
+        - 자동 전환 0.47 s < 2.5 s
+        - θ2d p95 60° > 45°
+        - 기울기 구간 θ2d 중앙값 19°가 20–40° 밖
+        guide_reasons_linear_d:
+        - 손 박스/짧은 변 0.60 > 0.5
+        - θ2d p95 60° > 45°
+        - 기울기 구간 θ2d 중앙값 19°가 20–40° 밖
+        default:
+          f_fixed_template_px: 2308.1
+          f_status: value
+          f_joint_delta_px: null
+          verdict: REJECT
+          tilt_start_s: 3.0
+          n_tilt_frames: 121
+        same_as_17: true
+        variants:
+          auto_phase:
+            f_fixed_template_px: 2271.7
+            f_status: value
+            f_joint_delta_px: null
+            verdict: REJECT
+            tilt_start_s: 6.333
+            n_tilt_frames: 71
+          max_tilt:
+            f_fixed_template_px: 2654.1
+            f_status: value
+            f_joint_delta_px: null
+            verdict: REJECT
+            tilt_start_s: 3.0
+            n_tilt_frames: 109
+          no_wrist:
+            f_fixed_template_px: 2394.5
+            f_status: value
+            f_joint_delta_px: 2380.3
+            verdict: REJECT
+            tilt_start_s: 3.0
+            n_tilt_frames: 121
+          max_tilt_no_wrist:
+            f_fixed_template_px: 2618.0
+            f_status: value
+            f_joint_delta_px: 2674.3
+            verdict: REJECT
+            tilt_start_s: 3.0
+            n_tilt_frames: 109
+      mediapipe_hands:
+        transition_legacy_theta_s: 0.0
+        transition_linear_d_s: 6.333333333333333
+        transition_linear_d_no_motion_s: 4.266666666666667
+        d0: 0.02839
+        d_thr: 0.08516
+        v0: 0.08579
+        v_thr: 0.25736
+        guide_satisfied_legacy_theta: false
+        guide_satisfied_linear_d: false
+        guide_reasons_legacy_theta:
+        - 손 박스/짧은 변 0.59 > 0.5
+        - 자동 전환 0.00 s < 2.5 s
+        - θ2d p95 68° > 45°
+        guide_reasons_linear_d:
+        - 손 박스/짧은 변 0.59 > 0.5
+        - θ2d p95 68° > 45°
+        default:
+          f_fixed_template_px: 1700.0
+          f_status: value
+          f_joint_delta_px: null
+          verdict: REJECT
+          tilt_start_s: 3.0
+          n_tilt_frames: 121
+        same_as_17: true
+        variants:
+          auto_phase:
+            f_fixed_template_px: 1601.3
+            f_status: value
+            f_joint_delta_px: null
+            verdict: REJECT
+            tilt_start_s: 6.333
+            n_tilt_frames: 71
+          max_tilt:
+            f_fixed_template_px: 2132.5
+            f_status: value
+            f_joint_delta_px: 1466.7
+            verdict: REJECT
+            tilt_start_s: 3.0
+            n_tilt_frames: 110
+          no_wrist:
+            f_fixed_template_px: 1873.6
+            f_status: value
+            f_joint_delta_px: 1644.9
+            verdict: REJECT
+            tilt_start_s: 3.0
+            n_tilt_frames: 121
+          max_tilt_no_wrist:
+            f_fixed_template_px: 2292.0
+            f_status: value
+            f_joint_delta_px: 1947.5
+            verdict: REJECT
+            tilt_start_s: 3.0
+            n_tilt_frames: 109
+      rtmpose_hand:
+        transition_legacy_theta_s: 4.0
+        transition_linear_d_s: 4.333333333333333
+        transition_linear_d_no_motion_s: 4.333333333333333
+        d0: 0.01447
+        d_thr: 0.0434
+        v0: 0.05677
+        v_thr: 0.17031
+        guide_satisfied_legacy_theta: false
+        guide_satisfied_linear_d: false
+        guide_reasons_legacy_theta:
+        - 손 박스/짧은 변 0.60 > 0.5
+        - θ2d p95 58° > 45°
+        - 기울기 구간 θ2d 중앙값 19°가 20–40° 밖
+        guide_reasons_linear_d:
+        - 손 박스/짧은 변 0.60 > 0.5
+        - θ2d p95 58° > 45°
+        - 기울기 구간 θ2d 중앙값 19°가 20–40° 밖
+        default:
+          f_fixed_template_px: 779.8
+          f_status: value
+          f_joint_delta_px: null
+          verdict: REJECT
+          tilt_start_s: 3.0
+          n_tilt_frames: 121
+        same_as_17: true
+        variants:
+          auto_phase:
+            f_fixed_template_px: 779.8
+            f_status: value
+            f_joint_delta_px: null
+            verdict: REJECT
+            tilt_start_s: 4.333
+            n_tilt_frames: 101
+          max_tilt:
+            f_fixed_template_px: 2198.7
+            f_status: value
+            f_joint_delta_px: null
+            verdict: REJECT
+            tilt_start_s: 3.0
+            n_tilt_frames: 110
+          no_wrist:
+            f_fixed_template_px: 1261.6
+            f_status: value
+            f_joint_delta_px: 1225.5
+            verdict: REJECT
+            tilt_start_s: 3.0
+            n_tilt_frames: 121
+          max_tilt_no_wrist:
+            f_fixed_template_px: 1268.4
+            f_status: value
+            f_joint_delta_px: 1215.1
+            verdict: REJECT
+            tilt_start_s: 3.0
+            n_tilt_frames: 108
+  IMG_7157.MOV:
+    manual_transition_s: null
+    detectors:
+      wilor_yolo:
+        transition_legacy_theta_s: 3.933333333333333
+        transition_linear_d_s: 5.933333333333334
+        transition_linear_d_no_motion_s: 4.133333333333334
+        d0: 0.01806
+        d_thr: 0.05417
+        v0: 0.08227
+        v_thr: 0.24682
+        guide_satisfied_legacy_theta: false
+        guide_satisfied_linear_d: false
+        guide_reasons_legacy_theta:
+        - 손 박스/짧은 변 0.55 > 0.5
+        guide_reasons_linear_d:
+        - 손 박스/짧은 변 0.55 > 0.5
+        default:
+          f_fixed_template_px: 2740.2
+          f_status: value
+          f_joint_delta_px: null
+          verdict: REJECT
+          tilt_start_s: 3.0
+          n_tilt_frames: 137
+        same_as_17: true
+        variants:
+          auto_phase:
+            f_fixed_template_px: 2874.1
+            f_status: value
+            f_joint_delta_px: null
+            verdict: REJECT
+            tilt_start_s: 5.933
+            n_tilt_frames: 93
+          max_tilt:
+            f_fixed_template_px: 2740.2
+            f_status: value
+            f_joint_delta_px: null
+            verdict: REJECT
+            tilt_start_s: 3.0
+            n_tilt_frames: 137
+          no_wrist:
+            f_fixed_template_px: null
+            f_status: 값 없음 (상한)
+            f_joint_delta_px: null
+            verdict: REJECT
+            tilt_start_s: 3.0
+            n_tilt_frames: 137
+          max_tilt_no_wrist:
+            f_fixed_template_px: null
+            f_status: 값 없음 (상한)
+            f_joint_delta_px: null
+            verdict: REJECT
+            tilt_start_s: 3.0
+            n_tilt_frames: 137
+      mediapipe_hands:
+        transition_legacy_theta_s: 3.466666666666667
+        transition_linear_d_s: 5.933333333333334
+        transition_linear_d_no_motion_s: 4.2
+        d0: 0.02205
+        d_thr: 0.06615
+        v0: 0.06082
+        v_thr: 0.18246
+        guide_satisfied_legacy_theta: false
+        guide_satisfied_linear_d: false
+        guide_reasons_legacy_theta:
+        - 손 박스/짧은 변 0.53 > 0.5
+        - 기울기 구간 θ2d 중앙값 18°가 20–40° 밖
+        guide_reasons_linear_d:
+        - 손 박스/짧은 변 0.53 > 0.5
+        - 기울기 구간 θ2d 중앙값 18°가 20–40° 밖
+        default:
+          f_fixed_template_px: 2245.6
+          f_status: value
+          f_joint_delta_px: 1951.3
+          verdict: REJECT
+          tilt_start_s: 3.0
+          n_tilt_frames: 137
+        same_as_17: true
+        variants:
+          auto_phase:
+            f_fixed_template_px: 2381.0
+            f_status: value
+            f_joint_delta_px: 1990.9
+            verdict: REJECT
+            tilt_start_s: 5.933
+            n_tilt_frames: 93
+          max_tilt:
+            f_fixed_template_px: 2245.6
+            f_status: value
+            f_joint_delta_px: 1951.3
+            verdict: REJECT
+            tilt_start_s: 3.0
+            n_tilt_frames: 137
+          no_wrist:
+            f_fixed_template_px: 2077.4
+            f_status: value
+            f_joint_delta_px: 2218.0
+            verdict: REJECT
+            tilt_start_s: 3.0
+            n_tilt_frames: 137
+          max_tilt_no_wrist:
+            f_fixed_template_px: 2077.4
+            f_status: value
+            f_joint_delta_px: 2218.0
+            verdict: REJECT
+            tilt_start_s: 3.0
+            n_tilt_frames: 137
+      rtmpose_hand:
+        transition_legacy_theta_s: 3.933333333333333
+        transition_linear_d_s: 5.8
+        transition_linear_d_no_motion_s: 4.133333333333334
+        d0: 0.01062
+        d_thr: 0.03407
+        v0: 0.05463
+        v_thr: 0.16388
+        guide_satisfied_legacy_theta: false
+        guide_satisfied_linear_d: false
+        guide_reasons_legacy_theta:
+        - 손 박스/짧은 변 0.55 > 0.5
+        - 기울기 구간 θ2d 중앙값 18°가 20–40° 밖
+        guide_reasons_linear_d:
+        - 손 박스/짧은 변 0.55 > 0.5
+        - 기울기 구간 θ2d 중앙값 18°가 20–40° 밖
+        default:
+          f_fixed_template_px: 1708.4
+          f_status: value
+          f_joint_delta_px: 1645.2
+          verdict: REJECT
+          tilt_start_s: 3.0
+          n_tilt_frames: 137
+        same_as_17: true
+        variants:
+          auto_phase:
+            f_fixed_template_px: 1662.4
+            f_status: value
+            f_joint_delta_px: 1635.9
+            verdict: REJECT
+            tilt_start_s: 5.8
+            n_tilt_frames: 95
+          max_tilt:
+            f_fixed_template_px: 1708.4
+            f_status: value
+            f_joint_delta_px: 1645.2
+            verdict: REJECT
+            tilt_start_s: 3.0
+            n_tilt_frames: 137
+          no_wrist:
+            f_fixed_template_px: 1667.2
+            f_status: value
+            f_joint_delta_px: 1675.5
+            verdict: REJECT
+            tilt_start_s: 3.0
+            n_tilt_frames: 137
+          max_tilt_no_wrist:
+            f_fixed_template_px: 1667.2
+            f_status: value
+            f_joint_delta_px: 1675.5
+            verdict: REJECT
+            tilt_start_s: 3.0
+            n_tilt_frames: 137
+  IMG_7158.MOV:
+    manual_transition_s: null
+    detectors:
+      wilor_yolo:
+        transition_legacy_theta_s: 1.4
+        transition_linear_d_s: 5.933333333333334
+        transition_linear_d_no_motion_s: 3.066666666666667
+        d0: 0.04272
+        d_thr: 0.12815
+        v0: 0.06021
+        v_thr: 0.18063
+        guide_satisfied_legacy_theta: false
+        guide_satisfied_linear_d: false
+        guide_reasons_legacy_theta:
+        - 손 박스/짧은 변 0.52 > 0.5
+        - 자동 전환 1.40 s < 2.5 s
+        - θ2d p95 51° > 45°
+        guide_reasons_linear_d:
+        - 손 박스/짧은 변 0.52 > 0.5
+        - θ2d p95 51° > 45°
+        default:
+          f_fixed_template_px: null
+          f_status: 값 없음 (상한)
+          f_joint_delta_px: null
+          verdict: REJECT
+          tilt_start_s: 3.0
+          n_tilt_frames: 174
+        same_as_17: true
+        variants:
+          auto_phase:
+            f_fixed_template_px: null
+            f_status: 값 없음 (상한)
+            f_joint_delta_px: null
+            verdict: REJECT
+            tilt_start_s: 5.933
+            n_tilt_frames: 130
+          max_tilt:
+            f_fixed_template_px: null
+            f_status: 값 없음 (상한)
+            f_joint_delta_px: null
+            verdict: REJECT
+            tilt_start_s: 3.0
+            n_tilt_frames: 147
+          no_wrist:
+            f_fixed_template_px: null
+            f_status: 값 없음 (상한)
+            f_joint_delta_px: null
+            verdict: REJECT
+            tilt_start_s: 3.0
+            n_tilt_frames: 174
+          max_tilt_no_wrist:
+            f_fixed_template_px: null
+            f_status: 값 없음 (상한)
+            f_joint_delta_px: null
+            verdict: REJECT
+            tilt_start_s: 3.0
+            n_tilt_frames: 147
+      mediapipe_hands:
+        transition_legacy_theta_s: 2.533333333333333
+        transition_linear_d_s: 5.866666666666666
+        transition_linear_d_no_motion_s: 2.933333333333333
+        d0: 0.03357
+        d_thr: 0.1007
+        v0: 0.06351
+        v_thr: 0.19053
+        guide_satisfied_legacy_theta: false
+        guide_satisfied_linear_d: false
+        guide_reasons_legacy_theta:
+        - 손 박스/짧은 변 0.52 > 0.5
+        - θ2d p95 52° > 45°
+        guide_reasons_linear_d:
+        - 손 박스/짧은 변 0.52 > 0.5
+        - θ2d p95 52° > 45°
+        default:
+          f_fixed_template_px: 1752.4
+          f_status: value
+          f_joint_delta_px: 1668.1
+          verdict: REJECT
+          tilt_start_s: 3.0
+          n_tilt_frames: 174
+        same_as_17: true
+        variants:
+          auto_phase:
+            f_fixed_template_px: 1809.0
+            f_status: value
+            f_joint_delta_px: 1695.1
+            verdict: REJECT
+            tilt_start_s: 5.867
+            n_tilt_frames: 131
+          max_tilt:
+            f_fixed_template_px: 1717.2
+            f_status: value
+            f_joint_delta_px: 1610.9
+            verdict: REJECT
+            tilt_start_s: 3.0
+            n_tilt_frames: 141
+          no_wrist:
+            f_fixed_template_px: 1748.2
+            f_status: value
+            f_joint_delta_px: 2651.4
+            verdict: REJECT
+            tilt_start_s: 3.0
+            n_tilt_frames: 174
+          max_tilt_no_wrist:
+            f_fixed_template_px: 1531.5
+            f_status: value
+            f_joint_delta_px: 1574.4
+            verdict: REJECT
+            tilt_start_s: 3.0
+            n_tilt_frames: 141
+      rtmpose_hand:
+        transition_legacy_theta_s: 2.533333333333333
+        transition_linear_d_s: 12.933333333333334
+        transition_linear_d_no_motion_s: 2.6666666666666665
+        d0: 0.01038
+        d_thr: 0.03407
+        v0: 0.05823
+        v_thr: 0.1747
+        guide_satisfied_legacy_theta: false
+        guide_satisfied_linear_d: false
+        guide_reasons_legacy_theta:
+        - 손 박스/짧은 변 0.52 > 0.5
+        - θ2d p95 48° > 45°
+        guide_reasons_linear_d:
+        - 손 박스/짧은 변 0.52 > 0.5
+        - θ2d p95 48° > 45°
+        default:
+          f_fixed_template_px: 1989.4
+          f_status: value
+          f_joint_delta_px: 2058.7
+          verdict: REJECT
+          tilt_start_s: 3.0
+          n_tilt_frames: 174
+        same_as_17: true
+        variants:
+          auto_phase:
+            f_fixed_template_px: null
+            f_status: 값 없음 (상한)
+            f_joint_delta_px: null
+            verdict: REJECT
+            tilt_start_s: 12.933
+            n_tilt_frames: 25
+          max_tilt:
+            f_fixed_template_px: 1878.1
+            f_status: value
+            f_joint_delta_px: 1903.2
+            verdict: REJECT
+            tilt_start_s: 3.0
+            n_tilt_frames: 157
+          no_wrist:
+            f_fixed_template_px: 1194.9
+            f_status: value
+            f_joint_delta_px: 1029.6
+            verdict: REJECT
+            tilt_start_s: 3.0
+            n_tilt_frames: 174
+          max_tilt_no_wrist:
+            f_fixed_template_px: 1204.2
+            f_status: value
+            f_joint_delta_px: 1034.7
+            verdict: REJECT
+            tilt_start_s: 3.0
+            n_tilt_frames: 158
+  IMG_7180.MOV:
+    manual_transition_s: null
+    detectors:
+      wilor_yolo:
+        transition_legacy_theta_s: 2.2666666666666666
+        transition_linear_d_s: null
+        transition_linear_d_no_motion_s: 2.466666666666667
+        d0: 0.01813
+        d_thr: 0.0544
+        v0: 0.04802
+        v_thr: 0.14406
+        guide_satisfied_legacy_theta: false
+        guide_satisfied_linear_d: false
+        guide_reasons_legacy_theta:
+        - 손 박스/짧은 변 0.57 > 0.5
+        - 자동 전환 2.27 s < 2.5 s
+        - θ2d p95 63° > 45°
+        guide_reasons_linear_d:
+        - 손 박스/짧은 변 0.57 > 0.5
+        - 자동 전환 없음
+        - θ2d p95 63° > 45°
+        default:
+          f_fixed_template_px: null
+          f_status: 값 없음 (상한)
+          f_joint_delta_px: null
+          verdict: REJECT
+          tilt_start_s: 3.0
+          n_tilt_frames: 180
+        same_as_17: true
+        variants:
+          auto_phase:
+            skipped: 전환 시각을 검출하지 못함
+          max_tilt:
+            f_fixed_template_px: null
+            f_status: 값 없음 (상한)
+            f_joint_delta_px: null
+            verdict: REJECT
+            tilt_start_s: 3.0
+            n_tilt_frames: 145
+          no_wrist:
+            f_fixed_template_px: null
+            f_status: 값 없음 (상한)
+            f_joint_delta_px: null
+            verdict: REJECT
+            tilt_start_s: 3.0
+            n_tilt_frames: 180
+          max_tilt_no_wrist:
+            f_fixed_template_px: 3005.8
+            f_status: value
+            f_joint_delta_px: 2747.5
+            verdict: REJECT
+            tilt_start_s: 3.0
+            n_tilt_frames: 146
+      mediapipe_hands:
+        transition_legacy_theta_s: 2.3333333333333335
+        transition_linear_d_s: null
+        transition_linear_d_no_motion_s: 2.466666666666667
+        d0: 0.01243
+        d_thr: 0.0373
+        v0: 0.0497
+        v_thr: 0.14911
+        guide_satisfied_legacy_theta: false
+        guide_satisfied_linear_d: false
+        guide_reasons_legacy_theta:
+        - 손 박스/짧은 변 0.55 > 0.5
+        - 자동 전환 2.33 s < 2.5 s
+        - θ2d p95 60° > 45°
+        guide_reasons_linear_d:
+        - 손 박스/짧은 변 0.55 > 0.5
+        - 자동 전환 없음
+        - θ2d p95 60° > 45°
+        default:
+          f_fixed_template_px: 2092.9
+          f_status: value
+          f_joint_delta_px: 1858.9
+          verdict: REJECT
+          tilt_start_s: 3.0
+          n_tilt_frames: 180
+        same_as_17: true
+        variants:
+          auto_phase:
+            skipped: 전환 시각을 검출하지 못함
+          max_tilt:
+            f_fixed_template_px: 2037.6
+            f_status: value
+            f_joint_delta_px: 1713.3
+            verdict: REJECT
+            tilt_start_s: 3.0
+            n_tilt_frames: 147
+          no_wrist:
+            f_fixed_template_px: 1843.0
+            f_status: value
+            f_joint_delta_px: 1652.0
+            verdict: REJECT
+            tilt_start_s: 3.0
+            n_tilt_frames: 180
+          max_tilt_no_wrist:
+            f_fixed_template_px: 1841.5
+            f_status: value
+            f_joint_delta_px: 1545.2
+            verdict: REJECT
+            tilt_start_s: 3.0
+            n_tilt_frames: 147
+      rtmpose_hand:
+        transition_legacy_theta_s: 2.2666666666666666
+        transition_linear_d_s: null
+        transition_linear_d_no_motion_s: 2.466666666666667
+        d0: 0.01099
+        d_thr: 0.03407
+        v0: 0.04572
+        v_thr: 0.13715
+        guide_satisfied_legacy_theta: false
+        guide_satisfied_linear_d: false
+        guide_reasons_legacy_theta:
+        - 손 박스/짧은 변 0.57 > 0.5
+        - 자동 전환 2.27 s < 2.5 s
+        - θ2d p95 56° > 45°
+        guide_reasons_linear_d:
+        - 손 박스/짧은 변 0.57 > 0.5
+        - 자동 전환 없음
+        - θ2d p95 56° > 45°
+        default:
+          f_fixed_template_px: 2291.8
+          f_status: value
+          f_joint_delta_px: 2211.9
+          verdict: REJECT
+          tilt_start_s: 3.0
+          n_tilt_frames: 180
+        same_as_17: true
+        variants:
+          auto_phase:
+            skipped: 전환 시각을 검출하지 못함
+          max_tilt:
+            f_fixed_template_px: 1800.8
+            f_status: value
+            f_joint_delta_px: 1496.2
+            verdict: REJECT
+            tilt_start_s: 3.0
+            n_tilt_frames: 150
+          no_wrist:
+            f_fixed_template_px: 1358.4
+            f_status: value
+            f_joint_delta_px: 1123.8
+            verdict: REJECT
+            tilt_start_s: 3.0
+            n_tilt_frames: 180
+          max_tilt_no_wrist:
+            f_fixed_template_px: 1528.0
+            f_status: value
+            f_joint_delta_px: 1209.7
+            verdict: REJECT
+            tilt_start_s: 3.0
+            n_tilt_frames: 150
