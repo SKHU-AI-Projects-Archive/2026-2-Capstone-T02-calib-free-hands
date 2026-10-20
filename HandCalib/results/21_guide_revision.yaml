@@ -1,0 +1,1104 @@
+experiment: 21_guide_revision
+run: runs/21_guide_revision/20261020T080658Z
+code_commit: 4a7b5fa
+git_dirty_at_run: false
+transition_method: linear_d
+note: 전환 검출 기본값, 가이드 판정 기준, 손목 점 처리를 바꿔 다시 낸 실험이다. f 추정 방식(평면 템플릿 + 프로파일)과 f 판정 문턱값은
+  바꾸지 않았다. 기준 f와의 비교 수치와 채택 규칙 판정은 summary.md에만 있다.
+videos:
+  IMG_7147.MOV:
+    manual_transition_s: null
+    detectors:
+      wilor_yolo:
+        transition_legacy_theta_s: 0.0
+        transition_20_s: 3.1333333333333333
+        transition_20_no_motion_s: 3.1333333333333333
+        transition_21_s: 3.1333333333333333
+        front_window_21_s:
+        - 1.467
+        - 2.4
+        d0: 0.00843
+        d0_capped: false
+        d_thr: 0.03407
+        d0_20: 0.00596
+        d_thr_20: 0.03407
+        guide_satisfied_21: false
+        guide_items_21:
+          box_short_ratio: false
+          edge_rate: true
+          transition: true
+          tilt_frames: true
+          theta_tilt_median: true
+          axis_bins: true
+          finger_extension: true
+        guide_reasons_21:
+        - 손 박스/짧은 변 0.64 > 0.6
+        tilt_frames_le_45: 62
+        tilt_median_le_45_deg: 22.5
+        guide_satisfied_20: false
+        guide_reasons_20:
+        - 손 박스/짧은 변 0.64 > 0.5
+        - θ2d p95 87° > 45°
+        same_as_17: true
+        same_as_20: true
+        wrist:
+          keep:
+            f_fixed_template_px: null
+            f_status: 값 없음 (상한)
+            f_joint_delta_px: null
+            verdict: REJECT
+            sharpness: 0.9985
+            f_rel_uncertainty: 0.3683
+            jointset_range: 0.7366
+            n_tilt_frames: 84
+            template_long_px: 525.0
+            template_width_px: 308.8
+            template_long_pct_box: 75.2
+            template_width_pct_box: 44.2
+          exclude:
+            f_fixed_template_px: 1692.2
+            f_status: value
+            f_joint_delta_px: 1939.0
+            verdict: REJECT
+            sharpness: 1.0009
+            f_rel_uncertainty: 0.5175
+            jointset_range: 1.035
+            n_tilt_frames: 84
+            template_long_px: 373.9
+            template_width_px: 281.9
+            template_long_pct_box: 53.6
+            template_width_pct_box: 40.4
+          downweight:
+            f_fixed_template_px: null
+            f_status: 값 없음 (상한)
+            f_joint_delta_px: null
+            verdict: REJECT
+            sharpness: 0.997
+            f_rel_uncertainty: 0.4562
+            jointset_range: 0.7495
+            n_tilt_frames: 84
+            template_long_px: 525.0
+            template_width_px: 308.8
+            template_long_pct_box: 75.2
+            template_width_pct_box: 44.2
+      mediapipe_hands:
+        transition_legacy_theta_s: 0.0
+        transition_20_s: null
+        transition_20_no_motion_s: 2.933333333333333
+        transition_21_s: 3.0
+        front_window_21_s:
+        - 1.333
+        - 2.267
+        d0: 0.0144
+        d0_capped: false
+        d_thr: 0.04319
+        d0_20: 0.01145
+        d_thr_20: 0.03435
+        guide_satisfied_21: true
+        guide_items_21:
+          box_short_ratio: true
+          edge_rate: true
+          transition: true
+          tilt_frames: true
+          theta_tilt_median: true
+          axis_bins: true
+          finger_extension: true
+        guide_reasons_21: []
+        tilt_frames_le_45: 63
+        tilt_median_le_45_deg: 24.9
+        guide_satisfied_20: false
+        guide_reasons_20:
+        - 손 박스/짧은 변 0.59 > 0.5
+        - 자동 전환 없음
+        - θ2d p95 89° > 45°
+        same_as_17: true
+        same_as_20: true
+        wrist:
+          keep:
+            f_fixed_template_px: null
+            f_status: 값 없음 (상한)
+            f_joint_delta_px: null
+            verdict: REJECT
+            sharpness: 0.9988
+            f_rel_uncertainty: 0.3422
+            jointset_range: 0.6844
+            n_tilt_frames: 84
+            template_long_px: 516.3
+            template_width_px: 282.9
+            template_long_pct_box: 80.2
+            template_width_pct_box: 44.0
+          exclude:
+            f_fixed_template_px: 1661.6
+            f_status: value
+            f_joint_delta_px: null
+            verdict: REJECT
+            sharpness: 1.0007
+            f_rel_uncertainty: 0.4244
+            jointset_range: 0.5557
+            n_tilt_frames: 84
+            template_long_px: 358.5
+            template_width_px: 249.1
+            template_long_pct_box: 55.7
+            template_width_pct_box: 38.7
+          downweight:
+            f_fixed_template_px: null
+            f_status: 값 없음 (상한)
+            f_joint_delta_px: null
+            verdict: REJECT
+            sharpness: 0.9968
+            f_rel_uncertainty: 0.359
+            jointset_range: 0.718
+            n_tilt_frames: 84
+            template_long_px: 516.3
+            template_width_px: 282.9
+            template_long_pct_box: 80.2
+            template_width_pct_box: 44.0
+      rtmpose_hand:
+        transition_legacy_theta_s: 0.0
+        transition_20_s: 3.2
+        transition_20_no_motion_s: 3.2
+        transition_21_s: 3.2
+        front_window_21_s:
+        - 1.467
+        - 2.4
+        d0: 0.00772
+        d0_capped: false
+        d_thr: 0.03407
+        d0_20: 0.00818
+        d_thr_20: 0.03407
+        guide_satisfied_21: false
+        guide_items_21:
+          box_short_ratio: false
+          edge_rate: true
+          transition: true
+          tilt_frames: true
+          theta_tilt_median: true
+          axis_bins: true
+          finger_extension: true
+        guide_reasons_21:
+        - 손 박스/짧은 변 0.64 > 0.6
+        tilt_frames_le_45: 63
+        tilt_median_le_45_deg: 23.4
+        guide_satisfied_20: false
+        guide_reasons_20:
+        - 손 박스/짧은 변 0.64 > 0.5
+        - θ2d p95 86° > 45°
+        same_as_17: true
+        same_as_20: true
+        wrist:
+          keep:
+            f_fixed_template_px: 975.1
+            f_status: value
+            f_joint_delta_px: 708.9
+            verdict: REJECT
+            sharpness: 1.0213
+            f_rel_uncertainty: 1.0575
+            jointset_range: 0.3108
+            n_tilt_frames: 84
+            template_long_px: 566.7
+            template_width_px: 297.5
+            template_long_pct_box: 81.2
+            template_width_pct_box: 42.6
+          exclude:
+            f_fixed_template_px: 1606.4
+            f_status: value
+            f_joint_delta_px: 1732.5
+            verdict: REJECT
+            sharpness: 1.0008
+            f_rel_uncertainty: 0.2908
+            jointset_range: 0.5817
+            n_tilt_frames: 84
+            template_long_px: 375.9
+            template_width_px: 245.5
+            template_long_pct_box: 53.9
+            template_width_pct_box: 35.2
+          downweight:
+            f_fixed_template_px: 877.5
+            f_status: value
+            f_joint_delta_px: 719.6
+            verdict: REJECT
+            sharpness: 1.0212
+            f_rel_uncertainty: 1.2564
+            jointset_range: 0.2932
+            n_tilt_frames: 84
+            template_long_px: 566.7
+            template_width_px: 297.5
+            template_long_pct_box: 81.2
+            template_width_pct_box: 42.6
+  IMG_7148.MOV:
+    manual_transition_s: null
+    detectors:
+      wilor_yolo:
+        transition_legacy_theta_s: 0.4666666666666667
+        transition_20_s: 6.333333333333333
+        transition_20_no_motion_s: 4.466666666666667
+        transition_21_s: 4.4
+        front_window_21_s:
+        - 1.133
+        - 2.067
+        d0: 0.02062
+        d0_capped: false
+        d_thr: 0.06187
+        d0_20: 0.02307
+        d_thr_20: 0.06922
+        guide_satisfied_21: false
+        guide_items_21:
+          box_short_ratio: false
+          edge_rate: true
+          transition: true
+          tilt_frames: true
+          theta_tilt_median: false
+          axis_bins: true
+          finger_extension: true
+        guide_reasons_21:
+        - 손 박스/짧은 변 0.60 > 0.6
+        - θ2d ≤ 45° 프레임의 θ2d 중앙값 19°가 20–40° 밖
+        tilt_frames_le_45: 109
+        tilt_median_le_45_deg: 18.6
+        guide_satisfied_20: false
+        guide_reasons_20:
+        - 손 박스/짧은 변 0.60 > 0.5
+        - θ2d p95 60° > 45°
+        - 기울기 구간 θ2d 중앙값 19°가 20–40° 밖
+        same_as_17: true
+        same_as_20: true
+        wrist:
+          keep:
+            f_fixed_template_px: 2308.1
+            f_status: value
+            f_joint_delta_px: null
+            verdict: REJECT
+            sharpness: 1.002
+            f_rel_uncertainty: 0.2045
+            jointset_range: 0.409
+            n_tilt_frames: 121
+            template_long_px: 511.3
+            template_width_px: 168.6
+            template_long_pct_box: 78.5
+            template_width_pct_box: 25.9
+          exclude:
+            f_fixed_template_px: 2394.5
+            f_status: value
+            f_joint_delta_px: 2380.3
+            verdict: REJECT
+            sharpness: 1.0005
+            f_rel_uncertainty: 0.3162
+            jointset_range: 0.6306
+            n_tilt_frames: 121
+            template_long_px: 299.1
+            template_width_px: 184.7
+            template_long_pct_box: 45.9
+            template_width_pct_box: 28.4
+          downweight:
+            f_fixed_template_px: 842.9
+            f_status: value
+            f_joint_delta_px: null
+            verdict: REJECT
+            sharpness: 1.0178
+            f_rel_uncertainty: 1.3223
+            jointset_range: 2.4237
+            n_tilt_frames: 121
+            template_long_px: 511.3
+            template_width_px: 168.6
+            template_long_pct_box: 78.5
+            template_width_pct_box: 25.9
+      mediapipe_hands:
+        transition_legacy_theta_s: 0.0
+        transition_20_s: 6.333333333333333
+        transition_20_no_motion_s: 4.266666666666667
+        transition_21_s: 4.266666666666667
+        front_window_21_s:
+        - 1.267
+        - 2.2
+        d0: 0.02375
+        d0_capped: false
+        d_thr: 0.07124
+        d0_20: 0.02839
+        d_thr_20: 0.08516
+        guide_satisfied_21: true
+        guide_items_21:
+          box_short_ratio: true
+          edge_rate: true
+          transition: true
+          tilt_frames: true
+          theta_tilt_median: true
+          axis_bins: true
+          finger_extension: true
+        guide_reasons_21: []
+        tilt_frames_le_45: 110
+        tilt_median_le_45_deg: 20.4
+        guide_satisfied_20: false
+        guide_reasons_20:
+        - 손 박스/짧은 변 0.59 > 0.5
+        - θ2d p95 68° > 45°
+        same_as_17: true
+        same_as_20: true
+        wrist:
+          keep:
+            f_fixed_template_px: 1700.0
+            f_status: value
+            f_joint_delta_px: null
+            verdict: REJECT
+            sharpness: 1.0023
+            f_rel_uncertainty: 0.4035
+            jointset_range: 0.6047
+            n_tilt_frames: 121
+            template_long_px: 531.2
+            template_width_px: 155.5
+            template_long_pct_box: 83.2
+            template_width_pct_box: 24.4
+          exclude:
+            f_fixed_template_px: 1873.6
+            f_status: value
+            f_joint_delta_px: 1644.9
+            verdict: REJECT
+            sharpness: 1.0007
+            f_rel_uncertainty: 0.3207
+            jointset_range: 0.6413
+            n_tilt_frames: 121
+            template_long_px: 311.2
+            template_width_px: 162.6
+            template_long_pct_box: 48.7
+            template_width_pct_box: 25.5
+          downweight:
+            f_fixed_template_px: 1263.1
+            f_status: value
+            f_joint_delta_px: null
+            verdict: REJECT
+            sharpness: 1.0025
+            f_rel_uncertainty: 0.7161
+            jointset_range: 0.4966
+            n_tilt_frames: 121
+            template_long_px: 531.2
+            template_width_px: 155.5
+            template_long_pct_box: 83.2
+            template_width_pct_box: 24.4
+      rtmpose_hand:
+        transition_legacy_theta_s: 4.0
+        transition_20_s: 4.333333333333333
+        transition_20_no_motion_s: 4.333333333333333
+        transition_21_s: 4.266666666666667
+        front_window_21_s:
+        - 1.267
+        - 2.2
+        d0: 0.01154
+        d0_capped: false
+        d_thr: 0.03462
+        d0_20: 0.01447
+        d_thr_20: 0.0434
+        guide_satisfied_21: false
+        guide_items_21:
+          box_short_ratio: false
+          edge_rate: true
+          transition: true
+          tilt_frames: true
+          theta_tilt_median: false
+          axis_bins: true
+          finger_extension: true
+        guide_reasons_21:
+        - 손 박스/짧은 변 0.60 > 0.6
+        - θ2d ≤ 45° 프레임의 θ2d 중앙값 17°가 20–40° 밖
+        tilt_frames_le_45: 110
+        tilt_median_le_45_deg: 17.5
+        guide_satisfied_20: false
+        guide_reasons_20:
+        - 손 박스/짧은 변 0.60 > 0.5
+        - θ2d p95 58° > 45°
+        - 기울기 구간 θ2d 중앙값 19°가 20–40° 밖
+        same_as_17: true
+        same_as_20: true
+        wrist:
+          keep:
+            f_fixed_template_px: 779.8
+            f_status: value
+            f_joint_delta_px: null
+            verdict: REJECT
+            sharpness: 1.2395
+            f_rel_uncertainty: 1.0024
+            jointset_range: 1.3142
+            n_tilt_frames: 121
+            template_long_px: 530.6
+            template_width_px: 159.8
+            template_long_pct_box: 81.5
+            template_width_pct_box: 24.5
+          exclude:
+            f_fixed_template_px: 1261.6
+            f_status: value
+            f_joint_delta_px: 1225.5
+            verdict: REJECT
+            sharpness: 1.0011
+            f_rel_uncertainty: 0.9512
+            jointset_range: 1.9023
+            n_tilt_frames: 121
+            template_long_px: 295.0
+            template_width_px: 171.3
+            template_long_pct_box: 45.3
+            template_width_pct_box: 26.3
+          downweight:
+            f_fixed_template_px: 774.2
+            f_status: value
+            f_joint_delta_px: null
+            verdict: REJECT
+            sharpness: 1.3352
+            f_rel_uncertainty: 0.98
+            jointset_range: 0.7692
+            n_tilt_frames: 121
+            template_long_px: 530.6
+            template_width_px: 159.8
+            template_long_pct_box: 81.5
+            template_width_pct_box: 24.5
+  IMG_7157.MOV:
+    manual_transition_s: null
+    detectors:
+      wilor_yolo:
+        transition_legacy_theta_s: 3.933333333333333
+        transition_20_s: 5.933333333333334
+        transition_20_no_motion_s: 4.133333333333334
+        transition_21_s: 4.133333333333334
+        front_window_21_s:
+        - 1.467
+        - 2.4
+        d0: 0.02004
+        d0_capped: false
+        d_thr: 0.06012
+        d0_20: 0.01806
+        d_thr_20: 0.05417
+        guide_satisfied_21: true
+        guide_items_21:
+          box_short_ratio: true
+          edge_rate: true
+          transition: true
+          tilt_frames: true
+          theta_tilt_median: true
+          axis_bins: true
+          finger_extension: true
+        guide_reasons_21: []
+        tilt_frames_le_45: 137
+        tilt_median_le_45_deg: 20.8
+        guide_satisfied_20: false
+        guide_reasons_20:
+        - 손 박스/짧은 변 0.55 > 0.5
+        same_as_17: true
+        same_as_20: true
+        wrist:
+          keep:
+            f_fixed_template_px: 2740.2
+            f_status: value
+            f_joint_delta_px: null
+            verdict: REJECT
+            sharpness: 1.0025
+            f_rel_uncertainty: 0.1876
+            jointset_range: 0.3122
+            n_tilt_frames: 137
+            template_long_px: 469.3
+            template_width_px: 161.3
+            template_long_pct_box: 79.5
+            template_width_pct_box: 27.3
+          exclude:
+            f_fixed_template_px: null
+            f_status: 값 없음 (상한)
+            f_joint_delta_px: null
+            verdict: REJECT
+            sharpness: 1.0013
+            f_rel_uncertainty: 0.3674
+            jointset_range: 0.7347
+            n_tilt_frames: 137
+            template_long_px: 284.5
+            template_width_px: 179.0
+            template_long_pct_box: 48.2
+            template_width_pct_box: 30.3
+          downweight:
+            f_fixed_template_px: 2854.0
+            f_status: value
+            f_joint_delta_px: null
+            verdict: REJECT
+            sharpness: 1.0021
+            f_rel_uncertainty: 0.1487
+            jointset_range: 0.2729
+            n_tilt_frames: 137
+            template_long_px: 469.3
+            template_width_px: 161.3
+            template_long_pct_box: 79.5
+            template_width_pct_box: 27.3
+      mediapipe_hands:
+        transition_legacy_theta_s: 3.466666666666667
+        transition_20_s: 5.933333333333334
+        transition_20_no_motion_s: 4.2
+        transition_21_s: 4.2
+        front_window_21_s:
+        - 1.467
+        - 2.4
+        d0: 0.02205
+        d0_capped: false
+        d_thr: 0.06615
+        d0_20: 0.02205
+        d_thr_20: 0.06615
+        guide_satisfied_21: false
+        guide_items_21:
+          box_short_ratio: true
+          edge_rate: true
+          transition: true
+          tilt_frames: true
+          theta_tilt_median: false
+          axis_bins: true
+          finger_extension: true
+        guide_reasons_21:
+        - θ2d ≤ 45° 프레임의 θ2d 중앙값 18°가 20–40° 밖
+        tilt_frames_le_45: 137
+        tilt_median_le_45_deg: 17.9
+        guide_satisfied_20: false
+        guide_reasons_20:
+        - 손 박스/짧은 변 0.53 > 0.5
+        - 기울기 구간 θ2d 중앙값 18°가 20–40° 밖
+        same_as_17: true
+        same_as_20: true
+        wrist:
+          keep:
+            f_fixed_template_px: 2245.6
+            f_status: value
+            f_joint_delta_px: 1951.3
+            verdict: REJECT
+            sharpness: 1.0083
+            f_rel_uncertainty: 0.2201
+            jointset_range: 0.3609
+            n_tilt_frames: 137
+            template_long_px: 478.8
+            template_width_px: 144.2
+            template_long_pct_box: 83.1
+            template_width_pct_box: 25.0
+          exclude:
+            f_fixed_template_px: 2077.4
+            f_status: value
+            f_joint_delta_px: 2218.0
+            verdict: REJECT
+            sharpness: 1.0046
+            f_rel_uncertainty: 0.2235
+            jointset_range: 0.4323
+            n_tilt_frames: 137
+            template_long_px: 292.1
+            template_width_px: 157.6
+            template_long_pct_box: 50.7
+            template_width_pct_box: 27.4
+          downweight:
+            f_fixed_template_px: 2237.0
+            f_status: value
+            f_joint_delta_px: 1925.4
+            verdict: REJECT
+            sharpness: 1.0063
+            f_rel_uncertainty: 0.2229
+            jointset_range: 0.3565
+            n_tilt_frames: 137
+            template_long_px: 478.8
+            template_width_px: 144.2
+            template_long_pct_box: 83.1
+            template_width_pct_box: 25.0
+      rtmpose_hand:
+        transition_legacy_theta_s: 3.933333333333333
+        transition_20_s: 5.8
+        transition_20_no_motion_s: 4.133333333333334
+        transition_21_s: 4.133333333333334
+        front_window_21_s:
+        - 1.467
+        - 2.4
+        d0: 0.01228
+        d0_capped: false
+        d_thr: 0.03685
+        d0_20: 0.01062
+        d_thr_20: 0.03407
+        guide_satisfied_21: false
+        guide_items_21:
+          box_short_ratio: true
+          edge_rate: true
+          transition: true
+          tilt_frames: true
+          theta_tilt_median: false
+          axis_bins: true
+          finger_extension: true
+        guide_reasons_21:
+        - θ2d ≤ 45° 프레임의 θ2d 중앙값 18°가 20–40° 밖
+        tilt_frames_le_45: 137
+        tilt_median_le_45_deg: 17.5
+        guide_satisfied_20: false
+        guide_reasons_20:
+        - 손 박스/짧은 변 0.55 > 0.5
+        - 기울기 구간 θ2d 중앙값 18°가 20–40° 밖
+        same_as_17: true
+        same_as_20: true
+        wrist:
+          keep:
+            f_fixed_template_px: 1708.4
+            f_status: value
+            f_joint_delta_px: 1645.2
+            verdict: REJECT
+            sharpness: 1.0133
+            f_rel_uncertainty: 0.2328
+            jointset_range: 0.4657
+            n_tilt_frames: 137
+            template_long_px: 513.5
+            template_width_px: 151.3
+            template_long_pct_box: 86.8
+            template_width_pct_box: 25.6
+          exclude:
+            f_fixed_template_px: 1667.2
+            f_status: value
+            f_joint_delta_px: 1675.5
+            verdict: REJECT
+            sharpness: 1.0034
+            f_rel_uncertainty: 0.7198
+            jointset_range: 1.4396
+            n_tilt_frames: 137
+            template_long_px: 281.2
+            template_width_px: 161.1
+            template_long_pct_box: 47.5
+            template_width_pct_box: 27.2
+          downweight:
+            f_fixed_template_px: 1697.6
+            f_status: value
+            f_joint_delta_px: 1652.5
+            verdict: REJECT
+            sharpness: 1.0104
+            f_rel_uncertainty: 0.2436
+            jointset_range: 0.4872
+            n_tilt_frames: 137
+            template_long_px: 513.5
+            template_width_px: 151.3
+            template_long_pct_box: 86.8
+            template_width_pct_box: 25.6
+  IMG_7158.MOV:
+    manual_transition_s: null
+    detectors:
+      wilor_yolo:
+        transition_legacy_theta_s: 1.4
+        transition_20_s: 5.933333333333334
+        transition_20_no_motion_s: 3.066666666666667
+        transition_21_s: 2.933333333333333
+        front_window_21_s:
+        - 1.4
+        - 2.333
+        d0: 0.03288
+        d0_capped: false
+        d_thr: 0.09864
+        d0_20: 0.04272
+        d_thr_20: 0.12815
+        guide_satisfied_21: true
+        guide_items_21:
+          box_short_ratio: true
+          edge_rate: true
+          transition: true
+          tilt_frames: true
+          theta_tilt_median: true
+          axis_bins: true
+          finger_extension: true
+        guide_reasons_21: []
+        tilt_frames_le_45: 147
+        tilt_median_le_45_deg: 22.6
+        guide_satisfied_20: false
+        guide_reasons_20:
+        - 손 박스/짧은 변 0.52 > 0.5
+        - θ2d p95 51° > 45°
+        same_as_17: true
+        same_as_20: true
+        wrist:
+          keep:
+            f_fixed_template_px: null
+            f_status: 값 없음 (상한)
+            f_joint_delta_px: null
+            verdict: REJECT
+            sharpness: 0.9886
+            f_rel_uncertainty: 0.2831
+            jointset_range: 0.5663
+            n_tilt_frames: 174
+            template_long_px: 472.9
+            template_width_px: 155.7
+            template_long_pct_box: 82.1
+            template_width_pct_box: 27.0
+          exclude:
+            f_fixed_template_px: null
+            f_status: 값 없음 (상한)
+            f_joint_delta_px: null
+            verdict: REJECT
+            sharpness: 0.9965
+            f_rel_uncertainty: 0.3906
+            jointset_range: 0.7813
+            n_tilt_frames: 174
+            template_long_px: 287.3
+            template_width_px: 169.5
+            template_long_pct_box: 49.9
+            template_width_pct_box: 29.4
+          downweight:
+            f_fixed_template_px: null
+            f_status: 값 없음 (상한)
+            f_joint_delta_px: null
+            verdict: REJECT
+            sharpness: 0.9902
+            f_rel_uncertainty: 0.2874
+            jointset_range: 0.5749
+            n_tilt_frames: 174
+            template_long_px: 472.9
+            template_width_px: 155.7
+            template_long_pct_box: 82.1
+            template_width_pct_box: 27.0
+      mediapipe_hands:
+        transition_legacy_theta_s: 2.533333333333333
+        transition_20_s: 5.866666666666666
+        transition_20_no_motion_s: 2.933333333333333
+        transition_21_s: 2.8666666666666667
+        front_window_21_s:
+        - 1.4
+        - 2.333
+        d0: 0.02572
+        d0_capped: false
+        d_thr: 0.07715
+        d0_20: 0.03357
+        d_thr_20: 0.1007
+        guide_satisfied_21: true
+        guide_items_21:
+          box_short_ratio: true
+          edge_rate: true
+          transition: true
+          tilt_frames: true
+          theta_tilt_median: true
+          axis_bins: true
+          finger_extension: true
+        guide_reasons_21: []
+        tilt_frames_le_45: 141
+        tilt_median_le_45_deg: 25.3
+        guide_satisfied_20: false
+        guide_reasons_20:
+        - 손 박스/짧은 변 0.52 > 0.5
+        - θ2d p95 52° > 45°
+        same_as_17: true
+        same_as_20: true
+        wrist:
+          keep:
+            f_fixed_template_px: 1752.4
+            f_status: value
+            f_joint_delta_px: 1668.1
+            verdict: REJECT
+            sharpness: 1.0087
+            f_rel_uncertainty: 0.2265
+            jointset_range: 0.4531
+            n_tilt_frames: 174
+            template_long_px: 477.8
+            template_width_px: 144.4
+            template_long_pct_box: 83.1
+            template_width_pct_box: 25.1
+          exclude:
+            f_fixed_template_px: 1748.2
+            f_status: value
+            f_joint_delta_px: 2651.4
+            verdict: REJECT
+            sharpness: 1.0047
+            f_rel_uncertainty: 0.3129
+            jointset_range: 0.3942
+            n_tilt_frames: 174
+            template_long_px: 289.6
+            template_width_px: 156.0
+            template_long_pct_box: 50.4
+            template_width_pct_box: 27.1
+          downweight:
+            f_fixed_template_px: 1775.5
+            f_status: value
+            f_joint_delta_px: 1720.0
+            verdict: REJECT
+            sharpness: 1.0074
+            f_rel_uncertainty: 0.2337
+            jointset_range: 0.4674
+            n_tilt_frames: 174
+            template_long_px: 477.8
+            template_width_px: 144.4
+            template_long_pct_box: 83.1
+            template_width_pct_box: 25.1
+      rtmpose_hand:
+        transition_legacy_theta_s: 2.533333333333333
+        transition_20_s: 12.933333333333334
+        transition_20_no_motion_s: 2.6666666666666665
+        transition_21_s: 2.6666666666666665
+        front_window_21_s:
+        - 1.4
+        - 2.333
+        d0: 0.01038
+        d0_capped: false
+        d_thr: 0.03407
+        d0_20: 0.01038
+        d_thr_20: 0.03407
+        guide_satisfied_21: true
+        guide_items_21:
+          box_short_ratio: true
+          edge_rate: true
+          transition: true
+          tilt_frames: true
+          theta_tilt_median: true
+          axis_bins: true
+          finger_extension: true
+        guide_reasons_21: []
+        tilt_frames_le_45: 157
+        tilt_median_le_45_deg: 27.4
+        guide_satisfied_20: false
+        guide_reasons_20:
+        - 손 박스/짧은 변 0.52 > 0.5
+        - θ2d p95 48° > 45°
+        same_as_17: true
+        same_as_20: true
+        wrist:
+          keep:
+            f_fixed_template_px: 1989.4
+            f_status: value
+            f_joint_delta_px: 2058.7
+            verdict: REJECT
+            sharpness: 1.008
+            f_rel_uncertainty: 0.5701
+            jointset_range: 1.1402
+            n_tilt_frames: 174
+            template_long_px: 516.6
+            template_width_px: 149.0
+            template_long_pct_box: 89.5
+            template_width_pct_box: 25.8
+          exclude:
+            f_fixed_template_px: 1194.9
+            f_status: value
+            f_joint_delta_px: 1029.6
+            verdict: REJECT
+            sharpness: 1.0051
+            f_rel_uncertainty: 0.8203
+            jointset_range: 1.6407
+            n_tilt_frames: 174
+            template_long_px: 281.8
+            template_width_px: 159.7
+            template_long_pct_box: 48.8
+            template_width_pct_box: 27.7
+          downweight:
+            f_fixed_template_px: 1932.2
+            f_status: value
+            f_joint_delta_px: 1988.6
+            verdict: REJECT
+            sharpness: 1.0065
+            f_rel_uncertainty: 0.5882
+            jointset_range: 1.1763
+            n_tilt_frames: 174
+            template_long_px: 516.6
+            template_width_px: 149.0
+            template_long_pct_box: 89.5
+            template_width_pct_box: 25.8
+  IMG_7180.MOV:
+    manual_transition_s: null
+    detectors:
+      wilor_yolo:
+        transition_legacy_theta_s: 2.2666666666666666
+        transition_20_s: null
+        transition_20_no_motion_s: 2.466666666666667
+        transition_21_s: 2.466666666666667
+        front_window_21_s:
+        - 1.067
+        - 2.0
+        d0: 0.01813
+        d0_capped: false
+        d_thr: 0.0544
+        d0_20: 0.01813
+        d_thr_20: 0.0544
+        guide_satisfied_21: false
+        guide_items_21:
+          box_short_ratio: true
+          edge_rate: true
+          transition: false
+          tilt_frames: true
+          theta_tilt_median: true
+          axis_bins: true
+          finger_extension: true
+        guide_reasons_21:
+        - 자동 전환 2.47 s < 2.5 s
+        tilt_frames_le_45: 145
+        tilt_median_le_45_deg: 27.0
+        guide_satisfied_20: false
+        guide_reasons_20:
+        - 손 박스/짧은 변 0.57 > 0.5
+        - 자동 전환 없음
+        - θ2d p95 63° > 45°
+        same_as_17: true
+        same_as_20: true
+        wrist:
+          keep:
+            f_fixed_template_px: null
+            f_status: 값 없음 (상한)
+            f_joint_delta_px: null
+            verdict: REJECT
+            sharpness: 0.9859
+            f_rel_uncertainty: 0.2505
+            jointset_range: 0.5009
+            n_tilt_frames: 180
+            template_long_px: 504.1
+            template_width_px: 177.8
+            template_long_pct_box: 79.7
+            template_width_pct_box: 28.1
+          exclude:
+            f_fixed_template_px: null
+            f_status: 값 없음 (상한)
+            f_joint_delta_px: null
+            verdict: REJECT
+            sharpness: 0.9997
+            f_rel_uncertainty: 0.3906
+            jointset_range: 0.7813
+            n_tilt_frames: 180
+            template_long_px: 304.4
+            template_width_px: 189.3
+            template_long_pct_box: 48.2
+            template_width_pct_box: 29.9
+          downweight:
+            f_fixed_template_px: null
+            f_status: 값 없음 (상한)
+            f_joint_delta_px: null
+            verdict: REJECT
+            sharpness: 0.9877
+            f_rel_uncertainty: 0.2567
+            jointset_range: 0.5135
+            n_tilt_frames: 180
+            template_long_px: 504.1
+            template_width_px: 177.8
+            template_long_pct_box: 79.7
+            template_width_pct_box: 28.1
+      mediapipe_hands:
+        transition_legacy_theta_s: 2.3333333333333335
+        transition_20_s: null
+        transition_20_no_motion_s: 2.466666666666667
+        transition_21_s: 2.466666666666667
+        front_window_21_s:
+        - 0.867
+        - 1.8
+        d0: 0.01243
+        d0_capped: false
+        d_thr: 0.0373
+        d0_20: 0.01243
+        d_thr_20: 0.0373
+        guide_satisfied_21: false
+        guide_items_21:
+          box_short_ratio: true
+          edge_rate: true
+          transition: false
+          tilt_frames: true
+          theta_tilt_median: true
+          axis_bins: true
+          finger_extension: true
+        guide_reasons_21:
+        - 자동 전환 2.47 s < 2.5 s
+        tilt_frames_le_45: 147
+        tilt_median_le_45_deg: 30.5
+        guide_satisfied_20: false
+        guide_reasons_20:
+        - 손 박스/짧은 변 0.55 > 0.5
+        - 자동 전환 없음
+        - θ2d p95 60° > 45°
+        same_as_17: true
+        same_as_20: true
+        wrist:
+          keep:
+            f_fixed_template_px: 2092.9
+            f_status: value
+            f_joint_delta_px: 1858.9
+            verdict: REJECT
+            sharpness: 1.0046
+            f_rel_uncertainty: 0.3139
+            jointset_range: 0.6279
+            n_tilt_frames: 180
+            template_long_px: 508.7
+            template_width_px: 151.5
+            template_long_pct_box: 83.3
+            template_width_pct_box: 24.8
+          exclude:
+            f_fixed_template_px: 1843.0
+            f_status: value
+            f_joint_delta_px: 1652.0
+            verdict: REJECT
+            sharpness: 1.0044
+            f_rel_uncertainty: 0.3798
+            jointset_range: 0.7597
+            n_tilt_frames: 180
+            template_long_px: 308.0
+            template_width_px: 164.4
+            template_long_pct_box: 50.4
+            template_width_pct_box: 26.9
+          downweight:
+            f_fixed_template_px: 2024.4
+            f_status: value
+            f_joint_delta_px: 1837.1
+            verdict: REJECT
+            sharpness: 1.0043
+            f_rel_uncertainty: 0.3104
+            jointset_range: 0.6207
+            n_tilt_frames: 180
+            template_long_px: 508.7
+            template_width_px: 151.5
+            template_long_pct_box: 83.3
+            template_width_pct_box: 24.8
+      rtmpose_hand:
+        transition_legacy_theta_s: 2.2666666666666666
+        transition_20_s: null
+        transition_20_no_motion_s: 2.466666666666667
+        transition_21_s: 2.466666666666667
+        front_window_21_s:
+        - 1.067
+        - 2.0
+        d0: 0.01099
+        d0_capped: false
+        d_thr: 0.03407
+        d0_20: 0.01099
+        d_thr_20: 0.03407
+        guide_satisfied_21: false
+        guide_items_21:
+          box_short_ratio: true
+          edge_rate: true
+          transition: false
+          tilt_frames: true
+          theta_tilt_median: true
+          axis_bins: true
+          finger_extension: true
+        guide_reasons_21:
+        - 자동 전환 2.47 s < 2.5 s
+        tilt_frames_le_45: 150
+        tilt_median_le_45_deg: 29.8
+        guide_satisfied_20: false
+        guide_reasons_20:
+        - 손 박스/짧은 변 0.57 > 0.5
+        - 자동 전환 없음
+        - θ2d p95 56° > 45°
+        same_as_17: true
+        same_as_20: true
+        wrist:
+          keep:
+            f_fixed_template_px: 2291.8
+            f_status: value
+            f_joint_delta_px: 2211.9
+            verdict: REJECT
+            sharpness: 1.0044
+            f_rel_uncertainty: 0.3143
+            jointset_range: 0.6287
+            n_tilt_frames: 180
+            template_long_px: 542.7
+            template_width_px: 156.2
+            template_long_pct_box: 85.8
+            template_width_pct_box: 24.7
+          exclude:
+            f_fixed_template_px: 1358.4
+            f_status: value
+            f_joint_delta_px: 1123.8
+            verdict: REJECT
+            sharpness: 1.0046
+            f_rel_uncertainty: 0.2997
+            jointset_range: 0.5995
+            n_tilt_frames: 180
+            template_long_px: 296.8
+            template_width_px: 168.3
+            template_long_pct_box: 46.9
+            template_width_pct_box: 26.6
+          downweight:
+            f_fixed_template_px: 2243.4
+            f_status: value
+            f_joint_delta_px: 2134.1
+            verdict: REJECT
+            sharpness: 1.0036
+            f_rel_uncertainty: 0.3104
+            jointset_range: 0.6209
+            n_tilt_frames: 180
+            template_long_px: 542.7
+            template_width_px: 156.2
+            template_long_pct_box: 85.8
+            template_width_pct_box: 24.7
