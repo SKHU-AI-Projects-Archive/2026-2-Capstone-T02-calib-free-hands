@@ -25,6 +25,7 @@ class HandEstimate:
     confidence: float
     mano_pose: np.ndarray | None = None
     mano_shape: np.ndarray | None = None
+    mano_faces: np.ndarray | None = None
 
 
 class CalibrationBackend(Protocol):
@@ -36,11 +37,16 @@ class PoseBackend(Protocol):
 
 
 def process_frames(frames: list[DecodedFrame], calibrator: CalibrationBackend, pose: PoseBackend,
-                   sampling_mode: str = "uniform", sample_count: int = 8, aggregation: str = "median") -> CanonicalResult:
+                   sampling_mode: str = "uniform", sample_count: int = 8, aggregation: str = "median",
+                   progress=None, cancelled=None) -> CanonicalResult:
     if not frames:
         raise ValueError("at least one decoded frame is required")
     sample_ids = sample_indices(len(frames), sampling_mode, sample_count)
-    sampled_focals = [calibrator.estimate_focal(frames[int(index)].rgb) for index in sample_ids]
+    sampled_focals = []
+    for position, index in enumerate(sample_ids, 1):
+        if cancelled and cancelled(): raise InterruptedError("Processing cancelled during calibration")
+        sampled_focals.append(calibrator.estimate_focal(frames[int(index)].rgb))
+        if progress: progress("Estimating focal", position, len(sample_ids))
     video_focal = aggregate_focal(sampled_focals, aggregation)
     frame_count = len(frames)
     keypoints_2d = np.full((frame_count, 2, 21, 2), np.nan, np.float32)
@@ -50,8 +56,10 @@ def process_frames(frames: list[DecodedFrame], calibrator: CalibrationBackend, p
     bbox = np.full((frame_count, 2, 4), np.nan, np.float32)
     camera_translation = np.full((frame_count, 2, 3), np.nan, np.float32)
     mano_vertices = None
+    mano_faces = None
     frame_focal = np.full(frame_count, video_focal, np.float32)
     for frame_pos, frame in enumerate(frames):
+        if cancelled and cancelled(): raise InterruptedError("Processing cancelled during reconstruction")
         for estimate in pose.predict(frame.rgb, video_focal):
             hand = 1 if estimate.is_right else 0
             keypoints_2d[frame_pos, hand] = estimate.keypoints_2d
@@ -64,18 +72,22 @@ def process_frames(frames: list[DecodedFrame], calibrator: CalibrationBackend, p
                 if mano_vertices is None:
                     mano_vertices = np.full((frame_count, 2, *estimate.vertices_relative.shape), np.nan, np.float32)
                 mano_vertices[frame_pos, hand] = estimate.vertices_relative + estimate.camera_translation
+            if estimate.mano_faces is not None and mano_faces is None:
+                faces = np.asarray(estimate.mano_faces, dtype=np.int32)
+                mano_faces = np.stack((faces[:, [0, 2, 1]], faces), axis=0) if faces.ndim == 2 else faces
+        if progress: progress("Reconstructing hands", frame_pos + 1, frame_count)
     return CanonicalResult(np.array([frame.index for frame in frames]), np.array([frame.timestamp_s for frame in frames]),
                            keypoints_2d, keypoints_3d, detected, frame_focal,
-                           (frames[0].rgb.shape[1], frames[0].rgb.shape[0]), mano_vertices,
+                           (frames[0].rgb.shape[1], frames[0].rgb.shape[0]), mano_vertices, mano_faces,
                            confidence, bbox, camera_translation=camera_translation, video_focal_px=video_focal,
                            media_metadata={"frame_count": frame_count})
 
 
 def process_and_save(frames: list[DecodedFrame], calibrator: CalibrationBackend, pose: PoseBackend,
-                     output_dir: Path, settings: dict) -> tuple[Path, Path]:
+                     output_dir: Path, settings: dict, progress=None, cancelled=None) -> tuple[Path, Path]:
     started = time.monotonic()
     result = process_frames(frames, calibrator, pose, settings.get("sampling_mode", "uniform"),
-                             int(settings.get("sample_count", 8)), settings.get("aggregation", "median"))
+                             int(settings.get("sample_count", 8)), settings.get("aggregation", "median"), progress, cancelled)
     provenance = {"schema_version": result.schema_version, "application_version": "0.1.0",
                   "calibration_backend": getattr(calibrator, "name", type(calibrator).__name__),
                   "pose_backend": getattr(pose, "name", type(pose).__name__),
@@ -95,10 +107,17 @@ def process_and_save(frames: list[DecodedFrame], calibrator: CalibrationBackend,
         provenance["mano_assets"] = {name: str(path) for name, path in pose.mano_paths.items()}
     preview_output = settings.get("preview_output")
     if preview_output:
+        if cancelled and cancelled(): raise InterruptedError("Processing cancelled before preview")
         preview_path = Path(preview_output)
         preview_path.parent.mkdir(parents=True, exist_ok=True)
-        encode_result_preview([frame.rgb for frame in frames], result, preview_path,
+        def preview_frames():
+            for position, frame in enumerate(frames, 1):
+                if cancelled and cancelled(): raise InterruptedError("Processing cancelled during preview")
+                if progress: progress("Creating preview", position, len(frames))
+                yield frame.rgb
+        encode_result_preview(preview_frames(), result, preview_path,
                               float(settings.get("fps", 30.0)),
                               Path(input_path) if settings.get("preserve_audio") and input_path else None)
         provenance["outputs"].append(str(preview_path.name))
+    if progress: progress("Saving results", 1, 1)
     return save_result(result, output_dir, provenance)

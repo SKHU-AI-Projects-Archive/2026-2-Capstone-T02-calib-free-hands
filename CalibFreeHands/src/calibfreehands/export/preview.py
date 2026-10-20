@@ -8,11 +8,7 @@ from typing import Iterable
 
 import numpy as np
 
-
-HAND_CONNECTIONS = ((0, 1), (0, 5), (0, 9), (0, 13), (0, 17),
-                    (1, 2), (2, 3), (3, 4), (5, 6), (6, 7), (7, 8),
-                    (9, 10), (10, 11), (11, 12), (13, 14), (14, 15), (15, 16),
-                    (17, 18), (18, 19), (19, 20))
+from calibfreehands.visualization.topology import HAND_CONNECTIONS
 
 
 def overlay_keypoints(frames: Iterable[np.ndarray], keypoints_2d: np.ndarray, detected: np.ndarray):

@@ -44,7 +44,7 @@ class FFmpegDecoder:
         except (OSError, subprocess.CalledProcessError, json.JSONDecodeError, ValueError) as exc:
             raise RuntimeError(f"Could not read frame timestamps for {path.name}: {exc}") from exc
 
-    def decode_rgb(self, path: Path, width: int, height: int):
+    def decode_rgb(self, path: Path, width: int, height: int, frame_rate: float | None = None):
         executable = self._executable(self.ffmpeg)
         command = [executable, "-v", "error", "-i", str(path), "-f", "rawvideo", "-pix_fmt", "rgb24", "pipe:1"]
         frame_bytes = width * height * 3
@@ -61,7 +61,9 @@ class FFmpegDecoder:
                 raw = process.stdout.read(frame_bytes)
                 if len(raw) != frame_bytes:
                     break
-                timestamp = timestamps[index] if index < len(timestamps) else float(index)
+                timestamp = timestamps[index] if index < len(timestamps) else (
+                    float(index) / frame_rate if frame_rate and frame_rate > 0 else float("nan")
+                )
                 yield DecodedFrame(index, timestamp, np.frombuffer(raw, dtype=np.uint8).reshape(height, width, 3))
                 index += 1
         finally:

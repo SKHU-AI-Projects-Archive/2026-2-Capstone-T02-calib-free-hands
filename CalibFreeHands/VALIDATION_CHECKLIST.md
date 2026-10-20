@@ -30,6 +30,18 @@
 - [x] Real preview validation: 2D overlay plus original AAC audio preserved
 - [x] Mean aggregation and All-frame sampling smoke path with real model backends
 - [x] MainWindow `_process_media` real pipeline reaches completion and writes result/preview/run.json
+- [x] P0 project-local Windows launcher path and preflight runtime diagnostics
+- [x] P0 OpenPose topology regression and non-sequential bone check
+- [x] P0 vertex translation numerical regression test
+- [x] P0 real OpenGL viewer offscreen construction test
+- [x] P0 real sample rerun: 502 frames, 2x1538 MANO faces, NaN/mask and mesh finite checks
+- [x] P0.1 float32/NaN QPainter regression test and offscreen repaint
+- [x] P0.1 actual Uniform/8/Median short-video run with calibration/reconstruction/preview progress
+- [x] P0.1 cooperative cancellation regression test
+- [x] P0.2 existing NPZ structural validation for 1_insert and 5_fold_p0
+- [x] P0.2 native Windows minimal GL smoke test with grid/axis/line/scatter/mesh
+- [x] P0.2 repeated ResultViewer lifecycle: 5_fold_p0 → 1_insert → 5_fold_p0
+- [x] P0.2 shared display-transform regression test
 - [x] Official WiLoR checkpoint and detector downloaded outside protected source tree
 - [x] Official model asset setup script with network access
 - [ ] Interactive viewer/manual validation

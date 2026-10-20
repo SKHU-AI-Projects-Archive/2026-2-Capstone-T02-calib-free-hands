@@ -15,8 +15,12 @@ class JobThread(QThread):
 
     def run(self) -> None:
         try:
+            self.job._report = self.update.emit
             for event in self.job.run():
                 self.update.emit(event)
+        except InterruptedError:
+            self.job.state = JobState.CANCELLED
+            self.update.emit(JobUpdate(JobState.CANCELLED, 0.0, 0, 1, 0.0))
         except Exception as exc:
             self.job.state = JobState.FAILED
             self.update.emit(JobUpdate(JobState.FAILED, 0.0, 0, 1, 0.0))

@@ -47,6 +47,8 @@ class MainWindow(QMainWindow):
         collision = QComboBox(); collision.addItems(["Ask", "Overwrite", "Auto rename", "Skip"]); collision.setCurrentText(str(self.settings.get("collision_policy")).replace("_", " ").title()); collision.currentTextChanged.connect(lambda value: self._set_setting("collision_policy", value.lower().replace(" ", "_")))
         sampling = QComboBox(); sampling.addItems(["Uniform", "All frames"]); sampling.setCurrentText("All frames" if self.settings.get("sampling_mode") == "all" else "Uniform"); sampling.currentTextChanged.connect(lambda value: self._set_setting("sampling_mode", "all" if value == "All frames" else "uniform"))
         sample_count = QComboBox(); sample_count.addItems(["4", "8", "16", "32"]); sample_count.setCurrentText(str(self.settings.get("sample_count"))); sample_count.currentTextChanged.connect(lambda value: self._set_setting("sample_count", int(value)))
+        sample_count.setEnabled(sampling.currentText() == "Uniform")
+        sampling.currentTextChanged.connect(lambda value: sample_count.setEnabled(value == "Uniform"))
         aggregation = QComboBox(); aggregation.addItems(["Median", "Mean"]); aggregation.setCurrentText(str(self.settings.get("aggregation")).title()); aggregation.currentTextChanged.connect(lambda value: self._set_setting("aggregation", value.lower()))
         preserve_audio = QCheckBox("Preserve audio"); preserve_audio.setChecked(bool(self.settings.get("preserve_audio"))); preserve_audio.toggled.connect(lambda value: self._set_setting("preserve_audio", value))
         settings_row.addWidget(QLabel("Theme")); settings_row.addWidget(theme); settings_row.addWidget(QLabel("Language")); settings_row.addWidget(language); settings_row.addWidget(output, 1)
@@ -105,26 +107,30 @@ class MainWindow(QMainWindow):
             self.progress.setText("Select a media item first")
             return
         input_path = Path(item.text())
-        self._job_thread = JobThread(ProcessingJob(item.text(), operation=lambda: self._process_media(input_path)))
-        self._job_thread.update.connect(lambda event: self.progress.setText(f"{event.state.value}: {event.current}/{event.total} ({event.progress:.0%})"))
+        self._job_thread = JobThread(ProcessingJob(item.text(), operation=lambda job: self._process_media(input_path, job)))
+        self._job_thread.update.connect(lambda event: self.progress.setText(f"{event.stage + ': ' if event.stage else ''}{event.state.value}: {event.current}/{event.total} ({event.progress:.0%})"))
         self._job_thread.failed.connect(lambda message: self.progress.setText(f"Failed: {message}"))
         self._job_thread.finished.connect(lambda: self.cancel.setEnabled(False))
         self.cancel.setEnabled(True); self._job_thread.start()
 
-    def _process_media(self, input_path: Path) -> None:
+    def _process_media(self, input_path: Path, job=None) -> None:
         info = probe_media(input_path)
         if info.width is None or info.height is None:
             raise RuntimeError(f"Media dimensions are unavailable: {input_path.name}")
-        frames = list(FFmpegDecoder().decode_rgb(input_path, info.width, info.height))
         root = Path(__file__).resolve().parents[4]
         repository = root / "WiLoR"
+        pose = OriginalWiLoRBackend(repository, repository / "pretrained_models" / "wilor_final.ckpt", root / "models" / "model_config_wilor_original.yaml")
+        pose.preflight()
+        if job: job.report(1, 1, stage="Preparing media")
+        frames = list(FFmpegDecoder().decode_rgb(input_path, info.width, info.height, info.frame_rate))
         output_base = Path(self.settings.get("output_directory") or input_path.parent)
         output_dir = choose_output_directory(output_base, input_path.stem, self.settings.get("collision_policy"))
         calibrator = AnyCalibBackend(device="cuda")
-        pose = OriginalWiLoRBackend(repository, repository / "pretrained_models" / "wilor_final.ckpt", root / "models" / "model_config_wilor_original.yaml")
         settings = {**self.settings.values(), "input_path": str(input_path), "checkpoint_paths": {"wilor": str(pose.checkpoint)},
                     "preview_output": str(output_dir / "preview.mp4"), "fps": info.frame_rate or 30.0}
-        process_and_save(frames, calibrator, pose, output_dir, settings)
+        def progress(stage, current, total):
+            if job: job.report(current, total, stage=stage)
+        process_and_save(frames, calibrator, pose, output_dir, settings, progress, lambda: bool(job and job.cancelled))
 
     def _cancel_job(self) -> None:
         if self._job_thread is not None:

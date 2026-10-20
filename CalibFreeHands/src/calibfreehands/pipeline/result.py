@@ -17,6 +17,7 @@ class CanonicalResult:
     focal_px: np.ndarray
     image_size: tuple[int, int]
     mano_vertices: np.ndarray | None = None
+    mano_faces: np.ndarray | None = None
     confidence: np.ndarray | None = None
     bbox: np.ndarray | None = None
     mano_pose: np.ndarray | None = None
@@ -34,6 +35,8 @@ class CanonicalResult:
             raise ValueError("result arrays must agree on frame count")
         if self.focal_px.shape != (frames,):
             raise ValueError("focal_px must have one value per frame")
+        if self.mano_faces is not None and (self.mano_faces.ndim not in (2, 3) or self.mano_faces.shape[-1] != 3):
+            raise ValueError("mano_faces must have shape (F, 3) or (2, F, 3)")
         validate_result(self)
 
 
@@ -63,6 +66,8 @@ def save_result(result: CanonicalResult, output_dir: Path, provenance: dict) -> 
     }
     if result.mano_vertices is not None:
         arrays["mano_vertices"] = result.mano_vertices
+    if result.mano_faces is not None:
+        arrays["mano_faces"] = result.mano_faces.astype(np.int32, copy=False)
     for name in ("confidence", "bbox", "mano_pose", "mano_shape", "camera_translation"):
         value = getattr(result, name)
         if value is not None:

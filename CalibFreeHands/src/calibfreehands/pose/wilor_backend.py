@@ -49,7 +49,7 @@ class OriginalWiLoRBackend:
         try:
             from wilor.models import load_wilor
         except ImportError as exc:
-            raise RuntimeError("Original WiLoR dependencies are not installed in the active environment.") from exc
+            raise RuntimeError(f"Original WiLoR import failed in {sys.executable}: {exc}") from exc
         # WiLoR's published loader resolves MANO paths relative to CWD.
         # Keep that legacy assumption inside this adapter only.
         previous_cwd = Path.cwd()
@@ -63,6 +63,19 @@ class OriginalWiLoRBackend:
         finally:
             os.chdir(previous_cwd)
         self.model.to(self.device).eval()
+
+    def preflight(self) -> dict[str, object]:
+        paths = (self.repository, self.checkpoint, self.config, *self.mano_paths.values(),
+                 self.repository / "pretrained_models" / "detector.pt")
+        missing = [str(path) for path in paths if not path.is_file() and path != self.repository]
+        if not self.repository.is_dir():
+            missing.insert(0, str(self.repository))
+        if missing:
+            raise FileNotFoundError("WiLoR preflight missing assets: " + ", ".join(missing))
+        import torch
+        if self.device.startswith("cuda") and not torch.cuda.is_available():
+            raise RuntimeError(f"CUDA device requested but unavailable in {sys.executable}")
+        return {"python": sys.executable, "torch": torch.__version__, "cuda_available": bool(torch.cuda.is_available())}
 
     def predict(self, *args, **kwargs):
         if len(args) < 2:
@@ -79,6 +92,8 @@ class OriginalWiLoRBackend:
             checkpoint = self.checkpoint.resolve()
             config = self.config.resolve()
             project_local_config = Path.cwd()
+            if os.name == "nt":
+                os.environ.setdefault("PYOPENGL_PLATFORM", "win32")
             os.environ.setdefault("YOLO_CONFIG_DIR", str(project_local_config))
             sys.path.insert(0, str(root))
             previous_cwd = Path.cwd()
@@ -86,18 +101,20 @@ class OriginalWiLoRBackend:
                 os.chdir(root)
                 _prepare_legacy_mano_imports()
                 from rgb_predictor import AnyHandPredictor
-                self._predictor = AnyHandPredictor(
-                    backend="wilor", device=self.device,
-                    wilor_ckpt=str(checkpoint),
-                    wilor_cfg=str(config),
-                    detector_pt=str(detector),
-                )
+                try:
+                    self._predictor = AnyHandPredictor(
+                        backend="wilor", device=self.device,
+                        wilor_ckpt=str(checkpoint), wilor_cfg=str(config), detector_pt=str(detector),
+                    )
+                except ImportError as exc:
+                    raise RuntimeError(f"WiLoR runtime import failed in {sys.executable}: {exc}") from exc
             finally:
                 os.chdir(previous_cwd)
         predictions = self._predictor.predict(image_rgb[:, :, ::-1].copy(), backend="wilor")
         from calibfreehands.calibration.focal import rescale_camera_translation
         from calibfreehands.pipeline.service import HandEstimate
         estimates = []
+        mano_faces = np.asarray(getattr(getattr(self._predictor, "_wilor_model", None), "mano", None).faces, dtype=np.int32) if getattr(getattr(self._predictor, "_wilor_model", None), "mano", None) is not None else None
         for prediction in predictions:
             source_focal = float(prediction.focal_length)
             translation = rescale_camera_translation(prediction.cam_t, source_focal, focal_px)
@@ -106,10 +123,11 @@ class OriginalWiLoRBackend:
                 keypoints_2d=np.asarray(prediction.keypoints_2d, dtype=np.float32),
                 keypoints_3d_relative=np.asarray(prediction.keypoints_3d, dtype=np.float32),
                 camera_translation=translation,
-                vertices_relative=np.asarray(prediction.vertices, dtype=np.float32) - np.asarray(prediction.cam_t, dtype=np.float32),
+                vertices_relative=np.asarray(prediction.vertices, dtype=np.float32),
                 bbox=np.asarray(prediction.bbox, dtype=np.float32),
                 confidence=float(prediction.score),
                 mano_pose=np.asarray(prediction.mano_pose, dtype=np.float32),
                 mano_shape=np.asarray(prediction.mano_shape, dtype=np.float32),
+                mano_faces=mano_faces,
             ))
         return estimates

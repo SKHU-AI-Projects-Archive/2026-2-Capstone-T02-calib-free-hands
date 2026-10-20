@@ -29,3 +29,12 @@
 - [x] End-to-end camera-space inference pipeline
 - [x] Result viewer and exports
 - [x] Main-window saved-result reopen action without rerunning inference
+- [x] P0 Windows launcher uses project-local Python and explicit PYTHONPATH
+- [x] P0 authoritative OpenPose hand topology shared by 2D preview and viewer
+- [x] P0 camera translation applied once to joints and MANO vertices
+- [x] P0 optional MANO triangle faces persisted with legacy-NPZ compatibility
+- [x] P0 real pyqtgraph OpenGL result viewer with mesh/skeleton/grid/axis toggles
+- [x] P0.1 QPainter float/NaN-safe overlay rendering and guaranteed painter cleanup
+- [x] P0.1 stage progress and cooperative cancellation callbacks in processing pipeline
+- [x] P0.2 GL item data validation and persistent per-hand item updates
+- [x] P0.2 Qt OpenGL shader-cache reset across repeated viewer contexts
