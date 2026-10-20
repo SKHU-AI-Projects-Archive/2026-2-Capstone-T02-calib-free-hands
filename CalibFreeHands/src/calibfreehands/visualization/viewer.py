@@ -11,7 +11,7 @@ from pyqtgraph.opengl import shaders
 from pyqtgraph.opengl.items.GLLinePlotItem import GLLinePlotItem
 from pyqtgraph.opengl.items.GLScatterPlotItem import GLScatterPlotItem
 from PySide6.QtCore import Qt, QTimer, QPointF, QLineF
-from PySide6.QtGui import QImage, QPainter, QPen, QKeySequence, QShortcut
+from PySide6.QtGui import QGuiApplication, QImage, QPainter, QPen, QKeySequence, QShortcut
 from PySide6.QtWidgets import QCheckBox, QHBoxLayout, QLabel, QPushButton, QSlider, QSplitter, QVBoxLayout, QWidget
 
 from calibfreehands.media.ffmpeg import FFmpegDecoder
@@ -98,26 +98,73 @@ class _OverlayCanvas(QWidget):
 class _GLResultView(gl.GLViewWidget):
     def __init__(self, loaded):
         _reset_gl_shader_cache(); super().__init__(); self.loaded = loaded; self.frame = 0
-        self.show_joints = self.show_bones = self.show_mesh = self.show_left = self.show_right = self.show_grid = self.show_axis = True
-        self.grid = gl.GLGridItem(); self.grid.setSize(1, 1); self.grid.setSpacing(0.1, 0.1); self.addItem(self.grid)
-        self.axis = gl.GLAxisItem(); self.axis.setSize(0.5, 0.5, 0.5); self.addItem(self.axis); self.setCameraPosition(distance=1.2)
+        self.show_joints = self.show_bones = self.show_left = self.show_right = self.show_grid = self.show_axis = True
+        self.show_mesh = loaded.has_mesh_topology
+        self.grids = [gl.GLGridItem(color=(120, 140, 160, 55)) for _ in range(3)]
+        for grid in self.grids: self.addItem(grid)
+        self.axis = gl.GLLinePlotItem(mode="lines", width=2, antialias=True)
+        self.axis_labels = [gl.GLTextItem(text=label) for label in ("X", "Y", "Z")]
+        self.addItem(self.axis)
+        for label in self.axis_labels: self.addItem(label)
+        self.fit_center = None; self.fit_distance = 1.2; self.setCameraPosition(distance=self.fit_distance)
         self.joints = [gl.GLScatterPlotItem(), gl.GLScatterPlotItem()]
         self.bones = [gl.GLLinePlotItem(mode="lines", width=2, antialias=True), gl.GLLinePlotItem(mode="lines", width=2, antialias=True)]
         self.meshes = [gl.GLMeshItem(smooth=False, drawEdges=False), gl.GLMeshItem(smooth=False, drawEdges=False)]
         for item in (*self.joints, *self.bones, *self.meshes): self.addItem(item); item.setVisible(False)
         self.set_frame(0)
-    def reset_camera(self): self._frame_camera(); self.update()
-    def _frame_camera(self):
+        self._frame_camera(self._first_detected_frame(), reset_orientation=True)
+    def _first_detected_frame(self):
+        detected = self.loaded.result.detected
+        return int(np.flatnonzero(detected.any(axis=1))[0]) if detected.any() else self.frame
+    def _geometry(self, frame):
         result = self.loaded.result; points = []
-        visible = result.detected[self.frame]
+        visible = result.detected[frame]
         for hand_i in range(2):
             if not visible[hand_i] or (hand_i == 0 and not self.show_left) or (hand_i == 1 and not self.show_right): continue
-            points.append(np.asarray(result.keypoints_3d[self.frame, hand_i]) @ RAW_TO_VIEW.T)
-            if self.loaded.has_mesh_topology and result.mano_vertices is not None: points.append(np.asarray(result.mano_vertices[self.frame, hand_i]) @ RAW_TO_VIEW.T)
-        finite = np.concatenate(points) if points else np.zeros((1, 3), dtype=np.float32); finite = finite[np.isfinite(finite).all(axis=1)]
-        if not len(finite): return
-        center = finite.mean(axis=0); extent = max(float(np.ptp(finite, axis=0).max()), 0.1)
-        self.setCameraPosition(distance=max(0.3, extent * 2.5), elevation=20, azimuth=45, pos=pg.Vector(*center))
+            points.append(np.asarray(result.keypoints_3d[frame, hand_i]) @ RAW_TO_VIEW.T)
+            if self.loaded.has_mesh_topology and result.mano_vertices is not None:
+                points.append(np.asarray(result.mano_vertices[frame, hand_i]) @ RAW_TO_VIEW.T)
+        finite = np.concatenate(points) if points else np.empty((0, 3), dtype=np.float32)
+        return finite[np.isfinite(finite).all(axis=1)]
+    def _update_reference(self, center, extent):
+        size = max(extent * 1.5, 0.4); spacing = max(size / 10, 0.05)
+        # Local XY grids become display XY (raw XZ), XZ (raw XY), and YZ (raw YZ).
+        for grid, rotation in zip(self.grids, (None, (90, 1, 0, 0), (90, 0, 1, 0))):
+            grid.resetTransform(); grid.setSize(size, size, 1); grid.setSpacing(spacing, spacing, 1)
+            if rotation: grid.rotate(*rotation)
+            grid.translate(*center)
+        directions = np.eye(3, dtype=np.float32) @ RAW_TO_VIEW.T
+        axis_size = size * 0.35
+        positions = np.concatenate([np.stack((center, center + direction * axis_size)) for direction in directions])
+        colors = np.repeat(np.asarray(((1, 0.2, 0.2, 1), (0.2, 1, 0.2, 1), (0.3, 0.5, 1, 1)), dtype=np.float32), 2, axis=0)
+        self.axis.setData(pos=np.ascontiguousarray(positions, dtype=np.float32), color=colors, mode="lines")
+        for label, direction in zip(self.axis_labels, directions): label.setData(pos=center + direction * axis_size * 1.1)
+    def _frame_camera(self, frame=None, reset_orientation=False):
+        finite = self._geometry(self.frame if frame is None else frame)
+        if not len(finite): return False
+        center = (finite.min(axis=0) + finite.max(axis=0)) / 2
+        extent = max(float(np.ptp(finite, axis=0).max()), 0.1)
+        self.fit_center = center; self.fit_distance = max(0.3, extent * 2.5); self._update_reference(center, extent)
+        options = {"distance": self.fit_distance, "pos": pg.Vector(*center)}
+        if reset_orientation: options.update(elevation=20, azimuth=45)
+        self.setCameraPosition(**options)
+        self._update_reference_visibility(); return True
+    def fit_hands(self): self._frame_camera()
+    def reset_camera(self): self._frame_camera(reset_orientation=True); self.update()
+    def _preset(self, raw_direction):
+        if self.fit_center is None: self._frame_camera()
+        if self.fit_center is None: return
+        direction = np.asarray(raw_direction, dtype=np.float32) @ RAW_TO_VIEW.T
+        azimuth = float(np.degrees(np.arctan2(direction[1], direction[0])))
+        elevation = float(np.degrees(np.arctan2(direction[2], np.hypot(direction[0], direction[1]))))
+        self.setCameraPosition(pos=pg.Vector(*self.fit_center), distance=self.fit_distance, azimuth=azimuth, elevation=elevation)
+    def front_view(self): self._preset((0, 0, -1))
+    def side_view(self): self._preset((-1, 0, 0))
+    def top_view(self): self._preset((0, -1, 0))
+    def _update_reference_visibility(self):
+        for grid in self.grids: grid.setVisible(self.show_grid)
+        self.axis.setVisible(self.show_axis)
+        for label in self.axis_labels: label.setVisible(self.show_axis)
     def set_frame(self, frame):
         self.frame = max(0, min(frame, self.loaded.frame_count - 1)); result = self.loaded.result; colors = ((0.1, 0.9, 1, 1), (1, 0.8, 0.1, 1))
         for hand_i in range(2):
@@ -136,21 +183,25 @@ class _GLResultView(gl.GLViewWidget):
                 vertices = np.ascontiguousarray(vertices, dtype=np.float32); faces = np.ascontiguousarray(faces, dtype=np.int32)
                 if np.isfinite(vertices).all() and faces.ndim == 2 and faces.shape[1] == 3 and faces.min() >= 0 and faces.max() < len(vertices):
                     self.meshes[hand_i].setMeshData(meshdata=gl.MeshData(vertexes=vertices, faces=faces)); self.meshes[hand_i].setColor(colors[hand_i]); self.meshes[hand_i].setVisible(True)
-        self.grid.setVisible(self.show_grid); self.axis.setVisible(self.show_axis); self.update()
-        if self.frame == 0: self._frame_camera()
+        self._update_reference_visibility(); self.update()
 
 
 class ResultViewer(QWidget):
     def __init__(self, result_path: Path):
-        super().__init__(); self.loaded = load_npz_result(result_path); self.setWindowTitle("CalibFreeHands — Result")
-        self.overlay = _OverlayCanvas(self.loaded); self.gl_view = _GLResultView(self.loaded); split = QSplitter(Qt.Orientation.Horizontal); split.addWidget(self.overlay); split.addWidget(self.gl_view); split.setSizes([1, 1])
+        super().__init__(); self.loaded = load_npz_result(result_path); self.setWindowTitle("CalibFreeHands — Result"); self.setMinimumSize(960, 640)
+        screen = QGuiApplication.primaryScreen().availableGeometry(); self.resize(min(1400, int(screen.width() * .8)), min(900, int(screen.height() * .8)))
+        self.overlay = _OverlayCanvas(self.loaded); self.gl_view = _GLResultView(self.loaded); split = QSplitter(Qt.Orientation.Horizontal); split.addWidget(self.overlay); split.addWidget(self.gl_view); split.setSizes([600, 600])
         self.slider = QSlider(Qt.Orientation.Horizontal); self.slider.setRange(0, max(0, self.loaded.frame_count - 1)); self.slider.valueChanged.connect(self._set_frame)
-        self.status = QLabel(); self.timer = QTimer(self); self.timer.timeout.connect(self._next); controls = QHBoxLayout()
+        self.status = QLabel(); self.coordinate_info = QLabel("Camera space · metres   X: image right   Y: image down   Z: forward   ·   View centered on hands · raw coordinates unchanged")
+        self.timer = QTimer(self); self.timer.timeout.connect(self._next); visibility = QHBoxLayout(); view = QHBoxLayout(); playback = QHBoxLayout()
         for label, attr in (("Joint", "show_joints"), ("Bone", "show_bones"), ("Left Hand", "show_left"), ("Right Hand", "show_right"), ("Grid", "show_grid"), ("Axis", "show_axis")):
-            check = QCheckBox(label); check.setChecked(True); check.toggled.connect(lambda value, a=attr: self._toggle(a, value)); controls.addWidget(check)
-        mesh = QCheckBox("Mesh"); mesh.setEnabled(self.loaded.has_mesh_topology); mesh.setToolTip("MANO faces are not present in this legacy NPZ" if not self.loaded.has_mesh_topology else ""); mesh.toggled.connect(lambda value: self._toggle("show_mesh", value)); controls.addWidget(mesh)
+            check = QCheckBox(label); check.setChecked(getattr(self.gl_view, attr)); check.toggled.connect(lambda value, a=attr: self._toggle(a, value)); visibility.addWidget(check)
+        mesh = QCheckBox("Mesh"); mesh.setChecked(self.gl_view.show_mesh); mesh.setEnabled(self.loaded.has_mesh_topology); mesh.setToolTip("MANO mesh topology is unavailable for this result" if not self.loaded.has_mesh_topology else ""); mesh.toggled.connect(lambda value: self._toggle("show_mesh", value)); visibility.addWidget(mesh)
         previous = QPushButton("Previous"); previous.clicked.connect(lambda: self.slider.setValue(max(0, self.slider.value() - 1))); play = QPushButton("Play / Pause"); play.clicked.connect(self._play); nxt = QPushButton("Next"); nxt.clicked.connect(lambda: self.slider.setValue(min(self.loaded.frame_count - 1, self.slider.value() + 1))); reset = QPushButton("Reset Camera"); reset.clicked.connect(self.gl_view.reset_camera)
-        controls.addWidget(previous); controls.addWidget(play); controls.addWidget(nxt); controls.addWidget(reset); layout = QVBoxLayout(self); layout.addWidget(split, 1); layout.addWidget(self.slider); layout.addLayout(controls); layout.addWidget(self.status)
+        for text, callback in (("Front", self.gl_view.front_view), ("Side", self.gl_view.side_view), ("Top", self.gl_view.top_view), ("Fit Hands", self.gl_view.fit_hands), ("Reset View", self.gl_view.reset_camera)):
+            button = QPushButton(text); button.clicked.connect(callback); view.addWidget(button)
+        playback.addWidget(previous); playback.addWidget(play); playback.addWidget(nxt)
+        layout = QVBoxLayout(self); layout.addWidget(split, 1); layout.addWidget(self.slider); layout.addLayout(visibility); layout.addLayout(view); layout.addLayout(playback); layout.addWidget(self.status); layout.addWidget(self.coordinate_info)
         for key, callback in (("Space", self._play), ("Left", lambda: self.slider.setValue(max(0, self.slider.value() - 1))), ("Right", lambda: self.slider.setValue(min(self.loaded.frame_count - 1, self.slider.value() + 1)))): QShortcut(QKeySequence(key), self, activated=callback)
         self._update_status()
     def _toggle(self, attr, value):
@@ -159,4 +210,7 @@ class ResultViewer(QWidget):
     def _set_frame(self, frame): self.overlay.set_frame(frame); self.gl_view.set_frame(frame); self._update_status()
     def _play(self): self.timer.stop() if self.timer.isActive() else self.timer.start(100)
     def _next(self): self.slider.setValue((self.slider.value() + 1) % max(1, self.loaded.frame_count))
-    def _update_status(self): self.status.setText(f"Frame {self.slider.value() + 1} / {self.loaded.frame_count}")
+    def _update_status(self):
+        timestamp = self.loaded.result.timestamps[self.slider.value()]
+        suffix = f" · {float(timestamp):.3f} s" if np.isfinite(timestamp) else ""
+        self.status.setText(f"Frame {self.slider.value() + 1} / {self.loaded.frame_count}{suffix}")

@@ -42,6 +42,8 @@
 - [x] P0.2 native Windows minimal GL smoke test with grid/axis/line/scatter/mesh
 - [x] P0.2 repeated ResultViewer lifecycle: 5_fold_p0 → 1_insert → 5_fold_p0
 - [x] P0.2 shared display-transform regression test
+- [x] P1-A viewer mesh/grid/axis toggle, auto-fit and raw-data immutability tests
+- [x] P1-A native Qt viewer construction for `1_insert` and `5_fold_p0` results
 - [x] Official WiLoR checkpoint and detector downloaded outside protected source tree
 - [x] Official model asset setup script with network access
 - [ ] Interactive viewer/manual validation

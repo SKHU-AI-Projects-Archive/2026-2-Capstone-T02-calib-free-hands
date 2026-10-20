@@ -1,4 +1,5 @@
 import numpy as np
+from PySide6.QtWidgets import QCheckBox
 
 from calibfreehands.pipeline import CanonicalResult, save_result
 from calibfreehands.visualization.viewer import load_npz_result
@@ -44,3 +45,56 @@ def test_overlay_float32_and_nan_coordinates_render_without_qt_errors(qapp):
     canvas.resize(64, 48)
     canvas.paintEvent(None)
     assert not canvas.isVisible() or canvas.size().width() == 64
+
+
+def _viewer_result(mesh=True):
+    keypoints_2d = np.full((2, 2, 21, 2), np.nan, dtype=np.float32); keypoints_2d[:, 0] = 0
+    keypoints_3d = np.full((2, 2, 21, 3), np.nan, dtype=np.float32)
+    keypoints_3d[:, 0] = np.array([1., 2., 3.], dtype=np.float32)
+    vertices = np.full((2, 2, 4, 3), np.nan, dtype=np.float32)
+    vertices[:, 0] = np.array(((0., 0., 0.), (2., 0., 0.), (0., 4., 0.), (0., 0., 6.)), dtype=np.float32)
+    return CanonicalResult(np.array([0, 1]), np.array([0., .25]), keypoints_2d, keypoints_3d,
+                           np.array([[True, False], [True, False]]), np.array([500., 500.]), (64, 48),
+                           mano_vertices=vertices if mesh else None,
+                           mano_faces=np.array([[[0, 1, 2]], [[0, 2, 3]]], dtype=np.int32) if mesh else None)
+
+
+def test_viewer_mesh_grid_axis_and_fit_contract(tmp_path, qapp):
+    result = _viewer_result(); before_joints = result.keypoints_3d.copy(); before_vertices = result.mano_vertices.copy()
+    npz, _ = save_result(result, tmp_path, {"schema_version": 1})
+    from calibfreehands.visualization.viewer import ResultViewer
+    viewer = ResultViewer(npz)
+    checkboxes = {box.text(): box for box in viewer.findChildren(QCheckBox)}
+    assert checkboxes["Mesh"].isChecked() and checkboxes["Mesh"].isEnabled()
+    assert viewer.gl_view.show_mesh and len(viewer.gl_view.grids) == 3 and len(viewer.gl_view.axis_labels) == 3
+    checkboxes["Grid"].setChecked(False)
+    assert not any(grid.visible() for grid in viewer.gl_view.grids)
+    checkboxes["Axis"].setChecked(False)
+    assert not viewer.gl_view.axis.visible() and not any(label.visible() for label in viewer.gl_view.axis_labels)
+    viewer.gl_view.fit_hands(); viewer.gl_view.front_view(); viewer.gl_view.side_view(); viewer.gl_view.top_view(); viewer.slider.setValue(1)
+    np.testing.assert_array_equal(result.keypoints_3d, before_joints)
+    np.testing.assert_array_equal(result.mano_vertices, before_vertices)
+    viewer.close()
+
+
+def test_legacy_result_disables_mesh_checkbox(tmp_path, qapp):
+    result = _viewer_result(mesh=False)
+    npz, _ = save_result(result, tmp_path, {"schema_version": 1})
+    from calibfreehands.visualization.viewer import ResultViewer
+    viewer = ResultViewer(npz)
+    mesh = next(box for box in viewer.findChildren(QCheckBox) if box.text() == "Mesh")
+    assert not mesh.isChecked() and not mesh.isEnabled()
+    viewer.close()
+
+
+def test_fit_uses_visible_two_hand_bounds_and_handles_empty_result(qapp):
+    from calibfreehands.visualization.topology import RAW_TO_VIEW
+    from calibfreehands.visualization.viewer import LoadedResult, _GLResultView
+    result = _viewer_result(); result.detected[:, 1] = True; result.keypoints_2d[:, 1] = 0; result.keypoints_3d[:, 1] = np.array([[-2., 1., 2.]], dtype=np.float32)
+    result.mano_vertices[:, 1] = np.array(((-3., 0., 0.), (-1., 0., 0.), (-3., 2., 0.), (-3., 0., 2.)), dtype=np.float32)
+    view = _GLResultView(LoadedResult(result)); assert view._frame_camera()
+    points = np.concatenate((result.keypoints_3d[0].reshape(-1, 3), result.mano_vertices[0].reshape(-1, 3))) @ RAW_TO_VIEW.T
+    points = points[np.isfinite(points).all(axis=1)]
+    np.testing.assert_allclose(view.fit_center, (points.min(axis=0) + points.max(axis=0)) / 2)
+    empty = _viewer_result(); empty.detected[:] = False; empty.keypoints_2d[:] = np.nan; empty.keypoints_3d[:] = np.nan; empty.mano_vertices[:] = np.nan
+    assert not _GLResultView(LoadedResult(empty))._frame_camera()
