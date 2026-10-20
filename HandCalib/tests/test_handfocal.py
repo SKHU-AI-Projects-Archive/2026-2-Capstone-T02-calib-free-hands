@@ -27,6 +27,7 @@ CFG17 = yaml.safe_load((ROOT / "configs/17_protocol_rerun.yaml").read_text())
 CFGFF = yaml.safe_load((ROOT / "configs/17_frame_filter_diag.yaml").read_text())
 CFG18 = yaml.safe_load((ROOT / "configs/18_same_session_check.yaml").read_text())
 CFG20 = yaml.safe_load((ROOT / "configs/20_phase_segmentation.yaml").read_text())
+CFG21 = yaml.safe_load((ROOT / "configs/21_guide_revision.yaml").read_text())
 PIPE = CFG17["pipeline"]                           # the 14 pipeline settings (identical in 16, 17 and 18)
 SYN = {"f_px": 1650, "image": [1920, 1080], "distance_mm": 350, "front_frames": 10, "tilt_frames": 40}     # 14's synthetic camera
 BASE_COND = {"name": "base", "delta_deg": 0, "noise": {"px": 1.0}, "heavy_tail": False, "tilt_range_deg": [25, 50], "arch_mm": 0,
@@ -967,6 +968,306 @@ class PsegEndToEnd(unittest.TestCase):
             self.assertNotIn("1680", Path(y).read_text())                              # the comparison with the reference f is in summary.md only
             self.assertIn("1680", (root / "summary.md").read_text())
             self.assertEqual(sorted(jobs[0]["variants"]), ["max_tilt"])
+
+
+# ====================================================================================================
+# guide revision (21)
+# ====================================================================================================
+
+def cjob21(cfg=CFG21, modes=("keep", "exclude", "downweight"), **over):
+    c = {k: copy.deepcopy(cfg[k]) for k in ("phase_segmentation", "conditions", "f_estimation", "reference_f_px", "compare_20", "transition_method") if k in cfg}
+    c["f_estimation"] = dict(c.get("f_estimation") or {}, compare_wrist_modes=list(modes))
+    c.update(over)
+    return c
+
+
+def synth_wrist(wrist_xy=None, seed=3, f=1650.0, noise=0.3, tilt_frames=40):
+    """Synthetic planar hand (17 points, tilt 30 deg, noise 0.3 px); optionally a wrist point replaced by wrist_xy (px) in every frame."""
+    g = synth({"noise": {"px": noise}, "tilt_range_deg": [30, 30]}, seed=seed, scfg=dict(SYN, f_px=f, tilt_frames=tilt_frames))
+    if wrist_xy is not None:
+        g["kp"][:, 0] = np.asarray(wrist_xy, float)
+        g["mask"][:, 0] = True
+    return g
+
+
+class GrevWristModes(unittest.TestCase):
+    def test_synthetic_hand_recovers_f_within_1_percent_in_all_three_modes(self):
+        """120 tilt frames (the random poses and distances of a draw already move f by up to ~1% with 40 frames, for 17's keep mode too), seeds 0-2."""
+        for seed in (0, 1, 2):
+            g = synth_wrist(seed=seed, tilt_frames=120)
+            for mode, kw in (("keep", {}), ("exclude", {"cfg": hf.pseg_wrist_cfg(PIPE)}), ("downweight", {"wrist_weight": 0.3})):
+                a = analyze_synth(g, methods_full=(), **kw)
+                self.assertLess(abs(a["solutions"]["fixed_template"]["f"] / g["f_true"] - 1.0), 0.01, (seed, mode, a["solutions"]["fixed_template"]["f"]))
+
+    def test_keep_is_the_old_analysis_and_weight_one_equals_keep(self):
+        g = synth_wrist()
+        a, b = analyze_synth(g, methods_full=("fixed_template",)), analyze_synth(g, methods_full=("fixed_template",), wrist_weight=1.0)
+        for m in ("fixed_template", "joint_delta"):
+            self.assertEqual(a["solutions"][m]["f"], b["solutions"][m]["f"])
+        pm_a, pm_b = a["per_method"]["fixed_template"], b["per_method"]["fixed_template"]
+        self.assertEqual(pm_a["f_rel_uncertainty"], pm_b["f_rel_uncertainty"])
+        self.assertEqual(pm_a["diagnostics"]["sharpness"], pm_b["diagnostics"]["sharpness"])
+        self.assertEqual(pm_a["verdict"]["verdict"], pm_b["verdict"]["verdict"])
+
+    def test_exclude_never_uses_the_wrist_point(self):
+        """The wrist replaced by two different garbage points gives bit-identical results in exclude mode (template, cost, jointsets, bootstrap, consistency), but not in keep."""
+        ce = hf.pseg_wrist_cfg(PIPE)
+        r = {}
+        for name, xy in (("a", (50.0, 60.0)), ("b", (1700.0, 900.0))):
+            g = synth_wrist(xy)
+            r[name] = (analyze_synth(g, methods_full=("fixed_template",), cfg=ce), analyze_synth(g, methods_full=("fixed_template",)))
+        ea, eb = r["a"][0], r["b"][0]
+        self.assertEqual(ea["template"], eb["template"])
+        for m in ("fixed_template", "joint_delta"):
+            self.assertEqual(ea["solutions"][m]["f"], eb["solutions"][m]["f"])
+        pa, pb = ea["per_method"]["fixed_template"], eb["per_method"]["fixed_template"]
+        self.assertEqual(pa["f_rel_uncertainty"], pb["f_rel_uncertainty"])
+        self.assertEqual(pa["jointset_range"], pb["jointset_range"])
+        self.assertEqual(pa["diagnostics"]["sharpness"], pb["diagnostics"]["sharpness"])
+        self.assertNotIn(0, pa["diagnostics"]["per_joint_rms_px"])
+        self.assertNotEqual(r["a"][1]["solutions"]["fixed_template"]["f"], r["b"][1]["solutions"]["fixed_template"]["f"])      # keep does see the wrist
+
+    def test_downweight_shrinks_the_wrist_outlier_effect(self):
+        g = synth_wrist((960.0, 700.0))                    # a wrist point far from where it belongs, in every frame
+        f = {m: analyze_synth(g, methods_full=(), **kw)["solutions"]["fixed_template"]["f"] for m, kw in (("keep", {}), ("down", {"wrist_weight": 0.3}))}
+        self.assertNotEqual(f["keep"], f["down"])
+
+
+class GrevTransition(unittest.TestCase):
+    def test_front_search_range_is_respected(self):
+        """Keypoint jitter falls steadily over the first 3 s: the lowest-motion second is the latest one. Searching to 3.0 s ends it at 3.0, searching to 2.5 s ends it at 2.5."""
+        t = np.arange(0, 8.0, 1 / 15)
+        rng = np.random.default_rng(0)
+        seq = pseg_seq(lambda t_: (0.0, 0.0), noise=0.0, seed=0)
+        _, kp, mask, present, box = seq
+        kp = kp + rng.normal(0, 1.0, kp.shape) * np.clip(3.2 - t, 0.05, 3.0)[:, None, None]
+        box = np.c_[np.nanmin(kp, 1) - 10, np.nanmax(kp, 1) + 10]
+        wide = hf.grev_front_window(t, present, kp, mask, box, PIPE["phases"], [0.5, 3.0])
+        narrow = hf.grev_front_window(t, present, kp, mask, box, PIPE["phases"], [0.5, 2.5])
+        self.assertGreater(wide["t1"], 2.5)
+        self.assertLessEqual(narrow["t1"], 2.5 + 1e-9)
+        self.assertGreaterEqual(narrow["t0"], 0.5 - 1e-9)
+        self.assertEqual(hf.front_window(t, present, kp, mask, box, PIPE["phases"])["t1"], wide["t1"])      # [0.5, 3.0] = 17's window
+
+    def test_d0_cap_limits_the_threshold_and_warns(self):
+        sq = pseg_seq(lambda t: (0.0, 0.0) if t < 2.0 else (float(min(25.0, 25.0 * (t - 2.0) / 1.0)), 20.0), seed=1)
+        t, kp, mask, present, box = sq
+        fw = hf.front_window(t, present, kp, mask, box, PIPE["phases"])
+        fr = [int(i) for i in fw["idx"]]
+        T = hf.template_build(kp[fr][:, EST_IDS], int(PIPE["joints"]["template_align_iters"]))["template"]
+        tilted = [i for i in range(len(t)) if 2.6 <= t[i] < 3.6]                          # a "front window" that already contains the tilt
+        p = CFG21["phase_segmentation"]
+        capped = hf.grev_transition(t, present, kp, mask, box, T, EST_IDS, tilted, p)
+        cap = 1 - np.cos(np.radians(p["d0_cap_theta_deg"]))
+        self.assertTrue(capped["d0_capped"])
+        self.assertGreater(capped["d0"], cap)
+        self.assertAlmostEqual(capped["d_thr"], max(p["k_d"] * cap, 1 - np.cos(np.radians(p["theta_min_deg"]))), places=12)
+        self.assertLess(capped["d_thr"], p["k_d"] * capped["d0"])
+        self.assertIn("정면 창에 기울임이 섞였을 수 있음", "; ".join(capped["warnings"]))
+        free = hf.grev_transition(t, present, kp, mask, box, T, EST_IDS, tilted, {k: v for k, v in p.items() if k != "d0_cap_theta_deg"})
+        self.assertFalse(free["d0_capped"])
+        self.assertAlmostEqual(free["d_thr"], p["k_d"] * free["d0"], places=12)           # no cap key = 20's rule
+        calm = hf.grev_transition(t, present, kp, mask, box, T, EST_IDS, fr, p)
+        self.assertFalse(calm["d0_capped"])
+        self.assertEqual(calm["warnings"], [])
+
+    def test_without_the_motion_condition_a_slow_ramp_is_found(self):
+        sq = pseg_seq(lambda t: (float(np.clip(30.0 * (t - 4.0) / 1.0, 0.0, 30.0)), 20.0), seed=2)
+        t, kp, mask, present, box = sq
+        fw = hf.grev_front_window(t, present, kp, mask, box, PIPE["phases"], CFG21["phase_segmentation"]["front_search_s"])
+        T = hf.template_build(kp[[int(i) for i in fw["idx"]]][:, EST_IDS], int(PIPE["joints"]["template_align_iters"]))["template"]
+        r = hf.grev_transition(t, present, kp, mask, box, T, EST_IDS, fw["idx"], CFG21["phase_segmentation"])
+        self.assertFalse(CFG21["phase_segmentation"]["use_motion"])
+        self.assertTrue(4.4 <= r["t_transition"] <= 4.9, r["t_transition"])
+
+
+def g21_metrics(box_ratio=0.4, n_tilt=60, theta_amp=30.0, n_extra_high=0, axis_bins=6, ext=0.98, transition=3.1, x0=700):
+    """Metrics of a trajectory: n_tilt tilt-phase frames around theta_amp (deg), plus n_extra_high frames at 70 deg."""
+    n_tot = n_tilt + n_extra_high + 45
+    t = np.arange(n_tot) / 15.0
+    present = np.ones(n_tot, bool)
+    side = box_ratio * 1080
+    box = np.tile([x0, 300, x0 + side, 300 + side], (n_tot, 1)).astype(float)
+    theta = np.r_[np.full(45, 1.0), theta_amp + np.sin(np.arange(n_tilt)) * 3.0, np.full(n_extra_high, 70.0)]
+    role = np.array(["front"] * 45 + ["tilt"] * (n_tilt + n_extra_high), dtype=object)
+    return hf.grev_metrics(t, present, box, 1920, 1080, theta, role, transition, 0.003, axis_bins, ext, 45.0)
+
+
+class GrevGuide(unittest.TestCase):
+    C21 = CFG21["conditions"]
+
+    def test_pass(self):
+        r = hf.grev_conditions_check(g21_metrics(), self.C21)
+        self.assertTrue(r["guide"], r["reasons"])
+        self.assertEqual(sorted(r["items"]), sorted(["box_short_ratio", "edge_rate", "transition", "tilt_frames", "theta_tilt_median", "axis_bins", "finger_extension"]))
+        self.assertNotIn("theta_p95", r["items"])
+
+    def test_each_item_fails_as_intended(self):
+        cases = {"box_short_ratio": dict(box_ratio=0.65), "edge_rate": dict(x0=0), "transition": dict(transition=1.0), "tilt_frames": dict(n_tilt=29),
+                 "theta_tilt_median": dict(theta_amp=15.0), "axis_bins": dict(axis_bins=4), "finger_extension": dict(ext=0.85)}
+        for item, kw in cases.items():
+            r = hf.grev_conditions_check(g21_metrics(**kw), self.C21)
+            self.assertFalse(r["items"][item], item)
+            self.assertFalse(r["guide"], item)
+            self.assertTrue(all(v for k, v in r["items"].items() if k != item), (item, r["items"]))
+
+    def test_box_limit_is_0_6_not_0_5_and_no_transition_fails(self):
+        m = g21_metrics(box_ratio=0.55)
+        self.assertTrue(hf.grev_conditions_check(m, self.C21)["items"]["box_short_ratio"])
+        self.assertFalse(hf.grev_conditions_check(m, CFG20["conditions"])["items"]["box_short_ratio"])
+        r = hf.grev_conditions_check(g21_metrics(transition=None), self.C21)
+        self.assertFalse(r["items"]["transition"])
+        self.assertIn("자동 전환 없음", "; ".join(r["reasons"]))
+
+    def test_large_tilt_frames_do_not_count_and_do_not_fail_the_guide(self):
+        """Frames above 45 deg neither count toward the 30 frames nor into the median (the old p95 limit is gone); only the frames <= 45 deg decide."""
+        m = g21_metrics(n_tilt=30, n_extra_high=40)
+        self.assertEqual(m["tilt_frames_le_max"], 30)
+        self.assertEqual(m["tilt_frames"], 70)
+        self.assertTrue(hf.grev_conditions_check(m, self.C21)["guide"])
+        self.assertFalse(hf.grev_conditions_check(m, CFG20["conditions"])["guide"])            # 20's p95 rule rejects the same metrics
+        self.assertFalse(hf.grev_conditions_check(g21_metrics(n_tilt=29, n_extra_high=40), self.C21)["items"]["tilt_frames"])
+
+    def test_tilt_rule_default_is_the_old_check(self):
+        m = g21_metrics()
+        self.assertEqual(hf.grev_conditions_check(m, CFG20["conditions"]), hf.conditions_check(m, CFG20["conditions"]))
+
+
+def adoption_jobs(keep, mode):
+    """keep / mode: lists of 15 fixed_template f (None = grid edge), pairs ordered video-major over 5 videos x 3 detectors."""
+    jobs = []
+    for i in range(15):
+        j = {"video": f"V{i // 3}.MOV", "detector": f"d{i % 3}", "wrist": {}}
+        for name, fv in (("keep", keep[i]), ("mode", mode[i])):
+            j["wrist"][name] = {"solutions": {"fixed_template": {"f": 3072.0 if fv is None else fv, "at_grid_edge": fv is None}}}
+        jobs.append(j)
+    return jobs
+
+
+class GrevAdoption(unittest.TestCase):
+    R = CFG21["wrist_adoption"]
+
+    def run_rules(self, keep, mode):
+        return hf.grev_adoption(adoption_jobs(keep, mode), 1000.0, self.R, "mode")
+
+    def test_all_rules_pass_and_each_can_fail(self):
+        keep = [1300.0] * 15
+        mode = [1100.0] * 15
+        a = self.run_rules(keep, mode)
+        self.assertTrue(a["candidate"], a["rules"])
+        self.assertEqual(a["all"]["improved"], 15)
+        b = self.run_rules(keep, [1100.0] * 9 + [1400.0] * 6)                           # 9 improved < 10
+        self.assertFalse(b["rules"]["2_improved_pairs"])
+        self.assertFalse(b["candidate"])
+        c = self.run_rules(keep, [1250.0] * 15)                                          # median error 25% vs 30%: improvement too small
+        self.assertTrue(c["rules"]["2_improved_pairs"])
+        self.assertFalse(c["rules"]["3_median_drop"])
+        d = self.run_rules([1300.0] * 14 + [None], [1100.0] * 14 + [None])               # edge count equal passes; more edges fails
+        self.assertTrue(d["rules"]["1_edge_not_more"])
+        e = self.run_rules(keep, [1100.0] * 14 + [None])
+        self.assertFalse(e["rules"]["1_edge_not_more"])
+
+    def test_leave_one_out_and_worst_video_rules(self):
+        keep = [1100.0] * 15
+        mode = [1000.0] * 15                                   # mode is better everywhere ...
+        mode[0:3] = [1500.0] * 3                               # ... except one video where all three detectors get 30 pp worse
+        a = self.run_rules(keep, mode)
+        self.assertEqual(a["worse_videos"], ["V0.MOV"])
+        self.assertFalse(a["rules"]["5_no_video_all_worse"])
+        self.assertFalse(a["candidate"])
+        keep2 = [1500.0] * 4 + [1100.0] * 11
+        mode2 = [1000.0] * 4 + [1200.0] * 11                   # improvement comes from one video only: dropping it breaks the direction
+        f = self.run_rules(keep2, mode2)
+        self.assertEqual(f["leave_one_out"]["V0.MOV"]["direction_2"], False)
+
+    def test_value_lost_counts_as_worse_and_value_gained_as_better(self):
+        a = self.run_rules([1100.0, None] + [1100.0] * 13, [None, 1100.0] + [1100.0] * 13)
+        self.assertEqual((a["all"]["improved"], a["all"]["worsened"]), (1, 1))
+
+
+class GrevOverlayText(unittest.TestCase):
+    def test_time_and_frame_number_match_the_frame_list(self):
+        r17 = RUN17_7158 / "mediapipe_hands" / "results.json"
+        if not r17.exists():
+            self.skipTest("17 run needed")
+        res = json.loads(r17.read_text())
+        fps = res["normalization"]["output"]["fps"]
+        for fr in (res["frames"]["list"][0], res["frames"]["list"][37], res["frames"]["list"][-1]):
+            lines = run.grev_overlay_lines(fr, 0.0456, 0.101, 2.93, 5.87, 2.53)
+            self.assertAlmostEqual(fr["frame"] / fps, fr["time_s"], places=9)
+            self.assertIn(f"t {fr['time_s']:.2f} s", lines[0])
+            self.assertIn(f"frame {fr['frame']} (#{fr['index']})", lines[0])
+            self.assertEqual(lines[1], "d 0.046   thr 0.101")
+            self.assertEqual(lines[2], "new 2.93 s   20 5.87 s   legacy 2.53 s")
+        self.assertEqual(run.grev_overlay_lines(res["frames"]["list"][0], np.nan, None, None, None, None)[1:], ["d -   thr -", "new none   20 none   legacy none"])
+
+
+@unittest.skipUnless(RUN17_7158.exists() and (Path(CFG17["input_dir"]) / "IMG_7158.MOV").exists(), "the 17 run and the input video of IMG_7158 are needed")
+class GrevReal(unittest.TestCase):
+    """17's own detections: with 20's settings the new code reproduces 20's transition, thresholds, guide and the default f; the keep mode equals 17."""
+
+    @classmethod
+    def setUpClass(cls):
+        c20 = {"phase_segmentation": CFG20["phase_segmentation"], "conditions": CFG20["conditions"], "f_estimation": {"compare_wrist_modes": ["keep"]},
+               "transition_method": "linear_d"}
+        cls.job20 = hf.grev_job(("IMG_7158.MOV", "mediapipe_hands", str(RUN17_7158), PIPE, c20, 0.5, None))
+        cls.ref20 = hf.pseg_job(("IMG_7158.MOV", "mediapipe_hands", str(RUN17_7158), PIPE, dict(CFG20["phase_segmentation"], variants={}), CFG20["conditions"], 0.5, "linear_d"))
+
+    def test_20_settings_reproduce_20(self):
+        a, b = self.job20["transition"], self.ref20["linear_d"]
+        for k in ("t_transition", "d0", "d_thr", "v0", "v_thr", "guide", "reasons", "skipped_no_motion_s"):
+            self.assertEqual(a[k], b[k], k)
+        self.assertEqual(self.job20["legacy_theta"]["t_transition"], self.ref20["legacy_theta"]["t_transition"])
+        self.assertEqual(self.job20["legacy_theta"]["guide"], self.ref20["legacy_theta"]["guide"])
+        self.assertEqual(self.job20["transition_no_motion"]["t_transition"], self.ref20["linear_d_no_motion"]["t_transition"])
+        self.assertEqual(self.job20["default"]["solutions"], self.ref20["default"]["solutions"])
+        self.assertEqual(self.job20["default"]["verdict"], self.ref20["default"]["verdict"])
+        self.assertNotIn("transition_20", self.job20)
+
+    def test_keep_mode_equals_17(self):
+        s = self.job20["same_as_17"]
+        self.assertTrue(s["f_fixed_template"] and s["f_joint_delta"] and s["verdict"] and s["keep_equals_default"], s)
+
+
+@unittest.skipUnless(RUN17_7158.exists() and (Path(CFG17["input_dir"]) / "IMG_7158.MOV").exists(), "the 17 run and the input video of IMG_7158 are needed")
+class GrevEndToEnd(unittest.TestCase):
+    def test_outputs_overlay_and_no_location_or_device_tags(self):
+        with tempfile.TemporaryDirectory() as d:
+            d = Path(d)
+            cfg = copy.deepcopy(CFG21)
+            cfg["workers"] = 1
+            cfg["videos"] = ["IMG_7158.MOV"]
+            cfg["output"]["root"] = str(d / "runs")
+            cfg["output"]["results_yaml"] = str(d / "r21.yaml")                     # never the tracked results file
+            cp = d / "c.yaml"
+            cp.write_text(yaml.safe_dump(cfg, allow_unicode=True))
+            root, jobs = run.grev_main(["--config", str(cp), "--detectors", "mediapipe_hands", "--out", str(d / "o")])
+            for f in ("report.md", "summary.md", "results.json", "metadata.json", "log.txt"):
+                self.assertTrue((root / f).exists(), f)
+            self.assertTrue((root / "figures" / "IMG_7158_mediapipe_hands.png").exists())
+            y = run.grev_results_yaml(root, cfg)
+            self.assertEqual(Path(y), d / "r21.yaml")
+            yy = yaml.safe_load(Path(y).read_text())
+            e = yy["videos"]["IMG_7158.MOV"]
+            self.assertIsNone(e["manual_transition_s"])
+            self.assertEqual(sorted(e["detectors"]["mediapipe_hands"]["wrist"]), ["downweight", "exclude", "keep"])
+            made = run.grev_main(["--config", str(cp), "overlay", "--run", str(root), "--videos", "IMG_7158.MOV"])
+            cap = cv2.VideoCapture(made[0])
+            n_video = int(cap.get(cv2.CAP_PROP_FRAME_COUNT))
+            ok, frame = cap.read()
+            cap.release()
+            self.assertTrue(ok and float(frame.std()) > 5.0)
+            self.assertEqual(n_video, jobs[0]["n_frames"])
+            texts = "".join(p.read_text(errors="ignore") for p in list(root.rglob("*")) + [Path(y)] if p.is_file() and p.suffix in (".json", ".yaml", ".md", ".csv", ".txt"))
+            for val in FAKE_TAGS.values():
+                self.assertNotIn(val, texts)
+            for key in ("ISO6709", "com.apple.quicktime", '"make"', '"model"'):
+                self.assertNotIn(key, texts)
+            self.assertIn("수동 전환 시각(manual_transition_s)이 비어 있다", (root / "report.md").read_text())
+            self.assertNotIn("1680", Path(y).read_text())                              # the comparison with the reference f is in summary.md only
+            self.assertNotIn("f_signal", Path(y).read_text())
+            self.assertIn("1680", (root / "summary.md").read_text())
+            self.assertNotIn("1680", (root / "report.md").read_text())
 
 
 if __name__ == "__main__":

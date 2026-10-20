@@ -461,8 +461,10 @@ def tilt_indices(times, present, t_start) -> np.ndarray:
 # ====================================================================================================
 
 class Problem:
-    def __init__(self, template: np.ndarray, frames: list, cx: float, cy: float, huber_px: np.ndarray, min_points: int = 4):
-        """template (J, 2); frames: list of (obs (J, 2), visible (J,)) ; huber_px: per frame Huber width."""
+    def __init__(self, template: np.ndarray, frames: list, cx: float, cy: float, huber_px: np.ndarray, min_points: int = 4, weights: np.ndarray | None = None):
+        """template (J, 2); frames: list of (obs (J, 2), visible (J,)) ; huber_px: per frame Huber width; weights (J,): per-joint weight of the
+        reprojection cost (21's wrist_mode downweight); None = every joint counts the same (17's behaviour)."""
+        self.w = None if weights is None else np.asarray(weights, float)
         self.T = np.asarray(template, float)
         self.frames = [(np.asarray(o, float), np.asarray(v, bool)) for o, v in frames]
         self.keep = [i for i, (o, v) in enumerate(self.frames) if v.sum() >= max(4, min_points)]
@@ -472,7 +474,7 @@ class Problem:
 
     def subset(self, idx):
         p = Problem.__new__(Problem)
-        p.T, p.frames, p.cx, p.cy, p.huber = self.T, self.frames, self.cx, self.cy, self.huber
+        p.T, p.frames, p.cx, p.cy, p.huber, p.w = self.T, self.frames, self.cx, self.cy, self.huber, self.w
         p.keep = [i for i in idx if i in set(self.keep)]
         p.n_points = int(sum(self.frames[i][1].sum() for i in p.keep))
         return p
@@ -512,7 +514,7 @@ def cost(pb: Problem, f: float, T2: np.ndarray | None = None, details: bool = Fa
     for i in pb.keep:
         o, v = pb.frames[i]
         r, R, t = frame_fit(T2, o, v, K)
-        per.append(float(_huber(r, pb.huber[i]).mean()))
+        per.append(float(_huber(r, pb.huber[i]).mean()) if pb.w is None else float((pb.w[v] * _huber(r, pb.huber[i])).sum() / pb.w[v].sum()))
         if details:
             out.append({"frame": i, "res": r, "vis": v, "R": R, "t": t})
     c = float(np.mean(per)) if per else float("inf")
@@ -1371,7 +1373,7 @@ def axis_coverage(theta, axis, ids, theta_min=10.0, min_count=2):
 
 
 def analyze(kp, mask, present, box, cls, times, size_wh, cfg, front_idx=None, tilt_start=None, methods_full=("fixed_template",),
-            n_boot=None, seed=0, budget_s=None, log=None) -> dict:
+            n_boot=None, seed=0, budget_s=None, log=None, wrist_weight=None) -> dict:
     t_start_clock = time.time()
     timings = {}
     W, H = size_wh
@@ -1424,7 +1426,8 @@ def analyze(kp, mask, present, box, cls, times, size_wh, cfg, front_idx=None, ti
     def problem(set_ids):
         pos = [est_ids.index(j) for j in set_ids]
         frames = [(kp[i][set_ids], mask[i][set_ids]) for i in range(n)]
-        return Problem(T[pos], frames, cx, cy, huber, ecfg["min_points"]).subset(used)
+        w = None if wrist_weight is None or wrist_weight == 1.0 else np.array([float(wrist_weight) if j == 0 else 1.0 for j in set_ids])
+        return Problem(T[pos], frames, cx, cy, huber, ecfg["min_points"], weights=w).subset(used)
 
     pb = problem(est_ids)
     tilt_ids = [i for i in pb.keep if i in set(int(x) for x in tilt_all)]
@@ -2476,3 +2479,283 @@ def pseg_job(args) -> dict:
                                       abs(out["legacy_theta"]["t_transition"] - a17["auto_transition_s"]) < 1e-9)}
         out["same_as_17"] = {**same, "all": bool(all(same.values())), "f_17": res.get("f_hand_px"), "verdict_17": res.get("verdict")}
     return out
+
+
+# ====================================================================================================
+# grev  (experiment 21: transition defaults, shooting-guide revision, wrist handling; new section, 17's and 20's functions above are used unchanged
+# except that Problem / cost / analyze got one optional argument each (weights / wrist_weight, default None = old behaviour))
+# - the front window of the noise floor can be searched in a narrower range (front_search_s) and d0 is capped (d0_cap_theta_deg);
+# - the guide's tilt rule can be 'frames_median' (enough frames with theta2d <= tilt_max_deg, and their median in range) instead of the p95 limit;
+# - wrist_mode keep | exclude | downweight changes the f estimate only (template, PnP cost, uncertainty); transition and guide use the default joint set.
+# ====================================================================================================
+
+def grev_front_window(times, present, kp, mask, box, pcfg, search_s) -> dict:
+    """front_window with its search range replaced by search_s = [lo, hi] (seconds); the window never reaches outside [lo, hi]."""
+    lo, hi = search_s
+    return front_window(times, present, kp, mask, box, {**pcfg, "front_skip_s": float(lo), "front_phase_s": float(hi)})
+
+
+def grev_transition(times, present, kp, mask, box, T, est_ids, front_idx, p: dict) -> dict:
+    """pseg_transition with the noise floor capped: d_thr = max(k_d * min(d0, d0_cap), 1 - cos theta_min), d0_cap = 1 - cos d0_cap_theta_deg.
+    No d0_cap_theta_deg in p = 20's rule unchanged. d0 itself is reported uncapped; d0_capped says whether the cap acted."""
+    cap_deg = p.get("d0_cap_theta_deg")
+    if cap_deg is None:
+        return {**pseg_transition(times, present, kp, mask, box, T, est_ids, front_idx, p), "d0_cap": None, "d0_capped": False, "warnings": []}
+    t = np.asarray(times, float)
+    d, _ = pseg_series(kp, mask, present, box, t, T, est_ids)
+    dw = d[[int(i) for i in front_idx]]
+    if not np.isfinite(dw).any():
+        return {**pseg_transition(times, present, kp, mask, box, T, est_ids, front_idx, p), "d0_cap": None, "d0_capped": False, "warnings": []}
+    d0 = float(np.nanpercentile(dw, p["noise_percentile"]))
+    cap = 1.0 - math.cos(math.radians(float(cap_deg)))
+    capped = bool(d0 > cap)
+    k_eff = float(p["k_d"]) * cap / d0 if capped else float(p["k_d"])           # k_eff * d0 = k_d * min(d0, cap)
+    res = pseg_transition(times, present, kp, mask, box, T, est_ids, front_idx, {**p, "k_d": k_eff})
+    floor = 1.0 - math.cos(math.radians(p["theta_min_deg"]))
+    if capped:
+        res["d_thr"] = float(max(float(p["k_d"]) * cap, floor))
+    warn = [f"정면 창에 기울임이 섞였을 수 있음: d0 {d0:.3f} > 상한 {cap:.3f} (θ {cap_deg:.0f}° 환산), 문턱에는 상한값을 씀"] if capped else []
+    return {**res, "d0_cap": cap, "d0_capped": capped, "warnings": warn}
+
+
+def grev_metrics(times, present, box, W, H, theta, role, t_transition, front_jitter_rel, axis_bins, finger_ext_min, tilt_max_deg: float = 45.0) -> dict:
+    """metrics_from_arrays plus the new tilt-rule inputs: tilt-phase frames with theta2d <= tilt_max_deg (count) and the median theta2d of those frames."""
+    m = metrics_from_arrays(times, present, box, W, H, theta, role, t_transition, front_jitter_rel, axis_bins, finger_ext_min)
+    th = np.asarray(theta, float)
+    tilt = (np.asarray(role) == "tilt") & np.isfinite(th)
+    sel = tilt & (th <= tilt_max_deg)
+    m.update({"tilt_frames": int(tilt.sum()), "tilt_frames_le_max": int(sel.sum()), "tilt_median_le_max_deg": float(np.median(th[sel])) if sel.any() else None})
+    return m
+
+
+def grev_conditions_check(m: dict, c: dict) -> dict:
+    """conditions_check with a selectable tilt rule. tilt_rule 'p95_max' (default, also when the key is missing) = 17's check unchanged; 'frames_median' replaces
+    the theta2d p95 item by: >= min_tilt_frames tilt-phase frames with theta2d <= tilt_max_deg, and the median theta2d of those frames inside the range."""
+    if c.get("tilt_rule", "p95_max") == "p95_max" or "failed" in m:
+        return conditions_check(m, c)
+    lo, hi = c["theta_tilt_median_range_deg"]
+    nmin, tmax = int(c["min_tilt_frames"]), float(c["tilt_max_deg"])
+
+    def ok(x, f):
+        return x is not None and bool(f(x))
+    items = {
+        "box_short_ratio": ok(m["box_short_ratio"], lambda x: x <= c["box_short_ratio_max"]),
+        "edge_rate": ok(m["edge_rate"], lambda x: x <= c["edge_rate_max"]),
+        "transition": ok(m["transition_s"], lambda x: x >= c["transition_min_s"]),
+        "tilt_frames": ok(m["tilt_frames_le_max"], lambda x: x >= nmin),
+        "theta_tilt_median": ok(m["tilt_median_le_max_deg"], lambda x: lo <= x <= hi),
+        "axis_bins": ok(m["axis_bins"], lambda x: x >= c["axis_bins_min"]),
+        "finger_extension": ok(m["finger_extension_min"], lambda x: x >= c["finger_extension_min"]),
+    }
+    msg = {"box_short_ratio": lambda: f"손 박스/짧은 변 {cond_f(m['box_short_ratio'], 2)} > {c['box_short_ratio_max']}",
+           "edge_rate": lambda: f"가장자리 접촉 {cond_p(m['edge_rate'])} > {100 * c['edge_rate_max']:.0f}%",
+           "transition": lambda: ("자동 전환 없음" if m["transition_s"] is None else f"자동 전환 {m['transition_s']:.2f} s < {c['transition_min_s']} s"),
+           "tilt_frames": lambda: f"기울기 구간 θ2d ≤ {tmax:.0f}° 프레임 {m['tilt_frames_le_max']}장 < {nmin}장",
+           "theta_tilt_median": lambda: f"θ2d ≤ {tmax:.0f}° 프레임의 θ2d 중앙값 {cond_f(m['tilt_median_le_max_deg'], 0)}°가 {lo:.0f}–{hi:.0f}° 밖",
+           "axis_bins": lambda: f"축 덮임 {m['axis_bins']}/6 < {c['axis_bins_min']}/6",
+           "finger_extension": lambda: f"손가락 펴짐 {cond_f(m['finger_extension_min'], 3)} < {c['finger_extension_min']}"}
+    return {"guide": all(items.values()), "items": items, "reasons": [msg[k]() for k, v in items.items() if not v]}
+
+
+def grev_template_extent(T: np.ndarray, box_long_front: float) -> dict:
+    """Spatial extent of the template points: length along their first principal axis (the hand's long axis) and width along the second, in px of the front
+    window and as % of the hand box's long side there."""
+    X = np.asarray(T, float) - np.asarray(T, float).mean(0)
+    _, _, Vt = np.linalg.svd(X, full_matrices=False)
+    proj = X @ Vt.T
+    long_px, width_px = float(np.ptp(proj[:, 0])), float(np.ptp(proj[:, 1]))
+    return {"n_points": int(len(X)), "long_px": long_px, "width_px": width_px, "long_pct_box": 100.0 * long_px / box_long_front, "width_pct_box": 100.0 * width_px / box_long_front}
+
+
+def _grev_project(T, obs, vis, f, cx, cy):
+    """IPPE fit of the planar template at focal f: reprojected points and the per-point residuals."""
+    K = K_of(f, cx, cy)
+    r, R, t = frame_fit(T, obs, vis, K)
+    X = np.c_[T[vis], np.zeros(int(vis.sum()))] @ R.T + t
+    return (K[:2, :2] @ (X[:, :2] / X[:, 2:3]).T + K[:2, 2:3]).T, r
+
+
+def grev_f_signal(a: dict, kp, mask, ids, f_ref: float, ratios=(0.8, 1.2)) -> dict:
+    """Per tilt frame: mean displacement of the reprojected points when the focal is set to ratios[0] * f_ref and ratios[1] * f_ref (pose refitted for each),
+    divided by the RMS residual of that frame at f_ref. Median over the tilt frames. Diagnostic of how much of the data can tell f apart from noise."""
+    T = np.array(a["template"], float)
+    cx, cy = a["principal_point"]
+    sig, res, rat = [], [], []
+    for i, rl in enumerate(a["role"]):
+        if rl != "tilt":
+            continue
+        obs, vis = np.asarray(kp[i])[ids], np.asarray(mask[i])[ids]
+        if vis.sum() < 4:
+            continue
+        pa, _ = _grev_project(T, obs, vis, f_ref * ratios[0], cx, cy)
+        pb, _ = _grev_project(T, obs, vis, f_ref * ratios[1], cx, cy)
+        _, r0 = _grev_project(T, obs, vis, f_ref, cx, cy)
+        s, r = float(np.linalg.norm(pa - pb, axis=1).mean()), float(np.sqrt((r0 ** 2).mean()))
+        sig.append(s), res.append(r), rat.append(s / max(r, 1e-9))
+    if not rat:
+        return {"n_frames": 0, "signal_px_median": None, "residual_px_median": None, "ratio_median": None}
+    return {"n_frames": len(rat), "signal_px_median": float(np.median(sig)), "residual_px_median": float(np.median(res)), "ratio_median": float(np.median(rat))}
+
+
+def grev_f_run(kp, mask, present, box, cls, times, size_wh, cfg: dict, c: dict, mode: str, a_keep: dict | None, seed: int) -> dict:
+    """f estimate (fixed_template and joint_delta, 17's verdict) for one wrist_mode, plus the template extent and the f signal. mode 'keep' = 17's analysis
+    (a_keep is reused); 'exclude' removes joint 0 from every joint set; 'downweight' multiplies the wrist's weight in the reprojection cost by wrist_weight.
+    exclude_large_tilt (phase_segmentation, default off) drops tilt-phase frames above max_tilt_deg from the estimate."""
+    fe, p = c.get("f_estimation") or {}, c["phase_segmentation"]
+    cfg_use = pseg_wrist_cfg(cfg) if mode == "exclude" else cfg
+    ww = float(fe.get("wrist_weight", 0.3)) if mode == "downweight" else None
+    ids = list(cfg_use["joints"]["sets"][cfg_use["joints"]["estimate_set"]])
+    base = a_keep if mode == "keep" and a_keep is not None else analyze(kp, mask, present, box, cls, times, size_wh, cfg_use, tilt_start=None,
+                                                                         methods_full=("fixed_template",), seed=seed, wrist_weight=ww)
+    res, n_before, n_after = base, None, None
+    if p.get("exclude_large_tilt") and "per_method" in base:
+        th = np.array([np.nan if x is None else x for x in base["theta2d_deg"]], float)
+        keep = pseg_tilt_keep(times, present, th, base["tilt_start_s"], p["max_tilt_deg"])
+        n_before = int((np.asarray(present, bool) & (np.asarray(times) >= base["tilt_start_s"])).sum())
+        n_after = int((keep & (np.asarray(times) >= base["tilt_start_s"])).sum())
+        res = analyze(kp, mask, keep, box, cls, times, size_wh, cfg_use, tilt_start=None, methods_full=("fixed_template",), seed=seed, wrist_weight=ww)
+    if "per_method" not in res:
+        return {"failed": res.get("failed", "분석 실패"), "mode": mode}
+    out = pseg_f_summary(res, present, cfg_use, {"mode": mode, "wrist_weight": ww, "n_tilt_before": n_before, "n_tilt_after": n_after, "joint_ids": ids,
+                                                 "jointset_range": res["per_method"]["fixed_template"]["jointset_range"]})
+    bl = box_long(np.asarray(box, float))
+    fidx = [int(i) for i in res["front_window"]["idx"]]
+    out["template_extent"] = grev_template_extent(np.array(res["template"]), float(np.nanmedian(bl[fidx])))
+    f_ref = c.get("reference_f_px")
+    out["f_signal"] = grev_f_signal(res, kp, mask, ids, float(f_ref)) if f_ref else None
+    return out
+
+
+def grev_analyze(kp, mask, present, box, cls, times, size_wh, cfg: dict, c: dict, seed: int | None = None) -> dict:
+    """One tracked hand. cfg = the pipeline settings, c = the experiment's settings (phase_segmentation, conditions, optional compare_20 / f_estimation).
+    Default analysis = 17's (unchanged call); legacy and configured transitions; 20's transition for comparison; the shooting guide with the configured and with
+    20's criteria; the f estimate for every wrist_mode in f_estimation.compare_wrist_modes."""
+    W, H = size_wh
+    seed = int(cfg["experiment"]["seed"]) if seed is None else seed
+    p, ccfg, fe = c["phase_segmentation"], c["conditions"], c.get("f_estimation") or {}
+    est_ids = list(cfg["joints"]["sets"][cfg["joints"]["estimate_set"]])
+    a0 = analyze(kp, mask, present, box, cls, times, size_wh, cfg, tilt_start=None, methods_full=("fixed_template",), seed=seed)
+    if "per_method" not in a0:
+        return {"failed": a0.get("failed", "분석 실패")}
+    theta = np.array([np.nan if x is None else x for x in a0["theta2d_deg"]], float)
+    T = np.array(a0["template"])
+    t_legacy = a0.get("auto_transition_s")
+    tmax = float(ccfg.get("tilt_max_deg", 45.0))
+
+    def guide_of(t_tr, cc, with_new=False):
+        if with_new:
+            m = grev_metrics(times, present, box, W, H, theta, a0["role"], t_tr, a0.get("front_jitter_rel"), a0["axis_coverage"]["bins"], a0["finger_extension"]["min"], tmax)
+        else:
+            m = metrics_from_arrays(times, present, box, W, H, theta, a0["role"], t_tr, a0.get("front_jitter_rel"), a0["axis_coverage"]["bins"], a0["finger_extension"]["min"])
+        g = grev_conditions_check(m, cc)
+        return {"transition_s": t_tr, "guide": g["guide"], "reasons": g["reasons"], "items": g["items"], "metrics": {k: v for k, v in m.items() if k != "series"}}
+
+    fw0 = a0["front_window"]
+    fw = fw0 if not p.get("front_search_s") else grev_front_window(times, present, kp, mask, box, cfg["phases"], p["front_search_s"])
+    if len(fw["idx"]) == 0:
+        return {"failed": "정면 창을 만들 수 없음"}
+    tr = grev_transition(times, present, kp, mask, box, T, est_ids, fw["idx"], p)
+    tr_nm = grev_transition(times, present, kp, mask, box, T, est_ids, fw["idx"], {**p, "use_motion": False}) if p["use_motion"] else tr
+    new_rule = ccfg.get("tilt_rule", "p95_max") != "p95_max"
+    out = {"default": pseg_f_summary(a0, present, cfg, {"front_window": [fw0.get("t0"), fw0.get("t1")], "auto_transition_s": t_legacy}),
+           "legacy_theta": {"t_transition": t_legacy, **guide_of(t_legacy, ccfg, new_rule)},
+           "transition": {**{k: tr.get(k) for k in ("t_transition", "d0", "d_thr", "v0", "v_thr", "front_end_s", "motion_v_at_start", "skipped_no_motion_s", "failed", "d0_cap",
+                                                    "d0_capped", "warnings")},
+                          "front_window": [fw.get("t0"), fw.get("t1")], "method": c.get("transition_method", "linear_d"),
+                          **guide_of(t_legacy if c.get("transition_method") == "legacy_theta" else tr.get("t_transition"), ccfg, new_rule)},
+           "transition_no_motion": {"t_transition": tr_nm.get("t_transition")},
+           "series": {**tr.get("series", {}), "theta": theta.tolist(), "front": [fw.get("t0"), fw.get("t1")]}}
+    if c.get("compare_20"):
+        c20 = c["compare_20"]
+        t20 = pseg_transition(times, present, kp, mask, box, T, est_ids, fw0["idx"], c20["phase_segmentation"])
+        t20nm = pseg_transition(times, present, kp, mask, box, T, est_ids, fw0["idx"], {**c20["phase_segmentation"], "use_motion": False}) if c20["phase_segmentation"]["use_motion"] else t20
+        out["transition_20"] = {**{k: t20.get(k) for k in ("t_transition", "d0", "d_thr", "v0", "v_thr", "skipped_no_motion_s", "failed")}, "front_window": [fw0.get("t0"), fw0.get("t1")],
+                                **guide_of(t20.get("t_transition"), c20["conditions"]), "t_no_motion": t20nm.get("t_transition")}
+    out["wrist"] = {}
+    modes = list(fe.get("compare_wrist_modes") or [fe.get("wrist_mode", "keep")])
+    for mode in modes:
+        out["wrist"][mode] = grev_f_run(kp, mask, present, box, cls, times, size_wh, cfg, c, mode, a0, seed)
+    return out
+
+
+def grev_job(args) -> dict:
+    """(video, detector) job for the process pool: the 17 run's frame list and detections, grev_analyze, and the check that the keep mode (and 20's transition) reproduce
+    17's (and 20's) recorded results."""
+    video, det, run_dir, pcfg, c, conf_min, ref20 = args
+    os.environ.setdefault("OMP_NUM_THREADS", "1")
+    cv2.setNumThreads(1)
+    pc = copy.deepcopy(pcfg)
+    pc["tracking"]["conf_min"] = float(conf_min)
+    d = Path(run_dir) / det
+    res = json.loads((d / "results.json").read_text())
+    dets = load_detections(d / "detections.npz")
+    frames = res["frames"]["list"]
+    check_alignment(frames, dets)
+    W, H = res["normalization"]["output"]["display_w"], res["normalization"]["output"]["display_h"]
+    times = np.array([r["time_s"] for r in frames])
+    tr = track(dets, times, (W, H), pc["tracking"], front_start_s=float(pc["phases"]["front_skip_s"]))
+    out = grev_analyze(tr["kp"], tr["mask"], tr["present"], tr["box"], tr["cls"], times, (W, H), pc, c)
+    out.update({"video": video, "detector": det, "size": [W, H], "n_frames": len(frames)})
+    if "default" in out and "solutions" in out["default"]:
+        s = out["default"]["solutions"]
+        same = {"f_fixed_template": abs(s["fixed_template"]["f"] - res.get("f_hand_px", np.nan)) <= 1e-6 * max(1.0, abs(s["fixed_template"]["f"])),
+                "f_joint_delta": abs(s["joint_delta"]["f"] - res.get("f_joint_delta_px", np.nan)) <= 1e-6 * max(1.0, abs(s["joint_delta"]["f"])),
+                "verdict": out["default"]["verdict"] == res.get("verdict")}
+        k = (out.get("wrist") or {}).get("keep")
+        if k and "solutions" in k:
+            same["keep_equals_default"] = bool(k["solutions"]["fixed_template"]["f"] == s["fixed_template"]["f"] and k["verdict"] == out["default"]["verdict"])
+        out["same_as_17"] = {**same, "all": bool(all(same.values())), "f_17": res.get("f_hand_px"), "verdict_17": res.get("verdict")}
+        if ref20 is not None:
+            t = out.get("transition_20") or {}
+            s20 = {"f_fixed_template": abs(s["fixed_template"]["f"] - ref20["default"]["solutions"]["fixed_template"]["f"]) <= 1e-9 * max(1.0, abs(s["fixed_template"]["f"])),
+                   "verdict": out["default"]["verdict"] == ref20["default"]["verdict"]}
+            if t:
+                a, b = t.get("t_transition"), ref20["linear_d"]["t_transition"]
+                s20["transition_linear_d"] = bool((a is None and b is None) or (a is not None and b is not None and abs(a - b) < 1e-9))
+                s20["d0"] = bool(t.get("d0") is not None and abs(t["d0"] - ref20["linear_d"]["d0"]) < 1e-12)
+            out["same_as_20"] = {**s20, "all": bool(all(s20.values()))}
+    return out
+
+
+def grev_adoption(jobs: list, ref_f: float, rules: dict, mode: str, base: str = "keep") -> dict:
+    """The fixed adoption rules of experiment 21 for one wrist_mode against `base`, over the (video, detector) pairs (f = fixed_template; a grid-edge f has no value).
+    err = |f / ref_f - 1|; no value counts as the worst possible error. A pair is improved when `mode` has a value and the base has none or a larger error, worsened
+    in the opposite case (equal or both without value: neither). Rules: 1 grid-edge count not larger; 2 improved pairs >= min_improved_pairs; 3 median error at least
+    median_rel_drop lower (and finite); 4 leaving out each video, improved > worsened and the median error lower; 5 no video where all its detectors get worse by
+    >= worse_pp percentage points (or lose their value)."""
+    def err(j, m):
+        w = (j.get("wrist") or {}).get(m)
+        if not w or "solutions" not in w or w["solutions"]["fixed_template"]["at_grid_edge"]:
+            return None
+        return abs(w["solutions"]["fixed_template"]["f"] / ref_f - 1.0)
+    pairs = [j for j in jobs if "failed" not in j and mode in (j.get("wrist") or {}) and base in (j.get("wrist") or {})]
+    eb, em = [err(j, base) for j in pairs], [err(j, mode) for j in pairs]
+    inf = float("inf")
+    val = lambda e: inf if e is None else e                                                             # noqa: E731
+    improved = lambda b, m_: m_ is not None and (b is None or m_ < b)                                   # noqa: E731
+    worsened = lambda b, m_: b is not None and (m_ is None or m_ > b)                                   # noqa: E731
+    idx = list(range(len(pairs)))
+
+    def stats(ix):
+        mb, mm = float(np.median([val(eb[i]) for i in ix])), float(np.median([val(em[i]) for i in ix]))
+        return {"n": len(ix), "improved": sum(improved(eb[i], em[i]) for i in ix), "worsened": sum(worsened(eb[i], em[i]) for i in ix), "median_base": mb, "median_mode": mm}
+    allp = stats(idx)
+    n_edge = lambda es: sum(e is None for e in es)                                                      # noqa: E731
+    r1 = n_edge(em) <= n_edge(eb)
+    r2 = allp["improved"] >= int(rules["min_improved_pairs"])
+    r3 = bool(np.isfinite(allp["median_mode"]) and allp["median_mode"] <= (1.0 - float(rules["median_rel_drop"])) * allp["median_base"])
+    videos = sorted({j["video"] for j in pairs})
+    loo = {}
+    for v in videos:
+        s = stats([i for i in idx if pairs[i]["video"] != v])
+        loo[v] = {**s, "direction_2": s["improved"] > s["worsened"], "direction_3": s["median_mode"] < s["median_base"]}
+    r4 = all(x["direction_2"] and x["direction_3"] for x in loo.values())
+    pp = float(rules["worse_pp"]) / 100.0
+    bad_videos = []
+    for v in videos:
+        ix = [i for i in idx if pairs[i]["video"] == v]
+        if ix and all(eb[i] is not None and (em[i] is None or em[i] - eb[i] >= pp) for i in ix):
+            bad_videos.append(v)
+    r5 = not bad_videos
+    return {"mode": mode, "base": base, "n_pairs": len(pairs), "edge_base": n_edge(eb), "edge_mode": n_edge(em), "all": allp, "leave_one_out": loo, "worse_videos": bad_videos,
+            "rules": {"1_edge_not_more": r1, "2_improved_pairs": r2, "3_median_drop": r3, "4_leave_one_out": r4, "5_no_video_all_worse": r5}, "candidate": bool(r1 and r2 and r3 and r4 and r5)}

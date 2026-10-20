@@ -5,6 +5,7 @@
     python HandCalib/run.py same-session   --config HandCalib/configs/18_same_session_check.yaml [results-yaml --run DIR]
     python HandCalib/run.py overlay        --video-dir runs/17_protocol_rerun/<UTC>/IMG_XXXX
     python HandCalib/run.py phase-segmentation --config HandCalib/configs/20_phase_segmentation.yaml [--videos A,B] [--detectors a,b] [results-yaml --run DIR]
+    python HandCalib/run.py guide-revision --config HandCalib/configs/21_guide_revision.yaml [--videos A,B] [--detectors a,b] [results-yaml --run DIR | overlay --run DIR]
 
 Consolidated from run_hand_focal.py (14, process_video only), run_detector_swap.py (16, the per-detector processing that 17 calls),
 run_protocol_rerun.py and run_frame_filter_diag.py (17),
@@ -1692,10 +1693,381 @@ def pseg_main(argv=None):
 
 
 # ====================================================================================================
+# grev  (experiment 21: transition defaults, shooting-guide revision, wrist handling; new section)
+# Same inputs as 20 (the 17 runs' detections, nothing is re-detected). Reports the transition under 20's and the new defaults, the revised shooting guide,
+# and the f estimate under the three wrist modes (keep / exclude / downweight) side by side; the adoption rules and every comparison with the reference f
+# are in summary.md only. The f estimate and the f verdict thresholds are 17's.
+#
+#     python HandCalib/run.py guide-revision --config HandCalib/configs/21_guide_revision.yaml [--videos A,B] [--detectors a,b] [--transition-method M]
+#     python HandCalib/run.py guide-revision --config ... results-yaml --run runs/21_guide_revision/<UTC>
+#     python HandCalib/run.py guide-revision --config ... overlay --run runs/21_guide_revision/<UTC> [--videos A,B] [--detector D]
+# ====================================================================================================
+
+GREV_NOTE = "전환 검출 기본값, 가이드 판정 기준, 손목 점 처리를 바꿔 다시 낸 실험이다. f 추정 방식(평면 템플릿 + 프로파일)과 f 판정 문턱값은 바꾸지 않았다."
+GREV_ITEMS = [("box_short_ratio", "박스"), ("edge_rate", "가장자리"), ("transition", "전환"), ("tilt_frames", "기울기 프레임"), ("theta_tilt_median", "θ2d 중앙값"),
+              ("axis_bins", "축 덮임"), ("finger_extension", "손가락 펴짐")]
+
+
+def grev_spread(jobs: list, key) -> dict:
+    """Per video: max - min of key(job) over the detectors; None when any detector has no value."""
+    out = {}
+    for v in sorted({j["video"] for j in jobs}):
+        ts = [key(j) for j in jobs if j["video"] == v and "failed" not in j]
+        out[v] = None if not ts or any(t is None for t in ts) else max(ts) - min(ts)
+    return out
+
+
+def grev_figure(path: Path, j: dict, manual):
+    """theta2d, and d (raw and smoothed) with the new threshold, 20's threshold and d0; the transitions of the legacy rule, 20's default, 20 without the motion
+    condition and the new default are marked; shaded: the new noise-floor window (blue) and the f estimate's front window (grey)."""
+    plt = _plt()
+    S = j["series"]
+    t = np.array(S["t"])
+    fig, axs = plt.subplots(2, 1, figsize=(9, 5.8), sharex=True)
+    n, t20 = j["transition"], j.get("transition_20")
+    marks = [("legacy_theta", j["legacy_theta"]["t_transition"], "#c00", "-", "기존(θ2d)")]
+    if t20:
+        marks += [("t20", t20["t_transition"], "#c47a00", "-", "20 기본"), ("t20nm", t20.get("t_no_motion"), "#3a9a4a", "--", "20 움직임 끔")]
+    marks += [("t21", n["t_transition"], "#2a6fbb", "-", "새 방식")]
+    for ax in axs:
+        if j["default"].get("front_window") and j["default"]["front_window"][0] is not None:
+            ax.axvspan(*j["default"]["front_window"], color="#999", alpha=0.15)
+        if n["front_window"][0] is not None:
+            ax.axvspan(*n["front_window"], color="#2a6fbb", alpha=0.15)
+        for k, tv, col, ls, lab in marks:
+            if tv is not None:
+                ax.axvline(tv, color=col, lw=1.4, ls=ls, label=lab if ax is axs[0] else None)
+        if manual is not None:
+            ax.axvline(manual, color="k", lw=1.2, ls=":", label="수동 기준" if ax is axs[0] else None)
+        ax.grid(alpha=0.3)
+    axs[0].plot(t, S["theta"], ".-", ms=3, lw=1, color="#2a6fbb")
+    axs[0].set_ylabel("θ2d (°)")
+    axs[0].legend(fontsize=7, loc="upper right")
+    axs[1].plot(t, S["d"], ".", ms=3, color="#9bb7d9", label="d")
+    axs[1].plot(t, S["d_smooth"], "-", lw=1.4, color="#2a6fbb", label="d (0.3 s 중앙값)")
+    if n.get("d_thr") is not None:
+        axs[1].axhline(n["d_thr"], color="#2a6fbb", lw=1.2, ls="-.", label=f"새 d_thr {n['d_thr']:.3f}" + (" (d0 상한 적용)" if n.get("d0_capped") else ""))
+        axs[1].axhline(n["d0"], color="#888", lw=0.9, ls="--", label=f"d0 {n['d0']:.3f}")
+    if t20 and t20.get("d_thr") is not None:
+        axs[1].axhline(t20["d_thr"], color="#c47a00", lw=1.0, ls=":", label=f"20 d_thr {t20['d_thr']:.3f}")
+    axs[1].set_ylabel("d = 1 − s2/s1")
+    axs[1].set_xlabel("시간 (s)  (파랑: 새 정면 창, 회색: f 추정의 정면 창)")
+    axs[1].legend(fontsize=7, loc="upper right")
+    axs[0].set_title(f"{j['video']} / {j['detector']}", fontsize=10)
+    fig.tight_layout()
+    fig.savefig(path, dpi=110)
+    plt.close(fig)
+
+
+def grev_pass(g, key):
+    return "O" if g["items"].get(key) else "X"
+
+
+def grev_report(path: Path, jobs: list, cfg: dict):
+    p, cc, c20 = cfg["phase_segmentation"], cfg["conditions"], cfg["compare_20"]
+    man = cfg.get("manual_transition_s") or {}
+    tol = float(cfg["manual_tolerance_s"])
+    ok = [j for j in jobs if "failed" not in j]
+    cap = 1 - math.cos(math.radians(p["d0_cap_theta_deg"])) if p.get("d0_cap_theta_deg") is not None else None
+    L = ["# 실험 21: 전환 검출 기본값, 가이드 기준, 손목 점 처리 수정", "", GREV_NOTE, "",
+         "## 1. 바뀐 것", "",
+         f"- 전환 검출 기본값: {cfg['transition_method']}, 움직임 조건 {'켬' if p['use_motion'] else '끔'}(20: 켬). k_d = {p['k_d']}, θ_min = {p['theta_min_deg']:.0f}°, 중앙값 필터 {p['median_window_s']} s, 지속 {p['sustain_s']} s는 20과 같다.",
+         f"- 잡음 바닥용 정면 창: 키포인트가 가장 덜 움직이는 1초를 {p['front_search_s'][0]}–{p['front_search_s'][1]} s 안에서 고른다(20: 0.5–3.0 s). f 추정의 정면 창과 템플릿은 17의 것 그대로다.",
+         f"- 잡음 바닥 상한: d_thr = max({p['k_d']} × min(d0, d0_cap), 1 − cos {p['theta_min_deg']:.0f}°), d0_cap = 1 − cos {p['d0_cap_theta_deg']:.0f}° = {cap:.3f}. d0가 상한을 넘으면 경고를 적는다.",
+         f"- 가이드 기준: 손 박스/짧은 변 ≤ {cc['box_short_ratio_max']} (20: {c20['conditions']['box_short_ratio_max']}). θ2d p95 항목 대신 기울기 구간에서 θ2d ≤ {cc['tilt_max_deg']:.0f}°인 프레임 "
+         f"≥ {cc['min_tilt_frames']}장, 그 프레임들의 θ2d 중앙값 {cc['theta_tilt_median_range_deg'][0]:.0f}–{cc['theta_tilt_median_range_deg'][1]:.0f}°. 전환 ≥ {cc['transition_min_s']} s는 새 전환 검출로 판단. 나머지는 그대로.",
+         "  기울기 구간은 17의 f 추정이 쓰는 구간(3.0초 이후)이다.",
+         f"- 손목 점: wrist_mode keep / exclude / downweight(가중치 {cfg['f_estimation']['wrist_weight']}) 세 방식을 모두 실행했다. f 추정(템플릿, PnP 비용, 불확실성)에만 적용하고 전환 검출과 가이드 판정은 같은 기본 관절 집합을 쓴다. "
+         "downweight는 한 프레임의 재투영 비용을 관절 가중 평균으로 계산한다(자세는 모든 점으로 풀고 비용만 가중).", "",
+         "## 2. 전환 시각 (초)", "",
+         "| 영상 | 검출기 | 기존(θ2d) | 20 기본 | 20 움직임 끔 | 21 | 수동 기준 | 21−수동 | 20−수동 |", "|---|---|---|---|---|---|---|---|---|"]
+    for j in jobs:
+        if "failed" in j:
+            L.append(f"| {j['video']} | {j['detector']} | 분석 실패: {j['failed']} | | | | | | |")
+            continue
+        mv, n, t20 = man.get(j["video"]), j["transition"], j["transition_20"]
+        L.append(f"| {j['video']} | {j['detector']} | {pseg_t(j['legacy_theta']['t_transition'])} | {pseg_t(t20['t_transition'])} | {pseg_t(t20.get('t_no_motion'))} | {pseg_t(n['t_transition'])} | "
+                 f"{'-' if mv is None else format(mv, '.2f')} | {pseg_manual_diff(n['t_transition'], mv)} | {pseg_manual_diff(t20['t_transition'], mv)} |")
+    L += ["", "검출기 사이 최대−최소 편차 (초, 값이 없는 검출기가 있으면 '계산 불가'):", "", "| 영상 | 기존 | 20 기본 | 20 움직임 끔 | 21 |", "|---|---|---|---|---|"]
+    sp = [grev_spread(ok, lambda j: j["legacy_theta"]["t_transition"]), grev_spread(ok, lambda j: j["transition_20"]["t_transition"]),
+          grev_spread(ok, lambda j: j["transition_20"].get("t_no_motion")), grev_spread(ok, lambda j: j["transition"]["t_transition"])]
+    for v in sorted({j["video"] for j in ok}):
+        L.append(f"| {v} | " + " | ".join("계산 불가" if s[v] is None else f"{s[v]:.2f}" for s in sp) + " |")
+    L += ["", "## 3. 잡음 바닥과 정면 창", "",
+          "| 영상 | 검출기 | 새 정면 창 (s) | d0 | d0 상한 적용 | 새 d_thr (θ 환산) | 20 d0 | 20 d_thr | 경고 |", "|---|---|---|---|---|---|---|---|---|"]
+    for j in ok:
+        n, t20 = j["transition"], j["transition_20"]
+        fw = n["front_window"]
+        th = "-" if n.get("d_thr") is None else f"{n['d_thr']:.3f} ({math.degrees(math.acos(max(-1.0, min(1.0, 1 - n['d_thr'])))):.0f}°)"
+        L.append(f"| {j['video']} | {j['detector']} | {'-' if fw[0] is None else f'{fw[0]:.2f}–{fw[1]:.2f}'} | {'-' if n.get('d0') is None else format(n['d0'], '.3f')} | "
+                 f"{'예' if n.get('d0_capped') else '아니오'} | {th} | {'-' if t20.get('d0') is None else format(t20['d0'], '.3f')} | {'-' if t20.get('d_thr') is None else format(t20['d_thr'], '.3f')} | "
+                 f"{'; '.join(n.get('warnings') or []) or '-'} |")
+    L += ["", "## 4. 새 가이드 판정", "",
+          "항목별 통과(O/X): " + ", ".join(k for _, k in GREV_ITEMS) + " 순서.", "",
+          "| 영상 | 검출기 | 새 판정 | " + " | ".join(k for _, k in GREV_ITEMS) + " | θ2d ≤ 45° 프레임 / 기울기 프레임 | 중앙값(°) | 20 판정 | 20 판정과의 차이 | 이유(새) |",
+          "|---|---|---|" + "---|" * len(GREV_ITEMS) + "---|---|---|---|---|"]
+    for j in ok:
+        n, g20 = j["transition"], j["transition_20"]
+        m = n["metrics"]
+        diff = "같음" if n["guide"] == g20["guide"] else ("미충족 → 충족" if n["guide"] else "충족 → 미충족")
+        L.append(f"| {j['video']} | {j['detector']} | {'충족' if n['guide'] else '미충족'} | " + " | ".join(grev_pass(n, k) for k, _ in GREV_ITEMS) +
+                 f" | {m['tilt_frames_le_max']} / {m['tilt_frames']} | {hf.cond_f(m['tilt_median_le_max_deg'], 0)} | {'충족' if g20['guide'] else '미충족'} | {diff} | {'; '.join(n['reasons']) or '-'} |")
+    L += ["", f"- 새 기준으로 충족: {sum(1 for j in ok if j['transition']['guide'])}/{len(ok)} 조합, 20 기준으로 충족: {sum(1 for j in ok if j['transition_20']['guide'])}/{len(ok)} 조합.", "",
+          "## 5. 수동 기준과의 비교", ""]
+    have = {v: mv for v, mv in man.items() if mv is not None}
+    if not have:
+        L.append("- 수동 전환 시각(manual_transition_s)이 비어 있다. 임의로 채우지 않았다.")
+    else:
+        L += [f"- 목표: 새 방식이 수동 기준과 {tol} s 이내.", "", "| 영상 | 검출기 | 수동 | 기존−수동 | 20−수동 | 21−수동 | 21 목표 |", "|---|---|---|---|---|---|---|"]
+        for j in ok:
+            mv = have.get(j["video"])
+            if mv is None:
+                continue
+            tn = j["transition"]["t_transition"]
+            L.append(f"| {j['video']} | {j['detector']} | {mv:.2f} | {pseg_manual_diff(j['legacy_theta']['t_transition'], mv)} | {pseg_manual_diff(j['transition_20']['t_transition'], mv)} | "
+                     f"{pseg_manual_diff(tn, mv)} | {'-' if tn is None else ('달성' if abs(tn - mv) <= tol else '미달')} |")
+    L += ["", "## 6. 손목 점 처리별 f 추정", "",
+          "f는 fixed_template(공식 추정), 판정은 17의 f 판정이다. 템플릿 범위는 정면 창 기준 점들의 긴 축 길이·폭(px, 손 박스 긴 변 대비 %).", "",
+          "| 영상 | 검출기 | 방식 | f fixed_template | f joint_delta | f 판정 | 날카로움 | f 불확실성(상대) | 관절 집합 범위 | 템플릿 긴 축 | 템플릿 폭 | 점 수 |", "|---|---|---|---|---|---|---|---|---|---|---|---|"]
+    for j in ok:
+        for mode, w in j["wrist"].items():
+            if "solutions" not in w:
+                L.append(f"| {j['video']} | {j['detector']} | {mode} | 분석 실패: {w.get('failed')} | | | | | | | | |")
+                continue
+            e = w["template_extent"]
+            unc = w["f_rel_uncertainty"]
+            L.append(f"| {j['video']} | {j['detector']} | {mode} | {pseg_fval(w['solutions']['fixed_template'])} | {pseg_fval(w['solutions']['joint_delta'])} | {w['verdict']} | {w['sharpness']:.3f} | "
+                     f"{'계산 불가' if unc is None or not np.isfinite(unc) else format(unc, '.3f')} | {'계산 불가' if w['jointset_range'] is None or not np.isfinite(w['jointset_range']) else format(w['jointset_range'], '.3f')} | "
+                     f"{e['long_px']:.0f} px ({e['long_pct_box']:.0f}%) | {e['width_px']:.0f} px ({e['width_pct_box']:.0f}%) | {e['n_points']} |")
+    L += ["", "프레임별 f 신호와 잔차의 비율, 기준 f와의 비교, 채택 규칙 판정은 summary.md에만 적는다.", "",
+          "## 7. 기존 결과와 같은지 (기본 설정, wrist_mode keep)", "",
+          "| 영상 | 검출기 | f 17 일치 | joint_delta 일치 | 판정 일치 | keep = 기본 분석 | 20 f·판정 일치 | 20 전환·d0 일치 |", "|---|---|---|---|---|---|---|---|"]
+    for j in ok:
+        s, s20 = j.get("same_as_17"), j.get("same_as_20")
+        ox = lambda b: "O" if b else "X"      # noqa: E731
+        L.append(f"| {j['video']} | {j['detector']} | {ox(s['f_fixed_template'])} | {ox(s['f_joint_delta'])} | {ox(s['verdict'])} | {ox(s.get('keep_equals_default'))} | "
+                 + (f"{ox(s20['f_fixed_template'] and s20['verdict'])} | {ox(s20.get('transition_linear_d') and s20.get('d0'))} |" if s20 else "- | - |"))
+    L += ["", f"- 17과 모두 일치: {sum(1 for j in ok if j.get('same_as_17', {}).get('all'))}/{len(ok)}, 20과 모두 일치: {sum(1 for j in ok if j.get('same_as_20', {}).get('all'))}/{sum(1 for j in ok if 'same_as_20' in j)}", "",
+          "## 8. 한계", "",
+          "- 정면 창 범위(front_search_s)는 잡음 바닥 계산에만 쓴다. f 추정은 17의 정면 창과 3.0초 이후 기울기 구간을 그대로 쓴다.",
+          "- 가이드의 기울기 구간은 17의 f 추정이 쓰는 구간(3.0초 이후)이라 새 전환 시각과 무관하다.",
+          "- 수동 기준이 없으면 어느 전환 시각이 맞는지는 판단하지 않았다.",
+          "- 영상 5개, 검출기 3종이다. 손목 처리의 채택 여부는 summary.md의 규칙 판정에 있고, 통과해도 탐색 결과다.", ""]
+    path.write_text("\n".join(L) + "\n")
+
+
+def grev_summary(path: Path, jobs: list, cfg: dict):
+    ref = float(cfg["reference_f_px"])
+    rules = cfg["wrist_adoption"]
+    ok = [j for j in jobs if "failed" not in j]
+    rel = lambda sol: "-" if sol is None or sol["at_grid_edge"] else f"{100 * (sol['f'] / ref - 1):+.1f}%"      # noqa: E731
+    modes = list(cfg["f_estimation"]["compare_wrist_modes"])
+    L = ["# 실험 21 손목 점 처리 비교와 채택 규칙 (summary.md에만 기록)", "",
+         "**탐색 결과이며 공식 f 추정값이 아님.** 1680과의 비교, 프레임별 f 신호, 채택 규칙 판정은 이 파일에만 적는다.", "",
+         f"- 비교 기준: 사용자 체커보드 f = {ref:.0f} px (추정·판정에 쓰지 않음). f 신호는 f를 {ref * 0.8:.0f} px와 {ref * 1.2:.0f} px로 둘 때(자세는 프레임마다 다시 풂) 재투영 점의 평균 이동이다.",
+         "- 오차 = |f / 1680 − 1|, f는 fixed_template. 격자 경계에 붙은 f는 값이 없는 것으로 보고 가장 나쁜 오차로 센다.", "",
+         "## 1. 조합별 f와 f 신호", "",
+         "| 영상 | 검출기 | 방식 | f fixed_template | 1680 대비 | f joint_delta | 1680 대비 | f 신호(px) | 잔차(px) | 신호/잔차 중앙값 | 기울기 프레임 |", "|---|---|---|---|---|---|---|---|---|---|---|"]
+    for j in ok:
+        for mode in modes:
+            w = j["wrist"].get(mode)
+            if not w or "solutions" not in w:
+                L.append(f"| {j['video']} | {j['detector']} | {mode} | 분석 실패 | | | | | | | |")
+                continue
+            ft, jd, fs = w["solutions"]["fixed_template"], w["solutions"]["joint_delta"], w.get("f_signal") or {}
+            nz = lambda x, d=2: "-" if x is None else format(x, f".{d}f")      # noqa: E731
+            L.append(f"| {j['video']} | {j['detector']} | {mode} | {pseg_fval(ft)} | {rel(ft)} | {pseg_fval(jd)} | {rel(jd)} | {nz(fs.get('signal_px_median'))} | {nz(fs.get('residual_px_median'))} | "
+                     f"{nz(fs.get('ratio_median'), 3)} | {fs.get('n_frames', '-')} |")
+    L += ["", "## 2. 채택 규칙 판정 (keep 대비, 같은 조합끼리)", "",
+          f"규칙(실행 전 yaml에 고정): ① f가 경계에 붙은 조합 수가 keep보다 늘지 않는다 ② 오차가 줄어든 조합 ≥ {rules['min_improved_pairs']} ③ 오차 중앙값이 keep보다 상대 {100 * rules['median_rel_drop']:.0f}% 이상 낮다 "
+          f"④ 영상 하나를 빼고 계산해도(5가지) ②의 방향(줄어든 조합 > 늘어난 조합)과 ③의 방향(중앙값이 더 낮다)이 유지된다 ⑤ 세 검출기가 모두 {rules['worse_pp']:.0f}%p 이상 나빠지거나 값을 잃는 영상이 없다.", ""]
+    for mode in [m for m in modes if m != "keep"]:
+        a = hf.grev_adoption(jobs, ref, rules, mode)
+        al, r = a["all"], a["rules"]
+        pf = lambda b: "통과" if b else "실패"      # noqa: E731
+        fm = lambda x: "경계(값 없음)" if not np.isfinite(x) else f"{100 * x:.1f}%"      # noqa: E731
+        L += [f"### {mode}", "",
+              f"- 조합 {a['n_pairs']}개. 경계에 붙은 조합: keep {a['edge_base']}, {mode} {a['edge_mode']}. 오차가 줄어든 조합 {al['improved']}, 늘어난 조합 {al['worsened']}. 오차 중앙값: keep {fm(al['median_base'])}, {mode} {fm(al['median_mode'])}.",
+              f"- ① {pf(r['1_edge_not_more'])}, ② {pf(r['2_improved_pairs'])}, ③ {pf(r['3_median_drop'])}, ④ {pf(r['4_leave_one_out'])}, ⑤ {pf(r['5_no_video_all_worse'])}"
+              + (f" (세 검출기 모두 나빠진 영상: {', '.join(a['worse_videos'])})" if a["worse_videos"] else ""), "",
+              "| 뺀 영상 | 조합 | 줄어든 | 늘어난 | 중앙값 keep | 중앙값 " + mode + " | 방향 ② | 방향 ③ |", "|---|---|---|---|---|---|---|---|"]
+        for v, x in a["leave_one_out"].items():
+            L.append(f"| {v} | {x['n']} | {x['improved']} | {x['worsened']} | {fm(x['median_base'])} | {fm(x['median_mode'])} | {'유지' if x['direction_2'] else '깨짐'} | {'유지' if x['direction_3'] else '깨짐'} |")
+        L += ["", f"- **{mode}: " + (f"모든 규칙 통과 → 다음 실험의 기본값 후보({rules['label']})" if a["candidate"] else "규칙 미통과 → 기본값 후보 아님") + "**", ""]
+    L += ["## 한계", "",
+          "- 규칙을 통과해도 이 5개 영상으로 고른 탐색 결과이다. 확정은 새로 찍은 영상 2~3개로 따로 확인해야 한다.",
+          "- 체커보드 f는 사용자 제공 값이며 이 비교와 f 신호의 기준점에만 썼다. 같은 세션 체커보드(1646.5 px)와는 다른 값이다.", ""]
+    path.write_text("\n".join(L) + "\n")
+
+
+def grev_results_yaml(run_dir: Path, cfg: dict):
+    r = json.loads((run_dir / "results.json").read_text())
+    m = json.loads((run_dir / "metadata.json").read_text())
+    man = cfg.get("manual_transition_s") or {}
+    try:
+        run_name = str(run_dir.resolve().relative_to(hf.PROJECT_ROOT))
+    except ValueError:
+        run_name = str(run_dir)
+    rd = lambda x, n=5: None if x is None else round(x, n)      # noqa: E731
+    out = {"experiment": "21_guide_revision", "run": run_name, "code_commit": m["git"]["commit"][:7], "git_dirty_at_run": m["git"]["git_dirty"],
+           "transition_method": r["transition_method"], "note": GREV_NOTE + " 기준 f와의 비교 수치와 채택 규칙 판정은 summary.md에만 있다.", "videos": {}}
+    for j in r["jobs"]:
+        e = out["videos"].setdefault(j["video"], {"manual_transition_s": man.get(j["video"]), "detectors": {}})
+        if "failed" in j:
+            e["detectors"][j["detector"]] = {"failed": j["failed"]}
+            continue
+        n, t20 = j["transition"], j["transition_20"]
+        wr = {}
+        for mode, w in j["wrist"].items():
+            if "solutions" not in w:
+                wr[mode] = {"failed": w.get("failed")}
+                continue
+            ft, jd, ex = w["solutions"]["fixed_template"], w["solutions"]["joint_delta"], w["template_extent"]
+            wr[mode] = {"f_fixed_template_px": None if ft["at_grid_edge"] else round(ft["f"], 1), "f_status": f"값 없음 ({ft['side']})" if ft["at_grid_edge"] else "value",
+                        "f_joint_delta_px": None if jd["at_grid_edge"] else round(jd["f"], 1), "verdict": w["verdict"], "sharpness": rd(w["sharpness"], 4),
+                        "f_rel_uncertainty": rd(w["f_rel_uncertainty"], 4), "jointset_range": rd(w["jointset_range"], 4), "n_tilt_frames": w["n_tilt_used"],
+                        "template_long_px": rd(ex["long_px"], 1), "template_width_px": rd(ex["width_px"], 1), "template_long_pct_box": rd(ex["long_pct_box"], 1),
+                        "template_width_pct_box": rd(ex["width_pct_box"], 1)}
+        g = n["metrics"]
+        e["detectors"][j["detector"]] = {
+            "transition_legacy_theta_s": j["legacy_theta"]["t_transition"], "transition_20_s": t20["t_transition"], "transition_20_no_motion_s": t20.get("t_no_motion"),
+            "transition_21_s": n["t_transition"], "front_window_21_s": [rd(x, 3) for x in n["front_window"]], "d0": rd(n.get("d0")), "d0_capped": n.get("d0_capped"),
+            "d_thr": rd(n.get("d_thr")), "d0_20": rd(t20.get("d0")), "d_thr_20": rd(t20.get("d_thr")),
+            "guide_satisfied_21": n["guide"], "guide_items_21": {k: bool(v) for k, v in n["items"].items()}, "guide_reasons_21": n["reasons"],
+            "tilt_frames_le_45": g["tilt_frames_le_max"], "tilt_median_le_45_deg": rd(g["tilt_median_le_max_deg"], 1),
+            "guide_satisfied_20": t20["guide"], "guide_reasons_20": t20["reasons"],
+            "same_as_17": j["same_as_17"]["all"], "same_as_20": j.get("same_as_20", {}).get("all"), "wrist": wr}
+    p = hf.resolve(cfg["output"]["results_yaml"])
+    p.write_text(yaml.safe_dump(hf.jsonable(out), allow_unicode=True, sort_keys=False))
+    return p
+
+
+def grev_overlay_lines(fr: dict, d_smooth, d_thr, t_new, t_20, t_legacy) -> list:
+    """Text of one overlay frame: time (0.01 s), normalised-video frame number and frame-list position, smoothed d with its threshold, and the transition times."""
+    tt = lambda x: "none" if x is None else f"{x:.2f} s"      # noqa: E731
+    dv = "-" if d_smooth is None or not np.isfinite(d_smooth) else f"{d_smooth:.3f}"
+    return [f"t {fr['time_s']:.2f} s   frame {fr['frame']} (#{fr['index']})", f"d {dv}   thr {'-' if d_thr is None else format(d_thr, '.3f')}",
+            f"new {tt(t_new)}   20 {tt(t_20)}   legacy {tt(t_legacy)}"]
+
+
+def grev_overlay(cfg: dict, run_dir: Path, videos: list, detector: str):
+    """One overlay video per video (the detector's tracked keypoints, the segmentation numbers of the 21 run) in <run>/overlay/<video>_<detector>.mp4."""
+    r = json.loads((run_dir / "results.json").read_text())
+    out_dir = run_dir / "overlay"
+    out_dir.mkdir(exist_ok=True)
+    made = []
+    for video in videos:
+        job = next(j for j in r["jobs"] if j["video"] == video and j["detector"] == detector and "failed" not in j)
+        vdir = hf.resolve(cfg["sources"][video])
+        r17 = json.loads((vdir / detector / "results.json").read_text())
+        src = Path(cfg["pipeline"]["input_dir"]).expanduser() / video
+        tmp = Path(tempfile.mkdtemp(prefix="hfov21_"))
+        try:
+            norm = hf.normalize(src, tmp / "n.mkv", cfg["pipeline"])
+            W, H = norm["output"]["display_w"], norm["output"]["display_h"]
+            frames, k = hf.extract_frames(tmp / "n.mkv", tmp / "f", norm["output"]["fps"], None, cfg["pipeline"]["frames"]["detect_fps"])
+            if [(x["index"], x["sha256"]) for x in frames] != [(x["index"], x["sha256"]) for x in r17["frames"]["list"]]:
+                raise SystemExit(f"{video}: re-created frames differ from the run's frame list")
+            times = np.array([x["time_s"] for x in frames])
+            det = hf.load_detections(vdir / detector / "detections.npz")
+            hf.check_alignment(frames, det)
+            tc = dict(cfg["pipeline"]["tracking"], conf_min=float(cfg["detector_settings"][detector]["conf_min"]))
+            tr = hf.track(det, times, (W, H), tc, front_start_s=float(cfg["pipeline"]["phases"]["front_skip_s"]))
+            S = job["series"]
+            ds = [np.nan if x is None else x for x in S["d_smooth"]]
+            n = job["transition"]
+            (tmp / "o").mkdir()
+            for i, fr in enumerate(frames):
+                img = cv2.imread(fr["png"], cv2.IMREAD_COLOR)
+                lines = grev_overlay_lines(fr, ds[i], n.get("d_thr"), n["t_transition"], job["transition_20"]["t_transition"], job["legacy_theta"]["t_transition"])
+                tag = f"{detector}   " + ("TILT (new)" if n["t_transition"] is not None and fr["time_s"] >= n["t_transition"] - 1e-9 else "front")
+                kp = tr["kp"][i] if tr["present"][i] else None
+                cv2.imwrite(str(tmp / "o" / f"o_{i:05d}.png"), overlay_draw(img, kp, tr["mask"][i], tr["box"][i] if tr["present"][i] else None, tag, lines))
+            out = out_dir / f"{Path(video).stem}_{detector}.mp4"
+            overlay_encode(tmp / "o", "o_%05d.png", norm["output"]["fps"] / k, out)
+            made.append(str(out))
+        finally:
+            shutil.rmtree(tmp, ignore_errors=True)
+    return made
+
+
+def grev_main(argv=None):
+    ap = argparse.ArgumentParser()
+    ap.add_argument("--config", default=str(hf.PROJECT_ROOT / "configs/21_guide_revision.yaml"))
+    sub = ap.add_subparsers(dest="cmd")
+    ry = sub.add_parser("results-yaml")
+    ry.add_argument("--run", required=True)
+    ov = sub.add_parser("overlay")
+    ov.add_argument("--run", required=True)
+    ov.add_argument("--videos", default=None)
+    ov.add_argument("--detector", default=None)
+    ap.add_argument("--videos", default=None, help="comma list overriding yaml videos")
+    ap.add_argument("--detectors", default=None, help="comma list overriding yaml detectors")
+    ap.add_argument("--transition-method", default=None, choices=["legacy_theta", "linear_d"])
+    ap.add_argument("--out", default=None)
+    a = ap.parse_args(argv)
+    text = Path(a.config).read_text()
+    cfg = yaml.safe_load(text)
+    if a.cmd == "results-yaml":
+        print(grev_results_yaml(hf.resolve(a.run), cfg))
+        return None
+    if a.cmd == "overlay":
+        vids = a.videos.split(",") if a.videos else cfg["videos"]
+        made = grev_overlay(cfg, hf.resolve(a.run), vids, a.detector or cfg["overlay"]["detector"])
+        print("\n".join(made))
+        return made
+    if a.videos:
+        cfg["videos"] = a.videos.split(",")
+    if a.detectors:
+        cfg["detectors"] = a.detectors.split(",")
+    if a.transition_method:
+        cfg["transition_method"] = a.transition_method
+    run_root = Path(a.out).expanduser() if a.out else hf.resolve(cfg["output"]["root"]) / utc_stamp()
+    run_root.mkdir(parents=True)
+    (run_root / "figures").mkdir()
+    log = Log(run_root / "log.txt")
+    log(f"21 가이드·전환·손목 처리 수정: 영상 {cfg['videos']}, 검출기 {cfg['detectors']}, 전환 방식 {cfg['transition_method']}, 손목 방식 {cfg['f_estimation']['compare_wrist_modes']} → {run_root}")
+    t0 = time.time()
+    ref20 = {}
+    for rp in cfg.get("results_20") or []:
+        pth = hf.resolve(rp)
+        if pth.exists():
+            for j in json.loads(pth.read_text())["jobs"]:
+                ref20[(j["video"], j["detector"])] = j
+    cjob = {k: cfg[k] for k in ("phase_segmentation", "conditions", "f_estimation", "reference_f_px", "compare_20", "transition_method") if k in cfg}
+    args = [(v, d, str(hf.resolve(cfg["sources"][v])), cfg["pipeline"], cjob, cfg["detector_settings"][d]["conf_min"], ref20.get((v, d)))
+            for v in cfg["videos"] for d in cfg["detectors"]]
+    for k in ("OMP_NUM_THREADS", "OPENBLAS_NUM_THREADS", "MKL_NUM_THREADS"):
+        os.environ[k] = "1"
+    import multiprocessing as mp
+    from concurrent.futures import ProcessPoolExecutor
+    with ProcessPoolExecutor(max_workers=int(cfg["workers"]), mp_context=mp.get_context("spawn")) as ex:
+        jobs = list(ex.map(hf.grev_job, args))
+    man = cfg.get("manual_transition_s") or {}
+    for j in jobs:
+        if "failed" in j:
+            log(f"  {j['video']} {j['detector']}: 분석 실패 ({j['failed']})")
+            continue
+        grev_figure(run_root / "figures" / f"{Path(j['video']).stem}_{j['detector']}.png", j, man.get(j["video"]))
+        g = lambda x: "충족" if x else "미충족"      # noqa: E731
+        log(f"  {j['video']} {j['detector']}: 기존 {pseg_t(j['legacy_theta']['t_transition'])} s, 20 {pseg_t(j['transition_20']['t_transition'])} s, 21 {pseg_t(j['transition']['t_transition'])} s, "
+            f"d0 {j['transition'].get('d0', float('nan')):.3f}{' (상한 적용)' if j['transition'].get('d0_capped') else ''}, 가이드 20 {g(j['transition_20']['guide'])} → 21 {g(j['transition']['guide'])}, "
+            f"17과 일치 {'O' if j['same_as_17']['all'] else 'X'}, 20과 일치 {'O' if j.get('same_as_20', {}).get('all') else 'X'}")
+    grev_report(run_root / "report.md", jobs, cfg)
+    grev_summary(run_root / "summary.md", jobs, cfg)
+    (run_root / "results.json").write_text(json.dumps(hf.jsonable({"transition_method": cfg["transition_method"], "jobs": jobs}), ensure_ascii=False, indent=1))
+    meta = hf.provenance_build(text, a.config, {"code_20": cfg["code_20"], "sources": cfg["sources"], "elapsed_s": time.time() - t0})
+    (run_root / "metadata.json").write_text(json.dumps(hf.jsonable(meta), ensure_ascii=False, indent=1))
+    log(f"완료 {time.time() - t0:.0f} s → {run_root}")
+    log.close()
+    return run_root, jobs
+
+
+# ====================================================================================================
 # command line
 # ====================================================================================================
 
-COMMANDS = {"protocol": protocol_main, "frame-filter": ff_main, "same-session": session_main, "overlay": overlay_main, "phase-segmentation": pseg_main}
+COMMANDS = {"protocol": protocol_main, "frame-filter": ff_main, "same-session": session_main, "overlay": overlay_main, "phase-segmentation": pseg_main, "guide-revision": grev_main}
 
 
 def main(argv=None):
