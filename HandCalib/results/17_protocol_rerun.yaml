@@ -263,6 +263,44 @@ videos:
       anycalib_gen: 1770.0
     run: runs/17_protocol_rerun/20261019T030703Z
     code_commit: cd32ed8
+  IMG_7176.MOV:
+    previous_video: false
+    guide_satisfied: false
+    guide_reasons:
+    - 손 박스/짧은 변 0.59 > 0.5
+    - 자동 전환 1.27 s < 2.5 s
+    - 기울기 구간 θ2d 중앙값 17°가 20–40° 밖
+    - 축 덮임 4/6 < 5/6
+    detectors:
+      wilor_yolo:
+        f_fixed_template_px: 2515.6
+        f_status: value
+        f_joint_delta_px: 2677.9
+        f_rel_uncertainty: 0.3605
+        verdict: REJECT
+        sharpness_flat17: 1.011
+        quality_rank: 3.0
+      mediapipe_hands:
+        f_fixed_template_px: 1260.6
+        f_status: value
+        f_joint_delta_px: 1224.7
+        f_rel_uncertainty: 0.4811
+        verdict: REJECT
+        sharpness_flat17: 1.0341
+        quality_rank: 2.0
+      rtmpose_hand:
+        f_fixed_template_px: 694.9
+        f_status: value
+        f_joint_delta_px: 708.0
+        f_rel_uncertainty: 0.495
+        verdict: REJECT
+        sharpness_flat17: 1.0932
+        quality_rank: 1.0
+    anycalib_median_px:
+      anycalib_pinhole: 2068.0
+      anycalib_gen: 2028.8
+    run: runs/17_protocol_rerun/20261020T011004Z
+    code_commit: f4de558
 ranking_summary:
   mediapipe_hands:
     mean_rank_guide: null
@@ -513,4 +551,55 @@ additional_runs:
         ROUGH: 0
         REJECT: 0
         EDGE: 1
+        FAILED: 0
+- run: runs/17_protocol_rerun/20261020T011004Z
+  code_commit: f4de558
+  git_dirty_at_run: false
+  videos:
+  - IMG_7176.MOV
+  ranking_summary:
+    mediapipe_hands:
+      mean_rank_guide: null
+      n_guide_videos: 0
+      verdict_counts:
+        GOOD: 0
+        ROUGH: 0
+        REJECT: 1
+      n_edge: 0
+      n_failed: 0
+      category_counts:
+        GOOD: 0
+        ROUGH: 0
+        REJECT: 1
+        EDGE: 0
+        FAILED: 0
+    rtmpose_hand:
+      mean_rank_guide: null
+      n_guide_videos: 0
+      verdict_counts:
+        GOOD: 0
+        ROUGH: 0
+        REJECT: 1
+      n_edge: 0
+      n_failed: 0
+      category_counts:
+        GOOD: 0
+        ROUGH: 0
+        REJECT: 1
+        EDGE: 0
+        FAILED: 0
+    wilor_yolo:
+      mean_rank_guide: null
+      n_guide_videos: 0
+      verdict_counts:
+        GOOD: 0
+        ROUGH: 0
+        REJECT: 1
+      n_edge: 0
+      n_failed: 0
+      category_counts:
+        GOOD: 0
+        ROUGH: 0
+        REJECT: 1
+        EDGE: 0
         FAILED: 0
