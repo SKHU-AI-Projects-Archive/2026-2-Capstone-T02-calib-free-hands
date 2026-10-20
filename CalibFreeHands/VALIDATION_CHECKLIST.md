@@ -46,6 +46,8 @@
 - [x] P1-A native Qt viewer construction for `1_insert` and `5_fold_p0` results
 - [x] P1-A.1 viewer opacity, axis-length and click-context keyboard routing tests
 - [x] P1-A.1 native Qt interaction checks for `1_insert` and `5_fold_p0` results
+- [x] P1-A.2 mesh render-mode/sample-count control regression tests
+- [x] P1-A.2 native Qt checks for mesh render-state switching and sample-count enablement
 - [x] Official WiLoR checkpoint and detector downloaded outside protected source tree
 - [x] Official model asset setup script with network access
 - [ ] Interactive viewer/manual validation

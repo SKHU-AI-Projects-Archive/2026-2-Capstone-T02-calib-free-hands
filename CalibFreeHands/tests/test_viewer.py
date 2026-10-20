@@ -1,4 +1,5 @@
 import numpy as np
+from pyqtgraph.opengl.GLGraphicsItem import GLOptions
 from PySide6.QtCore import QEvent, QPointF, Qt
 from PySide6.QtGui import QKeyEvent, QMouseEvent
 from PySide6.QtWidgets import QCheckBox
@@ -117,23 +118,28 @@ def _key_press(key):
     return QKeyEvent(QEvent.Type.KeyPress, key, Qt.KeyboardModifier.NoModifier)
 
 
-def test_mesh_opacity_controls_both_meshes_without_changing_vertices(tmp_path, qapp):
+def test_mesh_opacity_controls_render_mode_without_changing_vertices(tmp_path, qapp):
     result = _viewer_result()
     before_vertices = result.mano_vertices.copy()
     npz, _ = save_result(result, tmp_path, {"schema_version": 1})
     from calibfreehands.visualization.viewer import ResultViewer
 
     viewer = ResultViewer(npz)
-    assert viewer.mesh_opacity_slider.value() == 60
-    assert all(np.isclose(mesh.opts["color"][3], 0.6) for mesh in viewer.gl_view.meshes)
+    assert viewer.gl_view.mesh_opacity == 1.0
+    assert viewer.mesh_opacity_slider.value() == 100
+    assert viewer.mesh_opacity_value.text() == "100%"
+    assert all(np.isclose(mesh.opts["color"][3], 1.0) for mesh in viewer.gl_view.meshes)
+    assert all(mesh._GLGraphicsItem__glOpts == GLOptions["opaque"] for mesh in viewer.gl_view.meshes)
 
-    viewer.mesh_opacity_slider.setValue(20)
-    assert all(np.isclose(mesh.opts["color"][3], 0.2) for mesh in viewer.gl_view.meshes)
+    viewer.mesh_opacity_slider.setValue(50)
+    assert all(np.isclose(mesh.opts["color"][3], 0.5) for mesh in viewer.gl_view.meshes)
+    assert all(mesh._GLGraphicsItem__glOpts == GLOptions["translucent"] for mesh in viewer.gl_view.meshes)
     viewer.slider.setValue(1)
-    assert all(np.isclose(mesh.opts["color"][3], 0.2) for mesh in viewer.gl_view.meshes)
+    assert all(np.isclose(mesh.opts["color"][3], 0.5) for mesh in viewer.gl_view.meshes)
 
     viewer.mesh_opacity_slider.setValue(100)
     assert all(np.isclose(mesh.opts["color"][3], 1.0) for mesh in viewer.gl_view.meshes)
+    assert all(mesh._GLGraphicsItem__glOpts == GLOptions["opaque"] for mesh in viewer.gl_view.meshes)
     np.testing.assert_array_equal(result.mano_vertices, before_vertices)
     viewer.close()
 

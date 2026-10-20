@@ -100,7 +100,7 @@ class _GLResultView(gl.GLViewWidget):
         _reset_gl_shader_cache(); super().__init__(); self.loaded = loaded; self.frame = 0
         self.show_joints = self.show_bones = self.show_left = self.show_right = self.show_grid = self.show_axis = True
         self.show_mesh = loaded.has_mesh_topology
-        self.mesh_opacity = 0.6
+        self.mesh_opacity = 1.0
         self.hand_colors = ((0.1, 0.9, 1), (1, 0.8, 0.1))
         self.setFocusPolicy(Qt.FocusPolicy.StrongFocus)
         self.grids = [gl.GLGridItem(color=(120, 140, 160, 55)) for _ in range(3)]
@@ -112,7 +112,7 @@ class _GLResultView(gl.GLViewWidget):
         self.fit_center = None; self.fit_distance = 1.2; self.setCameraPosition(distance=self.fit_distance)
         self.joints = [gl.GLScatterPlotItem(), gl.GLScatterPlotItem()]
         self.bones = [gl.GLLinePlotItem(mode="lines", width=2, antialias=True), gl.GLLinePlotItem(mode="lines", width=2, antialias=True)]
-        self.meshes = [gl.GLMeshItem(smooth=False, drawEdges=False, glOptions="translucent"), gl.GLMeshItem(smooth=False, drawEdges=False, glOptions="translucent")]
+        self.meshes = [gl.GLMeshItem(smooth=False, drawEdges=False), gl.GLMeshItem(smooth=False, drawEdges=False)]
         for item in (*self.joints, *self.bones, *self.meshes): self.addItem(item); item.setVisible(False)
         self.set_mesh_opacity(self.mesh_opacity)
         self.set_frame(0)
@@ -122,7 +122,9 @@ class _GLResultView(gl.GLViewWidget):
         super().mousePressEvent(event)
     def set_mesh_opacity(self, opacity):
         self.mesh_opacity = float(np.clip(opacity, 0.1, 1.0))
-        for hand_i, mesh in enumerate(self.meshes): mesh.setColor((*self.hand_colors[hand_i], self.mesh_opacity))
+        gl_options = "opaque" if self.mesh_opacity >= 1.0 else "translucent"
+        for hand_i, mesh in enumerate(self.meshes):
+            mesh.setGLOptions(gl_options); mesh.setColor((*self.hand_colors[hand_i], self.mesh_opacity))
         self.update()
     def _first_detected_frame(self):
         detected = self.loaded.result.detected
@@ -210,8 +212,8 @@ class ResultViewer(QWidget):
             check = QCheckBox(label); check.setChecked(getattr(self.gl_view, attr)); check.toggled.connect(lambda value, a=attr: self._toggle(a, value)); visibility.addWidget(check)
         mesh = QCheckBox("Mesh"); mesh.setChecked(self.gl_view.show_mesh); mesh.setEnabled(self.loaded.has_mesh_topology); mesh.setToolTip("MANO mesh topology is unavailable for this result" if not self.loaded.has_mesh_topology else ""); mesh.toggled.connect(lambda value: self._toggle("show_mesh", value)); visibility.addWidget(mesh)
         opacity_label = QLabel("Opacity")
-        self.mesh_opacity_slider = QSlider(Qt.Orientation.Horizontal); self.mesh_opacity_slider.setRange(10, 100); self.mesh_opacity_slider.setValue(60); self.mesh_opacity_slider.setEnabled(self.loaded.has_mesh_topology); self.mesh_opacity_slider.setMaximumWidth(120)
-        self.mesh_opacity_value = QLabel("60%")
+        self.mesh_opacity_slider = QSlider(Qt.Orientation.Horizontal); self.mesh_opacity_slider.setRange(10, 100); self.mesh_opacity_slider.setValue(100); self.mesh_opacity_slider.setEnabled(self.loaded.has_mesh_topology); self.mesh_opacity_slider.setMaximumWidth(120)
+        self.mesh_opacity_value = QLabel("100%")
         self.mesh_opacity_slider.valueChanged.connect(self._set_mesh_opacity)
         opacity_label.setEnabled(self.loaded.has_mesh_topology); self.mesh_opacity_value.setEnabled(self.loaded.has_mesh_topology)
         visibility.addWidget(opacity_label); visibility.addWidget(self.mesh_opacity_slider); visibility.addWidget(self.mesh_opacity_value)
