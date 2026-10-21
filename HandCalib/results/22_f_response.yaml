@@ -1,0 +1,1022 @@
+experiment: 22_f_response
+run: runs/22_f_response/20261021T042524Z
+code_commit: 866b47a
+git_dirty_at_run: false
+note: 후보(mediapipe_hands + 손목 제외)가 f에 반응하는지 확인한 실험이다. f 추정 방식과 판정 문턱값은 바꾸지 않았다. 확대
+  검사의 통과는 f를 잰다는 근거가 아니다. 기준 f와의 비교 수치는 summary.md에만 있다.
+candidate:
+  detector: mediapipe_hands
+  wrist_mode: exclude
+  estimator: fixed_template
+  front_window: 17's (phase_mode nominal, tilt phase from 3.0 s)
+videos:
+  IMG_7148.MOV:
+    used_in_21: true
+    hand_box_short_ratio_front: 0.5912
+    detections: 17 run
+    original:
+      exclude:
+        f_fixed_template:
+          f_px: 1873.6
+          status: value
+        f_joint_delta:
+          f_px: 1644.9
+          status: value
+        verdict: REJECT
+        sharpness: 1.0007
+        f_rel_uncertainty: 0.3207
+        jointset_range: 0.6413
+      keep:
+        f_fixed_template:
+          f_px: 1700.0
+          status: value
+        f_joint_delta:
+          f_px: null
+          status: 값 없음 (상한)
+        verdict: REJECT
+        sharpness: 1.0023
+        f_rel_uncertainty: 0.4035
+        jointset_range: 0.6047
+    same_as_21: true
+    a1:
+      '1.1':
+        exclude:
+          ratio: 1.09977
+          ratio_err: -0.00021
+          pass: true
+          grid_scaled_ratio_err: -0.0
+        keep:
+          ratio: 1.1001
+          ratio_err: 9.0e-05
+          pass: true
+          grid_scaled_ratio_err: 0.0
+      '1.2':
+        exclude:
+          ratio: 1.20003
+          ratio_err: 3.0e-05
+          pass: true
+          grid_scaled_ratio_err: -0.0
+        keep:
+          ratio: 1.19994
+          ratio_err: -5.0e-05
+          pass: true
+          grid_scaled_ratio_err: 0.0
+    a2:
+      '1.0':
+        edge_rate: 0.0
+        hand_exclude:
+          f_px: 1873.6
+          status: value
+          ratio_to_1.0: 1.0
+          within_tolerance: true
+        hand_keep:
+          f_px: 1700.0
+          status: value
+          ratio_to_1.0: 1.0
+          within_tolerance: true
+        anycalib_pinhole:
+          f_median_px: 2137.7
+          ratio_to_1.0: 1.0
+          within_tolerance: true
+        anycalib_gen:
+          f_median_px: 2153.0
+          ratio_to_1.0: 1.0
+          within_tolerance: true
+      '1.1':
+        edge_rate: 0.0
+        hand_exclude:
+          f_px: 2102.4
+          status: value
+          ratio_to_1.0: 1.1222
+          within_tolerance: true
+        hand_keep:
+          f_px: 1878.6
+          status: value
+          ratio_to_1.0: 1.1051
+          within_tolerance: true
+        anycalib_pinhole:
+          f_median_px: 2170.0
+          ratio_to_1.0: 1.0151
+          within_tolerance: true
+        anycalib_gen:
+          f_median_px: 2179.2
+          ratio_to_1.0: 1.0122
+          within_tolerance: true
+      '1.2':
+        edge_rate: 0.0
+        hand_exclude:
+          f_px: 1671.1
+          status: value
+          ratio_to_1.0: 0.8919
+          within_tolerance: false
+        hand_keep:
+          f_px: 1846.4
+          status: value
+          ratio_to_1.0: 1.0861
+          within_tolerance: false
+        anycalib_pinhole:
+          f_median_px: 2244.4
+          ratio_to_1.0: 1.0499
+          within_tolerance: false
+        anycalib_gen:
+          f_median_px: 2276.7
+          ratio_to_1.0: 1.0574
+          within_tolerance: false
+  IMG_7157.MOV:
+    used_in_21: true
+    hand_box_short_ratio_front: 0.5332
+    detections: 17 run
+    original:
+      exclude:
+        f_fixed_template:
+          f_px: 2077.4
+          status: value
+        f_joint_delta:
+          f_px: 2218.0
+          status: value
+        verdict: REJECT
+        sharpness: 1.0046
+        f_rel_uncertainty: 0.2235
+        jointset_range: 0.4323
+      keep:
+        f_fixed_template:
+          f_px: 2245.6
+          status: value
+        f_joint_delta:
+          f_px: 1951.3
+          status: value
+        verdict: REJECT
+        sharpness: 1.0083
+        f_rel_uncertainty: 0.2201
+        jointset_range: 0.3609
+    same_as_21: true
+    a1:
+      '1.1':
+        exclude:
+          ratio: 1.09978
+          ratio_err: -0.0002
+          pass: true
+          grid_scaled_ratio_err: -0.0
+        keep:
+          ratio: 1.09978
+          ratio_err: -0.0002
+          pass: true
+          grid_scaled_ratio_err: -0.0
+      '1.2':
+        exclude:
+          ratio: 1.20003
+          ratio_err: 2.0e-05
+          pass: true
+          grid_scaled_ratio_err: 0.0
+        keep:
+          ratio: 1.20002
+          ratio_err: 2.0e-05
+          pass: true
+          grid_scaled_ratio_err: 0.0
+    a2:
+      '1.0':
+        edge_rate: 0.0
+        hand_exclude:
+          f_px: 2077.4
+          status: value
+          ratio_to_1.0: 1.0
+          within_tolerance: true
+        hand_keep:
+          f_px: 2245.6
+          status: value
+          ratio_to_1.0: 1.0
+          within_tolerance: true
+        anycalib_pinhole:
+          f_median_px: 1911.0
+          ratio_to_1.0: 1.0
+          within_tolerance: true
+        anycalib_gen:
+          f_median_px: 2034.1
+          ratio_to_1.0: 1.0
+          within_tolerance: true
+      '1.1':
+        edge_rate: 0.0
+        hand_exclude:
+          f_px: 2470.2
+          status: value
+          ratio_to_1.0: 1.1891
+          within_tolerance: false
+        hand_keep:
+          f_px: 2373.4
+          status: value
+          ratio_to_1.0: 1.0569
+          within_tolerance: true
+        anycalib_pinhole:
+          f_median_px: 1953.8
+          ratio_to_1.0: 1.0224
+          within_tolerance: true
+        anycalib_gen:
+          f_median_px: 2262.1
+          ratio_to_1.0: 1.1121
+          within_tolerance: true
+      '1.2':
+        edge_rate: 0.0
+        hand_exclude:
+          f_px: 2349.3
+          status: value
+          ratio_to_1.0: 1.1309
+          within_tolerance: false
+        hand_keep:
+          f_px: 2581.8
+          status: value
+          ratio_to_1.0: 1.1497
+          within_tolerance: true
+        anycalib_pinhole:
+          f_median_px: 2050.7
+          ratio_to_1.0: 1.0731
+          within_tolerance: false
+        anycalib_gen:
+          f_median_px: 2157.7
+          ratio_to_1.0: 1.0608
+          within_tolerance: false
+  IMG_7158.MOV:
+    used_in_21: true
+    hand_box_short_ratio_front: 0.532
+    detections: 17 run
+    original:
+      exclude:
+        f_fixed_template:
+          f_px: 1748.2
+          status: value
+        f_joint_delta:
+          f_px: 2651.4
+          status: value
+        verdict: REJECT
+        sharpness: 1.0047
+        f_rel_uncertainty: 0.3129
+        jointset_range: 0.3942
+      keep:
+        f_fixed_template:
+          f_px: 1752.4
+          status: value
+        f_joint_delta:
+          f_px: 1668.1
+          status: value
+        verdict: REJECT
+        sharpness: 1.0087
+        f_rel_uncertainty: 0.2265
+        jointset_range: 0.4531
+    same_as_21: true
+    a1:
+      '1.1':
+        exclude:
+          ratio: 1.10014
+          ratio_err: 0.00013
+          pass: true
+          grid_scaled_ratio_err: 0.0
+        keep:
+          ratio: 1.10019
+          ratio_err: 0.00018
+          pass: true
+          grid_scaled_ratio_err: 0.0
+      '1.2':
+        exclude:
+          ratio: 1.20001
+          ratio_err: 1.0e-05
+          pass: true
+          grid_scaled_ratio_err: 0.0
+        keep:
+          ratio: 1.19978
+          ratio_err: -0.00018
+          pass: true
+          grid_scaled_ratio_err: 0.0
+    a2:
+      '1.0':
+        edge_rate: 0.0
+        hand_exclude:
+          f_px: 1748.2
+          status: value
+          ratio_to_1.0: 1.0
+          within_tolerance: true
+        hand_keep:
+          f_px: 1752.4
+          status: value
+          ratio_to_1.0: 1.0
+          within_tolerance: true
+        anycalib_pinhole:
+          f_median_px: 1631.1
+          ratio_to_1.0: 1.0
+          within_tolerance: true
+        anycalib_gen:
+          f_median_px: 1770.0
+          ratio_to_1.0: 1.0
+          within_tolerance: true
+      '1.1':
+        edge_rate: 0.0
+        hand_exclude:
+          f_px: 1972.9
+          status: value
+          ratio_to_1.0: 1.1285
+          within_tolerance: true
+        hand_keep:
+          f_px: 1981.4
+          status: value
+          ratio_to_1.0: 1.1307
+          within_tolerance: true
+        anycalib_pinhole:
+          f_median_px: 1797.4
+          ratio_to_1.0: 1.102
+          within_tolerance: true
+        anycalib_gen:
+          f_median_px: 1852.1
+          ratio_to_1.0: 1.0464
+          within_tolerance: true
+      '1.2':
+        edge_rate: 0.0
+        hand_exclude:
+          f_px: 2238.0
+          status: value
+          ratio_to_1.0: 1.2802
+          within_tolerance: false
+        hand_keep:
+          f_px: 1949.4
+          status: value
+          ratio_to_1.0: 1.1124
+          within_tolerance: false
+        anycalib_pinhole:
+          f_median_px: 2025.2
+          ratio_to_1.0: 1.2417
+          within_tolerance: true
+        anycalib_gen:
+          f_median_px: 2048.8
+          ratio_to_1.0: 1.1575
+          within_tolerance: true
+  IMG_7176.MOV:
+    used_in_21: false
+    hand_box_short_ratio_front: 0.5814
+    detections: 17 run
+    original:
+      exclude:
+        f_fixed_template:
+          f_px: 1314.0
+          status: value
+        f_joint_delta:
+          f_px: 1283.9
+          status: value
+        verdict: REJECT
+        sharpness: 1.0121
+        f_rel_uncertainty: 0.4802
+        jointset_range: 0.4422
+      keep:
+        f_fixed_template:
+          f_px: 1260.6
+          status: value
+        f_joint_delta:
+          f_px: 1224.7
+          status: value
+        verdict: REJECT
+        sharpness: 1.0397
+        f_rel_uncertainty: 0.4811
+        jointset_range: 0.3493
+    a1:
+      '1.1':
+        exclude:
+          ratio: 1.10049
+          ratio_err: 0.00045
+          pass: true
+          grid_scaled_ratio_err: -0.0
+        keep:
+          ratio: 1.10051
+          ratio_err: 0.00047
+          pass: true
+          grid_scaled_ratio_err: -0.0
+      '1.2':
+        exclude:
+          ratio: 1.19996
+          ratio_err: -3.0e-05
+          pass: true
+          grid_scaled_ratio_err: -0.0
+        keep:
+          ratio: 1.19986
+          ratio_err: -0.00011
+          pass: true
+          grid_scaled_ratio_err: 0.0
+    a2:
+      '1.0':
+        edge_rate: 0.0
+        hand_exclude:
+          f_px: 1314.0
+          status: value
+          ratio_to_1.0: 1.0
+          within_tolerance: true
+        hand_keep:
+          f_px: 1260.6
+          status: value
+          ratio_to_1.0: 1.0
+          within_tolerance: true
+        anycalib_pinhole:
+          f_median_px: 2068.0
+          ratio_to_1.0: 1.0
+          within_tolerance: true
+        anycalib_gen:
+          f_median_px: 2028.8
+          ratio_to_1.0: 1.0
+          within_tolerance: true
+      '1.1':
+        edge_rate: 0.0
+        hand_exclude:
+          f_px: 1466.0
+          status: value
+          ratio_to_1.0: 1.1157
+          within_tolerance: true
+        hand_keep:
+          f_px: 1353.1
+          status: value
+          ratio_to_1.0: 1.0734
+          within_tolerance: true
+        anycalib_pinhole:
+          f_median_px: 2232.7
+          ratio_to_1.0: 1.0797
+          within_tolerance: true
+        anycalib_gen:
+          f_median_px: 2130.8
+          ratio_to_1.0: 1.0503
+          within_tolerance: true
+      '1.2':
+        edge_rate: 0.0
+        hand_exclude:
+          f_px: 1494.3
+          status: value
+          ratio_to_1.0: 1.1372
+          within_tolerance: false
+        hand_keep:
+          f_px: 1446.2
+          status: value
+          ratio_to_1.0: 1.1473
+          within_tolerance: true
+        anycalib_pinhole:
+          f_median_px: 2433.1
+          ratio_to_1.0: 1.1766
+          within_tolerance: true
+        anycalib_gen:
+          f_median_px: 2357.0
+          ratio_to_1.0: 1.1618
+          within_tolerance: true
+  IMG_7177.MOV:
+    used_in_21: false
+    hand_box_short_ratio_front: 0.607
+    detections: 17 run
+    original:
+      exclude:
+        f_fixed_template:
+          f_px: 2138.1
+          status: value
+        f_joint_delta:
+          f_px: 1763.9
+          status: value
+        verdict: REJECT
+        sharpness: 1.006
+        f_rel_uncertainty: 0.3907
+        jointset_range: 0.7364
+      keep:
+        f_fixed_template:
+          f_px: 2818.4
+          status: value
+        f_joint_delta:
+          f_px: 2156.2
+          status: value
+        verdict: REJECT
+        sharpness: 1.0093
+        f_rel_uncertainty: 0.3886
+        jointset_range: 0.7772
+    a1:
+      '1.1':
+        exclude:
+          ratio: 1.10034
+          ratio_err: 0.00031
+          pass: true
+          grid_scaled_ratio_err: 0.0
+        keep:
+          ratio: null
+          ratio_err: null
+          pass: null
+          grid_scaled_ratio_err: null
+      '1.2':
+        exclude:
+          ratio: 1.2
+          ratio_err: -0.0
+          pass: true
+          grid_scaled_ratio_err: 0.0
+        keep:
+          ratio: null
+          ratio_err: null
+          pass: null
+          grid_scaled_ratio_err: null
+    a2:
+      '1.0':
+        edge_rate: 0.0
+        hand_exclude:
+          f_px: 2138.1
+          status: value
+          ratio_to_1.0: 1.0
+          within_tolerance: true
+        hand_keep:
+          f_px: 2818.4
+          status: value
+          ratio_to_1.0: 1.0
+          within_tolerance: true
+        anycalib_pinhole:
+          f_median_px: 1955.7
+          ratio_to_1.0: 1.0
+          within_tolerance: true
+        anycalib_gen:
+          f_median_px: 1891.3
+          ratio_to_1.0: 1.0
+          within_tolerance: true
+      '1.1':
+        edge_rate: 0.0
+        hand_exclude:
+          f_px: 1961.1
+          status: value
+          ratio_to_1.0: 0.9172
+          within_tolerance: false
+        hand_keep:
+          f_px: 2647.5
+          status: value
+          ratio_to_1.0: 0.9394
+          within_tolerance: false
+        anycalib_pinhole:
+          f_median_px: 2044.8
+          ratio_to_1.0: 1.0456
+          within_tolerance: true
+        anycalib_gen:
+          f_median_px: 2094.4
+          ratio_to_1.0: 1.1074
+          within_tolerance: true
+      '1.2':
+        edge_rate: 0.0
+        hand_exclude:
+          f_px: 1689.0
+          status: value
+          ratio_to_1.0: 0.79
+          within_tolerance: false
+        hand_keep:
+          f_px: null
+          status: 값 없음 (상한)
+          ratio_to_1.0: null
+          within_tolerance: null
+        anycalib_pinhole:
+          f_median_px: 2136.9
+          ratio_to_1.0: 1.0927
+          within_tolerance: true
+        anycalib_gen:
+          f_median_px: 2140.7
+          ratio_to_1.0: 1.1319
+          within_tolerance: true
+  IMG_7178.MOV:
+    used_in_21: false
+    hand_box_short_ratio_front: 0.5675
+    detections: 17 run
+    original:
+      exclude:
+        f_fixed_template:
+          f_px: 1761.6
+          status: value
+        f_joint_delta:
+          f_px: 1501.9
+          status: value
+        verdict: REJECT
+        sharpness: 1.0053
+        f_rel_uncertainty: 0.3219
+        jointset_range: 0.6185
+      keep:
+        f_fixed_template:
+          f_px: 2361.0
+          status: value
+        f_joint_delta:
+          f_px: 2055.5
+          status: value
+        verdict: REJECT
+        sharpness: 1.0078
+        f_rel_uncertainty: 0.2331
+        jointset_range: 0.4519
+    a1:
+      '1.1':
+        exclude:
+          ratio: 1.10021
+          ratio_err: 0.00019
+          pass: true
+          grid_scaled_ratio_err: -0.0
+        keep:
+          ratio: 1.09977
+          ratio_err: -0.00021
+          pass: true
+          grid_scaled_ratio_err: 0.0
+      '1.2':
+        exclude:
+          ratio: 1.19994
+          ratio_err: -5.0e-05
+          pass: true
+          grid_scaled_ratio_err: -0.0
+        keep:
+          ratio: 1.20004
+          ratio_err: 4.0e-05
+          pass: true
+          grid_scaled_ratio_err: -0.0
+    a2:
+      '1.0':
+        edge_rate: 0.0804
+        hand_exclude:
+          f_px: 1761.6
+          status: value
+          ratio_to_1.0: 1.0
+          within_tolerance: true
+        hand_keep:
+          f_px: 2361.0
+          status: value
+          ratio_to_1.0: 1.0
+          within_tolerance: true
+        anycalib_pinhole:
+          f_median_px: 1761.3
+          ratio_to_1.0: 1.0
+          within_tolerance: true
+        anycalib_gen:
+          f_median_px: 1846.6
+          ratio_to_1.0: 1.0
+          within_tolerance: true
+      '1.1':
+        edge_rate: 0.9799
+        excluded: 가장자리 접촉 프레임 98.0% > 5%
+      '1.2':
+        edge_rate: 1.0
+        excluded: 가장자리 접촉 프레임 100.0% > 5%
+  IMG_7180.MOV:
+    used_in_21: true
+    hand_box_short_ratio_front: 0.5656
+    detections: 17 run
+    original:
+      exclude:
+        f_fixed_template:
+          f_px: 1843.0
+          status: value
+        f_joint_delta:
+          f_px: 1652.0
+          status: value
+        verdict: REJECT
+        sharpness: 1.0044
+        f_rel_uncertainty: 0.3798
+        jointset_range: 0.7597
+      keep:
+        f_fixed_template:
+          f_px: 2092.9
+          status: value
+        f_joint_delta:
+          f_px: 1858.9
+          status: value
+        verdict: REJECT
+        sharpness: 1.0046
+        f_rel_uncertainty: 0.3139
+        jointset_range: 0.6279
+    same_as_21: true
+    a1:
+      '1.1':
+        exclude:
+          ratio: 1.10001
+          ratio_err: 1.0e-05
+          pass: true
+          grid_scaled_ratio_err: -0.0
+        keep:
+          ratio: 1.09997
+          ratio_err: -3.0e-05
+          pass: true
+          grid_scaled_ratio_err: -0.0
+      '1.2':
+        exclude:
+          ratio: 1.19996
+          ratio_err: -3.0e-05
+          pass: true
+          grid_scaled_ratio_err: -0.0
+        keep:
+          ratio: 1.19998
+          ratio_err: -2.0e-05
+          pass: true
+          grid_scaled_ratio_err: -0.0
+    a2:
+      '1.0':
+        edge_rate: 0.0
+        hand_exclude:
+          f_px: 1843.0
+          status: value
+          ratio_to_1.0: 1.0
+          within_tolerance: true
+        hand_keep:
+          f_px: 2092.9
+          status: value
+          ratio_to_1.0: 1.0
+          within_tolerance: true
+        anycalib_pinhole:
+          f_median_px: 1776.0
+          ratio_to_1.0: 1.0
+          within_tolerance: true
+        anycalib_gen:
+          f_median_px: 1939.6
+          ratio_to_1.0: 1.0
+          within_tolerance: true
+      '1.1':
+        edge_rate: 0.0
+        hand_exclude:
+          f_px: 2194.7
+          status: value
+          ratio_to_1.0: 1.1908
+          within_tolerance: false
+        hand_keep:
+          f_px: 2210.3
+          status: value
+          ratio_to_1.0: 1.0561
+          within_tolerance: true
+        anycalib_pinhole:
+          f_median_px: 1905.9
+          ratio_to_1.0: 1.0731
+          within_tolerance: true
+        anycalib_gen:
+          f_median_px: 1922.1
+          ratio_to_1.0: 0.9909
+          within_tolerance: true
+      '1.2':
+        edge_rate: 0.0
+        hand_exclude:
+          f_px: 2236.2
+          status: value
+          ratio_to_1.0: 1.2133
+          within_tolerance: true
+        hand_keep:
+          f_px: 2378.7
+          status: value
+          ratio_to_1.0: 1.1366
+          within_tolerance: false
+        anycalib_pinhole:
+          f_median_px: 2043.6
+          ratio_to_1.0: 1.1507
+          within_tolerance: true
+        anycalib_gen:
+          f_median_px: 1964.8
+          ratio_to_1.0: 1.0129
+          within_tolerance: false
+  IMG_7181.MOV:
+    used_in_21: false
+    hand_box_short_ratio_front: 0.636
+    detections: 17 run
+    original:
+      exclude:
+        f_fixed_template:
+          f_px: 1727.7
+          status: value
+        f_joint_delta:
+          f_px: 1567.1
+          status: value
+        verdict: REJECT
+        sharpness: 1.0048
+        f_rel_uncertainty: 0.473
+        jointset_range: 0.946
+      keep:
+        f_fixed_template:
+          f_px: 1994.6
+          status: value
+        f_joint_delta:
+          f_px: 2097.1
+          status: value
+        verdict: REJECT
+        sharpness: 1.006
+        f_rel_uncertainty: 0.2723
+        jointset_range: 0.5445
+    a1:
+      '1.1':
+        exclude:
+          ratio: 1.09999
+          ratio_err: -1.0e-05
+          pass: true
+          grid_scaled_ratio_err: 0.0
+        keep:
+          ratio: 1.10006
+          ratio_err: 5.0e-05
+          pass: true
+          grid_scaled_ratio_err: 0.0
+      '1.2':
+        exclude:
+          ratio: 1.20006
+          ratio_err: 5.0e-05
+          pass: true
+          grid_scaled_ratio_err: 0.0
+        keep:
+          ratio: 1.19995
+          ratio_err: -5.0e-05
+          pass: true
+          grid_scaled_ratio_err: 0.0
+    a2:
+      '1.0':
+        edge_rate: 0.0
+        hand_exclude:
+          f_px: 1727.7
+          status: value
+          ratio_to_1.0: 1.0
+          within_tolerance: true
+        hand_keep:
+          f_px: 1994.6
+          status: value
+          ratio_to_1.0: 1.0
+          within_tolerance: true
+        anycalib_pinhole:
+          f_median_px: 1851.1
+          ratio_to_1.0: 1.0
+          within_tolerance: true
+        anycalib_gen:
+          f_median_px: 1790.0
+          ratio_to_1.0: 1.0
+          within_tolerance: true
+      '1.1':
+        edge_rate: 0.0
+        hand_exclude:
+          f_px: 2283.5
+          status: value
+          ratio_to_1.0: 1.3216
+          within_tolerance: false
+        hand_keep:
+          f_px: 1834.4
+          status: value
+          ratio_to_1.0: 0.9197
+          within_tolerance: false
+        anycalib_pinhole:
+          f_median_px: 1998.1
+          ratio_to_1.0: 1.0794
+          within_tolerance: true
+        anycalib_gen:
+          f_median_px: 1886.1
+          ratio_to_1.0: 1.0537
+          within_tolerance: true
+      '1.2':
+        edge_rate: 0.0
+        hand_exclude:
+          f_px: 2505.0
+          status: value
+          ratio_to_1.0: 1.4499
+          within_tolerance: false
+        hand_keep:
+          f_px: 2173.5
+          status: value
+          ratio_to_1.0: 1.0897
+          within_tolerance: false
+        anycalib_pinhole:
+          f_median_px: 2083.1
+          ratio_to_1.0: 1.1253
+          within_tolerance: true
+        anycalib_gen:
+          f_median_px: 1917.0
+          ratio_to_1.0: 1.071
+          within_tolerance: false
+  IMG_7184.MOV:
+    used_in_21: false
+    hand_box_short_ratio_front: 0.501
+    detections: new mediapipe run on the normalised frames
+    original:
+      exclude:
+        f_fixed_template:
+          f_px: 987.8
+          status: value
+        f_joint_delta:
+          f_px: 883.3
+          status: value
+        verdict: ROUGH
+        sharpness: 1.0052
+        f_rel_uncertainty: 0.2353
+        jointset_range: 0.0987
+      keep:
+        f_fixed_template:
+          f_px: 1107.9
+          status: value
+        f_joint_delta:
+          f_px: 1027.0
+          status: value
+        verdict: REJECT
+        sharpness: 1.0259
+        f_rel_uncertainty: 0.198
+        jointset_range: 0.3959
+    a1:
+      '1.1':
+        exclude:
+          ratio: 1.10188
+          ratio_err: 0.00171
+          pass: true
+          grid_scaled_ratio_err: -0.0
+        keep:
+          ratio: 1.10003
+          ratio_err: 3.0e-05
+          pass: true
+          grid_scaled_ratio_err: -0.0
+      '1.2':
+        exclude:
+          ratio: 1.19944
+          ratio_err: -0.00047
+          pass: true
+          grid_scaled_ratio_err: 0.0
+        keep:
+          ratio: 1.19987
+          ratio_err: -0.00011
+          pass: true
+          grid_scaled_ratio_err: -0.0
+    a2:
+      '1.0':
+        edge_rate: 0.0
+        hand_exclude:
+          f_px: 987.8
+          status: value
+          ratio_to_1.0: 1.0
+          within_tolerance: true
+        hand_keep:
+          f_px: 1107.9
+          status: value
+          ratio_to_1.0: 1.0
+          within_tolerance: true
+        anycalib_pinhole:
+          f_median_px: 1540.2
+          ratio_to_1.0: 1.0
+          within_tolerance: true
+        anycalib_gen:
+          f_median_px: 1623.1
+          ratio_to_1.0: 1.0
+          within_tolerance: true
+      '1.1':
+        edge_rate: 0.0
+        hand_exclude:
+          f_px: 1059.7
+          status: value
+          ratio_to_1.0: 1.0728
+          within_tolerance: true
+        hand_keep:
+          f_px: 1115.1
+          status: value
+          ratio_to_1.0: 1.0065
+          within_tolerance: false
+        anycalib_pinhole:
+          f_median_px: 1646.3
+          ratio_to_1.0: 1.0689
+          within_tolerance: true
+        anycalib_gen:
+          f_median_px: 1719.5
+          ratio_to_1.0: 1.0594
+          within_tolerance: true
+      '1.2':
+        edge_rate: 0.0
+        hand_exclude:
+          f_px: 1167.4
+          status: value
+          ratio_to_1.0: 1.1819
+          within_tolerance: true
+        hand_keep:
+          f_px: 1104.6
+          status: value
+          ratio_to_1.0: 0.997
+          within_tolerance: false
+        anycalib_pinhole:
+          f_median_px: 1723.2
+          ratio_to_1.0: 1.1188
+          within_tolerance: true
+        anycalib_gen:
+          f_median_px: 1752.4
+          ratio_to_1.0: 1.0797
+          within_tolerance: false
+lens_series:
+  one_x_videos:
+  - IMG_7148.MOV
+  - IMG_7157.MOV
+  - IMG_7158.MOV
+  - IMG_7176.MOV
+  - IMG_7177.MOV
+  - IMG_7178.MOV
+  - IMG_7180.MOV
+  - IMG_7181.MOV
+  videos:
+    IMG_7184.MOV:
+      lens: 0.5x
+      distance_cm: 30
+      modes:
+        exclude:
+          judged: true
+          f_px: 987.8
+          f_1x_median_px: 1802.3
+          n_1x_values: 8
+          estimated_ratio: 0.5481
+          verdict: f 변화에 반응함
+          unavailable: null
+        keep:
+          judged: false
+          f_px: 1107.9
+          f_1x_median_px: 2043.7
+          n_1x_values: 8
+          estimated_ratio: 0.5421
+          verdict: null
+          unavailable: null
+discrimination_rules:
+  distance_series:
+    max_over_min_f_max: 1.15
+  lens_series:
+    numerator_lens: 0.5x
+    denominator_lens: 1x
+    ratio_rel_tolerance: 0.15
+    one_x_estimate: median of the candidate's f (fixed_template, grid-edge values
+      left out) over every included video except the lens-series videos
+    judged_mode: candidate
