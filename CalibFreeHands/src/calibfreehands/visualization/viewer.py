@@ -10,7 +10,7 @@ import pyqtgraph.opengl as gl
 from pyqtgraph.opengl import shaders
 from pyqtgraph.opengl.items.GLLinePlotItem import GLLinePlotItem
 from pyqtgraph.opengl.items.GLScatterPlotItem import GLScatterPlotItem
-from PySide6.QtCore import QEvent, Qt, QTimer, QPointF, QLineF
+from PySide6.QtCore import QEvent, Qt, QTimer, QPointF, QLineF, QSignalBlocker
 from PySide6.QtGui import QGuiApplication, QImage, QPainter, QPen
 from PySide6.QtWidgets import QCheckBox, QHBoxLayout, QLabel, QPushButton, QSlider, QSplitter, QVBoxLayout, QWidget
 
@@ -99,7 +99,7 @@ class _GLResultView(gl.GLViewWidget):
     def __init__(self, loaded):
         _reset_gl_shader_cache(); super().__init__(); self.loaded = loaded; self.frame = 0
         self.show_joints = self.show_bones = self.show_left = self.show_right = self.show_grid = self.show_axis = True
-        self.show_mesh = loaded.has_mesh_topology
+        self.show_mesh = False
         self.mesh_opacity = 1.0
         self.hand_colors = ((0.1, 0.9, 1), (1, 0.8, 0.1))
         self.setFocusPolicy(Qt.FocusPolicy.StrongFocus)
@@ -208,15 +208,19 @@ class ResultViewer(QWidget):
         self.slider = QSlider(Qt.Orientation.Horizontal); self.slider.setRange(0, max(0, self.loaded.frame_count - 1)); self.slider.valueChanged.connect(self._set_frame)
         self.status = QLabel(); self.coordinate_info = QLabel("Camera space · metres   X: image right   Y: image down   Z: forward   ·   View centered on hands · raw coordinates unchanged")
         self.timer = QTimer(self); self.timer.timeout.connect(self._next); visibility = QHBoxLayout(); view = QHBoxLayout(); playback = QHBoxLayout()
-        for label, attr in (("Joint", "show_joints"), ("Bone", "show_bones"), ("Left Hand", "show_left"), ("Right Hand", "show_right"), ("Grid", "show_grid"), ("Axis", "show_axis")):
+        self.joint_checkbox = QCheckBox("Joint"); self.joint_checkbox.setChecked(self.gl_view.show_joints); self.joint_checkbox.toggled.connect(self._on_joint_toggled); visibility.addWidget(self.joint_checkbox)
+        self.bone_checkbox = QCheckBox("Bone"); self.bone_checkbox.setChecked(self.gl_view.show_bones); self.bone_checkbox.toggled.connect(self._on_bone_toggled); visibility.addWidget(self.bone_checkbox)
+        for label, attr in (("Left Hand", "show_left"), ("Right Hand", "show_right"), ("Grid", "show_grid"), ("Axis", "show_axis")):
             check = QCheckBox(label); check.setChecked(getattr(self.gl_view, attr)); check.toggled.connect(lambda value, a=attr: self._toggle(a, value)); visibility.addWidget(check)
-        mesh = QCheckBox("Mesh"); mesh.setChecked(self.gl_view.show_mesh); mesh.setEnabled(self.loaded.has_mesh_topology); mesh.setToolTip("MANO mesh topology is unavailable for this result" if not self.loaded.has_mesh_topology else ""); mesh.toggled.connect(lambda value: self._toggle("show_mesh", value)); visibility.addWidget(mesh)
+        self.mesh_checkbox = QCheckBox("Mesh"); self.mesh_checkbox.setChecked(self.gl_view.show_mesh); self.mesh_checkbox.setEnabled(self.loaded.has_mesh_topology); self.mesh_checkbox.setToolTip("MANO mesh topology is unavailable for this result" if not self.loaded.has_mesh_topology else ""); self.mesh_checkbox.toggled.connect(self._on_mesh_toggled); visibility.addWidget(self.mesh_checkbox)
         opacity_label = QLabel("Opacity")
         self.mesh_opacity_slider = QSlider(Qt.Orientation.Horizontal); self.mesh_opacity_slider.setRange(10, 100); self.mesh_opacity_slider.setValue(100); self.mesh_opacity_slider.setEnabled(self.loaded.has_mesh_topology); self.mesh_opacity_slider.setMaximumWidth(120)
         self.mesh_opacity_value = QLabel("100%")
         self.mesh_opacity_slider.valueChanged.connect(self._set_mesh_opacity)
         opacity_label.setEnabled(self.loaded.has_mesh_topology); self.mesh_opacity_value.setEnabled(self.loaded.has_mesh_topology)
-        visibility.addWidget(opacity_label); visibility.addWidget(self.mesh_opacity_slider); visibility.addWidget(self.mesh_opacity_value)
+        self.opacity_group = QHBoxLayout(); self.opacity_group.setContentsMargins(0, 0, 0, 0); self.opacity_group.setSpacing(4)
+        self.opacity_group.addWidget(opacity_label); self.opacity_group.addWidget(self.mesh_opacity_slider); self.opacity_group.addWidget(self.mesh_opacity_value)
+        visibility.addLayout(self.opacity_group)
         previous = QPushButton("Previous"); previous.clicked.connect(self._previous); play = QPushButton("Play / Pause"); play.clicked.connect(self._play); nxt = QPushButton("Next"); nxt.clicked.connect(self._next_frame)
         for text, callback in (("Front", self.gl_view.front_view), ("Side", self.gl_view.side_view), ("Top", self.gl_view.top_view), ("Fit Hands", self.gl_view.fit_hands), ("Reset View", self.gl_view.reset_camera)):
             button = QPushButton(text); button.clicked.connect(callback); view.addWidget(button)
@@ -228,6 +232,24 @@ class ResultViewer(QWidget):
     def _toggle(self, attr, value):
         if hasattr(self.overlay, attr): setattr(self.overlay, attr, value)
         setattr(self.gl_view, attr, value); self.overlay.update(); self.gl_view.set_frame(self.slider.value())
+    @staticmethod
+    def _set_checked_silently(checkbox, value):
+        blocker = QSignalBlocker(checkbox)
+        checkbox.setChecked(value)
+        del blocker
+    def _on_joint_toggled(self, value):
+        if value and self.mesh_checkbox.isChecked():
+            self._set_checked_silently(self.mesh_checkbox, False); self._toggle("show_mesh", False)
+        self._toggle("show_joints", value)
+    def _on_bone_toggled(self, value):
+        if value and self.mesh_checkbox.isChecked():
+            self._set_checked_silently(self.mesh_checkbox, False); self._toggle("show_mesh", False)
+        self._toggle("show_bones", value)
+    def _on_mesh_toggled(self, value):
+        if value:
+            self._set_checked_silently(self.joint_checkbox, False); self._set_checked_silently(self.bone_checkbox, False)
+            self._toggle("show_joints", False); self._toggle("show_bones", False)
+        self._toggle("show_mesh", value)
     def _set_frame(self, frame): self.overlay.set_frame(frame); self.gl_view.set_frame(frame); self._update_status()
     def _set_mesh_opacity(self, percent):
         self.mesh_opacity_value.setText(f"{percent}%"); self.gl_view.set_mesh_opacity(percent / 100)

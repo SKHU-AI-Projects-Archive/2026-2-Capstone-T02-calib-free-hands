@@ -50,6 +50,7 @@
 - [x] P1-A.2 native Qt checks for mesh render-state switching and sample-count enablement
 - [x] P1-B synthetic MANO NPZ round-trip and calibration provenance trace regression tests
 - [x] P1-B legacy NPZ reload without MANO parameters
+- [x] P1-C mesh/skeleton visibility transitions and compact opacity layout regression tests
 - [x] Official WiLoR checkpoint and detector downloaded outside protected source tree
 - [x] Official model asset setup script with network access
 - [ ] Interactive viewer/manual validation

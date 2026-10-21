@@ -42,3 +42,4 @@
 - [x] P1-A.1 viewer mesh opacity, expanded axes and click-context keyboard controls
 - [x] P1-A.2 opaque/translucent mesh state switching and compact sample-count controls
 - [x] P1-B MANO parameter preservation and calibration provenance trace
+- [x] P1-C mesh/skeleton mutual-exclusion visibility controls and compact opacity layout

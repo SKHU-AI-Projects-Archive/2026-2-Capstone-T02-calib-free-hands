@@ -68,8 +68,9 @@ def test_viewer_mesh_grid_axis_and_fit_contract(tmp_path, qapp):
     from calibfreehands.visualization.viewer import ResultViewer
     viewer = ResultViewer(npz)
     checkboxes = {box.text(): box for box in viewer.findChildren(QCheckBox)}
-    assert checkboxes["Mesh"].isChecked() and checkboxes["Mesh"].isEnabled()
-    assert viewer.gl_view.show_mesh and len(viewer.gl_view.grids) == 3 and len(viewer.gl_view.axis_labels) == 3
+    assert checkboxes["Joint"].isChecked() and checkboxes["Bone"].isChecked()
+    assert not checkboxes["Mesh"].isChecked() and checkboxes["Mesh"].isEnabled()
+    assert not viewer.gl_view.show_mesh and len(viewer.gl_view.grids) == 3 and len(viewer.gl_view.axis_labels) == 3
     checkboxes["Grid"].setChecked(False)
     assert not any(grid.visible() for grid in viewer.gl_view.grids)
     checkboxes["Axis"].setChecked(False)
@@ -87,6 +88,76 @@ def test_legacy_result_disables_mesh_checkbox(tmp_path, qapp):
     viewer = ResultViewer(npz)
     mesh = next(box for box in viewer.findChildren(QCheckBox) if box.text() == "Mesh")
     assert not mesh.isChecked() and not mesh.isEnabled()
+    viewer.close()
+
+
+def test_mesh_and_skeleton_visibility_modes_remain_synchronized(tmp_path, qapp):
+    npz, _ = save_result(_viewer_result(), tmp_path, {"schema_version": 1})
+    from calibfreehands.visualization.viewer import ResultViewer
+
+    viewer = ResultViewer(npz)
+    checks = {box.text(): box for box in viewer.findChildren(QCheckBox)}
+
+    def assert_mode(joints, bones, mesh):
+        assert checks["Joint"].isChecked() is joints
+        assert checks["Bone"].isChecked() is bones
+        assert checks["Mesh"].isChecked() is mesh
+        assert viewer.overlay.show_joints is joints
+        assert viewer.overlay.show_bones is bones
+        assert viewer.gl_view.show_joints is joints
+        assert viewer.gl_view.show_bones is bones
+        assert viewer.gl_view.show_mesh is mesh
+
+    assert_mode(True, True, False)
+
+    checks["Mesh"].setChecked(True)
+    assert_mode(False, False, True)
+    assert not viewer.gl_view.joints[0].visible()
+    assert not viewer.gl_view.bones[0].visible()
+    assert viewer.gl_view.meshes[0].visible()
+    viewer.slider.setValue(1)
+    assert_mode(False, False, True)
+    assert viewer.gl_view.meshes[0].visible()
+
+    checks["Joint"].setChecked(True)
+    assert_mode(True, False, False)
+    assert viewer.gl_view.joints[0].visible()
+    assert not viewer.gl_view.bones[0].visible()
+    assert not viewer.gl_view.meshes[0].visible()
+
+    checks["Mesh"].setChecked(True)
+    assert_mode(False, False, True)
+    checks["Bone"].setChecked(True)
+    assert_mode(False, True, False)
+    assert not viewer.gl_view.joints[0].visible()
+    assert viewer.gl_view.bones[0].visible()
+    assert not viewer.gl_view.meshes[0].visible()
+
+    checks["Joint"].setChecked(True)
+    assert_mode(True, True, False)
+    checks["Joint"].setChecked(False)
+    assert_mode(False, True, False)
+    checks["Bone"].setChecked(False)
+    assert_mode(False, False, False)
+
+    checks["Mesh"].setChecked(True)
+    assert_mode(False, False, True)
+    checks["Mesh"].setChecked(False)
+    assert_mode(False, False, False)
+    viewer.close()
+
+
+def test_opacity_controls_use_compact_nested_layout(tmp_path, qapp):
+    npz, _ = save_result(_viewer_result(), tmp_path, {"schema_version": 1})
+    from calibfreehands.visualization.viewer import ResultViewer
+
+    viewer = ResultViewer(npz)
+    margins = viewer.opacity_group.contentsMargins()
+    assert (margins.left(), margins.top(), margins.right(), margins.bottom()) == (0, 0, 0, 0)
+    assert viewer.opacity_group.spacing() <= 6
+    assert viewer.opacity_group.itemAt(0).widget().text() == "Opacity"
+    assert viewer.opacity_group.itemAt(1).widget() is viewer.mesh_opacity_slider
+    assert viewer.opacity_group.itemAt(2).widget() is viewer.mesh_opacity_value
     viewer.close()
 
 
