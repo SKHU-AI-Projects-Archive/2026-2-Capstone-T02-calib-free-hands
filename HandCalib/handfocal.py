@@ -16,9 +16,11 @@ import math
 import numpy as np
 import os
 import platform
+import re
 import shutil
 import subprocess
 import sys
+import tempfile
 import time
 import yaml
 from concurrent.futures import ProcessPoolExecutor
@@ -2759,3 +2761,309 @@ def grev_adoption(jobs: list, ref_f: float, rules: dict, mode: str, base: str = 
     r5 = not bad_videos
     return {"mode": mode, "base": base, "n_pairs": len(pairs), "edge_base": n_edge(eb), "edge_mode": n_edge(em), "all": allp, "leave_one_out": loo, "worse_videos": bad_videos,
             "rules": {"1_edge_not_more": r1, "2_improved_pairs": r2, "3_median_drop": r3, "4_leave_one_out": r4, "5_no_video_all_worse": r5}, "candidate": bool(r1 and r2 and r3 and r4 and r5)}
+
+
+# ====================================================================================================
+# fresp  (experiment 22: does the candidate (mediapipe_hands + wrist_mode exclude) respond to f?; new section, earlier functions are used unchanged)
+# A1: the estimator is scale-equivariant (keypoints scaled about the image centre -> f scaled by the same factor).
+# A2: centre-cropped and enlarged frames (true f = s * f, principal point unchanged), detector re-run on them; AnyCalib re-run on them.
+# A3: the candidate on every video of the range, original frames, with the hand's box size in the front window.
+# B (distance / lens series) is prepared in the yaml only.
+# ====================================================================================================
+
+def fresp_target_videos(input_dir, vcfg: dict, used_in_21: list) -> list:
+    """Every IMG_<number> video file in input_dir with its inclusion: number inside number_range [lo, hi] (hi null = open) and not in exclude."""
+    lo, hi = vcfg["number_range"]
+    excl = {int(x) for x in (vcfg.get("exclude") or [])}
+    exts = {e.lower() for e in vcfg.get("extensions", [".mov"])}
+    rows = []
+    for p in sorted(Path(input_dir).expanduser().iterdir()):
+        m = re.fullmatch(r"IMG_(\d+)", p.stem)
+        if not m or p.suffix.lower() not in exts:
+            continue
+        n = int(m.group(1))
+        reason = None
+        if n in excl:
+            reason = (vcfg.get("exclude_reasons") or {}).get(n) or (vcfg.get("exclude_reasons") or {}).get(str(n)) or "제외 목록"
+        elif n < lo:
+            reason = f"번호 {lo} 미만 (촬영 기준이 다름)"
+        elif hi is not None and n > hi:
+            reason = f"번호 {hi} 초과"
+        rows.append({"video": p.name, "number": n, "included": reason is None, "reason": reason, "used_in_21": p.name in set(used_in_21)})
+    return rows
+
+
+def fresp_scale_track(kp, box, s: float, center) -> tuple:
+    """Keypoints and box scaled by s about `center` (x, y): the same picture enlarged about the principal point (A1). No re-detection."""
+    c = np.asarray(center, float)
+    kp2 = c + float(s) * (np.asarray(kp, float) - c)
+    b = np.asarray(box, float)
+    box2 = np.c_[c + float(s) * (b[:, :2] - c), c + float(s) * (b[:, 2:] - c)]
+    return kp2, box2
+
+
+def fresp_zoom_matrix(s: float, W: int, H: int) -> np.ndarray:
+    """Forward affine map x' = s (x - c) + c of pixel indices about the image centre c = ((W - 1) / 2, (H - 1) / 2), i.e. the optical axis (W / 2, H / 2) in the
+    continuous coordinates of the keypoints stays fixed. The crop is (W / s) x (H / s) around that centre, enlarged to W x H."""
+    cx, cy = (W - 1) / 2.0, (H - 1) / 2.0
+    return np.array([[s, 0.0, (1.0 - s) * cx], [0.0, s, (1.0 - s) * cy]], float)
+
+
+def fresp_zoom_image(img, s: float, interp: int):
+    h, w = img.shape[:2]
+    return cv2.warpAffine(img, fresp_zoom_matrix(s, w, h), (w, h), flags=interp, borderMode=cv2.BORDER_REPLICATE)
+
+
+def fresp_zoom_frames(frames: list, s: float, out_dir: Path, interp: int) -> list:
+    """The frame list with every PNG centre-cropped and enlarged by s (same index / frame / time_s; new PNG files and hashes)."""
+    out_dir.mkdir(parents=True, exist_ok=True)
+    rows = []
+    for r in frames:
+        img = cv2.imread(r["png"], cv2.IMREAD_COLOR)
+        p = out_dir / Path(r["png"]).name
+        cv2.imwrite(str(p), fresp_zoom_image(img, s, interp))
+        rows.append({**{k: r[k] for k in ("index", "frame", "time_s")}, "png": str(p), "sha256": sha256(p)})
+    return rows
+
+
+def fresp_edge_rate(box, present, W, H) -> float:
+    present = np.asarray(present, bool)
+    return float(edge_flags(box, present, W, H)[present].mean()) if present.any() else 0.0
+
+
+def fresp_f_pair(kp, mask, present, box, cls, times, size_wh, cfg: dict, modes, seed: int, ratio_range_scale: float = 1.0, front_idx=None, tilt_start=None) -> dict:
+    """f of both estimators for each wrist mode (no uncertainty, no bootstrap). ratio_range_scale multiplies the f grid's range (A1 diagnostic: grid scaled with the picture)."""
+    out = {}
+    for mode in modes:
+        c = pseg_wrist_cfg(cfg) if mode == "exclude" else copy.deepcopy(cfg)
+        if ratio_range_scale != 1.0:
+            c["estimate"]["f_ratio_range"] = [float(x) * ratio_range_scale for x in c["estimate"]["f_ratio_range"]]
+        a = analyze(kp, mask, present, box, cls, times, size_wh, c, front_idx=front_idx, tilt_start=tilt_start, methods_full=(), seed=seed)
+        if "solutions" not in a:
+            out[mode] = {"failed": a.get("failed", "분석 실패")}
+            continue
+        hi = a["grid"][-1]
+        out[mode] = {m: {"f": a["solutions"][m]["f"], "at_grid_edge": a["solutions"][m]["at_grid_edge"],
+                         "side": None if not a["solutions"][m]["at_grid_edge"] else ("상한" if a["solutions"][m]["f"] >= hi * (1 - 1e-6) else "하한")}
+                     for m in ("fixed_template", "joint_delta")}
+    return out
+
+
+def fresp_thermal_wait(hi: float = 70.0, lo: float = 65.0, poll_s: float = 15.0, log=print) -> float:
+    """GPU thermal guard before a GPU stage: while any visible GPU is >= hi deg C, wait until all are < lo. Returns the seconds waited."""
+    ids = [x for x in os.environ.get("CUDA_VISIBLE_DEVICES", "").split(",") if x.strip().isdigit()]
+
+    def temps():
+        q = subprocess.check_output(["nvidia-smi", "--query-gpu=index,temperature.gpu", "--format=csv,noheader,nounits"], text=True).strip().splitlines()
+        t = {x.split(",")[0].strip(): float(x.split(",")[1]) for x in q}
+        return [t[i] for i in (ids or list(t)) if i in t]
+    waited = 0.0
+    try:
+        if max(temps() or [0.0]) >= hi:
+            log(f"  GPU 온도 {max(temps()):.0f}°C ≥ {hi:.0f}°C: {lo:.0f}°C 미만이 될 때까지 대기")
+            while max(temps() or [0.0]) >= lo:
+                time.sleep(poll_s)
+                waited += poll_s
+    except (OSError, subprocess.CalledProcessError, ValueError):
+        pass
+    return waited
+
+
+@contextlib.contextmanager
+def fresp_gpu_lock(path):
+    """Serialise the GPU stage (AnyCalib) of parallel video jobs with an exclusive file lock."""
+    import fcntl
+    with open(path, "w") as fh:
+        fcntl.flock(fh, fcntl.LOCK_EX)
+        try:
+            yield
+        finally:
+            fcntl.flock(fh, fcntl.LOCK_UN)
+
+
+def fresp_zoom_excluded(s: float, edge_rate: float, edge_rate_max: float) -> bool:
+    """A zoom above 1 is dropped when more of its detected frames touch the border than edge_rate_max; the 1.0 control is never dropped."""
+    return bool(float(s) > 1.0 and edge_rate > edge_rate_max)
+
+
+def fresp_ratio_status(f_s: dict | None, f_1: dict | None, s: float, tol: float) -> dict:
+    """Ratio f(s) / f(1.0) of one estimator (dicts {f, at_grid_edge}); within = |ratio / s - 1| <= tol. A grid-edge value has no ratio."""
+    if f_s is None or f_1 is None or f_s.get("at_grid_edge") or f_1.get("at_grid_edge") or not f_1.get("f"):
+        return {"ratio": None, "within": None}
+    r = f_s["f"] / f_1["f"]
+    return {"ratio": float(r), "within": bool(abs(r / s - 1.0) <= tol), "rel_to_s": float(r / s - 1.0)}
+
+
+def fresp_prepare(args) -> dict:
+    """Stage 1, one video: normalise, extract the frames (the 17 pipeline's) and write the centre-cropped / enlarged copies for every zoom factor into frames_root.
+    args = (video, input_dir, pcfg, c, frames_root). The frame images stay in frames_root until the run ends (then they are deleted)."""
+    video, input_dir, pcfg, c, frames_root = args
+    os.environ.setdefault("OMP_NUM_THREADS", "1")
+    cv2.setNumThreads(1)
+    root = Path(frames_root) / Path(video).stem
+    tmp = Path(tempfile.mkdtemp(prefix="hf22n_", dir=frames_root))
+    try:
+        norm = normalize(Path(input_dir).expanduser() / video, tmp / "n.mkv", pcfg)
+        W, H = norm["output"]["display_w"], norm["output"]["display_h"]
+        frames, _ = extract_frames(tmp / "n.mkv", root / "orig", norm["output"]["fps"], None, pcfg["frames"]["detect_fps"])
+        out = {"video": video, "size": [W, H], "frames": frames, "zoom": {}}
+        a2c = c.get("a2") or {}
+        if a2c.get("enabled"):
+            interp = getattr(cv2, a2c.get("interpolation", "INTER_CUBIC"))
+            for z in a2c["zoom_factors"]:
+                out["zoom"][str(z)] = fresp_zoom_frames(frames, float(z), root / f"z_{z}", interp)
+        return out
+    finally:
+        shutil.rmtree(tmp, ignore_errors=True)
+
+
+def fresp_detect_many(tasks: list, dset: dict, cache_dir, n_workers: int = 1, log=print) -> dict:
+    """Stage 2: mediapipe (CPU) on several frame lists with swap_mediapipe_hands unchanged (same model, mode, confidence thresholds, input resolution; cache by frame
+    hashes + settings). tasks = [(key, frames)]. n_workers = 1: one list after the other (the old behaviour); > 1: that many lists at the same time, each worker process
+    runs its list whole and in the list's own frame order, so the saved keypoints do not depend on which list finishes first. Lists with identical frames (the 1.0 control
+    and the original) are detected once. Returns {key: npz path}."""
+    from concurrent.futures import ThreadPoolExecutor
+    cache_dir = Path(cache_dir)
+    cache_dir.mkdir(parents=True, exist_ok=True)
+    uniq = {}
+    for key, frames in tasks:
+        uniq.setdefault(tuple(r["sha256"] for r in frames), frames)
+
+    def one(item):
+        sig, frames = item
+        npz, _ = swap_mediapipe_hands(frames, dset, cache_dir, None, log)
+        return sig, npz
+    items = list(uniq.items())
+    if int(n_workers) <= 1:
+        done = dict(one(it) for it in items)
+    else:
+        with ThreadPoolExecutor(max_workers=int(n_workers)) as ex:
+            done = dict(ex.map(one, items))
+    return {key: done[tuple(r["sha256"] for r in frames)] for key, frames in tasks}
+
+
+def fresp_job(args) -> dict:
+    """Stage 3, one video: the original candidate analysis (keep and exclude; 17 detections when a 17 run exists, else the stage-2 detection), A1 and A2 from the stage-2
+    detections of the enlarged frames, AnyCalib on them. args = (video, prep, src_dir | None, npz_orig | None, npz_zoom {zoom: path}, pcfg, c, lock_dir, ref21 | None,
+    used_in_21, gpu_id | None). gpu_id (a physical GPU index, one fresh process per video) selects the GPU of this video's AnyCalib runs; None keeps the inherited device."""
+    video, prep, src_dir, npz_orig, npz_zoom, pcfg, c, lock_dir, ref21, used_in_21, gpu_id = args
+    if gpu_id is not None:
+        os.environ["CUDA_VISIBLE_DEVICES"] = str(gpu_id)
+    os.environ.setdefault("OMP_NUM_THREADS", "1")
+    cv2.setNumThreads(1)
+    cand = c["candidate"]
+    det_name = cand["detector"]
+    dset = c["detector_settings"][det_name]
+    pc = copy.deepcopy(pcfg)
+    pc["tracking"]["conf_min"] = float(dset["conf_min"])
+    W, H = prep["size"]
+    frames = prep["frames"]
+    times = np.array([r["time_s"] for r in frames])
+    res = {"video": video, "detector": det_name, "used_in_21": bool(used_in_21), "size": [W, H], "n_frames": len(frames), "a2": {}, "a1": {}}
+    if src_dir is not None:
+        r17 = json.loads((Path(src_dir) / det_name / "results.json").read_text())
+        if [(x["index"], x["sha256"]) for x in frames] != [(x["index"], x["sha256"]) for x in r17["frames"]["list"]]:
+            raise RuntimeError(f"{video}: re-created frames differ from the 17 run's frame list")
+        dets = load_detections(Path(src_dir) / det_name / "detections.npz")
+        res["detections"] = "17 run"
+    else:
+        dets = load_detections(Path(npz_orig))
+        res["detections"] = "new mediapipe run on the normalised frames"
+    check_alignment(frames, dets)
+    tr = track(dets, times, (W, H), pc["tracking"], front_start_s=float(pc["phases"]["front_skip_s"]))
+    seed = int(pc["experiment"]["seed"])
+    a3 = bool((c.get("a3") or {}).get("enabled"))
+    a_keep = analyze(tr["kp"], tr["mask"], tr["present"], tr["box"], tr["cls"], times, (W, H), pc, tilt_start=None, methods_full=("fixed_template",) if a3 else (), seed=seed)
+    if "solutions" not in a_keep:
+        res["failed"] = a_keep.get("failed", "분석 실패")
+        return res
+    cj = {k: c[k] for k in ("phase_segmentation", "f_estimation") if k in c}
+    res["original"] = {}
+    for mode in (c["f_estimation"]["compare_wrist_modes"] if a3 else []):
+        res["original"][mode] = grev_f_run(tr["kp"], tr["mask"], tr["present"], tr["box"], tr["cls"], times, (W, H), pc, cj, mode, a_keep, seed)
+    fidx = [int(i) for i in a_keep["front_window"]["idx"]]
+    bl = box_long(tr["box"])
+    res["hand_box_short_ratio_front"] = float(np.nanmedian(bl[fidx]) / min(W, H))
+    res["edge_rate"] = fresp_edge_rate(tr["box"], tr["present"], W, H)
+    res["detect_rate"] = float(tr["present"].mean())
+    res["frames_table"] = {"index": [int(r["index"]) for r in frames], "time_s": times.tolist(), "present": tr["present"].tolist(),
+                           "box_short_ratio": (bl / min(W, H)).tolist(), "theta2d_deg": a_keep["theta2d_deg"], "role": a_keep["role"]}
+    if ref21 is not None:
+        s21 = {}
+        for mode in ("keep", "exclude"):
+            a, b = res["original"].get(mode), (ref21.get("wrist") or {}).get(mode)
+            if a and b and "solutions" in a and "solutions" in b:
+                s21[mode] = bool(a["solutions"]["fixed_template"]["f"] == b["solutions"]["fixed_template"]["f"] and a["verdict"] == b["verdict"])
+        res["same_as_21"] = {**s21, "all": bool(s21 and all(s21.values()))}
+    modes = list(c["f_estimation"]["compare_wrist_modes"])
+    # ---- A1: keypoints and boxes scaled about the image centre, no re-detection
+    a1c = c.get("a1") or {}
+    if a1c.get("enabled"):
+        base = fresp_f_pair(tr["kp"], tr["mask"], tr["present"], tr["box"], tr["cls"], times, (W, H), pc, modes, seed)
+        for s in a1c["scales"]:
+            kp2, box2 = fresp_scale_track(tr["kp"], tr["box"], s, (W / 2.0, H / 2.0))
+            f2 = fresp_f_pair(kp2, tr["mask"], tr["present"], box2, tr["cls"], times, (W, H), pc, modes, seed)
+            g2 = fresp_f_pair(kp2, tr["mask"], tr["present"], box2, tr["cls"], times, (W, H), pc, modes, seed, ratio_range_scale=float(s))
+            res["a1"][str(s)] = {}
+            for mode in modes:
+                row = {}
+                for m in ("fixed_template", "joint_delta"):
+                    b0, b1, b2 = base[mode].get(m), f2[mode].get(m), g2[mode].get(m)
+                    ok = b0 and b1 and b2 and not (b0["at_grid_edge"] or b1["at_grid_edge"])
+                    row[m] = {"f_1": b0["f"] if b0 else None, "f_s": b1["f"] if b1 else None, "ratio": (b1["f"] / b0["f"]) if ok else None,
+                              "ratio_err": (b1["f"] / b0["f"] / s - 1.0) if ok else None,
+                              "grid_scaled_ratio_err": (b2["f"] / b0["f"] / s - 1.0) if (ok and not b2["at_grid_edge"]) else None}
+                res["a1"][str(s)][mode] = row
+    # ---- A2: detections of the enlarged frames (stage 2), the candidate analysis on them, AnyCalib on them
+    a2c = c.get("a2") or {}
+    if a2c.get("enabled"):
+        acfg = copy.deepcopy(pc["anycalib"])
+        for s in a2c["zoom_factors"]:
+            zfr = prep["zoom"][str(s)]
+            zd = load_detections(Path(npz_zoom[str(s)]))
+            check_alignment(zfr, zd)
+            ztr = track(zd, times, (W, H), pc["tracking"], front_start_s=float(pc["phases"]["front_skip_s"]))
+            er = fresp_edge_rate(ztr["box"], ztr["present"], W, H)
+            e = {"zoom": float(s), "edge_rate": er, "detect_rate": float(ztr["present"].mean())}
+            if fresp_zoom_excluded(float(s), er, float(a2c["edge_rate_max"])):
+                e["excluded"] = f"가장자리 접촉 프레임 {100 * er:.1f}% > {100 * float(a2c['edge_rate_max']):.0f}%"
+                res["a2"][str(s)] = e
+                continue
+            e["hand"] = fresp_f_pair(ztr["kp"], ztr["mask"], ztr["present"], ztr["box"], ztr["cls"], times, (W, H), pc, modes, seed)
+            if a2c.get("anycalib", True) and pc["anycalib"]["enabled"]:
+                with fresp_gpu_lock(Path(lock_dir) / f"gpu_{'' if gpu_id is None else gpu_id}.lock"):
+                    e["thermal_wait_s"] = fresp_thermal_wait(float(a2c.get("gpu_pause_c", 70)), float(a2c.get("gpu_resume_c", 65)))
+                    ac = anycalib_run(zfr, acfg, float(pc["phases"]["front_phase_s"]), lambda m="": None)
+                e["anycalib"] = {m: {"median": v["summary"].get("median"), "n": v["summary"].get("n"), "iqr": v["summary"].get("iqr")} for m, v in ac["models"].items()}
+            res["a2"][str(s)] = e
+    return res
+
+
+def fresp_lens_judgment(jobs: list, meta: dict, rules: dict, candidate_mode: str, modes: list) -> dict:
+    """B, lens series. 1x estimate = median f (fixed_template, grid-edge values left out) of the 1x videos (every included video that is not a numerator-lens video of the
+    metadata); estimated ratio = the numerator-lens video's f / the 1x estimate; reference ratio = its reference f / reference_f_1x_px; within +-ratio_rel_tolerance of
+    the reference ratio = "f 변화에 반응함". The verdict applies to the candidate's wrist mode only; the other modes are computed and marked as not judged."""
+    r = rules["lens_series"]
+    tol = float(r["ratio_rel_tolerance"])
+    ok = {j["video"]: j for j in jobs if "failed" not in j}
+    lens_vids = [v for v, m in meta.items() if m.get("group") == "lens_series" and m.get("lens") == r["numerator_lens"] and v in ok]
+    one_x = [v for v in ok if v not in lens_vids]
+    out = {"numerator_videos": lens_vids, "one_x_videos": one_x, "tolerance": tol, "by_video": {}}
+    for v in lens_vids:
+        ref_ratio = float(meta[v]["reference_f_px"]) / float(r["reference_f_1x_px"])
+        lo, hi = ref_ratio * (1.0 - tol), ref_ratio * (1.0 + tol)
+        by_mode = {}
+        for mode in modes:
+            fs = [ok[x]["original"][mode]["solutions"]["fixed_template"] for x in one_x if mode in (ok[x].get("original") or {}) and "solutions" in ok[x]["original"][mode]]
+            vals = [x["f"] for x in fs if not x["at_grid_edge"]]
+            est1 = float(np.median(vals)) if vals else None
+            sol = ((ok[v].get("original") or {}).get(mode) or {}).get("solutions", {}).get("fixed_template")
+            f7 = None if sol is None or sol["at_grid_edge"] else sol["f"]
+            ratio = None if est1 is None or f7 is None else f7 / est1
+            within = None if ratio is None else bool(lo <= ratio <= hi)
+            why = None if ratio is not None else ("1배 추정값 없음" if est1 is None else f"{v} f 값 없음 ({sol['side']})" if sol else f"{v} 분석 없음")
+            by_mode[mode] = {"judged": mode == candidate_mode, "f_numerator_px": f7, "f_1x_median_px": est1, "n_1x_values": len(vals), "n_1x_videos": len(fs), "ratio": ratio,
+                             "reference_ratio": ref_ratio, "range": [lo, hi], "within": within, "unavailable": why,
+                             "verdict": None if mode != candidate_mode else ("판정 불가" if within is None else ("f 변화에 반응함" if within else "f 변화에 반응하지 않음"))}
+        out["by_video"][v] = by_mode
+    return out

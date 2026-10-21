@@ -28,6 +28,7 @@ CFGFF = yaml.safe_load((ROOT / "configs/17_frame_filter_diag.yaml").read_text())
 CFG18 = yaml.safe_load((ROOT / "configs/18_same_session_check.yaml").read_text())
 CFG20 = yaml.safe_load((ROOT / "configs/20_phase_segmentation.yaml").read_text())
 CFG21 = yaml.safe_load((ROOT / "configs/21_guide_revision.yaml").read_text())
+CFG22 = yaml.safe_load((ROOT / "configs/22_f_response.yaml").read_text())
 PIPE = CFG17["pipeline"]                           # the 14 pipeline settings (identical in 16, 17 and 18)
 SYN = {"f_px": 1650, "image": [1920, 1080], "distance_mm": 350, "front_frames": 10, "tilt_frames": 40}     # 14's synthetic camera
 BASE_COND = {"name": "base", "delta_deg": 0, "noise": {"px": 1.0}, "heavy_tail": False, "tilt_range_deg": [25, 50], "arch_mm": 0,
@@ -1268,6 +1269,301 @@ class GrevEndToEnd(unittest.TestCase):
             self.assertNotIn("f_signal", Path(y).read_text())
             self.assertIn("1680", (root / "summary.md").read_text())
             self.assertNotIn("1680", (root / "report.md").read_text())
+
+
+# ====================================================================================================
+# f response (22)
+# ====================================================================================================
+
+def blob_image(W, H, centres, sigma=6.0):
+    """Gaussian blobs at continuous pixel-index positions (x, y)."""
+    yy, xx = np.mgrid[0:H, 0:W].astype(np.float64)
+    img = np.zeros((H, W))
+    for cx, cy in centres:
+        img += np.exp(-((xx - cx) ** 2 + (yy - cy) ** 2) / (2 * sigma ** 2))
+    return (np.clip(img, 0, 1) * 255.0).astype(np.uint8)
+
+
+def centroid(img, box):
+    x0, y0, x1, y1 = box
+    sub = img[y0:y1, x0:x1].astype(np.float64)
+    yy, xx = np.mgrid[y0:y1, x0:x1]
+    return float((sub * xx).sum() / sub.sum()), float((sub * yy).sum() / sub.sum())
+
+
+class FrespZoom(unittest.TestCase):
+    W, H = 1920, 1080
+
+    def test_centre_crop_keeps_the_principal_point_and_scales_offsets(self):
+        """A blob on the optical axis (pixel-index centre (W-1)/2, (H-1)/2) stays there; a blob d away from it ends up s * d away."""
+        cx, cy = (self.W - 1) / 2, (self.H - 1) / 2
+        img = np.dstack([blob_image(self.W, self.H, [(cx, cy), (cx + 300, cy - 120)])] * 3)
+        for s in (1.1, 1.2):
+            z = hf.fresp_zoom_image(img, s, cv2.INTER_CUBIC)[..., 0]
+            x, y = centroid(z, (int(cx) - 40, int(cy) - 40, int(cx) + 41, int(cy) + 41))
+            self.assertAlmostEqual(x, cx, delta=0.05)
+            self.assertAlmostEqual(y, cy, delta=0.05)
+            x, y = centroid(z, (int(cx + 300 * s) - 40, int(cy - 120 * s) - 40, int(cx + 300 * s) + 41, int(cy - 120 * s) + 41))
+            self.assertAlmostEqual(x, cx + 300 * s, delta=0.1)
+            self.assertAlmostEqual(y, cy - 120 * s, delta=0.1)
+
+    def test_zoom_matrix_fixes_the_centre_and_zoom_one_is_the_identity(self):
+        M = hf.fresp_zoom_matrix(1.2, self.W, self.H)
+        c = np.array([(self.W - 1) / 2, (self.H - 1) / 2, 1.0])
+        np.testing.assert_allclose(M @ c, c[:2], atol=1e-9)
+        rng = np.random.default_rng(0)
+        img = rng.integers(0, 256, (self.H, self.W, 3), dtype=np.uint8)
+        self.assertTrue(np.array_equal(hf.fresp_zoom_image(img, 1.0, cv2.INTER_CUBIC), img))
+
+    def test_zoom_one_frames_are_the_same_files_content(self):
+        with tempfile.TemporaryDirectory() as d:
+            d = Path(d)
+            rng = np.random.default_rng(1)
+            rows = []
+            for i in range(3):
+                p = d / f"f_{i:06d}.png"
+                cv2.imwrite(str(p), rng.integers(0, 256, (108, 192, 3), dtype=np.uint8))
+                rows.append({"index": i, "frame": 2 * i, "time_s": 2 * i / 30.0, "png": str(p), "sha256": hf.sha256(p)})
+            z1 = hf.fresp_zoom_frames(rows, 1.0, d / "z", cv2.INTER_CUBIC)
+            self.assertEqual([r["sha256"] for r in z1], [r["sha256"] for r in rows])
+            self.assertEqual([(r["index"], r["frame"], r["time_s"]) for r in z1], [(r["index"], r["frame"], r["time_s"]) for r in rows])
+            z2 = hf.fresp_zoom_frames(rows, 1.2, d / "z2", cv2.INTER_CUBIC)
+            self.assertNotEqual([r["sha256"] for r in z2], [r["sha256"] for r in rows])
+
+
+class FrespScaleEquivariance(unittest.TestCase):
+    def test_scaled_track_moves_points_about_the_centre(self):
+        kp = np.array([[[960.0, 540.0], [1060.0, 440.0]]])
+        box = np.array([[900.0, 400.0, 1100.0, 600.0]])
+        kp2, b2 = hf.fresp_scale_track(kp, box, 1.2, (960.0, 540.0))
+        np.testing.assert_allclose(kp2[0, 0], [960.0, 540.0])
+        np.testing.assert_allclose(kp2[0, 1], [960.0 + 120.0, 540.0 - 120.0])
+        np.testing.assert_allclose(b2[0], [960 - 60 * 1.2, 540 - 140 * 1.2, 960 + 140 * 1.2, 540 + 60 * 1.2])
+
+    def test_synthetic_hand_f_scales_with_the_picture(self):
+        """Keypoints and boxes enlarged by s about the image centre: with the f grid moved by s too f is exactly s * f (to 1e-6); with the unmoved grid (the pipeline's
+        way) the parabola on the profile gives it within 0.2% on these draws."""
+        g = synth_wrist(seed=0, tilt_frames=120)
+        W, H = g["size"]
+        kw = dict(front_idx=g["front_idx"], tilt_start=g["tilt_start"])
+        modes = ["keep", "exclude"]
+        base = hf.fresp_f_pair(g["kp"], g["mask"], g["present"], g["box"], g["cls"], g["times"], g["size"], PIPE, modes, 0, **kw)
+        for s in (1.1, 1.2):
+            kp2, box2 = hf.fresp_scale_track(g["kp"], g["box"], s, (W / 2, H / 2))
+            plain = hf.fresp_f_pair(kp2, g["mask"], g["present"], box2, g["cls"], g["times"], g["size"], PIPE, modes, 0, **kw)
+            moved = hf.fresp_f_pair(kp2, g["mask"], g["present"], box2, g["cls"], g["times"], g["size"], PIPE, modes, 0, ratio_range_scale=s, **kw)
+            for m in modes:
+                f0 = base[m]["fixed_template"]["f"]
+                self.assertAlmostEqual(moved[m]["fixed_template"]["f"] / f0 / s, 1.0, delta=1e-6)
+                self.assertAlmostEqual(plain[m]["fixed_template"]["f"] / f0 / s, 1.0, delta=0.002)
+
+
+class FrespHelpers(unittest.TestCase):
+    def test_edge_threshold_drops_a_zoom_but_never_the_control(self):
+        self.assertFalse(hf.fresp_zoom_excluded(1.0, 0.5, 0.05))
+        self.assertFalse(hf.fresp_zoom_excluded(1.1, 0.05, 0.05))
+        self.assertTrue(hf.fresp_zoom_excluded(1.1, 0.0501, 0.05))
+        self.assertTrue(hf.fresp_zoom_excluded(1.2, 0.2, 0.05))
+        box = np.array([[0.0, 100.0, 300.0, 400.0]] * 3 + [[500.0, 100.0, 800.0, 400.0]] * 7)       # 3 of 10 frames touch the left border
+        self.assertAlmostEqual(hf.fresp_edge_rate(box, np.ones(10, bool), 1920, 1080), 0.3)
+
+    def test_ratio_status(self):
+        f1, f2 = {"f": 1000.0, "at_grid_edge": False}, {"f": 1190.0, "at_grid_edge": False}
+        st = hf.fresp_ratio_status(f2, f1, 1.2, 0.05)
+        self.assertTrue(st["within"])
+        self.assertAlmostEqual(st["ratio"], 1.19)
+        self.assertFalse(hf.fresp_ratio_status({"f": 1300.0, "at_grid_edge": False}, f1, 1.2, 0.05)["within"])
+        self.assertIsNone(hf.fresp_ratio_status({"f": 3072.0, "at_grid_edge": True}, f1, 1.2, 0.05)["ratio"])
+
+    def test_target_videos_range_and_exclusions(self):
+        with tempfile.TemporaryDirectory() as d:
+            d = Path(d)
+            for n in (7141, 7147, 7148, 7155, 7184):
+                (d / f"IMG_{n}.MOV").write_bytes(b"x")
+            (d / "notes.txt").write_text("x")
+            rows = hf.fresp_target_videos(d, CFG22["target_videos"], CFG22["used_in_21"])
+            by = {r["number"]: r for r in rows}
+            self.assertEqual(sorted(by), [7141, 7147, 7148, 7155, 7184])
+            self.assertEqual([n for n, r in by.items() if r["included"]], [7148, 7184])
+            self.assertIn("체커보드", by[7155]["reason"])
+            self.assertIn("미만", by[7147]["reason"])
+            self.assertTrue(by[7148]["used_in_21"])
+            self.assertFalse(by[7184]["used_in_21"])
+            rows2 = hf.fresp_target_videos(d, dict(CFG22["target_videos"], number_range=[7148, 7150], exclude=[]), [])
+            self.assertEqual([r["number"] for r in rows2 if r["included"]], [7148])
+
+    def test_thermal_guard_does_not_wait_when_cool_or_without_nvidia_smi(self):
+        self.assertEqual(hf.fresp_thermal_wait(hi=1000.0, lo=999.0, poll_s=0.01), 0.0)
+
+
+def lens_jobs(f_one_x, f_wide, vids=None):
+    """f_one_x: {video: f or None (grid edge)} for the 1x videos; f_wide: f of IMG_7184 or None, for modes exclude (candidate) and keep (same values)."""
+    def job(v, f):
+        sol = {"f": 3072.0 if f is None else f, "at_grid_edge": f is None, "side": "상한" if f is None else None}
+        return {"video": v, "original": {m: {"solutions": {"fixed_template": sol}} for m in ("exclude", "keep")}}
+    return [job(v, f) for v, f in f_one_x.items()] + [job("IMG_7184.MOV", f_wide)]
+
+
+class FrespLens(unittest.TestCase):
+    META = CFG22["discrimination"]["videos"]
+    RULES = CFG22["discrimination"]["rules"]
+
+    def run_judgment(self, f_one_x, f_wide):
+        return hf.fresp_lens_judgment(lens_jobs(f_one_x, f_wide), self.META, self.RULES, "exclude", ["exclude", "keep"])
+
+    def test_response_within_15_percent_of_the_reference_ratio(self):
+        ones = {"IMG_7148.MOV": 1600.0, "IMG_7157.MOV": 1700.0, "IMG_7158.MOV": 1800.0, "IMG_7176.MOV": None}      # median of the 3 values = 1700
+        ref = 880.0 / 1680.0
+        lo, hi = ref * 0.85, ref * 1.15
+        a = self.run_judgment(ones, 1700.0 * ref)
+        x = a["by_video"]["IMG_7184.MOV"]["exclude"]
+        self.assertEqual(a["one_x_videos"], list(ones))
+        self.assertAlmostEqual(x["f_1x_median_px"], 1700.0)
+        self.assertEqual((x["n_1x_values"], x["n_1x_videos"]), (3, 4))
+        self.assertAlmostEqual(x["ratio"], ref)
+        self.assertEqual(x["verdict"], "f 변화에 반응함")
+        self.assertAlmostEqual(x["range"][0], 0.4452, places=3)
+        self.assertAlmostEqual(x["range"][1], 0.6024, places=3)
+        self.assertEqual(self.run_judgment(ones, 1700.0 * hi * 0.999)["by_video"]["IMG_7184.MOV"]["exclude"]["verdict"], "f 변화에 반응함")
+        self.assertEqual(self.run_judgment(ones, 1700.0 * hi * 1.01)["by_video"]["IMG_7184.MOV"]["exclude"]["verdict"], "f 변화에 반응하지 않음")
+        self.assertEqual(self.run_judgment(ones, 1700.0 * lo * 0.99)["by_video"]["IMG_7184.MOV"]["exclude"]["verdict"], "f 변화에 반응하지 않음")
+        self.assertEqual(self.run_judgment(ones, 1700.0)["by_video"]["IMG_7184.MOV"]["exclude"]["verdict"], "f 변화에 반응하지 않음")        # f did not change at all
+
+    def test_only_the_candidate_is_judged(self):
+        a = self.run_judgment({"IMG_7148.MOV": 1700.0}, 890.0)["by_video"]["IMG_7184.MOV"]
+        self.assertTrue(a["exclude"]["judged"] and a["exclude"]["verdict"] is not None)
+        self.assertFalse(a["keep"]["judged"])
+        self.assertIsNone(a["keep"]["verdict"])
+        self.assertIsNotNone(a["keep"]["ratio"])                      # computed anyway
+
+    def test_unavailable_when_the_wide_f_is_on_the_grid_edge_or_no_1x_value(self):
+        a = self.run_judgment({"IMG_7148.MOV": 1700.0}, None)["by_video"]["IMG_7184.MOV"]["exclude"]
+        self.assertEqual(a["verdict"], "판정 불가")
+        self.assertIn("값 없음", a["unavailable"])
+        b = self.run_judgment({"IMG_7148.MOV": None}, 900.0)["by_video"]["IMG_7184.MOV"]["exclude"]
+        self.assertEqual(b["verdict"], "판정 불가")
+        self.assertIn("1배 추정값 없음", b["unavailable"])
+
+
+class FrespStats(unittest.TestCase):
+    def test_excluded_video_is_not_in_the_points_or_the_statistics(self):
+        def j(v, box, f):
+            return {"video": v, "hand_box_short_ratio_front": box, "original": {"exclude": {"solutions": {"fixed_template": {"f": f, "at_grid_edge": False}}}}}
+        jobs = [j("A.MOV", 0.5, 1500.0), j("B.MOV", 0.6, 1600.0), j("C.MOV", 0.7, 1700.0), j("IMG_7184.MOV", 0.3, 900.0)]
+        pts = run.fresp_a3_points(jobs, "exclude", ["IMG_7184.MOV"])
+        self.assertEqual([p[0] for p in pts], ["A.MOV", "B.MOV", "C.MOV"])
+        st = run.fresp_stats([p[1] for p in pts], [p[2] for p in pts])
+        self.assertAlmostEqual(st["spearman"], 1.0)
+        self.assertAlmostEqual(st["slope_px"], 1000.0, places=6)
+        self.assertEqual(run.fresp_stats([0.5, 0.6], [1500.0, 1600.0])["spearman"], None)             # fewer than 3 videos
+        self.assertEqual(len(run.fresp_a3_points(jobs, "exclude")), 4)
+
+
+VID7158 = Path(CFG22["target_videos"]["input_dir"]) / "IMG_7158.MOV"
+VID7184 = Path(CFG22["target_videos"]["input_dir"]) / "IMG_7184.MOV"
+
+
+@unittest.skipUnless(VID7158.exists() and shutil.which("ffmpeg"), "the input video of IMG_7158 is needed")
+class FrespDetectMany(unittest.TestCase):
+    """mediapipe on the same frame lists with n_workers = 1 and > 1: identical keypoints, and the control list is detected once."""
+
+    @classmethod
+    def setUpClass(cls):
+        cls.tmp = Path(tempfile.mkdtemp(prefix="t22_"))
+        c = copy.deepcopy(CFG22)
+        c["a2"]["zoom_factors"] = [1.0, 1.1, 1.2]
+        prep = hf.fresp_prepare(("IMG_7158.MOV", str(VID7158.parent), c["pipeline"], c, str(cls.tmp)))
+        cls.prep = prep
+        n = 14
+        cls.lists = {z: fr[:n] for z, fr in prep["zoom"].items()}
+        cls.orig = prep["frames"][:n]
+        cls.dset = c["detector_settings"]["mediapipe_hands"]
+
+    @classmethod
+    def tearDownClass(cls):
+        shutil.rmtree(cls.tmp, ignore_errors=True)
+
+    def tasks(self):
+        return [(("v", "orig"), self.orig)] + [(("v", z), fr) for z, fr in self.lists.items()]
+
+    def test_zoom_one_frames_have_the_original_pixels(self):
+        """The PNG bytes differ (another encoder), the decoded pixels are identical, and index / frame / time are the same."""
+        for a, b in zip(self.orig, self.lists["1.0"]):
+            self.assertTrue(np.array_equal(cv2.imread(a["png"]), cv2.imread(b["png"])))
+            self.assertEqual((a["index"], a["frame"], a["time_s"]), (b["index"], b["frame"], b["time_s"]))
+
+    def test_parallel_detection_equals_sequential(self):
+        seq = hf.fresp_detect_many(self.tasks(), self.dset, self.tmp / "cache_seq", 1)
+        par = hf.fresp_detect_many(self.tasks(), self.dset, self.tmp / "cache_par", 4)
+        self.assertNotEqual(seq[("v", "1.1")], seq[("v", "1.2")])
+        for key in seq:
+            a, b = np.load(seq[key]), np.load(par[key])
+            self.assertEqual(sorted(a.files), sorted(b.files))
+            for f in a.files:
+                if a[f].dtype.kind in "fiub":
+                    self.assertTrue(np.array_equal(a[f], b[f], equal_nan=a[f].dtype.kind == "f"), (key, f))
+        dets = hf.load_detections(par[("v", "1.2")])
+        hf.check_alignment(self.lists["1.2"], dets)                                   # frame order = list order
+        a, b = np.load(par[("v", "orig")]), np.load(par[("v", "1.0")])                # the 1.0 control gives the original frames' keypoints
+        for f in a.files:
+            if a[f].dtype.kind in "fiub":
+                self.assertTrue(np.array_equal(a[f], b[f], equal_nan=a[f].dtype.kind == "f"), f)
+
+
+def cfg22_tmp(d: Path, videos_note=None):
+    cfg = copy.deepcopy(CFG22)
+    cfg["workers"] = 2
+    cfg["a2"]["zoom_factors"] = [1.0, 1.2]
+    cfg["a2"]["n_workers"] = 2
+    cfg["a2"]["gpu_ids"] = [1, 2]
+    cfg["output"]["root"] = str(d / "runs")
+    cfg["output"]["results_yaml"] = str(d / "r22.yaml")
+    return cfg
+
+
+@unittest.skipUnless(VID7158.exists() and VID7184.exists() and RUN17_7158.exists() and GPU, "input videos of IMG_7158 / IMG_7184, the 17 run and a GPU are needed")
+class FrespEndToEnd(unittest.TestCase):
+    def test_outputs_21_reproduction_lens_judgment_and_no_tags(self):
+        with tempfile.TemporaryDirectory() as d:
+            d = Path(d)
+            cfg = cfg22_tmp(d)
+            cp = d / "c.yaml"
+            cp.write_text(yaml.safe_dump(cfg, allow_unicode=True))
+            root, jobs = run.fresp_main(["--config", str(cp), "--videos", "IMG_7158.MOV,IMG_7184.MOV", "--out", str(d / "o")])
+            for f in ("report.md", "summary.md", "results.json", "metadata.json", "log.txt", "per_frame.csv"):
+                self.assertTrue((root / f).exists(), f)
+            for f in ("a2_zoom_ratio.png", "a3_box_vs_f.png"):
+                self.assertTrue((root / "figures" / f).exists(), f)
+            self.assertFalse((root / "_frames").exists())                              # the enlarged frames are deleted
+            by = {j["video"]: j for j in jobs}
+            self.assertTrue(by["IMG_7158.MOV"]["same_as_21"]["all"], by["IMG_7158.MOV"]["same_as_21"])        # the 21 settings reproduce 21's keep / exclude f and verdicts
+            self.assertEqual(by["IMG_7184.MOV"]["detections"], "new mediapipe run on the normalised frames")
+            e = by["IMG_7158.MOV"]["a2"]
+            self.assertEqual(e["1.0"]["hand"]["keep"]["fixed_template"]["f"], by["IMG_7158.MOV"]["original"]["keep"]["solutions"]["fixed_template"]["f"])      # control = original
+            self.assertEqual(e["1.0"]["hand"]["exclude"]["fixed_template"]["f"], by["IMG_7158.MOV"]["original"]["exclude"]["solutions"]["fixed_template"]["f"])
+            self.assertIn("anycalib_pinhole", e["1.2"]["anycalib"])
+            y = run.fresp_results_yaml(root, cfg)
+            self.assertEqual(Path(y), d / "r22.yaml")
+            yy = yaml.safe_load(Path(y).read_text())
+            self.assertIn("IMG_7184.MOV", yy["lens_series"]["videos"])
+            self.assertEqual(yy["lens_series"]["videos"]["IMG_7184.MOV"]["modes"]["exclude"]["judged"], True)
+            self.assertFalse(yy["lens_series"]["videos"]["IMG_7184.MOV"]["modes"]["keep"]["judged"])
+            texts = "".join(p.read_text(errors="ignore") for p in list(root.rglob("*")) + [Path(y)] if p.is_file() and p.suffix in (".json", ".yaml", ".md", ".csv", ".txt"))
+            for val in FAKE_TAGS.values():
+                self.assertNotIn(val, texts)
+            for key in ("ISO6709", "com.apple.quicktime", '"make"', '"model"'):
+                self.assertNotIn(key, texts)
+            ytext = Path(y).read_text()
+            rtext = (root / "report.md").read_text()
+            for t_ in (ytext, rtext):
+                self.assertNotIn("1680", t_)                                          # the comparison with the reference f is in summary.md only
+                self.assertNotIn("880", t_)
+            summ = (root / "summary.md").read_text()
+            self.assertIn("1680", summ)
+            self.assertIn("880", summ)
+            sec2 = summ.split("## 2.")[1].split("## 3.")[0]
+            self.assertNotIn("7184", sec2)                                            # the 0.5x video is not in the |error| medians
+            self.assertNotIn("7184", rtext.split("손 박스 크기와 추정 f의 관계")[1].split("산점도")[0].split("| 방식 |")[1])
 
 
 if __name__ == "__main__":

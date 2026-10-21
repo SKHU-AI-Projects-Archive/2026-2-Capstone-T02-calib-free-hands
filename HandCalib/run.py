@@ -6,6 +6,7 @@
     python HandCalib/run.py overlay        --video-dir runs/17_protocol_rerun/<UTC>/IMG_XXXX
     python HandCalib/run.py phase-segmentation --config HandCalib/configs/20_phase_segmentation.yaml [--videos A,B] [--detectors a,b] [results-yaml --run DIR]
     python HandCalib/run.py guide-revision --config HandCalib/configs/21_guide_revision.yaml [--videos A,B] [--detectors a,b] [results-yaml --run DIR | overlay --run DIR]
+    python HandCalib/run.py f-response     --config HandCalib/configs/22_f_response.yaml [--videos A,B] [results-yaml --run DIR]
 
 Consolidated from run_hand_focal.py (14, process_video only), run_detector_swap.py (16, the per-detector processing that 17 calls),
 run_protocol_rerun.py and run_frame_filter_diag.py (17),
@@ -15,6 +16,7 @@ from __future__ import annotations
 
 import argparse
 import copy
+import csv
 import cv2
 import datetime as dt
 import hashlib
@@ -2064,10 +2066,496 @@ def grev_main(argv=None):
 
 
 # ====================================================================================================
+# fresp  (experiment 22: does the candidate respond to f?; new section)
+# A1 estimator scale equivariance, A2 centre-cropped / enlarged frames (detector and AnyCalib re-run), A3 the candidate on every video of the range with the
+# hand's box size. The candidate (mediapipe_hands + wrist_mode exclude, keep alongside) is fixed in the yaml. B (distance / lens series) is prepared in the yaml only.
+#
+#     python HandCalib/run.py f-response --config HandCalib/configs/22_f_response.yaml [--videos A,B] [--out DIR]
+#     python HandCalib/run.py f-response --config ... results-yaml --run runs/22_f_response/<UTC>
+# ====================================================================================================
+
+FRESP_NOTE = "후보(mediapipe_hands + 손목 제외)가 f에 반응하는지 확인한 실험이다. f 추정 방식과 판정 문턱값은 바꾸지 않았다. 확대 검사의 통과는 f를 잰다는 근거가 아니다."
+
+
+def fresp_ok(x):
+    return "-" if x is None else ("통과" if x else "미통과")
+
+
+def fresp_num(x, d=3):
+    return "계산 불가" if x is None or not np.isfinite(x) else f"{x:.{d}f}"
+
+
+def fresp_stats(xs, ys):
+    """Spearman rank correlation, slope of f on the box ratio (px per 1.0) and the log-log slope; needs >= 3 videos with a value."""
+    from scipy.stats import spearmanr
+    x, y = np.asarray(xs, float), np.asarray(ys, float)
+    if len(x) < 3:
+        return {"n": int(len(x)), "spearman": None, "slope_px": None, "loglog_slope": None}
+    return {"n": int(len(x)), "spearman": float(spearmanr(x, y)[0]), "slope_px": float(np.polyfit(x, y, 1)[0]), "loglog_slope": float(np.polyfit(np.log(x), np.log(y), 1)[0])}
+
+
+def fresp_a3_points(jobs, mode, exclude=()):
+    """(video, front-window box ratio, f) of the videos with an f value; the videos in `exclude` (a3.exclude_from_comparison) are left out."""
+    return [(j["video"], j["hand_box_short_ratio_front"], j["original"][mode]["solutions"]["fixed_template"]["f"]) for j in jobs
+            if "failed" not in j and j["video"] not in set(exclude) and mode in (j.get("original") or {}) and "solutions" in j["original"][mode]
+            and not j["original"][mode]["solutions"]["fixed_template"]["at_grid_edge"]]
+
+
+def fresp_ref_f(cfg, video):
+    """Reference f of a video: its discrimination metadata (other lens) when it has one, else the 1x checkerboard value. Summary use only."""
+    m = (cfg.get("discrimination") or {}).get("videos", {}).get(video)
+    return float(m["reference_f_px"]) if m and m.get("reference_f_px") else float(cfg["reference_f_px"])
+
+
+def fresp_figures(out: Path, jobs: list, cfg: dict):
+    plt = _plt()
+    modes = cfg["f_estimation"]["compare_wrist_modes"]
+    ok = [j for j in jobs if "failed" not in j]
+    if cfg["a2"]["enabled"] and ok:
+        series = [(m, f"손 {m}") for m in modes] + [("anycalib_pinhole", "AnyCalib pinhole"), ("anycalib_gen", "AnyCalib gen")]
+        fig, axs = plt.subplots(1, len(series), figsize=(4.2 * len(series), 4), sharey=True)
+        zs = [float(z) for z in cfg["a2"]["zoom_factors"]]
+        for ax, (key, lab) in zip(axs, series):
+            ax.plot(zs, zs, "k--", lw=1, label="f(s)/f(1.0) = s")
+            for j in ok:
+                e1 = j["a2"].get("1.0")
+                if not e1:
+                    continue
+                xs, ys = [], []
+                for z in zs:
+                    e = j["a2"].get(str(z))
+                    if not e or e.get("excluded"):
+                        continue
+                    if key.startswith("anycalib"):
+                        a, b = (e.get("anycalib") or {}).get(key), (e1.get("anycalib") or {}).get(key)
+                        r = a["median"] / b["median"] if a and b and a.get("median") and b.get("median") else None
+                    else:
+                        r = hf.fresp_ratio_status(((e.get("hand") or {}).get(key) or {}).get("fixed_template"), ((e1.get("hand") or {}).get(key) or {}).get("fixed_template"), z, 1.0)["ratio"]
+                    if r is not None:
+                        xs.append(z), ys.append(r)
+                if xs:
+                    ax.plot(xs, ys, "o-", ms=4, lw=1, label=Path(j["video"]).stem[4:])
+            ax.set_title(lab, fontsize=9)
+            ax.set_xlabel("확대 배율 s")
+            ax.grid(alpha=0.3)
+        axs[0].set_ylabel("f(s) / f(1.0)")
+        axs[-1].legend(fontsize=7, loc="upper left")
+        fig.tight_layout()
+        fig.savefig(out / "a2_zoom_ratio.png", dpi=110)
+        plt.close(fig)
+    if cfg["a3"]["enabled"] and ok:
+        fig, axs = plt.subplots(1, len(modes), figsize=(4.6 * len(modes), 4), sharey=True)
+        axs = np.atleast_1d(axs)
+        for ax, m in zip(axs, modes):
+            excl = cfg["a3"].get("exclude_from_comparison") or []
+            for v, x, f in fresp_a3_points(ok, m):
+                if v in excl:
+                    ax.plot(x, f, "x", color="#888")
+                else:
+                    ax.plot(x, f, "o", color="#2a6fbb" if next(j for j in ok if j["video"] == v)["used_in_21"] else "#c47a00")
+                ax.annotate(v[4:8], (x, f), fontsize=7, xytext=(3, 3), textcoords="offset points")
+            ax.set_title(f"손 {m}", fontsize=9)
+            ax.set_xlabel("정면 창 손 박스 / 영상 짧은 변")
+            ax.grid(alpha=0.3)
+        axs[0].set_ylabel("추정 f (px)  (파랑: 21에서 사용, 주황: 미사용, 회색 x: 0.5x 렌즈·통계 제외)")
+        fig.tight_layout()
+        fig.savefig(out / "a3_box_vs_f.png", dpi=110)
+        plt.close(fig)
+
+
+def fresp_report(path: Path, rows: list, jobs: list, cfg: dict):
+    modes = cfg["f_estimation"]["compare_wrist_modes"]
+    a1c, a2c = cfg["a1"], cfg["a2"]
+    notes = cfg.get("selection_notes") or {}
+    ok = [j for j in jobs if "failed" not in j]
+    L = ["# 실험 22: 후보가 실제로 f를 재는지 확인", "", FRESP_NOTE, "",
+         "## 1. 대상 영상", "",
+         f"- 범위: IMG_{cfg['target_videos']['number_range'][0]} 이상, 제외 목록 {cfg['target_videos']['exclude']}. 21의 손목 비교에 쓰인 영상과 쓰이지 않은 영상을 구분했다.", "",
+         "| 영상 | 포함 | 이유 | 21의 손목 비교에 사용 | 비고 |", "|---|---|---|---|---|"]
+    for r in rows:
+        L.append(f"| {r['video']} | {'포함' if r['included'] else '제외'} | {r['reason'] or '-'} | {'사용' if r['used_in_21'] else '미사용'} | {notes.get(r['video'], '-')} |")
+    L += ["", "## 2. 고정한 후보와 방법", "",
+          f"- 후보: {cfg['candidate']['detector']} + wrist_mode {cfg['candidate']['wrist_mode']}, f 추정 {cfg['candidate']['estimator']}, 17의 정면 창(phase_mode nominal). 비교용으로 keep도 함께 계산했다. 실행 전 yaml에 고정했다.",
+          "- 검출: 17 공식 실행이 있는 영상은 그 검출 결과를 그대로 쓰고, 없는 영상(새 영상)은 정규화한 프레임에 mediapipe를 새로 돌렸다.",
+          f"- A1: 원본 검출 키포인트와 박스를 화면 중심(W/2, H/2)에서 s배(s = {a1c['scales']}) 늘려 추정기에 넣는다(재검출 없음). 기대: f가 정확히 s배. 판정: 비율 오차 {100 * a1c['tolerance_rel']:.1f}% 이내.",
+          f"- A2: 17의 규격 변환을 거친 프레임을 중심에서 (W/s) × (H/s) 잘라 W × H로 다시 키웠다({a2c['interpolation']}, s = {a2c['zoom_factors']}). 광축이 화면 중심에 그대로 있고 실제 f는 정확히 s배가 된다. "
+          f"확대 프레임에 mediapipe와 AnyCalib(pinhole, gen)를 새로 돌렸다. 확대 후 가장자리에 닿는 프레임이 {100 * a2c['edge_rate_max']:.0f}%를 넘는 배율(1.0 대조군 제외)은 그 영상에서 뺐다.",
+          f"- A2 판정: 손 방식 f(s)/f(1.0)이 s의 ±{100 * a2c['hand_tol']:.0f}% 안이면 '검출기 해상도 의존성 없음', AnyCalib는 ±{100 * a2c['anycalib_tol']:.0f}% 안이면 '확대에 반응함'. "
+          "**손 방식의 통과는 크기 동변성 확인일 뿐 f를 잰다는 근거가 아니다.**", ""]
+    if a1c["enabled"]:
+        L += ["## 3. A1: 추정기의 크기 동변성", "",
+              "f는 fixed_template(joint_delta도 함께 표시). '격자 이동' 열은 f 격자 범위도 s배로 옮긴 진단이다.", "",
+              "| 영상 | 방식 | s | f(1) | f(s) | f(s)/f(1) | s 대비 오차 | 판정 | 격자 이동 시 s 대비 오차 | joint_delta s 대비 오차 |", "|---|---|---|---|---|---|---|---|---|---|"]
+        n_pass = n_all = 0
+        for j in ok:
+            for s, byc in j["a1"].items():
+                for mode in modes:
+                    row = byc.get(mode) or {}
+                    ft, jd = row.get("fixed_template") or {}, row.get("joint_delta") or {}
+                    ok1 = None if ft.get("ratio_err") is None else abs(ft["ratio_err"]) <= a1c["tolerance_rel"]
+                    if ok1 is not None:
+                        n_all += 1
+                        n_pass += int(ok1)
+                    pc_ = lambda x: "계산 불가" if x is None else f"{100 * x:+.3f}%"      # noqa: E731
+                    L.append(f"| {j['video']} | {mode} | {s} | {'-' if ft.get('f_1') is None else format(ft['f_1'], '.1f')} | {'-' if ft.get('f_s') is None else format(ft['f_s'], '.1f')} | "
+                             f"{fresp_num(ft.get('ratio'), 4)} | {pc_(ft.get('ratio_err'))} | {fresp_ok(ok1)} | {pc_(ft.get('grid_scaled_ratio_err'))} | {pc_(jd.get('ratio_err'))} |")
+        L += ["", f"- fixed_template 판정 가능한 조합 {n_all}개 중 통과 {n_pass}개. 경계에 붙은 f는 비율을 계산하지 않았다.",
+              "- 미통과가 있으면 원인: f 격자는 s배로 옮겨지지 않고 같은 점에서 비용을 잰 뒤 포물선으로 보간한다. 비용 곡선이 거의 평평해서(날카로움 ≈ 1) 격자 점 위치가 달라지면 보간된 최솟값이 달라진다. "
+              "격자도 s배로 옮기면 오차가 줄어드는지가 '격자 이동' 열이다.", ""]
+    if a2c["enabled"]:
+        L += ["## 4. A2: 잘라서 확대한 영상", "",
+              "f(s)/f(1.0)에서 f(1.0)은 같은 자르기·키우기 경로를 거친 s = 1.0 대조군이다. 값 없음 = f가 격자 경계에 붙음(비율 계산 불가).", "",
+              "| 영상 | s | 가장자리 접촉 | 대상 | f (px) | f(s)/f(1.0) | s 대비 오차 | 판정 |", "|---|---|---|---|---|---|---|---|"]
+        for j in ok:
+            e1 = j["a2"].get("1.0")
+            for z in a2c["zoom_factors"]:
+                e = j["a2"].get(str(z))
+                if not e:
+                    continue
+                if e.get("excluded"):
+                    L.append(f"| {j['video']} | {z} | {100 * e['edge_rate']:.1f}% | (제외) | {e['excluded']} | | | |")
+                    continue
+                zf = float(z)
+                for mode in modes:
+                    ft = ((e.get("hand") or {}).get(mode) or {}).get("fixed_template")
+                    f1 = (((e1 or {}).get("hand") or {}).get(mode) or {}).get("fixed_template")
+                    st = hf.fresp_ratio_status(ft, f1, zf, a2c["hand_tol"])
+                    L.append(f"| {j['video']} | {z} | {100 * e['edge_rate']:.1f}% | 손 {mode} | {pseg_fval(ft) if ft else '-'} | {fresp_num(st['ratio'], 3)} | "
+                             f"{'계산 불가' if st['ratio'] is None else format(100 * st['rel_to_s'], '+.1f') + '%'} | {fresp_ok(st['within'])} |")
+                for m in ("anycalib_pinhole", "anycalib_gen"):
+                    a, b = (e.get("anycalib") or {}).get(m), ((e1 or {}).get("anycalib") or {}).get(m)
+                    if not a:
+                        continue
+                    r = a["median"] / b["median"] if b and b.get("median") else None
+                    ok2 = None if r is None else abs(r / zf - 1.0) <= a2c["anycalib_tol"]
+                    L.append(f"| {j['video']} | {z} | {100 * e['edge_rate']:.1f}% | {m} | {a['median']:.1f} | {fresp_num(r, 3)} | {'계산 불가' if r is None else format(100 * (r / zf - 1.0), '+.1f') + '%'} | {fresp_ok(ok2)} |")
+        L += ["", "손 방식 / AnyCalib 별 통과 수 (s > 1 조합):", "", "| 대상 | 통과 / 판정 가능 | 영상 단위: 모든 배율 통과 |", "|---|---|---|"]
+        for key in [f"손 {m}" for m in modes] + ["anycalib_pinhole", "anycalib_gen"]:
+            tot = okc = vids_ok = vids_n = 0
+            for j in ok:
+                e1 = j["a2"].get("1.0")
+                flags = []
+                for z in a2c["zoom_factors"]:
+                    if float(z) <= 1.0 or not j["a2"].get(str(z)) or j["a2"][str(z)].get("excluded"):
+                        continue
+                    e, zf = j["a2"][str(z)], float(z)
+                    if key.startswith("손"):
+                        mode = key[2:]
+                        st = hf.fresp_ratio_status(((e.get("hand") or {}).get(mode) or {}).get("fixed_template"), (((e1 or {}).get("hand") or {}).get(mode) or {}).get("fixed_template"), zf, a2c["hand_tol"])
+                        flags.append(st["within"])
+                    else:
+                        a, b = (e.get("anycalib") or {}).get(key), ((e1 or {}).get("anycalib") or {}).get(key)
+                        flags.append(None if not (a and b and b.get("median")) else abs(a["median"] / b["median"] / zf - 1.0) <= a2c["anycalib_tol"])
+                valid = [f for f in flags if f is not None]
+                tot += len(valid)
+                okc += sum(valid)
+                if valid:
+                    vids_n += 1
+                    vids_ok += int(all(valid) and len(valid) == len(flags))
+            L.append(f"| {key} | {okc} / {tot} | {vids_ok} / {vids_n} 영상 |")
+        L += ["", "대조군(s = 1.0)이 원본 분석과 같은지:", "", "| 영상 | 방식 | 원본 f | s = 1.0 f | 같음 |", "|---|---|---|---|---|"]
+        for j in ok:
+            e1 = j["a2"].get("1.0")
+            for mode in modes:
+                o = (j.get("original") or {}).get(mode, {}).get("solutions", {}).get("fixed_template")
+                c1 = (((e1 or {}).get("hand") or {}).get(mode) or {}).get("fixed_template")
+                if o and c1:
+                    L.append(f"| {j['video']} | {mode} | {pseg_fval(o)} | {pseg_fval(c1)} | {'O' if o['f'] == c1['f'] else 'X'} |")
+        L.append("")
+    if cfg["a3"]["enabled"]:
+        L += ["## 5. A3: 후보의 원본 영상 결과", "",
+              "| 영상 | 구분 | 정면 창 손 박스/짧은 변 | 방식 | f fixed_template | f joint_delta | f 판정 | 날카로움 | f 불확실성(상대) | 관절 집합 범위 |", "|---|---|---|---|---|---|---|---|---|---|"]
+        excl = cfg["a3"].get("exclude_from_comparison") or []
+        meta = (cfg.get("discrimination") or {}).get("videos") or {}
+        for grp, sel in (("21 사용", lambda j: j["used_in_21"] and j["video"] not in excl), ("21 미사용", lambda j: not j["used_in_21"] and j["video"] not in excl),
+                         ("0.5x 렌즈 (B, 통계 제외)", lambda j: j["video"] in excl)):
+            for j in ok:
+                if not sel(j):
+                    continue
+                for mode in modes:
+                    w = j["original"].get(mode, {})
+                    if "solutions" not in w:
+                        L.append(f"| {j['video']} | {grp} | {j['hand_box_short_ratio_front']:.3f} | {mode} | 분석 실패 | | | | | |")
+                        continue
+                    L.append(f"| {j['video']} | {grp} | {j['hand_box_short_ratio_front']:.3f} | {mode} | {pseg_fval(w['solutions']['fixed_template'])} | {pseg_fval(w['solutions']['joint_delta'])} | {w['verdict']} | "
+                             f"{w['sharpness']:.3f} | {fresp_num(w['f_rel_uncertainty'])} | {fresp_num(w['jointset_range'])} |")
+        L += ["", f"손 박스 크기와 추정 f의 관계 (기록용, 영상 수가 적어 상관만으로 결론 내지 않는다). f 값이 있는 영상만 쓰고, {', '.join(excl) or '(없음)'}는 뺐다.", "",
+              "| 방식 | 영상 수 | Spearman | 기울기(px / 박스 비율 1.0) | log-log 기울기 (1이면 f가 손 크기에 비례) |", "|---|---|---|---|---|"]
+        for m in modes:
+            pts = fresp_a3_points(ok, m, excl)
+            st = fresp_stats([p[1] for p in pts], [p[2] for p in pts])
+            L.append(f"| {m} | {st['n']} | {fresp_num(st['spearman'])} | {fresp_num(st['slope_px'], 0)} | {fresp_num(st['loglog_slope'])} |")
+        L += ["", "산점도: figures/a3_box_vs_f.png", ""]
+    if (cfg.get("discrimination") or {}).get("enabled") and cfg["a3"]["enabled"]:
+        lj = hf.fresp_lens_judgment(ok, cfg["discrimination"]["videos"], cfg["discrimination"]["rules"], cfg["candidate"]["wrist_mode"], modes)
+        L += ["## 6. B: 렌즈 변화 판정", "",
+              f"- 1배 추정값 = 1배 영상 {len(lj['one_x_videos'])}개({', '.join(v[4:8] for v in lj['one_x_videos'])})의 f 중앙값(후보 설정, 값 없음은 뺌). 추정 비율 = 0.5x 영상의 추정 f ÷ 1배 추정값.",
+              f"- 판정은 후보({cfg['candidate']['wrist_mode']})에만 적용한다. 기준 비율과 허용 범위, 기준 f와의 비교는 summary.md에만 적는다.", "",
+              "| 영상 | 방식 | 0.5x 영상의 f | 1배 추정값(중앙값) | 1배 f 값 수 | 추정 비율 | 판정 |", "|---|---|---|---|---|---|---|"]
+        for v, bm in lj["by_video"].items():
+            for mode in modes:
+                x = bm[mode]
+                L.append(f"| {v} | {mode} | {'-' if x['f_numerator_px'] is None else format(x['f_numerator_px'], '.1f') + ' px'} | {'-' if x['f_1x_median_px'] is None else format(x['f_1x_median_px'], '.1f') + ' px'} | "
+                         f"{x['n_1x_values']}/{x['n_1x_videos']} | {fresp_num(x['ratio'])} | {x['verdict'] if x['judged'] else '(판정 대상 아님)'}{' — ' + x['unavailable'] if x['unavailable'] else ''} |")
+        L.append("")
+    L += ["## 7. 기존 결과와 같은지", "",
+          "| 영상 | 21의 keep·exclude f와 판정 일치 |", "|---|---|"]
+    for j in ok:
+        s21 = j.get("same_as_21")
+        L.append(f"| {j['video']} | " + ("21 사용 영상이 아님(비교 대상 없음)" if s21 is None else ", ".join(f"{k} {'O' if v else 'X'}" for k, v in s21.items() if k != "all")) + " |")
+    L += ["", f"- 21과 모두 일치한 영상: {sum(1 for j in ok if j.get('same_as_21', {}).get('all'))}/{sum(1 for j in ok if 'same_as_21' in j)}", "",
+          "## 8. 한계", "",
+          "- 영상 수가 적고(9개) 한 대의 폰, 한 가지 렌즈로 찍은 영상이다. 후보는 21에서 사후 탐색으로 골랐다.",
+          "- 확대 검사(A2)의 손 방식 통과는 검출기가 확대된 같은 장면에서 같은 비율의 키포인트를 낸다는 확인이지, 방법이 f를 잰다는 증거가 아니다. 손 크기가 같은 비율로 커지면 f도 같은 비율로 커지는 방식이면 통과한다.",
+          "- 렌즈 변화 판정(B)의 0.5x 영상은 같은 폰의 초광각 렌즈로 찍었다. 이 방법은 렌즈 왜곡이 없다고 가정하는데 초광각은 왜곡이 커서, 그 영상의 추정 f에는 f 변화와 왜곡 가정 위반이 섞여 있다. "
+          "'f 변화에 반응함'이 나와도 f를 정확히 쟀다는 근거가 아니다.",
+          "- 거리 변화 영상으로 하는 판별 테스트(B의 distance_series)는 준비만 했다(yaml의 discrimination). 영상이 들어온 뒤 따로 실행한다.", ""]
+    path.write_text("\n".join(L) + "\n")
+
+
+def fresp_summary(path: Path, jobs: list, cfg: dict):
+    ref = float(cfg["reference_f_px"])
+    modes = cfg["f_estimation"]["compare_wrist_modes"]
+    ok = [j for j in jobs if "failed" not in j]
+    excl = cfg["a3"].get("exclude_from_comparison") or []
+    rel = lambda sol, r: None if sol is None or sol["at_grid_edge"] else sol["f"] / r - 1.0      # noqa: E731
+    pct = lambda x: "-" if x is None else f"{100 * x:+.1f}%"      # noqa: E731
+    main = [j for j in ok if j["video"] not in excl]
+    L = ["# 실험 22 기준 f와의 비교 (summary.md에만 기록)", "", "**탐색 결과이며 공식 f 추정값이 아님.** 기준 f와의 비교와 상대 오차는 이 파일에만 적는다.", "",
+         f"- 비교 기준: 1배 렌즈 사용자 체커보드 f = {ref:.0f} px (추정·판정에 쓰지 않음). 같은 세션 체커보드(1646.5 px)는 기준 불확실이다.",
+         f"- 0.5x 렌즈 영상({', '.join(excl) or '없음'})은 이 표의 1배 기준 비교, |오차| 중앙값에서 뺐다. 그 영상은 자기 렌즈의 기준 f로 4절에 따로 적는다.", "",
+         "## 1. 영상별 오차 (원본 영상, fixed_template, 1배 영상)", "",
+         "| 영상 | 21 사용 | " + " | ".join(f"{m} f | {m} 오차" for m in modes) + " |", "|---|---|" + "---|---|" * len(modes)]
+    for j in main:
+        cells = []
+        for m in modes:
+            sol = ((j.get("original") or {}).get(m) or {}).get("solutions", {}).get("fixed_template")
+            cells += [pseg_fval(sol) if sol else "-", pct(rel(sol, ref)) if sol else "-"]
+        L.append(f"| {j['video']} | {'사용' if j['used_in_21'] else '미사용'} | " + " | ".join(cells) + " |")
+    L += ["", "## 2. |오차| 중앙값 (21에서 사용한 영상 / 사용하지 않은 영상)", "",
+          "값이 있는 영상만으로 계산했고, 값 없음(격자 경계) 영상 수를 함께 적는다.", "",
+          "| 방식 | 구분 | 영상 수 | 값 있음 | 값 없음 | \\|오차\\| 중앙값 | 부호 포함 중앙값 | 영상별 오차 |", "|---|---|---|---|---|---|---|---|"]
+    for m in modes:
+        for grp, flag in (("21 사용", True), ("21 미사용", False)):
+            js = [j for j in main if j["used_in_21"] == flag]
+            es = [rel(((j.get("original") or {}).get(m) or {}).get("solutions", {}).get("fixed_template"), ref) for j in js]
+            v = [e for e in es if e is not None]
+            L.append(f"| {m} | {grp} | {len(js)} | {len(v)} | {len(js) - len(v)} | {'계산 불가' if not v else format(100 * float(np.median(np.abs(v))), '.1f') + '%'} | "
+                     f"{'계산 불가' if not v else pct(float(np.median(v)))} | " + ", ".join(f"{j['video'][4:8]} {pct(e)}" if e is not None else f"{j['video'][4:8]} 값 없음" for j, e in zip(js, es)) + " |")
+    L += ["", "## 3. 확대 영상: 실제 f(= s × 영상 렌즈의 기준 f) 대비 오차", ""]
+    if cfg["a2"]["enabled"]:
+        L += ["| 영상 | 기준 f | s | " + " | ".join(f"손 {m}" for m in modes) + " | AnyCalib pinhole | AnyCalib gen |", "|---|---|---|" + "---|" * (len(modes) + 2)]
+        for j in ok:
+            rf = fresp_ref_f(cfg, j["video"])
+            for z in cfg["a2"]["zoom_factors"]:
+                e = j["a2"].get(str(z))
+                if not e or e.get("excluded"):
+                    continue
+                zf = float(z)
+                cells = []
+                for m in modes:
+                    sol = ((e.get("hand") or {}).get(m) or {}).get("fixed_template")
+                    cells.append("-" if sol is None else ("값 없음" if sol["at_grid_edge"] else f"{sol['f']:.0f} ({100 * (sol['f'] / (zf * rf) - 1):+.1f}%)"))
+                for k in ("anycalib_pinhole", "anycalib_gen"):
+                    a = (e.get("anycalib") or {}).get(k)
+                    cells.append("-" if not a else f"{a['median']:.0f} ({100 * (a['median'] / (zf * rf) - 1):+.1f}%)")
+                L.append(f"| {j['video']} | {rf:.0f} | {z} | " + " | ".join(cells) + " |")
+    disc = cfg.get("discrimination") or {}
+    if disc.get("enabled") and cfg["a3"]["enabled"]:
+        lj = hf.fresp_lens_judgment(ok, disc["videos"], disc["rules"], cfg["candidate"]["wrist_mode"], modes)
+        rl = disc["rules"]["lens_series"]
+        L += ["", "## 4. 0.5x 렌즈 영상 (B, 렌즈 변화 판정)", ""]
+        for v, bm in lj["by_video"].items():
+            mv = disc["videos"][v]
+            j = next(x for x in ok if x["video"] == v)
+            rf = float(mv["reference_f_px"])
+            L += [f"### {v} ({mv['lens']}, 약 {mv['distance_cm']} cm, 기준 f {rf:.0f} px)", "",
+                  f"- 판정 규칙(결과를 보기 전 고정): 1배 추정값 = 1배 영상 {len(lj['one_x_videos'])}개 f의 중앙값, 추정 비율 = {v}의 f ÷ 1배 추정값, 기준 비율 = {rf:.0f} ÷ {float(rl['reference_f_1x_px']):.0f}, "
+                  f"추정 비율이 기준 비율의 ±{100 * lj['tolerance']:.0f}% 안이면 \"f 변화에 반응함\". 후보에만 적용.", "",
+                  "| 방식 | 0.5x 영상 f | 880 대비 | 1배 추정값 | 추정 비율 | 기준 비율 | 허용 범위 | 판정 |", "|---|---|---|---|---|---|---|---|"]
+            for mode in modes:
+                x = bm[mode]
+                sol = ((j.get("original") or {}).get(mode) or {}).get("solutions", {}).get("fixed_template")
+                L.append(f"| {mode} | {pseg_fval(sol) if sol else '-'} | {pct(rel(sol, rf)) if sol else '-'} | {'-' if x['f_1x_median_px'] is None else format(x['f_1x_median_px'], '.1f') + ' px'} | "
+                         f"{fresp_num(x['ratio'])} | {x['reference_ratio']:.3f} | {x['range'][0]:.3f}–{x['range'][1]:.3f} | "
+                         f"{(x['verdict'] if x['judged'] else '(판정 대상 아님) ' + ('범위 안' if x['within'] else '범위 밖' if x['within'] is not None else '계산 불가'))} |")
+            w = (j.get("original") or {}).get(cfg["candidate"]["wrist_mode"]) or {}
+            e1 = (j.get("a2") or {}).get("1.0") or {}
+            L += ["", f"- 후보 {cfg['candidate']['wrist_mode']}: f {pseg_fval(w['solutions']['fixed_template']) if 'solutions' in w else '-'}, 판정 {w.get('verdict', '-')}, 날카로움 {fresp_num(w.get('sharpness'))}, "
+                  f"불확실성 {fresp_num(w.get('f_rel_uncertainty'))}, 정면 창 손 박스 {j['hand_box_short_ratio_front']:.3f}",
+                  "- AnyCalib (s = 1.0 대조군, 원본과 같은 프레임) 중앙값과 기준 f와의 상대 차이: " + (", ".join(
+                      f"{k} {a['median']:.1f} px ({100 * (a['median'] / rf - 1):+.1f}%)" for k, a in (e1.get("anycalib") or {}).items()) or "실행 안 함"), ""]
+    L += ["", "## 한계", "",
+          "- 영상 9개, 한 대의 폰. 후보는 21에서 사후 탐색으로 골랐고, 21 미사용 영상 중 7181은 20의 진단 결과를 이미 본 영상이다.",
+          "- 렌즈 변화 판정은 0.5x 영상 하나(약 30 cm)에 대한 것이다. 1배 영상은 거리가 달라(손 크기가 다름) 1배 추정값 자체가 퍼져 있다.",
+          "- 0.5x 영상은 같은 폰의 초광각 렌즈로 찍었다. 이 방법과 AnyCalib pinhole은 왜곡이 없다고 가정하는데 초광각은 왜곡이 커서, 추정 f에는 f 변화와 왜곡 가정 위반이 섞여 있다.",
+          "- 체커보드 f는 사용자 제공 값이며 이 비교에만 썼다.", ""]
+    path.write_text("\n".join(L) + "\n")
+
+
+def fresp_results_yaml(run_dir: Path, cfg: dict):
+    r = json.loads((run_dir / "results.json").read_text())
+    m = json.loads((run_dir / "metadata.json").read_text())
+    try:
+        run_name = str(run_dir.resolve().relative_to(hf.PROJECT_ROOT))
+    except ValueError:
+        run_name = str(run_dir)
+    rd = lambda x, n=4: None if x is None else round(x, n)      # noqa: E731
+    fv = lambda sol: ({"f_px": None, "status": f"값 없음 ({sol['side']})"} if sol["at_grid_edge"] else {"f_px": round(sol["f"], 1), "status": "value"})      # noqa: E731
+    out = {"experiment": "22_f_response", "run": run_name, "code_commit": m["git"]["commit"][:7], "git_dirty_at_run": m["git"]["git_dirty"], "note": FRESP_NOTE + " 기준 f와의 비교 수치는 summary.md에만 있다.",
+           "candidate": cfg["candidate"], "videos": {}}
+    a1t, a2c = cfg["a1"]["tolerance_rel"], cfg["a2"]
+    for j in r["jobs"]:
+        e = {"used_in_21": j["used_in_21"]}
+        if "failed" in j:
+            out["videos"][j["video"]] = {**e, "failed": j["failed"]}
+            continue
+        e["hand_box_short_ratio_front"] = rd(j.get("hand_box_short_ratio_front"))
+        e["detections"] = j.get("detections")
+        if j.get("original"):
+            e["original"] = {md: ({"failed": w.get("failed")} if "solutions" not in w else
+                                  {"f_fixed_template": fv(w["solutions"]["fixed_template"]), "f_joint_delta": fv(w["solutions"]["joint_delta"]), "verdict": w["verdict"],
+                                   "sharpness": rd(w["sharpness"]), "f_rel_uncertainty": rd(w["f_rel_uncertainty"]), "jointset_range": rd(w["jointset_range"])})
+                             for md, w in j["original"].items()}
+        if j.get("same_as_21"):
+            e["same_as_21"] = j["same_as_21"]["all"]
+        if j.get("a1"):
+            e["a1"] = {s: {md: {"ratio": rd((row.get("fixed_template") or {}).get("ratio"), 5), "ratio_err": rd((row.get("fixed_template") or {}).get("ratio_err"), 5),
+                               "pass": None if (row.get("fixed_template") or {}).get("ratio_err") is None else abs(row["fixed_template"]["ratio_err"]) <= a1t,
+                               "grid_scaled_ratio_err": rd((row.get("fixed_template") or {}).get("grid_scaled_ratio_err"), 6)}
+                            for md, row in byc.items()} for s, byc in j["a1"].items()}
+        if j.get("a2"):
+            e1 = j["a2"].get("1.0") or {}
+            a2 = {}
+            for z, ez in j["a2"].items():
+                if ez.get("excluded"):
+                    a2[z] = {"edge_rate": rd(ez["edge_rate"]), "excluded": ez["excluded"]}
+                    continue
+                zf = float(z)
+                row = {"edge_rate": rd(ez["edge_rate"])}
+                for md, hv in (ez.get("hand") or {}).items():
+                    sol = hv.get("fixed_template")
+                    st = hf.fresp_ratio_status(sol, ((e1.get("hand") or {}).get(md) or {}).get("fixed_template"), zf, a2c["hand_tol"]) if sol else {"ratio": None, "within": None}
+                    row[f"hand_{md}"] = {**(fv(sol) if sol else {}), "ratio_to_1.0": rd(st["ratio"]), "within_tolerance": st["within"]}
+                for k2, a in (ez.get("anycalib") or {}).items():
+                    b = (e1.get("anycalib") or {}).get(k2)
+                    rr = a["median"] / b["median"] if b and b.get("median") else None
+                    row[k2] = {"f_median_px": rd(a["median"], 1), "ratio_to_1.0": rd(rr), "within_tolerance": None if rr is None else abs(rr / zf - 1.0) <= a2c["anycalib_tol"]}
+                a2[z] = row
+            e["a2"] = a2
+        out["videos"][j["video"]] = e
+    disc = cfg.get("discrimination") or {}
+    if disc.get("enabled") and cfg["a3"]["enabled"]:
+        lj = hf.fresp_lens_judgment([j for j in r["jobs"] if "failed" not in j], disc["videos"], disc["rules"], cfg["candidate"]["wrist_mode"], cfg["f_estimation"]["compare_wrist_modes"])
+        out["lens_series"] = {"one_x_videos": lj["one_x_videos"], "videos": {v: {"lens": disc["videos"][v]["lens"], "distance_cm": disc["videos"][v]["distance_cm"], "modes": {
+            md: {"judged": x["judged"], "f_px": None if x["f_numerator_px"] is None else round(x["f_numerator_px"], 1),
+                 "f_1x_median_px": None if x["f_1x_median_px"] is None else round(x["f_1x_median_px"], 1), "n_1x_values": x["n_1x_values"],
+                 "estimated_ratio": rd(x["ratio"]), "verdict": x["verdict"], "unavailable": x["unavailable"]} for md, x in bm.items()}} for v, bm in lj["by_video"].items()}}
+    rules = copy.deepcopy(disc.get("rules"))
+    if rules:
+        rules["lens_series"].pop("reference_f_1x_px", None)                  # reference f values stay out of the results file
+    out["discrimination_rules"] = rules
+    p = hf.resolve(cfg["output"]["results_yaml"])
+    p.write_text(yaml.safe_dump(hf.jsonable(out), allow_unicode=True, sort_keys=False))
+    return p
+
+
+def fresp_main(argv=None):
+    ap = argparse.ArgumentParser()
+    ap.add_argument("--config", default=str(hf.PROJECT_ROOT / "configs/22_f_response.yaml"))
+    sub = ap.add_subparsers(dest="cmd")
+    ry = sub.add_parser("results-yaml")
+    ry.add_argument("--run", required=True)
+    ap.add_argument("--videos", default=None, help="comma list narrowing the included videos")
+    ap.add_argument("--out", default=None)
+    a = ap.parse_args(argv)
+    text = Path(a.config).read_text()
+    cfg = yaml.safe_load(text)
+    if a.cmd == "results-yaml":
+        print(fresp_results_yaml(hf.resolve(a.run), cfg))
+        return None
+    run_root = Path(a.out).expanduser() if a.out else hf.resolve(cfg["output"]["root"]) / utc_stamp()
+    run_root.mkdir(parents=True)
+    (run_root / "figures").mkdir()
+    log = Log(run_root / "log.txt")
+    rows = hf.fresp_target_videos(cfg["target_videos"]["input_dir"], cfg["target_videos"], cfg["used_in_21"])
+    vids = [r["video"] for r in rows if r["included"] and (not a.videos or r["video"] in a.videos.split(","))]
+    log(f"22 f 반응 확인: 포함 영상 {vids} (제외 {[r['video'] for r in rows if not r['included']]}), 후보 {cfg['candidate']['detector']} + {cfg['candidate']['wrist_mode']} → {run_root}")
+    t0 = time.time()
+    ref21 = {}
+    for rp in cfg.get("results_21") or []:
+        pth = hf.resolve(rp)
+        if pth.exists():
+            for j in json.loads(pth.read_text())["jobs"]:
+                if j["detector"] == cfg["candidate"]["detector"]:
+                    ref21[j["video"]] = j
+    tmp_root = run_root / "_frames"
+    tmp_root.mkdir()
+    cjob = {k: cfg[k] for k in ("candidate", "f_estimation", "phase_segmentation", "a1", "a2", "a3", "detector_settings") if k in cfg}
+    for k in ("OMP_NUM_THREADS", "OPENBLAS_NUM_THREADS", "MKL_NUM_THREADS"):
+        os.environ[k] = "1"
+    import multiprocessing as mp
+    from concurrent.futures import ProcessPoolExecutor
+    n_det = int(cfg["a2"].get("n_workers", 1))
+    gpus = list(cfg["a2"].get("gpu_ids") or [])
+    log(f"  CPU: 논리 {os.cpu_count()}개, 검출 n_workers {n_det} (절반 {os.cpu_count() // 2} 이하), 분석 workers {cfg['workers']}, AnyCalib GPU {gpus or '(상속)'}")
+    try:
+        with ProcessPoolExecutor(max_workers=int(cfg["workers"]), mp_context=mp.get_context("spawn")) as ex:
+            t1 = time.time()
+            preps = list(ex.map(hf.fresp_prepare, [(v, cfg["target_videos"]["input_dir"], cfg["pipeline"], cjob, str(tmp_root)) for v in vids]))
+            log(f"  1단계 프레임 준비 {time.time() - t1:.0f} s")
+            dset = cfg["detector_settings"][cfg["candidate"]["detector"]]
+            tasks = []
+            for p_ in preps:
+                if p_["video"] not in (cfg.get("sources") or {}):
+                    tasks.append(((p_["video"], "orig"), p_["frames"]))
+                tasks += [((p_["video"], z), fr) for z, fr in p_["zoom"].items()]
+            t1 = time.time()
+            npz = hf.fresp_detect_many(tasks, dset, run_root / "detection_cache", n_det, log)
+            log(f"  2단계 mediapipe 검출 {len(tasks)}개 목록, n_workers {n_det}: {time.time() - t1:.0f} s")
+            args = [(p_["video"], p_, str(hf.resolve(cfg["sources"][p_["video"]])) if p_["video"] in (cfg.get("sources") or {}) else None, npz.get((p_["video"], "orig")),
+                     {z: npz[(p_["video"], z)] for z in p_["zoom"]}, cfg["pipeline"], cjob, str(tmp_root), ref21.get(p_["video"]), p_["video"] in set(cfg["used_in_21"]),
+                     (gpus[i % len(gpus)] if gpus else None)) for i, p_ in enumerate(preps)]
+            t1 = time.time()
+            with ProcessPoolExecutor(max_workers=int(cfg["workers"]), mp_context=mp.get_context("spawn"), max_tasks_per_child=1) as ex3:      # one video per process: a process keeps one CUDA device
+                jobs = list(ex3.map(hf.fresp_job, args))
+            log(f"  3단계 분석 {time.time() - t1:.0f} s")
+    finally:
+        shutil.rmtree(tmp_root, ignore_errors=True)                # the enlarged frames never stay
+    for j in jobs:
+        if "failed" in j:
+            log(f"  {j['video']}: 분석 실패 ({j['failed']})")
+            continue
+        o = j.get("original") or {}
+        fx = lambda m: pseg_fval(o[m]["solutions"]["fixed_template"]) if m in o and "solutions" in o[m] else "-"      # noqa: E731
+        log(f"  {j['video']}: 검출 {j['detections']}, 손 박스 {j['hand_box_short_ratio_front']:.3f}, f exclude {fx('exclude')}, keep {fx('keep')}, 21과 일치 {j.get('same_as_21', {}).get('all', '-')}")
+    fresp_figures(run_root / "figures", jobs, cfg)
+    fresp_report(run_root / "report.md", rows, jobs, cfg)
+    fresp_summary(run_root / "summary.md", jobs, cfg)
+    with (run_root / "per_frame.csv").open("w", newline="") as fh:
+        wr = csv.writer(fh)
+        wr.writerow(["video", "index", "time_s", "present", "box_short_ratio", "theta2d_deg", "role"])
+        for j in jobs:
+            ft = j.get("frames_table")
+            if ft:
+                for i in range(len(ft["index"])):
+                    wr.writerow([j["video"], ft["index"][i], f"{ft['time_s'][i]:.4f}", int(ft["present"][i]), f"{ft['box_short_ratio'][i]:.4f}",
+                                 "" if ft["theta2d_deg"][i] is None else f"{ft['theta2d_deg'][i]:.2f}", ft["role"][i]])
+    for j in jobs:
+        j.pop("frames_table", None)
+    (run_root / "results.json").write_text(json.dumps(hf.jsonable({"videos": rows, "jobs": jobs}), ensure_ascii=False, indent=1))
+    meta = hf.provenance_build(text, a.config, {"code_21": cfg["code_21"], "sources": cfg["sources"], "elapsed_s": time.time() - t0})
+    (run_root / "metadata.json").write_text(json.dumps(hf.jsonable(meta), ensure_ascii=False, indent=1))
+    log(f"완료 {time.time() - t0:.0f} s → {run_root}")
+    log.close()
+    return run_root, jobs
+
+
+# ====================================================================================================
 # command line
 # ====================================================================================================
 
-COMMANDS = {"protocol": protocol_main, "frame-filter": ff_main, "same-session": session_main, "overlay": overlay_main, "phase-segmentation": pseg_main, "guide-revision": grev_main}
+COMMANDS = {"protocol": protocol_main, "frame-filter": ff_main, "same-session": session_main, "overlay": overlay_main, "phase-segmentation": pseg_main, "guide-revision": grev_main, "f-response": fresp_main}
 
 
 def main(argv=None):
