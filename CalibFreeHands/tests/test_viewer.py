@@ -2,7 +2,7 @@ import numpy as np
 from pyqtgraph.opengl.GLGraphicsItem import GLOptions
 from PySide6.QtCore import QEvent, QPointF, Qt
 from PySide6.QtGui import QKeyEvent, QMouseEvent
-from PySide6.QtWidgets import QCheckBox
+from PySide6.QtWidgets import QCheckBox, QSizePolicy, QWidget
 
 from calibfreehands.pipeline import CanonicalResult, save_result
 from calibfreehands.visualization.viewer import load_npz_result
@@ -152,12 +152,16 @@ def test_opacity_controls_use_compact_nested_layout(tmp_path, qapp):
     from calibfreehands.visualization.viewer import ResultViewer
 
     viewer = ResultViewer(npz)
+    assert isinstance(viewer.opacity_container, QWidget)
+    assert viewer.opacity_container.layout() is viewer.opacity_group
+    assert viewer.opacity_container.sizePolicy().horizontalPolicy() == QSizePolicy.Policy.Fixed
     margins = viewer.opacity_group.contentsMargins()
     assert (margins.left(), margins.top(), margins.right(), margins.bottom()) == (0, 0, 0, 0)
     assert viewer.opacity_group.spacing() <= 6
     assert viewer.opacity_group.itemAt(0).widget().text() == "Opacity"
     assert viewer.opacity_group.itemAt(1).widget() is viewer.mesh_opacity_slider
     assert viewer.opacity_group.itemAt(2).widget() is viewer.mesh_opacity_value
+    assert viewer.mesh_opacity_slider.minimumWidth() == viewer.mesh_opacity_slider.maximumWidth() == 120
     viewer.close()
 
 

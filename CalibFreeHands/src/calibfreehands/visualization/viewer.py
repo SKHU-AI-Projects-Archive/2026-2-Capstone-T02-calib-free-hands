@@ -12,7 +12,7 @@ from pyqtgraph.opengl.items.GLLinePlotItem import GLLinePlotItem
 from pyqtgraph.opengl.items.GLScatterPlotItem import GLScatterPlotItem
 from PySide6.QtCore import QEvent, Qt, QTimer, QPointF, QLineF, QSignalBlocker
 from PySide6.QtGui import QGuiApplication, QImage, QPainter, QPen
-from PySide6.QtWidgets import QCheckBox, QHBoxLayout, QLabel, QPushButton, QSlider, QSplitter, QVBoxLayout, QWidget
+from PySide6.QtWidgets import QCheckBox, QHBoxLayout, QLabel, QPushButton, QSizePolicy, QSlider, QSplitter, QVBoxLayout, QWidget
 
 from calibfreehands.media.ffmpeg import FFmpegDecoder
 from calibfreehands.media.probe import probe_media
@@ -214,13 +214,14 @@ class ResultViewer(QWidget):
             check = QCheckBox(label); check.setChecked(getattr(self.gl_view, attr)); check.toggled.connect(lambda value, a=attr: self._toggle(a, value)); visibility.addWidget(check)
         self.mesh_checkbox = QCheckBox("Mesh"); self.mesh_checkbox.setChecked(self.gl_view.show_mesh); self.mesh_checkbox.setEnabled(self.loaded.has_mesh_topology); self.mesh_checkbox.setToolTip("MANO mesh topology is unavailable for this result" if not self.loaded.has_mesh_topology else ""); self.mesh_checkbox.toggled.connect(self._on_mesh_toggled); visibility.addWidget(self.mesh_checkbox)
         opacity_label = QLabel("Opacity")
-        self.mesh_opacity_slider = QSlider(Qt.Orientation.Horizontal); self.mesh_opacity_slider.setRange(10, 100); self.mesh_opacity_slider.setValue(100); self.mesh_opacity_slider.setEnabled(self.loaded.has_mesh_topology); self.mesh_opacity_slider.setMaximumWidth(120)
+        self.mesh_opacity_slider = QSlider(Qt.Orientation.Horizontal); self.mesh_opacity_slider.setRange(10, 100); self.mesh_opacity_slider.setValue(100); self.mesh_opacity_slider.setEnabled(self.loaded.has_mesh_topology); self.mesh_opacity_slider.setFixedWidth(120)
         self.mesh_opacity_value = QLabel("100%")
         self.mesh_opacity_slider.valueChanged.connect(self._set_mesh_opacity)
         opacity_label.setEnabled(self.loaded.has_mesh_topology); self.mesh_opacity_value.setEnabled(self.loaded.has_mesh_topology)
-        self.opacity_group = QHBoxLayout(); self.opacity_group.setContentsMargins(0, 0, 0, 0); self.opacity_group.setSpacing(4)
+        self.opacity_container = QWidget(); self.opacity_container.setSizePolicy(QSizePolicy.Policy.Fixed, QSizePolicy.Policy.Preferred)
+        self.opacity_group = QHBoxLayout(self.opacity_container); self.opacity_group.setContentsMargins(0, 0, 0, 0); self.opacity_group.setSpacing(4)
         self.opacity_group.addWidget(opacity_label); self.opacity_group.addWidget(self.mesh_opacity_slider); self.opacity_group.addWidget(self.mesh_opacity_value)
-        visibility.addLayout(self.opacity_group)
+        visibility.addWidget(self.opacity_container)
         previous = QPushButton("Previous"); previous.clicked.connect(self._previous); play = QPushButton("Play / Pause"); play.clicked.connect(self._play); nxt = QPushButton("Next"); nxt.clicked.connect(self._next_frame)
         for text, callback in (("Front", self.gl_view.front_view), ("Side", self.gl_view.side_view), ("Top", self.gl_view.top_view), ("Fit Hands", self.gl_view.fit_hands), ("Reset View", self.gl_view.reset_camera)):
             button = QPushButton(text); button.clicked.connect(callback); view.addWidget(button)
