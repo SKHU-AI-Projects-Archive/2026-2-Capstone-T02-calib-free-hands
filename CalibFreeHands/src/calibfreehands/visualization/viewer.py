@@ -216,6 +216,8 @@ class ResultViewer(QWidget):
         opacity_label = QLabel("Opacity")
         self.mesh_opacity_slider = QSlider(Qt.Orientation.Horizontal); self.mesh_opacity_slider.setRange(10, 100); self.mesh_opacity_slider.setValue(100); self.mesh_opacity_slider.setEnabled(self.loaded.has_mesh_topology); self.mesh_opacity_slider.setFixedWidth(120)
         self.mesh_opacity_value = QLabel("100%")
+        self.mesh_opacity_value.setFixedWidth(self.mesh_opacity_value.fontMetrics().horizontalAdvance("100%") + 4)
+        self.mesh_opacity_value.setAlignment(Qt.AlignmentFlag.AlignRight | Qt.AlignmentFlag.AlignVCenter)
         self.mesh_opacity_slider.valueChanged.connect(self._set_mesh_opacity)
         opacity_label.setEnabled(self.loaded.has_mesh_topology); self.mesh_opacity_value.setEnabled(self.loaded.has_mesh_topology)
         self.opacity_container = QWidget(); self.opacity_container.setSizePolicy(QSizePolicy.Policy.Fixed, QSizePolicy.Policy.Preferred)

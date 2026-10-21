@@ -162,6 +162,15 @@ def test_opacity_controls_use_compact_nested_layout(tmp_path, qapp):
     assert viewer.opacity_group.itemAt(1).widget() is viewer.mesh_opacity_slider
     assert viewer.opacity_group.itemAt(2).widget() is viewer.mesh_opacity_value
     assert viewer.mesh_opacity_slider.minimumWidth() == viewer.mesh_opacity_slider.maximumWidth() == 120
+    expected_value_width = viewer.mesh_opacity_value.fontMetrics().horizontalAdvance("100%") + 4
+    assert viewer.mesh_opacity_value.minimumWidth() == viewer.mesh_opacity_value.maximumWidth() == expected_value_width
+    assert viewer.mesh_opacity_value.alignment() & Qt.AlignmentFlag.AlignRight
+    assert viewer.mesh_opacity_value.alignment() & Qt.AlignmentFlag.AlignVCenter
+    container_width = viewer.opacity_container.sizeHint().width()
+    for percent in (10, 90, 100):
+        viewer.mesh_opacity_slider.setValue(percent)
+        assert viewer.mesh_opacity_value.text() == f"{percent}%"
+        assert viewer.opacity_container.sizeHint().width() == container_width
     viewer.close()
 
 
