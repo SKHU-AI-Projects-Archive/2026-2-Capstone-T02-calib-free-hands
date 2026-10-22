@@ -4,7 +4,7 @@ experiment:
 
 # 25: the candidate (mediapipe_hands + wrist_mode exclude + fixed_template) on long new videos (about 20 s, 1x lens). The new videos were not used to choose the candidate: verification.
 # Candidate settings and every threshold below are fixed 2026-10-22 before any new video is processed; nothing is changed after seeing results.
-new_videos: []                       # file names filled in by the user (empty: the script lists the videos above after_number with their lengths and stops for the user's confirmation)
+new_videos: [IMG_7190.MOV, IMG_7191.MOV, IMG_7192.MOV, IMG_7193.MOV, IMG_7194.MOV, IMG_7195.MOV]   # file names filled in by the user (empty: the script lists the videos above after_number with their lengths and stops for the user's confirmation)
 after_number: 7184                   # candidates for new_videos: input_dir hand videos numbered above this
 baseline_videos: [IMG_7148.MOV, IMG_7157.MOV, IMG_7158.MOV, IMG_7176.MOV, IMG_7177.MOV, IMG_7178.MOV, IMG_7180.MOV, IMG_7181.MOV]     # 22's 1x videos (17 runs' cached detections, read only)
 input_dir: /home/juson/data/hand_focal_videos
