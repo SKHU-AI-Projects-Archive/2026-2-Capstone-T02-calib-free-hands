@@ -1,0 +1,306 @@
+experiment: 25_long_video_check
+run: runs/25_long_video_check/20261022T042710Z
+code_commit: 17053b1
+git_dirty_at_run: false
+note: 긴 새 영상으로 후보 방법(mediapipe_hands + 손목 제외 + fixed_template)을 다시 평가한 검증 실험이다. 후보
+  설정과 판정 문턱값은 바꾸지 않았다. 기준 f와의 비교는 summary.md에만 있다.
+candidate:
+  detector: mediapipe_hands
+  wrist_mode: exclude
+  estimator: fixed_template
+  front_window: 17's (phase_mode nominal, tilt phase from 3.0 s)
+videos:
+  IMG_7190.MOV:
+    duration_s: 22.33
+    detect_rate: 1.0
+    edge_rate: 0.0
+    excluded: null
+    ft:
+      f_px: 1568.8
+      status: value
+      verdict: REJECT
+      sharpness: 1.006
+      boot_log_std: 0.07458
+      boot_rel_std: 0.07704
+      f_rel_uncertainty: 0.5188
+    motion:
+      tilt_start_s: 3.0
+      tilt_last_s: 22.333
+      n_tilt_frames: 291
+      tilt_duration_s: 19.333
+      theta_median_deg: 37.207
+      theta_p90_deg: 54.292
+      theta_over_45_frac: 0.34
+      theta_max_deg: 66.359
+    h4_variant:
+      theta_min_deg: 20.0
+      n_tilt: 249
+      f: 1516.5
+      at_grid_edge: false
+      side: null
+    guide:
+      t_transition: 1.8666666666666667
+      guide: false
+      reasons:
+      - 손 박스/짧은 변 0.63 > 0.6
+      - 자동 전환 1.87 s < 2.5 s
+      items:
+        box_short_ratio: false
+        edge_rate: true
+        transition: false
+        tilt_frames: true
+        theta_tilt_median: true
+        axis_bins: true
+        finger_extension: true
+    comparison:
+      keep_ft_px: 1451.5
+      exclude_jd_px: 1367.7
+      anycalib_pinhole_px: 2374.8
+      anycalib_gen_px: 2052.4
+  IMG_7191.MOV:
+    duration_s: 13.53
+    detect_rate: 1.0
+    edge_rate: 0.0
+    excluded: null
+    ft:
+      f_px: 2390.8
+      status: value
+      verdict: REJECT
+      sharpness: 1.0026
+      boot_log_std: 0.11137
+      boot_rel_std: 0.112
+      f_rel_uncertainty: 0.4595
+    motion:
+      tilt_start_s: 3.0
+      tilt_last_s: 13.533
+      n_tilt_frames: 159
+      tilt_duration_s: 10.533
+      theta_median_deg: 28.653
+      theta_p90_deg: 44.855
+      theta_over_45_frac: 0.094
+      theta_max_deg: 49.064
+    h4_variant:
+      theta_min_deg: 20.0
+      n_tilt: 128
+      f: 2423.4
+      at_grid_edge: false
+      side: null
+    guide:
+      t_transition: 4.266666666666667
+      guide: false
+      reasons:
+      - 손 박스/짧은 변 0.63 > 0.6
+      items:
+        box_short_ratio: false
+        edge_rate: true
+        transition: true
+        tilt_frames: true
+        theta_tilt_median: true
+        axis_bins: true
+        finger_extension: true
+    comparison:
+      keep_ft_px: 1926.5
+      exclude_jd_px: 2045.6
+      anycalib_pinhole_px: 2416.6
+      anycalib_gen_px: 2118.5
+  IMG_7192.MOV:
+    duration_s: 23.67
+    detect_rate: 1.0
+    edge_rate: 0.0
+    excluded: null
+    ft:
+      f_px: 1742.2
+      status: value
+      verdict: REJECT
+      sharpness: 1.0039
+      boot_log_std: 0.0794
+      boot_rel_std: 0.07869
+      f_rel_uncertainty: 0.4053
+    motion:
+      tilt_start_s: 3.0
+      tilt_last_s: 23.667
+      n_tilt_frames: 311
+      tilt_duration_s: 20.667
+      theta_median_deg: 35.779
+      theta_p90_deg: 50.58
+      theta_over_45_frac: 0.228
+      theta_max_deg: 61.859
+    h4_variant:
+      theta_min_deg: 20.0
+      n_tilt: 255
+      f: 1702.2
+      at_grid_edge: false
+      side: null
+    guide:
+      t_transition: 4.0
+      guide: false
+      reasons:
+      - 손 박스/짧은 변 0.62 > 0.6
+      items:
+        box_short_ratio: false
+        edge_rate: true
+        transition: true
+        tilt_frames: true
+        theta_tilt_median: true
+        axis_bins: true
+        finger_extension: true
+    comparison:
+      keep_ft_px: 1628.6
+      exclude_jd_px: 1633.7
+      anycalib_pinhole_px: 2439.3
+      anycalib_gen_px: 2105.9
+  IMG_7193.MOV:
+    duration_s: 23.07
+    detect_rate: 1.0
+    edge_rate: 0.0
+    excluded: null
+    ft:
+      f_px: 1534.4
+      status: value
+      verdict: REJECT
+      sharpness: 1.0047
+      boot_log_std: 0.11707
+      boot_rel_std: 0.11942
+      f_rel_uncertainty: 0.3724
+    motion:
+      tilt_start_s: 3.0
+      tilt_last_s: 23.067
+      n_tilt_frames: 302
+      tilt_duration_s: 20.067
+      theta_median_deg: 34.233
+      theta_p90_deg: 61.798
+      theta_over_45_frac: 0.341
+      theta_max_deg: 72.305
+    h4_variant:
+      theta_min_deg: 20.0
+      n_tilt: 239
+      f: 1516.1
+      at_grid_edge: false
+      side: null
+    guide:
+      t_transition: 4.8
+      guide: false
+      reasons:
+      - 손 박스/짧은 변 0.63 > 0.6
+      items:
+        box_short_ratio: false
+        edge_rate: true
+        transition: true
+        tilt_frames: true
+        theta_tilt_median: true
+        axis_bins: true
+        finger_extension: true
+    comparison:
+      keep_ft_px: 1613.4
+      exclude_jd_px: 1513.8
+      anycalib_pinhole_px: 2525.9
+      anycalib_gen_px: 2152.1
+  IMG_7194.MOV:
+    duration_s: 23.87
+    detect_rate: 1.0
+    edge_rate: 0.0
+    excluded: null
+    ft:
+      f_px: 1875.1
+      status: value
+      verdict: REJECT
+      sharpness: 1.0029
+      boot_log_std: 0.08224
+      boot_rel_std: 0.08393
+      f_rel_uncertainty: 0.3555
+    motion:
+      tilt_start_s: 3.0
+      tilt_last_s: 23.867
+      n_tilt_frames: 314
+      tilt_duration_s: 20.867
+      theta_median_deg: 32.139
+      theta_p90_deg: 54.597
+      theta_over_45_frac: 0.29
+      theta_max_deg: 62.511
+    h4_variant:
+      theta_min_deg: 20.0
+      n_tilt: 241
+      f: 1884.1
+      at_grid_edge: false
+      side: null
+    guide:
+      t_transition: 4.6
+      guide: false
+      reasons:
+      - 손 박스/짧은 변 0.62 > 0.6
+      items:
+        box_short_ratio: false
+        edge_rate: true
+        transition: true
+        tilt_frames: true
+        theta_tilt_median: true
+        axis_bins: true
+        finger_extension: true
+    comparison:
+      keep_ft_px: 1823.8
+      exclude_jd_px: 1731.0
+      anycalib_pinhole_px: 2448.4
+      anycalib_gen_px: 2080.8
+  IMG_7195.MOV:
+    duration_s: 26.67
+    detect_rate: 1.0
+    edge_rate: 0.0
+    excluded: null
+    ft:
+      f_px: 1663.9
+      status: value
+      verdict: REJECT
+      sharpness: 1.0047
+      boot_log_std: 0.07509
+      boot_rel_std: 0.07457
+      f_rel_uncertainty: 0.2895
+    motion:
+      tilt_start_s: 3.0
+      tilt_last_s: 26.667
+      n_tilt_frames: 356
+      tilt_duration_s: 23.667
+      theta_median_deg: 33.821
+      theta_p90_deg: 51.693
+      theta_over_45_frac: 0.194
+      theta_max_deg: 63.106
+    h4_variant:
+      theta_min_deg: 20.0
+      n_tilt: 282
+      f: 1605.5
+      at_grid_edge: false
+      side: null
+    guide:
+      t_transition: 4.133333333333334
+      guide: false
+      reasons:
+      - 손 박스/짧은 변 0.63 > 0.6
+      items:
+        box_short_ratio: false
+        edge_rate: true
+        transition: true
+        tilt_frames: true
+        theta_tilt_median: true
+        axis_bins: true
+        finger_extension: true
+    comparison:
+      keep_ft_px: 1470.0
+      exclude_jd_px: 1513.1
+      anycalib_pinhole_px: 2253.3
+      anycalib_gen_px: 2024.9
+hypotheses:
+  H1:
+    verdict: 지지
+    new_median: 0.08082
+    base_median: 0.12732
+    ratio_used: 0.85
+    ratio_observed: 0.63478
+  H2:
+    verdict: 확인 안 됨
+    reason: null
+  H3:
+    verdict: 보정 효과 없음
+    reason: null
+  H4:
+    verdict: 근거 없음
+    n: 6
+bias_correction_fixed_before_new_videos: true
