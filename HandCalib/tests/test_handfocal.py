@@ -1925,5 +1925,18 @@ class LongEndToEnd(unittest.TestCase):
             self.assertEqual(sorted(yy["hypotheses"]), ["H1", "H2", "H3", "H4"])
 
 
+class LongYamlPatch(unittest.TestCase):
+    def test_baseline_values_are_written_without_losing_comments_or_the_space_before_them(self):
+        with tempfile.TemporaryDirectory() as d:
+            p = Path(d) / "c.yaml"
+            p.write_text("baseline:\n  bias_b: null                       # b = log\n  json: null                         # note\n  pooled_f_px: null\n")
+            run.long_patch_yaml(p, {"bias_b": "0.5", "json": "x/y.json", "pooled_f_px": "1.5"})
+            c = yaml.safe_load(p.read_text())["baseline"]
+            self.assertEqual((c["bias_b"], c["json"], c["pooled_f_px"]), (0.5, "x/y.json", 1.5))
+            self.assertIn("# b = log", p.read_text())
+            with self.assertRaises(SystemExit):
+                run.long_patch_yaml(p, {"missing_key": "1"})
+
+
 if __name__ == "__main__":
     unittest.main()

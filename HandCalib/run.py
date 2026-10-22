@@ -3017,7 +3017,7 @@ def long_patch_yaml(path: Path, values: dict):
     """Writes the baseline values into the `baseline:` block of the config (text edit that keeps comments)."""
     t = path.read_text()
     for k, v in values.items():
-        t, n = re.subn(rf"^(  {k}:)[^\n#]*", lambda m: f"{m.group(1)} {v}", t, count=1, flags=re.M)
+        t, n = re.subn(rf"^(  {k}:)[^\n#]*(#[^\n]*)?$", lambda m: f"{m.group(1)} {v}" + (f"  {m.group(2)}" if m.group(2) else ""), t, count=1, flags=re.M)
         if n != 1:
             raise SystemExit(f"baseline key not found in the yaml: {k}")
     path.write_text(t)

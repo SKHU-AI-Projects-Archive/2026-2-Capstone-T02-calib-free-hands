@@ -46,12 +46,19 @@ n_workers: 16                        # mediapipe (CPU) detection of the new vide
 workers: 9                           # parallel videos
 
 # Baseline of the 8 existing videos, written by `error-bias` BEFORE any new video is processed (step 2 of the run order) and then committed.
+# ---- b fixed 2026-10-22 by `long-video-check bias` (code commit 3742810, baseline videos only); it is not recomputed afterwards. Log of that run
+# (runs/25_long_video_check/20261022T041924Z_bias/log.txt):
+#   25 편향 보정값 b: 기존 영상 ['IMG_7148.MOV', 'IMG_7157.MOV', 'IMG_7158.MOV', 'IMG_7176.MOV', 'IMG_7177.MOV', 'IMG_7178.MOV', 'IMG_7180.MOV', 'IMG_7181.MOV']만 사용(새 영상 없음) → /home/juson/project/2026-2-Capstone-T02-calib-free-hands/HandCalib/runs/25_long_video_check/20261022T041924Z_bias
+#   합동 추정 f = 1784.60 px, b = log(f_합동 / 1680) = +0.060398 (f_합동 / 기준 = 1.0623)
+#   기존 8개 영상: |오차| 중앙값 10.6%, 부호 포함 중앙값 +7.3%, log f 표준편차 0.148, 부트스트랩 로그 SD 중앙값 0.1273
+#   22와 같은 f: 8/8, 23과 같은 부트스트랩 상대 표준편차: 8/8
+#   yaml에 기록: HandCalib/configs/25_long_video_check.yaml
 baseline:
-  bias_b: null                       # b = log(f_pooled_baseline / reference_f_px)
-  json: null                         # the baseline run's per-video values and cost curves
-  bootstrap_log_std_median: null
-  log_f_sd_between_videos: null
-  pooled_f_px: null
+  bias_b: 0.06039820152879306  # b = log(f_pooled_baseline / reference_f_px)
+  json: runs/25_long_video_check/20261022T041924Z_bias/baseline.json  # the baseline run's per-video values and cost curves
+  bootstrap_log_std_median: 0.1273215227887114
+  log_f_sd_between_videos: 0.14846236998656698
+  pooled_f_px: 1784.595885538142
 
 # 21's guide settings (the new guide and the linear_d transition)
 guide:
