@@ -1,0 +1,657 @@
+experiment: 23_error_factors
+run: runs/23_error_factors/20261022T002204Z
+code_commit: 5edae6f
+git_dirty_at_run: false
+note: 후보 방법의 영상별 오차가 어떤 요인과 함께 움직이는지 찾은 탐색 결과이다. 원인 확정이 아니며, 확정은 통제 촬영이 필요하다. 기준 f와의
+  비교와 순위 상관은 summary.md에만 있다.
+candidate:
+  detector: mediapipe_hands
+  wrist_mode: exclude
+  estimator: fixed_template
+  front_window: 17's (phase_mode nominal, tilt phase from 3.0 s)
+videos:
+  IMG_7148.MOV:
+    lens_series: false
+    detections: 17 run
+    same_as_22: true
+    ft:
+      f_px: 1873.6
+      status: value
+      verdict: REJECT
+    factors:
+      jd_delta_deg: 16.2018
+      jd_phi_deg: 87.4701
+      d0: 0.029
+      front_jitter_rel_pct: 0.2235
+      finger_ext_min: 0.9974
+      finger_ext_mean: 0.9989
+      n_tilt_frames: 121
+      theta_median_deg: 22.7572
+      theta_p90_deg: 44.922
+      theta_over_45_frac: 0.0992
+      frac_pitch: 0.4336
+      frac_roll: 0.2389
+      frac_mixed: 0.3274
+      frac_unclassified: 0.0661
+      axis_bins: 6
+      hand_box_short_ratio_front: 0.5912
+      center_offset_pct: 6.6724
+      edge_rate: 0.0
+      bone_ratio_pct: 1.7358
+      spread_change_deg: 1.3726
+      wrist_change_deg: 1.1787
+      reproj_rms_rel_pct: 1.7253
+      sharpness: 1.0007
+      bootstrap_rel_std: 0.1297
+      f_rel_uncertainty: 0.3207
+      f_signal_ratio: 0.1669
+      overlap_rel: 0.0699
+      speed: 0.1259
+      detector_diff_wilor_yolo: 2.1293
+      detector_diff_rtmpose_hand: 1.9988
+    curve_mean_check_max_rel_diff: 0.0
+    subsets:
+      all_tilt_frames:
+        f_px: 1873.6
+        status: value
+        n_tilt_frames: 121
+      숙임 프레임만:
+        f_px: 2408.9
+        status: value
+        n_tilt_frames: 49
+      굴림 프레임만:
+        skipped: 기울기 프레임 27장 < 30장
+      θ2d 20–40°만:
+        f_px: 2108.6
+        status: value
+        n_tilt_frames: 57
+      재투영 잔차 하위 절반:
+        f_px: null
+        status: 값 없음 (상한)
+        n_tilt_frames: 61
+      손 모양 변화(마디 길이 비) 하위 절반:
+        f_px: null
+        status: 값 없음 (상한)
+        n_tilt_frames: 61
+    frames:
+      n_tilt: 121
+      n_pref_at_grid_edge: 62
+      kinds:
+        숙임: 49
+        굴림: 27
+        혼합: 37
+        미분류: 8
+  IMG_7157.MOV:
+    lens_series: false
+    detections: 17 run
+    same_as_22: true
+    ft:
+      f_px: 2077.4
+      status: value
+      verdict: REJECT
+    factors:
+      jd_delta_deg: 22.5718
+      jd_phi_deg: 79.5933
+      d0: 0.0232
+      front_jitter_rel_pct: 0.1899
+      finger_ext_min: 0.9991
+      finger_ext_mean: 0.9995
+      n_tilt_frames: 137
+      theta_median_deg: 19.0617
+      theta_p90_deg: 28.8502
+      theta_over_45_frac: 0.0
+      frac_pitch: 0.248
+      frac_roll: 0.448
+      frac_mixed: 0.304
+      frac_unclassified: 0.0876
+      axis_bins: 6
+      hand_box_short_ratio_front: 0.5332
+      center_offset_pct: 9.4017
+      edge_rate: 0.0
+      bone_ratio_pct: 1.6237
+      spread_change_deg: 0.8921
+      wrist_change_deg: 1.4448
+      reproj_rms_rel_pct: 0.3121
+      sharpness: 1.0046
+      bootstrap_rel_std: 0.1117
+      f_rel_uncertainty: 0.2235
+      f_signal_ratio: 0.1891
+      overlap_rel: 0.0726
+      speed: 0.1247
+      detector_diff_wilor_yolo: 2.0291
+      detector_diff_rtmpose_hand: 1.7873
+    curve_mean_check_max_rel_diff: 0.0
+    subsets:
+      all_tilt_frames:
+        f_px: 2077.4
+        status: value
+        n_tilt_frames: 137
+      숙임 프레임만:
+        f_px: 2878.5
+        status: value
+        n_tilt_frames: 31
+      굴림 프레임만:
+        f_px: 1586.8
+        status: value
+        n_tilt_frames: 56
+      θ2d 20–40°만:
+        f_px: 1994.3
+        status: value
+        n_tilt_frames: 65
+      재투영 잔차 하위 절반:
+        f_px: 2369.6
+        status: value
+        n_tilt_frames: 69
+      손 모양 변화(마디 길이 비) 하위 절반:
+        f_px: 2718.3
+        status: value
+        n_tilt_frames: 69
+    frames:
+      n_tilt: 137
+      n_pref_at_grid_edge: 56
+      kinds:
+        숙임: 31
+        굴림: 56
+        혼합: 38
+        미분류: 12
+  IMG_7158.MOV:
+    lens_series: false
+    detections: 17 run
+    same_as_22: true
+    ft:
+      f_px: 1748.2
+      status: value
+      verdict: REJECT
+    factors:
+      jd_delta_deg: 36.8029
+      jd_phi_deg: 168.6678
+      d0: 0.0323
+      front_jitter_rel_pct: 0.194
+      finger_ext_min: 0.9981
+      finger_ext_mean: 0.9994
+      n_tilt_frames: 174
+      theta_median_deg: 30.3452
+      theta_p90_deg: 49.4341
+      theta_over_45_frac: 0.1897
+      frac_pitch: 0.0756
+      frac_roll: 0.657
+      frac_mixed: 0.2674
+      frac_unclassified: 0.0115
+      axis_bins: 6
+      hand_box_short_ratio_front: 0.532
+      center_offset_pct: 8.2624
+      edge_rate: 0.0
+      bone_ratio_pct: 2.5279
+      spread_change_deg: 1.855
+      wrist_change_deg: 2.6795
+      reproj_rms_rel_pct: 0.47
+      sharpness: 1.0047
+      bootstrap_rel_std: 0.1272
+      f_rel_uncertainty: 0.3129
+      f_signal_ratio: 0.1977
+      overlap_rel: 0.0692
+      speed: 0.1233
+      detector_diff_wilor_yolo: 2.0293
+      detector_diff_rtmpose_hand: 1.7123
+    curve_mean_check_max_rel_diff: 0.0
+    subsets:
+      all_tilt_frames:
+        f_px: 1748.2
+        status: value
+        n_tilt_frames: 174
+      숙임 프레임만:
+        skipped: 기울기 프레임 13장 < 30장
+      굴림 프레임만:
+        f_px: 1817.6
+        status: value
+        n_tilt_frames: 113
+      θ2d 20–40°만:
+        f_px: 1301.4
+        status: value
+        n_tilt_frames: 86
+      재투영 잔차 하위 절반:
+        f_px: 1683.3
+        status: value
+        n_tilt_frames: 87
+      손 모양 변화(마디 길이 비) 하위 절반:
+        f_px: 2782.2
+        status: value
+        n_tilt_frames: 87
+    frames:
+      n_tilt: 174
+      n_pref_at_grid_edge: 63
+      kinds:
+        숙임: 13
+        굴림: 113
+        혼합: 46
+        미분류: 2
+  IMG_7176.MOV:
+    lens_series: false
+    detections: 17 run
+    same_as_22: true
+    ft:
+      f_px: 1314.0
+      status: value
+      verdict: REJECT
+    factors:
+      jd_delta_deg: 7.4731
+      jd_phi_deg: 127.4536
+      d0: 0.131
+      front_jitter_rel_pct: 0.5014
+      finger_ext_min: 0.9958
+      finger_ext_mean: 0.9986
+      n_tilt_frames: 93
+      theta_median_deg: 15.8414
+      theta_p90_deg: 35.4926
+      theta_over_45_frac: 0.0
+      frac_pitch: 0.2143
+      frac_roll: 0.5476
+      frac_mixed: 0.2381
+      frac_unclassified: 0.0968
+      axis_bins: 6
+      hand_box_short_ratio_front: 0.5814
+      center_offset_pct: 6.2111
+      edge_rate: 0.0
+      bone_ratio_pct: 1.2032
+      spread_change_deg: 0.8715
+      wrist_change_deg: 1.9501
+      reproj_rms_rel_pct: 0.3752
+      sharpness: 1.0121
+      bootstrap_rel_std: 0.13
+      f_rel_uncertainty: 0.4802
+      f_signal_ratio: 0.2182
+      overlap_rel: 0.0732
+      speed: 0.0935
+      detector_diff_wilor_yolo: 1.8939
+      detector_diff_rtmpose_hand: 1.9056
+    curve_mean_check_max_rel_diff: 0.0
+    subsets:
+      all_tilt_frames:
+        f_px: 1314.0
+        status: value
+        n_tilt_frames: 93
+      숙임 프레임만:
+        skipped: 기울기 프레임 18장 < 30장
+      굴림 프레임만:
+        f_px: 1183.8
+        status: value
+        n_tilt_frames: 46
+      θ2d 20–40°만:
+        f_px: 1256.4
+        status: value
+        n_tilt_frames: 31
+      재투영 잔차 하위 절반:
+        f_px: null
+        status: 값 없음 (상한)
+        n_tilt_frames: 47
+      손 모양 변화(마디 길이 비) 하위 절반:
+        f_px: null
+        status: 값 없음 (상한)
+        n_tilt_frames: 47
+    frames:
+      n_tilt: 93
+      n_pref_at_grid_edge: 60
+      kinds:
+        숙임: 18
+        굴림: 46
+        혼합: 20
+        미분류: 9
+  IMG_7177.MOV:
+    lens_series: false
+    detections: 17 run
+    same_as_22: true
+    ft:
+      f_px: 2138.1
+      status: value
+      verdict: REJECT
+    factors:
+      jd_delta_deg: 16.249
+      jd_phi_deg: 0.0
+      d0: 0.0304
+      front_jitter_rel_pct: 0.1937
+      finger_ext_min: 0.997
+      finger_ext_mean: 0.9991
+      n_tilt_frames: 113
+      theta_median_deg: 17.5661
+      theta_p90_deg: 47.9631
+      theta_over_45_frac: 0.1504
+      frac_pitch: 0.5741
+      frac_roll: 0.2315
+      frac_mixed: 0.1944
+      frac_unclassified: 0.0442
+      axis_bins: 6
+      hand_box_short_ratio_front: 0.607
+      center_offset_pct: 9.6677
+      edge_rate: 0.0
+      bone_ratio_pct: 1.2502
+      spread_change_deg: 0.8871
+      wrist_change_deg: 1.9554
+      reproj_rms_rel_pct: 0.3725
+      sharpness: 1.006
+      bootstrap_rel_std: 0.1712
+      f_rel_uncertainty: 0.3907
+      f_signal_ratio: 0.246
+      overlap_rel: 0.0722
+      speed: 0.0991
+      detector_diff_wilor_yolo: 2.2283
+      detector_diff_rtmpose_hand: 1.8458
+    curve_mean_check_max_rel_diff: 0.0
+    subsets:
+      all_tilt_frames:
+        f_px: 2138.1
+        status: value
+        n_tilt_frames: 113
+      숙임 프레임만:
+        f_px: 2819.7
+        status: value
+        n_tilt_frames: 62
+      굴림 프레임만:
+        skipped: 기울기 프레임 25장 < 30장
+      θ2d 20–40°만:
+        skipped: 기울기 프레임 25장 < 30장
+      재투영 잔차 하위 절반:
+        f_px: null
+        status: 값 없음 (상한)
+        n_tilt_frames: 57
+      손 모양 변화(마디 길이 비) 하위 절반:
+        f_px: null
+        status: 값 없음 (상한)
+        n_tilt_frames: 57
+    frames:
+      n_tilt: 113
+      n_pref_at_grid_edge: 58
+      kinds:
+        숙임: 62
+        굴림: 25
+        혼합: 21
+        미분류: 5
+  IMG_7178.MOV:
+    lens_series: false
+    detections: 17 run
+    same_as_22: true
+    ft:
+      f_px: 1761.6
+      status: value
+      verdict: REJECT
+    factors:
+      jd_delta_deg: 15.9789
+      jd_phi_deg: 26.1213
+      d0: 0.0227
+      front_jitter_rel_pct: 0.157
+      finger_ext_min: 0.9988
+      finger_ext_mean: 0.9995
+      n_tilt_frames: 154
+      theta_median_deg: 14.8361
+      theta_p90_deg: 44.0536
+      theta_over_45_frac: 0.0974
+      frac_pitch: 0.3788
+      frac_roll: 0.3939
+      frac_mixed: 0.2273
+      frac_unclassified: 0.1429
+      axis_bins: 6
+      hand_box_short_ratio_front: 0.5675
+      center_offset_pct: 19.5895
+      edge_rate: 0.0804
+      bone_ratio_pct: 1.3783
+      spread_change_deg: 1.0505
+      wrist_change_deg: 2.5053
+      reproj_rms_rel_pct: 0.4085
+      sharpness: 1.0053
+      bootstrap_rel_std: 0.1609
+      f_rel_uncertainty: 0.3219
+      f_signal_ratio: 0.2191
+      overlap_rel: 0.0694
+      speed: 0.0879
+      detector_diff_wilor_yolo: 2.1361
+      detector_diff_rtmpose_hand: 1.6317
+    curve_mean_check_max_rel_diff: 0.0
+    subsets:
+      all_tilt_frames:
+        f_px: 1761.6
+        status: value
+        n_tilt_frames: 154
+      숙임 프레임만:
+        f_px: 1725.6
+        status: value
+        n_tilt_frames: 50
+      굴림 프레임만:
+        f_px: 1615.5
+        status: value
+        n_tilt_frames: 52
+      θ2d 20–40°만:
+        f_px: 1550.2
+        status: value
+        n_tilt_frames: 38
+      재투영 잔차 하위 절반:
+        f_px: null
+        status: 값 없음 (상한)
+        n_tilt_frames: 77
+      손 모양 변화(마디 길이 비) 하위 절반:
+        f_px: null
+        status: 값 없음 (상한)
+        n_tilt_frames: 77
+    frames:
+      n_tilt: 154
+      n_pref_at_grid_edge: 70
+      kinds:
+        숙임: 50
+        굴림: 52
+        혼합: 30
+        미분류: 22
+  IMG_7180.MOV:
+    lens_series: false
+    detections: 17 run
+    same_as_22: true
+    ft:
+      f_px: 1843.0
+      status: value
+      verdict: REJECT
+    factors:
+      jd_delta_deg: 16.8734
+      jd_phi_deg: 37.1026
+      d0: 0.017
+      front_jitter_rel_pct: 0.1368
+      finger_ext_min: 0.9982
+      finger_ext_mean: 0.9994
+      n_tilt_frames: 180
+      theta_median_deg: 35.6467
+      theta_p90_deg: 54.9868
+      theta_over_45_frac: 0.1833
+      frac_pitch: 0.2011
+      frac_roll: 0.3799
+      frac_mixed: 0.419
+      frac_unclassified: 0.0056
+      axis_bins: 6
+      hand_box_short_ratio_front: 0.5656
+      center_offset_pct: 10.8043
+      edge_rate: 0.0
+      bone_ratio_pct: 2.773
+      spread_change_deg: 1.2159
+      wrist_change_deg: 4.9773
+      reproj_rms_rel_pct: 0.629
+      sharpness: 1.0044
+      bootstrap_rel_std: 0.1296
+      f_rel_uncertainty: 0.3798
+      f_signal_ratio: 0.2126
+      overlap_rel: 0.0669
+      speed: 0.1941
+      detector_diff_wilor_yolo: 2.0585
+      detector_diff_rtmpose_hand: 1.784
+    curve_mean_check_max_rel_diff: 0.0
+    subsets:
+      all_tilt_frames:
+        f_px: 1843.0
+        status: value
+        n_tilt_frames: 180
+      숙임 프레임만:
+        f_px: 1504.6
+        status: value
+        n_tilt_frames: 36
+      굴림 프레임만:
+        f_px: 1634.4
+        status: value
+        n_tilt_frames: 68
+      θ2d 20–40°만:
+        f_px: 1790.5
+        status: value
+        n_tilt_frames: 115
+      재투영 잔차 하위 절반:
+        f_px: 1785.0
+        status: value
+        n_tilt_frames: 90
+      손 모양 변화(마디 길이 비) 하위 절반:
+        f_px: 2948.8
+        status: value
+        n_tilt_frames: 90
+    frames:
+      n_tilt: 180
+      n_pref_at_grid_edge: 61
+      kinds:
+        숙임: 36
+        굴림: 68
+        혼합: 75
+        미분류: 1
+  IMG_7181.MOV:
+    lens_series: false
+    detections: 17 run
+    same_as_22: true
+    ft:
+      f_px: 1727.7
+      status: value
+      verdict: REJECT
+    factors:
+      jd_delta_deg: 16.7203
+      jd_phi_deg: 58.3514
+      d0: 0.0142
+      front_jitter_rel_pct: 0.1238
+      finger_ext_min: 0.9965
+      finger_ext_mean: 0.999
+      n_tilt_frames: 125
+      theta_median_deg: 25.5821
+      theta_p90_deg: 49.7813
+      theta_over_45_frac: 0.168
+      frac_pitch: 0.121
+      frac_roll: 0.629
+      frac_mixed: 0.25
+      frac_unclassified: 0.008
+      axis_bins: 6
+      hand_box_short_ratio_front: 0.636
+      center_offset_pct: 6.4772
+      edge_rate: 0.0
+      bone_ratio_pct: 2.4377
+      spread_change_deg: 1.4189
+      wrist_change_deg: 2.8784
+      reproj_rms_rel_pct: 0.5535
+      sharpness: 1.0048
+      bootstrap_rel_std: 0.1076
+      f_rel_uncertainty: 0.473
+      f_signal_ratio: 0.218
+      overlap_rel: 0.0714
+      speed: 0.2023
+      detector_diff_wilor_yolo: 1.9749
+      detector_diff_rtmpose_hand: 1.8075
+    curve_mean_check_max_rel_diff: 0.0
+    subsets:
+      all_tilt_frames:
+        f_px: 1727.7
+        status: value
+        n_tilt_frames: 125
+      숙임 프레임만:
+        skipped: 기울기 프레임 15장 < 30장
+      굴림 프레임만:
+        f_px: 1952.8
+        status: value
+        n_tilt_frames: 78
+      θ2d 20–40°만:
+        f_px: 1833.9
+        status: value
+        n_tilt_frames: 81
+      재투영 잔차 하위 절반:
+        f_px: 2339.7
+        status: value
+        n_tilt_frames: 63
+      손 모양 변화(마디 길이 비) 하위 절반:
+        f_px: 2794.0
+        status: value
+        n_tilt_frames: 63
+    frames:
+      n_tilt: 125
+      n_pref_at_grid_edge: 37
+      kinds:
+        숙임: 15
+        굴림: 78
+        혼합: 31
+        미분류: 1
+  IMG_7184.MOV:
+    lens_series: true
+    detections: 22 run cache (found by the frame hashes)
+    same_as_22: true
+    ft:
+      f_px: 987.8
+      status: value
+      verdict: ROUGH
+    factors:
+      jd_delta_deg: 18.1803
+      jd_phi_deg: 25.7825
+      d0: 0.0103
+      front_jitter_rel_pct: 0.0846
+      finger_ext_min: 0.9979
+      finger_ext_mean: 0.999
+      n_tilt_frames: 154
+      theta_median_deg: 28.9069
+      theta_p90_deg: 42.6919
+      theta_over_45_frac: 0.0519
+      frac_pitch: 0.2449
+      frac_roll: 0.5102
+      frac_mixed: 0.2449
+      frac_unclassified: 0.0455
+      axis_bins: 6
+      hand_box_short_ratio_front: 0.501
+      center_offset_pct: 7.6389
+      edge_rate: 0.0
+      bone_ratio_pct: 3.0548
+      spread_change_deg: 1.4894
+      wrist_change_deg: 1.4765
+      reproj_rms_rel_pct: 0.5482
+      sharpness: 1.0052
+      bootstrap_rel_std: 0.1177
+      f_rel_uncertainty: 0.2353
+      f_signal_ratio: 0.2578
+      overlap_rel: 0.0705
+      speed: 0.0918
+      detector_diff_wilor_yolo: null
+      detector_diff_rtmpose_hand: null
+    curve_mean_check_max_rel_diff: 0.0
+    subsets:
+      all_tilt_frames:
+        f_px: 987.8
+        status: value
+        n_tilt_frames: 154
+      숙임 프레임만:
+        f_px: 1027.9
+        status: value
+        n_tilt_frames: 36
+      굴림 프레임만:
+        f_px: 894.0
+        status: value
+        n_tilt_frames: 75
+      θ2d 20–40°만:
+        f_px: 990.2
+        status: value
+        n_tilt_frames: 69
+      재투영 잔차 하위 절반:
+        f_px: 1188.6
+        status: value
+        n_tilt_frames: 77
+      손 모양 변화(마디 길이 비) 하위 절반:
+        f_px: 1343.8
+        status: value
+        n_tilt_frames: 77
+    frames:
+      n_tilt: 154
+      n_pref_at_grid_edge: 35
+      kinds:
+        숙임: 36
+        굴림: 75
+        혼합: 36
+        미분류: 7
