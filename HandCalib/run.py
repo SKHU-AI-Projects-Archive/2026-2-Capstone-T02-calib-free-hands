@@ -7,6 +7,7 @@
     python HandCalib/run.py phase-segmentation --config HandCalib/configs/20_phase_segmentation.yaml [--videos A,B] [--detectors a,b] [results-yaml --run DIR]
     python HandCalib/run.py guide-revision --config HandCalib/configs/21_guide_revision.yaml [--videos A,B] [--detectors a,b] [results-yaml --run DIR | overlay --run DIR]
     python HandCalib/run.py f-response     --config HandCalib/configs/22_f_response.yaml [--videos A,B] [results-yaml --run DIR]
+    python HandCalib/run.py error-factors  --config HandCalib/configs/23_error_factors.yaml [--videos A,B] [results-yaml --run DIR]
 
 Consolidated from run_hand_focal.py (14, process_video only), run_detector_swap.py (16, the per-detector processing that 17 calls),
 run_protocol_rerun.py and run_frame_filter_diag.py (17),
@@ -2552,10 +2553,447 @@ def fresp_main(argv=None):
 
 
 # ====================================================================================================
+# ferr  (experiment 23: why do the per-video errors differ?; new section)
+# Diagnostics of the candidate (mediapipe_hands + wrist_mode exclude + fixed_template) from cached detections only: video-level factors, frame-level preferred f from every tilt
+# frame's own cost curve, and f re-estimated on subsets fixed in the yaml. Reference f values (1680 / 880) appear in summary.md, the pull diagnostic and the factor-vs-error
+# figure only; report.md, per_frame.csv and the results yaml hold values without them.
+#
+#     python HandCalib/run.py error-factors --config HandCalib/configs/23_error_factors.yaml [--videos A,B] [--out DIR]
+#     python HandCalib/run.py error-factors --config ... results-yaml --run runs/23_error_factors/<UTC>
+# ====================================================================================================
+
+FERR_NOTE = "후보 방법의 영상별 오차가 어떤 요인과 함께 움직이는지 찾은 탐색 결과이다. 원인 확정이 아니며, 확정은 통제 촬영이 필요하다."
+FERR_FACTORS = [   # (key, group, label, definition)
+    ("jd_delta_deg", "정면", "JD 정면 기울기 δ (°)", "joint_delta가 추정한 정면 창 손의 기울기(정면이 아니라고 본 정도)"),
+    ("jd_phi_deg", "정면", "JD 기울기 방향 φ (°)", "그 기울기의 방향(템플릿 좌표, 0–180°)"),
+    ("d0", "정면", "정면 잡음 바닥 d0", "정면 창 프레임의 d = 1 − s2/s1(템플릿→프레임 아핀) 95번째 백분위수"),
+    ("front_jitter_rel_pct", "정면", "정면 키포인트 떨림 (% 박스)", "정면 창에서 프레임 키포인트가 템플릿(닮음 변환)에서 벗어나는 RMS ÷ 손 박스 긴 변"),
+    ("finger_ext_min", "정면", "손가락 펴짐 (최소)", "정면 창 MCP→끝 직선 거리 ÷ 세 마디 길이 합, 손가락별 중앙값의 최솟값"),
+    ("n_tilt_frames", "동작", "FT 기울기 프레임 수", "f 추정에 쓰인 기울기 구간 프레임"),
+    ("theta_median_deg", "동작", "θ2d 중앙값 (°)", "기울기 프레임의 θ2d = arccos(s2/s1)"),
+    ("theta_p90_deg", "동작", "θ2d 90번째 백분위수 (°)", "위와 같음"),
+    ("theta_over_45_frac", "동작", "θ2d > 45° 비율", "기울기 프레임 중 45° 초과 비율"),
+    ("frac_pitch", "동작", "숙임 비율", "분류된 프레임 중. 기울기(회전)축과 손의 긴 축 사이 각도 > 60° (손 폭 방향 축 둘레, 손끝이 멀어짐/가까워짐)"),
+    ("frac_roll", "동작", "굴림 비율", "분류된 프레임 중. 그 각도 < 30° (손의 긴 축 둘레로 돌림)"),
+    ("frac_mixed", "동작", "혼합 비율", "분류된 프레임 중. 30–60°"),
+    ("frac_unclassified", "동작", "미분류 비율", "θ2d가 작아(10° 미만) 축을 정할 수 없는 프레임 비율(기울기 프레임 전체 기준)"),
+    ("axis_bins", "동작", "기울기 축 덮임 (/6)", "θ2d ≥ 10° 프레임의 이미지 기울기 방향이 30° 구간 6개 중 2장 이상인 구간 수"),
+    ("hand_box_short_ratio_front", "크기·위치", "정면 창 손 박스 / 짧은 변", "정면 창 손 박스 긴 변 ÷ 영상 짧은 변"),
+    ("center_offset_pct", "크기·위치", "손 중심 화면 중심 거리 (% 대각선 절반)", "기울기 프레임 손 박스 중심이 화면 중심에서 떨어진 거리의 중앙값"),
+    ("edge_rate", "크기·위치", "가장자리 접촉 비율", "검출된 프레임 중 손 박스가 영상 가장자리(2 px 이내)에 닿은 비율"),
+    ("bone_ratio_pct", "손 모양 변화", "마디 길이 비 변화 (%)", "기울기 프레임에서 최적 평면 기울기를 되돌린 뒤 손가락 마디·MCP 줄의 길이 ÷ 템플릿 길이 − 1 의 절댓값 중앙값(마디별, 그다음 프레임별 중앙값)"),
+    ("spread_change_deg", "손 모양 변화", "손가락 벌어짐 변화 (°)", "검지(MCP→끝)와 새끼 방향 사이 각도가 정면 창 값에서 변한 정도의 절댓값 중앙값"),
+    ("wrist_change_deg", "손 모양 변화", "손목 꺾임 변화 (°)", "손목→중지 MCP 방향과 MCP 줄의 수직 방향 사이 각도가 정면 창 값에서 변한 정도의 절댓값 중앙값"),
+    ("overlap_rel", "손 모양 변화", "손가락 겹침 (최소 거리 / 박스)", "이웃 손가락의 PIP·DIP·끝 관절 사이 최소 거리 ÷ 손 박스 긴 변(프레임별, 기울기 프레임 중앙값). 작을수록 겹침"),
+    ("speed", "동작", "키포인트 속도 (1/s)", "관절 이동 평균 ÷ 손 박스 긴 변 ÷ 시간 간격(기울기 프레임 중앙값)"),
+    ("reproj_rms_rel_pct", "검출·추정", "재투영 RMS (% 박스)", "추정 f에서 쓰인 프레임의 재투영 오차 RMS ÷ 손 박스 긴 변"),
+    ("detector_diff_wilor_yolo", "검출·추정", "검출기 차이: mediapipe↔wilor_yolo (% 박스)", "같은 기울기 프레임의 추정 관절 평균 거리 ÷ mediapipe 손 박스 긴 변의 중앙값"),
+    ("detector_diff_rtmpose_hand", "검출·추정", "검출기 차이: mediapipe↔rtmpose (% 박스)", "위와 같음"),
+    ("sharpness", "검출·추정", "날카로움", "min(비용(1.15 f), 비용(f/1.15)) ÷ 비용(f)"),
+    ("bootstrap_rel_std", "검출·추정", "부트스트랩 불확실성 (상대 표준편차)", "프레임 블록 부트스트랩 f의 상대 표준편차"),
+    ("f_signal_ratio", "검출·추정", "f 신호 ÷ 잔차 중앙값", "기울기 프레임마다 f를 0.8·1.2배로 둘 때 재투영 점의 평균 이동 ÷ 그 프레임의 잔차 RMS의 중앙값. 기준점은 영상 자신의 추정 f"),
+]
+FERR_FRAME_FEATURES = [("theta2d_deg", "θ2d (°)"), ("axis_angle_deg", "회전축–긴 축 각도 (°)"), ("direction_deg", "이미지 기울기 방향 (°)"), ("resid_rel_pct", "재투영 잔차 (% 박스)"),
+                       ("bone_ratio_pct", "마디 길이 비 변화 (%)"), ("spread_change_deg", "벌어짐 변화 (°)"), ("wrist_change_deg", "손목 꺾임 변화 (°)"),
+                       ("overlap_rel", "손가락 겹침 (최소 거리/박스)"), ("speed", "속도 (1/s)"), ("center_offset_pct", "손 위치 (% 대각선 절반)")]
+
+
+def ferr_flat(j: dict) -> dict:
+    """The factor values of one video as {key: float | None} (the detector differences flattened)."""
+    f = dict(j["factors"])
+    for d, v in (f.pop("detector_diff_pct", None) or {}).items():
+        f[f"detector_diff_{d}"] = None if v is None else v["median_pct"]
+    return f
+
+
+def ferr_err(j: dict, ref: float):
+    ft = j["ft"]
+    return None if ft["at_grid_edge"] else ft["f"] / ref - 1.0
+
+
+def ferr_ref(cfg: dict, video: str) -> float:
+    return float(cfg["reference_f"].get(video, cfg["reference_f"]["default"]))
+
+
+def ferr_edges(vals, step, lo=0.0):
+    v = np.asarray([x for x in vals if np.isfinite(x)], float)
+    hi = float(np.ceil((v.max() + 1e-9) / step) * step) if len(v) else lo + step
+    return list(np.arange(lo, hi + step / 2, step))
+
+
+def ferr_quantile_edges(vals, n):
+    v = np.asarray([x for x in vals if np.isfinite(x)], float)
+    if len(v) < n:
+        return []
+    e = sorted(set(np.quantile(v, np.linspace(0, 1, n + 1)).tolist()))
+    if len(e) > 1:
+        e[-1] += 1e-9
+    return e
+
+
+def ferr_pooled_tables(frames: list, fc: dict) -> list:
+    """[(title, rows)] of the preferred f per feature bin for the given frames (a list of frame dicts)."""
+    f = [r["f_pref"] for r in frames]
+    ed = [r["pref_at_edge"] for r in frames]
+    out = [("θ2d 구간 (°)", hf.ferr_bin_table([r["theta2d_deg"] for r in frames], f, ed, edges=ferr_edges([r["theta2d_deg"] for r in frames], fc["theta_bin_deg"]))),
+           ("기울기 종류", hf.ferr_bin_table([r["kind"] for r in frames], f, ed, labels=["숙임", "굴림", "혼합", "미분류"])),
+           ("이미지 기울기 방향 구간 (°)", hf.ferr_bin_table([r["direction_deg"] for r in frames], f, ed, edges=ferr_edges([r["direction_deg"] for r in frames], fc["direction_bin_deg"])))]
+    for key, lab in FERR_FRAME_FEATURES:
+        if key in ("theta2d_deg", "axis_angle_deg", "direction_deg"):
+            continue
+        e = ferr_quantile_edges([r[key] for r in frames], int(fc["n_quantiles"]))
+        if len(e) > 2:
+            out.append((f"{lab} (분위 구간)", hf.ferr_bin_table([r[key] for r in frames], f, ed, edges=e)))
+    return out
+
+
+def ferr_table_md(rows: list) -> list:
+    L = ["| 구간 | 프레임 수 | 경계에 붙은 프레임 | 값 있는 프레임 | 선호 f 중앙값 (px) |", "|---|---|---|---|---|"]
+    for r in rows:
+        L.append(f"| {r['label']} | {r['n']} | {r['n_edge']} | {r['n_with_f']} | {'-' if r['median_f'] is None else format(r['median_f'], '.0f')} |")
+    return L
+
+
+def ferr_fmt(key, x):
+    if x is None or (isinstance(x, float) and not np.isfinite(x)):
+        return "계산 불가"
+    if key in ("n_tilt_frames", "axis_bins"):
+        return f"{x:.0f}"
+    if key.startswith("frac_") or key in ("theta_over_45_frac", "edge_rate"):
+        return f"{100 * x:.0f}%" if key.startswith("frac_") or key == "theta_over_45_frac" else f"{100 * x:.1f}%"
+    if key in ("d0", "sharpness", "hand_box_short_ratio_front", "bootstrap_rel_std", "f_rel_uncertainty", "overlap_rel", "f_signal_ratio", "speed"):
+        return f"{x:.3f}"
+    return f"{x:.1f}"
+
+
+def ferr_report(path: Path, jobs: list, cfg: dict):
+    fc = cfg["factors"]
+    ok = [j for j in jobs if "failed" not in j]
+    lens = set(cfg["lens_videos"])
+    main = [j for j in ok if j["video"] not in lens]
+    L = ["# 실험 23: 영상별 오차가 왜 다른가 (진단)", "", FERR_NOTE, "",
+         "후보: mediapipe_hands + wrist_mode exclude + fixed_template (22와 같음). 새 검출 없이 캐시한 검출을 읽었다. 기준 f와의 비교는 이 파일에 없다(summary.md).", "",
+         "## 1. 요인 정의", "", "| 묶음 | 요인 | 정의 |", "|---|---|---|"]
+    for k, g, lab, d in FERR_FACTORS:
+        L.append(f"| {g} | {lab} | {d} |")
+    L += ["", f"- 기울기 종류: 기울기 축(회전축)은 템플릿에서 가장 줄어드는 방향(아핀 선형부의 작은 특이값 방향 v)에 수직이다. 회전축과 손의 긴 축(템플릿 첫 주성분) 사이 각도 = 90° − angle(v, 긴 축). "
+          f"< {fc['roll_max_deg']:.0f}° 굴림, > {fc['pitch_min_deg']:.0f}° 숙임, 그 사이 혼합. θ2d < {fc['class_min_theta_deg']:.0f}° 프레임은 미분류.",
+          "- 손 모양 변화 지표는 프레임을 템플릿에 맞춘 최적 아핀(평면 기울기)을 되돌린 점으로 계산한다. 강체 평면 손이면 0에 가깝고, 손가락이 휘거나 벌어지면 커진다.",
+          "- 7184(0.5x 렌즈)는 아래 표에 열로 넣었지만 순위 상관과 프레임 구간 통합 표에서는 뺐다.", "",
+          "## 2. 영상 단위 요인 표", "",
+          "| 요인 | " + " | ".join(j["video"][4:8] + ("(0.5x)" if j["video"] in lens else "") for j in ok) + " |", "|---|" + "---|" * len(ok)]
+    flat = {j["video"]: ferr_flat(j) for j in ok}
+    for k, g, lab, d in FERR_FACTORS:
+        L.append(f"| {lab} | " + " | ".join(ferr_fmt(k, flat[j["video"]].get(k)) for j in ok) + " |")
+    L += ["", "검출기 차이는 17 실행에 wilor_yolo, rtmpose 검출이 있는 영상만 계산한다(7184는 없음 → 계산 불가, 새 검출을 하지 않았다).", "",
+          "## 3. 프레임 단위: 선호 f 구간별 표", "",
+          "기울기 구간 프레임마다 그 프레임 하나의 비용 곡선(같은 f 격자)에서 최솟값 위치를 선호 f로 했다(fixed_template와 같은 포물선 보간). 곡선 최솟값이 격자 경계면 '경계에 붙은 프레임'으로 세고 중앙값에서 뺐다.", ""]
+    frames_main = [dict(r, video=j["video"]) for j in main for r in j["frames"]]
+    L += [f"### 1배 영상 {len(main)}개 통합 (프레임 {len(frames_main)}장, 경계에 붙은 프레임 {sum(r['pref_at_edge'] for r in frames_main)}장)", ""]
+    for title, rows in ferr_pooled_tables(frames_main, fc):
+        L += [f"**{title}**", ""] + ferr_table_md(rows) + [""]
+    L += ["### 영상별", ""]
+    for j in ok:
+        fr = j["frames"]
+        L += [f"**{j['video']}** (기울기 프레임 {len(fr)}장, 경계에 붙은 {sum(r['pref_at_edge'] for r in fr)}장)", ""]
+        f_ = [r["f_pref"] for r in fr]
+        e_ = [r["pref_at_edge"] for r in fr]
+        L += ferr_table_md(hf.ferr_bin_table([r["theta2d_deg"] for r in fr], f_, e_, edges=ferr_edges([r["theta2d_deg"] for r in fr], fc["theta_bin_deg"]))) + [""]
+        L += ferr_table_md(hf.ferr_bin_table([r["kind"] for r in fr], f_, e_, labels=["숙임", "굴림", "혼합", "미분류"])) + [""]
+    L += ["## 4. 부분집합으로 다시 추정한 f (fixed_template)", "",
+          f"정면 창 프레임 + 아래 기울기 프레임만으로 추정했다. 부분집합은 실행 전 yaml에 고정했고 5개를 모두 적는다. 기울기 프레임이 {fc['min_subset_frames']}장 미만이면 계산하지 않는다. 가장 좋은 것만 고르지 않는다.", "",
+          "| 영상 | 전체 기울기 프레임(FT) | " + " | ".join(s["name"] for s in cfg["subsets"]) + " |", "|---|---|" + "---|" * len(cfg["subsets"])]
+
+    def subcell(x):
+        if x is None:
+            return "-"
+        if x.get("skipped"):
+            return f"계산 안 함: {x['skipped']}"
+        return (f"값 없음 ({x['side']})" if x["at_grid_edge"] else f"{x['f']:.1f} px") + f" ({x['n_tilt']}장)"
+    for j in ok:
+        L.append(f"| {j['video']} | {subcell(j['subset_all'])} | " + " | ".join(subcell(j["subsets"].get(s["name"])) for s in cfg["subsets"]) + " |")
+    L += ["", "## 5. 확인", "",
+          "| 영상 | 22의 f·판정과 일치 | 프레임별 비용 곡선 평균 = FT 비용 곡선 (최대 상대 차이) | 다시 만든 비용 = 모델 비용 | 전체 부분집합 = FT |", "|---|---|---|---|---|"]
+    for j in ok:
+        cc, mc = j["curve_mean_check"], j["cost_check"]
+        L.append(f"| {j['video']} | {'-' if 'same_as_22' not in j else ('O' if j['same_as_22'] else 'X')} | {cc['max_rel_diff']:.2e} ({cc['n_frames']}장) | "
+                 f"{'O' if abs(mc['model_cost'] - mc['rebuilt_cost']) <= 1e-9 * max(1.0, abs(mc['model_cost'])) else 'X'} | {'O' if j['subset_all']['f'] == j['ft']['f'] else 'X'} |")
+    L += ["", "## 6. 한계", "",
+          "- 영상 8개(1배)와 한 대의 폰. 요인 하나하나가 영상 수준에서 서로 얽혀 있어 순위 상관으로 원인을 가릴 수 없다.",
+          "- 프레임 하나의 비용 곡선은 대부분 평평하거나 경계로 간다. 선호 f는 프레임의 정보 정도에 따라 크게 흔들리므로 구간별 중앙값은 경향만 보여준다.",
+          "- 후보 설정과 부분집합 목록은 결과를 보고 바꾸지 않았다. 이 결과로 새 방법을 채택하지 않는다.", ""]
+    path.write_text("\n".join(L) + "\n")
+
+
+def ferr_pull_summary(j: dict, cfg: dict) -> dict:
+    """Pull of every tilt frame (cost at the reference f - cost at the estimate, frame alone): the share of the tilt total carried by the top frames and the features of the top
+    frames against the rest."""
+    rows = j["frames"]
+    pulls = np.array([r["pull"] for r in rows])
+    n_top = max(1, int(round(float(cfg["factors"]["pull_top_fraction"]) * len(rows))))
+    order = np.argsort(-pulls, kind="stable")
+    top = [rows[k] for k in order[:n_top]]
+    rest = [rows[k] for k in order[n_top:]]
+    pos = float(pulls[pulls > 0].sum())
+    feat = {}
+    for key, lab in FERR_FRAME_FEATURES:
+        a, b = [r[key] for r in top], [r[key] for r in rest]
+        feat[key] = {"top": float(np.nanmedian(a)) if a else None, "rest": float(np.nanmedian(b)) if b else None}
+    kinds = {k: (sum(r["kind"] == k for r in top) / len(top) if top else None) for k in ("숙임", "굴림", "혼합", "미분류")}
+    kinds_rest = {k: (sum(r["kind"] == k for r in rest) / len(rest) if rest else None) for k in ("숙임", "굴림", "혼합", "미분류")}
+    return {"n_tilt": len(rows), "n_top": n_top, "total_tilt": float(pulls.sum()), "front_total": j["pull_front_total"], "n_front": j["n_front_frames"],
+            "n_positive": int((pulls > 0).sum()), "top_share_of_positive": float(pulls[order[:n_top]][pulls[order[:n_top]] > 0].sum() / pos) if pos > 0 else None,
+            "features": feat, "kinds_top": kinds, "kinds_rest": kinds_rest}
+
+
+def ferr_pull_md(jobs: list, cfg: dict, title: str) -> list:
+    ok = [j for j in jobs if "failed" not in j]
+    fc = cfg["factors"]
+    L = [title, "", f"프레임마다 비용(기준 f) − 비용(추정 f)를 구했다(그 프레임 하나의 재투영 비용). 양수가 클수록 그 프레임은 추정값을 기준 f에서 멀리 끌어간 쪽이다. 상위 {100 * fc['pull_top_fraction']:.0f}% 프레임을 나머지와 비교한다.", "",
+         "| 영상 | 기준 f | 정면 창 합 | 기울기 합 | 기울기 중 끌림>0 프레임 | 상위 프레임이 차지한 양의 끌림 비율 |", "|---|---|---|---|---|---|"]
+    ps = {}
+    for j in ok:
+        p = ferr_pull_summary(j, cfg)
+        ps[j["video"]] = p
+        L.append(f"| {j['video']} | {ferr_ref(cfg, j['video']):.0f} | {p['front_total']:.4g} ({p['n_front']}장) | {p['total_tilt']:.4g} ({p['n_tilt']}장) | {p['n_positive']} | "
+                 f"{'-' if p['top_share_of_positive'] is None else format(100 * p['top_share_of_positive'], '.0f') + '%'} |")
+    L += ["", "### 상위 끌림 프레임의 특징 (영상별 중앙값, 상위 / 나머지)", "",
+          "| 영상 | " + " | ".join(lab for _, lab in FERR_FRAME_FEATURES) + " | 상위의 숙임/굴림/혼합 비율 | 나머지의 숙임/굴림/혼합 비율 |", "|---|" + "---|" * (len(FERR_FRAME_FEATURES) + 2)]
+    for j in ok:
+        p = ps[j["video"]]
+        fm = lambda x: "-" if x is None or not np.isfinite(x) else f"{x:.3g}"      # noqa: E731
+        kt = "/".join("-" if p["kinds_top"][k] is None else f"{100 * p['kinds_top'][k]:.0f}" for k in ("숙임", "굴림", "혼합"))
+        kr = "/".join("-" if p["kinds_rest"][k] is None else f"{100 * p['kinds_rest'][k]:.0f}" for k in ("숙임", "굴림", "혼합"))
+        L.append(f"| {j['video']} | " + " | ".join(f"{fm(p['features'][k]['top'])} / {fm(p['features'][k]['rest'])}" for k, _ in FERR_FRAME_FEATURES) + f" | {kt}% | {kr}% |")
+    frames = [dict(r, video=j["video"]) for j in ok if j["video"] not in set(cfg["lens_videos"]) for r in j["frames"]]
+    L += ["", f"### 특징 구간별 평균 끌림 (1배 영상 {len(set(r['video'] for r in frames))}개 통합)", ""]
+    for name, key, edges in (("θ2d 구간 (°)", "theta2d_deg", ferr_edges([r["theta2d_deg"] for r in frames], fc["theta_bin_deg"])), ("기울기 종류", "kind", None)):
+        L += [f"**{name}**", "", "| 구간 | 프레임 수 | 평균 끌림 | 양의 끌림 프레임 비율 |", "|---|---|---|---|"]
+        cats = [(edges[k], edges[k + 1]) for k in range(len(edges) - 1)] if edges else ["숙임", "굴림", "혼합", "미분류"]
+        for cat in cats:
+            sel = [r for r in frames if (cat[0] <= r[key] < cat[1] if edges else r[key] == cat)]
+            L.append(f"| {('%g–%g' % cat) if edges else cat} | {len(sel)} | {'-' if not sel else format(float(np.mean([r['pull'] for r in sel])), '.3g')} | "
+                     f"{'-' if not sel else format(100 * float(np.mean([r['pull'] > 0 for r in sel])), '.0f') + '%'} |")
+        L.append("")
+    return L
+
+
+def ferr_summary(path: Path, jobs: list, cfg: dict):
+    from scipy.stats import spearmanr
+    ok = [j for j in jobs if "failed" not in j]
+    lens = set(cfg["lens_videos"])
+    main = [j for j in ok if j["video"] not in lens]
+    pct = lambda x: "-" if x is None else f"{100 * x:+.1f}%"      # noqa: E731
+    L = ["# 실험 23 기준 f와의 비교, 요인 상관, 끌림, 부분집합 (summary.md)", "", f"**{FERR_NOTE} 모든 분석이 탐색용이다.**", "",
+         "기준 f(1배 1680 px, 0.5x 880 px)는 사용자 체커보드 값이며 추정에 쓰지 않았다. 1배 영상 8개로만 상관을 낸다.", "",
+         "## 1. 영상별 FT 오차", "", "| 영상 | 기준 f | FT f | 오차 | 판정 |", "|---|---|---|---|---|"]
+    for j in ok:
+        ft = j["ft"]
+        L.append(f"| {j['video']}{' (0.5x)' if j['video'] in lens else ''} | {ferr_ref(cfg, j['video']):.0f} | {'값 없음 (' + ft['side'] + ')' if ft['at_grid_edge'] else format(ft['f'], '.1f') + ' px'} | {pct(ferr_err(j, ferr_ref(cfg, j['video'])))} | {ft['verdict']} |")
+    err = {j["video"]: ferr_err(j, ferr_ref(cfg, j["video"])) for j in main}
+    L += ["", "## 2. 요인과 오차의 순위 상관 (Spearman, 탐색용)", "",
+          f"영상 {len(main)}개뿐이라 상관만으로 결론 내지 않는다. 한 요인이 오차와 함께 움직이는 것은 인과가 아니다(요인끼리도 얽혀 있다). 값이 없는 영상은 뺐다.", "",
+          "| 묶음 | 요인 | 영상 수 | ρ (부호 포함 오차) | ρ (절댓값 오차) |", "|---|---|---|---|---|"]
+    flat = {j["video"]: ferr_flat(j) for j in main}
+    for k, g, lab, d in FERR_FACTORS:
+        xs = [(flat[v].get(k), e) for v, e in err.items() if flat[v].get(k) is not None and np.isfinite(flat[v].get(k)) and e is not None]
+        if len(xs) < 4 or len({x for x, _ in xs}) < 2:
+            L.append(f"| {g} | {lab} | {len(xs)} | 계산 불가 | 계산 불가 |")
+            continue
+        x = [a for a, _ in xs]
+        L.append(f"| {g} | {lab} | {len(xs)} | {spearmanr(x, [e for _, e in xs])[0]:+.2f} | {spearmanr(x, [abs(e) for _, e in xs])[0]:+.2f} |")
+    L += [""] + ferr_pull_md(jobs, cfg, "## 3. 끌림 분석 (기준 f 사용: summary.md와 진단 파일에만)")
+    L += ["## 4. 부분집합별 오차 (fixed_template, 5개 모두)", "",
+          "| 영상 | 기준 f | 전체(FT) | " + " | ".join(s["name"] for s in cfg["subsets"]) + " |", "|---|---|---|" + "---|" * len(cfg["subsets"])]
+
+    def ecell(x, ref):
+        if x is None:
+            return "-"
+        if x.get("skipped"):
+            return f"계산 안 함 ({x['skipped']})"
+        return ("값 없음 (" + x["side"] + ")") if x["at_grid_edge"] else f"{x['f']:.0f} ({100 * (x['f'] / ref - 1):+.1f}%, {x['n_tilt']}장)"
+    for j in ok:
+        ref = ferr_ref(cfg, j["video"])
+        L.append(f"| {j['video']}{' (0.5x)' if j['video'] in lens else ''} | {ref:.0f} | {ecell(j['subset_all'], ref)} | " + " | ".join(ecell(j["subsets"].get(s["name"]), ref) for s in cfg["subsets"]) + " |")
+    L += ["", "부분집합 5개를 모두 적었다. 이 결과로 새 방법을 채택하지 않는다.", "",
+          "## 한계", "", "- 영상 8개(1배), 한 대의 폰, 프레임은 같은 영상 안에서 서로 독립이 아니다.", "- 7184(0.5x)는 왜곡이 큰 초광각이라 따로 보며, 요인 상관에는 넣지 않았다.", ""]
+    path.write_text("\n".join(L) + "\n")
+
+
+def ferr_figures(out: Path, jobs: list, cfg: dict):
+    plt = _plt()
+    ok = [j for j in jobs if "failed" not in j]
+    lens = set(cfg["lens_videos"])
+    main = [j for j in ok if j["video"] not in lens]
+    err = {j["video"]: ferr_err(j, ferr_ref(cfg, j["video"])) for j in main}
+    flat = {j["video"]: ferr_flat(j) for j in main}
+    n = len(FERR_FACTORS)
+    cols = 5
+    fig, axs = plt.subplots((n + cols - 1) // cols, cols, figsize=(3.4 * cols, 2.9 * ((n + cols - 1) // cols)))
+    for ax, (k, g, lab, d) in zip(axs.ravel(), FERR_FACTORS):
+        for v, e in err.items():
+            x = flat[v].get(k)
+            if x is not None and np.isfinite(x) and e is not None:
+                ax.plot(x, 100 * e, "o", ms=4, color="#2a6fbb")
+                ax.annotate(v[4:8], (x, 100 * e), fontsize=6, xytext=(2, 2), textcoords="offset points")
+        ax.axhline(0, color="#888", lw=0.7)
+        ax.set_title(lab, fontsize=7)
+        ax.tick_params(labelsize=6)
+    for ax in axs.ravel()[n:]:
+        ax.axis("off")
+    fig.supylabel("FT 오차 (%)", fontsize=8)
+    fig.tight_layout()
+    fig.savefig(out / "factor_vs_error.png", dpi=100)
+    plt.close(fig)
+    cols = 3
+    fig, axs = plt.subplots((len(ok) + cols - 1) // cols, cols, figsize=(4.6 * cols, 3.2 * ((len(ok) + cols - 1) // cols)), squeeze=False)
+    colors = {"숙임": "#c00", "굴림": "#2a6fbb", "혼합": "#3a9a4a", "미분류": "#999"}
+    for ax, j in zip(axs.ravel(), ok):
+        for kind, col in colors.items():
+            sel = [r for r in j["frames"] if r["kind"] == kind]
+            ax.plot([r["time_s"] for r in sel if not r["pref_at_edge"]], [r["f_pref"] for r in sel if not r["pref_at_edge"]], ".", ms=4, color=col, label=kind)
+            ax.plot([r["time_s"] for r in sel if r["pref_at_edge"]], [r["f_pref"] for r in sel if r["pref_at_edge"]], "x", ms=3, color=col, alpha=0.5)
+        ax.axhline(j["ft"]["f"], color="k", lw=0.8, ls="--")
+        ax.set_title(j["video"] + (" (0.5x)" if j["video"] in lens else ""), fontsize=8)
+        ax.set_yscale("log")
+        ax.tick_params(labelsize=6)
+    axs.ravel()[0].legend(fontsize=6, loc="upper right")
+    fig.supxlabel("시간 (s)  (점: 프레임별 선호 f, x: 격자 경계, 점선: 영상의 FT f, 색: 기울기 종류)", fontsize=8)
+    fig.tight_layout()
+    fig.savefig(out / "frame_preferred_f.png", dpi=100)
+    plt.close(fig)
+    frames = [r for j in main for r in j["frames"] if not r["pref_at_edge"]]
+    fc = cfg["factors"]
+    fig, axs = plt.subplots(1, 2, figsize=(11, 4))
+    edges = ferr_edges([r["theta2d_deg"] for r in frames], fc["theta_bin_deg"])
+    data = [[r["f_pref"] for r in frames if lo <= r["theta2d_deg"] < hi] for lo, hi in zip(edges[:-1], edges[1:])]
+    lab0 = [f"{lo:g}–{hi:g}" for (lo, hi), d in zip(zip(edges[:-1], edges[1:]), data) if d]
+    axs[0].boxplot([d for d in data if d], showfliers=False)
+    axs[0].set_xticks(range(1, len(lab0) + 1))
+    axs[0].set_xticklabels(lab0)
+    axs[0].set_xlabel("θ2d 구간 (°)")
+    axs[0].set_ylabel("프레임별 선호 f (px, 경계 제외)")
+    kd = [[r["f_pref"] for r in frames if r["kind"] == k] for k in ("숙임", "굴림", "혼합", "미분류")]
+    lab1 = [k for k, d in zip(("숙임", "굴림", "혼합", "미분류"), kd) if d]
+    axs[1].boxplot([d for d in kd if d], showfliers=False)
+    axs[1].set_xticks(range(1, len(lab1) + 1))
+    axs[1].set_xticklabels(lab1)
+    axs[1].set_xlabel("기울기 종류")
+    for ax in axs:
+        ax.set_yscale("log")
+        ax.grid(alpha=0.3)
+    fig.tight_layout()
+    fig.savefig(out / "preferred_f_by_bins.png", dpi=110)
+    plt.close(fig)
+
+
+def ferr_results_yaml(run_dir: Path, cfg: dict):
+    r = json.loads((run_dir / "results.json").read_text())
+    m = json.loads((run_dir / "metadata.json").read_text())
+    try:
+        run_name = str(run_dir.resolve().relative_to(hf.PROJECT_ROOT))
+    except ValueError:
+        run_name = str(run_dir)
+    rd = lambda x, n=4: None if x is None or (isinstance(x, float) and not np.isfinite(x)) else round(x, n)      # noqa: E731
+    fv = lambda x: ({"skipped": x["skipped"]} if x.get("skipped") else ({"f_px": None, "status": f"값 없음 ({x['side']})", "n_tilt_frames": x["n_tilt"]} if x["at_grid_edge"] else      # noqa: E731
+                                                                          {"f_px": round(x["f"], 1), "status": "value", "n_tilt_frames": x["n_tilt"]}))
+    out = {"experiment": "23_error_factors", "run": run_name, "code_commit": m["git"]["commit"][:7], "git_dirty_at_run": m["git"]["git_dirty"],
+           "note": FERR_NOTE + " 기준 f와의 비교와 순위 상관은 summary.md에만 있다.", "candidate": cfg["candidate"], "videos": {}}
+    for j in r["jobs"]:
+        if "failed" in j:
+            out["videos"][j["video"]] = {"failed": j["failed"]}
+            continue
+        flat = ferr_flat(j)
+        out["videos"][j["video"]] = {
+            "lens_series": j["video"] in set(cfg["lens_videos"]), "detections": j["detections"], "same_as_22": j.get("same_as_22"),
+            "ft": {"f_px": None if j["ft"]["at_grid_edge"] else round(j["ft"]["f"], 1), "status": "value" if not j["ft"]["at_grid_edge"] else f"값 없음 ({j['ft']['side']})", "verdict": j["ft"]["verdict"]},
+            "factors": {k: rd(v) for k, v in flat.items()}, "curve_mean_check_max_rel_diff": rd(j["curve_mean_check"]["max_rel_diff"], 12),
+            "subsets": {"all_tilt_frames": fv(j["subset_all"]), **{name: fv(x) for name, x in j["subsets"].items()}},
+            "frames": {"n_tilt": len(j["frames"]), "n_pref_at_grid_edge": sum(fr["pref_at_edge"] for fr in j["frames"]),
+                       "kinds": {k: sum(fr["kind"] == k for fr in j["frames"]) for k in ("숙임", "굴림", "혼합", "미분류")}}}
+    p = hf.resolve(cfg["output"]["results_yaml"])
+    p.write_text(yaml.safe_dump(hf.jsonable(out), allow_unicode=True, sort_keys=False))
+    return p
+
+
+def ferr_main(argv=None):
+    ap = argparse.ArgumentParser()
+    ap.add_argument("--config", default=str(hf.PROJECT_ROOT / "configs/23_error_factors.yaml"))
+    sub = ap.add_subparsers(dest="cmd")
+    ry = sub.add_parser("results-yaml")
+    ry.add_argument("--run", required=True)
+    ap.add_argument("--videos", default=None, help="comma list overriding yaml videos")
+    ap.add_argument("--out", default=None)
+    a = ap.parse_args(argv)
+    text = Path(a.config).read_text()
+    cfg = yaml.safe_load(text)
+    if a.cmd == "results-yaml":
+        print(ferr_results_yaml(hf.resolve(a.run), cfg))
+        return None
+    if a.videos:
+        cfg["videos"] = a.videos.split(",")
+    run_root = Path(a.out).expanduser() if a.out else hf.resolve(cfg["output"]["root"]) / utc_stamp()
+    run_root.mkdir(parents=True)
+    (run_root / "figures").mkdir()
+    log = Log(run_root / "log.txt")
+    log(f"23 영상별 오차 요인 진단: 영상 {cfg['videos']}, 후보 {cfg['candidate']['detector']} + {cfg['candidate']['wrist_mode']} → {run_root}")
+    t0 = time.time()
+    ref22 = {}
+    p22 = hf.resolve(cfg["results_22"])
+    if p22.exists():
+        ref22 = {j["video"]: j for j in json.loads(p22.read_text())["jobs"]}
+    tmp_root = run_root / "_tmp"
+    tmp_root.mkdir()
+    cjob = {k: cfg[k] for k in ("candidate", "compare_detectors", "factors", "subsets", "detector_settings")}
+    args = [(v, str(hf.resolve(cfg["sources"][v])) if v in (cfg.get("sources") or {}) else None, cfg["input_dir"], cfg["pipeline"], cjob, str(hf.resolve(cfg["cache_22"])),
+             str(tmp_root), ref22.get(v), ferr_ref(cfg, v)) for v in cfg["videos"]]
+    for k in ("OMP_NUM_THREADS", "OPENBLAS_NUM_THREADS", "MKL_NUM_THREADS"):
+        os.environ[k] = "1"
+    import multiprocessing as mp
+    from concurrent.futures import ProcessPoolExecutor
+    try:
+        with ProcessPoolExecutor(max_workers=int(cfg["workers"]), mp_context=mp.get_context("spawn")) as ex:
+            jobs = list(ex.map(hf.ferr_video, args))
+    finally:
+        shutil.rmtree(tmp_root, ignore_errors=True)
+    for j in jobs:
+        if "failed" in j:
+            log(f"  {j['video']}: 분석 실패 ({j['failed']})")
+            continue
+        ft = j["ft"]
+        log(f"  {j['video']}: FT {'값 없음' if ft['at_grid_edge'] else format(ft['f'], '.1f') + ' px'}, 판정 {ft['verdict']}, 기울기 프레임 {len(j['frames'])}장, "
+            f"22와 일치 {j.get('same_as_22', '-')}, 곡선 평균 차 {j['curve_mean_check']['max_rel_diff']:.1e}")
+    ferr_figures(run_root / "figures", jobs, cfg)
+    ferr_report(run_root / "report.md", jobs, cfg)
+    ferr_summary(run_root / "summary.md", jobs, cfg)
+    (run_root / "diagnostic_pull.md").write_text("\n".join(ferr_pull_md(jobs, cfg, "# 실험 23 끌림 진단 (기준 f 사용, 진단 파일)")) + "\n")
+    cols = ["time_s", "theta2d_deg", "kind", "axis_angle_deg", "direction_deg", "resid_rel_pct", "bone_ratio_pct", "spread_change_deg", "wrist_change_deg", "overlap_rel", "speed",
+            "center_offset_pct", "f_pref", "pref_at_edge", "sharpness"]
+    with (run_root / "per_frame.csv").open("w", newline="") as fh:
+        wr = csv.writer(fh)
+        wr.writerow(["video", "index"] + cols)
+        for j in jobs:
+            for r in j.get("frames") or []:
+                wr.writerow([j["video"], r["index"]] + [f"{r[c]:.5g}" if isinstance(r[c], float) else r[c] for c in cols])
+    with (run_root / "pull_per_frame.csv").open("w", newline="") as fh:
+        wr = csv.writer(fh)
+        wr.writerow(["video", "index", "pull"])
+        for j in jobs:
+            for r in j.get("frames") or []:
+                wr.writerow([j["video"], r["index"], f"{r['pull']:.6g}"])
+    (run_root / "results.json").write_text(json.dumps(hf.jsonable({"jobs": jobs}), ensure_ascii=False, indent=1))
+    meta = hf.provenance_build(text, a.config, {"code_22": cfg["code_22"], "sources": cfg["sources"], "elapsed_s": time.time() - t0})
+    (run_root / "metadata.json").write_text(json.dumps(hf.jsonable(meta), ensure_ascii=False, indent=1))
+    log(f"완료 {time.time() - t0:.0f} s → {run_root}")
+    log.close()
+    return run_root, jobs
+
+
+# ====================================================================================================
 # command line
 # ====================================================================================================
 
-COMMANDS = {"protocol": protocol_main, "frame-filter": ff_main, "same-session": session_main, "overlay": overlay_main, "phase-segmentation": pseg_main, "guide-revision": grev_main, "f-response": fresp_main}
+COMMANDS = {"protocol": protocol_main, "frame-filter": ff_main, "same-session": session_main, "overlay": overlay_main, "phase-segmentation": pseg_main, "guide-revision": grev_main, "f-response": fresp_main, "error-factors": ferr_main}
 
 
 def main(argv=None):

@@ -3067,3 +3067,333 @@ def fresp_lens_judgment(jobs: list, meta: dict, rules: dict, candidate_mode: str
                              "verdict": None if mode != candidate_mode else ("판정 불가" if within is None else ("f 변화에 반응함" if within else "f 변화에 반응하지 않음"))}
         out["by_video"][v] = by_mode
     return out
+
+
+# ====================================================================================================
+# ferr  (experiment 23: why do the per-video errors differ?; new section, diagnostics only - earlier functions are used unchanged)
+# Video-level factors (front window, motion, hand size / position, hand-shape change, detection / estimation), frame-level preferred f from every tilt frame's own cost
+# curve, and f re-estimated on subsets fixed in the yaml. New detections are never made; the cached mediapipe (and, for comparison, wilor_yolo / rtmpose) detections are read.
+# ====================================================================================================
+
+FERR_FINGERS = {"index": 5, "middle": 9, "ring": 13, "pinky": 17}          # MCP joint of every finger (the PIP / DIP / tip joints follow)
+
+
+def ferr_long_axis(T: np.ndarray, ids=None) -> np.ndarray:
+    """Unit direction of the hand's long axis in template coordinates: mean of the fingertips (8, 12, 16, 20) minus mean of the MCP joints (5, 9, 13, 17) when the joint set
+    has them, else the template's first principal axis."""
+    T = np.asarray(T, float)
+    pos = {j: k for k, j in enumerate(ids)} if ids is not None else {}
+    if all(j in pos for j in (5, 9, 13, 17, 8, 12, 16, 20)):
+        v = T[[pos[j] for j in (8, 12, 16, 20)]].mean(0) - T[[pos[j] for j in (5, 9, 13, 17)]].mean(0)
+        return v / np.linalg.norm(v)
+    return np.linalg.svd(T - T.mean(0), full_matrices=False)[2][0]
+
+
+def ferr_affine(T: np.ndarray, P: np.ndarray) -> tuple:
+    """Least-squares affine T -> P (P ~ T @ M + t). Returns M (2, 2), t (2,)."""
+    A = np.c_[T, np.ones(len(T))]
+    X, *_ = np.linalg.lstsq(A, P, rcond=None)
+    return X[:2], X[2]
+
+
+def ferr_tilt_class(T: np.ndarray, P: np.ndarray, theta_deg: float, cfg: dict, ids=None) -> dict:
+    """Tilt kind of one frame. The affine T -> P compresses one template direction v (right singular vector of the smaller singular value); the tilt (rotation) axis is
+    perpendicular to v. angle = angle between the rotation axis and the hand's long axis (fingertips minus MCP joints, see ferr_long_axis) = 90 deg - angle(v, long axis). angle < roll_max_deg: roll (rotation about the long
+    axis, 굴림); angle > pitch_min_deg: pitch (rotation about the width axis, 숙임); otherwise mixed (혼합). Frames with theta2d below class_min_theta_deg are not classified."""
+    M, _ = ferr_affine(T, P)
+    _, _, Vt = np.linalg.svd(M.T)
+    v = Vt[1]
+    c = float(np.degrees(np.arccos(np.clip(abs(float(v @ ferr_long_axis(T, ids))), 0.0, 1.0))))
+    ang = 90.0 - c
+    if not np.isfinite(theta_deg) or theta_deg < cfg["class_min_theta_deg"]:
+        kind = "미분류"
+    elif ang < cfg["roll_max_deg"]:
+        kind = "굴림"
+    elif ang > cfg["pitch_min_deg"]:
+        kind = "숙임"
+    else:
+        kind = "혼합"
+    return {"axis_angle_deg": ang, "kind": kind}
+
+
+def _ferr_bones(ids):
+    pos = {j: k for k, j in enumerate(ids)}
+    out = []
+    for a in FERR_FINGERS.values():
+        for j in (a, a + 1, a + 2):
+            if j in pos and j + 1 in pos:
+                out.append((pos[j], pos[j + 1]))
+    for a, b in ((5, 9), (9, 13), (13, 17)):
+        if a in pos and b in pos:
+            out.append((pos[a], pos[b]))
+    return out
+
+
+def _ferr_angle(u, v) -> float:
+    c = float(u @ v / max(np.linalg.norm(u) * np.linalg.norm(v), 1e-12))
+    return float(np.degrees(np.arccos(np.clip(c, -1.0, 1.0))))
+
+
+def ferr_shape(T: np.ndarray, ids, P: np.ndarray, wrist_xy=None) -> dict:
+    """Hand-shape indicators of one frame after the best-fit planar tilt (affine template -> frame, fitted on the MCP row and the middle and ring fingers so the index / pinky
+    joints that the spread measures cannot be absorbed by the fit) is undone: points Q = (P - t) M^-1 are in the template's coordinates.
+    bone_ratio: median over finger segments and MCP-row links of |length in Q / template length - 1| (fraction). spread_deg: angle between the index (MCP -> tip) and the pinky
+    direction in Q. wrist_deg: angle between wrist -> middle MCP and the perpendicular of the MCP row in Q (0 = straight; needs the wrist point). Returns NaN where not computable."""
+    pos = {j: k for k, j in enumerate(ids)}
+    core = [pos[j] for j in (5, 9, 13, 17, 10, 11, 12, 14, 15, 16) if j in pos]            # fit on the MCP row, middle and ring fingers: the index / pinky joints are measured, not fitted
+    M, t = ferr_affine(T[core], P[core]) if len(core) >= 6 else ferr_affine(T, P)
+    Minv = np.linalg.inv(M)
+    Q = (P - t) @ Minv
+    out = {"bone_ratio": float("nan"), "spread_deg": float("nan"), "wrist_deg": float("nan")}
+    r = [abs(np.linalg.norm(Q[a] - Q[b]) / max(np.linalg.norm(T[a] - T[b]), 1e-9) - 1.0) for a, b in _ferr_bones(ids)]
+    if r:
+        out["bone_ratio"] = float(np.median(r))
+    if all(j in pos for j in (5, 8, 17, 20)):
+        out["spread_deg"] = _ferr_angle(Q[pos[8]] - Q[pos[5]], Q[pos[20]] - Q[pos[17]])
+    if wrist_xy is not None and np.isfinite(wrist_xy).all() and all(j in pos for j in (5, 9, 17)):
+        w = (np.asarray(wrist_xy, float) - t) @ Minv
+        row = Q[pos[17]] - Q[pos[5]]
+        perp = np.array([-row[1], row[0]])
+        ang = _ferr_angle(Q[pos[9]] - w, perp)
+        out["wrist_deg"] = float(min(ang, 180.0 - ang))
+    return out
+
+
+def ferr_overlap(kp_frame, mask_frame, box_long: float) -> float:
+    """Smallest distance between the PIP / DIP / tip joints of neighbouring fingers (index-middle, middle-ring, ring-pinky), as a fraction of the hand box's long side."""
+    names = list(FERR_FINGERS.values())
+    best = float("nan")
+    for a, b in zip(names[:-1], names[1:]):
+        for j in (a + 1, a + 2, a + 3):
+            for k in (b + 1, b + 2, b + 3):
+                if mask_frame[j] and mask_frame[k]:
+                    d = float(np.linalg.norm(kp_frame[j] - kp_frame[k]) / max(box_long, 1e-9))
+                    best = d if not np.isfinite(best) else min(best, d)
+    return best
+
+
+def ferr_problem(a: dict, kp, mask, box, cfg_use: dict, size_wh) -> tuple:
+    """The estimation problem analyze() solved (same template, frames, Huber widths, the front + tilt frames it used), rebuilt from its result. Returns (Problem, ids)."""
+    W, H = size_wh
+    ecfg, J = cfg_use["estimate"], cfg_use["joints"]
+    ids = list(J["sets"][J["estimate_set"]])
+    kp = undistort(np.asarray(kp, float), ecfg, W, H)
+    bl = box_long(np.asarray(box, float))
+    n = len(bl)
+    huber = ecfg["huber_rel"] * np.where(np.isfinite(bl), bl, 0.0)
+    cx, cy = principal_point(ecfg, W, H)
+    frames = [(kp[i][ids], np.asarray(mask)[i][ids]) for i in range(n)]
+    used = [i for i, r in enumerate(a["role"]) if r in ("front", "tilt")]
+    return Problem(np.array(a["template"]), frames, cx, cy, huber, ecfg["min_points"]).subset(used), ids
+
+
+def ferr_frame_curves(pb: Problem, grid: np.ndarray) -> np.ndarray:
+    """(n_frames of pb.keep, len(grid)): every frame's own cost curve (cost of that frame alone at every f of the grid), rows in pb.keep order."""
+    return np.array([[cost(pb.subset([i]), float(f)) for f in grid] for i in pb.keep])
+
+
+def ferr_preferred(curve: np.ndarray, grid: np.ndarray, pb_i: Problem) -> dict:
+    """Preferred f of one frame (grid minimum, refined by the parabola in log f like fixed_template; at_edge when the minimum is on the grid border) and the sharpness
+    min(cost(1.15 f), cost(f / 1.15)) / cost(f)."""
+    k = int(np.argmin(curve))
+    lf = _parabola(np.log(grid), curve, k)
+    f = float(np.exp(np.clip(lf, np.log(grid[0]), np.log(grid[-1]))))
+    c0 = cost(pb_i, f)
+    return {"f_pref": f, "at_edge": bool(k in (0, len(grid) - 1)), "sharpness": float(min(cost(pb_i, f * 1.15), cost(pb_i, f / 1.15)) / max(c0, 1e-12))}
+
+
+def ferr_subset_ft(pb: Problem, front_ids, tilt_ids, grid: np.ndarray) -> dict:
+    """fixed_template on the front-window frames plus the given tilt frames only (all tilt frames given = the full estimate)."""
+    sub = pb.subset(sorted(set(front_ids) | set(tilt_ids)))
+    sol = fixed_template(sub, grid)
+    hi = grid[-1]
+    return {"f": sol["f"], "at_grid_edge": sol["at_grid_edge"], "side": None if not sol["at_grid_edge"] else ("상한" if sol["f"] >= hi * (1 - 1e-6) else "하한"),
+            "n_tilt": len([i for i in sub.keep if i in set(tilt_ids)])}
+
+
+def ferr_bin_table(values, f_pref, at_edge, edges=None, labels=None) -> list:
+    """Preferred f per feature bin: rows {label, n, n_edge, median_f (frames not on the grid border), n_with_f}. edges: increasing bin borders (len = bins + 1); labels:
+    category labels instead of edges (values are then the labels)."""
+    v = list(values)
+    f = np.asarray(f_pref, float)
+    e = np.asarray(at_edge, bool)
+    rows = []
+    cats = labels if labels is not None else [(edges[k], edges[k + 1]) for k in range(len(edges) - 1)]
+    for cat in cats:
+        if labels is not None:
+            m = np.array([x == cat for x in v])
+            name = str(cat)
+        else:
+            x = np.asarray(v, float)
+            m = np.isfinite(x) & (x >= cat[0]) & (x < cat[1])
+            name = f"{cat[0]:.3g}–{cat[1]:.3g}"
+        ok = m & ~e
+        rows.append({"label": name, "n": int(m.sum()), "n_edge": int((m & e).sum()), "n_with_f": int(ok.sum()), "median_f": float(np.median(f[ok])) if ok.any() else None})
+    return rows
+
+
+def ferr_cached_npz(frames: list, dset: dict, cache_dir) -> Path:
+    """Path of the cached mediapipe detection of this frame list (same key as swap_mediapipe_hands). Raises when it is not cached: experiment 23 never detects."""
+    settings = {k: dset[k] for k in ("weights", "num_hands", "min_hand_detection_confidence", "min_hand_presence_confidence", "box_margin", "remap")}
+    out = Path(cache_dir) / f"mediapipe_hands_{frames_key(frames, settings, 'mediapipe_hands')}.npz"
+    if not out.exists():
+        raise FileNotFoundError(f"cached detection missing: {out}")
+    return out
+
+
+def ferr_video(args) -> dict:
+    """One video: the candidate (mediapipe_hands, wrist_mode exclude, fixed_template) analysis from cached detections, the video-level factors, the frame-level table
+    (preferred f of every tilt frame, features, pull) and the subset estimates. args = (video, src_dir | None, input_dir, pcfg, c, cache_dir, tmp_root, ref22 | None, ref_f)."""
+    video, src_dir, input_dir, pcfg, c, cache_dir, tmp_root, ref22, ref_f = args
+    os.environ.setdefault("OMP_NUM_THREADS", "1")
+    cv2.setNumThreads(1)
+    fc = c["factors"]
+    cand = c["candidate"]
+    dset = c["detector_settings"][cand["detector"]]
+    pc = copy.deepcopy(pcfg)
+    pc["tracking"]["conf_min"] = float(dset["conf_min"])
+    res = {"video": video, "detector": cand["detector"]}
+    tmp = None
+    try:
+        if src_dir is not None:
+            r17 = json.loads((Path(src_dir) / cand["detector"] / "results.json").read_text())
+            times = np.array([x["time_s"] for x in r17["frames"]["list"]])
+            W, H = r17["normalization"]["output"]["display_w"], r17["normalization"]["output"]["display_h"]
+            dets = load_detections(Path(src_dir) / cand["detector"] / "detections.npz")
+            res["detections"] = "17 run"
+        else:
+            tmp = Path(tempfile.mkdtemp(prefix="hf23_", dir=tmp_root))
+            prep = fresp_prepare((video, input_dir, pcfg, {k: v for k, v in c.items() if k != "a2"}, str(tmp)))
+            frames = prep["frames"]
+            times = np.array([r["time_s"] for r in frames])
+            W, H = prep["size"]
+            dets = load_detections(ferr_cached_npz(frames, dset, cache_dir))
+            check_alignment(frames, dets)
+            res["detections"] = "22 run cache (found by the frame hashes)"
+        tr = track(dets, times, (W, H), pc["tracking"], front_start_s=float(pc["phases"]["front_skip_s"]))
+        seed = int(pc["experiment"]["seed"])
+        cfg_ex = pseg_wrist_cfg(pc) if cand["wrist_mode"] == "exclude" else pc
+        kp, mask, present, box = tr["kp"], tr["mask"], tr["present"], tr["box"]
+        a = analyze(kp, mask, present, box, tr["cls"], times, (W, H), cfg_ex, tilt_start=None, methods_full=("fixed_template",), seed=seed)
+        if "per_method" not in a:
+            res["failed"] = a.get("failed", "분석 실패")
+            return res
+        sol, pm = a["solutions"]["fixed_template"], a["per_method"]["fixed_template"]
+        f_est = float(sol["f"])
+        hi = a["grid"][-1]
+        res["ft"] = {"f": f_est, "at_grid_edge": bool(sol["at_grid_edge"]), "side": None if not sol["at_grid_edge"] else ("상한" if f_est >= hi * (1 - 1e-6) else "하한"), "verdict": pm["verdict"]["verdict"]}
+        if ref22 is not None:
+            s22 = ref22["original"][cand["wrist_mode"]]["solutions"]["fixed_template"]
+            res["same_as_22"] = bool(s22["f"] == f_est and ref22["original"][cand["wrist_mode"]]["verdict"] == pm["verdict"]["verdict"])
+        pb, ids = ferr_problem(a, kp, mask, box, cfg_ex, (W, H))
+        T = np.array(a["template"])
+        grid = np.array(a["grid"])
+        bl = box_long(box)
+        short = float(min(W, H))
+        half_diag = float(np.hypot(W, H) / 2.0)
+        res["cost_check"] = {"model_cost": float(sol["cost"]), "rebuilt_cost": float(cost(pb, f_est))}
+        # ---- frame-level curves
+        keep = list(pb.keep)
+        curves = ferr_frame_curves(pb, grid)
+        prof = np.array(sol["profile_cost"])
+        res["curve_mean_check"] = {"max_rel_diff": float(np.max(np.abs(curves.mean(0) - prof) / np.maximum(np.abs(prof), 1e-12))), "n_frames": len(keep)}
+        role = a["role"]
+        tilt_ids = [i for i in keep if role[i] == "tilt"]
+        front_ids = [i for i in keep if role[i] == "front"]
+        theta = np.array([np.nan if x is None else x for x in a["theta2d_deg"]], float)
+        axis = np.array([np.nan if x is None else x for x in a["axis2d_deg"]], float)
+        d_series, v_series = pseg_series(kp, mask, present, box, times, T, ids)
+        rms = dict(zip(pm["diagnostics"]["frames_used"], pm["diagnostics"]["frame_rms_px"]))
+
+        def shape_of(i):
+            vis = mask[i][ids]
+            P = kp[i][ids]
+            if vis.sum() < len(ids):
+                return {"bone_ratio": float("nan"), "spread_deg": float("nan"), "wrist_deg": float("nan")}
+            return ferr_shape(T, ids, P, kp[i][0] if mask[i][0] else None)
+        front_shape = [shape_of(i) for i in front_ids]
+        ref_spread = float(np.nanmedian([s["spread_deg"] for s in front_shape])) if front_shape else float("nan")
+        ref_wrist = float(np.nanmedian([s["wrist_deg"] for s in front_shape])) if front_shape else float("nan")
+        res["front_shape"] = {"bone_ratio": float(np.nanmedian([s["bone_ratio"] for s in front_shape])) if front_shape else None, "spread_deg": ref_spread, "wrist_deg": ref_wrist}
+        rows = []
+        pos_in_keep = {i: k for k, i in enumerate(keep)}
+        for i in tilt_ids:
+            sh = shape_of(i)
+            cl = ferr_tilt_class(T, kp[i][ids], theta[i], fc, ids)
+            pr = ferr_preferred(curves[pos_in_keep[i]], grid, pb.subset([i]))
+            cx_, cy_ = (box[i][0] + box[i][2]) / 2.0, (box[i][1] + box[i][3]) / 2.0
+            d_ref = cost(pb.subset([i]), float(ref_f)) - cost(pb.subset([i]), f_est)
+            rows.append({"index": int(i), "time_s": float(times[i]), "theta2d_deg": float(theta[i]), "kind": cl["kind"], "axis_angle_deg": cl["axis_angle_deg"], "direction_deg": float(axis[i]),
+                         "resid_rel_pct": float(100.0 * rms[i] / bl[i]) if i in rms and bl[i] > 0 else float("nan"), "bone_ratio_pct": 100.0 * sh["bone_ratio"],
+                         "spread_change_deg": abs(sh["spread_deg"] - ref_spread), "wrist_change_deg": abs(sh["wrist_deg"] - ref_wrist),
+                         "overlap_rel": ferr_overlap(kp[i], mask[i], bl[i]), "speed": float(v_series[i]), "center_offset_pct": float(100.0 * np.hypot(cx_ - W / 2.0, cy_ - H / 2.0) / half_diag),
+                         "f_pref": pr["f_pref"], "pref_at_edge": pr["at_edge"], "sharpness": pr["sharpness"], "pull": float(d_ref)})
+        res["frames"] = rows
+        res["pull_front_total"] = float(sum(cost(pb.subset([i]), float(ref_f)) - cost(pb.subset([i]), f_est) for i in front_ids))
+        res["n_front_frames"] = len(front_ids)
+        # ---- video-level factors
+        th_t = np.array([r["theta2d_deg"] for r in rows])
+        kinds = [r["kind"] for r in rows]
+        classified = [k for k in kinds if k != "미분류"]
+        fw = [int(i) for i in a["front_window"]["idx"]]
+        dfw = d_series[fw]
+        jd = a["solutions"]["joint_delta"]
+        nm = lambda key: float(np.nanmedian([r[key] for r in rows])) if rows else None      # noqa: E731
+        dev = {}
+        for other in (c.get("compare_detectors") or []):
+            p_ = Path(src_dir) / other / "detections.npz" if src_dir is not None else None
+            if p_ is None or not p_.exists():
+                dev[other] = None
+                continue
+            tc = dict(pc["tracking"], conf_min=float(c["detector_settings"][other]["conf_min"]))
+            to = track(load_detections(p_), times, (W, H), tc, front_start_s=float(pc["phases"]["front_skip_s"]))
+            ds = []
+            for i in tilt_ids:
+                m_ = mask[i][ids] & to["mask"][i][ids]
+                if present[i] and to["present"][i] and m_.sum() >= 4:
+                    ds.append(float(np.linalg.norm(kp[i][ids][m_] - to["kp"][i][ids][m_], axis=-1).mean() / bl[i] * 100.0))
+            dev[other] = {"median_pct": float(np.median(ds)) if ds else None, "n_frames": len(ds)}
+        sig = grev_f_signal(a, kp, mask, ids, f_est)
+        res["factors"] = {
+            "jd_delta_deg": float(jd["delta_deg"]), "jd_phi_deg": float(jd["phi_deg"]), "d0": float(np.nanpercentile(dfw, 95)) if np.isfinite(dfw).any() else None,
+            "front_jitter_rel_pct": 100.0 * float(a["front_jitter_rel"]), "finger_ext_min": float(a["finger_extension"]["min"]), "finger_ext_mean": float(a["finger_extension"]["mean"]),
+            "n_tilt_frames": int(a["n_tilt_used"]), "theta_median_deg": float(np.median(th_t)) if len(th_t) else None, "theta_p90_deg": float(np.percentile(th_t, 90)) if len(th_t) else None,
+            "theta_over_45_frac": float((th_t > 45.0).mean()) if len(th_t) else None,
+            "frac_pitch": float(np.mean([k == "숙임" for k in classified])) if classified else None, "frac_roll": float(np.mean([k == "굴림" for k in classified])) if classified else None,
+            "frac_mixed": float(np.mean([k == "혼합" for k in classified])) if classified else None, "frac_unclassified": float(np.mean([k == "미분류" for k in kinds])) if kinds else None,
+            "axis_bins": int(a["axis_coverage"]["bins"]), "hand_box_short_ratio_front": float(np.nanmedian(bl[fw]) / short), "center_offset_pct": nm("center_offset_pct"),
+            "edge_rate": float(a["edge_frame_rate"]), "bone_ratio_pct": nm("bone_ratio_pct"), "spread_change_deg": nm("spread_change_deg"), "wrist_change_deg": nm("wrist_change_deg"),
+            "reproj_rms_rel_pct": 100.0 * float(pm["diagnostics"]["reproj_rms_rel"]), "detector_diff_pct": dev, "sharpness": float(pm["diagnostics"]["sharpness"]),
+            "bootstrap_rel_std": None if pm["bootstrap"]["rel_std"] is None or not np.isfinite(pm["bootstrap"]["rel_std"]) else float(pm["bootstrap"]["rel_std"]),
+            "f_rel_uncertainty": None if pm["f_rel_uncertainty"] is None or not np.isfinite(pm["f_rel_uncertainty"]) else float(pm["f_rel_uncertainty"]),
+            "f_signal_ratio": sig["ratio_median"], "overlap_rel": nm("overlap_rel"), "speed": nm("speed")}
+        # ---- subsets fixed in the yaml
+        sub = {}
+        nmin = int(fc["min_subset_frames"])
+        resid = np.array([r["resid_rel_pct"] for r in rows])
+        shp = np.array([r["bone_ratio_pct"] for r in rows])
+        for s in c["subsets"]:
+            kind = s["kind"]
+            if kind == "pitch":
+                sel = [r["index"] for r in rows if r["kind"] == "숙임"]
+            elif kind == "roll":
+                sel = [r["index"] for r in rows if r["kind"] == "굴림"]
+            elif kind == "theta_range":
+                lo, hi_ = s["range"]
+                sel = [r["index"] for r in rows if lo <= r["theta2d_deg"] <= hi_]
+            elif kind == "residual_low_half":
+                sel = [rows[k]["index"] for k in np.argsort(resid, kind="stable")[:len(rows) // 2 + len(rows) % 2]] if rows else []
+            elif kind == "shape_low_half":
+                sel = [rows[k]["index"] for k in np.argsort(shp, kind="stable")[:len(rows) // 2 + len(rows) % 2]] if rows else []
+            else:
+                raise ValueError(kind)
+            if len(sel) < nmin:
+                sub[s["name"]] = {"skipped": f"기울기 프레임 {len(sel)}장 < {nmin}장", "n_tilt": len(sel)}
+            else:
+                sub[s["name"]] = ferr_subset_ft(pb, front_ids, sel, grid)
+        res["subsets"] = sub
+        res["subset_all"] = ferr_subset_ft(pb, front_ids, tilt_ids, grid)                  # control: every tilt frame = the full estimate
+        return res
+    finally:
+        if tmp is not None:
+            shutil.rmtree(tmp, ignore_errors=True)

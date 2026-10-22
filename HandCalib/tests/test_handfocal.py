@@ -5,6 +5,7 @@
 import copy
 import json
 import os
+import re
 import shutil
 import subprocess
 import sys
@@ -29,6 +30,7 @@ CFG18 = yaml.safe_load((ROOT / "configs/18_same_session_check.yaml").read_text()
 CFG20 = yaml.safe_load((ROOT / "configs/20_phase_segmentation.yaml").read_text())
 CFG21 = yaml.safe_load((ROOT / "configs/21_guide_revision.yaml").read_text())
 CFG22 = yaml.safe_load((ROOT / "configs/22_f_response.yaml").read_text())
+CFG23 = yaml.safe_load((ROOT / "configs/23_error_factors.yaml").read_text())
 PIPE = CFG17["pipeline"]                           # the 14 pipeline settings (identical in 16, 17 and 18)
 SYN = {"f_px": 1650, "image": [1920, 1080], "distance_mm": 350, "front_frames": 10, "tilt_frames": 40}     # 14's synthetic camera
 BASE_COND = {"name": "base", "delta_deg": 0, "noise": {"px": 1.0}, "heavy_tail": False, "tilt_range_deg": [25, 50], "arch_mm": 0,
@@ -1564,6 +1566,199 @@ class FrespEndToEnd(unittest.TestCase):
             sec2 = summ.split("## 2.")[1].split("## 3.")[0]
             self.assertNotIn("7184", sec2)                                            # the 0.5x video is not in the |error| medians
             self.assertNotIn("7184", rtext.split("손 박스 크기와 추정 f의 관계")[1].split("산점도")[0].split("| 방식 |")[1])
+
+
+# ====================================================================================================
+# error factors (23)
+# ====================================================================================================
+
+IDS16 = list(range(5, 21))                          # the candidate's joint set (flat17 without the wrist)
+
+
+def hand_pts16(spread_deg=0.0, wrist_shift_mm=0.0):
+    """Synthetic planar hand (21 x 3, hand frame, long axis = y); optionally the index and pinky fingers rotated outward in the palm plane about their MCP joints
+    (spread_deg each) and the wrist shifted sideways (mm)."""
+    P = hf.synth_hand_points(0.0)
+    P[:, 1] += 95.0
+    for mcp, sign in ((5, 1.0), (17, -1.0)):
+        a = np.radians(sign * spread_deg)
+        R = np.array([[np.cos(a), -np.sin(a)], [np.sin(a), np.cos(a)]])
+        for j in range(mcp + 1, mcp + 4):
+            P[j, :2] = P[mcp, :2] + R @ (P[j, :2] - P[mcp, :2])
+    P[0, 0] += wrist_shift_mm
+    return P
+
+
+def project_hand(P, theta, azim, f=3000.0, dist=1500.0, W=1920, H=1080, noise=0.0, rng=None):
+    pts = hf.synth_project(P, hf.synth_pose(theta, azim, 0.0), np.array([0.0, 0.0, dist]), f, W / 2, H / 2)
+    return pts + (rng.normal(0, noise, pts.shape) if noise else 0.0)
+
+
+def frontal_template(rng=None, noise=0.0):
+    P = hand_pts16()
+    pts = np.array([project_hand(P, 0.0, 0.0, noise=noise, rng=rng)[IDS16] for _ in range(6)])
+    return hf.template_build(pts, 4)["template"]
+
+
+class FerrTiltKinds(unittest.TestCase):
+    FC = CFG23["factors"]
+
+    def kind_of(self, theta, azim):
+        T = frontal_template()
+        P = project_hand(hand_pts16(), theta, azim)[IDS16]
+        th, _ = hf.affine_tilt(T, P)
+        return hf.ferr_tilt_class(T, P, th, self.FC, IDS16)
+
+    def test_rotation_about_the_long_axis_is_roll_and_about_the_width_axis_is_pitch(self):
+        for th in (20.0, 35.0):
+            r = self.kind_of(th, 0.0)                         # rotation axis (0, 1, 0) = the hand's long axis
+            self.assertEqual(r["kind"], "굴림", r)
+            self.assertLess(r["axis_angle_deg"], 5.0)
+            p = self.kind_of(th, 90.0)                        # rotation axis (-1, 0, 0) = the width axis
+            self.assertEqual(p["kind"], "숙임", p)
+            self.assertGreater(p["axis_angle_deg"], 85.0)
+        self.assertEqual(self.kind_of(30.0, 45.0)["kind"], "혼합")
+
+    def test_small_tilt_is_not_classified(self):
+        T = frontal_template()
+        P = project_hand(hand_pts16(), 3.0, 0.0)[IDS16]
+        th, _ = hf.affine_tilt(T, P)
+        self.assertEqual(hf.ferr_tilt_class(T, P, th, self.FC, IDS16)["kind"], "미분류")
+
+
+class FerrShape(unittest.TestCase):
+    def shape(self, spread=0.0, shift=0.0, theta=30.0, azim=70.0, rng=None, noise=0.0):
+        T = frontal_template()
+        P = project_hand(hand_pts16(spread, shift), theta, azim, noise=noise, rng=rng)
+        return hf.ferr_shape(T, IDS16, P[IDS16], P[0])
+
+    def test_rigid_hand_has_near_zero_change_and_spread_fingers_have_a_large_one(self):
+        rigid = self.shape()
+        base = self.shape(theta=0.0, azim=0.0)
+        self.assertLess(rigid["bone_ratio"], 0.02)
+        self.assertLess(abs(rigid["spread_deg"] - base["spread_deg"]), 2.5)
+        self.assertLess(abs(rigid["wrist_deg"] - base["wrist_deg"]), 2.5)
+        spread = self.shape(spread=-12.0)                                                   # index and pinky turned 12 deg outward each: the angle between them grows by 24 deg
+        self.assertGreater(spread["spread_deg"] - base["spread_deg"], 18.0)
+        self.assertGreater(spread["spread_deg"] - rigid["spread_deg"], 18.0)
+        bent = self.shape(shift=30.0)
+        self.assertGreater(abs(bent["wrist_deg"] - base["wrist_deg"]), 10.0)
+
+    def test_noise_keeps_the_rigid_change_small(self):
+        rng = np.random.default_rng(0)
+        r = [self.shape(rng=rng, noise=0.3, azim=a) for a in (10.0, 80.0, 130.0)]
+        self.assertTrue(all(x["bone_ratio"] < 0.03 for x in r), r)
+
+    def test_overlap_and_bin_helpers(self):
+        kp = np.zeros((21, 2))
+        mask = np.ones(21, bool)
+        for k, a in enumerate((5, 9, 13, 17)):
+            for q in range(4):
+                kp[a + q] = (100.0 * k + 3.0 * q, 50.0 * q)
+        self.assertAlmostEqual(hf.ferr_overlap(kp, mask, 200.0), 100.0 / 200.0, places=6)
+        rows = hf.ferr_bin_table([5.0, 15.0, 16.0, 26.0], [1000.0, 1100.0, 1300.0, 900.0], [False, False, True, False], edges=[0.0, 10.0, 20.0, 30.0])
+        self.assertEqual([(r["n"], r["n_edge"], r["n_with_f"], r["median_f"]) for r in rows], [(1, 0, 1, 1000.0), (2, 1, 1, 1100.0), (1, 0, 1, 900.0)])
+        rows = hf.ferr_bin_table(["굴림", "숙임", "굴림"], [1000.0, 1200.0, 1400.0], [False, False, False], labels=["숙임", "굴림", "혼합"])
+        self.assertEqual([(r["label"], r["n"], r["median_f"]) for r in rows], [("숙임", 1, 1200.0), ("굴림", 2, 1200.0), ("혼합", 0, None)])
+
+
+class FerrCurves(unittest.TestCase):
+    @classmethod
+    def setUpClass(cls):
+        cls.g = synth_wrist(seed=1, tilt_frames=60)
+        cls.a = analyze_synth(cls.g, methods_full=("fixed_template",))
+        cls.pb, cls.ids = hf.ferr_problem(cls.a, cls.g["kp"], cls.g["mask"], cls.g["box"], PIPE, cls.g["size"])
+        cls.grid = np.array(cls.a["grid"])
+
+    def test_mean_of_the_frame_curves_is_the_ft_curve(self):
+        curves = hf.ferr_frame_curves(self.pb, self.grid)
+        prof = np.array(self.a["solutions"]["fixed_template"]["profile_cost"])
+        self.assertEqual(curves.shape, (len(self.pb.keep), len(self.grid)))
+        np.testing.assert_allclose(curves.mean(0), prof, rtol=1e-9)
+        self.assertAlmostEqual(hf.cost(self.pb, self.a["solutions"]["fixed_template"]["f"]), self.a["solutions"]["fixed_template"]["cost"], places=9)
+
+    def test_subset_with_every_frame_gives_the_ft_f(self):
+        role = self.a["role"]
+        front = [i for i in self.pb.keep if role[i] == "front"]
+        tilt = [i for i in self.pb.keep if role[i] == "tilt"]
+        r = hf.ferr_subset_ft(self.pb, front, tilt, self.grid)
+        self.assertEqual(r["f"], self.a["solutions"]["fixed_template"]["f"])
+        self.assertEqual(r["n_tilt"], len(tilt))
+        half = hf.ferr_subset_ft(self.pb, front, tilt[:len(tilt) // 2], self.grid)
+        self.assertEqual(half["n_tilt"], len(tilt) // 2)
+        self.assertNotEqual(half["f"], r["f"])
+
+    def test_preferred_f_of_a_frame_and_its_sharpness(self):
+        curves = hf.ferr_frame_curves(self.pb, self.grid)
+        k = self.pb.keep[-1]
+        pr = hf.ferr_preferred(curves[-1], self.grid, self.pb.subset([k]))
+        self.assertGreater(pr["f_pref"], 0.0)
+        self.assertGreaterEqual(pr["sharpness"], 1.0 - 1e-9)
+        self.assertEqual(pr["at_edge"], bool(int(np.argmin(curves[-1])) in (0, len(self.grid) - 1)))
+
+
+class FerrCachedDetection(unittest.TestCase):
+    def test_missing_cache_raises_instead_of_detecting(self):
+        with tempfile.TemporaryDirectory() as d:
+            frames = [{"index": 0, "sha256": "ab" * 32}]
+            with self.assertRaises(FileNotFoundError):
+                hf.ferr_cached_npz(frames, CFG23["detector_settings"]["mediapipe_hands"], d)
+            p = Path(d) / "x.npz"
+            key_path = Path(d) / f"mediapipe_hands_{hf.frames_key(frames, {k: CFG23['detector_settings']['mediapipe_hands'][k] for k in ('weights', 'num_hands', 'min_hand_detection_confidence', 'min_hand_presence_confidence', 'box_margin', 'remap')}, 'mediapipe_hands')}.npz"
+            key_path.write_bytes(b"x")
+            self.assertEqual(hf.ferr_cached_npz(frames, CFG23["detector_settings"]["mediapipe_hands"], d), key_path)
+            del p
+
+
+RUN22 = ROOT / "runs/22_f_response/20261021T042524Z"
+
+
+@unittest.skipUnless(VID7158.exists() and VID7184.exists() and RUN17_7158.exists() and (RUN22 / "results.json").exists() and (RUN22 / "detection_cache").exists(),
+                     "the input videos of IMG_7158 / IMG_7184, the 17 run and 22's official run (results and detection cache) are needed")
+class FerrEndToEnd(unittest.TestCase):
+    def test_22_reproduction_outputs_and_no_tags(self):
+        with tempfile.TemporaryDirectory() as d:
+            d = Path(d)
+            cfg = copy.deepcopy(CFG23)
+            cfg["workers"] = 2
+            cfg["output"]["root"] = str(d / "runs")
+            cfg["output"]["results_yaml"] = str(d / "r23.yaml")                     # never the tracked results file
+            cp = d / "c.yaml"
+            cp.write_text(yaml.safe_dump(cfg, allow_unicode=True))
+            root, jobs = run.ferr_main(["--config", str(cp), "--videos", "IMG_7158.MOV,IMG_7184.MOV", "--out", str(d / "o")])
+            for f in ("report.md", "summary.md", "diagnostic_pull.md", "results.json", "metadata.json", "log.txt", "per_frame.csv", "pull_per_frame.csv"):
+                self.assertTrue((root / f).exists(), f)
+            for f in ("factor_vs_error.png", "frame_preferred_f.png", "preferred_f_by_bins.png"):
+                self.assertTrue((root / "figures" / f).exists(), f)
+            self.assertFalse((root / "_tmp").exists())
+            by = {j["video"]: j for j in jobs}
+            for v in ("IMG_7158.MOV", "IMG_7184.MOV"):
+                self.assertTrue(by[v]["same_as_22"], v)                              # the 22 settings reproduce 22's candidate f and verdict
+                self.assertLess(by[v]["curve_mean_check"]["max_rel_diff"], 1e-9)
+                self.assertEqual(by[v]["subset_all"]["f"], by[v]["ft"]["f"])
+                self.assertEqual(sorted(by[v]["subsets"]), sorted(s["name"] for s in CFG23["subsets"]))
+            self.assertEqual(by["IMG_7184.MOV"]["detections"], "22 run cache (found by the frame hashes)")
+            self.assertTrue(all(x is None for x in by["IMG_7184.MOV"]["factors"]["detector_diff_pct"].values()))      # no wilor_yolo / rtmpose detection exists for it
+            self.assertTrue(all(x is not None for x in by["IMG_7158.MOV"]["factors"]["detector_diff_pct"].values()))
+            y = run.ferr_results_yaml(root, cfg)
+            self.assertEqual(Path(y), d / "r23.yaml")
+            texts = "".join(p.read_text(errors="ignore") for p in list(root.rglob("*")) + [Path(y)] if p.is_file() and p.suffix in (".json", ".yaml", ".md", ".csv", ".txt"))
+            for val in FAKE_TAGS.values():
+                self.assertNotIn(val, texts)
+            for key in ("ISO6709", "com.apple.quicktime", '"make"', '"model"'):
+                self.assertNotIn(key, texts)
+            ref_f = re.compile(r"(?<![\d.])(?:1680|880)(?:\.0+)?(?!\d)(?!\.\d)")           # the reference values as standalone numbers (not part of another number)
+            for name in ("report.md", "per_frame.csv"):
+                self.assertIsNone(ref_f.search((root / name).read_text()), name)       # reference f values: summary.md and the pull diagnostic only
+            ytext = Path(y).read_text()
+            self.assertIsNone(ref_f.search(ytext))
+            summ = (root / "summary.md").read_text()
+            self.assertIn("원인 확정", summ.split("## 1.")[0])                         # the exploratory disclaimer is at the top
+            self.assertIn("1680", summ)
+            self.assertIn("880", summ)
+            self.assertIn("1680", (root / "diagnostic_pull.md").read_text())
+            rho = summ.split("## 2.")[1].split("## 3.")[0]
+            self.assertNotIn("7184", rho)                                            # the 0.5x video is not in the correlations
 
 
 if __name__ == "__main__":

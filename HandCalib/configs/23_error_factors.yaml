@@ -1,0 +1,234 @@
+experiment:
+  name: 23_error_factors
+  seed: 42
+
+# 23: why do the per-video errors of the candidate (mediapipe_hands + wrist_mode exclude + fixed_template) differ? Diagnostics only: cached detections are read, nothing is
+# detected, no setting of the candidate changes. Values below are fixed 2026-10-21 before the first run.
+videos: [IMG_7148.MOV, IMG_7157.MOV, IMG_7158.MOV, IMG_7176.MOV, IMG_7177.MOV, IMG_7178.MOV, IMG_7180.MOV, IMG_7181.MOV, IMG_7184.MOV]
+lens_videos: [IMG_7184.MOV]          # 0.5x lens: reported separately, never in the statistics (correlations); its reference f is its own
+reference_f: {default: 1680.0, IMG_7184.MOV: 880.0}       # user's checkerboard values: summary.md and the pull diagnostic only; never an estimation input
+input_dir: /home/juson/data/hand_focal_videos
+sources:                             # 17 official runs (mediapipe and the comparison detectors' detections and frame lists); a video without an entry (IMG_7184) is read from 22's cache
+  IMG_7148.MOV: runs/17_protocol_rerun/20261016T083019Z/IMG_7148
+  IMG_7157.MOV: runs/17_protocol_rerun/20261019T024522Z/IMG_7157
+  IMG_7158.MOV: runs/17_protocol_rerun/20261019T030703Z/IMG_7158
+  IMG_7176.MOV: runs/17_protocol_rerun/20261020T011004Z/IMG_7176
+  IMG_7177.MOV: runs/17_protocol_rerun/20261020T012620Z/IMG_7177
+  IMG_7178.MOV: runs/17_protocol_rerun/20261020T014136Z/IMG_7178
+  IMG_7180.MOV: runs/17_protocol_rerun/20261020T015845Z/IMG_7180
+  IMG_7181.MOV: runs/17_protocol_rerun/20261020T040532Z/IMG_7181
+cache_22: runs/22_f_response/20261021T042524Z/detection_cache      # 22's mediapipe cache (IMG_7184's detection)
+results_22: runs/22_f_response/20261021T042524Z/results.json       # 22's official original-frame results: the candidate's f and verdict are re-checked against them
+code_22: {branch: exp/22-f-response, commit: cffdeb4, modules: [HandCalib/handfocal.py, HandCalib/run.py]}
+
+candidate:                           # fixed (22); not changed here
+  detector: mediapipe_hands
+  wrist_mode: exclude
+  estimator: fixed_template
+  front_window: 17's (phase_mode nominal, tilt phase from 3.0 s)
+compare_detectors: [wilor_yolo, rtmpose_hand]       # detection differences against these (17 runs' detections; none for IMG_7184 -> not computable)
+
+factors:
+  roll_max_deg: 30.0                 # angle between the tilt (rotation) axis and the hand's long axis: below = roll (굴림)
+  pitch_min_deg: 60.0                # above = pitch (숙임); in between = mixed (혼합)
+  class_min_theta_deg: 10.0          # frames with theta2d below this are not classified (the tilt axis is undefined near 0)
+  theta_bin_deg: 10.0                # frame bins by theta2d
+  direction_bin_deg: 30.0            # frame bins by the image tilt direction
+  n_quantiles: 4                     # other continuous features: bins of this many pooled quantiles
+  min_subset_frames: 30              # a subset with fewer tilt frames is not estimated
+  pull_top_fraction: 0.1             # pull diagnostic: the frames with the largest pull (this top share) are described
+
+subsets:                             # fixed before the first run; not extended after seeing results. Each = the front-window frames + these tilt frames, fixed_template
+  - {name: 숙임 프레임만, kind: pitch}
+  - {name: 굴림 프레임만, kind: roll}
+  - {name: θ2d 20–40°만, kind: theta_range, range: [20.0, 40.0]}
+  - {name: 재투영 잔차 하위 절반, kind: residual_low_half}
+  - {name: 손 모양 변화(마디 길이 비) 하위 절반, kind: shape_low_half}
+
+workers: 9                           # parallel videos
+rank_correlation: spearman           # exploratory, 8 videos (1x), never a conclusion
+
+pipeline:
+  experiment:
+    name: 23_error_factors
+    seed: 42
+  input_dir: /home/juson/data/hand_focal_videos
+  video_extensions:
+  - .mov
+  - .mp4
+  - .m4v
+  - .mkv
+  - .avi
+  min_duration_s: 5.0
+  normalize:
+    long_side: 1920
+    max_fps: 60
+    sdr_target: bt709
+    hdr_path:
+    - zscale_tonemap
+    - colorspace
+    codec: ffv1
+  frames:
+    detect_fps: 15
+    tmp_dir: null
+  detector:
+    name: mock
+    mock_npz: null
+    classes:
+      0: left
+      1: right
+    cache: true
+  tracking:
+    init_window_s: 1.0
+    iou_min: 0.3
+    conf_min: 0.5
+    smoothing:
+      enabled: false
+      window: 3
+  phases:
+    phase_mode: nominal
+    front_phase_s: 3.0
+    front_skip_s: 0.5
+    front_window_s: 1.0
+    front_min_detect_rate: 0.9
+    finger_extension_min: 0.9
+    auto_theta_deg: 10.0
+    auto_sustain_s: 0.5
+    auto_warn_diff_s: 1.0
+  joints:
+    sets:
+      palm4:
+      - 0
+      - 5
+      - 9
+      - 13
+      palm5:
+      - 0
+      - 5
+      - 9
+      - 13
+      - 17
+      palm_proximal9:
+      - 0
+      - 5
+      - 6
+      - 9
+      - 10
+      - 13
+      - 14
+      - 17
+      - 18
+      flat17:
+      - 0
+      - 5
+      - 6
+      - 7
+      - 8
+      - 9
+      - 10
+      - 11
+      - 12
+      - 13
+      - 14
+      - 15
+      - 16
+      - 17
+      - 18
+      - 19
+      - 20
+    estimate_set: flat17
+    uncertainty_sets:
+    - palm5
+    - palm_proximal9
+    - flat17
+    template_align_iters: 4
+  estimate:
+    estimator: fixed_template
+    synthetic_study_result: null
+    principal_point: center
+    distortion: null
+    f_grid_n: 60
+    f_ratio_range:
+    - 0.35
+    - 1.6
+    huber_rel: 0.02
+    min_points: 4
+    joint_delta:
+      delta_grid_deg:
+      - 0
+      - 4
+      - 8
+      - 12
+      - 16
+      - 20
+      phi_n: 6
+      delta_prior_deg: 8.0
+      prior_weight: auto
+      nm_max_iter: 300
+  anycalib:
+    enabled: true
+    model_id: anycalib_pinhole
+    cam_id: pinhole
+    stride: 1
+    device: cuda:0
+    extra_models:
+    - anycalib_gen
+    offline_env:
+      HF_HUB_OFFLINE: '1'
+      TRANSFORMERS_OFFLINE: '1'
+    torch_hub_dir: ~/.cache/torch/hub
+  uncertainty:
+    n_bootstrap: 30
+    block_frames: 10
+    time_budget_s: 600
+  verdict:
+    good:
+      detect_rate_min: 0.9
+      front_frames_min: 15
+      finger_extension_required: true
+      theta_p90_min_deg: 25.0
+      axis_bins_min: 5
+      reproj_rms_rel_max: 0.01
+      jointset_range_max: 0.04
+      bootstrap_rel_std_max: 0.03
+      consistency_range_max: 0.06
+      delta_abs_max_deg: 12.0
+      sharpness_min: 1.3
+    rough:
+      detect_rate_min: 0.7
+      theta_p90_min_deg: 12.0
+      axis_bins_min: 3
+      reproj_rms_rel_max: 0.025
+      jointset_range_max: 0.12
+    min_target_frames: 20
+  target_sizes:
+  - - 1920
+    - 1080
+  - - 1280
+    - 720
+  - - 3840
+    - 2160
+  output:
+    root: runs/23_error_factors
+    results_yaml: results/23_error_factors.yaml
+
+detector_settings:
+  mediapipe_hands:
+    model: MediaPipe Hand Landmarker (hand_landmarker.task float16/1)
+    weights: /home/juson/models/mediapipe/hand_landmarker.task
+    python: /home/juson/venvs/det_mediapipe/bin/python
+    device: cpu
+    num_hands: 2
+    min_hand_detection_confidence: 0.5
+    min_hand_presence_confidence: 0.5
+    box_margin: 0.1
+    conf_min: 0.5
+    remap: null
+  wilor_yolo:
+    conf_min: 0.5
+  rtmpose_hand:
+    conf_min: 0.3
+
+output:
+  root: runs/23_error_factors
+  results_yaml: results/23_error_factors.yaml
