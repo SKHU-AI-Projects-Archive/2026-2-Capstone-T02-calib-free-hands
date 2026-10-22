@@ -3397,3 +3397,219 @@ def ferr_video(args) -> dict:
     finally:
         if tmp is not None:
             shutil.rmtree(tmp, ignore_errors=True)
+
+
+# ====================================================================================================
+# long  (experiment 25: the candidate on long new videos; new section, earlier functions are used unchanged)
+# Candidate = mediapipe_hands + wrist_mode exclude + fixed_template (22). New videos only enter after b (the common bias of the baseline videos) is fixed.
+# Pooled estimate: the per-video fixed_template cost curves (every video with its own template, same f grid) are summed and minimised like fixed_template.
+# H1 noise falls with more data, H2 a common bias exists, H3 b transfers to the new videos, H4 dropping small-tilt frames helps (rules and thresholds in the yaml).
+# ====================================================================================================
+
+def long_find_new_videos(input_dir, after_number: int, extensions=(".mov", ".mp4", ".m4v", ".mkv", ".avi")) -> list:
+    """Hand videos IMG_<number> in input_dir with a number above after_number: [{video, number, duration_s, width, height}] (technical stream fields only)."""
+    rows = []
+    for p in sorted(Path(input_dir).expanduser().iterdir()):
+        m = re.fullmatch(r"IMG_(\d+)", p.stem)
+        if m and p.suffix.lower() in set(extensions) and int(m.group(1)) > int(after_number):
+            i = probe(p)
+            rows.append({"video": p.name, "number": int(m.group(1)), "duration_s": float(i["duration_s"]), "width": int(i["display_w"]), "height": int(i["display_h"])})
+    return rows
+
+
+def long_pooled_curve(curves) -> np.ndarray:
+    """Sum of the per-video fixed_template cost curves (rows = videos, columns = the common f grid)."""
+    return np.asarray(curves, float).sum(axis=0)
+
+
+def long_curve_min(curve, grid) -> dict:
+    """f of a cost curve like fixed_template: grid minimum refined by the parabola in log f, clipped to the grid; at_grid_edge when the minimum is on the border."""
+    grid = np.asarray(grid, float)
+    c = np.asarray(curve, float)
+    k = int(np.argmin(c))
+    f = float(np.exp(np.clip(_parabola(np.log(grid), c, k), np.log(grid[0]), np.log(grid[-1]))))
+    return {"f": f, "at_grid_edge": bool(k in (0, len(grid) - 1)), "side": None if k not in (0, len(grid) - 1) else ("상한" if k == len(grid) - 1 else "하한")}
+
+
+def long_pooled_estimate(curves, grid) -> dict:
+    return long_curve_min(long_pooled_curve(curves), grid)
+
+
+def long_pooled_bootstrap(curves, grid, n: int, seed: int) -> dict:
+    """Video-level bootstrap of the pooled estimate: videos are drawn with replacement n times (fixed seed). Returns the pooled f of every draw, the number of draws on the grid edge."""
+    curves = np.asarray(curves, float)
+    rng = np.random.default_rng(int(seed))
+    fs, edge = [], 0
+    for _ in range(int(n)):
+        pick = rng.integers(0, len(curves), len(curves))
+        r = long_pooled_estimate(curves[pick], grid)
+        fs.append(r["f"])
+        edge += int(r["at_grid_edge"])
+    return {"f": fs, "n_edge": edge, "n": int(n), "seed": int(seed)}
+
+
+def long_log_ci(fs, ref: float, level: float = 0.95) -> tuple:
+    """Percentile interval of log(f / ref) over bootstrap draws."""
+    x = np.log(np.asarray(fs, float) / float(ref))
+    a = (1.0 - level) / 2.0
+    return float(np.quantile(x, a)), float(np.quantile(x, 1.0 - a))
+
+
+def long_boot_log_std(fs) -> float:
+    """Standard deviation of log f over the block-bootstrap estimates of one video (NaN with fewer than 2)."""
+    x = np.log(np.asarray(fs, float))
+    return float(np.std(x, ddof=1)) if len(x) > 1 else float("nan")
+
+
+def long_theta_keep(theta, tilt_ids, theta_min_deg: float) -> list:
+    """Tilt frames whose theta2d is at least theta_min_deg (frames without theta2d are dropped)."""
+    th = np.asarray(theta, float)
+    return [int(i) for i in tilt_ids if np.isfinite(th[i]) and th[i] >= float(theta_min_deg)]
+
+
+def long_h1(new_stds, base_stds, ratio: float) -> dict:
+    """H1: the median per-video bootstrap log SD of the new videos <= ratio * the baseline median -> supported."""
+    ns = [x for x in new_stds if np.isfinite(x)]
+    bs = [x for x in base_stds if np.isfinite(x)]
+    if not ns or not bs:
+        return {"verdict": "판단 불가", "new_median": None, "base_median": None, "ratio_used": ratio}
+    nm, bm = float(np.median(ns)), float(np.median(bs))
+    return {"verdict": "지지" if nm <= ratio * bm else "근거 없음", "new_median": nm, "base_median": bm, "ratio_used": ratio, "ratio_observed": nm / bm}
+
+
+def long_h2(ci: tuple, n_new: int, min_videos: int) -> dict:
+    """H2: the 95% interval of log(f_pooled / ref) excludes 0 -> common bias; fewer than min_videos new videos -> not judged (values only)."""
+    lo, hi = ci
+    if n_new < min_videos:
+        return {"verdict": "판단 불가", "reason": f"새 영상 {n_new}개 < {min_videos}개", "ci": [lo, hi]}
+    return {"verdict": "공통 편향 있음" if (lo > 0 or hi < 0) else "확인 안 됨", "ci": [lo, hi], "sign": None if not (lo > 0 or hi < 0) else ("+" if lo > 0 else "−")}
+
+
+def long_h3(f_new, ref: float, b: float, n_new: int, min_videos: int, fraction: float) -> dict:
+    """H3: with the correction f / exp(b), the median |error| falls and at least `fraction` of the new videos have a smaller |error| -> effective."""
+    f = np.asarray(f_new, float)
+    before = np.abs(f / ref - 1.0)
+    after = np.abs(f / np.exp(b) / ref - 1.0)
+    frac = float(np.mean(after < before)) if len(f) else float("nan")
+    mb, ma = float(np.median(before)) if len(f) else float("nan"), float(np.median(after)) if len(f) else float("nan")
+    out = {"median_abs_before": mb, "median_abs_after": ma, "fraction_reduced": frac, "n": int(len(f)), "b": float(b)}
+    if n_new < min_videos:
+        return {**out, "verdict": "판단 불가", "reason": f"새 영상 {n_new}개 < {min_videos}개"}
+    return {**out, "verdict": "보정 효과 있음" if (ma < mb and frac >= fraction - 1e-9) else "보정 효과 없음"}
+
+
+def long_h4(f_orig, f_h4, ref: float, gain: float, fraction: float) -> dict:
+    """H4: over the videos with a theta2d >= limit estimate, the median |error| is at least `gain` smaller than the original FT's and at least `fraction` of them improve."""
+    fo, fh = np.asarray(f_orig, float), np.asarray(f_h4, float)
+    if not len(fo):
+        return {"verdict": "판단 불가", "n": 0}
+    eo, eh = np.abs(fo / ref - 1.0), np.abs(fh / ref - 1.0)
+    mo, mh, frac = float(np.median(eo)), float(np.median(eh)), float(np.mean(eh < eo))
+    return {"verdict": "개선" if (mo - mh >= gain - 1e-12 and frac >= fraction - 1e-9) else "근거 없음", "median_abs_orig": mo, "median_abs_h4": mh, "fraction_improved": frac, "n": int(len(fo))}
+
+
+def long_calibration(f, sigma_log, ref: float, b: float = 0.0) -> dict:
+    """Share of videos whose |log(f / ref) - b| lies within 1 and 2 bootstrap log SDs."""
+    e = np.abs(np.log(np.asarray(f, float) / ref) - b)
+    s = np.asarray(sigma_log, float)
+    ok = np.isfinite(s) & (s > 0)
+    return {"within_1sigma": float(np.mean(e[ok] <= s[ok])) if ok.any() else None, "within_2sigma": float(np.mean(e[ok] <= 2 * s[ok])) if ok.any() else None, "n": int(ok.sum())}
+
+
+def long_video(args) -> dict:
+    """One video of experiment 25: the candidate (exclude, fixed_template) from mediapipe detections with its cost curve, bootstrap, motion statistics and the theta2d >= limit variant (H4);
+    for new videos also the exclusion check, 21's guide and transition, and the comparison estimates (keep, joint_delta, AnyCalib). Baseline videos are read from their 17 runs.
+    args = (video, kind 'baseline' | 'new', src_dir | None, prep | None, npz | None, pcfg, c, lock_dir, gpu_id | None)."""
+    video, kind, src_dir, prep, npz, pcfg, c, lock_dir, gpu_id = args
+    if gpu_id is not None:
+        os.environ["CUDA_VISIBLE_DEVICES"] = str(gpu_id)
+    os.environ.setdefault("OMP_NUM_THREADS", "1")
+    cv2.setNumThreads(1)
+    cand, hy, ex = c["candidate"], c["hypotheses"], c["exclusion"]
+    dset = c["detector_settings"][cand["detector"]]
+    pc = copy.deepcopy(pcfg)
+    pc["tracking"]["conf_min"] = float(dset["conf_min"])
+    if kind == "baseline":
+        r17 = json.loads((Path(src_dir) / cand["detector"] / "results.json").read_text())
+        times = np.array([x["time_s"] for x in r17["frames"]["list"]])
+        W, H = r17["normalization"]["output"]["display_w"], r17["normalization"]["output"]["display_h"]
+        dets = load_detections(Path(src_dir) / cand["detector"] / "detections.npz")
+        frames = None
+    else:
+        frames = prep["frames"]
+        times = np.array([r["time_s"] for r in frames])
+        W, H = prep["size"]
+        dets = load_detections(Path(npz))
+        check_alignment(frames, dets)
+    tr = track(dets, times, (W, H), pc["tracking"], front_start_s=float(pc["phases"]["front_skip_s"]))
+    kp, mask, present, box = tr["kp"], tr["mask"], tr["present"], tr["box"]
+    res = {"video": video, "kind": kind, "n_frames": int(len(times)), "duration_s": float(times[-1] - times[0]) if len(times) else 0.0, "size": [W, H]}
+    fw = front_window(times, present, kp, mask, box, pc["phases"])
+    res["detect_rate"] = float(present.mean())
+    res["edge_rate"] = fresp_edge_rate(box, present, W, H)
+    res["front_window"] = [fw.get("t0"), fw.get("t1")]
+    reasons = []
+    if len(fw["idx"]) == 0 or fw["detect_rate"] < float(pc["phases"]["front_min_detect_rate"]):
+        reasons.append("유효한 정면 창(1초)이 없음")
+    if res["edge_rate"] > float(ex["edge_rate_max"]):
+        reasons.append(f"가장자리 접촉 프레임 {100 * res['edge_rate']:.1f}% > {100 * float(ex['edge_rate_max']):.0f}%")
+    if 1.0 - res["detect_rate"] > float(ex["detect_fail_max"]):
+        reasons.append(f"손 검출 실패 프레임 {100 * (1.0 - res['detect_rate']):.1f}% > {100 * float(ex['detect_fail_max']):.0f}%")
+    res["excluded"] = reasons
+    if kind == "new" and reasons:
+        return res
+    seed = int(pc["experiment"]["seed"])
+    cfg_ex = pseg_wrist_cfg(pc) if cand["wrist_mode"] == "exclude" else pc
+    a = analyze(kp, mask, present, box, tr["cls"], times, (W, H), cfg_ex, tilt_start=None, methods_full=("fixed_template",), seed=seed)
+    if "per_method" not in a:
+        res["failed"] = a.get("failed", "분석 실패")
+        return res
+    sol, jd, pm = a["solutions"]["fixed_template"], a["solutions"]["joint_delta"], a["per_method"]["fixed_template"]
+    grid = np.array(a["grid"])
+    hi = grid[-1]
+    side = lambda s: None if not s["at_grid_edge"] else ("상한" if s["f"] >= hi * (1 - 1e-6) else "하한")      # noqa: E731
+    bf = pm["bootstrap"]["f"]
+    res["ft"] = {"f": float(sol["f"]), "at_grid_edge": bool(sol["at_grid_edge"]), "side": side(sol), "verdict": pm["verdict"]["verdict"], "sharpness": float(pm["diagnostics"]["sharpness"]),
+                 "f_rel_uncertainty": float(pm["f_rel_uncertainty"]) if np.isfinite(pm["f_rel_uncertainty"]) else None, "boot_rel_std": float(pm["bootstrap"]["rel_std"]) if np.isfinite(pm["bootstrap"]["rel_std"]) else None,
+                 "boot_log_std": long_boot_log_std(bf), "boot_f": [float(x) for x in bf], "n_boot": int(pm["bootstrap"]["n_done"])}
+    res["jd"] = {"f": float(jd["f"]), "at_grid_edge": bool(jd["at_grid_edge"]), "side": side(jd)}
+    res["curve"] = {"grid": grid.tolist(), "cost": [float(x) for x in sol["profile_cost"]]}
+    theta = np.array([np.nan if x is None else x for x in a["theta2d_deg"]], float)
+    role = a["role"]
+    pb, ids = ferr_problem(a, kp, mask, box, cfg_ex, (W, H))
+    front_ids = [i for i in pb.keep if role[i] == "front"]
+    tilt_ids = [i for i in pb.keep if role[i] == "tilt"]
+    th = theta[tilt_ids]
+    res["motion"] = {"tilt_start_s": float(a["tilt_start_s"]), "tilt_last_s": float(times[tilt_ids].max()) if tilt_ids else None, "n_tilt_frames": len(tilt_ids),
+                     "tilt_duration_s": float(times[tilt_ids].max() - a["tilt_start_s"]) if tilt_ids else 0.0, "theta_median_deg": float(np.nanmedian(th)) if len(th) else None,
+                     "theta_p90_deg": float(np.nanpercentile(th, 90)) if len(th) else None, "theta_over_45_frac": float(np.nanmean(th > 45.0)) if len(th) else None,
+                     "theta_max_deg": float(np.nanmax(th)) if len(th) else None, "theta_tilt": [round(float(x), 1) for x in th if np.isfinite(x)]}
+    sel = long_theta_keep(theta, tilt_ids, float(hy["h4_theta_min_deg"]))
+    if len(sel) >= int(hy["h4_min_frames"]):
+        s4 = ferr_subset_ft(pb, front_ids, sel, grid)
+        res["h4"] = {"theta_min_deg": float(hy["h4_theta_min_deg"]), "n_tilt": len(sel), "f": s4["f"], "at_grid_edge": s4["at_grid_edge"], "side": s4["side"]}
+    else:
+        res["h4"] = {"theta_min_deg": float(hy["h4_theta_min_deg"]), "n_tilt": len(sel), "skipped": f"기울기 프레임 {len(sel)}장 < {int(hy['h4_min_frames'])}장"}
+    if kind == "baseline":
+        return res
+    # ---- new videos: per-frame table, 21's guide and transition, comparison estimates
+    keepset = set(sel)
+    res["frames"] = [{"index": int(i), "time_s": float(times[i]), "theta2d_deg": float(theta[i]), "in_h4_subset": bool(i in keepset)} for i in tilt_ids]
+    if c.get("compare_estimates"):
+        c21 = {"phase_segmentation": c["guide"]["phase_segmentation"], "conditions": c["guide"]["conditions"], "f_estimation": {"compare_wrist_modes": ["keep"]}, "transition_method": "linear_d"}
+        g = grev_analyze(kp, mask, present, box, tr["cls"], times, (W, H), pc, c21, seed)
+        if "transition" in g:
+            tr21 = g["transition"]
+            res["guide"] = {"t_transition": tr21.get("t_transition"), "guide": bool(tr21["guide"]), "reasons": tr21["reasons"], "items": {k: bool(v) for k, v in tr21["items"].items()},
+                            "d0": tr21.get("d0"), "d_thr": tr21.get("d_thr"), "d0_capped": tr21.get("d0_capped"), "front_window": tr21.get("front_window")}
+            kw = g["wrist"]["keep"]
+            res["keep"] = {"ft": kw["solutions"]["fixed_template"], "jd": kw["solutions"]["joint_delta"], "verdict": kw["verdict"]} if "solutions" in kw else {"failed": kw.get("failed")}
+        else:
+            res["guide"] = {"failed": g.get("failed")}
+        acfg = copy.deepcopy(pc["anycalib"])
+        if pc["anycalib"]["enabled"] and frames is not None:
+            with fresp_gpu_lock(Path(lock_dir) / f"gpu_{'' if gpu_id is None else gpu_id}.lock"):
+                fresp_thermal_wait(float(c["anycalib_guard"]["gpu_pause_c"]), float(c["anycalib_guard"]["gpu_resume_c"]))
+                ac = anycalib_run(frames, acfg, float(pc["phases"]["front_phase_s"]), lambda m="": None)
+            res["anycalib"] = {m: {"median": v["summary"].get("median"), "n": v["summary"].get("n")} for m, v in ac["models"].items()}
+    return res

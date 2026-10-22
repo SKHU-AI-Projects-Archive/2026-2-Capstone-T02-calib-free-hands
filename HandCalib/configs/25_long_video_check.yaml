@@ -1,0 +1,266 @@
+experiment:
+  name: 25_long_video_check
+  seed: 42
+
+# 25: the candidate (mediapipe_hands + wrist_mode exclude + fixed_template) on long new videos (about 20 s, 1x lens). The new videos were not used to choose the candidate: verification.
+# Candidate settings and every threshold below are fixed 2026-10-22 before any new video is processed; nothing is changed after seeing results.
+new_videos: []                       # file names filled in by the user (empty: the script lists the videos above after_number with their lengths and stops for the user's confirmation)
+after_number: 7184                   # candidates for new_videos: input_dir hand videos numbered above this
+baseline_videos: [IMG_7148.MOV, IMG_7157.MOV, IMG_7158.MOV, IMG_7176.MOV, IMG_7177.MOV, IMG_7178.MOV, IMG_7180.MOV, IMG_7181.MOV]     # 22's 1x videos (17 runs' cached detections, read only)
+input_dir: /home/juson/data/hand_focal_videos
+sources:                             # 17 official runs of the baseline videos
+  IMG_7148.MOV: runs/17_protocol_rerun/20261016T083019Z/IMG_7148
+  IMG_7157.MOV: runs/17_protocol_rerun/20261019T024522Z/IMG_7157
+  IMG_7158.MOV: runs/17_protocol_rerun/20261019T030703Z/IMG_7158
+  IMG_7176.MOV: runs/17_protocol_rerun/20261020T011004Z/IMG_7176
+  IMG_7177.MOV: runs/17_protocol_rerun/20261020T012620Z/IMG_7177
+  IMG_7178.MOV: runs/17_protocol_rerun/20261020T014136Z/IMG_7178
+  IMG_7180.MOV: runs/17_protocol_rerun/20261020T015845Z/IMG_7180
+  IMG_7181.MOV: runs/17_protocol_rerun/20261020T040532Z/IMG_7181
+results_22: runs/22_f_response/20261021T042524Z/results.json       # 22's official results: the candidate's f and verdict of the baseline videos are re-checked against them
+results_23: runs/23_error_factors/20261022T002204Z/results.json    # 23's bootstrap values of the baseline videos (re-check)
+code_23: {branch: exp/23-error-factors, commit: 53ffd4f, modules: [HandCalib/handfocal.py, HandCalib/run.py]}
+
+candidate:                           # fixed (22); not changed here
+  detector: mediapipe_hands
+  wrist_mode: exclude
+  estimator: fixed_template
+  front_window: 17's (phase_mode nominal, tilt phase from 3.0 s)
+compare_estimates: true              # keep FT, exclude JD, 21's guide, AnyCalib pinhole / gen for the new videos (never used in a verdict)
+exclusion:                           # shooting conditions only, fixed before the first run; a new video without a valid 1 s front window is excluded as well
+  edge_rate_max: 0.05                # share of detected frames whose hand box touches the image border
+  detect_fail_max: 0.20              # share of frames without a detected hand
+hypotheses:
+  h1_ratio: 0.85                     # H1 supported: new median bootstrap log SD <= this * baseline median
+  h4_gain: 0.02                      # H4 improvement: median |error| smaller by at least this much (2 percentage points) ...
+  fraction: 0.6666667                # ... and at least this share of the new videos improve (also H3)
+  min_new_videos_h2_h3: 4            # fewer new videos: H2 and H3 are recorded but not judged
+  h4_theta_min_deg: 20.0             # H4 variant: only tilt frames with theta2d >= this
+  h4_min_frames: 30                  # the variant is estimated only with at least this many tilt frames
+  bootstrap_n: 1000                  # H2: draws of videos with replacement
+  bootstrap_seed: 42
+  reference_f_px: 1680.0             # user's checkerboard value (1x lens): summary.md only; never an estimation input
+anycalib_guard: {gpu_pause_c: 70, gpu_resume_c: 65}
+gpu_ids: [1, 2, 3]                   # physical GPUs for the AnyCalib runs of the new videos
+n_workers: 16                        # mediapipe (CPU) detection of the new videos: lists at the same time (64 logical CPUs, keep <= half)
+workers: 9                           # parallel videos
+
+# Baseline of the 8 existing videos, written by `error-bias` BEFORE any new video is processed (step 2 of the run order) and then committed.
+baseline:
+  bias_b: null                       # b = log(f_pooled_baseline / reference_f_px)
+  json: null                         # the baseline run's per-video values and cost curves
+  bootstrap_log_std_median: null
+  log_f_sd_between_videos: null
+  pooled_f_px: null
+
+# 21's guide settings (the new guide and the linear_d transition)
+guide:
+  phase_segmentation:
+    noise_percentile: 95
+    k_d: 3.0
+    theta_min_deg: 15.0
+    median_window_s: 0.3
+    sustain_s: 0.5
+    front_search_s:
+    - 0.5
+    - 2.5
+    d0_cap_theta_deg: 20.0
+    use_motion: false
+    k_v: 3.0
+    motion_window_s: 0.3
+    exclude_large_tilt: false
+    max_tilt_deg: 45.0
+  conditions:
+    reference_detector: wilor_yolo
+    box_short_ratio_max: 0.6
+    edge_rate_max: 0.05
+    transition_min_s: 2.5
+    tilt_rule: frames_median
+    tilt_max_deg: 45.0
+    min_tilt_frames: 30
+    theta_tilt_median_range_deg:
+    - 20.0
+    - 40.0
+    axis_bins_min: 5
+    finger_extension_min: 0.9
+
+pipeline:
+  experiment:
+    name: 25_long_video_check
+    seed: 42
+  input_dir: /home/juson/data/hand_focal_videos
+  video_extensions:
+  - .mov
+  - .mp4
+  - .m4v
+  - .mkv
+  - .avi
+  min_duration_s: 5.0
+  normalize:
+    long_side: 1920
+    max_fps: 60
+    sdr_target: bt709
+    hdr_path:
+    - zscale_tonemap
+    - colorspace
+    codec: ffv1
+  frames:
+    detect_fps: 15
+    tmp_dir: null
+  detector:
+    name: mock
+    mock_npz: null
+    classes:
+      0: left
+      1: right
+    cache: true
+  tracking:
+    init_window_s: 1.0
+    iou_min: 0.3
+    conf_min: 0.5
+    smoothing:
+      enabled: false
+      window: 3
+  phases:
+    phase_mode: nominal
+    front_phase_s: 3.0
+    front_skip_s: 0.5
+    front_window_s: 1.0
+    front_min_detect_rate: 0.9
+    finger_extension_min: 0.9
+    auto_theta_deg: 10.0
+    auto_sustain_s: 0.5
+    auto_warn_diff_s: 1.0
+  joints:
+    sets:
+      palm4:
+      - 0
+      - 5
+      - 9
+      - 13
+      palm5:
+      - 0
+      - 5
+      - 9
+      - 13
+      - 17
+      palm_proximal9:
+      - 0
+      - 5
+      - 6
+      - 9
+      - 10
+      - 13
+      - 14
+      - 17
+      - 18
+      flat17:
+      - 0
+      - 5
+      - 6
+      - 7
+      - 8
+      - 9
+      - 10
+      - 11
+      - 12
+      - 13
+      - 14
+      - 15
+      - 16
+      - 17
+      - 18
+      - 19
+      - 20
+    estimate_set: flat17
+    uncertainty_sets:
+    - palm5
+    - palm_proximal9
+    - flat17
+    template_align_iters: 4
+  estimate:
+    estimator: fixed_template
+    synthetic_study_result: null
+    principal_point: center
+    distortion: null
+    f_grid_n: 60
+    f_ratio_range:
+    - 0.35
+    - 1.6
+    huber_rel: 0.02
+    min_points: 4
+    joint_delta:
+      delta_grid_deg:
+      - 0
+      - 4
+      - 8
+      - 12
+      - 16
+      - 20
+      phi_n: 6
+      delta_prior_deg: 8.0
+      prior_weight: auto
+      nm_max_iter: 300
+  anycalib:
+    enabled: true
+    model_id: anycalib_pinhole
+    cam_id: pinhole
+    stride: 1
+    device: cuda:0
+    extra_models:
+    - anycalib_gen
+    offline_env:
+      HF_HUB_OFFLINE: '1'
+      TRANSFORMERS_OFFLINE: '1'
+    torch_hub_dir: ~/.cache/torch/hub
+  uncertainty:
+    n_bootstrap: 30
+    block_frames: 10
+    time_budget_s: 600
+  verdict:
+    good:
+      detect_rate_min: 0.9
+      front_frames_min: 15
+      finger_extension_required: true
+      theta_p90_min_deg: 25.0
+      axis_bins_min: 5
+      reproj_rms_rel_max: 0.01
+      jointset_range_max: 0.04
+      bootstrap_rel_std_max: 0.03
+      consistency_range_max: 0.06
+      delta_abs_max_deg: 12.0
+      sharpness_min: 1.3
+    rough:
+      detect_rate_min: 0.7
+      theta_p90_min_deg: 12.0
+      axis_bins_min: 3
+      reproj_rms_rel_max: 0.025
+      jointset_range_max: 0.12
+    min_target_frames: 20
+  target_sizes:
+  - - 1920
+    - 1080
+  - - 1280
+    - 720
+  - - 3840
+    - 2160
+  output:
+    root: runs/25_long_video_check
+    results_yaml: results/25_long_video_check.yaml
+
+detector_settings:
+  mediapipe_hands:
+    model: MediaPipe Hand Landmarker (hand_landmarker.task float16/1)
+    weights: /home/juson/models/mediapipe/hand_landmarker.task
+    python: /home/juson/venvs/det_mediapipe/bin/python
+    device: cpu
+    num_hands: 2
+    min_hand_detection_confidence: 0.5
+    min_hand_presence_confidence: 0.5
+    box_margin: 0.1
+    conf_min: 0.5
+    remap: null
+
+output:
+  root: runs/25_long_video_check
+  results_yaml: results/25_long_video_check.yaml

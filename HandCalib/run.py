@@ -8,6 +8,7 @@
     python HandCalib/run.py guide-revision --config HandCalib/configs/21_guide_revision.yaml [--videos A,B] [--detectors a,b] [results-yaml --run DIR | overlay --run DIR]
     python HandCalib/run.py f-response     --config HandCalib/configs/22_f_response.yaml [--videos A,B] [results-yaml --run DIR]
     python HandCalib/run.py error-factors  --config HandCalib/configs/23_error_factors.yaml [--videos A,B] [results-yaml --run DIR]
+    python HandCalib/run.py long-video-check --config HandCalib/configs/25_long_video_check.yaml [bias | --videos A,B | results-yaml --run DIR]
 
 Consolidated from run_hand_focal.py (14, process_video only), run_detector_swap.py (16, the per-detector processing that 17 calls),
 run_protocol_rerun.py and run_frame_filter_diag.py (17),
@@ -25,6 +26,7 @@ import json
 import math
 import numpy as np
 import os
+import re
 import shutil
 import subprocess
 import sys
@@ -2990,10 +2992,377 @@ def ferr_main(argv=None):
 
 
 # ====================================================================================================
+# long  (experiment 25: the candidate on long new videos; new section)
+# Order of the run (fixed in the specification): 1 code committed; 2 `bias`: the common bias b of the baseline videos (22's 1x videos, cached detections) is computed and written
+# to the yaml and a log, then committed; 3 the new videos are detected and estimated; 4 H1-H4 are judged. New videos never enter b or the candidate.
+#
+#     python HandCalib/run.py long-video-check --config HandCalib/configs/25_long_video_check.yaml bias
+#     python HandCalib/run.py long-video-check --config HandCalib/configs/25_long_video_check.yaml [--videos A,B]
+#     python HandCalib/run.py long-video-check --config ... results-yaml --run runs/25_long_video_check/<UTC>
+# ====================================================================================================
+
+LONG_NOTE = "긴 새 영상으로 후보 방법(mediapipe_hands + 손목 제외 + fixed_template)을 다시 평가한 검증 실험이다. 후보 설정과 판정 문턱값은 바꾸지 않았다. 기준 f와의 비교는 summary.md에만 있다."
+
+
+def long_fmt(x, d=3):
+    return "-" if x is None or (isinstance(x, float) and not np.isfinite(x)) else f"{x:.{d}f}"
+
+
+def long_fval(r):
+    """'값 없음 (상한/하한)' for a grid-edge solution, else 'f px'."""
+    return "값 없음 (" + str(r["side"]) + ")" if r["at_grid_edge"] else f"{r['f']:.1f} px"
+
+
+def long_patch_yaml(path: Path, values: dict):
+    """Writes the baseline values into the `baseline:` block of the config (text edit that keeps comments)."""
+    t = path.read_text()
+    for k, v in values.items():
+        t, n = re.subn(rf"^(  {k}:)[^\n#]*", lambda m: f"{m.group(1)} {v}", t, count=1, flags=re.M)
+        if n != 1:
+            raise SystemExit(f"baseline key not found in the yaml: {k}")
+    path.write_text(t)
+
+
+def long_base_stats(jobs: list, ref: float) -> dict:
+    ok = [j for j in jobs if "ft" in j and not j["ft"]["at_grid_edge"]]
+    e = np.array([j["ft"]["f"] / ref - 1.0 for j in ok])
+    lf = np.log([j["ft"]["f"] for j in ok])
+    return {"n": len(ok), "median_abs_err": float(np.median(np.abs(e))) if len(e) else None, "median_signed_err": float(np.median(e)) if len(e) else None,
+            "log_f_sd": float(np.std(lf, ddof=1)) if len(lf) > 1 else None, "boot_log_std_median": float(np.median([j["ft"]["boot_log_std"] for j in ok])) if ok else None}
+
+
+def long_bias_main(cfg: dict, cfg_path: Path, log) -> dict:
+    """Step 2: the baseline videos only. Returns the baseline record (also written next to the run folder and into the yaml)."""
+    hy = cfg["hypotheses"]
+    ref = float(hy["reference_f_px"])
+    run_root = hf.resolve(cfg["output"]["root"]) / f"{utc_stamp()}_bias"
+    run_root.mkdir(parents=True)
+    log2 = Log(run_root / "log.txt")
+    log2(f"25 편향 보정값 b: 기존 영상 {cfg['baseline_videos']}만 사용(새 영상 없음) → {run_root}")
+    cjob = {k: cfg[k] for k in ("candidate", "exclusion", "hypotheses", "detector_settings", "guide", "compare_estimates", "anycalib_guard") if k in cfg}
+    cjob["compare_estimates"] = False
+    args = [(v, "baseline", str(hf.resolve(cfg["sources"][v])), None, None, cfg["pipeline"], cjob, str(run_root), None) for v in cfg["baseline_videos"]]
+    for k in ("OMP_NUM_THREADS", "OPENBLAS_NUM_THREADS", "MKL_NUM_THREADS"):
+        os.environ[k] = "1"
+    import multiprocessing as mp
+    from concurrent.futures import ProcessPoolExecutor
+    with ProcessPoolExecutor(max_workers=int(cfg["workers"]), mp_context=mp.get_context("spawn")) as ex:
+        jobs = list(ex.map(hf.long_video, args))
+    bad = [j["video"] for j in jobs if "ft" not in j]
+    if bad:
+        raise SystemExit(f"baseline analysis failed: {bad}")
+    grids = [np.array(j["curve"]["grid"]) for j in jobs]
+    assert all(np.allclose(grids[0], g) for g in grids), "the f grids differ"
+    curves = np.array([j["curve"]["cost"] for j in jobs])
+    pooled = hf.long_pooled_estimate(curves, grids[0])
+    if pooled["at_grid_edge"]:
+        raise SystemExit("the pooled baseline estimate is on the f grid edge: b is not defined")
+    b = float(np.log(pooled["f"] / ref))
+    st = long_base_stats(jobs, ref)
+    # re-check against 22 and 23
+    r22 = {j["video"]: j for j in json.loads(hf.resolve(cfg["results_22"]).read_text())["jobs"]}
+    r23 = {j["video"]: j for j in json.loads(hf.resolve(cfg["results_23"]).read_text())["jobs"]}
+    for j in jobs:
+        s22 = r22[j["video"]]["original"][cfg["candidate"]["wrist_mode"]]["solutions"]["fixed_template"]["f"]
+        j["same_as_22"] = bool(s22 == j["ft"]["f"])
+        j["rel_std_as_23"] = bool(abs(r23[j["video"]]["factors"]["bootstrap_rel_std"] - j["ft"]["boot_rel_std"]) < 1e-12)
+    rec = {"videos": jobs, "pooled": pooled, "b": b, "reference_f_px": ref, "stats": st, "grid": grids[0].tolist()}
+    jp = run_root / "baseline.json"
+    jp.write_text(json.dumps(hf.jsonable(rec), ensure_ascii=False, indent=1))
+    log2(f"합동 추정 f = {pooled['f']:.2f} px, b = log(f_합동 / {ref:.0f}) = {b:+.6f} (f_합동 / 기준 = {np.exp(b):.4f})")
+    log2(f"기존 {st['n']}개 영상: |오차| 중앙값 {100 * st['median_abs_err']:.1f}%, 부호 포함 중앙값 {100 * st['median_signed_err']:+.1f}%, log f 표준편차 {st['log_f_sd']:.3f}, 부트스트랩 로그 SD 중앙값 {st['boot_log_std_median']:.4f}")
+    log2(f"22와 같은 f: {sum(j['same_as_22'] for j in jobs)}/{len(jobs)}, 23과 같은 부트스트랩 상대 표준편차: {sum(j['rel_std_as_23'] for j in jobs)}/{len(jobs)}")
+    long_patch_yaml(cfg_path, {"bias_b": f"{b!r}", "json": str(jp.relative_to(hf.PROJECT_ROOT)) if str(jp).startswith(str(hf.PROJECT_ROOT)) else str(jp), "bootstrap_log_std_median": repr(st["boot_log_std_median"]),
+                               "log_f_sd_between_videos": repr(st["log_f_sd"]), "pooled_f_px": repr(pooled["f"])})
+    log2(f"yaml에 기록: {cfg_path}")
+    log2.close()
+    return rec
+
+
+def long_figures(out: Path, base: dict, new_ok: list, pooled_new: dict | None, cfg: dict):
+    plt = _plt()
+    bj = [j for j in base["videos"]]
+    fig, ax = plt.subplots(figsize=(10, 4.2))
+    x = 0
+    ticks = []
+    for grp, js, col in (("기존", bj, "#2a6fbb"), ("새 영상", new_ok, "#c47a00")):
+        for j in js:
+            f, s = j["ft"]["f"], j["ft"]["boot_log_std"]
+            if j["ft"]["at_grid_edge"]:
+                ax.plot(x, f, "x", color=col)
+            else:
+                ax.errorbar(x, f, yerr=[[f - f * np.exp(-s)], [f * np.exp(s) - f]], fmt="o", color=col, capsize=3)
+            ticks.append((x, j["video"][4:8] + ("\n새" if grp == "새 영상" else "")))
+            x += 1
+        x += 1
+    ax.set_xticks([t[0] for t in ticks])
+    ax.set_xticklabels([t[1] for t in ticks], fontsize=8)
+    ax.set_ylabel("FT f (px), 막대 = 블록 부트스트랩 ±1σ(로그)")
+    ax.set_title("영상별 f와 부트스트랩 구간 (파랑: 기존 8개, 주황: 새 영상)", fontsize=10)
+    ax.grid(alpha=0.3)
+    fig.tight_layout()
+    fig.savefig(out / "f_with_bootstrap.png", dpi=110)
+    plt.close(fig)
+    grid = np.array(base["grid"])
+    fig, ax = plt.subplots(figsize=(8, 4.2))
+    for j in bj:
+        c = np.array(j["curve"]["cost"]); ax.plot(grid, c / c.min(), color="#9bb7d9", lw=0.9)
+    ax.plot(grid, np.array([j["curve"]["cost"] for j in bj]).sum(0) / np.array([j["curve"]["cost"] for j in bj]).sum(0).min(), color="#2a6fbb", lw=2.2, label="기존 8개 합동")
+    for j in new_ok:
+        c = np.array(j["curve"]["cost"]); ax.plot(grid, c / c.min(), color="#f0b66a", lw=0.9)
+    if new_ok:
+        pc_ = np.array([j["curve"]["cost"] for j in new_ok]).sum(0)
+        ax.plot(grid, pc_ / pc_.min(), color="#c47a00", lw=2.2, label="새 영상 합동")
+    ax.set_xscale("log")
+    ax.set_xlabel("f (px)")
+    ax.set_ylabel("비용 / 최솟값")
+    ax.set_ylim(0.99, 1.15)
+    ax.legend(fontsize=8)
+    ax.grid(alpha=0.3)
+    fig.tight_layout()
+    fig.savefig(out / "pooled_cost_curves.png", dpi=110)
+    plt.close(fig)
+    fig, ax = plt.subplots(figsize=(7, 3.8))
+    bt = [x for j in bj for x in j["motion"]["theta_tilt"]]
+    nt = [x for j in new_ok for x in j["motion"]["theta_tilt"]]
+    bins = np.arange(0, 91, 5)
+    ax.hist(bt, bins=bins, density=True, alpha=0.55, color="#2a6fbb", label=f"기존 8개 (프레임 {len(bt)})")
+    if nt:
+        ax.hist(nt, bins=bins, density=True, alpha=0.55, color="#c47a00", label=f"새 영상 (프레임 {len(nt)})")
+    ax.set_xlabel("θ2d (°)")
+    ax.set_ylabel("밀도")
+    ax.legend(fontsize=8)
+    fig.tight_layout()
+    fig.savefig(out / "theta_distribution.png", dpi=110)
+    plt.close(fig)
+
+
+def long_report(path: Path, listing: list, new_all: list, new_ok: list, base: dict, cfg: dict):
+    ex = cfg["exclusion"]
+    L = ["# 실험 25: 긴 영상으로 후보 방법 재검증", "", LONG_NOTE, "",
+         "후보: mediapipe_hands + wrist_mode exclude + fixed_template (22와 같음). 새 영상은 후보를 고를 때 쓰지 않았다(검증). 비교용(판정에 쓰지 않음): keep FT, exclude JD, 21 가이드, AnyCalib.", "",
+         "## 1. 영상 목록과 제외", "", f"제외 규칙(실행 전 고정): 유효한 정면 창(1초) 없음, 가장자리 접촉 프레임 > {100 * ex['edge_rate_max']:.0f}%, 손 검출 실패 프레임 > {100 * ex['detect_fail_max']:.0f}%.", "",
+         "| 영상 | 길이(초) | 해상도(처리 후) | 검출된 프레임 비율 | 가장자리 접촉 비율 | 정면 창 | 포함 | 이유 |", "|---|---|---|---|---|---|---|---|"]
+    for j in new_all:
+        fw = j.get("front_window") or [None, None]
+        L.append(f"| {j['video']} | {j['duration_s']:.1f} | {j['size'][0]}x{j['size'][1]} | {100 * j['detect_rate']:.1f}% | {100 * j['edge_rate']:.1f}% | "
+                 f"{'-' if fw[0] is None else f'{fw[0]:.2f}–{fw[1]:.2f} s'} | {'제외' if j['excluded'] else ('포함' if 'ft' in j else '분석 실패')} | {'; '.join(j['excluded']) or j.get('failed', '-')} |")
+    L += ["", "## 2. 영상별 촬영 지표", "",
+          "| 영상 | 영상 길이(초) | 기울기 구간 길이(초) | 사용한 기울기 프레임 | θ2d 중앙값(°) | 90번째 백분위수(°) | 45° 초과 비율 | 최댓값(°) |", "|---|---|---|---|---|---|---|---|"]
+    for j in new_ok:
+        m = j["motion"]
+        L.append(f"| {j['video']} | {j['duration_s']:.1f} | {m['tilt_duration_s']:.1f} | {m['n_tilt_frames']} | {long_fmt(m['theta_median_deg'], 1)} | {long_fmt(m['theta_p90_deg'], 1)} | {100 * m['theta_over_45_frac']:.0f}% | {long_fmt(m['theta_max_deg'], 1)} |")
+    L += ["", "기존 8개 영상(참고): 기울기 구간 길이 중앙값 %.1f초, 기울기 프레임 중앙값 %d장." % (np.median([j["motion"]["tilt_duration_s"] for j in base["videos"]]), int(np.median([j["motion"]["n_tilt_frames"] for j in base["videos"]]))), "",
+          "## 3. 21의 새 가이드 판정과 전환 시각 (linear_d)", "",
+          "| 영상 | 전환 시각(초) | 가이드 | 항목별 통과 | 이유 |", "|---|---|---|---|---|"]
+    for j in new_ok:
+        g = j.get("guide") or {}
+        if "guide" not in g:
+            L.append(f"| {j['video']} | - | 계산 안 함 | | {g.get('failed', '비교용 계산 끔')} |")
+            continue
+        L.append(f"| {j['video']} | {long_fmt(g['t_transition'], 2)} | {'충족' if g['guide'] else '미충족'} | " + ", ".join(f"{k}:{'O' if v else 'X'}" for k, v in g["items"].items()) + f" | {'; '.join(g['reasons']) or '-'} |")
+    L += ["", "## 4. f, 판정, 날카로움, 불확실성 (후보: 손목 제외 fixed_template)", "",
+          "| 영상 | f | f 판정 | 날카로움 | 블록 부트스트랩 로그 SD | 상대 SD(22·23과 같은 지표) | 결합 불확실성 |", "|---|---|---|---|---|---|---|"]
+    for j in new_ok:
+        f = j["ft"]
+        L.append(f"| {j['video']} | {long_fval(f)} | {f['verdict']} | {f['sharpness']:.3f} | {long_fmt(f['boot_log_std'], 4)} | {long_fmt(f['boot_rel_std'], 4)} | {long_fmt(f['f_rel_uncertainty'], 3)} |")
+    L += ["", "블록 부트스트랩 로그 SD = 영상 안에서 10프레임 블록을 복원 추출해 다시 추정한 f(30회)의 로그 표준편차. 22·23의 상대 SD(표준편차 ÷ 평균)와 값이 거의 같다.", "",
+          "## 5. 한계", "", "- 새 영상 수가 적으면 H2, H3은 판정하지 않는다(지시문). 영상 한두 개의 판정은 증거가 약하다.", "- 기준 f와의 비교는 summary.md에만 있다.", ""]
+    path.write_text("\n".join(L) + "\n")
+
+
+def long_summary(path: Path, new_all: list, new_ok: list, base: dict, h: dict, cfg: dict, extra: dict):
+    ref = float(cfg["hypotheses"]["reference_f_px"])
+    pct = lambda x: "-" if x is None else f"{100 * x:+.1f}%"      # noqa: E731
+    L = ["# 실험 25 summary: 기준 f와의 비교, H1~H4", "", f"**{LONG_NOTE}**", "",
+         f"- 기준 f = {ref:.0f} px (1배 렌즈, 사용자 체커보드 값; 추정에 쓰지 않음). 새 영상 {len(new_ok)}개 사용, 제외 {sum(1 for j in new_all if j['excluded'])}개.",
+         f"- 편향 보정값 b = {cfg['baseline']['bias_b']:+.6f} (기존 8개 영상의 합동 추정으로 실행 전에 고정, 새 영상은 쓰지 않음; exp(b) = {np.exp(cfg['baseline']['bias_b']):.4f})", "",
+         "## 1. 영상별 오차", "", "| 영상 | FT f | 오차 | 보정 후 f (f / exp(b)) | 보정 후 오차 | 판정 |", "|---|---|---|---|---|---|"]
+    b = float(cfg["baseline"]["bias_b"])
+    for j in new_ok:
+        f = j["ft"]
+        L.append(f"| {j['video']} | {long_fval(f)} | {pct(None if f['at_grid_edge'] else f['f'] / ref - 1)} | {'-' if f['at_grid_edge'] else format(f['f'] / np.exp(b), '.1f') + ' px'} | "
+                 f"{pct(None if f['at_grid_edge'] else f['f'] / np.exp(b) / ref - 1)} | {f['verdict']} |")
+    st_new = long_base_stats(new_ok, ref)
+    st_base = long_base_stats(base["videos"], ref)
+    L += ["", f"- 새 영상 |오차| 중앙값 {pct(st_new['median_abs_err']).replace('+', '')}, 부호 포함 중앙값 {pct(st_new['median_signed_err'])} / 기존 8개: |오차| 중앙값 {pct(st_base['median_abs_err']).replace('+', '')}, 부호 포함 {pct(st_base['median_signed_err'])}", "",
+          "## 2. H1~H4 판정 (규칙과 문턱값은 실행 전 yaml에 고정)", ""]
+    h1, h2, h3, h4 = h["H1"], h["H2"], h["H3"], h["H4"]
+    L += [f"**H1 (데이터가 늘면 잡음이 줄어든다): {h1['verdict']}**  — 새 영상 부트스트랩 로그 SD 중앙값 {long_fmt(h1.get('new_median'), 4)}, 기존 중앙값 {long_fmt(h1.get('base_median'), 4)}, 비율 {long_fmt(h1.get('ratio_observed'), 3)} (지지 기준 ≤ {h1['ratio_used']})",
+          f"  - 기록용: 영상 사이 log f 표준편차 새 {long_fmt(extra.get('new_log_f_sd'), 3)} (영상 {len(new_ok)}개) / 기존 {long_fmt(st_base['log_f_sd'], 3)}; 기울기 구간 길이 중앙값 새 {long_fmt(extra.get('new_tilt_len'), 1)}초 / 기존 {long_fmt(extra.get('base_tilt_len'), 1)}초 (비 {long_fmt(extra.get('tilt_len_ratio'), 2)})", "",
+          f"**H2 (공통 편향이 있다): {h2['verdict']}**  — 새 영상 합동 f = {long_fmt(extra.get('pooled_new_f'), 1)} px, log(f_합동/{ref:.0f})의 95% 구간 [{long_fmt(h2['ci'][0], 4)}, {long_fmt(h2['ci'][1], 4)}] (영상 단위 부트스트랩 {cfg['hypotheses']['bootstrap_n']}회, 시드 {cfg['hypotheses']['bootstrap_seed']})" + (f" — {h2['reason']}" if h2.get('reason') else ""), "",
+          f"**H3 (기존 영상으로 정한 보정이 새 영상에서도 통한다): {h3['verdict']}**  — 보정 전 |오차| 중앙값 {long_fmt(h3['median_abs_before'], 4)} → 보정 후 {long_fmt(h3['median_abs_after'], 4)}, |오차|가 줄어든 영상 {long_fmt(h3['fraction_reduced'], 2)} (n = {h3['n']})" + (f" — {h3['reason']}" if h3.get('reason') else ""), "",
+          f"**H4 (작은 기울기 프레임을 빼면 나아진다, θ2d ≥ {cfg['hypotheses']['h4_theta_min_deg']:.0f}°): {h4['verdict']}**  — " + (f"|오차| 중앙값 {long_fmt(h4['median_abs_orig'], 4)} → {long_fmt(h4['median_abs_h4'], 4)}, 개선된 영상 {long_fmt(h4['fraction_improved'], 2)} (n = {h4['n']})" if h4.get("n") else "계산한 영상이 없음"), "",
+          "## 3. 기록용 (판정 없음)", "", "### 불확실성 보정 상태 (|log 오차|가 부트스트랩 로그 SD 안에 드는 영상 비율)", "",
+          "| 대상 | 보정 | 1σ 안 | 2σ 안 | 영상 수 |", "|---|---|---|---|---|"]
+    for name, cal in extra["calibration"].items():
+        L.append(f"| {name} | {cal['label']} | {long_fmt(cal['within_1sigma'], 2)} | {long_fmt(cal['within_2sigma'], 2)} | {cal['n']} |")
+    L += ["", "### 비교용 추정 (새 영상, 판정에 쓰지 않음)", "", "| 영상 | keep FT | 오차 | exclude JD | 오차 | AnyCalib pinhole | 오차 | AnyCalib gen | 오차 |", "|---|---|---|---|---|---|---|---|---|"]
+    for j in new_ok:
+        k = j.get("keep") or {}
+        kf = k.get("ft")
+        ac = j.get("anycalib") or {}
+        e = lambda sol: ("값 없음", "-") if sol is None or sol.get("at_grid_edge") else (f"{sol['f']:.1f} px", pct(sol["f"] / ref - 1))      # noqa: E731
+        a1, a2 = ac.get("anycalib_pinhole"), ac.get("anycalib_gen")
+        cell = lambda a: ("-", "-") if not a else (f"{a['median']:.1f} px", pct(a["median"] / ref - 1))      # noqa: E731
+        c = [e(kf), e(j["jd"]), cell(a1), cell(a2)]
+        L.append(f"| {j['video']} | " + " | ".join(f"{x} | {y}" for x, y in c) + " |")
+    L += ["", "## 4. 기존 8개와의 비교", "", "| 영상 | FT f | 오차 | 블록 부트스트랩 로그 SD | 기울기 구간(초) | 기울기 프레임 |", "|---|---|---|---|---|---|"]
+    for j in base["videos"]:
+        f = j["ft"]
+        L.append(f"| {j['video']} | {long_fval(f)} | {pct(None if f['at_grid_edge'] else f['f'] / ref - 1)} | {long_fmt(f['boot_log_std'], 4)} | {j['motion']['tilt_duration_s']:.1f} | {j['motion']['n_tilt_frames']} |")
+    L += ["", "## 한계", "", "- 새 영상이 적을수록 H1~H4의 증거가 약하다. H2, H3은 새 영상 %d개 미만이면 판정하지 않는다." % int(cfg["hypotheses"]["min_new_videos_h2_h3"]),
+          "- 기준 f 1680은 사용자 제공 값이며 원본 보정 파일은 서버에 없다.", ""]
+    path.write_text("\n".join(L) + "\n")
+
+
+def long_results_yaml(run_dir: Path, cfg: dict):
+    r = json.loads((run_dir / "results.json").read_text())
+    m = json.loads((run_dir / "metadata.json").read_text())
+    try:
+        run_name = str(run_dir.resolve().relative_to(hf.PROJECT_ROOT))
+    except ValueError:
+        run_name = str(run_dir)
+    rd = lambda x, n=4: None if x is None or (isinstance(x, float) and not np.isfinite(x)) else round(x, n)      # noqa: E731
+    out = {"experiment": "25_long_video_check", "run": run_name, "code_commit": m["git"]["commit"][:7], "git_dirty_at_run": m["git"]["git_dirty"], "note": LONG_NOTE, "candidate": cfg["candidate"], "videos": {}}
+    for j in r["new"]:
+        e = {"duration_s": rd(j["duration_s"], 2), "detect_rate": rd(j["detect_rate"]), "edge_rate": rd(j["edge_rate"]), "excluded": j["excluded"] or None}
+        if "ft" in j:
+            f = j["ft"]
+            mo = j["motion"]
+            e.update({"ft": {"f_px": None if f["at_grid_edge"] else round(f["f"], 1), "status": "value" if not f["at_grid_edge"] else f"값 없음 ({f['side']})", "verdict": f["verdict"], "sharpness": rd(f["sharpness"]),
+                             "boot_log_std": rd(f["boot_log_std"], 5), "boot_rel_std": rd(f["boot_rel_std"], 5), "f_rel_uncertainty": rd(f["f_rel_uncertainty"])},
+                      "motion": {k: rd(v, 3) if isinstance(v, float) else v for k, v in mo.items() if k != "theta_tilt"},
+                      "h4_variant": {k: (rd(v, 1) if k == "f" else v) for k, v in j["h4"].items()},
+                      "guide": {k: v for k, v in (j.get("guide") or {}).items() if k in ("t_transition", "guide", "reasons", "items")},
+                      "comparison": {"keep_ft_px": None if not j.get("keep") or "ft" not in j["keep"] or j["keep"]["ft"]["at_grid_edge"] else round(j["keep"]["ft"]["f"], 1),
+                                     "exclude_jd_px": None if j["jd"]["at_grid_edge"] else round(j["jd"]["f"], 1),
+                                     "anycalib_pinhole_px": rd(((j.get("anycalib") or {}).get("anycalib_pinhole") or {}).get("median"), 1), "anycalib_gen_px": rd(((j.get("anycalib") or {}).get("anycalib_gen") or {}).get("median"), 1)}})
+        out["videos"][j["video"]] = e
+    h = r["hypotheses"]
+    out["hypotheses"] = {"H1": {k: rd(v, 5) if isinstance(v, float) else v for k, v in h["H1"].items()}, "H2": {"verdict": h["H2"]["verdict"], "reason": h["H2"].get("reason")}, "H3": {"verdict": h["H3"]["verdict"], "reason": h["H3"].get("reason")},
+                         "H4": {"verdict": h["H4"]["verdict"], "n": h["H4"].get("n")}}
+    out["bias_correction_fixed_before_new_videos"] = True
+    p = hf.resolve(cfg["output"]["results_yaml"])
+    p.write_text(yaml.safe_dump(hf.jsonable(out), allow_unicode=True, sort_keys=False))
+    return p
+
+
+def long_main(argv=None):
+    ap = argparse.ArgumentParser()
+    ap.add_argument("--config", default=str(hf.PROJECT_ROOT / "configs/25_long_video_check.yaml"))
+    sub = ap.add_subparsers(dest="cmd")
+    sub.add_parser("bias")
+    ry = sub.add_parser("results-yaml")
+    ry.add_argument("--run", required=True)
+    ap.add_argument("--videos", default=None, help="comma list overriding yaml new_videos")
+    ap.add_argument("--out", default=None)
+    a = ap.parse_args(argv)
+    cfg_path = Path(a.config)
+    text = cfg_path.read_text()
+    cfg = yaml.safe_load(text)
+    if a.cmd == "results-yaml":
+        print(long_results_yaml(hf.resolve(a.run), cfg))
+        return None
+    if a.cmd == "bias":
+        return long_bias_main(cfg, cfg_path, print)
+    if cfg["baseline"]["bias_b"] is None:
+        raise SystemExit("run `bias` first: b (step 2) must be fixed and committed before any new video is processed")
+    new_list = a.videos.split(",") if a.videos else list(cfg["new_videos"])
+    if not new_list:
+        found = hf.long_find_new_videos(cfg["input_dir"], cfg["after_number"])
+        print(f"new_videos is empty. Hand videos above IMG_{cfg['after_number']}: " + (", ".join(f"{x['video']} ({x['duration_s']:.1f} s, {x['width']}x{x['height']})" for x in found) or "(none)"))
+        print("Confirm with the user, then put the file names into new_videos of the yaml and commit it before the run.")
+        return found
+    run_root = Path(a.out).expanduser() if a.out else hf.resolve(cfg["output"]["root"]) / utc_stamp()
+    run_root.mkdir(parents=True)
+    (run_root / "figures").mkdir()
+    log = Log(run_root / "log.txt")
+    hy = cfg["hypotheses"]
+    ref = float(hy["reference_f_px"])
+    b = float(cfg["baseline"]["bias_b"])
+    base = json.loads(hf.resolve(cfg["baseline"]["json"]).read_text())
+    log(f"25 긴 영상 재검증: 새 영상 {new_list}, 기존 {len(base['videos'])}개(고정된 baseline.json), b = {b:+.6f} → {run_root}")
+    t0 = time.time()
+    tmp_root = run_root / "_frames"
+    tmp_root.mkdir()
+    cjob = {k: cfg[k] for k in ("candidate", "exclusion", "hypotheses", "detector_settings", "guide", "compare_estimates", "anycalib_guard") if k in cfg}
+    for k in ("OMP_NUM_THREADS", "OPENBLAS_NUM_THREADS", "MKL_NUM_THREADS"):
+        os.environ[k] = "1"
+    import multiprocessing as mp
+    from concurrent.futures import ProcessPoolExecutor
+    gpus = list(cfg.get("gpu_ids") or [])
+    log(f"  CPU: 논리 {os.cpu_count()}개, 검출 n_workers {cfg['n_workers']} (절반 {os.cpu_count() // 2} 이하), AnyCalib GPU {gpus or '(상속)'}")
+    try:
+        with ProcessPoolExecutor(max_workers=int(cfg["workers"]), mp_context=mp.get_context("spawn")) as ex:
+            preps = list(ex.map(hf.fresp_prepare, [(v, cfg["input_dir"], cfg["pipeline"], {}, str(tmp_root)) for v in new_list]))
+            dset = cfg["detector_settings"][cfg["candidate"]["detector"]]
+            npz = hf.fresp_detect_many([((p["video"], "orig"), p["frames"]) for p in preps], dset, run_root / "detection_cache", int(cfg["n_workers"]), log)
+            args = [(p["video"], "new", None, p, npz[(p["video"], "orig")], cfg["pipeline"], cjob, str(tmp_root), gpus[i % len(gpus)] if gpus else None) for i, p in enumerate(preps)]
+            with ProcessPoolExecutor(max_workers=int(cfg["workers"]), mp_context=mp.get_context("spawn"), max_tasks_per_child=1) as ex3:
+                new_all = list(ex3.map(hf.long_video, args))
+    finally:
+        shutil.rmtree(tmp_root, ignore_errors=True)
+    new_ok = [j for j in new_all if "ft" in j]
+    for j in new_all:
+        if j["excluded"]:
+            log(f"  {j['video']}: 제외 — {'; '.join(j['excluded'])}")
+        elif "ft" in j:
+            log(f"  {j['video']}: 길이 {j['duration_s']:.1f} s, 기울기 프레임 {j['motion']['n_tilt_frames']}장, FT {long_fval(j['ft'])}, 판정 {j['ft']['verdict']}, 부트스트랩 로그 SD {long_fmt(j['ft']['boot_log_std'], 4)}")
+        else:
+            log(f"  {j['video']}: 분석 실패 ({j.get('failed')})")
+    # ---- hypotheses
+    base_std = [j["ft"]["boot_log_std"] for j in base["videos"]]
+    h1 = hf.long_h1([j["ft"]["boot_log_std"] for j in new_ok], base_std, float(hy["h1_ratio"]))
+    grid = np.array(base["grid"])
+    pooled_new = None
+    if new_ok:
+        curves_new = np.array([j["curve"]["cost"] for j in new_ok])
+        pooled_new = hf.long_pooled_estimate(curves_new, grid)
+        boot = hf.long_pooled_bootstrap(curves_new, grid, int(hy["bootstrap_n"]), int(hy["bootstrap_seed"]))
+        ci = hf.long_log_ci(boot["f"], ref) if not pooled_new["at_grid_edge"] else (float("nan"), float("nan"))
+    else:
+        boot, ci = None, (float("nan"), float("nan"))
+    h2 = hf.long_h2(ci, len(new_ok), int(hy["min_new_videos_h2_h3"]))
+    vals = [j for j in new_ok if not j["ft"]["at_grid_edge"]]
+    h3 = hf.long_h3([j["ft"]["f"] for j in vals], ref, b, len(new_ok), int(hy["min_new_videos_h2_h3"]), float(hy["fraction"]))
+    pairs = [(j["ft"]["f"], j["h4"]["f"]) for j in vals if "f" in j["h4"] and not j["h4"]["at_grid_edge"]]
+    h4 = hf.long_h4([p[0] for p in pairs], [p[1] for p in pairs], ref, float(hy["h4_gain"]), float(hy["fraction"]))
+    h = {"H1": h1, "H2": h2, "H3": h3, "H4": h4}
+    for k, v in h.items():
+        log(f"  {k}: {v['verdict']}")
+    st_base = long_base_stats(base["videos"], ref)
+    lf_new = np.log([j["ft"]["f"] for j in vals])
+    extra = {"new_log_f_sd": float(np.std(lf_new, ddof=1)) if len(lf_new) > 1 else None, "pooled_new_f": pooled_new["f"] if pooled_new else None,
+             "new_tilt_len": float(np.median([j["motion"]["tilt_duration_s"] for j in new_ok])) if new_ok else None,
+             "base_tilt_len": float(np.median([j["motion"]["tilt_duration_s"] for j in base["videos"]])), "calibration": {}}
+    extra["tilt_len_ratio"] = extra["new_tilt_len"] / extra["base_tilt_len"] if extra["new_tilt_len"] else None
+    for name, js in (("새 영상", vals), ("기존 8개", [j for j in base["videos"] if not j["ft"]["at_grid_edge"]])):
+        for label, bb in (("보정 전", 0.0), ("보정 후(b 뺌)", b)):
+            c_ = hf.long_calibration([j["ft"]["f"] for j in js], [j["ft"]["boot_log_std"] for j in js], ref, bb)
+            extra["calibration"][f"{name} {label}"] = {**c_, "label": label}
+    long_figures(run_root / "figures", base, new_ok, pooled_new, cfg)
+    long_report(run_root / "report.md", [], new_all, new_ok, base, cfg)
+    long_summary(run_root / "summary.md", new_all, new_ok, base, h, cfg, extra)
+    with (run_root / "per_frame.csv").open("w", newline="") as fh:
+        wr = csv.writer(fh)
+        wr.writerow(["video", "index", "time_s", "theta2d_deg", "in_theta_min_subset"])
+        for j in new_ok:
+            for r_ in j.get("frames") or []:
+                wr.writerow([j["video"], r_["index"], f"{r_['time_s']:.4f}", f"{r_['theta2d_deg']:.2f}", int(r_["in_h4_subset"])])
+    (run_root / "results.json").write_text(json.dumps(hf.jsonable({"new": new_all, "hypotheses": h, "pooled_new": pooled_new, "bootstrap": boot, "extra": extra, "baseline_json": cfg["baseline"]["json"]}), ensure_ascii=False, indent=1))
+    meta = hf.provenance_build(text, a.config, {"code_23": cfg["code_23"], "sources": cfg["sources"], "elapsed_s": time.time() - t0})
+    (run_root / "metadata.json").write_text(json.dumps(hf.jsonable(meta), ensure_ascii=False, indent=1))
+    log(f"완료 {time.time() - t0:.0f} s → {run_root}")
+    log.close()
+    return run_root, new_all, h
+
+
+# ====================================================================================================
 # command line
 # ====================================================================================================
 
-COMMANDS = {"protocol": protocol_main, "frame-filter": ff_main, "same-session": session_main, "overlay": overlay_main, "phase-segmentation": pseg_main, "guide-revision": grev_main, "f-response": fresp_main, "error-factors": ferr_main}
+COMMANDS = {"protocol": protocol_main, "frame-filter": ff_main, "same-session": session_main, "overlay": overlay_main, "phase-segmentation": pseg_main, "guide-revision": grev_main, "f-response": fresp_main, "error-factors": ferr_main, "long-video-check": long_main}
 
 
 def main(argv=None):

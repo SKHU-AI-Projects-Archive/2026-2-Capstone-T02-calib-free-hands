@@ -31,6 +31,7 @@ CFG20 = yaml.safe_load((ROOT / "configs/20_phase_segmentation.yaml").read_text()
 CFG21 = yaml.safe_load((ROOT / "configs/21_guide_revision.yaml").read_text())
 CFG22 = yaml.safe_load((ROOT / "configs/22_f_response.yaml").read_text())
 CFG23 = yaml.safe_load((ROOT / "configs/23_error_factors.yaml").read_text())
+CFG25 = yaml.safe_load((ROOT / "configs/25_long_video_check.yaml").read_text())
 PIPE = CFG17["pipeline"]                           # the 14 pipeline settings (identical in 16, 17 and 18)
 SYN = {"f_px": 1650, "image": [1920, 1080], "distance_mm": 350, "front_frames": 10, "tilt_frames": 40}     # 14's synthetic camera
 BASE_COND = {"name": "base", "delta_deg": 0, "noise": {"px": 1.0}, "heavy_tail": False, "tilt_range_deg": [25, 50], "arch_mm": 0,
@@ -1759,6 +1760,169 @@ class FerrEndToEnd(unittest.TestCase):
             self.assertIn("1680", (root / "diagnostic_pull.md").read_text())
             rho = summ.split("## 2.")[1].split("## 3.")[0]
             self.assertNotIn("7184", rho)                                            # the 0.5x video is not in the correlations
+
+
+# ====================================================================================================
+# long video check (25)
+# ====================================================================================================
+
+def toy_curves(f_true=(1500.0, 1800.0, 2100.0), noise=0.0):
+    """Cost curves on the pipeline's f grid: quadratic in log f around each video's own minimum."""
+    grid = hf.f_grid(PIPE["estimate"], 1920.0)
+    return grid, np.array([(np.log(grid / f0)) ** 2 + 1.0 for f0 in f_true])
+
+
+class LongPooled(unittest.TestCase):
+    def test_pooled_curve_is_the_sum_of_the_video_curves(self):
+        grid, cur = toy_curves()
+        np.testing.assert_allclose(hf.long_pooled_curve(cur), cur[0] + cur[1] + cur[2])
+        pooled = hf.long_pooled_estimate(cur, grid)
+        self.assertAlmostEqual(pooled["f"], float(np.exp(np.mean(np.log([1500.0, 1800.0, 2100.0])))), delta=8.0)      # the minimum of the summed parabolas: the geometric mean
+        self.assertFalse(pooled["at_grid_edge"])
+
+    def test_one_video_gives_that_videos_ft(self):
+        g = synth_wrist(seed=2, tilt_frames=80)
+        a = analyze_synth(g, methods_full=("fixed_template",))
+        sol = a["solutions"]["fixed_template"]
+        one = hf.long_pooled_estimate([sol["profile_cost"]], a["grid"])
+        self.assertEqual(one["f"], sol["f"])
+        self.assertEqual(one["at_grid_edge"], sol["at_grid_edge"])
+
+    def test_grid_edge_is_flagged(self):
+        grid = hf.f_grid(PIPE["estimate"], 1920.0)
+        r = hf.long_pooled_estimate([np.linspace(2.0, 1.0, len(grid))], grid)           # decreasing: the minimum is at the upper end
+        self.assertTrue(r["at_grid_edge"])
+        self.assertEqual(r["side"], "상한")
+
+    def test_bootstrap_is_reproducible_with_a_fixed_seed_and_differs_between_seeds(self):
+        grid, cur = toy_curves((1400.0, 1600.0, 1900.0, 2300.0, 1700.0))
+        a = hf.long_pooled_bootstrap(cur, grid, 200, 42)
+        b = hf.long_pooled_bootstrap(cur, grid, 200, 42)
+        c = hf.long_pooled_bootstrap(cur, grid, 200, 7)
+        self.assertEqual(a["f"], b["f"])
+        self.assertNotEqual(a["f"], c["f"])
+        lo, hi = hf.long_log_ci(a["f"], 1700.0)
+        self.assertLess(lo, hi)
+        self.assertEqual(hf.long_log_ci(hf.long_pooled_bootstrap(cur, grid, 200, 42)["f"], 1700.0), (lo, hi))
+
+
+class LongThetaFilter(unittest.TestCase):
+    def test_keeps_only_tilt_frames_at_or_above_the_limit(self):
+        theta = np.array([5.0, 19.9, 20.0, 35.0, np.nan, 61.0, 10.0])
+        tilt = [1, 2, 3, 4, 5, 6]
+        self.assertEqual(hf.long_theta_keep(theta, tilt, 20.0), [2, 3, 5])            # frame 0 is not a tilt frame; nan is dropped; the limit itself stays
+        self.assertEqual(hf.long_theta_keep(theta, tilt, 0.0), [1, 2, 3, 5, 6])
+
+
+class LongHypotheses(unittest.TestCase):
+    H = CFG25["hypotheses"]
+
+    def test_h1(self):
+        self.assertEqual(hf.long_h1([0.08, 0.09], [0.10, 0.11, 0.12], 0.85)["verdict"], "지지")           # 0.085 <= 0.85 * 0.11
+        self.assertEqual(hf.long_h1([0.10, 0.11], [0.10, 0.11, 0.12], 0.85)["verdict"], "근거 없음")
+        self.assertEqual(hf.long_h1([], [0.1], 0.85)["verdict"], "판단 불가")
+
+    def test_h2_interval_rule_and_minimum_number_of_videos(self):
+        self.assertEqual(hf.long_h2((0.02, 0.2), 4, 4)["verdict"], "공통 편향 있음")
+        self.assertEqual(hf.long_h2((-0.2, -0.01), 5, 4)["sign"], "−")
+        self.assertEqual(hf.long_h2((-0.05, 0.2), 4, 4)["verdict"], "확인 안 됨")
+        self.assertEqual(hf.long_h2((0.02, 0.2), 3, 4)["verdict"], "판단 불가")                     # recorded but not judged
+
+    def test_h3(self):
+        b = float(np.log(1.1))
+        f = [1848.0, 1870.0, 1900.0, 1700.0]               # +10%, +11%, +13%, +1% against 1680; the correction divides by 1.1
+        r = hf.long_h3(f, 1680.0, b, 4, 4, self.H["fraction"])
+        self.assertEqual(r["verdict"], "보정 효과 있음" if r["median_abs_after"] < r["median_abs_before"] and r["fraction_reduced"] >= 2 / 3 else "보정 효과 없음")
+        self.assertAlmostEqual(r["fraction_reduced"], 0.75)
+        self.assertEqual(hf.long_h3([1650.0, 1700.0, 1660.0, 1690.0], 1680.0, b, 4, 4, self.H["fraction"])["verdict"], "보정 효과 없음")      # already unbiased: the correction hurts
+        self.assertEqual(hf.long_h3(f[:3], 1680.0, b, 3, 4, self.H["fraction"])["verdict"], "판단 불가")
+
+    def test_h4(self):
+        r = hf.long_h4([1900.0, 1850.0, 1700.0], [1700.0, 1720.0, 1690.0], 1680.0, 0.02, 2 / 3)
+        self.assertEqual(r["verdict"], "개선")
+        self.assertEqual(hf.long_h4([1800.0, 1850.0, 1700.0], [1790.0, 1850.0, 1700.0], 1680.0, 0.02, 2 / 3)["verdict"], "근거 없음")      # gain below 2 points
+        self.assertEqual(hf.long_h4([1800.0, 1650.0, 1700.0], [1700.0, 1900.0, 1750.0], 1680.0, 0.02, 2 / 3)["verdict"], "근거 없음")      # not enough videos improve
+        self.assertEqual(hf.long_h4([], [], 1680.0, 0.02, 2 / 3)["verdict"], "판단 불가")
+
+    def test_calibration_shares(self):
+        c = hf.long_calibration([1680.0 * np.exp(0.05), 1680.0 * np.exp(0.5)], [0.1, 0.1], 1680.0)
+        self.assertEqual((c["within_1sigma"], c["within_2sigma"]), (0.5, 0.5))
+        c2 = hf.long_calibration([1680.0 * np.exp(0.05 + 0.3), 1680.0 * np.exp(0.18)], [0.1, 0.1], 1680.0, b=0.3)
+        self.assertEqual(c2["within_1sigma"], 0.5)
+
+    def test_log_std_and_yaml_thresholds(self):
+        self.assertAlmostEqual(hf.long_boot_log_std([1000.0, 1000.0 * np.e]), float(np.std([np.log(1000.0), np.log(1000.0) + 1.0], ddof=1)))
+        self.assertTrue(np.isnan(hf.long_boot_log_std([1000.0])))
+        self.assertEqual((self.H["h1_ratio"], self.H["h4_gain"], self.H["min_new_videos_h2_h3"], self.H["h4_theta_min_deg"]), (0.85, 0.02, 4, 20.0))
+        self.assertAlmostEqual(self.H["fraction"], 2 / 3, places=6)
+
+
+@unittest.skipUnless(RUN17_7158.exists() and (ROOT / "runs/22_f_response/20261021T042524Z/results.json").exists() and (ROOT / "runs/23_error_factors/20261022T002204Z/results.json").exists(),
+                     "the 17 run of IMG_7158 and the official runs 22 and 23 are needed")
+class LongReproduction(unittest.TestCase):
+    def test_22_settings_reproduce_22_and_23_for_a_baseline_video(self):
+        cjob = {k: CFG25[k] for k in ("candidate", "exclusion", "hypotheses", "detector_settings", "guide", "anycalib_guard")}
+        with tempfile.TemporaryDirectory() as d:
+            r = hf.long_video(("IMG_7158.MOV", "baseline", str(RUN17_7158), None, None, CFG25["pipeline"], dict(cjob, compare_estimates=False), d, None))
+        r22 = {j["video"]: j for j in json.loads((ROOT / "runs/22_f_response/20261021T042524Z/results.json").read_text())["jobs"]}["IMG_7158.MOV"]
+        r23 = {j["video"]: j for j in json.loads((ROOT / "runs/23_error_factors/20261022T002204Z/results.json").read_text())["jobs"]}["IMG_7158.MOV"]
+        self.assertEqual(r["ft"]["f"], r22["original"]["exclude"]["solutions"]["fixed_template"]["f"])
+        self.assertEqual(r["ft"]["verdict"], r22["original"]["exclude"]["verdict"])
+        self.assertAlmostEqual(r["ft"]["boot_rel_std"], r23["factors"]["bootstrap_rel_std"], places=12)
+        self.assertEqual(r["excluded"], [])
+        self.assertEqual(len(r["curve"]["cost"]), len(r["curve"]["grid"]))
+        self.assertEqual(r["motion"]["n_tilt_frames"], r23["factors"]["n_tilt_frames"])
+        self.assertTrue(abs(r["ft"]["boot_log_std"] - r["ft"]["boot_rel_std"]) < 0.01)              # the log SD and the relative SD are nearly the same quantity
+
+
+@unittest.skipUnless(VID7158.exists() and RUN17_7158.exists() and GPU, "the input video of IMG_7158, the 17 run and a GPU are needed")
+class LongEndToEnd(unittest.TestCase):
+    def test_bias_step_new_video_run_and_no_tags(self):
+        with tempfile.TemporaryDirectory() as d:
+            d = Path(d)
+            cfg = copy.deepcopy(CFG25)
+            cfg["baseline_videos"] = ["IMG_7157.MOV", "IMG_7176.MOV"]                  # two baseline videos keep the test short
+            cfg["new_videos"] = ["IMG_7158.MOV"]                                       # a "new" video that is not in the baseline list
+            cfg["workers"] = 2
+            cfg["gpu_ids"] = [1]
+            cfg["n_workers"] = 2
+            cfg["output"]["root"] = str(d / "runs")
+            cfg["output"]["results_yaml"] = str(d / "r25.yaml")
+            cp = d / "c.yaml"
+            cp.write_text(yaml.safe_dump(cfg, allow_unicode=True))
+            self.assertIsNone(yaml.safe_load(cp.read_text())["baseline"]["bias_b"])
+            with self.assertRaises(SystemExit):                                         # the run refuses to start before b is fixed
+                run.long_main(["--config", str(cp), "--videos", "IMG_7158.MOV", "--out", str(d / "o0")])
+            rec = run.long_main(["--config", str(cp), "bias"])
+            self.assertEqual([j["video"] for j in rec["videos"]], ["IMG_7157.MOV", "IMG_7176.MOV"])      # b uses the baseline videos only
+            self.assertNotIn("IMG_7158.MOV", json.dumps(rec))
+            c2 = yaml.safe_load(cp.read_text())
+            self.assertAlmostEqual(c2["baseline"]["bias_b"], rec["b"], places=12)
+            self.assertTrue(Path(c2["baseline"]["json"]).exists() or (ROOT.parent / c2["baseline"]["json"]).exists() or hf.resolve(c2["baseline"]["json"]).exists())
+            root, new_all, h = run.long_main(["--config", str(cp), "--out", str(d / "o")])
+            for f in ("report.md", "summary.md", "results.json", "metadata.json", "log.txt", "per_frame.csv"):
+                self.assertTrue((root / f).exists(), f)
+            for f in ("f_with_bootstrap.png", "pooled_cost_curves.png", "theta_distribution.png"):
+                self.assertTrue((root / "figures" / f).exists(), f)
+            self.assertFalse((root / "_frames").exists())
+            j = new_all[0]
+            self.assertEqual(j["ft"]["f"], json.loads((ROOT / "runs/22_f_response/20261021T042524Z/results.json").read_text())["jobs"][2]["original"]["exclude"]["solutions"]["fixed_template"]["f"])   # IMG_7158 = 22's value
+            self.assertEqual((h["H2"]["verdict"], h["H3"]["verdict"]), ("판단 불가", "판단 불가"))      # one new video: fewer than 4
+            self.assertIn("anycalib_pinhole", j["anycalib"])
+            self.assertIn("guide", j)
+            y = run.long_results_yaml(root, cfg)
+            self.assertEqual(Path(y), d / "r25.yaml")
+            texts = "".join(p.read_text(errors="ignore") for p in list(root.rglob("*")) + [Path(y)] if p.is_file() and p.suffix in (".json", ".yaml", ".md", ".csv", ".txt"))
+            for val in FAKE_TAGS.values():
+                self.assertNotIn(val, texts)
+            for key in ("ISO6709", "com.apple.quicktime", '"make"', '"model"'):
+                self.assertNotIn(key, texts)
+            ref_f = re.compile(r"(?<![\d.])(?:1680)(?:\.0+)?(?!\d)(?!\.\d)")
+            self.assertIsNone(ref_f.search((root / "report.md").read_text()))
+            self.assertIsNone(ref_f.search(Path(y).read_text()))
+            self.assertIn("1680", (root / "summary.md").read_text())
+            yy = yaml.safe_load(Path(y).read_text())
+            self.assertEqual(sorted(yy["hypotheses"]), ["H1", "H2", "H3", "H4"])
 
 
 if __name__ == "__main__":
