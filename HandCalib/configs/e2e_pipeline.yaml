@@ -1,0 +1,15 @@
+experiment:
+  name: e2e_pipeline
+
+# End-to-end run: the 17 protocol run (frames, detectors, f, shooting guide) and the 20 phase segmentation (transition times, guide re-check) in ONE command.
+# 20 reads 17's detections and frame lists, so the 17 run folder this command just made is wired into 20's `sources` automatically.
+# Every analysis parameter stays in the two configs below (unchanged); this file only chooses the videos and the steps.
+config_17: configs/17_protocol_rerun.yaml
+config_20: configs/20_phase_segmentation.yaml
+videos: []                           # input_dir file names, e.g. [IMG_7158.MOV]; required (the command stops when empty)
+detectors: [wilor_yolo, mediapipe_hands, rtmpose_hand]      # any subset of 17's detectors
+anycalib: true                       # 17's AnyCalib values (GPU); false = --no-anycalib
+transition_method: linear_d          # legacy_theta | linear_d  (20's setting for the guide verdict)
+write_results_yaml: true             # results_17.yaml / results_20.yaml inside the run folder (the tracked results/ files are never touched)
+output:
+  root: runs/e2e_pipeline

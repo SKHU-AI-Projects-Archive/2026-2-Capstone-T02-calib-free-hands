@@ -9,6 +9,7 @@
     python HandCalib/run.py f-response     --config HandCalib/configs/22_f_response.yaml [--videos A,B] [results-yaml --run DIR]
     python HandCalib/run.py error-factors  --config HandCalib/configs/23_error_factors.yaml [--videos A,B] [results-yaml --run DIR]
     python HandCalib/run.py long-video-check --config HandCalib/configs/25_long_video_check.yaml [bias | --videos A,B | results-yaml --run DIR]
+    python HandCalib/run.py end-to-end     --config HandCalib/configs/e2e_pipeline.yaml [--videos A,B] [--detectors a,b]     # 17 protocol -> 20 phase segmentation
 
 Consolidated from run_hand_focal.py (14, process_video only), run_detector_swap.py (16, the per-detector processing that 17 calls),
 run_protocol_rerun.py and run_frame_filter_diag.py (17),
@@ -3359,10 +3360,104 @@ def long_main(argv=None):
 
 
 # ====================================================================================================
+# e2e  (end-to-end: the 17 protocol run and the 20 phase segmentation in one command; new section)
+# 20 reads the detections and frame lists of a 17 run folder (its `sources`). This command runs 17 into <run>/17_protocol_rerun, derives a copy of 20's config whose
+# `sources` point at that folder, and runs 20 into <run>/20_phase_segmentation. Both configs are read unchanged (only videos / detectors / sources / transition_method of the
+# derived copy differ); results yaml files are written into the run folder, never into the tracked results/.
+#
+#     python HandCalib/run.py end-to-end --config HandCalib/configs/e2e_pipeline.yaml [--videos A.MOV,B.MOV] [--detectors a,b] [--out DIR]
+# ====================================================================================================
+
+def e2e_derive_config20(cfg20: dict, videos: list, detectors: list, run17: Path, run_dir: Path, transition_method: str | None = None) -> dict:
+    """A copy of 20's config for these videos: sources = the folders of the 17 run, detectors = those that produced results, manual slots null for new videos,
+    result yaml and output root inside the e2e run folder. Everything else is 20's value."""
+    c = copy.deepcopy(cfg20)
+    c["videos"] = list(videos)
+    c["detectors"] = list(detectors)
+    c["sources"] = {v: str(run17 / Path(v).stem) for v in videos}
+    c["manual_transition_s"] = {**{v: None for v in videos}, **{k: x for k, x in (cfg20.get("manual_transition_s") or {}).items() if k in videos}}
+    if transition_method:
+        c["transition_method"] = transition_method
+    c["output"] = {**c.get("output", {}), "root": str(run_dir / "20_phase_segmentation"), "results_yaml": str(run_dir / "results_20.yaml")}
+    return c
+
+
+def e2e_summary(path: Path, run17: Path, run20: Path, vids17: list, jobs20: list, cfg: dict, commit: str):
+    L = ["# End-to-end 요약 (17 프로토콜 → 20 전환 검출)", "",
+         f"- 17 실행 폴더: {run17.name}/ (프레임, 검출, f 추정, 촬영 가이드). 20 실행 폴더: {run20.name}/ (전환 시각, 가이드 재판정).",
+         f"- 코드 commit {commit}. 설정: {cfg['config_17']}, {cfg['config_20']} (값은 그대로, 20은 sources만 17 결과로 연결해 이 폴더의 config_20_derived.yaml로 사용).",
+         "- 아래 값은 기준 f와의 비교 없이 두 실행의 결과를 모은 것이다.", "",
+         "| 영상 | 검출기 | f fixed_template | f 판정(17) | 기존 전환(초) | linear_d 전환(초) | 가이드(20, " + str(cfg["transition_method"]) + ") | 17과 일치 |", "|---|---|---|---|---|---|---|---|"]
+    for j in jobs20:
+        if "failed" in j:
+            L.append(f"| {j['video']} | {j['detector']} | 분석 실패: {j['failed']} | | | | | |")
+            continue
+        s = j["default"]["solutions"]["fixed_template"]
+        L.append(f"| {j['video']} | {j['detector']} | {pseg_fval(s)} | {j['default']['verdict']} | {pseg_t(j['legacy_theta']['t_transition'])} | {pseg_t(j['linear_d']['t_transition'])} | "
+                 f"{'충족' if j['guide_selected'] else '미충족'} | {'O' if j['same_as_17']['all'] else 'X'} |")
+    L += ["", "17 쪽 상세(검출기별 보고서, 순위, AnyCalib)는 17_protocol_rerun/report.md, 20 쪽 상세는 20_phase_segmentation/report.md.", ""]
+    path.write_text("\n".join(L) + "\n")
+
+
+def e2e_main(argv=None):
+    ap = argparse.ArgumentParser()
+    ap.add_argument("--config", default=str(hf.PROJECT_ROOT / "configs/e2e_pipeline.yaml"))
+    ap.add_argument("--videos", default=None, help="comma list overriding yaml videos")
+    ap.add_argument("--detectors", default=None, help="comma list overriding yaml detectors")
+    ap.add_argument("--out", default=None)
+    a = ap.parse_args(argv)
+    text = Path(a.config).read_text()
+    cfg = yaml.safe_load(text)
+    videos = a.videos.split(",") if a.videos else list(cfg.get("videos") or [])
+    if not videos:
+        raise SystemExit("videos is empty: give input_dir file names in the yaml or with --videos")
+    detectors = a.detectors.split(",") if a.detectors else list(cfg["detectors"])
+    p17, p20 = hf.resolve(cfg["config_17"]), hf.resolve(cfg["config_20"])
+    cfg17, cfg20 = yaml.safe_load(p17.read_text()), yaml.safe_load(p20.read_text())
+    select_videos(cfg17, videos)                                   # stops with a clear message when a file is missing
+    run_dir = Path(a.out).expanduser() if a.out else hf.resolve(cfg["output"]["root"]) / utc_stamp()
+    run_dir.mkdir(parents=True)
+    log = Log(run_dir / "log.txt")
+    log(f"end-to-end: 영상 {videos}, 검출기 {detectors}, 17 → 20, 결과 폴더 {run_dir}")
+    t0 = time.time()
+    log("== 1/2: 17 프로토콜 ==")
+    argv17 = ["--config", str(p17), "--videos", ",".join(videos), "--detectors", ",".join(detectors), "--out", str(run_dir / "17_protocol_rerun")]
+    if not cfg.get("anycalib", True):
+        argv17.append("--no-anycalib")
+    run17, vids17 = protocol_main(argv17)
+    produced = [d for d in detectors if all("fixed_template" in v["detectors"].get(d, {}) for v in vids17)]
+    skipped = [d for d in detectors if d not in produced]
+    if skipped:
+        log(f"  17에서 결과가 없는 검출기는 20에서 뺍니다: {skipped}")
+    if not produced:
+        raise SystemExit("no detector produced results in the 17 run")
+    log("== 2/2: 20 전환 검출 (sources = 방금 만든 17 실행 폴더) ==")
+    cfg20d = e2e_derive_config20(cfg20, videos, produced, run17, run_dir, cfg.get("transition_method"))
+    derived = run_dir / "config_20_derived.yaml"
+    derived.write_text(yaml.safe_dump(cfg20d, allow_unicode=True, sort_keys=False))
+    run20, jobs20 = pseg_main(["--config", str(derived), "--out", str(run_dir / "20_phase_segmentation")])
+    if cfg.get("write_results_yaml", True):
+        try:
+            cfg17y = copy.deepcopy(cfg17)
+            cfg17y["output"] = {**cfg17.get("output", {}), "results_yaml": str(run_dir / "results_17.yaml")}
+            protocol_results_yaml(run17, cfg17y)
+            pseg_results_yaml(run20, cfg20d)
+        except ValueError as e:                                    # a run folder outside the project cannot be written as a relative path in the yaml
+            log(f"결과 yaml을 쓰지 못함: {e}")
+    git = hf.git_state()
+    e2e_summary(run_dir / "e2e_summary.md", run17, run20, vids17, jobs20, {**cfg, "transition_method": cfg20d["transition_method"]}, str(git.get("commit", ""))[:7])
+    meta = hf.provenance_build(text, a.config, {"config_17": str(p17), "config_20": str(p20), "videos": videos, "detectors": produced, "elapsed_s": time.time() - t0})
+    (run_dir / "metadata.json").write_text(json.dumps(hf.jsonable(meta), ensure_ascii=False, indent=1))
+    log(f"완료 {time.time() - t0:.0f} s → {run_dir}")
+    log.close()
+    return run_dir, run17, run20, jobs20
+
+
+# ====================================================================================================
 # command line
 # ====================================================================================================
 
-COMMANDS = {"protocol": protocol_main, "frame-filter": ff_main, "same-session": session_main, "overlay": overlay_main, "phase-segmentation": pseg_main, "guide-revision": grev_main, "f-response": fresp_main, "error-factors": ferr_main, "long-video-check": long_main}
+COMMANDS = {"protocol": protocol_main, "frame-filter": ff_main, "same-session": session_main, "overlay": overlay_main, "phase-segmentation": pseg_main, "guide-revision": grev_main, "f-response": fresp_main, "error-factors": ferr_main, "long-video-check": long_main, "end-to-end": e2e_main}
 
 
 def main(argv=None):

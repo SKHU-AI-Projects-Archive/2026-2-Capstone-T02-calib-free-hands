@@ -32,6 +32,7 @@ CFG21 = yaml.safe_load((ROOT / "configs/21_guide_revision.yaml").read_text())
 CFG22 = yaml.safe_load((ROOT / "configs/22_f_response.yaml").read_text())
 CFG23 = yaml.safe_load((ROOT / "configs/23_error_factors.yaml").read_text())
 CFG25 = yaml.safe_load((ROOT / "configs/25_long_video_check.yaml").read_text())
+CFGE2E = yaml.safe_load((ROOT / "configs/e2e_pipeline.yaml").read_text())
 PIPE = CFG17["pipeline"]                           # the 14 pipeline settings (identical in 16, 17 and 18)
 SYN = {"f_px": 1650, "image": [1920, 1080], "distance_mm": 350, "front_frames": 10, "tilt_frames": 40}     # 14's synthetic camera
 BASE_COND = {"name": "base", "delta_deg": 0, "noise": {"px": 1.0}, "heavy_tail": False, "tilt_range_deg": [25, 50], "arch_mm": 0,
@@ -1936,6 +1937,80 @@ class LongYamlPatch(unittest.TestCase):
             self.assertIn("# b = log", p.read_text())
             with self.assertRaises(SystemExit):
                 run.long_patch_yaml(p, {"missing_key": "1"})
+
+
+# ====================================================================================================
+# end-to-end (17 protocol -> 20 phase segmentation in one command)
+# ====================================================================================================
+
+class E2EDerive(unittest.TestCase):
+    def test_derived_20_config_points_at_the_new_17_run_and_changes_nothing_else(self):
+        run17, run_dir = Path("/x/e2e/17_protocol_rerun"), Path("/x/e2e")
+        d = run.e2e_derive_config20(CFG20, ["IMG_7158.MOV", "IMG_7999.MOV"], ["mediapipe_hands"], run17, run_dir, "legacy_theta")
+        self.assertEqual(d["sources"], {"IMG_7158.MOV": "/x/e2e/17_protocol_rerun/IMG_7158", "IMG_7999.MOV": "/x/e2e/17_protocol_rerun/IMG_7999"})
+        self.assertEqual((d["videos"], d["detectors"], d["transition_method"]), (["IMG_7158.MOV", "IMG_7999.MOV"], ["mediapipe_hands"], "legacy_theta"))
+        self.assertEqual(d["manual_transition_s"], {"IMG_7158.MOV": None, "IMG_7999.MOV": None})          # a new video gets an empty manual slot (never filled in)
+        self.assertEqual(d["output"]["results_yaml"], "/x/e2e/results_20.yaml")
+        self.assertEqual(d["output"]["root"], "/x/e2e/20_phase_segmentation")
+        for k in CFG20:
+            if k not in ("videos", "detectors", "sources", "manual_transition_s", "output", "transition_method"):
+                self.assertEqual(d[k], CFG20[k], k)                                                         # every analysis value is 20's
+        self.assertNotEqual(CFG20["sources"], d["sources"])                                                 # the original dict is untouched
+        self.assertIn("IMG_7147.MOV", CFG20["sources"])
+        d2 = run.e2e_derive_config20(CFG20, ["IMG_7148.MOV"], ["wilor_yolo"], run17, run_dir)
+        self.assertEqual(d2["transition_method"], CFG20["transition_method"])
+
+    def test_the_yaml_names_the_two_unchanged_configs_and_never_the_tracked_results(self):
+        self.assertTrue((ROOT / CFGE2E["config_17"].replace("configs/", "configs/")).exists())
+        self.assertTrue((ROOT / CFGE2E["config_20"]).exists())
+        self.assertEqual(CFGE2E["videos"], [])
+        self.assertTrue(CFGE2E["output"]["root"].startswith("runs/e2e_pipeline"))
+
+    def test_stops_without_videos_or_with_a_missing_file(self):
+        with tempfile.TemporaryDirectory() as d:
+            cp = Path(d) / "c.yaml"
+            cp.write_text(yaml.safe_dump(dict(CFGE2E, videos=[], output={"root": str(Path(d) / "runs")})))
+            with self.assertRaises(SystemExit):
+                run.e2e_main(["--config", str(cp)])
+            with self.assertRaises(SystemExit):
+                run.e2e_main(["--config", str(cp), "--videos", "IMG_9999.MOV"])
+            self.assertFalse((Path(d) / "runs").exists())                                                   # nothing was created
+
+
+@unittest.skipUnless(VID7158.exists() and RUN17_7158.exists() and (ROOT / "runs/20_phase_segmentation/20261020T035326Z/results.json").exists(), "the input video of IMG_7158 and the official 17 / 20 runs are needed")
+class E2EEndToEnd(unittest.TestCase):
+    def test_one_command_reproduces_17_and_20_and_leaves_the_tracked_results_alone(self):
+        import hashlib
+        tracked = [ROOT / "results/17_protocol_rerun.yaml", ROOT / "results/20_phase_segmentation.yaml"]
+        before = [hashlib.sha256(p.read_bytes()).hexdigest() for p in tracked]
+        out = ROOT / "runs/e2e_pipeline" / f"test_{os.getpid()}"
+        try:
+            with tempfile.TemporaryDirectory() as d:
+                cp = Path(d) / "c.yaml"
+                cp.write_text(yaml.safe_dump(dict(CFGE2E, videos=["IMG_7158.MOV"], detectors=["mediapipe_hands"], anycalib=False)))
+                run_dir, run17, run20, jobs = run.e2e_main(["--config", str(cp), "--out", str(out)])
+            for f in ("e2e_summary.md", "metadata.json", "log.txt", "config_20_derived.yaml", "results_17.yaml", "results_20.yaml"):
+                self.assertTrue((run_dir / f).exists(), f)
+            self.assertTrue((run17 / "IMG_7158/mediapipe_hands/detections.npz").exists())
+            self.assertTrue((run20 / "report.md").exists())
+            j = jobs[0]
+            r17 = json.loads((RUN17_7158 / "mediapipe_hands/results.json").read_text())
+            self.assertEqual(j["default"]["solutions"]["fixed_template"]["f"], r17["f_hand_px"])               # f of the official 17 run
+            self.assertEqual(j["default"]["verdict"], r17["verdict"])
+            o20 = [x for x in json.loads((ROOT / "runs/20_phase_segmentation/20261020T035326Z/results.json").read_text())["jobs"] if x["video"] == "IMG_7158.MOV" and x["detector"] == "mediapipe_hands"][0]
+            self.assertEqual(j["legacy_theta"]["t_transition"], o20["legacy_theta"]["t_transition"])            # the official 20 transitions
+            self.assertEqual(j["linear_d"]["t_transition"], o20["linear_d"]["t_transition"])
+            self.assertEqual(j["linear_d"]["d0"], o20["linear_d"]["d0"])
+            self.assertTrue(j["same_as_17"]["all"])
+            self.assertEqual(before, [hashlib.sha256(p.read_bytes()).hexdigest() for p in tracked])             # tracked results untouched
+            texts = "".join(p.read_text(errors="ignore") for p in run_dir.rglob("*") if p.is_file() and p.suffix in (".json", ".yaml", ".md", ".csv", ".txt"))
+            for val in FAKE_TAGS.values():
+                self.assertNotIn(val, texts)
+            for key in ("ISO6709", "com.apple.quicktime", '"make"', '"model"'):
+                self.assertNotIn(key, texts)
+            self.assertNotIn("1680", (run_dir / "e2e_summary.md").read_text())
+        finally:
+            shutil.rmtree(out, ignore_errors=True)
 
 
 if __name__ == "__main__":
