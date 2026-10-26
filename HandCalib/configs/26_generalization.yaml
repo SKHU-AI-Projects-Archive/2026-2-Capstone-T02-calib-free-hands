@@ -5,7 +5,10 @@ experiment:
 # 26: rating v2, generalisation groups and the effect of the f error on the hand trajectory. The candidate (mediapipe_hands + wrist_mode exclude + fixed_template) is 22 / 25's.
 # Every threshold below is fixed 2026-10-26 before any new video is processed; nothing is changed after seeing results.
 # Groups: G1 other person, G2 other phone (teammate), G3 other lens (0.5x), G4 gloves, G5 calibration + work (f from the first calib_end_s seconds, the rest only for the trajectory).
-videos: []                           # entries filled in by the user: {file, group, person_id, phone, lens, glove, ref_f[, calib_end_s]}   e.g. {file: IMG_XXXX.MOV, group: G3, person_id: P1, phone: main, lens: 0.5x, glove: false, ref_f: 880}
+videos:                              # entries: {file, group, person_id, phone, lens, glove, ref_f[, calib_end_s]}
+  - {file: IMG_7213.MOV, group: G3, person_id: P1, phone: main, lens: 0.5x, glove: false, ref_f: 880}
+  - {file: IMG_7214.MOV, group: G3, person_id: P1, phone: main, lens: 0.5x, glove: false, ref_f: 880}
+  - {file: IMG_7215.MOV, group: G3, person_id: P1, phone: main, lens: 0.5x, glove: false, ref_f: 880}
 after_number: 7195                   # candidates when videos is empty: input_dir hand videos numbered above this (listed with their lengths, then the command stops for the user's confirmation)
 input_dir: /home/juson/data/hand_focal_videos
 
