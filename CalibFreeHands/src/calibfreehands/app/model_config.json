@@ -1,0 +1,54 @@
+{
+  "schema_version": 1,
+  "calibration_models": [
+    {
+      "id": "anycalib_original",
+      "display_name": "Original AnyCalib",
+      "backend": "anycalib",
+      "model_id": "anycalib_pinhole",
+      "available": true
+    },
+    {
+      "id": "handcalib",
+      "display_name": "HandCalib (unavailable)",
+      "backend": "handcalib",
+      "available": false,
+      "unavailable_reason": "HandCalib currently has research/evaluation code but no confirmed CalibFreeHands runtime adapter."
+    }
+  ],
+  "reconstruction_models": [
+    {
+      "id": "wilor_original",
+      "display_name": "Original WiLoR",
+      "backend": "wilor",
+      "available": true,
+      "assets": {
+        "repository": "WiLoR",
+        "checkpoint": "WiLoR/pretrained_models/wilor_final.ckpt",
+        "config": "models/model_config_wilor_original.yaml"
+      }
+    },
+    {
+      "id": "anyhand_wilor",
+      "display_name": "AnyHand WiLoR (unavailable)",
+      "backend": "anyhand_wilor",
+      "available": false,
+      "unavailable_reason": "The legacy AnyHand entry point is separate from the app backend and its checkpoint is not present.",
+      "assets": {
+        "checkpoint": "models/anyhand_wilor.ckpt",
+        "config": "models/model_config_wilor.yaml"
+      }
+    }
+  ],
+  "presets": [
+    {
+      "id": "original",
+      "display_name": "Original",
+      "calibration_model_id": "anycalib_original",
+      "reconstruction_model_id": "wilor_original",
+      "sampling": "uniform",
+      "sample_count": 8,
+      "aggregation": "median"
+    }
+  ]
+}

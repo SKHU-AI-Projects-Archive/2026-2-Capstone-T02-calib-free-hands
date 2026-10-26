@@ -112,7 +112,8 @@ def test_service_preserves_mano_parameters_and_calibration_trace(tmp_path):
 
     npz_path, run_path = process_and_save(
         frames, CalibratorByPixel(), PoseWithMano(), tmp_path,
-        {"sampling_mode": "uniform", "sample_count": 3, "aggregation": "median"},
+        {"sampling_mode": "uniform", "sample_count": 3, "aggregation": "median",
+         "model_selection": {"calibration_model_id": "anycalib_original", "preset_id": "original"}},
     )
     with np.load(npz_path) as saved:
         assert {"mano_pose", "mano_shape"}.issubset(saved.files)
@@ -122,6 +123,7 @@ def test_service_preserves_mano_parameters_and_calibration_trace(tmp_path):
     provenance = json.loads(run_path.read_text(encoding="utf-8"))
     assert provenance["calibration"] == result.calibration_metadata
     assert provenance["applied_camera_parameters"]["focal_px"] == result.video_focal_px
+    assert provenance["model_selection"]["calibration_model_id"] == "anycalib_original"
 
 
 @pytest.mark.parametrize(

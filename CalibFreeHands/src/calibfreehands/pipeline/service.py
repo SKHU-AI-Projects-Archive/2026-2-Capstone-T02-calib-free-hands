@@ -29,16 +29,21 @@ class HandEstimate:
 
 
 class CalibrationBackend(Protocol):
+    """One focal estimator selected for a single processing run."""
+
     def estimate_focal(self, image_rgb: np.ndarray) -> float: ...
 
 
 class PoseBackend(Protocol):
+    """One hand reconstruction backend paired with the run's focal estimator."""
+
     def predict(self, image_rgb: np.ndarray, focal_px: float) -> list[HandEstimate]: ...
 
 
 def process_frames(frames: list[DecodedFrame], calibrator: CalibrationBackend, pose: PoseBackend,
                    sampling_mode: str = "uniform", sample_count: int = 8, aggregation: str = "median",
                    progress=None, cancelled=None) -> CanonicalResult:
+    """Process one calibration/reconstruction pair and preserve the canonical result contract."""
     if not frames:
         raise ValueError("at least one decoded frame is required")
     sample_ids = sample_indices(len(frames), sampling_mode, sample_count)
@@ -126,6 +131,8 @@ def process_and_save(frames: list[DecodedFrame], calibrator: CalibrationBackend,
                                                  "principal_point_applied": False,
                                                  "distortion_applied": False},
                   "runtime": runtime_metadata(), "outputs": ["results.npz", "run.json"]}
+    if settings.get("model_selection") is not None:
+        provenance["model_selection"] = settings["model_selection"]
     if result.calibration_metadata is not None:
         provenance["calibration"] = result.calibration_metadata
     input_path = settings.get("input_path")

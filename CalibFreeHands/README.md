@@ -56,6 +56,12 @@ AnyCalib's official package supports Python 3.10+ and downloads its selected pre
 
 The application uses the original WiLoR checkpoint at `../WiLoR/pretrained_models/wilor_final.ckpt`, detector at `../WiLoR/pretrained_models/detector.pt`, and the existing original config at `../models/model_config_wilor_original.yaml`. WiLoR's loader expects the licensed `mano_data/MANO_RIGHT.pkl` and `mano_data/MANO_LEFT.pkl` files relative to the repository root; the setup script intentionally does not download them.
 
+## Model selection and presets
+
+The packaged `src/calibfreehands/app/model_config.json` lists the model and preset definitions. The built-in `Original` preset selects Original AnyCalib, Original WiLoR, uniform sampling of 8 frames, and median focal aggregation. The GUI can show HandCalib and AnyHand WiLoR, but keeps them unavailable: HandCalib has no confirmed app runtime adapter, and the legacy AnyHand WiLoR checkpoint is not present or integrated with this app. Preset definitions are read-only at runtime; choosing **Set as default** stores the selected preset/model IDs and custom sampling values in Qt settings for the next launch. Unknown saved IDs fall back to `Original`.
+
+The calibration and reconstruction registries create one backend pair per run. The existing `process_frames` contract still accepts a single calibration backend and a single reconstruction backend; comparison execution and comparison viewers are not part of this stage. `run.json` preserves the existing backend fields and adds the selected model/preset IDs and display names.
+
 To prepare the publicly downloadable original WiLoR checkpoint and detector in the repository's expected external `WiLoR/pretrained_models/` directory:
 
 ```powershell

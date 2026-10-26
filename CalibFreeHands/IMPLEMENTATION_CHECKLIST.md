@@ -43,3 +43,8 @@
 - [x] P1-A.2 opaque/translucent mesh state switching and compact sample-count controls
 - [x] P1-B MANO parameter preservation and calibration provenance trace
 - [x] P1-C mesh/skeleton mutual-exclusion visibility controls and compact opacity layout
+- [x] Packaged JSON model and preset configuration with validation
+- [x] Calibration/reconstruction registries for configured backend creation
+- [x] Original AnyCalib + Original WiLoR preset and persistent user default selection
+- [x] GUI model/preset controls with unavailable HandCalib and AnyHand WiLoR entries
+- [x] Selected model/preset provenance retained in `run.json`

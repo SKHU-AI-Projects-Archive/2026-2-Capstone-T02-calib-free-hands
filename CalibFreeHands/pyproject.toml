@@ -19,3 +19,6 @@ pythonpath = ["src"]
 
 [tool.setuptools.packages.find]
 where = ["src"]
+
+[tool.setuptools.package-data]
+"calibfreehands.app" = ["model_config.json"]

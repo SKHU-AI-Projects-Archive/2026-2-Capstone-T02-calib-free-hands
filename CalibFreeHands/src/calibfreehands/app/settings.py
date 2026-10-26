@@ -7,7 +7,9 @@ from PySide6.QtCore import QSettings
 
 class AppSettings:
     defaults = {"theme": "system", "language": "en", "output_directory": "", "collision_policy": "ask",
-                "preserve_audio": True, "sampling_mode": "uniform", "sample_count": 8, "aggregation": "median"}
+                "preserve_audio": True, "sampling_mode": "uniform", "sample_count": 8, "aggregation": "median",
+                "default_preset_id": "original", "default_calibration_model_id": "anycalib_original",
+                "default_reconstruction_model_id": "wilor_original"}
 
     def __init__(self, path: Path | None = None) -> None:
         self._settings = QSettings(str(path), QSettings.IniFormat) if path else QSettings("CalibFreeHands", "CalibFreeHands")

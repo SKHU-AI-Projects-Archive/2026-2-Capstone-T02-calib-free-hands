@@ -3,6 +3,9 @@ from PySide6.QtWidgets import QCheckBox, QComboBox, QLabel, QListWidgetItem
 import importlib
 import threading
 import time
+from PySide6.QtCore import Qt
+from pathlib import Path
+from types import SimpleNamespace
 
 
 def test_settings_persist(tmp_path):
@@ -15,6 +18,110 @@ def test_settings_persist(tmp_path):
     assert restored.get("sample_count") == 12
 
 
+def test_model_and_preset_defaults_persist_and_missing_ids_fall_back(tmp_path, monkeypatch, qapp):
+    main = importlib.import_module("calibfreehands.app.main")
+    settings_path = tmp_path / "settings.ini"
+    monkeypatch.setattr(main, "AppSettings", lambda: AppSettings(settings_path))
+    window = main.MainWindow()
+
+    assert window.preset_combo.currentData() == "original"
+    assert window.calibration_combo.currentData() == "anycalib_original"
+    assert window.reconstruction_combo.currentData() == "wilor_original"
+    handcalib_index = window.calibration_combo.findData("handcalib")
+    assert handcalib_index >= 0
+    assert not window.calibration_combo.model().item(handcalib_index).isEnabled()
+    assert "no confirmed" in window.calibration_combo.itemData(handcalib_index, Qt.ItemDataRole.ToolTipRole)
+
+    window._save_defaults()
+    window.close()
+    restored = main.MainWindow()
+    assert restored.preset_combo.currentData() == "original"
+    assert restored.calibration_combo.currentData() == "anycalib_original"
+    assert restored.reconstruction_combo.currentData() == "wilor_original"
+    restored.close()
+
+    settings = AppSettings(settings_path)
+    settings.set("default_preset_id", "removed_preset")
+    settings.set("default_calibration_model_id", "removed_calibration")
+    settings.set("default_reconstruction_model_id", "removed_pose")
+    settings.sync()
+    fallback = main.MainWindow()
+    assert fallback.preset_combo.currentData() == "original"
+    assert fallback.calibration_combo.currentData() == "anycalib_original"
+    assert fallback.reconstruction_combo.currentData() == "wilor_original"
+    fallback.close()
+
+
+def test_preset_updates_controls_and_manual_change_does_not_mutate_definition(tmp_path, monkeypatch, qapp):
+    main = importlib.import_module("calibfreehands.app.main")
+    monkeypatch.setattr(main, "AppSettings", lambda: AppSettings(tmp_path / "settings.ini"))
+    window = main.MainWindow()
+    original = window.configuration.presets["original"]
+
+    window.sampling_combo.setCurrentIndex(window.sampling_combo.findData("all"))
+    window.sample_count_combo.setCurrentText("16")
+    window.aggregation_combo.setCurrentText("mean")
+    assert window.preset_combo.currentData() == "custom"
+    assert (original.sampling, original.sample_count, original.aggregation) == ("uniform", 8, "median")
+
+    window.preset_combo.setCurrentIndex(window.preset_combo.findData("original"))
+    assert window.sampling_combo.currentData() == "uniform"
+    assert window.sample_count_combo.currentText() == "8"
+    assert window.aggregation_combo.currentData() == "median"
+    window.close()
+
+
+def test_custom_default_selection_is_restored_after_restart(tmp_path, monkeypatch, qapp):
+    main = importlib.import_module("calibfreehands.app.main")
+    settings_path = tmp_path / "settings.ini"
+    monkeypatch.setattr(main, "AppSettings", lambda: AppSettings(settings_path))
+    window = main.MainWindow()
+    window.sampling_combo.setCurrentIndex(window.sampling_combo.findData("all"))
+    window.sample_count_combo.setCurrentText("16")
+    window.aggregation_combo.setCurrentIndex(window.aggregation_combo.findData("mean"))
+    window._save_defaults()
+    window.close()
+
+    restored = main.MainWindow()
+    assert restored.preset_combo.currentData() == "custom"
+    assert restored.sampling_combo.currentData() == "all"
+    assert restored.sample_count_combo.currentText() == "16"
+    assert restored.aggregation_combo.currentData() == "mean"
+    restored.close()
+
+
+def test_processing_path_uses_selected_registry_models_and_records_selection(tmp_path, monkeypatch, qapp):
+    main = importlib.import_module("calibfreehands.app.main")
+    monkeypatch.setattr(main, "AppSettings", lambda: AppSettings(tmp_path / "settings.ini"))
+    window = main.MainWindow()
+    created = []
+    calibrator = SimpleNamespace(name="Selected calibration")
+    pose = SimpleNamespace(name="Selected pose", checkpoint=tmp_path / "wilor.ckpt", preflight=lambda: None)
+    monkeypatch.setattr(main, "probe_media", lambda path: SimpleNamespace(width=8, height=8, frame_rate=25.0))
+    monkeypatch.setattr(main, "create_calibration_backend", lambda model_id, config: created.append(("calibration", model_id)) or calibrator)
+    monkeypatch.setattr(main, "create_pose_backend", lambda model_id, config, root: created.append(("pose", model_id)) or pose)
+    monkeypatch.setattr(main, "FFmpegDecoder", lambda: SimpleNamespace(decode_rgb=lambda *args: ["frame"]))
+    monkeypatch.setattr(main, "choose_output_directory", lambda *args: tmp_path)
+    captured = {}
+    monkeypatch.setattr(main, "process_and_save", lambda frames, cal, rec, out, settings, *args: captured.update(
+        calibration=cal, reconstruction=rec, settings=settings
+    ))
+    selection = {
+        "calibration_model_id": "anycalib_original",
+        "reconstruction_model_id": "wilor_original",
+        "preset_id": "original",
+    }
+
+    window._process_media(Path("input.mp4"), selection=selection)
+
+    assert created == [("calibration", "anycalib_original"), ("pose", "wilor_original")]
+    assert captured["calibration"] is calibrator
+    assert captured["reconstruction"] is pose
+    assert captured["settings"]["model_selection"]["preset_name"] == "Original"
+    assert captured["settings"]["model_selection"]["calibration_model_id"] == "anycalib_original"
+    window.close()
+
+
 def test_main_window_groups_sample_count_and_preserves_sampling_toggle(tmp_path, monkeypatch, qapp):
     main = importlib.import_module("calibfreehands.app.main")
 
@@ -24,7 +131,7 @@ def test_main_window_groups_sample_count_and_preserves_sampling_toggle(tmp_path,
     window = MainWindow()
     labels = [label.text() for label in window.findChildren(QLabel)]
     combos = window.findChildren(QComboBox)
-    processing_row = window.centralWidget().layout().itemAt(4).layout()
+    processing_row = window.centralWidget().layout().itemAt(5).layout()
     sampling = next(combo for combo in combos if [combo.itemText(i) for i in range(combo.count())] == ["Uniform", "All frames"])
     sample_count = next(combo for combo in combos if [combo.itemText(i) for i in range(combo.count())] == ["4", "8", "16", "32"])
     collision = next(combo for combo in combos if [combo.itemText(i) for i in range(combo.count())] == ["Ask", "Overwrite", "Auto rename", "Skip"])
@@ -58,7 +165,7 @@ def test_main_window_prevents_concurrent_jobs_and_restores_controls(tmp_path, mo
     release = threading.Event()
     calls = []
 
-    def process_media(path, job):
+    def process_media(path, job, selection):
         calls.append(path)
         entered.set()
         assert release.wait(2)
@@ -93,7 +200,7 @@ def test_main_window_restores_controls_after_job_failure(tmp_path, monkeypatch, 
     window = main.MainWindow()
     window.queue.addItem(QListWidgetItem("sample.mp4"))
     window.queue.setCurrentRow(0)
-    monkeypatch.setattr(window, "_process_media", lambda path, job: (_ for _ in ()).throw(RuntimeError("failed")))
+    monkeypatch.setattr(window, "_process_media", lambda path, job, selection: (_ for _ in ()).throw(RuntimeError("failed")))
 
     window._start_selected()
     thread = window._job_thread
@@ -113,7 +220,7 @@ def test_main_window_restores_controls_after_cancellation(tmp_path, monkeypatch,
     window.queue.setCurrentRow(0)
     entered = threading.Event()
 
-    def process_media(path, job):
+    def process_media(path, job, selection):
         entered.set()
         while not job.cancelled:
             time.sleep(0.001)

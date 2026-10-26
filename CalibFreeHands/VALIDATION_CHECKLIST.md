@@ -51,6 +51,9 @@
 - [x] P1-B synthetic MANO NPZ round-trip and calibration provenance trace regression tests
 - [x] P1-B legacy NPZ reload without MANO parameters
 - [x] P1-C mesh/skeleton visibility transitions and compact opacity layout regression tests
+- [x] Model config validation, original preset values, and registry factory tests
+- [x] Model/preset GUI controls, unavailable model state, custom default persistence, and stale-ID fallback tests
+- [x] Selected backend wiring and model/preset provenance regression tests
 - [x] Official WiLoR checkpoint and detector downloaded outside protected source tree
 - [x] Official model asset setup script with network access
 - [ ] Interactive viewer/manual validation
