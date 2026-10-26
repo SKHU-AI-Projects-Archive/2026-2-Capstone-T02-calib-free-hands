@@ -1,0 +1,292 @@
+experiment: 26_generalization
+run: runs/26_generalization/20261026T031941Z
+code_commit: 0308d81
+git_dirty_at_run: false
+note: 새 판정 규칙(v2), 일반화 그룹, f 오차가 손 궤적에 주는 영향을 본 실험이다. 후보 설정(mediapipe_hands + 손목 제외
+  + fixed_template)과 모든 문턱값은 실행 전에 고정했고 바꾸지 않았다. 기준 f(ref_f)와의 비교는 summary.md에만 있다.
+candidate:
+  detector: mediapipe_hands
+  wrist_mode: exclude
+  estimator: fixed_template
+  front_window: 17's (phase_mode nominal, tilt phase from 3.0 s)
+videos:
+  IMG_7213.MOV:
+    group: G3
+    person_id: P1
+    phone: main
+    lens: 0.5x
+    glove: false
+    duration_s: 21.69
+    detect_fail_rate: 0.0
+    edge_rate: 0.0
+    excluded: null
+    f_px: 1073.5
+    status: value
+    f_verdict_estimator: REJECT
+    rating_v2: 사용 가능
+    boot_log_std: 0.06356
+    tilt_duration_s: 18.69
+    n_tilt_frames: 281
+    theta_median_deg: 30.4
+    theta_p90_deg: 41.3
+    theta_max_deg: 55.6
+    hand_box_short_ratio_front: 0.6526
+    guide_v2:
+      guide: true
+      reasons: []
+      t_transition: 4.2042
+  IMG_7214.MOV:
+    group: G3
+    person_id: P1
+    phone: main
+    lens: 0.5x
+    glove: false
+    duration_s: 23.69
+    detect_fail_rate: 0.0
+    edge_rate: 0.0
+    excluded: null
+    f_px: 920.9
+    status: value
+    f_verdict_estimator: REJECT
+    rating_v2: 사용 가능
+    boot_log_std: 0.04453
+    tilt_duration_s: 20.69
+    n_tilt_frames: 311
+    theta_median_deg: 30.3
+    theta_p90_deg: 47.8
+    theta_max_deg: 59.7
+    hand_box_short_ratio_front: 0.6784
+    guide_v2:
+      guide: false
+      reasons:
+      - 손 박스/짧은 변 0.65 > 0.65
+      t_transition: 5.138466666666667
+  IMG_7215.MOV:
+    group: G3
+    person_id: P1
+    phone: main
+    lens: 0.5x
+    glove: false
+    duration_s: 23.16
+    detect_fail_rate: 0.0
+    edge_rate: 0.0
+    excluded: null
+    f_px: 1193.7
+    status: value
+    f_verdict_estimator: REJECT
+    rating_v2: 사용 가능
+    boot_log_std: 0.06628
+    tilt_duration_s: 20.16
+    n_tilt_frames: 303
+    theta_median_deg: 32.4
+    theta_p90_deg: 49.9
+    theta_max_deg: 57.4
+    hand_box_short_ratio_front: 0.6533
+    guide_v2:
+      guide: true
+      reasons: []
+      t_transition: 5.4054
+verification_v2:
+  verdict: 판단 불가
+  n_usable: 3
+  n_videos: 3
+  reason: 사용 가능 영상 3개 < 5개
+groups:
+  G1:
+    verdict: 영상 없음
+    n_videos: 0
+    n_excluded: 0
+    pooled_f_px: null
+    interval_95_px: null
+  G2:
+    verdict: 영상 없음
+    n_videos: 0
+    n_excluded: 0
+    pooled_f_px: null
+    interval_95_px: null
+  G3:
+    verdict: 실패
+    n_videos: 3
+    n_excluded: 0
+    pooled_f_px: 1054.7
+    interval_95_px:
+    - 920.9
+    - 1193.7
+  G4:
+    verdict: 영상 없음
+    n_videos: 0
+    n_excluded: 0
+    pooled_f_px: null
+    interval_95_px: null
+  G5:
+    verdict: 영상 없음
+    n_videos: 0
+    n_excluded: 0
+    pooled_f_px: null
+    interval_95_px: null
+trajectory_eps_metrics:
+  IMG_7213.MOV:
+    eps_-20:
+      n_steps: 29
+      magnitude_err_median_pct: 14.799
+      magnitude_err_p90_pct: 19.337
+      direction_err_median_deg: 4.259
+      direction_err_p90_deg: 6.233
+      depth_err_median_mm: 1.998
+      depth_err_p90_mm: 3.783
+      depth_share_median: 0.873
+    eps_-10:
+      n_steps: 29
+      magnitude_err_median_pct: 7.515
+      magnitude_err_p90_pct: 9.688
+      direction_err_median_deg: 1.923
+      direction_err_p90_deg: 2.913
+      depth_err_median_mm: 0.999
+      depth_err_p90_mm: 1.892
+      depth_share_median: 0.873
+    eps_-5:
+      n_steps: 29
+      magnitude_err_median_pct: 3.783
+      magnitude_err_p90_pct: 4.848
+      direction_err_median_deg: 0.936
+      direction_err_p90_deg: 1.408
+      depth_err_median_mm: 0.5
+      depth_err_p90_mm: 0.946
+      depth_share_median: 0.873
+    eps_+5:
+      n_steps: 29
+      magnitude_err_median_pct: 3.829
+      magnitude_err_p90_pct: 4.855
+      direction_err_median_deg: 0.925
+      direction_err_p90_deg: 1.32
+      depth_err_median_mm: 0.5
+      depth_err_p90_mm: 0.946
+      depth_share_median: 0.873
+    eps_+10:
+      n_steps: 29
+      magnitude_err_median_pct: 7.698
+      magnitude_err_p90_pct: 9.717
+      direction_err_median_deg: 1.833
+      direction_err_p90_deg: 2.559
+      depth_err_median_mm: 0.999
+      depth_err_p90_mm: 1.892
+      depth_share_median: 0.873
+    eps_+20:
+      n_steps: 29
+      magnitude_err_median_pct: 15.542
+      magnitude_err_p90_pct: 19.456
+      direction_err_median_deg: 3.587
+      direction_err_p90_deg: 4.939
+      depth_err_median_mm: 1.998
+      depth_err_p90_mm: 3.783
+      depth_share_median: 0.873
+  IMG_7214.MOV:
+    eps_-20:
+      n_steps: 33
+      magnitude_err_median_pct: 14.51
+      magnitude_err_p90_pct: 19.047
+      direction_err_median_deg: 4.879
+      direction_err_p90_deg: 6.362
+      depth_err_median_mm: 1.61
+      depth_err_p90_mm: 4.419
+      depth_share_median: 0.865
+    eps_-10:
+      n_steps: 33
+      magnitude_err_median_pct: 7.375
+      magnitude_err_p90_pct: 9.551
+      direction_err_median_deg: 2.216
+      direction_err_p90_deg: 3.008
+      depth_err_median_mm: 0.805
+      depth_err_p90_mm: 2.209
+      depth_share_median: 0.865
+    eps_-5:
+      n_steps: 33
+      magnitude_err_median_pct: 3.714
+      magnitude_err_p90_pct: 4.782
+      direction_err_median_deg: 1.059
+      direction_err_p90_deg: 1.461
+      depth_err_median_mm: 0.402
+      depth_err_p90_mm: 1.105
+      depth_share_median: 0.865
+    eps_+5:
+      n_steps: 33
+      magnitude_err_median_pct: 3.761
+      magnitude_err_p90_pct: 4.792
+      direction_err_median_deg: 0.973
+      direction_err_p90_deg: 1.382
+      depth_err_median_mm: 0.402
+      depth_err_p90_mm: 1.105
+      depth_share_median: 0.865
+    eps_+10:
+      n_steps: 33
+      magnitude_err_median_pct: 7.564
+      magnitude_err_p90_pct: 9.592
+      direction_err_median_deg: 1.868
+      direction_err_p90_deg: 2.695
+      depth_err_median_mm: 0.805
+      depth_err_p90_mm: 2.209
+      depth_share_median: 0.865
+    eps_+20:
+      n_steps: 33
+      magnitude_err_median_pct: 15.281
+      magnitude_err_p90_pct: 19.216
+      direction_err_median_deg: 3.461
+      direction_err_p90_deg: 5.137
+      depth_err_median_mm: 1.61
+      depth_err_p90_mm: 4.419
+      depth_share_median: 0.865
+  IMG_7215.MOV:
+    eps_-20:
+      n_steps: 29
+      magnitude_err_median_pct: 15.563
+      magnitude_err_p90_pct: 19.392
+      direction_err_median_deg: 4.034
+      direction_err_p90_deg: 5.708
+      depth_err_median_mm: 1.704
+      depth_err_p90_mm: 4.2
+      depth_share_median: 0.893
+    eps_-10:
+      n_steps: 29
+      magnitude_err_median_pct: 7.886
+      magnitude_err_p90_pct: 9.714
+      direction_err_median_deg: 1.854
+      direction_err_p90_deg: 2.728
+      depth_err_median_mm: 0.852
+      depth_err_p90_mm: 2.1
+      depth_share_median: 0.893
+    eps_-5:
+      n_steps: 29
+      magnitude_err_median_pct: 3.966
+      magnitude_err_p90_pct: 4.861
+      direction_err_median_deg: 0.917
+      direction_err_p90_deg: 1.339
+      depth_err_median_mm: 0.426
+      depth_err_p90_mm: 1.05
+      depth_share_median: 0.893
+    eps_+5:
+      n_steps: 29
+      magnitude_err_median_pct: 4.006
+      magnitude_err_p90_pct: 4.868
+      direction_err_median_deg: 0.906
+      direction_err_p90_deg: 1.291
+      depth_err_median_mm: 0.426
+      depth_err_p90_mm: 1.05
+      depth_share_median: 0.893
+    eps_+10:
+      n_steps: 29
+      magnitude_err_median_pct: 8.048
+      magnitude_err_p90_pct: 9.741
+      direction_err_median_deg: 1.764
+      direction_err_p90_deg: 2.535
+      depth_err_median_mm: 0.852
+      depth_err_p90_mm: 2.1
+      depth_share_median: 0.893
+    eps_+20:
+      n_steps: 29
+      magnitude_err_median_pct: 16.225
+      magnitude_err_p90_pct: 19.502
+      direction_err_median_deg: 3.473
+      direction_err_p90_deg: 4.828
+      depth_err_median_mm: 1.704
+      depth_err_p90_mm: 4.2
+      depth_share_median: 0.893
