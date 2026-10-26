@@ -1,0 +1,21 @@
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "calibfreehands"
+version = "0.1.0"
+requires-python = ">=3.10"
+dependencies = ["numpy>=1.23"]
+
+[project.optional-dependencies]
+gui = ["PySide6>=6.6", "pyqtgraph>=0.14", "PyOpenGL>=3.1"]
+media = ["imageio-ffmpeg>=0.6"]
+inference = ["chumpy>=0.70", "dill>=0.4", "ultralytics>=8.4"]
+test = ["pytest>=7"]
+
+[tool.pytest.ini_options]
+pythonpath = ["src"]
+
+[tool.setuptools.packages.find]
+where = ["src"]

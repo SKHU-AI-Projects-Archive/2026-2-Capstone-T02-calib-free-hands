@@ -1,0 +1,9 @@
+local_test_media/
+local_test_output/
+__pycache__/
+*.py[cod]
+.pytest_cache/
+*.egg-info/
+.venv/
+# Local runtime settings
+Ultralytics/

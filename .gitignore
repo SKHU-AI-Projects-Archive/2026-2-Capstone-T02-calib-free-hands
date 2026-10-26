@@ -78,3 +78,5 @@ experiments/runs/CAM-EXP-009_3_real_bilateral_geometry_separability/cache/
 experiments/runs/CAM-EXP-009_4_scene_shared_anatomy_focal_refinement/cache/
 experiments/runs/CAM-EXP-010_monocular_depth_scale_decomposition/cache/
 experiments/runs/CAM-EXP-011_allframe_three_model_hand_paired_benchmark/cache/
+# Local pretrained model assets
+WiLoR/pretrained_models/

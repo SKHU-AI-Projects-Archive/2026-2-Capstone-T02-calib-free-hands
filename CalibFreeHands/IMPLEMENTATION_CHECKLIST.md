@@ -1,0 +1,45 @@
+# Implementation checklist
+
+- [x] Python package and PySide6 application shell
+- [x] Non-recursive supported-media discovery
+- [x] ffprobe metadata boundary with explicit missing-tool error
+- [x] Main-window drag and drop input
+- [x] FFmpeg subprocess decoder boundary with frame timestamps
+- [x] Project-local bundled FFmpeg option via imageio-ffmpeg
+- [x] Backend-independent frame processing service and canonical result integration
+- [x] Preview encoder boundary with optional audio mapping
+- [x] Queue start/cancel UI bound to QThread lifecycle
+- [x] Sampling and focal aggregation contract
+- [x] Canonical result model with NaN/mask representation
+- [x] NPZ and `run.json` persistence
+- [x] Saved-result viewer with timeline and interactive canvas controls
+- [x] Synthetic multi-frame result fixture tests
+- [x] CSV/JSON export
+- [x] Persistent application settings
+- [x] Processing job lifecycle with cancellation
+- [x] QThread wrapper for non-blocking job execution
+- [x] AnyCalib API adapter and focal extraction/translation regression contract
+- [x] Original WiLoR asset/config boundary adapter
+- [x] Reproducible official WiLoR asset preparation script (MANO intentionally excluded)
+- [x] Project-local CUDA PyTorch runtime and AnyCalib package installation path
+- [x] Core automated tests
+- [x] FFmpeg-backed decoding and sequential frame fallback when ffprobe is unavailable
+- [x] Original AnyCalib backend adapter
+- [x] Original pretrained WiLoR asset/config adapter boundary
+- [x] End-to-end camera-space inference pipeline
+- [x] Result viewer and exports
+- [x] Main-window saved-result reopen action without rerunning inference
+- [x] P0 Windows launcher uses project-local Python and explicit PYTHONPATH
+- [x] P0 authoritative OpenPose hand topology shared by 2D preview and viewer
+- [x] P0 camera translation applied once to joints and MANO vertices
+- [x] P0 optional MANO triangle faces persisted with legacy-NPZ compatibility
+- [x] P0 real pyqtgraph OpenGL result viewer with mesh/skeleton/grid/axis toggles
+- [x] P0.1 QPainter float/NaN-safe overlay rendering and guaranteed painter cleanup
+- [x] P0.1 stage progress and cooperative cancellation callbacks in processing pipeline
+- [x] P0.2 GL item data validation and persistent per-hand item updates
+- [x] P0.2 Qt OpenGL shader-cache reset across repeated viewer contexts
+- [x] P1-A viewer mesh-state synchronization, camera-space references, fit and view presets
+- [x] P1-A.1 viewer mesh opacity, expanded axes and click-context keyboard controls
+- [x] P1-A.2 opaque/translucent mesh state switching and compact sample-count controls
+- [x] P1-B MANO parameter preservation and calibration provenance trace
+- [x] P1-C mesh/skeleton mutual-exclusion visibility controls and compact opacity layout
