@@ -32,6 +32,7 @@ CFG21 = yaml.safe_load((ROOT / "configs/21_guide_revision.yaml").read_text())
 CFG22 = yaml.safe_load((ROOT / "configs/22_f_response.yaml").read_text())
 CFG23 = yaml.safe_load((ROOT / "configs/23_error_factors.yaml").read_text())
 CFG25 = yaml.safe_load((ROOT / "configs/25_long_video_check.yaml").read_text())
+CFG26 = yaml.safe_load((ROOT / "configs/26_generalization.yaml").read_text())
 PIPE = CFG17["pipeline"]                           # the 14 pipeline settings (identical in 16, 17 and 18)
 SYN = {"f_px": 1650, "image": [1920, 1080], "distance_mm": 350, "front_frames": 10, "tilt_frames": 40}     # 14's synthetic camera
 BASE_COND = {"name": "base", "delta_deg": 0, "noise": {"px": 1.0}, "heavy_tail": False, "tilt_range_deg": [25, 50], "arch_mm": 0,
@@ -1936,6 +1937,253 @@ class LongYamlPatch(unittest.TestCase):
             self.assertIn("# b = log", p.read_text())
             with self.assertRaises(SystemExit):
                 run.long_patch_yaml(p, {"missing_key": "1"})
+
+
+# ====================================================================================================
+# generalisation (26)
+# ====================================================================================================
+
+class GenRatingAndVerification(unittest.TestCase):
+    V2, VER = CFG26["rating_v2"], CFG26["verification_v2"]
+
+    def test_rating_rules(self):
+        r = lambda tilt, th, sg: hf.gen_rating(tilt, th, sg, self.V2)      # noqa: E731
+        self.assertEqual(r(20.0, 60.0, 0.08), "사용 가능")
+        self.assertEqual(r(18.0, 55.0, 0.10), "사용 가능")                      # the limits belong to the better class
+        self.assertEqual(r(20.0, 60.0, 0.12), "참고")                          # both shooting conditions hold, the log SD is looser
+        self.assertEqual(r(20.0, 60.0, 0.15), "참고")
+        self.assertEqual(r(20.0, 60.0, 0.16), "사용 불가")
+        self.assertEqual(r(17.9, 60.0, 0.05), "사용 불가")                      # one shooting condition fails
+        self.assertEqual(r(20.0, 54.9, 0.05), "사용 불가")
+        self.assertEqual(r(20.0, 60.0, None), "사용 불가")
+        self.assertEqual(r(None, 60.0, 0.05), "사용 불가")
+
+    def test_thresholds_of_the_yaml_are_the_specified_ones(self):
+        self.assertEqual((self.V2["tilt_min_s"], self.V2["theta_max_min_deg"], self.V2["usable_log_std_max"], self.V2["reference_log_std_max"]), (18.0, 55.0, 0.10, 0.15))
+        self.assertEqual((self.VER["within_sigma"], self.VER["within_share_min"], self.VER["median_abs_err_max"], self.VER["min_usable"]), (2.0, 0.9, 0.10, 5))
+        g = CFG26["generalization"]
+        self.assertEqual((g["pooled_tol"], g["video_tol"], g["min_videos"], g["bootstrap_n"]), (0.10, 0.15, 3, 1000))
+        self.assertAlmostEqual(g["video_fraction"], 2 / 3, places=6)
+        self.assertEqual(CFG26["guide"]["conditions"]["box_short_ratio_max"], 0.65)
+        self.assertEqual(CFG25["guide"]["conditions"]["box_short_ratio_max"], 0.6)                       # 25's value is untouched
+        t = CFG26["trajectory"]
+        self.assertEqual((t["hand_length_mm"], t["epsilons_pct"], t["tolerance"]), (180.0, [-20, -10, -5, 5, 10, 20], {"motion_pct": None, "direction_deg": None}))
+        self.assertEqual(CFG26["calib_end_default_s"], 25.0)
+
+    def rows(self, n_usable, errs, sigma=0.06):
+        return [{"video": f"v{i}", "rating": "사용 가능", "f": 1000.0 * np.exp(e), "ref_f": 1000.0, "sigma": sigma} for i, e in enumerate(errs[:n_usable])] + [{"video": "x", "rating": "참고", "f": 1.0, "ref_f": 1000.0, "sigma": 0.1}]
+
+    def test_verification(self):
+        ok = hf.gen_verify(self.rows(5, [0.02, -0.05, 0.08, 0.0, -0.03]), self.VER)
+        self.assertEqual(ok["verdict"], "판정 v2 검증됨")
+        self.assertEqual(ok["n_usable"], 5)
+        far = hf.gen_verify(self.rows(5, [0.02, -0.05, 0.30, 0.0, -0.03]), self.VER)                      # one video beyond 2 sigma (0.12): share 0.8 < 0.9
+        self.assertEqual(far["verdict"], "검증 안 됨")
+        self.assertAlmostEqual(far["within_share"], 0.8)
+        big = hf.gen_verify(self.rows(5, [0.11, 0.12, 0.11, 0.1, 0.11], sigma=0.2), self.VER)           # all within 2 sigma but the median error is above 10%
+        self.assertEqual(big["verdict"], "검증 안 됨")
+        few = hf.gen_verify(self.rows(4, [0.01, 0.02, 0.0, 0.01]), self.VER)
+        self.assertEqual(few["verdict"], "판단 불가")
+        self.assertIn("4개 < 5개", few["reason"])
+        self.assertEqual(hf.gen_verify([], self.VER)["verdict"], "판단 불가")
+
+
+class GenGroups(unittest.TestCase):
+    G = CFG26["generalization"]
+
+    def curves(self, fs):
+        grid, cur = toy_curves(tuple(fs))
+        return grid, cur
+
+    def test_group_pooled_f_is_the_sum_of_the_video_curves(self):
+        grid, cur = self.curves((900.0, 880.0, 860.0, 910.0))
+        d = hf.gen_group_verdict(cur, grid, [900.0, 880.0, 860.0, 910.0], 880.0, self.G)
+        self.assertEqual(d["pooled_f"], hf.long_pooled_estimate(cur, grid)["f"])
+        np.testing.assert_allclose(hf.long_pooled_curve(cur), cur.sum(0))
+        self.assertEqual(d["n_videos"], 4)
+        self.assertEqual(d["verdict"], "통과")
+
+    def test_pass_fail_and_not_judged(self):
+        grid, cur = self.curves((900.0, 880.0, 860.0))
+        self.assertEqual(hf.gen_group_verdict(cur, grid, [900.0, 880.0, 860.0], 880.0, self.G)["verdict"], "통과")
+        self.assertEqual(hf.gen_group_verdict(cur, grid, [900.0, 880.0, 860.0], 700.0, self.G)["verdict"], "실패")        # the pooled f is not within +-10% of ref_f
+        grid2, cur2 = self.curves((880.0, 880.0, 880.0))
+        d = hf.gen_group_verdict(cur2, grid2, [880.0, 1200.0, 1300.0], 880.0, self.G)                                      # pooled f fine, only 1 of 3 videos within +-15%
+        self.assertTrue(d["pooled_within_tol"])
+        self.assertAlmostEqual(d["video_share_within_tol"], 1 / 3)
+        self.assertEqual(d["verdict"], "실패")
+        d2 = hf.gen_group_verdict(cur2, grid2, [880.0, 880.0, 1300.0], 880.0, self.G)                                      # 2 of 3 within +-15%: exactly the 2/3 threshold
+        self.assertEqual(d2["verdict"], "통과")
+        self.assertEqual(hf.gen_group_verdict(cur[:2], grid, [900.0, 880.0], 880.0, self.G)["verdict"], "판단 불가")
+        self.assertEqual(hf.gen_group_verdict([], np.array([]), [], 880.0, self.G)["verdict"], "영상 없음")
+        ex = hf.gen_group_verdict(cur, grid, [900.0, 880.0, 860.0], 880.0, self.G, n_excluded=2, n_total=5)
+        self.assertEqual((ex["n_excluded"], ex["n_total"]), (2, 5))                                                       # the excluded share is carried (G4)
+
+    def test_video_entries_are_checked(self):
+        good = {"file": "IMG_1.MOV", "group": "G3", "person_id": "P1", "phone": "main", "lens": "0.5x", "glove": False, "ref_f": 880}
+        self.assertEqual(hf.gen_check_videos([good]), [good])
+        with self.assertRaises(SystemExit):
+            hf.gen_check_videos([])
+        with self.assertRaises(SystemExit):
+            hf.gen_check_videos([{k: v for k, v in good.items() if k != "ref_f"}])
+        with self.assertRaises(SystemExit):
+            hf.gen_check_videos([dict(good, group="G9")])
+        with self.assertRaises(SystemExit):
+            hf.gen_check_videos([dict(good, ref_f=0)])
+        for g in hf.GEN_GROUPS:                                                                                      # every group is accepted
+            self.assertEqual(len(hf.gen_check_videos([dict(good, group=g)])), 1)
+
+
+class GenTrajectory(unittest.TestCase):
+    TC = CFG26["trajectory"]
+
+    def series(self):
+        t = np.arange(0, 6.0, 1 / 15)
+        u = 960 + 120 * np.sin(1.2 * t)
+        v = 540 + 80 * np.cos(0.9 * t)
+        ell = 400.0 * (1.0 + 0.15 * np.sin(0.7 * t))                 # the hand moves along the optical axis too
+        return t, u, v, ell
+
+    def test_changing_f_scales_only_z_and_the_depth_movement(self):
+        t, u, v, ell = self.series()
+        ref = hf.gen_trajectory(u, v, ell, 1680.0, 180.0, 1920, 1080)
+        for e in self.TC["epsilons_pct"]:
+            cmp_ = hf.gen_trajectory(u, v, ell, 1680.0 * (1 + e / 100.0), 180.0, 1920, 1080)
+            np.testing.assert_allclose(cmp_[:, 0], ref[:, 0], rtol=1e-12)
+            np.testing.assert_allclose(cmp_[:, 1], ref[:, 1], rtol=1e-12)
+            np.testing.assert_allclose(cmp_[:, 2], ref[:, 2] * (1 + e / 100.0), rtol=1e-12)
+            _, d0 = hf.gen_step_vectors(t, ref, 0.5, 0.1)
+            _, d1 = hf.gen_step_vectors(t, cmp_, 0.5, 0.1)
+            np.testing.assert_allclose(d1[:, :2], d0[:, :2], atol=1e-9)
+            np.testing.assert_allclose(d1[:, 2], d0[:, 2] * (1 + e / 100.0), rtol=1e-9)                     # only the depth movement changes, by (1 + eps)
+        np.testing.assert_allclose(ref[:, 0], (u - 960) * 180.0 / ell)                                       # X = (u - cx) L / l
+        np.testing.assert_allclose(ref[:, 2], 1680.0 * 180.0 / ell)                                          # Z = f L / l
+
+    def test_step_metrics(self):
+        t, u, v, ell = self.series()
+        ref = hf.gen_smooth_traj(t, hf.gen_trajectory(u, v, ell, 1680.0, 180.0, 1920, 1080), 0.3)
+        same = hf.gen_step_metrics(t, ref, ref, self.TC)
+        self.assertEqual((same["magnitude_err_median_pct"], same["direction_err_median_deg"], same["depth_err_median_mm"]), (0.0, 0.0, 0.0))
+        m10 = hf.gen_step_metrics(t, ref, hf.gen_smooth_traj(t, hf.gen_trajectory(u, v, ell, 1680.0 * 1.1, 180.0, 1920, 1080), 0.3), self.TC)
+        m20 = hf.gen_step_metrics(t, ref, hf.gen_smooth_traj(t, hf.gen_trajectory(u, v, ell, 1680.0 * 1.2, 180.0, 1920, 1080), 0.3), self.TC)
+        self.assertGreater(m10["depth_err_median_mm"], 0.0)
+        self.assertGreater(m20["depth_err_median_mm"], m10["depth_err_median_mm"])                          # a larger f error: a larger depth error
+        self.assertGreater(m20["direction_err_median_deg"], m10["direction_err_median_deg"])
+        self.assertGreater(m10["n_steps"], 5)
+        still = np.tile(ref[:1], (len(t), 1))                                                              # no movement: no step is used
+        self.assertEqual(hf.gen_step_metrics(t, still, still, self.TC)["n_steps"], 0)
+        self.assertIsNone(hf.gen_step_metrics(t, still, still, self.TC)["magnitude_err_median_pct"])
+
+    def test_variants_of_a_video_include_the_estimate_and_the_pooled_f(self):
+        t, u, v, ell = self.series()
+        rows = [{"time_s": float(a), "u": float(b), "v": float(c), "size_ratio": float(d / 400.0)} for a, b, c, d in zip(t, u, v, ell)]
+        res = {"ref_f": 880.0, "size": [1920, 1080], "traj": {"rows": rows, "ell_front_px": 400.0}, "ft": {"f": 950.0, "at_grid_edge": False}}
+        tv = run.gen_traj_variants(res, CFG26, 900.0)
+        self.assertEqual(sorted(tv["variants"]), sorted(["ref", "est", "pooled"] + [f"eps_{int(e):+d}" for e in CFG26["trajectory"]["epsilons_pct"]]))
+        self.assertEqual(tv["variants"]["est"]["f"], 950.0)
+        self.assertEqual(tv["variants"]["eps_+10"]["f"], 880.0 * 1.1)
+        res["ft"]["at_grid_edge"] = True
+        self.assertNotIn("est", run.gen_traj_variants(res, CFG26, None)["variants"])                         # an estimate on the grid edge has no trajectory
+
+
+class GenCalibEnd(unittest.TestCase):
+    def test_frames_after_calib_end_are_not_used_for_f(self):
+        g = synth_wrist(seed=4, tilt_frames=60)
+        t = g["times"]
+        calib_end = float(t[len(t) - 20])                                                                        # the last 20 tilt frames are the "work" segment
+        pres = hf.gen_present_until(t, g["present"], calib_end)
+        self.assertEqual(int(pres.sum()), int((t <= calib_end).sum()))
+        self.assertTrue(np.array_equal(hf.gen_present_until(t, g["present"], None), g["present"]))
+        a = hf.analyze(g["kp"], g["mask"], pres, g["box"], g["cls"], t, g["size"], PIPE, front_idx=g["front_idx"], tilt_start=g["tilt_start"], methods_full=())
+        kp2 = g["kp"].copy()
+        kp2[t > calib_end] = kp2[t > calib_end] + np.random.default_rng(0).normal(0, 60.0, kp2[t > calib_end].shape)      # wreck the work segment
+        b = hf.analyze(kp2, g["mask"], pres, g["box"], g["cls"], t, g["size"], PIPE, front_idx=g["front_idx"], tilt_start=g["tilt_start"], methods_full=())
+        self.assertEqual(a["solutions"]["fixed_template"]["f"], b["solutions"]["fixed_template"]["f"])
+        self.assertEqual(max(i for i, r in enumerate(a["role"]) if r == "tilt"), int(np.flatnonzero(t <= calib_end).max()))
+        full = hf.analyze(g["kp"], g["mask"], g["present"], g["box"], g["cls"], t, g["size"], PIPE, front_idx=g["front_idx"], tilt_start=g["tilt_start"], methods_full=())
+        self.assertNotEqual(a["solutions"]["fixed_template"]["f"], full["solutions"]["fixed_template"]["f"])      # the frames after calib_end do matter when they are allowed
+
+
+def gen_fake(video, group, **kw):
+    """A minimal gen_video result for the report functions."""
+    rows = [{"index": i, "time_s": 3.0 + i / 15.0, "u": 900.0 + 5 * i, "v": 500.0, "size_ratio": 1.0 + 0.01 * i, "theta2d_deg": 20.0} for i in range(40)]
+    r = {"video": video, "group": group, "person_id": kw.get("person", "P1"), "phone": "main", "lens": "1x", "glove": group == "G4", "ref_f": 1680.0, "calib_end_s": None, "n_frames": 300, "duration_s": 20.0,
+         "size": [1920, 1080], "detect_rate": kw.get("detect_rate", 1.0), "edge_rate": 0.0, "front_window": [1.0, 2.0], "excluded": kw.get("excluded", [])}
+    if not r["excluded"]:
+        r.update({"ft": {"f": 1700.0, "at_grid_edge": False, "side": None, "verdict": "REJECT", "sharpness": 1.004, "boot_log_std": 0.08, "boot_rel_std": 0.08, "n_boot": 30}, "curve": {"grid": [1.0], "cost": [1.0]},
+                  "motion": {"tilt_start_s": 3.0, "n_tilt_frames": 300, "tilt_duration_s": 19.0, "theta_median_deg": 33.0, "theta_p90_deg": 50.0, "theta_max_deg": 60.0, "theta_over_45_frac": 0.2},
+                  "hand_box_short_ratio_front": 0.63, "guide": {"t_transition": 4.0, "guide": True, "reasons": [], "items": {}}, "traj": {"rows": rows, "ell_front_px": 400.0, "s1_front": 1.0, "segment": "tilt phase"}, "rating": "사용 가능"})
+    return r
+
+
+class GenReports(unittest.TestCase):
+    def test_every_group_path_reports_and_excluded_g4_shows_the_failure_rate(self):
+        res = [gen_fake("IMG_A.MOV", "G1", person="P1"), gen_fake("IMG_B.MOV", "G1", person="P2"), gen_fake("IMG_C.MOV", "G4", excluded=["손 검출 실패 프레임 35.0% > 20%"], detect_rate=0.65),
+               gen_fake("IMG_D.MOV", "G2"), gen_fake("IMG_E.MOV", "G5")]
+        groups = {"G1": {"verdict": "판단 불가", "reason": "영상 2개 < 3개", "n_videos": 2, "n_excluded": 0, "by_person": {"P1": {"n_videos": 1, "pooled_f": 1700.0, "at_grid_edge": False}}},
+                  "G2": {"verdict": "영상 없음", "n_videos": 0, "n_excluded": 0}, "G3": {"verdict": "영상 없음"}, "G4": {"verdict": "판단 불가", "n_videos": 0, "n_excluded": 1, "detect_fail_rates": [0.35]}, "G5": {"verdict": "판정 없음 (궤적 분석용)"}}
+        ver = {"verdict": "판단 불가", "reason": "사용 가능 영상 3개 < 5개", "n_usable": 3, "n_videos": 4}
+        with tempfile.TemporaryDirectory() as d:
+            d = Path(d)
+            run.gen_report(d / "report.md", res, [], {}, CFG26)
+            run.gen_summary(d / "summary.md", res, [], groups, ver, {}, CFG26)
+            rep, summ = (d / "report.md").read_text(), (d / "summary.md").read_text()
+        self.assertIn("손 검출 실패 프레임 35.0%", rep)
+        self.assertIn("35.0%", summ)                                                  # the failure rate of the excluded G4 video
+        for g in ("G1", "G2", "G3", "G4", "G5"):
+            self.assertIn(g, summ)
+        self.assertIn("판정 v2 검증: 판단 불가", summ.split("## 1.")[0])             # the verdicts are at the top
+        self.assertIn("영상 없음", summ.split("## 1.")[0])
+        self.assertNotIn("1680", rep.split("## 4.")[0])                            # no ref_f comparison before the trajectory section of report.md
+        for name in ("P1", "P2"):
+            self.assertIn(name, rep)                                               # people appear as person_id only
+        self.assertNotIn("얼굴", rep + summ)
+
+
+@unittest.skipUnless(VID7158.exists() and (ROOT / "runs/25_long_video_check/20261022T042710Z/results.json").exists() and (Path(CFG26["input_dir"]) / "IMG_7191.MOV").exists() and (Path(CFG26["input_dir"]) / "IMG_7192.MOV").exists(),
+                     "the input videos IMG_7191 / IMG_7192 and 25's official run are needed")
+class GenEndToEnd(unittest.TestCase):
+    def test_25_reproduction_g5_split_outputs_and_no_tags(self):
+        r25 = {j["video"]: j for j in json.loads((ROOT / "runs/25_long_video_check/20261022T042710Z/results.json").read_text())["new"]}
+        with tempfile.TemporaryDirectory() as d:
+            d = Path(d)
+            cfg = copy.deepcopy(CFG26)
+            cfg["videos"] = [{"file": "IMG_7191.MOV", "group": "G2", "person_id": "P2", "phone": "teammate", "lens": "1x", "glove": False, "ref_f": 1680},
+                             {"file": "IMG_7192.MOV", "group": "G5", "person_id": "P1", "phone": "main", "lens": "1x", "glove": False, "ref_f": 1680, "calib_end_s": 14.0}]
+            cfg["workers"], cfg["n_workers"] = 2, 2
+            cfg["output"] = {"root": str(d / "runs"), "results_yaml": str(d / "r26.yaml")}
+            cp = d / "c.yaml"
+            cp.write_text(yaml.safe_dump(cfg, allow_unicode=True))
+            root, results, groups, ver = run.gen_main(["--config", str(cp), "--out", str(d / "o")])
+            for f in ("report.md", "summary.md", "results.json", "metadata.json", "log.txt", "per_frame.csv", "trajectory.csv"):
+                self.assertTrue((root / f).exists(), f)
+            for f in ("f_by_group.png", "error_by_rating.png", "trajectory_eps_error.png", "trajectory_3d.png"):
+                self.assertTrue((root / "figures" / f).exists(), f)
+            self.assertFalse((root / "_frames").exists())
+            by = {r["video"]: r for r in results}
+            a = by["IMG_7191.MOV"]
+            self.assertEqual(a["ft"]["f"], r25["IMG_7191.MOV"]["ft"]["f"])                                  # 25's candidate value for the same video (the whole video is used)
+            self.assertAlmostEqual(a["ft"]["boot_log_std"], r25["IMG_7191.MOV"]["ft"]["boot_log_std"], places=12)
+            self.assertEqual(a["rating"], hf.gen_rating(a["motion"]["tilt_duration_s"], a["motion"]["theta_max_deg"], a["ft"]["boot_log_std"], CFG26["rating_v2"]))
+            g5 = by["IMG_7192.MOV"]
+            self.assertEqual(g5["calib_end_s"], 14.0)
+            self.assertLessEqual(g5["motion"]["tilt_duration_s"], 14.0 - g5["motion"]["tilt_start_s"] + 1e-6)         # f uses the first 14 s only
+            self.assertGreater(min(q["time_s"] for q in g5["traj"]["rows"]), 14.0)                                  # the trajectory is the work segment after it
+            self.assertNotEqual(g5["ft"]["f"], r25["IMG_7192.MOV"]["ft"]["f"])
+            self.assertEqual(groups["G5"]["verdict"], "판정 없음 (궤적 분석용)")
+            self.assertEqual(groups["G3"]["verdict"], "영상 없음")
+            self.assertEqual(groups["G2"]["verdict"], "판단 불가")                                                   # one video < 3
+            self.assertEqual(ver["verdict"], "판단 불가")
+            y = run.gen_results_yaml(root, cfg)
+            self.assertEqual(Path(y), d / "r26.yaml")
+            texts = "".join(p.read_text(errors="ignore") for p in list(root.rglob("*")) + [Path(y)] if p.is_file() and p.suffix in (".json", ".yaml", ".md", ".csv", ".txt"))
+            for val in FAKE_TAGS.values():
+                self.assertNotIn(val, texts)
+            for key in ("ISO6709", "com.apple.quicktime", '"make"', '"model"'):
+                self.assertNotIn(key, texts)
+            ref_f = re.compile(r"(?<![\d.])(?:1680|880)(?:\.0+)?(?!\d)(?!\.\d)")
+            self.assertIsNone(ref_f.search(Path(y).read_text()))                                                  # no ref_f comparison in the results yaml
+            self.assertIn("1680", (root / "summary.md").read_text())
 
 
 if __name__ == "__main__":
