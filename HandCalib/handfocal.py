@@ -3868,5 +3868,6 @@ def gen_existing_rows(cfg: dict) -> list:
         th = [r["theta2d_deg"] for r in j23["frames"]]
         tt = [r["time_s"] for r in j23["frames"]]
         rows.append({"video": ex["lens_video"], "source": "22 (0.5x)", "ref_f": float(ex["ref_f_lens"]), "f": s["f"], "at_grid_edge": s["at_grid_edge"], "sigma": j23["factors"]["bootstrap_rel_std"],
-                     "tilt_s": float(max(tt) - 3.0) if tt else 0.0, "theta_max": float(max(th)) if th else None, "sigma_is_rel_std": True})
+                     "tilt_s": float(max(tt) - 3.0) if tt else 0.0, "theta_max": float(max(th)) if th else None, "sigma_is_rel_std": True, "size": j22.get("size"),
+                     "n_frames": j22.get("n_frames"), "duration_s": None if not j22.get("n_frames") else j22["n_frames"] / 15.0})
     return rows

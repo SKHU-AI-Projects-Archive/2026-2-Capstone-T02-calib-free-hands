@@ -2140,6 +2140,33 @@ class GenReports(unittest.TestCase):
         self.assertNotIn("얼굴", rep + summ)
 
 
+    def test_orientation_column_and_the_lens_comparison_with_7184(self):
+        res = [gen_fake("IMG_L.MOV", "G3"), dict(gen_fake("IMG_P.MOV", "G3"), size=[1080, 1920])]
+        for r in res:
+            r["lens"], r["ref_f"] = "0.5x", 880.0
+        ex = [{"video": "IMG_7184.MOV", "source": "22 (0.5x)", "ref_f": 880.0, "f": 987.8, "at_grid_edge": False, "sigma": 0.08, "tilt_s": 10.0, "theta_max": 62.0, "sigma_is_rel_std": True, "size": [1920, 1080],
+               "n_frames": 199, "duration_s": 199 / 15.0, "rating": "사용 불가"}]
+        groups = {g: {"verdict": "영상 없음"} for g in ("G1", "G2", "G4", "G5")}
+        groups["G3"] = {"verdict": "판단 불가", "reason": "영상 2개 < 3개", "n_videos": 2, "n_excluded": 0}
+        with tempfile.TemporaryDirectory() as d:
+            d = Path(d)
+            run.gen_report(d / "report.md", res, ex, {}, CFG26)
+            run.gen_summary(d / "summary.md", res, ex, groups, {"verdict": "판단 불가", "reason": "x", "n_usable": 2, "n_videos": 2}, {}, CFG26)
+            rep, summ = (d / "report.md").read_text(), (d / "summary.md").read_text()
+        self.assertEqual(run.gen_orient([1920, 1080]), "가로")
+        self.assertEqual(run.gen_orient([1080, 1920]), "세로")
+        for text in (rep, summ):
+            rows = [l for l in text.splitlines() if "IMG_P.MOV" in l]
+            self.assertTrue(rows and all("세로" in l for l in rows), text[:200])           # the portrait video says 세로 in every per-video table
+            rows = [l for l in text.splitlines() if "IMG_L.MOV" in l]
+            self.assertTrue(rows and all("가로" in l for l in rows))
+        side = summ.split("### 0.5배")[1].split("## 4.")[0]
+        self.assertIn("IMG_7184.MOV", side)
+        self.assertIn("IMG_L.MOV", side)
+        self.assertIn("IMG_P.MOV", side)
+        self.assertIn("13.3", side)                                                         # the stored length of 7184 (199 frames at 15 fps)
+
+
 @unittest.skipUnless(VID7158.exists() and (ROOT / "runs/25_long_video_check/20261022T042710Z/results.json").exists() and (Path(CFG26["input_dir"]) / "IMG_7191.MOV").exists() and (Path(CFG26["input_dir"]) / "IMG_7192.MOV").exists(),
                      "the input videos IMG_7191 / IMG_7192 and 25's official run are needed")
 class GenEndToEnd(unittest.TestCase):

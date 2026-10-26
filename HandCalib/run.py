@@ -3372,6 +3372,11 @@ GEN_NOTE = ("새 판정 규칙(v2), 일반화 그룹, f 오차가 손 궤적에 
 GEN_GROUP_KO = {"G1": "다른 사람", "G2": "다른 폰", "G3": "다른 렌즈(0.5배)", "G4": "장갑", "G5": "보정 + 작업 구간"}
 
 
+def gen_orient(size) -> str:
+    """'가로' for a processed video wider than tall (or square), '세로' for a portrait one (size = [width, height] after rotation)."""
+    return "-" if not size else ("가로" if size[0] >= size[1] else "세로")
+
+
 def gen_traj_variants(res: dict, cfg: dict, pooled_f: float | None) -> dict:
     """Trajectories (smoothed) of one video for the reference f and every comparison f: {name: {"f", "P" (n, 3)}} and the time vector."""
     tcfg = cfg["trajectory"]
@@ -3594,21 +3599,21 @@ def gen_report(path: Path, results: list, ex_rows: list, traj: dict, cfg: dict):
     L = ["# 실험 26: 판정 v2, 일반화, f 오차의 궤적 영향", "", GEN_NOTE, "",
          f"후보: {cfg['candidate']['detector']} + wrist_mode {cfg['candidate']['wrist_mode']} + {cfg['candidate']['estimator']} (22·25와 같음). 사람은 person_id로만 적고, 폰은 main / teammate로만 적는다.", "",
          "## 1. 영상 목록과 제외", "", f"제외 규칙(실행 전 고정): 유효한 정면 창(1초) 없음, 가장자리 접촉 프레임 > {100 * cfg['exclusion']['edge_rate_max']:.0f}%, 손 검출 실패 프레임 > {100 * cfg['exclusion']['detect_fail_max']:.0f}%.", "",
-         "| 그룹 | 영상 | person_id | 폰 | 렌즈 | 장갑 | 길이(초) | 검출 실패율 | 가장자리 접촉 | 포함 | 이유 |", "|---|---|---|---|---|---|---|---|---|---|---|"]
+         "| 그룹 | 영상 | 방향 | person_id | 폰 | 렌즈 | 장갑 | 길이(초) | 검출 실패율 | 가장자리 접촉 | 포함 | 이유 |", "|---|---|---|---|---|---|---|---|---|---|---|---|"]
     for r in results:
-        L.append(f"| {r['group']} {GEN_GROUP_KO[r['group']]} | {r['video']} | {r['person_id']} | {r['phone']} | {r['lens']} | {'예' if r['glove'] else '아니오'} | {r['duration_s']:.1f} | {100 * (1 - r['detect_rate']):.1f}% | "
+        L.append(f"| {r['group']} {GEN_GROUP_KO[r['group']]} | {r['video']} | {gen_orient(r['size'])} | {r['person_id']} | {r['phone']} | {r['lens']} | {'예' if r['glove'] else '아니오'} | {r['duration_s']:.1f} | {100 * (1 - r['detect_rate']):.1f}% | "
                  f"{100 * r['edge_rate']:.1f}% | {'제외' if r['excluded'] else ('포함' if 'ft' in r else '분석 실패')} | {'; '.join(r['excluded']) or r.get('failed', '-')} |")
     L += ["", "## 2. 영상별 촬영 지표와 신뢰 등급(v2)", "",
           f"등급 규칙: 사용 가능 = 기울기 구간 ≥ {v2['tilt_min_s']:.0f}초, θ2d 최댓값 ≥ {v2['theta_max_min_deg']:.0f}°, 부트스트랩 로그 SD ≤ {v2['usable_log_std_max']}; 참고 = 촬영 조건 둘은 만족하고 로그 SD ≤ {v2['reference_log_std_max']}; 그 외 사용 불가.", "",
-          "| 영상 | 기울기 구간(초) | 기울기 프레임 | θ2d 중앙값 / 90번째 / 최댓값(°) | 정면 창 손 박스/짧은 변 | 가이드 v2 | 전환 시각(초) | 부트스트랩 로그 SD | 등급 |", "|---|---|---|---|---|---|---|---|---|"]
+          "| 영상 | 방향 | 기울기 구간(초) | 기울기 프레임 | θ2d 중앙값 / 90번째 / 최댓값(°) | 정면 창 손 박스/짧은 변 | 가이드 v2 | 전환 시각(초) | 부트스트랩 로그 SD | 등급 |", "|---|---|---|---|---|---|---|---|---|---|"]
     for r in ok:
         m, g = r["motion"], r.get("guide") or {}
-        L.append(f"| {r['video']} | {m['tilt_duration_s']:.1f} | {m['n_tilt_frames']} | {long_fmt(m['theta_median_deg'], 1)} / {long_fmt(m['theta_p90_deg'], 1)} / {long_fmt(m['theta_max_deg'], 1)} | {r['hand_box_short_ratio_front']:.3f} | "
+        L.append(f"| {r['video']} | {gen_orient(r['size'])} | {m['tilt_duration_s']:.1f} | {m['n_tilt_frames']} | {long_fmt(m['theta_median_deg'], 1)} / {long_fmt(m['theta_p90_deg'], 1)} / {long_fmt(m['theta_max_deg'], 1)} | {r['hand_box_short_ratio_front']:.3f} | "
                  f"{('충족' if g.get('guide') else '미충족') if 'guide' in g else '-'}{(': ' + '; '.join(g['reasons'])) if g.get('reasons') else ''} | {long_fmt(g.get('t_transition'), 2)} | {long_fmt(r['ft']['boot_log_std'], 4)} | **{r['rating']}** |")
-    L += ["", "## 3. 초점거리와 불확실성 (값만)", "", "| 영상 | f (px) | f 판정(추정기) | 부트스트랩 로그 SD | 상대 SD(22·25와 같은 지표) |", "|---|---|---|---|---|"]
+    L += ["", "## 3. 초점거리와 불확실성 (값만)", "", "| 영상 | 방향 | f (px) | f 판정(추정기) | 부트스트랩 로그 SD | 상대 SD(22·25와 같은 지표) |", "|---|---|---|---|---|---|"]
     for r in ok:
         f = r["ft"]
-        L.append(f"| {r['video']} | {'값 없음 (' + str(f['side']) + ')' if f['at_grid_edge'] else format(f['f'], '.1f')} | {f['verdict']} | {long_fmt(f['boot_log_std'], 4)} | {long_fmt(f['boot_rel_std'], 4)} |")
+        L.append(f"| {r['video']} | {gen_orient(r['size'])} | {'값 없음 (' + str(f['side']) + ')' if f['at_grid_edge'] else format(f['f'], '.1f')} | {f['verdict']} | {long_fmt(f['boot_log_std'], 4)} | {long_fmt(f['boot_rel_std'], 4)} |")
     L += ["", "## 4. 궤적 지표: f = ref_f × (1+ε)로 바꿨을 때 (기준 궤적 = f가 ref_f일 때)", "",
           f"손 중심 궤적을 {cfg['trajectory']['median_window_s']}초 중앙값 필터로 평활화하고 {cfg['trajectory']['step_s']}초 간격 이동 벡터를 비교했다(기준 이동 {cfg['trajectory']['min_step_mm']:.0f} mm 미만은 제외). "
           "X, Y는 f와 무관하고 Z만 f에 비례하므로 오차는 깊이 이동에서 생긴다.", ""]
@@ -3644,12 +3649,12 @@ def gen_summary(path: Path, results: list, ex_rows: list, groups: dict, ver: dic
         elif d.get("reason"):
             extra = f" — {d['reason']}"
         L.append(f"- **{g} {GEN_GROUP_KO[g]}: {d['verdict']}**{extra}")
-    L += ["", "## 1. 영상별 ref_f 대비 오차", "", "| 영상 | 그룹 | ref_f | f | 오차 | 로그 SD | 2σ 안 | 등급 | 가이드 v2 |", "|---|---|---|---|---|---|---|---|---|"]
+    L += ["", "## 1. 영상별 ref_f 대비 오차", "", "| 영상 | 방향 | 그룹 | ref_f | f | 오차 | 로그 SD | 2σ 안 | 등급 | 가이드 v2 |", "|---|---|---|---|---|---|---|---|---|---|"]
     for r in ok:
         f = r["ft"]
         e = None if f["at_grid_edge"] else f["f"] / r["ref_f"] - 1
         w = None if f["at_grid_edge"] or not f["boot_log_std"] else abs(np.log(f["f"] / r["ref_f"])) <= cfg["verification_v2"]["within_sigma"] * f["boot_log_std"]
-        L.append(f"| {r['video']} | {r['group']} | {r['ref_f']:.0f} | {'값 없음' if f['at_grid_edge'] else format(f['f'], '.1f')} | {pct(e)} | {long_fmt(f['boot_log_std'], 4)} | {'-' if w is None else ('예' if w else '아니오')} | {r['rating']} | "
+        L.append(f"| {r['video']} | {gen_orient(r['size'])} | {r['group']} | {r['ref_f']:.0f} | {'값 없음' if f['at_grid_edge'] else format(f['f'], '.1f')} | {pct(e)} | {long_fmt(f['boot_log_std'], 4)} | {'-' if w is None else ('예' if w else '아니오')} | {r['rating']} | "
                  f"{('충족' if (r.get('guide') or {}).get('guide') else '미충족') if 'guide' in (r.get('guide') or {}) else '-'} |")
     L += ["", "## 2. 그룹 합동 추정 (근거 표)", "", "| 그룹 | 영상 | 제외 | 합동 f | 95% 구간 | ref_f 대비 | 영상 중 ±15% 안 | 검출 실패율(영상별) | 판정 |", "|---|---|---|---|---|---|---|---|---|"]
     for g, d in groups.items():
@@ -3673,11 +3678,16 @@ def gen_summary(path: Path, results: list, ex_rows: list, groups: dict, ver: dic
     lens_new = [r for r in ok if r["lens"] == "0.5x"]
     if lens_old and lens_new:
         o = lens_old[0]
-        L += ["", f"### 0.5배: {o['video']}(실험 22, 약 15초)와 이번 영상", "", "| 영상 | 길이/기울기 구간(초) | f | ref_f 대비 | 로그 SD | θ2d 최댓값(°) | 등급 |", "|---|---|---|---|---|---|---|",
-              f"| {o['video']} | 15 / {o['tilt_s']:.1f} | {format(o['f'], '.1f')} | {pct(o['f'] / o['ref_f'] - 1)} | {long_fmt(o['sigma'], 4)} (상대 SD) | {long_fmt(o['theta_max'], 0)} | {o['rating']} |"]
+        L += ["", f"### 0.5배(약 30 cm): 실험 22의 {o['video']}와 이번 G3 영상을 나란히", "",
+              "| 영상 | 출처 | 방향 | 길이 / 기울기 구간(초) | f | ref_f 대비 | 로그 SD | θ2d 최댓값(°) | 등급 |", "|---|---|---|---|---|---|---|---|---|",
+              f"| {o['video']} | 실험 22 | {gen_orient(o.get('size'))} | {long_fmt(o.get('duration_s'), 1)} / {o['tilt_s']:.1f} | {format(o['f'], '.1f')} | {pct(o['f'] / o['ref_f'] - 1)} | {long_fmt(o['sigma'], 4)} (상대 SD) | {long_fmt(o['theta_max'], 0)} | {o['rating']} |"]
         for r in lens_new:
             f = r["ft"]
-            L.append(f"| {r['video']} | {r['duration_s']:.1f} / {r['motion']['tilt_duration_s']:.1f} | {'값 없음' if f['at_grid_edge'] else format(f['f'], '.1f')} | {pct(None if f['at_grid_edge'] else f['f'] / r['ref_f'] - 1)} | {long_fmt(f['boot_log_std'], 4)} | {long_fmt(r['motion']['theta_max_deg'], 0)} | {r['rating']} |")
+            L.append(f"| {r['video']} | 실험 26 (G3) | {gen_orient(r['size'])} | {r['duration_s']:.1f} / {r['motion']['tilt_duration_s']:.1f} | {'값 없음' if f['at_grid_edge'] else format(f['f'], '.1f')} | "
+                     f"{pct(None if f['at_grid_edge'] else f['f'] / r['ref_f'] - 1)} | {long_fmt(f['boot_log_std'], 4)} | {long_fmt(r['motion']['theta_max_deg'], 0)} | {r['rating']} |")
+        vals = [r["ft"]["f"] for r in lens_new if not r["ft"]["at_grid_edge"]]
+        if vals:
+            L += ["", f"- 이번 G3 영상 {len(vals)}개의 f 중앙값 {np.median(vals):.1f} px, 7184 {o['f']:.1f} px. 길이는 7184가 짧다(처리 프레임 {o.get('n_frames', '?')}장, 15 fps 기준 약 {long_fmt(o.get('duration_s'), 1)}초)."]
     L += ["", "## 4. 궤적 영향: 추정 f와 그룹 합동 f", "", "| 영상 | 비교 | 사용한 f (px) | 이동량 오차 중앙값 / 90번째(%) | 방향 오차 중앙값 / 90번째(°) | 깊이 이동 오차 중앙값 / 90번째(mm) |", "|---|---|---|---|---|---|"]
     tol = cfg["trajectory"]["tolerance"]
     for vid, tj in traj.items():
