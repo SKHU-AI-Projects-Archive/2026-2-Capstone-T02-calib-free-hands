@@ -1,0 +1,127 @@
+experiment: 29_wide_60cm
+run: runs/29_wide_60cm/20261026T053915Z
+code_commit: 708d05b
+git_dirty_at_run: false
+note: 0.5배 렌즈로 손을 약 60 cm에 두고 찍은 영상에서 "방법이 늘 약 62 cm로 읽는다"(추정 f = ref_f × 62.5 ÷ 거리)는
+  가설을 확인한 실험이다. 후보 설정(mediapipe_hands + 손목 제외 + fixed_template)과 판정 범위는 실행 전에 고정했고
+  바꾸지 않았다. 기준 f(ref_f)와의 비교와 암시 거리는 summary.md에만 있다.
+candidate:
+  detector: mediapipe_hands
+  wrist_mode: exclude
+  estimator: fixed_template
+  front_window: 17's (phase_mode nominal, tilt phase from 3.0 s)
+videos:
+  IMG_7231.MOV:
+    group: G8
+    lens: 0.5x
+    distance_cm: 60.0
+    hand: right
+    size:
+    - 1080
+    - 1920
+    duration_s: 23.62
+    detect_fail_rate: 0.0
+    edge_rate: 0.0
+    excluded: null
+    f_px: 1112.7
+    status: value
+    f_verdict_estimator: REJECT
+    rating_v2: 사용 불가
+    boot_log_std: 0.09618
+    front_jitter_pct: 0.119
+    tilt_duration_s: 20.62
+    n_tilt_frames: 310
+    theta_median_deg: 29.9
+    theta_max_deg: 50.2
+    hand_box_short_ratio_front: 0.3267
+    guide_v2:
+      guide: true
+      reasons: []
+      t_transition: 4.0040000000000004
+    principal_point_px:
+    - 540.0
+    - 960.0
+    anycalib_median_px:
+      pinhole: 1329.8
+      gen: 1343.4
+  IMG_7232.MOV:
+    group: G8
+    lens: 0.5x
+    distance_cm: 60.0
+    hand: right
+    size:
+    - 1080
+    - 1920
+    duration_s: 24.36
+    detect_fail_rate: 0.0082
+    edge_rate: 0.0
+    excluded: null
+    f_px: 1016.9
+    status: value
+    f_verdict_estimator: REJECT
+    rating_v2: 사용 가능
+    boot_log_std: 0.06691
+    front_jitter_pct: 0.152
+    tilt_duration_s: 21.36
+    n_tilt_frames: 318
+    theta_median_deg: 34.5
+    theta_max_deg: 57.6
+    hand_box_short_ratio_front: 0.321
+    guide_v2:
+      guide: true
+      reasons: []
+      t_transition: 4.0040000000000004
+    principal_point_px:
+    - 540.0
+    - 960.0
+    anycalib_median_px:
+      pinhole: 1301.1
+      gen: 1292.3
+  IMG_7233.MOV:
+    group: G8
+    lens: 0.5x
+    distance_cm: 60.0
+    hand: right
+    size:
+    - 1080
+    - 1920
+    duration_s: 24.22
+    detect_fail_rate: 0.0
+    edge_rate: 0.0
+    excluded: null
+    f_px: 1143.3
+    status: value
+    f_verdict_estimator: REJECT
+    rating_v2: 사용 가능
+    boot_log_std: 0.08916
+    front_jitter_pct: 0.205
+    tilt_duration_s: 21.22
+    n_tilt_frames: 319
+    theta_median_deg: 32.2
+    theta_max_deg: 70.7
+    hand_box_short_ratio_front: 0.3782
+    guide_v2:
+      guide: true
+      reasons: []
+      t_transition: 4.2042
+    principal_point_px:
+    - 540.0
+    - 960.0
+    anycalib_median_px:
+      pinhole: 1332.5
+      gen: 1417.4
+hypothesis:
+  verdict: 판단 보류
+  reason: null
+  predicted_f_px: 917.0
+  support_range_px:
+  - 825.3
+  - 1008.7
+  refute_above_px: 1146.2
+  refute_below_px: 733.6
+  n_videos: 3
+  n_excluded: 0
+  pooled_f_px: 1107.5
+  interval_95_px:
+  - 1016.9
+  - 1143.3
