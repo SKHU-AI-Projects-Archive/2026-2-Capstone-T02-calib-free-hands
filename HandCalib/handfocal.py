@@ -3871,3 +3871,192 @@ def gen_existing_rows(cfg: dict) -> list:
                      "tilt_s": float(max(tt) - 3.0) if tt else 0.0, "theta_max": float(max(th)) if th else None, "sigma_is_rel_std": True, "size": j22.get("size"),
                      "n_frames": j22.get("n_frames"), "duration_s": None if not j22.get("n_frames") else j22["n_frames"] / 15.0})
     return rows
+
+
+# ====================================================================================================
+# ext  (experiment 27: main-camera 1x extension, G6 distance and G7 left hand; new section, earlier functions are used unchanged)
+# Videos carry group (G6 distance 50 / 60 / 75 cm, right hand; G7 left hand), distance_cm, hand and ref_f. Candidate and per-video processing are 26's (gen_video).
+# G6 verdict: pooled f per distance (cost curves summed, video-level bootstrap interval), all within +-pooled_tol of ref_f and max / min <= ratio_max. G7: 26's group verdict.
+# ====================================================================================================
+
+EXT_GROUPS = ("G6", "G7")
+EXT_REQUIRED = ("file", "group", "distance_cm", "hand", "ref_f")
+
+
+def ext_check_videos(entries) -> list:
+    """Validates the videos list of the yaml (every entry needs file, group G6 / G7, distance_cm, hand left / right, ref_f). Stops (SystemExit) with the reason otherwise."""
+    if not entries:
+        raise SystemExit("videos is empty: give the video entries in the yaml (file, group, distance_cm, hand, ref_f)")
+    for i, e in enumerate(entries):
+        miss = [k for k in EXT_REQUIRED if e.get(k) is None]
+        if miss:
+            raise SystemExit(f"videos[{i}] ({e.get('file')}): missing {miss}")
+        if e["group"] not in EXT_GROUPS:
+            raise SystemExit(f"videos[{i}] ({e['file']}): group must be one of {EXT_GROUPS}")
+        if e["hand"] not in ("left", "right"):
+            raise SystemExit(f"videos[{i}] ({e['file']}): hand must be left or right")
+        if float(e["distance_cm"]) <= 0 or float(e["ref_f"]) <= 0:
+            raise SystemExit(f"videos[{i}] ({e['file']}): distance_cm and ref_f must be positive")
+    return list(entries)
+
+
+def ext_video(args) -> dict:
+    """One video of experiment 27: 26's gen_video unchanged (the session block of the yaml supplies phone / lens / glove / person_id), plus distance_cm and hand.
+    args = (entry, prep, npz, pcfg, c); c needs candidate, exclusion, detector_settings, guide (trajectory is not used)."""
+    entry, prep, npz, pcfg, c = args[:5]
+    ses = c.get("session") or {}
+    e2 = {"person_id": ses.get("person_id"), "phone": ses.get("phone", "main"), "lens": ses.get("lens", "1x"), "glove": bool(ses.get("glove", False)), **entry}
+    res = gen_video((e2, prep, npz, pcfg, {**c, "trajectory": c.get("trajectory") or {}}))
+    res.update({"distance_cm": float(entry["distance_cm"]), "hand": entry["hand"]})
+    if "ft" in res:
+        cand = c["candidate"]
+        pc = copy.deepcopy(pcfg)
+        pc["tracking"]["conf_min"] = float(c["detector_settings"][cand["detector"]]["conf_min"])
+        times = np.array([r["time_s"] for r in prep["frames"]])
+        W, H = prep["size"]
+        tr = track(load_detections(Path(npz)), times, (W, H), pc["tracking"], front_start_s=float(pc["phases"]["front_skip_s"]))
+        cfg_ex = pseg_wrist_cfg(pc) if cand["wrist_mode"] == "exclude" else pc
+        a = analyze(tr["kp"], tr["mask"], tr["present"], tr["box"], tr["cls"], times, (W, H), cfg_ex, tilt_start=None, methods_full=(), seed=int(pc["experiment"]["seed"]))
+        res["dynamics"] = ext_motion(tr["kp"], tr["mask"], tr["present"], tr["box"], times, a, cfg_ex, (W, H))
+    return res
+
+
+def ext_motion(kp, mask, present, box, times, a: dict, cfg_use: dict, size_wh) -> dict:
+    """Motion indicators of the tilt-phase frames of one video, defined as in experiment 23 (ferr_video): tilt axis coverage (analyze's 30-degree sectors with >= min_count frames),
+    keypoint speed (pseg_series, hand-box lengths per second), bone-length ratio change (percent) and finger-spread change (degrees against the front window's median) of ferr_shape.
+    Median and 90th percentile of every per-frame series. a = analyze() result of the candidate (the template and roles it used)."""
+    pb, ids = ferr_problem(a, kp, mask, box, cfg_use, size_wh)
+    T = np.array(a["template"])
+    keep = list(pb.keep)
+    role = a["role"]
+    tilt_ids = [i for i in keep if role[i] == "tilt"]
+    front_ids = [i for i in keep if role[i] == "front"]
+    _, v_series = pseg_series(kp, mask, present, box, times, T, ids)
+
+    def shape_of(i):
+        if mask[i][ids].sum() < len(ids):
+            return {"bone_ratio": float("nan"), "spread_deg": float("nan")}
+        return ferr_shape(T, ids, kp[i][ids], kp[i][0] if mask[i][0] else None)
+    ref_spread = float(np.nanmedian([shape_of(i)["spread_deg"] for i in front_ids])) if front_ids else float("nan")
+    sh = [shape_of(i) for i in tilt_ids]
+    series = {"speed": np.array([v_series[i] for i in tilt_ids], float), "bone_ratio_pct": np.array([100.0 * s["bone_ratio"] for s in sh], float),
+              "spread_change_deg": np.array([abs(s["spread_deg"] - ref_spread) for s in sh], float)}
+    cov = a["axis_coverage"]
+    out = {"n_tilt_frames": len(tilt_ids), "axis_bins": int(cov["bins"]), "axis_counts": [int(x) for x in cov["counts"]], "axis_dominant": cov["dominant"]}
+    for k, x in series.items():
+        x = x[np.isfinite(x)]
+        out[k] = {"median": float(np.median(x)) if len(x) else None, "p90": float(np.percentile(x, 90)) if len(x) else None, "n": int(len(x))}
+    return out
+
+
+def ext_rounds(entries) -> dict:
+    """Shooting round of every G6 video: the n-th video (in file order) at its distance is round n. {file: n}."""
+    seen, out = {}, {}
+    for e in sorted((e for e in entries if e["group"] == "G6"), key=lambda e: e["file"]):
+        d = float(e["distance_cm"])
+        seen[d] = seen.get(d, 0) + 1
+        out[e["file"]] = seen[d]
+    return out
+
+
+def ext_ranks(x) -> np.ndarray:
+    """Ranks (0-based, ties share their mean rank)."""
+    x = np.asarray(x, float)
+    order = np.argsort(x, kind="stable")
+    r = np.empty(len(x))
+    r[order] = np.arange(len(x))
+    for v in np.unique(x):
+        m = x == v
+        r[m] = r[m].mean()
+    return r
+
+
+def ext_spearman(x, y):
+    """Spearman rank correlation, None with fewer than 3 points or a constant input."""
+    x, y = np.asarray(x, float), np.asarray(y, float)
+    if len(x) < 3:
+        return None
+    rx, ry = ext_ranks(x), ext_ranks(y)
+    if rx.std() == 0 or ry.std() == 0:
+        return None
+    return float(np.corrcoef(rx, ry)[0, 1])
+
+
+def ext_loglog_slope(d, f):
+    """Slope of log f on log distance (least squares), None with fewer than 2 distinct distances."""
+    d, f = np.asarray(d, float), np.asarray(f, float)
+    if len(d) < 2 or len(np.unique(d)) < 2:
+        return None
+    return float(np.polyfit(np.log(d), np.log(f), 1)[0])
+
+
+def ext_pooled(curves, grid, gcfg: dict) -> dict:
+    """Pooled estimate of a set of cost curves with the video-level bootstrap interval (empty set: n_videos 0 only)."""
+    out = {"n_videos": len(curves)}
+    if not len(curves):
+        return out
+    est = long_pooled_estimate(curves, grid)
+    b = long_pooled_bootstrap(curves, grid, int(gcfg["bootstrap_n"]), int(gcfg["bootstrap_seed"]))
+    return {**out, "pooled_f": est["f"], "at_grid_edge": est["at_grid_edge"], "side": est["side"], "interval_95": [float(np.quantile(b["f"], 0.025)), float(np.quantile(b["f"], 0.975))]}
+
+
+def ext_distance_verdict(by_distance: dict, grid, ref_f: float, dcfg: dict) -> dict:
+    """G6 verdict. by_distance = {distance_cm: {"curves": [fixed_template cost curves of the included videos], "n_total": videos of that distance}}.
+    pass: the pooled f of every distance within +-pooled_tol of ref_f and max / min of the pooled f <= ratio_max; fail otherwise; not judged when a distance has fewer than
+    min_videos_per_distance included videos; no videos: 영상 없음."""
+    out = {"ref_f": float(ref_f), "distances": {}}
+    if not by_distance:
+        return {**out, "verdict": "영상 없음"}
+    for d in sorted(by_distance):
+        x = by_distance[d]
+        row = ext_pooled(x["curves"], grid, dcfg)
+        row.update({"n_total": int(x["n_total"]), "n_excluded": int(x["n_total"]) - len(x["curves"])})
+        if "pooled_f" in row:
+            row["pooled_within_tol"] = bool(not row["at_grid_edge"] and abs(row["pooled_f"] / ref_f - 1.0) <= float(dcfg["pooled_tol"]))
+        out["distances"][d] = row
+    short = {d: r["n_videos"] for d, r in out["distances"].items() if r["n_videos"] < int(dcfg["min_videos_per_distance"])}
+    if short:
+        return {**out, "verdict": "판단 불가", "reason": ", ".join(f"{d:g} cm 영상 {n}개" for d, n in short.items()) + f" < {int(dcfg['min_videos_per_distance'])}개"}
+    fs = [r["pooled_f"] for r in out["distances"].values() if not r["at_grid_edge"]]
+    out["max_over_min"] = float(max(fs) / min(fs)) if len(fs) == len(out["distances"]) else None
+    ok = all(r["pooled_within_tol"] for r in out["distances"].values()) and out["max_over_min"] is not None and out["max_over_min"] <= float(dcfg["ratio_max"]) + 1e-9
+    return {**out, "verdict": "통과" if ok else "실패"}
+
+
+def ext_distance_records(results: list, entries: list, grid, dcfg: dict) -> dict:
+    """Record-only quantities of G6 (no verdict): slope of log f on log distance and Spearman rank correlation (video f and pooled f per distance), f by shooting round (pooled over the
+    round's videos and the single f values)."""
+    g6 = [r for r in results if r["group"] == "G6" and "ft" in r and not r["ft"]["at_grid_edge"]]
+    rounds = ext_rounds(entries)
+    d_all, f_all = [r["distance_cm"] for r in g6], [r["ft"]["f"] for r in g6]
+    out = {"n_points": len(g6), "slope_video": ext_loglog_slope(d_all, f_all), "spearman_video": ext_spearman(d_all, f_all), "rounds": {}}
+    pooled = {}
+    for d in sorted({r["distance_cm"] for r in g6}):
+        c = [r["curve"]["cost"] for r in g6 if r["distance_cm"] == d]
+        est = long_pooled_estimate(c, grid)
+        if not est["at_grid_edge"]:
+            pooled[d] = est["f"]
+    out["pooled_by_distance"] = pooled
+    out["slope_pooled"] = ext_loglog_slope(list(pooled), list(pooled.values()))
+    out["spearman_pooled"] = ext_spearman(list(pooled), list(pooled.values()))
+    for k in sorted(set(rounds.values())):
+        rv = [r for r in results if r["group"] == "G6" and rounds.get(r["video"]) == k and "ft" in r]
+        est = long_pooled_estimate([r["curve"]["cost"] for r in rv], grid) if rv else None
+        out["rounds"][k] = {"videos": [r["video"] for r in rv], "n_videos": len(rv), "pooled_f": None if est is None or est["at_grid_edge"] else est["f"],
+                            "f_videos": [None if r["ft"]["at_grid_edge"] else r["ft"]["f"] for r in rv]}
+    return out
+
+
+def ext_hand_compare(results: list, grid, gcfg: dict, right_distance_cm: float) -> dict:
+    """G7 left-hand videos beside the G6 right-hand videos of the same distance (record only): pooled f with interval, the single f values and the ratio of the pooled f (left / right)."""
+    left = [r for r in results if r["group"] == "G7" and "ft" in r]
+    right = [r for r in results if r["group"] == "G6" and "ft" in r and abs(r["distance_cm"] - float(right_distance_cm)) < 1e-9]
+    out = {}
+    for name, rs in (("left", left), ("right", right)):
+        d = ext_pooled([r["curve"]["cost"] for r in rs], grid, gcfg)
+        d["videos"] = [r["video"] for r in rs]
+        d["f_videos"] = [None if r["ft"]["at_grid_edge"] else r["ft"]["f"] for r in rs]
+        out[name] = d
+    a, b = out["left"], out["right"]
+    out["ratio_left_over_right"] = float(a["pooled_f"] / b["pooled_f"]) if "pooled_f" in a and "pooled_f" in b and not a["at_grid_edge"] and not b["at_grid_edge"] else None
+    return out

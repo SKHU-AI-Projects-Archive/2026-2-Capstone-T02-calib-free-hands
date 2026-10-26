@@ -33,6 +33,7 @@ CFG22 = yaml.safe_load((ROOT / "configs/22_f_response.yaml").read_text())
 CFG23 = yaml.safe_load((ROOT / "configs/23_error_factors.yaml").read_text())
 CFG25 = yaml.safe_load((ROOT / "configs/25_long_video_check.yaml").read_text())
 CFG26 = yaml.safe_load((ROOT / "configs/26_generalization.yaml").read_text())
+CFG27 = yaml.safe_load((ROOT / "configs/27_main_camera_extension.yaml").read_text())
 PIPE = CFG17["pipeline"]                           # the 14 pipeline settings (identical in 16, 17 and 18)
 SYN = {"f_px": 1650, "image": [1920, 1080], "distance_mm": 350, "front_frames": 10, "tilt_frames": 40}     # 14's synthetic camera
 BASE_COND = {"name": "base", "delta_deg": 0, "noise": {"px": 1.0}, "heavy_tail": False, "tilt_range_deg": [25, 50], "arch_mm": 0,
@@ -2211,6 +2212,248 @@ class GenEndToEnd(unittest.TestCase):
             ref_f = re.compile(r"(?<![\d.])(?:1680|880)(?:\.0+)?(?!\d)(?!\.\d)")
             self.assertIsNone(ref_f.search(Path(y).read_text()))                                                  # no ref_f comparison in the results yaml
             self.assertIn("1680", (root / "summary.md").read_text())
+
+
+# ====================================================================================================
+# 27: main-camera extension (G6 distance, G7 left hand)
+# ====================================================================================================
+
+GRID27 = np.exp(np.linspace(np.log(0.35 * 1920), np.log(1.6 * 1920), 241))
+
+
+def curve27(f0, scale=1.0):
+    """A cost curve with its minimum at f0 (parabola in log f)."""
+    return scale * (np.log(GRID27) - np.log(f0)) ** 2
+
+
+def by_distance27(spec):
+    """spec = {distance: [f0 of the included videos]} -> the by_distance input of ext_distance_verdict (n_total = the included videos unless given as (f0s, n_total))."""
+    out = {}
+    for d, v in spec.items():
+        f0s, n_total = (v, len(v)) if isinstance(v, list) else v
+        out[d] = {"curves": [curve27(f) for f in f0s], "n_total": n_total}
+    return out
+
+
+class ExtDistanceVerdict(unittest.TestCase):
+    D = CFG27["distance"]
+
+    def test_pass_fail_and_not_judged_on_synthetic_input(self):
+        ok = hf.ext_distance_verdict(by_distance27({50: [1700, 1720], 60: [1680, 1690], 75: [1650, 1660]}), GRID27, 1680.0, self.D)
+        self.assertEqual(ok["verdict"], "통과")
+        self.assertLessEqual(ok["max_over_min"], 1.15)
+        far = hf.ext_distance_verdict(by_distance27({50: [1700, 1720], 60: [1680, 1690], 75: [1450, 1450]}), GRID27, 1680.0, self.D)           # 75 cm pooled f 13.7% below ref_f
+        self.assertEqual(far["verdict"], "실패")
+        self.assertFalse(far["distances"][75.0 if 75.0 in far["distances"] else 75]["pooled_within_tol"])
+        spread = hf.ext_distance_verdict(by_distance27({50: [1530, 1530], 60: [1680, 1680], 75: [1830, 1830]}), GRID27, 1680.0, self.D)           # each within +-10%, max / min 1.196 > 1.15
+        self.assertEqual(spread["verdict"], "실패")
+        self.assertTrue(all(r["pooled_within_tol"] for r in spread["distances"].values()))
+        self.assertGreater(spread["max_over_min"], 1.15)
+        few = hf.ext_distance_verdict(by_distance27({50: [1700, 1720], 60: [1680], 75: ([1650, 1660], 3)}), GRID27, 1680.0, self.D)              # 60 cm has one included video
+        self.assertEqual(few["verdict"], "판단 불가")
+        self.assertIn("60", few["reason"])
+        gone = hf.ext_distance_verdict(by_distance27({50: [1700, 1720], 60: ([], 3), 75: [1650, 1660]}), GRID27, 1680.0, self.D)                # every 60 cm video excluded
+        self.assertEqual(gone["verdict"], "판단 불가")
+        self.assertEqual(gone["distances"][60]["n_excluded"], 3)
+        self.assertEqual(hf.ext_distance_verdict({}, GRID27, 1680.0, self.D)["verdict"], "영상 없음")
+
+    def test_thresholds_come_from_the_yaml(self):
+        spec = by_distance27({50: [1530, 1530], 60: [1680, 1680], 75: [1830, 1830]})
+        loose = hf.ext_distance_verdict(spec, GRID27, 1680.0, dict(self.D, ratio_max=1.25))
+        self.assertEqual(loose["verdict"], "통과")
+        tight = hf.ext_distance_verdict(by_distance27({50: [1700, 1700], 60: [1680, 1680], 75: [1650, 1650]}), GRID27, 1680.0, dict(self.D, pooled_tol=0.01))
+        self.assertEqual(tight["verdict"], "실패")
+        self.assertEqual(hf.ext_distance_verdict(by_distance27({50: [1700, 1700], 60: [1680, 1690, 1670], 75: [1650, 1650]}), GRID27, 1680.0, dict(self.D, min_videos_per_distance=3))["verdict"], "판단 불가")
+
+    def test_pooled_estimate_of_a_distance_is_the_sum_of_its_cost_curves(self):
+        curves = [curve27(1600), curve27(1700, 2.0), curve27(1750, 0.5)]
+        r = hf.ext_distance_verdict({50: {"curves": curves, "n_total": 3}, 60: {"curves": curves[:2], "n_total": 2}, 75: {"curves": curves[1:], "n_total": 2}}, GRID27, 1680.0, self.D)
+        ref = hf.long_pooled_estimate(np.sum(curves, axis=0)[None, :], GRID27)
+        self.assertEqual(r["distances"][50]["pooled_f"], ref["f"])
+        self.assertEqual(r["distances"][60]["pooled_f"], hf.long_pooled_estimate(np.sum(curves[:2], axis=0)[None, :], GRID27)["f"])
+        b = hf.long_pooled_bootstrap(np.asarray(curves), GRID27, int(self.D["bootstrap_n"]), int(self.D["bootstrap_seed"]))
+        self.assertAlmostEqual(r["distances"][50]["interval_95"][0], float(np.quantile(b["f"], 0.025)), places=9)
+
+    def test_records_slope_rank_correlation_and_rounds(self):
+        def vid(name, d, f0, rnd):
+            return {"video": name, "group": "G6", "distance_cm": float(d), "round": rnd, "ft": {"f": f0, "at_grid_edge": False}, "curve": {"cost": curve27(f0).tolist()}}
+        res = [vid("IMG_1", 50, 1500, 1), vid("IMG_2", 60, 1600, 1), vid("IMG_3", 75, 1800, 1), vid("IMG_4", 50, 1520, 2), vid("IMG_5", 60, 1620, 2), vid("IMG_6", 75, 1830, 2)]
+        entries = [{"file": r["video"], "group": "G6", "distance_cm": r["distance_cm"]} for r in res]
+        self.assertEqual(hf.ext_rounds(entries), {"IMG_1": 1, "IMG_2": 1, "IMG_3": 1, "IMG_4": 2, "IMG_5": 2, "IMG_6": 2})
+        rec = hf.ext_distance_records(res, entries, GRID27, self.D)
+        self.assertGreater(rec["slope_video"], 0)                                                          # f grows with distance in this input
+        rx, ry = np.array([0.5, 2.5, 4.5, 0.5, 2.5, 4.5]), np.array([0.0, 2.0, 4.0, 1.0, 3.0, 5.0])                    # mean ranks of the tied distances, ranks of f
+        self.assertAlmostEqual(rec["spearman_video"], float(np.corrcoef(rx, ry)[0, 1]))
+        self.assertEqual(rec["rounds"][1]["videos"], ["IMG_1", "IMG_2", "IMG_3"])
+        self.assertAlmostEqual(rec["rounds"][2]["pooled_f"], hf.long_pooled_estimate(np.array([curve27(1520), curve27(1620), curve27(1830)]), GRID27)["f"])
+        self.assertAlmostEqual(hf.ext_spearman([1, 2, 3, 4], [4, 3, 2, 1]), -1.0)
+        self.assertIsNone(hf.ext_spearman([1, 2], [1, 2]))
+        self.assertIsNone(hf.ext_loglog_slope([50, 50], [1, 2]))
+        self.assertAlmostEqual(hf.ext_loglog_slope([50, 100], [100, 200]), 1.0)
+
+    def test_entry_check_and_hand_compare(self):
+        good = [{"file": "a.MOV", "group": "G6", "distance_cm": 50, "hand": "right", "ref_f": 1680}]
+        self.assertEqual(hf.ext_check_videos(good), good)
+        for bad in ({"hand": "both"}, {"group": "G3"}, {"distance_cm": 0}, {"ref_f": None}):
+            with self.assertRaises(SystemExit):
+                hf.ext_check_videos([dict(good[0], **bad)])
+        with self.assertRaises(SystemExit):
+            hf.ext_check_videos([])
+        res = [{"video": "R1", "group": "G6", "distance_cm": 60.0, "ft": {"f": 1700.0, "at_grid_edge": False}, "curve": {"cost": curve27(1700).tolist()}},
+               {"video": "R2", "group": "G6", "distance_cm": 50.0, "ft": {"f": 1500.0, "at_grid_edge": False}, "curve": {"cost": curve27(1500).tolist()}},
+               {"video": "L1", "group": "G7", "distance_cm": 60.0, "ft": {"f": 1800.0, "at_grid_edge": False}, "curve": {"cost": curve27(1800).tolist()}}]
+        h = hf.ext_hand_compare(res, GRID27, CFG27["generalization"], 60.0)
+        self.assertEqual(h["right"]["videos"], ["R1"])                                                      # only the 60 cm right-hand videos
+        self.assertAlmostEqual(h["ratio_left_over_right"], h["left"]["pooled_f"] / h["right"]["pooled_f"])
+
+
+def mirror27(g, W):
+    """The same synthetic hand seen as a left hand: image x -> W - x, handedness 0."""
+    m = copy.deepcopy(g)
+    m["kp"][..., 0] = W - g["kp"][..., 0]
+    m["box"][:, [0, 2]] = W - g["box"][:, [2, 0]]
+    m["cls"] = np.zeros_like(g["cls"])
+    return m
+
+
+class ExtLeftHand(unittest.TestCase):
+    """The pipeline treats a left hand like a right hand: the 21 joints keep MediaPipe's order for both hands and the template is built from the video's own front window,
+    so the mirrored image of a hand gives the same f, the same wrist-excluded estimate and the same motion indicators."""
+
+    def test_mirrored_hand_gives_the_same_f_and_the_wrist_is_still_excluded(self):
+        ce = hf.pseg_wrist_cfg(PIPE)
+        W = SYN["image"][0]
+        for seed in (0, 1):
+            g = synth_wrist(seed=seed, tilt_frames=60)
+            m = mirror27(g, W)
+            ra = analyze_synth(g, methods_full=("fixed_template",), cfg=ce)
+            rb = analyze_synth(m, methods_full=("fixed_template",), cfg=ce)
+            fa, fb = ra["solutions"]["fixed_template"]["f"], rb["solutions"]["fixed_template"]["f"]
+            self.assertLess(abs(fb / fa - 1.0), 1e-6, (seed, fa, fb))
+            self.assertEqual(ra["solutions"]["fixed_template"]["f"] > 0, True)
+            self.assertAlmostEqual(ra["per_method"]["fixed_template"]["bootstrap"]["rel_std"], rb["per_method"]["fixed_template"]["bootstrap"]["rel_std"], places=6)
+        garbage = {}
+        for name, gx in (("right", synth_wrist((50.0, 60.0))), ("left", mirror27(synth_wrist((50.0, 60.0)), W))):
+            other = synth_wrist((1700.0, 900.0))
+            other = other if name == "right" else mirror27(other, W)
+            garbage[name] = (analyze_synth(gx, methods_full=("fixed_template",), cfg=ce), analyze_synth(other, methods_full=("fixed_template",), cfg=ce))
+        for name, (x, y) in garbage.items():
+            self.assertEqual(x["solutions"]["fixed_template"]["f"], y["solutions"]["fixed_template"]["f"], name)                                  # the wrist point never enters, left or right
+            self.assertEqual(x["template"], y["template"], name)
+
+    def test_motion_indicators_are_the_same_for_the_mirrored_hand(self):
+        ce = hf.pseg_wrist_cfg(PIPE)
+        g = synth_wrist(seed=2, tilt_frames=60)
+        m = mirror27(g, SYN["image"][0])
+        out = []
+        for x in (g, m):
+            a = analyze_synth(x, methods_full=(), cfg=ce)
+            out.append(hf.ext_motion(x["kp"], x["mask"], x["present"], x["box"], x["times"], a, ce, x["size"]))
+        self.assertGreater(out[0]["n_tilt_frames"], 30)
+        self.assertEqual(out[0]["n_tilt_frames"], out[1]["n_tilt_frames"])
+        self.assertEqual(out[0]["axis_bins"], out[1]["axis_bins"])
+        for k in ("speed", "bone_ratio_pct", "spread_change_deg"):
+            for q in ("median", "p90"):
+                self.assertAlmostEqual(out[0][k][q], out[1][k][q], places=5, msg=(k, q))
+
+
+def ext_fake(video, group, distance, hand, rnd, f=1700.0, sigma=0.08):
+    r = gen_fake(video, group)
+    r.update({"distance_cm": float(distance), "hand": hand, "round": rnd, "person_id": None, "ref_f": 1680.0})
+    r["ft"]["f"], r["ft"]["boot_log_std"] = f, sigma
+    r["dynamics"] = {"n_tilt_frames": 300, "axis_bins": 5, "axis_counts": [3, 5, 9, 12, 4, 2], "axis_dominant": None, "speed": {"median": 0.8, "p90": 1.9, "n": 300},
+                     "bone_ratio_pct": {"median": 3.1, "p90": 6.0, "n": 300}, "spread_change_deg": {"median": 4.2, "p90": 9.0, "n": 300}}
+    r.pop("traj", None)
+    return r
+
+
+class ExtReports(unittest.TestCase):
+    def _run(self, d, results, groups, ver, hand, rec, cfg=CFG27):
+        run.ext_report(d / "report.md", results, groups, rec, hand, cfg)
+        run.ext_summary(d / "summary.md", results, groups, ver, rec, hand, [], cfg)
+        return (d / "report.md").read_text(), (d / "summary.md").read_text()
+
+    def test_verdicts_on_top_dynamics_table_and_the_photographer_note(self):
+        res = [ext_fake("IMG_7217.MOV", "G6", 60, "right", 1), ext_fake("IMG_7220.MOV", "G6", 60, "right", 2), ext_fake("IMG_7223.MOV", "G6", 60, "right", 3),
+               ext_fake("IMG_7225.MOV", "G7", 60, "left", None, f=1750.0), ext_fake("IMG_7226.MOV", "G7", 60, "left", None, f=1760.0), ext_fake("IMG_7227.MOV", "G7", 60, "left", None, f=1740.0)]
+        g6 = hf.ext_distance_verdict(by_distance27({60: [1700, 1700, 1700]}), GRID27, 1680.0, CFG27["distance"])
+        g7 = hf.gen_group_verdict([curve27(1750), curve27(1760), curve27(1740)], GRID27, [1750.0, 1760.0, 1740.0], 1680.0, CFG27["generalization"], 0, 3)
+        ver = {"verdict": "판단 불가", "reason": "사용 가능 영상 6개 ... x", "n_usable": 6, "n_videos": 6}
+        hand = hf.ext_hand_compare([dict(r, curve={"cost": curve27(r["ft"]["f"]).tolist()}) for r in res], GRID27, CFG27["generalization"], 60.0)
+        with tempfile.TemporaryDirectory() as d:
+            rep, summ = self._run(Path(d), res, {"G6": g6, "G7": g7}, ver, hand, {})
+        top = summ.split("## 1.")[0]
+        for key in ("G6 거리", "G7 왼손", "판정 v2 검증"):
+            self.assertIn(key, top)
+        self.assertIn("촬영자 메모: 왼손 촬영이 오른손보다 어색했다고 함", summ.split("## 4.")[0].split("## 3.")[1])      # in the G7 section
+        for text in (rep, summ):
+            self.assertIn("기울기 축 덮임", text)
+            self.assertIn("마디 길이 비 변화", text)
+            self.assertIn("손가락 벌어짐 변화", text)
+            for vid in ("IMG_7217.MOV", "IMG_7225.MOV"):
+                self.assertTrue(any(vid in l and "|" in l and "0.80" in l for l in text.splitlines()), vid)         # the speed median of the video is in its row
+        self.assertNotIn("1680", rep)                                                                          # no ref_f comparison in report.md
+        self.assertNotIn("촬영자 메모", rep)
+
+    def test_every_status_path_reports(self):
+        res = [ext_fake("IMG_A.MOV", "G6", 50, "right", 1), dict(gen_fake("IMG_B.MOV", "G6", excluded=["손 검출 실패 프레임 35.0% > 20%"], detect_rate=0.65), distance_cm=60.0, hand="right", round=1, person_id=None),
+               ext_fake("IMG_C.MOV", "G7", 60, "left", None)]
+        g6 = hf.ext_distance_verdict(by_distance27({50: [1700], 60: ([], 1)}), GRID27, 1680.0, CFG27["distance"])
+        groups = {"G6": g6, "G7": {"verdict": "판단 불가", "reason": "영상 1개 < 3개", "n_videos": 1, "n_excluded": 0}}
+        with tempfile.TemporaryDirectory() as d:
+            rep, summ = self._run(Path(d), res, groups, {"verdict": "판단 불가", "reason": "x", "n_usable": 2, "n_videos": 2}, {}, {})
+        self.assertEqual(g6["verdict"], "판단 불가")
+        self.assertIn("손 검출 실패 프레임 35.0%", rep)
+        self.assertIn("판단 불가", summ.split("## 1.")[0])
+
+
+R26 = ROOT / "runs/26_generalization/20261026T031941Z/results.json"
+
+
+@unittest.skipUnless(R26.exists() and all((Path(CFG27["input_dir"]) / f"IMG_{n}.MOV").exists() for n in (7213, 7214, 7215)),
+                     "26's official run and the input videos IMG_7213 / 7214 / 7215 are needed")
+class ExtEndToEnd(unittest.TestCase):
+    def test_26_reproduction_outputs_and_no_tags(self):
+        r26 = {j["video"]: j for j in json.loads(R26.read_text())["videos"]}
+        with tempfile.TemporaryDirectory() as d:
+            d = Path(d)
+            cfg = copy.deepcopy(CFG27)
+            cfg["videos"] = [{"file": "IMG_7213.MOV", "group": "G6", "distance_cm": 60, "hand": "right", "ref_f": 880},
+                             {"file": "IMG_7214.MOV", "group": "G6", "distance_cm": 60, "hand": "right", "ref_f": 880},
+                             {"file": "IMG_7215.MOV", "group": "G7", "distance_cm": 60, "hand": "left", "ref_f": 880}]
+            cfg["workers"], cfg["n_workers"] = 3, 3
+            cfg["output"] = {"root": str(d / "runs"), "results_yaml": str(d / "r27.yaml")}
+            cp = d / "c.yaml"
+            cp.write_text(yaml.safe_dump(cfg, allow_unicode=True))
+            root, results, groups, ver = run.ext_main(["--config", str(cp), "--out", str(d / "o")])
+            for f in ("report.md", "summary.md", "results.json", "metadata.json", "log.txt", "per_frame.csv"):
+                self.assertTrue((root / f).exists(), f)
+            for f in ("f_by_distance.png", "f_by_group.png"):
+                self.assertTrue((root / "figures" / f).exists(), f)
+            self.assertFalse((root / "_frames").exists())
+            for r in results:
+                o = r26[r["video"]]                                                                          # 26's official values for the same video: same candidate, same numbers
+                self.assertEqual(r["ft"]["f"], o["ft"]["f"], r["video"])
+                self.assertAlmostEqual(r["ft"]["boot_log_std"], o["ft"]["boot_log_std"], places=12)
+                self.assertEqual(r["rating"], o["rating"])
+                self.assertEqual(r["motion"]["n_tilt_frames"], o["motion"]["n_tilt_frames"])
+                self.assertEqual(r["dynamics"]["n_tilt_frames"], o["motion"]["n_tilt_frames"])
+                self.assertEqual(r["guide"]["guide"], o["guide"]["guide"])
+            g6 = [r for r in results if r["group"] == "G6"]
+            pooled = hf.long_pooled_estimate([r["curve"]["cost"] for r in g6], np.array(g6[0]["curve"]["grid"]))
+            self.assertEqual(groups["G6"]["distances"][60.0]["pooled_f"], pooled["f"])                         # the distance's pooled f = the sum of its two videos' cost curves
+            self.assertEqual(groups["G6"]["verdict"], "통과" if abs(pooled["f"] / 880.0 - 1.0) <= CFG27["distance"]["pooled_tol"] else "실패")   # one distance: max / min = 1
+            self.assertEqual(groups["G7"]["verdict"], "판단 불가")                                           # one video < 3
+            self.assertEqual(ver["verdict"], "판단 불가")
+            y = run.ext_results_yaml(root, cfg)
+            self.assertEqual(Path(y), d / "r27.yaml")
+            texts = "".join(p.read_text(errors="ignore") for p in list(root.rglob("*")) + [Path(y)] if p.is_file() and p.suffix in (".json", ".yaml", ".md", ".csv", ".txt"))
+            for val in FAKE_TAGS.values():
+                self.assertNotIn(val, texts)
+            for key in ("ISO6709", "com.apple.quicktime", '"make"', '"model"'):
+                self.assertNotIn(key, texts)
+            self.assertIsNone(re.compile(r"(?<![\d.])(?:1680|880)(?:\.0+)?(?!\d)(?!\.\d)").search(Path(y).read_text()))        # no ref_f comparison in the results yaml
+            self.assertIn("880", (root / "summary.md").read_text())
 
 
 if __name__ == "__main__":
