@@ -11,6 +11,7 @@
     python HandCalib/run.py long-video-check --config HandCalib/configs/25_long_video_check.yaml [bias | --videos A,B | results-yaml --run DIR]
     python HandCalib/run.py generalization --config HandCalib/configs/26_generalization.yaml [--videos A,B] [results-yaml --run DIR]
     python HandCalib/run.py main-camera-extension --config HandCalib/configs/27_main_camera_extension.yaml [--videos A,B] [results-yaml --run DIR]
+    python HandCalib/run.py wide-60cm --config HandCalib/configs/29_wide_60cm.yaml [--videos A,B] [results-yaml --run DIR]
 
 Consolidated from run_hand_focal.py (14, process_video only), run_detector_swap.py (16, the per-detector processing that 17 calls),
 run_protocol_rerun.py and run_frame_filter_diag.py (17),
@@ -4134,10 +4135,293 @@ def ext_results_yaml(run_dir: Path, cfg: dict):
 
 
 # ====================================================================================================
+# wide  (experiment 29: 0.5x lens at about 60 cm, hypothesis "the method always reads about 62 cm"; new section)
+#
+#     python HandCalib/run.py wide-60cm --config HandCalib/configs/29_wide_60cm.yaml [--videos A.MOV,B.MOV] [--out DIR]
+#     python HandCalib/run.py wide-60cm --config ... results-yaml --run runs/29_wide_60cm/<UTC>
+# The videos (file, group, lens, distance_cm, hand, ref_f) come from the yaml; the per-video processing is 26's (gen_video via wide_video); AnyCalib is a comparison only.
+# ====================================================================================================
+
+WIDE_NOTE = ("0.5배 렌즈로 손을 약 60 cm에 두고 찍은 영상에서 \"방법이 늘 약 62 cm로 읽는다\"(추정 f = ref_f × 62.5 ÷ 거리)는 가설을 확인한 실험이다. 후보 설정(mediapipe_hands + 손목 제외 + fixed_template)과 "
+             "판정 범위는 실행 전에 고정했고 바꾸지 않았다. 기준 f(ref_f)와의 비교와 암시 거리는 summary.md에만 있다.")
+
+
+def wide_main(argv=None):
+    ap = argparse.ArgumentParser()
+    ap.add_argument("--config", default=str(hf.PROJECT_ROOT / "configs/29_wide_60cm.yaml"))
+    sub = ap.add_subparsers(dest="cmd")
+    ry = sub.add_parser("results-yaml")
+    ry.add_argument("--run", required=True)
+    ap.add_argument("--videos", default=None, help="comma list of file names narrowing the yaml entries")
+    ap.add_argument("--out", default=None)
+    a = ap.parse_args(argv)
+    text = Path(a.config).read_text()
+    cfg = yaml.safe_load(text)
+    if a.cmd == "results-yaml":
+        print(wide_results_yaml(hf.resolve(a.run), cfg))
+        return None
+    entries = hf.wide_check_videos(list(cfg.get("videos") or []))
+    if a.videos:
+        entries = [e for e in entries if e["file"] in a.videos.split(",")]
+    missing = [e["file"] for e in entries if not (Path(cfg["input_dir"]).expanduser() / e["file"]).exists()]
+    if missing:
+        raise SystemExit(f"영상이 없습니다: {missing}")
+    run_root = Path(a.out).expanduser() if a.out else hf.resolve(cfg["output"]["root"]) / utc_stamp()
+    run_root.mkdir(parents=True)
+    (run_root / "figures").mkdir()
+    log = Log(run_root / "log.txt")
+    log(f"29 0.5배 60 cm: 영상 {[e['file'] for e in entries]} → {run_root}")
+    t0 = time.time()
+    tmp_root = run_root / "_frames"
+    tmp_root.mkdir()
+    cjob = {k: cfg[k] for k in ("candidate", "exclusion", "detector_settings", "guide", "session") if k in cfg}
+    for k in ("OMP_NUM_THREADS", "OPENBLAS_NUM_THREADS", "MKL_NUM_THREADS"):
+        os.environ[k] = "1"
+    import multiprocessing as mp
+    from concurrent.futures import ProcessPoolExecutor
+    acs = cfg.get("anycalib_compare") or {}
+    ac_res = {}
+    try:
+        with ProcessPoolExecutor(max_workers=int(cfg["workers"]), mp_context=mp.get_context("spawn")) as ex:
+            preps = list(ex.map(hf.fresp_prepare, [(e["file"], cfg["input_dir"], cfg["pipeline"], {}, str(tmp_root)) for e in entries]))
+            npz = hf.fresp_detect_many([((p["video"], "orig"), p["frames"]) for p in preps], cfg["detector_settings"][cfg["candidate"]["detector"]], run_root / "detection_cache", int(cfg["n_workers"]), log)
+            jobs_args = [(e, p, npz[(p["video"], "orig")], cfg["pipeline"], cjob) for e, p in zip(entries, preps)]
+            results = list(ex.map(hf.wide_video, jobs_args))
+        if acs.get("enabled"):
+            if acs.get("gpu_ids") and "CUDA_VISIBLE_DEVICES" not in os.environ:
+                os.environ["CUDA_VISIBLE_DEVICES"] = str(acs["gpu_ids"][0])
+            for r, p in zip(results, preps):
+                if r["excluded"]:
+                    continue
+                with hf.fresp_gpu_lock(run_root / "gpu.lock"):
+                    hf.fresp_thermal_wait(float(acs["gpu_pause_c"]), float(acs["gpu_resume_c"]), log=log)
+                    ac = hf.anycalib_run(p["frames"], copy.deepcopy(cfg["pipeline"]["anycalib"]), float(cfg["pipeline"]["phases"]["front_phase_s"]), lambda m="": None)
+                ac_res[r["video"]] = {m: {"median": v["summary"].get("median"), "n": v["summary"].get("n"), "iqr": v["summary"].get("iqr")} for m, v in ac["models"].items()}
+                log(f"  {r['video']} AnyCalib: " + ", ".join(f"{m} {v['median']:.1f} px" for m, v in ac_res[r["video"]].items()))
+    finally:
+        shutil.rmtree(tmp_root, ignore_errors=True)
+    v2 = cfg["rating_v2"]
+    for r in results:
+        if r["excluded"]:
+            log(f"  {r['video']} ({r['distance_cm']:g} cm): 제외 — {'; '.join(r['excluded'])} (손 검출 실패 {100 * (1 - r['detect_rate']):.1f}%)")
+        elif "ft" in r:
+            r["rating"] = hf.gen_rating(r["motion"]["tilt_duration_s"], r["motion"]["theta_max_deg"], r["ft"]["boot_log_std"], v2)
+            r["anycalib"] = ac_res.get(r["video"])
+            r["implied_distance_cm"] = hf.wide_implied_distance(None if r["ft"]["at_grid_edge"] else r["ft"]["f"], r["distance_cm"], r["ref_f"])
+            log(f"  {r['video']} ({r['distance_cm']:g} cm): 기울기 {r['motion']['tilt_duration_s']:.1f}초, 최대 θ2d {r['motion']['theta_max_deg']:.0f}°, f {format(r['ft']['f'], '.1f') + ' px' if not r['ft']['at_grid_edge'] else '값 없음'}, "
+                f"로그 SD {long_fmt(r['ft']['boot_log_std'], 4)}, 등급 {r['rating']}, 정면 떨림 {r['front_jitter_pct']:.2f}%")
+        else:
+            log(f"  {r['video']}: 분석 실패 ({r.get('failed')})")
+    ok = [r for r in results if "ft" in r]
+    grid = np.array(ok[0]["curve"]["grid"]) if ok else np.array([])
+    if any(not np.allclose(np.array(r["curve"]["grid"]), grid) for r in ok):
+        raise SystemExit("비용 곡선의 f 격자가 영상마다 다릅니다")
+    hy = cfg["hypothesis"]
+    pooled = hf.ext_pooled([r["curve"]["cost"] for r in ok], grid, hy)
+    pooled["n_excluded"] = len(results) - len(ok)
+    verdict = hf.wide_hypothesis_verdict(pooled, hy)
+    ref_f = float(np.mean([r["ref_f"] for r in results]))
+    dist = float(np.mean([r["distance_cm"] for r in results]))
+    verdict["ref_f"], verdict["distance_cm"] = ref_f, dist
+    if "pooled_f" in verdict and not verdict["at_grid_edge"]:
+        verdict["implied_distance_cm"] = hf.wide_implied_distance(verdict["pooled_f"], dist, ref_f)
+        verdict["implied_distance_interval_cm"] = [hf.wide_implied_distance(x, dist, ref_f) for x in verdict["interval_95"]]
+    log(f"  가설 판정: {verdict['verdict']}" + (f" (합동 f {verdict['pooled_f']:.1f} px)" if "pooled_f" in verdict else f" ({verdict.get('reason')})"))
+    table = wide_condition_table(cfg, verdict)
+    wide_figures(run_root / "figures", results, verdict, table, cfg)
+    wide_report(run_root / "report.md", results, verdict, cfg)
+    wide_summary(run_root / "summary.md", results, verdict, table, cfg)
+    for r in results:
+        r.pop("traj", None)
+    (run_root / "results.json").write_text(json.dumps(hf.jsonable({"videos": results, "hypothesis": verdict, "conditions": table}), ensure_ascii=False, indent=1))
+    meta = hf.provenance_build(text, a.config, {"code_27": cfg["code_27"], "videos": [e["file"] for e in entries], "elapsed_s": time.time() - t0})
+    (run_root / "metadata.json").write_text(json.dumps(hf.jsonable(meta), ensure_ascii=False, indent=1))
+    log(f"완료 {time.time() - t0:.0f} s → {run_root}")
+    log.close()
+    return run_root, results, verdict
+
+
+def wide_condition_table(cfg: dict, verdict: dict) -> list:
+    """Rows of the comparison table: condition, actual distance (cm), pooled f (px), reference f, implied distance (cm). 1x 50 / 60 / 75 cm from 27, 0.5x 30 cm from 26, 0.5x 60 cm from this run.
+    Rows whose stored result is not on disk are skipped."""
+    ex = cfg.get("existing") or {}
+    rows = []
+    p27 = hf.resolve(ex["results_27"]) if ex.get("results_27") else None
+    if p27 is not None and p27.exists():
+        for d, x in json.loads(p27.read_text())["groups"]["G6"]["distances"].items():
+            if x.get("pooled_f") is not None and not x.get("at_grid_edge"):
+                rows.append({"condition": f"1배 {float(d):g} cm (실험 27)", "distance_cm": float(d), "pooled_f": x["pooled_f"], "ref_f": float(ex["ref_f_27"]),
+                             "implied_distance_cm": hf.wide_implied_distance(x["pooled_f"], float(d), float(ex["ref_f_27"]))})
+    p26 = hf.resolve(ex["results_26"]) if ex.get("results_26") else None
+    if p26 is not None and p26.exists():
+        g = json.loads(p26.read_text())["groups"][ex["group_26"]]
+        if g.get("pooled_f") is not None and not g.get("at_grid_edge"):
+            rows.append({"condition": "0.5배 30 cm (실험 26)", "distance_cm": float(ex["distance_26_cm"]), "pooled_f": g["pooled_f"], "ref_f": float(ex["ref_f_26"]),
+                         "implied_distance_cm": hf.wide_implied_distance(g["pooled_f"], float(ex["distance_26_cm"]), float(ex["ref_f_26"]))})
+    if verdict.get("pooled_f") is not None and not verdict.get("at_grid_edge"):
+        rows.append({"condition": "0.5배 60 cm (이번)", "distance_cm": verdict["distance_cm"], "pooled_f": verdict["pooled_f"], "ref_f": verdict["ref_f"], "implied_distance_cm": verdict["implied_distance_cm"]})
+    return rows
+
+
+def wide_figures(out: Path, results: list, verdict: dict, table: list, cfg: dict):
+    plt = _plt()
+    ok = [r for r in results if "ft" in r]
+    if ok:
+        fig, ax = plt.subplots(figsize=(5.6, 4.2))
+        lo, hi = verdict["support_range"]
+        ax.axhspan(lo, hi, color="#3a9a4a", alpha=0.15, label=f"가설 지지 범위 {lo:.0f}–{hi:.0f} px")
+        ax.axhline(verdict["predicted_f"], color="#3a9a4a", ls="--", lw=1, label=f"가설 예측 {verdict['predicted_f']:.0f} px")
+        for k, r in enumerate(ok):
+            f, sg = r["ft"]["f"], r["ft"]["boot_log_std"]
+            if r["ft"]["at_grid_edge"]:
+                ax.plot(k, f, "x", color="#c00")
+            else:
+                ax.errorbar(k, f, yerr=[[f - f * np.exp(-sg)], [f * np.exp(sg) - f]], fmt="o", color="#2a6fbb", capsize=3)
+        if "pooled_f" in verdict and not verdict["at_grid_edge"]:
+            ax.axhspan(*verdict["interval_95"], color="#c47a00", alpha=0.18)
+            ax.axhline(verdict["pooled_f"], color="#c47a00", lw=1.5, label=f"합동 f {verdict['pooled_f']:.0f} px (95% 구간)")
+        ax.set_xticks(range(len(ok)))
+        ax.set_xticklabels([r["video"][4:8] for r in ok])
+        ax.set_ylabel("f (px), 막대 = 로그 SD ±1σ")
+        ax.legend(fontsize=7)
+        ax.grid(alpha=0.3)
+        fig.tight_layout()
+        fig.savefig(out / "f_by_video.png", dpi=110)
+        plt.close(fig)
+    if table:
+        fig, ax = plt.subplots(figsize=(5.6, 4.2))
+        xs = [r["distance_cm"] for r in table]
+        ax.plot([0, 80], [0, 80], color="#999", lw=1, label="실제 거리와 같게 읽음")
+        ax.axhline(float(cfg["hypothesis"]["ref_distance_cm"]), color="#c47a00", ls="--", lw=1, label=f"가설: 늘 {float(cfg['hypothesis']['ref_distance_cm']):g} cm")
+        for r in table:
+            ax.plot(r["distance_cm"], r["implied_distance_cm"], "o", color="#2a6fbb")
+            ax.annotate(r["condition"].replace(" (실험", "\n(실험").replace(" (이번)", "\n(이번)"), (r["distance_cm"], r["implied_distance_cm"]), fontsize=6, xytext=(4, -16), textcoords="offset points")
+        ax.set_xlabel("실제 거리 (cm)")
+        ax.set_ylabel("암시 거리 = 거리 × f ÷ ref_f (cm)")
+        ax.set_xlim(20, 80)
+        ax.set_ylim(20, 80)
+        ax.legend(fontsize=7)
+        ax.grid(alpha=0.3)
+        fig.tight_layout()
+        fig.savefig(out / "implied_distance.png", dpi=110)
+        plt.close(fig)
+
+
+def wide_report(path: Path, results: list, verdict: dict, cfg: dict):
+    v2 = cfg["rating_v2"]
+    ok = [r for r in results if "ft" in r]
+    L = ["# 실험 29: 0.5배 렌즈, 60 cm", "", WIDE_NOTE, "",
+         f"후보: {cfg['candidate']['detector']} + wrist_mode {cfg['candidate']['wrist_mode']} + {cfg['candidate']['estimator']} (25·26·27과 같음). 영상은 모두 같은 폰, 0.5배 렌즈, 오른손, 세로 영상이다.", "",
+         "## 1. 영상 목록, 검출 상태, 제외", "", f"제외 규칙(실행 전 고정, 27과 같음): 유효한 정면 창(1초) 없음, 가장자리 접촉 프레임 > {100 * cfg['exclusion']['edge_rate_max']:.0f}%, 손 검출 실패 프레임 > {100 * cfg['exclusion']['detect_fail_max']:.0f}%.", "",
+         "| 영상 | 거리(cm) | 방향 | 길이(초) | 처리 해상도 | 검출 실패율 | 가장자리 접촉 | 포함 | 이유 |", "|---|---|---|---|---|---|---|---|---|"]
+    for r in results:
+        L.append(f"| {r['video']} | {r['distance_cm']:g} | {gen_orient(r['size'])} | {r['duration_s']:.1f} | {r['size'][0]}×{r['size'][1]} | {100 * (1 - r['detect_rate']):.1f}% | {100 * r['edge_rate']:.1f}% | "
+                 f"{'제외' if r['excluded'] else ('포함' if 'ft' in r else '분석 실패')} | {'; '.join(r['excluded']) or r.get('failed', '-')} |")
+    L += ["", "## 2. 영상별 촬영 지표와 신뢰 등급(v2)", "",
+          f"등급 규칙: 사용 가능 = 기울기 구간 ≥ {v2['tilt_min_s']:.0f}초, θ2d 최댓값 ≥ {v2['theta_max_min_deg']:.0f}°, 부트스트랩 로그 SD ≤ {v2['usable_log_std_max']}; 참고 = 촬영 조건 둘은 만족하고 로그 SD ≤ {v2['reference_log_std_max']}; 그 외 사용 불가.", "",
+          "| 영상 | 기울기 구간(초) | 기울기 프레임 | θ2d 중앙값 / 최댓값(°) | 정면 창 손 박스/짧은 변 | 정면 창 키포인트 떨림(손 박스 대비 %) | 가이드 v2 | 부트스트랩 로그 SD | 등급 |", "|---|---|---|---|---|---|---|---|---|"]
+    for r in ok:
+        m, g = r["motion"], r.get("guide") or {}
+        L.append(f"| {r['video']} | {m['tilt_duration_s']:.1f} | {m['n_tilt_frames']} | {long_fmt(m['theta_median_deg'], 1)} / {long_fmt(m['theta_max_deg'], 1)} | {r['hand_box_short_ratio_front']:.3f} | {r['front_jitter_pct']:.2f} | "
+                 f"{('충족' if g.get('guide') else '미충족') if 'guide' in g else '-'}{(': ' + '; '.join(g['reasons'])) if g.get('reasons') else ''} | {long_fmt(r['ft']['boot_log_std'], 4)} | **{r['rating']}** |")
+    L += ["", "## 3. 초점거리와 불확실성 (값만)", "", "| 영상 | f (px) | f 판정(추정기) | 부트스트랩 로그 SD | 상대 SD(22·25·26·27과 같은 지표) |", "|---|---|---|---|---|"]
+    for r in ok:
+        f = r["ft"]
+        L.append(f"| {r['video']} | {'값 없음 (' + str(f['side']) + ')' if f['at_grid_edge'] else format(f['f'], '.1f')} | {f['verdict']} | {long_fmt(f['boot_log_std'], 4)} | {long_fmt(f['boot_rel_std'], 4)} |")
+    if "pooled_f" in verdict:
+        L += ["", f"합동 추정(영상별 fixed_template 비용 곡선의 합, 영상 단위 부트스트랩 95% 구간): {'값 없음 (' + str(verdict['side']) + ')' if verdict['at_grid_edge'] else format(verdict['pooled_f'], '.1f') + ' px'} "
+                  f"(구간 {verdict['interval_95'][0]:.0f}–{verdict['interval_95'][1]:.0f} px, 영상 {verdict['n_videos']}개, 제외 {verdict['n_excluded']}개)"]
+    L += ["", "## 4. 한계", "",
+          "- 이 보고서는 값만 적는다. 기준 f(ref_f) 대비 오차, 암시 거리, 가설 판정의 근거, 다른 실험과의 비교, AnyCalib 비교는 summary.md에 있다.",
+          "- 영상은 3개이고 모두 같은 세션이다. 0.5배 렌즈는 왜곡이 커서 pinhole을 가정하는 이 방법에는 f 변화와 왜곡 가정 위반이 섞여 있다.", ""]
+    path.write_text("\n".join(L) + "\n")
+
+
+def wide_summary(path: Path, results: list, verdict: dict, table: list, cfg: dict):
+    pct = lambda x: "-" if x is None else f"{100 * x:+.1f}%"      # noqa: E731
+    ok = [r for r in results if "ft" in r]
+    hy = cfg["hypothesis"]
+    lo, hi = verdict["support_range"]
+    line = f"- **가설 판정: {verdict['verdict']}**"
+    if "pooled_f" in verdict:
+        line += (f" — 합동 f {'값 없음 (' + str(verdict['side']) + ')' if verdict['at_grid_edge'] else format(verdict['pooled_f'], '.1f') + ' px'} (95% 구간 {verdict['interval_95'][0]:.0f}–{verdict['interval_95'][1]:.0f}), "
+                 f"예측 {verdict['predicted_f']:.0f} px, 지지 범위 {lo:.0f}–{hi:.0f}, 반박 범위 ≥ {verdict['refute_above']:.0f} 또는 ≤ {verdict['refute_below']:.0f} (영상 {verdict['n_videos']}개, 제외 {verdict['n_excluded']}개)")
+    elif verdict.get("reason"):
+        line += f" — {verdict['reason']}"
+    L = ["# 실험 29 summary", "", f"**{WIDE_NOTE}**", "", "## 판정", "", line, "",
+         f"가설: 방법이 거리와 상관없이 늘 약 {float(hy['ref_distance_cm']):g} cm로 읽는다 → 추정 f = ref_f × {float(hy['ref_distance_cm']):g} ÷ 거리. 이번 조건(ref_f {verdict['ref_f']:.0f}, 거리 {verdict['distance_cm']:g} cm)의 예측은 {verdict['predicted_f']:.0f} px.", "",
+         "## 1. 영상별 ref_f 대비 오차와 암시 거리", "", "암시 거리 = 실제 거리 × f ÷ ref_f (cm).", "",
+         "| 영상 | 방향 | ref_f | f | 오차 | 암시 거리(cm) | 로그 SD | 등급 | 가이드 v2 |", "|---|---|---|---|---|---|---|---|---|"]
+    for r in results:
+        if "ft" not in r:
+            L.append(f"| {r['video']} | {gen_orient(r['size'])} | {r['ref_f']:.0f} | 제외: {'; '.join(r['excluded']) or r.get('failed', '-')} | - | - | - | - | - |")
+            continue
+        f = r["ft"]
+        L.append(f"| {r['video']} | {gen_orient(r['size'])} | {r['ref_f']:.0f} | {'값 없음 (' + str(f['side']) + ')' if f['at_grid_edge'] else format(f['f'], '.1f')} | "
+                 f"{pct(None if f['at_grid_edge'] else f['f'] / r['ref_f'] - 1.0)} | {long_fmt(r.get('implied_distance_cm'), 1)} | {f['boot_log_std']:.4f} | {r['rating']} | {'충족' if (r.get('guide') or {}).get('guide') else '미충족'} |")
+    L += ["", "## 2. 합동 추정 (판정 근거)", ""]
+    if "pooled_f" in verdict and not verdict["at_grid_edge"]:
+        L += [f"| 합동 f (px) | 95% 구간 (px) | ref_f 대비 | 암시 거리(cm) | 암시 거리 구간(cm) | 예측 {verdict['predicted_f']:.0f} 대비 |", "|---|---|---|---|---|---|",
+              f"| {verdict['pooled_f']:.1f} | {verdict['interval_95'][0]:.0f}–{verdict['interval_95'][1]:.0f} | {pct(verdict['pooled_f'] / verdict['ref_f'] - 1.0)} | {verdict['implied_distance_cm']:.1f} | "
+              f"{verdict['implied_distance_interval_cm'][0]:.1f}–{verdict['implied_distance_interval_cm'][1]:.1f} | {pct(verdict['pooled_f'] / verdict['predicted_f'] - 1.0)} |"]
+    L += ["", "## 3. 조건별 합동 f와 암시 거리", "", "| 조건 | 실제 거리(cm) | 합동 f (px) | ref_f | 암시 거리(cm) |", "|---|---|---|---|---|"]
+    for r in table:
+        L.append(f"| {r['condition']} | {r['distance_cm']:g} | {r['pooled_f']:.1f} | {r['ref_f']:.0f} | {r['implied_distance_cm']:.1f} |")
+    L += ["", f"- 가설이 맞다면 모든 조건의 암시 거리가 약 {float(hy['ref_distance_cm']):g} cm로 같아야 한다.", "", "## 4. AnyCalib 비교 (판정에 쓰지 않음)", ""]
+    ac = [r for r in ok if r.get("anycalib")]
+    if ac:
+        L += ["실험 25와 같은 설정(pinhole·gen, 모든 프레임). 값은 영상 중앙값.", "", "| 영상 | AnyCalib pinhole (ref_f 대비) | AnyCalib gen (ref_f 대비) | 손 방법 f (ref_f 대비) |", "|---|---|---|---|"]
+        for r in ac:
+            p, g = r["anycalib"]["anycalib_pinhole"]["median"], r["anycalib"]["anycalib_gen"]["median"]
+            f = None if r["ft"]["at_grid_edge"] else r["ft"]["f"]
+            L.append(f"| {r['video']} | {p:.1f} ({pct(p / r['ref_f'] - 1.0)}) | {g:.1f} ({pct(g / r['ref_f'] - 1.0)}) | {long_fmt(f, 1)} ({pct(None if f is None else f / r['ref_f'] - 1.0)}) |")
+        L += ["", f"- 영상 {len(ac)}개 중앙값: pinhole {np.median([r['anycalib']['anycalib_pinhole']['median'] for r in ac]):.1f} px, gen {np.median([r['anycalib']['anycalib_gen']['median'] for r in ac]):.1f} px"]
+    else:
+        L += ["AnyCalib을 돌리지 않았다."]
+    L += ["", "## 한계", "",
+          "- 영상은 3개이고 모두 같은 세션·같은 폰·같은 거리다. 판정은 이 조건에 대한 것이다. 제외된 영상이 있으면 합동 추정은 남은 영상으로만 구한다(영상 2개 미만이면 판단 불가).",
+          "- 기준 f는 사용자 제공 값(0.5배 880 px, 1배 1680 px)이며 원본 보정 파일은 서버에 없다.",
+          "- 0.5배 렌즈는 왜곡이 커서 pinhole을 가정하는 이 방법에는 f 변화와 왜곡 가정 위반이 섞여 있다. 가설은 단일 상수(약 62.5 cm)만 검정하며 원인을 가려내지는 않는다.",
+          "- 가설 지지·반박은 이 영상 3개의 합동 f 한 값으로만 판정한다. 영상별 값과 구간은 근거 표에 있다.", ""]
+    path.write_text("\n".join(L) + "\n")
+
+
+def wide_results_yaml(run_dir: Path, cfg: dict):
+    r = json.loads((run_dir / "results.json").read_text())
+    m = json.loads((run_dir / "metadata.json").read_text())
+    try:
+        run_name = str(run_dir.resolve().relative_to(hf.PROJECT_ROOT))
+    except ValueError:
+        run_name = str(run_dir)
+    rd = lambda x, n=4: None if x is None or (isinstance(x, float) and not np.isfinite(x)) else round(x, n)      # noqa: E731
+    out = {"experiment": "29_wide_60cm", "run": run_name, "code_commit": m["git"]["commit"][:7], "git_dirty_at_run": m["git"]["git_dirty"], "note": WIDE_NOTE, "candidate": cfg["candidate"], "videos": {}}
+    for v in r["videos"]:
+        e = {"group": v["group"], "lens": v["lens"], "distance_cm": v["distance_cm"], "hand": v["hand"], "size": v["size"], "duration_s": rd(v["duration_s"], 2), "detect_fail_rate": rd(1 - v["detect_rate"]),
+             "edge_rate": rd(v["edge_rate"]), "excluded": v["excluded"] or None}
+        if "ft" in v:
+            f, mo, g = v["ft"], v["motion"], v.get("guide") or {}
+            e.update({"f_px": None if f["at_grid_edge"] else round(f["f"], 1), "status": "value" if not f["at_grid_edge"] else f"값 없음 ({f['side']})", "f_verdict_estimator": f["verdict"], "rating_v2": v["rating"],
+                      "boot_log_std": rd(f["boot_log_std"], 5), "front_jitter_pct": rd(v["front_jitter_pct"], 3), "tilt_duration_s": rd(mo["tilt_duration_s"], 2), "n_tilt_frames": mo["n_tilt_frames"],
+                      "theta_median_deg": rd(mo["theta_median_deg"], 1), "theta_max_deg": rd(mo["theta_max_deg"], 1), "hand_box_short_ratio_front": rd(v["hand_box_short_ratio_front"]),
+                      "guide_v2": {k: g.get(k) for k in ("guide", "reasons", "t_transition")} if "guide" in g else None, "principal_point_px": v["principal_point"]})
+            if v.get("anycalib"):
+                e["anycalib_median_px"] = {k.replace("anycalib_", ""): rd(x["median"], 1) for k, x in v["anycalib"].items()}
+        out["videos"][v["video"]] = e
+    h = r["hypothesis"]
+    out["hypothesis"] = {"verdict": h["verdict"], "reason": h.get("reason"), "predicted_f_px": h["predicted_f"], "support_range_px": [round(x, 1) for x in h["support_range"]],
+                         "refute_above_px": round(h["refute_above"], 1), "refute_below_px": round(h["refute_below"], 1), "n_videos": h["n_videos"], "n_excluded": h["n_excluded"],
+                         "pooled_f_px": None if h.get("pooled_f") is None or h.get("at_grid_edge") else round(h["pooled_f"], 1),
+                         "interval_95_px": None if "interval_95" not in h else [round(x, 1) for x in h["interval_95"]]}
+    p = hf.resolve(cfg["output"]["results_yaml"])
+    p.write_text(yaml.safe_dump(hf.jsonable(out), allow_unicode=True, sort_keys=False))
+    return p
+
+
+# ====================================================================================================
 # command line
 # ====================================================================================================
 
-COMMANDS = {"protocol": protocol_main, "frame-filter": ff_main, "same-session": session_main, "overlay": overlay_main, "phase-segmentation": pseg_main, "guide-revision": grev_main, "f-response": fresp_main, "error-factors": ferr_main, "long-video-check": long_main, "generalization": gen_main, "main-camera-extension": ext_main}
+COMMANDS = {"protocol": protocol_main, "frame-filter": ff_main, "same-session": session_main, "overlay": overlay_main, "phase-segmentation": pseg_main, "guide-revision": grev_main, "f-response": fresp_main, "error-factors": ferr_main, "long-video-check": long_main, "generalization": gen_main, "main-camera-extension": ext_main, "wide-60cm": wide_main}
 
 
 def main(argv=None):

@@ -34,6 +34,7 @@ CFG23 = yaml.safe_load((ROOT / "configs/23_error_factors.yaml").read_text())
 CFG25 = yaml.safe_load((ROOT / "configs/25_long_video_check.yaml").read_text())
 CFG26 = yaml.safe_load((ROOT / "configs/26_generalization.yaml").read_text())
 CFG27 = yaml.safe_load((ROOT / "configs/27_main_camera_extension.yaml").read_text())
+CFG29 = yaml.safe_load((ROOT / "configs/29_wide_60cm.yaml").read_text())
 PIPE = CFG17["pipeline"]                           # the 14 pipeline settings (identical in 16, 17 and 18)
 SYN = {"f_px": 1650, "image": [1920, 1080], "distance_mm": 350, "front_frames": 10, "tilt_frames": 40}     # 14's synthetic camera
 BASE_COND = {"name": "base", "delta_deg": 0, "noise": {"px": 1.0}, "heavy_tail": False, "tilt_range_deg": [25, 50], "arch_mm": 0,
@@ -2454,6 +2455,184 @@ class ExtEndToEnd(unittest.TestCase):
                 self.assertNotIn(key, texts)
             self.assertIsNone(re.compile(r"(?<![\d.])(?:1680|880)(?:\.0+)?(?!\d)(?!\.\d)").search(Path(y).read_text()))        # no ref_f comparison in the results yaml
             self.assertIn("880", (root / "summary.md").read_text())
+
+
+# ====================================================================================================
+# 29: 0.5x lens at about 60 cm, hypothesis "the method always reads about 62.5 cm"
+# ====================================================================================================
+
+def pooled29(f0s, n_excluded=0, cfg=None):
+    """The pooled estimate (ext_pooled) of videos whose cost curves have their minima at f0s, as wide_hypothesis_verdict takes it."""
+    p = hf.ext_pooled([curve27(f) for f in f0s], GRID27, (cfg or CFG29)["hypothesis"])
+    p["n_excluded"] = n_excluded
+    return p
+
+
+class WideHypothesis(unittest.TestCase):
+    H = CFG29["hypothesis"]
+
+    def test_support_refute_open_and_not_judged_on_synthetic_input(self):
+        for f0s, want in (([917, 920, 915], "가설 지지"), ([1000, 1000], "가설 지지"), ([1200, 1210, 1190], "가설 반박"), ([700, 710], "가설 반박"), ([1060, 1070, 1050], "판단 보류"), ([790, 800], "판단 보류")):
+            v = hf.wide_hypothesis_verdict(pooled29(f0s), self.H)
+            self.assertEqual(v["verdict"], want, (f0s, v.get("pooled_f")))
+        one = hf.wide_hypothesis_verdict(pooled29([917], n_excluded=2), self.H)
+        self.assertEqual(one["verdict"], "판단 불가")
+        self.assertIn("1개", one["reason"])
+        none = hf.wide_hypothesis_verdict({"n_videos": 0, "n_excluded": 3}, self.H)
+        self.assertEqual(none["verdict"], "판단 불가")
+
+    def test_ranges_are_the_ones_fixed_in_the_yaml(self):
+        v = hf.wide_hypothesis_verdict(pooled29([917, 917]), self.H)
+        self.assertAlmostEqual(v["support_range"][0], 825.3, places=1)
+        self.assertAlmostEqual(v["support_range"][1], 1008.7, places=1)
+        self.assertAlmostEqual(v["refute_above"], 1146.25, places=2)
+        self.assertAlmostEqual(v["refute_below"], 733.6, places=1)
+        self.assertEqual(hf.wide_hypothesis_verdict(pooled29([826]), dict(self.H, min_videos=1))["verdict"], "가설 지지")
+        self.assertEqual(hf.wide_hypothesis_verdict(pooled29([824]), dict(self.H, min_videos=1))["verdict"], "판단 보류")                       # just outside the support range, above the refuting 0.8
+        self.assertEqual(hf.wide_hypothesis_verdict(pooled29([1009.5]), dict(self.H, min_videos=1))["verdict"], "판단 보류")
+        self.assertEqual(hf.wide_hypothesis_verdict(pooled29([1146.5]), dict(self.H, min_videos=1))["verdict"], "가설 반박")
+        self.assertEqual(hf.wide_hypothesis_verdict(pooled29([733.0]), dict(self.H, min_videos=1))["verdict"], "가설 반박")
+        shifted = dict(self.H, predicted_f=1833.0)                                                                                     # another predicted f moves every range with it
+        self.assertEqual(hf.wide_hypothesis_verdict(pooled29([1840, 1830], cfg=CFG29), shifted)["verdict"], "가설 지지")
+        self.assertEqual(hf.wide_hypothesis_verdict(pooled29([917, 917]), shifted)["verdict"], "가설 반박")
+        self.assertEqual(hf.wide_hypothesis_verdict(pooled29([917, 917]), dict(self.H, min_videos=3))["verdict"], "판단 불가")
+
+    def test_a_grid_edge_value_refutes_and_is_reported_as_such(self):
+        v = hf.wide_hypothesis_verdict(pooled29([5000, 5000]), self.H)                                                             # minimum beyond the grid: clipped to the upper edge
+        self.assertEqual(v["verdict"], "가설 반박")
+        self.assertTrue(v["at_grid_edge"])
+        self.assertEqual(v["side"], "상한")
+        lowv = hf.wide_hypothesis_verdict(pooled29([300, 300]), self.H)
+        self.assertEqual((lowv["verdict"], lowv["side"]), ("가설 반박", "하한"))
+
+    def test_implied_distance_and_entry_check(self):
+        self.assertAlmostEqual(hf.wide_implied_distance(917.0, 60, 880.0), 62.5, places=1)
+        self.assertAlmostEqual(hf.wide_implied_distance(1054.7, 30, 880.0), 35.9557, places=3)
+        self.assertAlmostEqual(hf.wide_implied_distance(2092.4, 50, 1680.0), 62.274, places=2)
+        self.assertIsNone(hf.wide_implied_distance(None, 60, 880.0))
+        good = [{"file": "a.MOV", "group": "G8", "lens": "0.5x", "distance_cm": 60, "hand": "right", "ref_f": 880}]
+        self.assertEqual(hf.wide_check_videos(good), good)
+        for bad in ({"lens": None}, {"hand": "both"}, {"distance_cm": 0}, {"ref_f": -1}):
+            with self.assertRaises(SystemExit):
+                hf.wide_check_videos([dict(good[0], **bad)])
+        with self.assertRaises(SystemExit):
+            hf.wide_check_videos([])
+        self.assertEqual([e["file"] for e in CFG29["videos"]], ["IMG_7231.MOV", "IMG_7232.MOV", "IMG_7233.MOV"])
+        self.assertTrue(all(e["lens"] == "0.5x" and e["distance_cm"] == 60 and e["hand"] == "right" and e["ref_f"] == 880 for e in CFG29["videos"]))
+
+
+class WidePortrait(unittest.TestCase):
+    def test_principal_point_of_a_portrait_video_is_the_screen_centre(self):
+        self.assertEqual(hf.principal_point(PIPE["estimate"], 1080, 1920), (540.0, 960.0))
+        g = synth_wrist(seed=1, tilt_frames=40)
+        W, H = 1080, 1920
+        g["size"] = (W, H)
+        g["kp"] = g["kp"] - np.array([SYN["image"][0] / 2, SYN["image"][1] / 2]) + np.array([W / 2, H / 2])                         # the same hand around the portrait centre
+        g["box"] = g["box"] - np.array([SYN["image"][0] / 2, SYN["image"][1] / 2] * 2) + np.array([W / 2, H / 2] * 2)
+        a = analyze_synth(g, methods_full=(), cfg=hf.pseg_wrist_cfg(PIPE))
+        self.assertEqual(a["principal_point"], [540.0, 960.0])
+
+
+def wide_fake(video, f=900.0, sigma=0.06, **kw):
+    r = gen_fake(video, "G8")
+    r.update({"lens": "0.5x", "distance_cm": 60.0, "hand": "right", "ref_f": 880.0, "person_id": None, "size": [1080, 1920], "front_jitter_pct": 0.42, "principal_point": [540.0, 960.0],
+              "rating": "사용 가능", "implied_distance_cm": hf.wide_implied_distance(f, 60, 880.0), "anycalib": {"anycalib_pinhole": {"median": 1763.5, "n": 300}, "anycalib_gen": {"median": 1692.5, "n": 300}}})
+    r["ft"]["f"], r["ft"]["boot_log_std"] = f, sigma
+    r.update(kw)
+    r.pop("traj", None)
+    return r
+
+
+class WideReports(unittest.TestCase):
+    def test_verdict_on_top_values_only_report_and_the_comparison_table(self):
+        res = [wide_fake("IMG_A.MOV", 900.0), wide_fake("IMG_B.MOV", 930.0), wide_fake("IMG_C.MOV", 905.0)]
+        v = hf.wide_hypothesis_verdict(pooled29([900, 930, 905]), CFG29["hypothesis"])
+        v["ref_f"], v["distance_cm"] = 880.0, 60.0
+        v["implied_distance_cm"] = hf.wide_implied_distance(v["pooled_f"], 60.0, 880.0)
+        v["implied_distance_interval_cm"] = [hf.wide_implied_distance(x, 60.0, 880.0) for x in v["interval_95"]]
+        table = [{"condition": "1배 50 cm (실험 27)", "distance_cm": 50.0, "pooled_f": 2092.4, "ref_f": 1680.0, "implied_distance_cm": 62.27},
+                 {"condition": "0.5배 30 cm (실험 26)", "distance_cm": 30.0, "pooled_f": 1054.7, "ref_f": 880.0, "implied_distance_cm": 35.96},
+                 {"condition": "0.5배 60 cm (이번)", "distance_cm": 60.0, "pooled_f": v["pooled_f"], "ref_f": 880.0, "implied_distance_cm": v["implied_distance_cm"]}]
+        with tempfile.TemporaryDirectory() as d:
+            d = Path(d)
+            run.wide_report(d / "report.md", res, v, CFG29)
+            run.wide_summary(d / "summary.md", res, v, table, CFG29)
+            run.wide_figures(d, res, v, table, CFG29)
+            rep, summ = (d / "report.md").read_text(), (d / "summary.md").read_text()
+            self.assertTrue((d / "f_by_video.png").exists() and (d / "implied_distance.png").exists())
+        self.assertIn("가설 판정: 가설 지지", summ.split("## 1.")[0])
+        for key in ("0.5배 30 cm (실험 26)", "1배 50 cm (실험 27)", "AnyCalib", "1763.5", "암시 거리"):
+            self.assertIn(key, summ)
+        self.assertNotIn("880", rep)                                                                                   # no ref_f in report.md
+        self.assertNotIn("암시 거리(cm)", rep)                                                                          # no implied-distance column or value (900 px -> 61.4 cm) in report.md
+        self.assertNotIn("61.4", rep)
+        self.assertNotIn("1763.5", rep)                                                                                # no AnyCalib value in report.md
+        self.assertIn("키포인트 떨림", rep)
+        self.assertIn("0.42", rep)
+
+    def test_not_judged_and_excluded_paths_report(self):
+        res = [wide_fake("IMG_A.MOV"), dict(gen_fake("IMG_B.MOV", "G8", excluded=["가장자리 접촉 프레임 6.3% > 5%"]), lens="0.5x", distance_cm=60.0, hand="right", ref_f=880.0, person_id=None, size=[1080, 1920])]
+        v = hf.wide_hypothesis_verdict(pooled29([900], n_excluded=1), CFG29["hypothesis"])
+        v["ref_f"], v["distance_cm"] = 880.0, 60.0
+        with tempfile.TemporaryDirectory() as d:
+            d = Path(d)
+            run.wide_report(d / "report.md", res, v, CFG29)
+            run.wide_summary(d / "summary.md", res, v, [], CFG29)
+            rep, summ = (d / "report.md").read_text(), (d / "summary.md").read_text()
+        self.assertIn("가설 판정: 판단 불가", summ)
+        self.assertIn("가장자리 접촉 프레임 6.3%", rep)
+        self.assertIn("세로", rep)
+
+
+R27 = ROOT / "runs/27_main_camera_extension/20261026T044322Z/results.json"
+R26B = ROOT / "runs/26_generalization/20261026T031941Z/results.json"
+
+
+@unittest.skipUnless(R27.exists() and R26B.exists() and all((Path(CFG29["input_dir"]) / f"IMG_{n}.MOV").exists() for n in (7215, 7217, 7218)),
+                     "27's and 26's official runs and the input videos IMG_7215 / 7217 / 7218 are needed")
+class WideEndToEnd(unittest.TestCase):
+    def test_27_reproduction_portrait_principal_point_anycalib_and_no_tags(self):
+        r27 = {j["video"]: j for j in json.loads(R27.read_text())["videos"]}
+        r26 = {j["video"]: j for j in json.loads(R26B.read_text())["videos"]}
+        with tempfile.TemporaryDirectory() as d:
+            d = Path(d)
+            cfg = copy.deepcopy(CFG29)
+            cfg["videos"] = [{"file": "IMG_7217.MOV", "group": "G8", "lens": "1x", "distance_cm": 60, "hand": "right", "ref_f": 1680},
+                             {"file": "IMG_7218.MOV", "group": "G8", "lens": "1x", "distance_cm": 75, "hand": "right", "ref_f": 1680},
+                             {"file": "IMG_7215.MOV", "group": "G8", "lens": "0.5x", "distance_cm": 60, "hand": "right", "ref_f": 880}]
+            cfg["workers"], cfg["n_workers"] = 3, 3
+            cfg["anycalib_compare"]["enabled"] = GPU
+            cfg["output"] = {"root": str(d / "runs"), "results_yaml": str(d / "r29.yaml")}
+            cp = d / "c.yaml"
+            cp.write_text(yaml.safe_dump(cfg, allow_unicode=True))
+            root, results, verdict = run.wide_main(["--config", str(cp), "--out", str(d / "o")])
+            for f in ("report.md", "summary.md", "results.json", "metadata.json", "log.txt"):
+                self.assertTrue((root / f).exists(), f)
+            for f in ("f_by_video.png", "implied_distance.png"):
+                self.assertTrue((root / "figures" / f).exists(), f)
+            self.assertFalse((root / "_frames").exists())
+            by = {r["video"]: r for r in results}
+            for vid in ("IMG_7217.MOV", "IMG_7218.MOV"):                                                                 # 27's official values for the same videos
+                self.assertEqual(by[vid]["ft"]["f"], r27[vid]["ft"]["f"], vid)
+                self.assertAlmostEqual(by[vid]["ft"]["boot_log_std"], r27[vid]["ft"]["boot_log_std"], places=12)
+                self.assertEqual(by[vid]["rating"], r27[vid]["rating"])
+            p = by["IMG_7215.MOV"]                                                                                       # a portrait video of 26: the same f, principal point at the screen centre
+            self.assertEqual(p["ft"]["f"], r26["IMG_7215.MOV"]["ft"]["f"])
+            self.assertEqual(p["size"], [1080, 1920])
+            self.assertEqual(p["principal_point"], [540.0, 960.0])
+            self.assertGreater(p["front_jitter_pct"], 0.0)
+            if GPU:
+                self.assertTrue(all(set(r["anycalib"]) == {"anycalib_pinhole", "anycalib_gen"} for r in results))
+            self.assertIn(verdict["verdict"], ("가설 지지", "가설 반박", "판단 보류", "판단 불가"))
+            y = run.wide_results_yaml(root, cfg)
+            self.assertEqual(Path(y), d / "r29.yaml")
+            texts = "".join(q.read_text(errors="ignore") for q in list(root.rglob("*")) + [Path(y)] if q.is_file() and q.suffix in (".json", ".yaml", ".md", ".csv", ".txt"))
+            for val in FAKE_TAGS.values():
+                self.assertNotIn(val, texts)
+            for key in ("ISO6709", "com.apple.quicktime", '"make"', '"model"'):
+                self.assertNotIn(key, texts)
+            self.assertIsNone(re.compile(r"(?<![\d.])(?:1680|880)(?:\.0+)?(?!\d)(?!\.\d)").search(Path(y).read_text()))        # no ref_f comparison in the results yaml
+            self.assertNotIn("implied", Path(y).read_text())
 
 
 if __name__ == "__main__":

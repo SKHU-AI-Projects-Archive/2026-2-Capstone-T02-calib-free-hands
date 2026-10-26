@@ -4060,3 +4060,72 @@ def ext_hand_compare(results: list, grid, gcfg: dict, right_distance_cm: float) 
     a, b = out["left"], out["right"]
     out["ratio_left_over_right"] = float(a["pooled_f"] / b["pooled_f"]) if "pooled_f" in a and "pooled_f" in b and not a["at_grid_edge"] and not b["at_grid_edge"] else None
     return out
+
+
+# ====================================================================================================
+# wide  (experiment 29: 0.5x lens at about 60 cm, is the f estimate "always read as about 62 cm"?; new section, earlier functions are used unchanged)
+# 27 found f x distance ~ constant (1x: about 105,000 px cm = ref_f x 62.5 cm). Hypothesis: the method reads every hand at about 62.5 cm, i.e. f_est = ref_f x 62.5 / distance.
+# Verdict on the pooled f of the videos (cost curves summed): within +-support_tol of predicted_f = support, >= refute_high x predicted_f or <= refute_low x predicted_f = refuted, else open.
+# ====================================================================================================
+
+WIDE_REQUIRED = ("file", "group", "lens", "distance_cm", "hand", "ref_f")
+
+
+def wide_check_videos(entries) -> list:
+    """Validates the videos list of the yaml (every entry needs file, group, lens, distance_cm, hand left / right, ref_f). Stops (SystemExit) with the reason otherwise."""
+    if not entries:
+        raise SystemExit("videos is empty: give the video entries in the yaml (file, group, lens, distance_cm, hand, ref_f)")
+    for i, e in enumerate(entries):
+        miss = [k for k in WIDE_REQUIRED if e.get(k) is None]
+        if miss:
+            raise SystemExit(f"videos[{i}] ({e.get('file')}): missing {miss}")
+        if e["hand"] not in ("left", "right"):
+            raise SystemExit(f"videos[{i}] ({e['file']}): hand must be left or right")
+        if float(e["distance_cm"]) <= 0 or float(e["ref_f"]) <= 0:
+            raise SystemExit(f"videos[{i}] ({e['file']}): distance_cm and ref_f must be positive")
+    return list(entries)
+
+
+def wide_video(args) -> dict:
+    """One video of experiment 29: 26's gen_video unchanged (the session block of the yaml supplies phone / glove / person_id, the entry its lens), plus distance_cm, hand, the principal point
+    and the front-window keypoint jitter (percent of the hand box). args = (entry, prep, npz, pcfg, c); c needs candidate, exclusion, detector_settings, guide."""
+    entry, prep, npz, pcfg, c = args[:5]
+    ses = c.get("session") or {}
+    e2 = {"person_id": ses.get("person_id"), "phone": ses.get("phone", "main"), "lens": ses.get("lens", "1x"), "glove": bool(ses.get("glove", False)), **entry}
+    res = gen_video((e2, prep, npz, pcfg, {**c, "trajectory": c.get("trajectory") or {}}))
+    res.update({"distance_cm": float(entry["distance_cm"]), "hand": entry["hand"]})
+    if "ft" in res:
+        cand = c["candidate"]
+        pc = copy.deepcopy(pcfg)
+        pc["tracking"]["conf_min"] = float(c["detector_settings"][cand["detector"]]["conf_min"])
+        times = np.array([r["time_s"] for r in prep["frames"]])
+        W, H = prep["size"]
+        tr = track(load_detections(Path(npz)), times, (W, H), pc["tracking"], front_start_s=float(pc["phases"]["front_skip_s"]))
+        cfg_ex = pseg_wrist_cfg(pc) if cand["wrist_mode"] == "exclude" else pc
+        a = analyze(tr["kp"], tr["mask"], tr["present"], tr["box"], tr["cls"], times, (W, H), cfg_ex, tilt_start=None, methods_full=(), seed=int(pc["experiment"]["seed"]))
+        res["front_jitter_pct"] = 100.0 * float(a["front_jitter_rel"])
+        res["principal_point"] = [float(x) for x in a["principal_point"]]
+    return res
+
+
+def wide_implied_distance(f, distance_cm, ref_f):
+    """Distance (cm) the estimate reads: distance x f / ref_f (None without a value). 62.5 for every f of the hypothesis."""
+    return None if f is None or not np.isfinite(f) else float(distance_cm) * float(f) / float(ref_f)
+
+
+def wide_hypothesis_verdict(pooled: dict, hcfg: dict) -> dict:
+    """Verdict of the hypothesis from the pooled estimate (ext_pooled's dict plus n_excluded): fewer than min_videos videos: 판단 불가; pooled f within +-support_tol of predicted_f: 가설 지지;
+    >= refute_high x predicted_f or <= refute_low x predicted_f: 가설 반박 (a value on the f grid edge is the clipped edge value and falls in the refuting range); otherwise 판단 보류."""
+    p = float(hcfg["predicted_f"])
+    lo, hi = p * (1.0 - float(hcfg["support_tol"])), p * (1.0 + float(hcfg["support_tol"]))
+    up, low = p * float(hcfg["refute_high"]), p * float(hcfg["refute_low"])
+    out = {"predicted_f": p, "support_range": [lo, hi], "refute_above": up, "refute_below": low, "n_videos": int(pooled.get("n_videos", 0)), "n_excluded": int(pooled.get("n_excluded", 0))}
+    if out["n_videos"] < int(hcfg["min_videos"]):
+        return {**out, "verdict": "판단 불가", "reason": f"영상 {out['n_videos']}개 < {int(hcfg['min_videos'])}개"}
+    f = float(pooled["pooled_f"])
+    out.update({"pooled_f": f, "at_grid_edge": bool(pooled["at_grid_edge"]), "side": pooled.get("side"), "interval_95": pooled["interval_95"]})
+    if lo - 1e-9 <= f <= hi + 1e-9:
+        return {**out, "verdict": "가설 지지"}
+    if f >= up - 1e-9 or f <= low + 1e-9:
+        return {**out, "verdict": "가설 반박"}
+    return {**out, "verdict": "판단 보류"}
