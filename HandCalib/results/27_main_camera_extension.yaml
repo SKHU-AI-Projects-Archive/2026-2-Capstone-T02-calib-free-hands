@@ -1,0 +1,559 @@
+experiment: 27_main_camera_extension
+run: runs/27_main_camera_extension/20261026T044322Z
+code_commit: e579ddf
+git_dirty_at_run: false
+note: 1배 주 카메라 조건에서 손과 카메라의 거리(G6)와 왼손(G7)을 확인한 실험이다. 후보 설정(mediapipe_hands + 손목 제외
+  + fixed_template)과 모든 문턱값은 실행 전에 고정했고 바꾸지 않았다. 기준 f(ref_f)와의 비교는 summary.md에만 있다.
+candidate:
+  detector: mediapipe_hands
+  wrist_mode: exclude
+  estimator: fixed_template
+  front_window: 17's (phase_mode nominal, tilt phase from 3.0 s)
+videos:
+  IMG_7216.MOV:
+    group: G6
+    distance_cm: 50.0
+    hand: right
+    round: 1
+    duration_s: 24.2
+    detect_fail_rate: 0.0
+    edge_rate: 0.0632
+    excluded:
+    - 가장자리 접촉 프레임 6.3% > 5%
+  IMG_7217.MOV:
+    group: G6
+    distance_cm: 60.0
+    hand: right
+    round: 1
+    duration_s: 24.87
+    detect_fail_rate: 0.0
+    edge_rate: 0.0
+    excluded: null
+    f_px: 1527.3
+    status: value
+    f_verdict_estimator: REJECT
+    rating_v2: 사용 불가
+    boot_log_std: 0.04665
+    tilt_duration_s: 21.87
+    n_tilt_frames: 329
+    theta_median_deg: 34.6
+    theta_p90_deg: 45.6
+    theta_max_deg: 52.5
+    hand_box_short_ratio_front: 0.6277
+    guide_v2:
+      guide: true
+      reasons: []
+      t_transition: 3.933333333333333
+    dynamics:
+      axis_bins: 6
+      axis_counts:
+      - 66
+      - 24
+      - 17
+      - 56
+      - 55
+      - 95
+      speed:
+        median: 0.124
+        p90: 0.228
+      bone_ratio_pct:
+        median: 3.169
+        p90: 5.628
+      spread_change_deg:
+        median: 1.65
+        p90: 4.32
+  IMG_7218.MOV:
+    group: G6
+    distance_cm: 75.0
+    hand: right
+    round: 1
+    duration_s: 24.87
+    detect_fail_rate: 0.0
+    edge_rate: 0.0
+    excluded: null
+    f_px: 1399.1
+    status: value
+    f_verdict_estimator: REJECT
+    rating_v2: 사용 가능
+    boot_log_std: 0.07413
+    tilt_duration_s: 21.87
+    n_tilt_frames: 329
+    theta_median_deg: 32.7
+    theta_p90_deg: 49.1
+    theta_max_deg: 65.5
+    hand_box_short_ratio_front: 0.4924
+    guide_v2:
+      guide: true
+      reasons: []
+      t_transition: 4.466666666666667
+    dynamics:
+      axis_bins: 6
+      axis_counts:
+      - 53
+      - 18
+      - 12
+      - 35
+      - 93
+      - 100
+      speed:
+        median: 0.131
+        p90: 0.227
+      bone_ratio_pct:
+        median: 3.043
+        p90: 6.165
+      spread_change_deg:
+        median: 1.233
+        p90: 3.584
+  IMG_7219.MOV:
+    group: G6
+    distance_cm: 50.0
+    hand: right
+    round: 2
+    duration_s: 23.6
+    detect_fail_rate: 0.0
+    edge_rate: 0.0
+    excluded: null
+    f_px: 1993.9
+    status: value
+    f_verdict_estimator: REJECT
+    rating_v2: 사용 불가
+    boot_log_std: 0.08052
+    tilt_duration_s: 20.6
+    n_tilt_frames: 310
+    theta_median_deg: 34.0
+    theta_p90_deg: 44.8
+    theta_max_deg: 52.6
+    hand_box_short_ratio_front: 0.7526
+    guide_v2:
+      guide: false
+      reasons:
+      - 손 박스/짧은 변 0.76 > 0.65
+      t_transition: 3.933333333333333
+    dynamics:
+      axis_bins: 6
+      axis_counts:
+      - 41
+      - 19
+      - 11
+      - 55
+      - 83
+      - 88
+      speed:
+        median: 0.146
+        p90: 0.28
+      bone_ratio_pct:
+        median: 3.638
+        p90: 6.012
+      spread_change_deg:
+        median: 1.568
+        p90: 3.395
+  IMG_7220.MOV:
+    group: G6
+    distance_cm: 60.0
+    hand: right
+    round: 2
+    duration_s: 21.4
+    detect_fail_rate: 0.0
+    edge_rate: 0.0
+    excluded: null
+    f_px: 2122.1
+    status: value
+    f_verdict_estimator: REJECT
+    rating_v2: 사용 불가
+    boot_log_std: 0.04077
+    tilt_duration_s: 18.4
+    n_tilt_frames: 277
+    theta_median_deg: 29.8
+    theta_p90_deg: 40.8
+    theta_max_deg: 49.9
+    hand_box_short_ratio_front: 0.6075
+    guide_v2:
+      guide: true
+      reasons: []
+      t_transition: 4.133333333333334
+    dynamics:
+      axis_bins: 6
+      axis_counts:
+      - 43
+      - 7
+      - 5
+      - 32
+      - 90
+      - 89
+      speed:
+        median: 0.125
+        p90: 0.286
+      bone_ratio_pct:
+        median: 2.777
+        p90: 4.16
+      spread_change_deg:
+        median: 0.987
+        p90: 2.658
+  IMG_7221.MOV:
+    group: G6
+    distance_cm: 75.0
+    hand: right
+    round: 2
+    duration_s: 24.0
+    detect_fail_rate: 0.0
+    edge_rate: 0.0
+    excluded: null
+    f_px: 1298.0
+    status: value
+    f_verdict_estimator: REJECT
+    rating_v2: 사용 가능
+    boot_log_std: 0.0628
+    tilt_duration_s: 21.0
+    n_tilt_frames: 316
+    theta_median_deg: 31.8
+    theta_p90_deg: 46.1
+    theta_max_deg: 55.1
+    hand_box_short_ratio_front: 0.4928
+    guide_v2:
+      guide: true
+      reasons: []
+      t_transition: 3.8666666666666667
+    dynamics:
+      axis_bins: 6
+      axis_counts:
+      - 40
+      - 21
+      - 12
+      - 55
+      - 86
+      - 90
+      speed:
+        median: 0.125
+        p90: 0.255
+      bone_ratio_pct:
+        median: 3.516
+        p90: 6.08
+      spread_change_deg:
+        median: 1.658
+        p90: 3.513
+  IMG_7222.MOV:
+    group: G6
+    distance_cm: 50.0
+    hand: right
+    round: 3
+    duration_s: 23.4
+    detect_fail_rate: 0.0
+    edge_rate: 0.0
+    excluded: null
+    f_px: 2230.6
+    status: value
+    f_verdict_estimator: REJECT
+    rating_v2: 사용 불가
+    boot_log_std: 0.0856
+    tilt_duration_s: 20.4
+    n_tilt_frames: 307
+    theta_median_deg: 30.4
+    theta_p90_deg: 39.3
+    theta_max_deg: 45.1
+    hand_box_short_ratio_front: 0.7545
+    guide_v2:
+      guide: false
+      reasons:
+      - 손 박스/짧은 변 0.76 > 0.65
+      t_transition: 4.666666666666667
+    dynamics:
+      axis_bins: 6
+      axis_counts:
+      - 33
+      - 10
+      - 38
+      - 76
+      - 70
+      - 79
+      speed:
+        median: 0.112
+        p90: 0.22
+      bone_ratio_pct:
+        median: 3.081
+        p90: 5.263
+      spread_change_deg:
+        median: 1.852
+        p90: 3.445
+  IMG_7223.MOV:
+    group: G6
+    distance_cm: 60.0
+    hand: right
+    round: 3
+    duration_s: 22.13
+    detect_fail_rate: 0.0
+    edge_rate: 0.0
+    excluded: null
+    f_px: 1866.2
+    status: value
+    f_verdict_estimator: REJECT
+    rating_v2: 사용 불가
+    boot_log_std: 0.04846
+    tilt_duration_s: 19.13
+    n_tilt_frames: 288
+    theta_median_deg: 31.3
+    theta_p90_deg: 43.2
+    theta_max_deg: 48.1
+    hand_box_short_ratio_front: 0.6111
+    guide_v2:
+      guide: true
+      reasons: []
+      t_transition: 3.6666666666666665
+    dynamics:
+      axis_bins: 6
+      axis_counts:
+      - 36
+      - 5
+      - 4
+      - 25
+      - 66
+      - 152
+      speed:
+        median: 0.134
+        p90: 0.261
+      bone_ratio_pct:
+        median: 2.436
+        p90: 3.876
+      spread_change_deg:
+        median: 1.067
+        p90: 2.795
+  IMG_7224.MOV:
+    group: G6
+    distance_cm: 75.0
+    hand: right
+    round: 3
+    duration_s: 23.47
+    detect_fail_rate: 0.0
+    edge_rate: 0.0
+    excluded: null
+    f_px: 1554.4
+    status: value
+    f_verdict_estimator: REJECT
+    rating_v2: 사용 불가
+    boot_log_std: 0.07561
+    tilt_duration_s: 20.47
+    n_tilt_frames: 308
+    theta_median_deg: 30.9
+    theta_p90_deg: 39.4
+    theta_max_deg: 48.4
+    hand_box_short_ratio_front: 0.4794
+    guide_v2:
+      guide: true
+      reasons: []
+      t_transition: 4.2
+    dynamics:
+      axis_bins: 6
+      axis_counts:
+      - 37
+      - 4
+      - 2
+      - 60
+      - 55
+      - 141
+      speed:
+        median: 0.131
+        p90: 0.28
+      bone_ratio_pct:
+        median: 3.137
+        p90: 5.923
+      spread_change_deg:
+        median: 1.037
+        p90: 2.833
+  IMG_7225.MOV:
+    group: G7
+    distance_cm: 60.0
+    hand: left
+    round: null
+    duration_s: 21.47
+    detect_fail_rate: 0.0
+    edge_rate: 0.0
+    excluded: null
+    f_px: 1753.7
+    status: value
+    f_verdict_estimator: REJECT
+    rating_v2: 사용 가능
+    boot_log_std: 0.05566
+    tilt_duration_s: 18.47
+    n_tilt_frames: 278
+    theta_median_deg: 31.5
+    theta_p90_deg: 41.2
+    theta_max_deg: 72.0
+    hand_box_short_ratio_front: 0.6537
+    guide_v2:
+      guide: false
+      reasons:
+      - 손 박스/짧은 변 0.68 > 0.65
+      t_transition: 3.8666666666666667
+    dynamics:
+      axis_bins: 6
+      axis_counts:
+      - 55
+      - 34
+      - 30
+      - 41
+      - 38
+      - 59
+      speed:
+        median: 0.16
+        p90: 0.281
+      bone_ratio_pct:
+        median: 2.661
+        p90: 5.519
+      spread_change_deg:
+        median: 2.284
+        p90: 5.24
+  IMG_7226.MOV:
+    group: G7
+    distance_cm: 60.0
+    hand: left
+    round: null
+    duration_s: 21.47
+    detect_fail_rate: 0.0
+    edge_rate: 0.0
+    excluded: null
+    f_px: 1368.0
+    status: value
+    f_verdict_estimator: REJECT
+    rating_v2: 사용 불가
+    boot_log_std: 0.04328
+    tilt_duration_s: 18.47
+    n_tilt_frames: 278
+    theta_median_deg: 30.6
+    theta_p90_deg: 39.4
+    theta_max_deg: 52.3
+    hand_box_short_ratio_front: 0.652
+    guide_v2:
+      guide: true
+      reasons: []
+      t_transition: 4.0
+    dynamics:
+      axis_bins: 6
+      axis_counts:
+      - 62
+      - 52
+      - 29
+      - 32
+      - 27
+      - 61
+      speed:
+        median: 0.131
+        p90: 0.232
+      bone_ratio_pct:
+        median: 2.667
+        p90: 4.439
+      spread_change_deg:
+        median: 1.685
+        p90: 3.279
+  IMG_7227.MOV:
+    group: G7
+    distance_cm: 60.0
+    hand: left
+    round: null
+    duration_s: 22.4
+    detect_fail_rate: 0.0
+    edge_rate: 0.0
+    excluded: null
+    f_px: 1387.7
+    status: value
+    f_verdict_estimator: REJECT
+    rating_v2: 사용 불가
+    boot_log_std: 0.05029
+    tilt_duration_s: 19.4
+    n_tilt_frames: 292
+    theta_median_deg: 30.7
+    theta_p90_deg: 38.4
+    theta_max_deg: 42.4
+    hand_box_short_ratio_front: 0.6318
+    guide_v2:
+      guide: true
+      reasons: []
+      t_transition: 4.2
+    dynamics:
+      axis_bins: 6
+      axis_counts:
+      - 66
+      - 49
+      - 31
+      - 25
+      - 28
+      - 70
+      speed:
+        median: 0.161
+        p90: 0.321
+      bone_ratio_pct:
+        median: 2.457
+        p90: 4.234
+      spread_change_deg:
+        median: 1.469
+        p90: 3.604
+verification_v2:
+  verdict: 판단 불가
+  n_usable: 3
+  n_videos: 11
+  reason: 사용 가능 영상 3개 < 5개
+groups:
+  G6:
+    verdict: 실패
+    reason: null
+    max_over_min: 1.4963
+    distances:
+      '50':
+        n_videos: 2
+        n_excluded: 1
+        pooled_f_px: 2092.4
+        interval_95_px:
+        - 1993.9
+        - 2230.6
+      '60':
+        n_videos: 3
+        n_excluded: 0
+        pooled_f_px: 1766.8
+        interval_95_px:
+        - 1527.3
+        - 2122.1
+      '75':
+        n_videos: 3
+        n_excluded: 0
+        pooled_f_px: 1398.4
+        interval_95_px:
+        - 1298.0
+        - 1554.4
+  G7:
+    verdict: 실패
+    reason: null
+    n_videos: 3
+    n_excluded: 0
+    pooled_f_px: 1553.8
+    interval_95_px:
+    - 1368.0
+    - 1753.7
+records:
+  slope_log_f_vs_log_distance:
+    video: -1.0061
+    pooled: -0.9958
+  spearman:
+    video: -0.8063
+    pooled: -1.0
+  pooled_f_by_round_px:
+    '1': 1496.8
+    '2': 1924.1
+    '3': 2055.2
+hand_compare:
+  right:
+    videos:
+    - IMG_7217.MOV
+    - IMG_7220.MOV
+    - IMG_7223.MOV
+    pooled_f_px: 1766.8
+    interval_95_px:
+    - 1527.3
+    - 2122.1
+  left:
+    videos:
+    - IMG_7225.MOV
+    - IMG_7226.MOV
+    - IMG_7227.MOV
+    pooled_f_px: 1553.8
+    interval_95_px:
+    - 1368.0
+    - 1753.7
+  ratio_left_over_right: 0.8795
