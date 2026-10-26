@@ -32,14 +32,14 @@ class MainWindow(QMainWindow):
         browse_folder = QPushButton("Browse folder")
         browse_files.clicked.connect(self._browse_files)
         browse_folder.clicked.connect(self._browse_folder)
-        start = QPushButton("Start processing"); start.clicked.connect(self._start_selected)
+        self.start_button = QPushButton("Start processing"); self.start_button.clicked.connect(self._start_selected)
         open_result = QPushButton("Open saved result"); open_result.clicked.connect(self._open_result)
         self.cancel = QPushButton("Cancel"); self.cancel.setEnabled(False); self.cancel.clicked.connect(self._cancel_job)
         self.progress = QLabel("Waiting")
         buttons = QHBoxLayout()
         buttons.addWidget(browse_files)
         buttons.addWidget(browse_folder)
-        buttons.addWidget(start); buttons.addWidget(open_result); buttons.addWidget(self.cancel)
+        buttons.addWidget(self.start_button); buttons.addWidget(open_result); buttons.addWidget(self.cancel)
         settings_row = QHBoxLayout()
         theme = QComboBox(); theme.addItems(["System", "Light", "Dark"]); theme.setCurrentText(self.settings.get("theme").title()); theme.currentTextChanged.connect(self._set_theme)
         language = QComboBox(); language.addItems(["English", "한국어"]); language.setCurrentText("한국어" if self.settings.get("language") == "ko" else "English"); language.currentTextChanged.connect(lambda value: self._set_setting("language", "ko" if value == "한국어" else "en"))
@@ -106,6 +106,8 @@ class MainWindow(QMainWindow):
             self._add_paths(discover_media(Path(folder)))
 
     def _start_selected(self) -> None:
+        if self._job_thread is not None and self._job_thread.isRunning():
+            return
         item = self.queue.currentItem()
         if item is None:
             self.progress.setText("Select a media item first")
@@ -114,8 +116,14 @@ class MainWindow(QMainWindow):
         self._job_thread = JobThread(ProcessingJob(item.text(), operation=lambda job: self._process_media(input_path, job)))
         self._job_thread.update.connect(lambda event: self.progress.setText(f"{event.stage + ': ' if event.stage else ''}{event.state.value}: {event.current}/{event.total} ({event.progress:.0%})"))
         self._job_thread.failed.connect(lambda message: self.progress.setText(f"Failed: {message}"))
-        self._job_thread.finished.connect(lambda: self.cancel.setEnabled(False))
-        self.cancel.setEnabled(True); self._job_thread.start()
+        self._job_thread.finished.connect(self._on_job_finished)
+        self.start_button.setEnabled(False)
+        self.cancel.setEnabled(True)
+        self._job_thread.start()
+
+    def _on_job_finished(self) -> None:
+        self.start_button.setEnabled(True)
+        self.cancel.setEnabled(False)
 
     def _process_media(self, input_path: Path, job=None) -> None:
         info = probe_media(input_path)
