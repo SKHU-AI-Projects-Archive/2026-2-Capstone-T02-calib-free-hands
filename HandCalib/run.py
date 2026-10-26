@@ -9,6 +9,7 @@
     python HandCalib/run.py f-response     --config HandCalib/configs/22_f_response.yaml [--videos A,B] [results-yaml --run DIR]
     python HandCalib/run.py error-factors  --config HandCalib/configs/23_error_factors.yaml [--videos A,B] [results-yaml --run DIR]
     python HandCalib/run.py long-video-check --config HandCalib/configs/25_long_video_check.yaml [bias | --videos A,B | results-yaml --run DIR]
+    python HandCalib/run.py generalization --config HandCalib/configs/26_generalization.yaml [--videos A,B] [results-yaml --run DIR]
 
 Consolidated from run_hand_focal.py (14, process_video only), run_detector_swap.py (16, the per-detector processing that 17 calls),
 run_protocol_rerun.py and run_frame_filter_diag.py (17),
@@ -3359,10 +3360,382 @@ def long_main(argv=None):
 
 
 # ====================================================================================================
+# gen  (experiment 26: rating v2, generalisation groups, trajectory effect of the f error; new section)
+#
+#     python HandCalib/run.py generalization --config HandCalib/configs/26_generalization.yaml [--videos A.MOV,B.MOV] [--out DIR]
+#     python HandCalib/run.py generalization --config ... results-yaml --run runs/26_generalization/<UTC>
+# The videos (file, group, person_id, phone, lens, glove, ref_f) come from the yaml. Every group G1-G5 can be processed; only the groups present are judged.
+# ====================================================================================================
+
+GEN_NOTE = ("새 판정 규칙(v2), 일반화 그룹, f 오차가 손 궤적에 주는 영향을 본 실험이다. 후보 설정(mediapipe_hands + 손목 제외 + fixed_template)과 모든 문턱값은 실행 전에 고정했고 바꾸지 않았다. "
+            "기준 f(ref_f)와의 비교는 summary.md에만 있다.")
+GEN_GROUP_KO = {"G1": "다른 사람", "G2": "다른 폰", "G3": "다른 렌즈(0.5배)", "G4": "장갑", "G5": "보정 + 작업 구간"}
+
+
+def gen_traj_variants(res: dict, cfg: dict, pooled_f: float | None) -> dict:
+    """Trajectories (smoothed) of one video for the reference f and every comparison f: {name: {"f", "P" (n, 3)}} and the time vector."""
+    tcfg = cfg["trajectory"]
+    rows = res["traj"]["rows"]
+    if not rows:
+        return {}
+    t = np.array([r["time_s"] for r in rows])
+    u, v = np.array([r["u"] for r in rows]), np.array([r["v"] for r in rows])
+    ell = res["traj"]["ell_front_px"] * np.array([r["size_ratio"] for r in rows])
+    W, H = res["size"]
+    L = float(tcfg["hand_length_mm"])
+    fref = res["ref_f"]
+    fs = {"ref": fref, **{f"eps_{int(e):+d}": fref * (1 + e / 100.0) for e in tcfg["epsilons_pct"]}}
+    if "ft" in res and not res["ft"]["at_grid_edge"]:
+        fs["est"] = res["ft"]["f"]
+    if pooled_f is not None:
+        fs["pooled"] = pooled_f
+    return {"t": t, "variants": {k: {"f": f, "P": hf.gen_smooth_traj(t, hf.gen_trajectory(u, v, ell, f, L, W, H), float(tcfg["median_window_s"]))} for k, f in fs.items()}}
+
+
+def gen_main(argv=None):
+    ap = argparse.ArgumentParser()
+    ap.add_argument("--config", default=str(hf.PROJECT_ROOT / "configs/26_generalization.yaml"))
+    sub = ap.add_subparsers(dest="cmd")
+    ry = sub.add_parser("results-yaml")
+    ry.add_argument("--run", required=True)
+    ap.add_argument("--videos", default=None, help="comma list of file names narrowing the yaml entries")
+    ap.add_argument("--out", default=None)
+    a = ap.parse_args(argv)
+    text = Path(a.config).read_text()
+    cfg = yaml.safe_load(text)
+    if a.cmd == "results-yaml":
+        print(gen_results_yaml(hf.resolve(a.run), cfg))
+        return None
+    entries = list(cfg.get("videos") or [])
+    if a.videos:
+        entries = [e for e in entries if e["file"] in a.videos.split(",")]
+    if not entries:
+        found = hf.long_find_new_videos(cfg["input_dir"], cfg["after_number"])
+        print(f"videos is empty. Hand videos above IMG_{cfg['after_number']}: " + (", ".join(f"{x['video']} ({x['duration_s']:.1f} s, {x['width']}x{x['height']})" for x in found) or "(none)"))
+        print("Confirm with the user, then put the entries (file, group, person_id, phone, lens, glove, ref_f) into videos of the yaml and commit it before the run.")
+        return found
+    entries = hf.gen_check_videos(entries)
+    missing = [e["file"] for e in entries if not (Path(cfg["input_dir"]).expanduser() / e["file"]).exists()]
+    if missing:
+        raise SystemExit(f"영상이 없습니다: {missing}")
+    run_root = Path(a.out).expanduser() if a.out else hf.resolve(cfg["output"]["root"]) / utc_stamp()
+    run_root.mkdir(parents=True)
+    (run_root / "figures").mkdir()
+    log = Log(run_root / "log.txt")
+    log(f"26 일반화 확인: 영상 {[e['file'] for e in entries]}, 그룹 {sorted({e['group'] for e in entries})} → {run_root}")
+    t0 = time.time()
+    tmp_root = run_root / "_frames"
+    tmp_root.mkdir()
+    cjob = {k: cfg[k] for k in ("candidate", "exclusion", "detector_settings", "guide", "trajectory", "calib_end_default_s") if k in cfg}
+    for k in ("OMP_NUM_THREADS", "OPENBLAS_NUM_THREADS", "MKL_NUM_THREADS"):
+        os.environ[k] = "1"
+    import multiprocessing as mp
+    from concurrent.futures import ProcessPoolExecutor
+    try:
+        with ProcessPoolExecutor(max_workers=int(cfg["workers"]), mp_context=mp.get_context("spawn")) as ex:
+            preps = list(ex.map(hf.fresp_prepare, [(e["file"], cfg["input_dir"], cfg["pipeline"], {}, str(tmp_root)) for e in entries]))
+            npz = hf.fresp_detect_many([((p["video"], "orig"), p["frames"]) for p in preps], cfg["detector_settings"][cfg["candidate"]["detector"]], run_root / "detection_cache", int(cfg["n_workers"]), log)
+            jobs_args = [(e, p, npz[(p["video"], "orig")], cfg["pipeline"], cjob) for e, p in zip(entries, preps)]
+            results = list(ex.map(hf.gen_video, jobs_args))
+    finally:
+        shutil.rmtree(tmp_root, ignore_errors=True)
+    v2 = cfg["rating_v2"]
+    for r in results:
+        if r["excluded"]:
+            log(f"  {r['video']} ({r['group']}): 제외 — {'; '.join(r['excluded'])} (손 검출 실패 {100 * (1 - r['detect_rate']):.1f}%)")
+        elif "ft" in r:
+            r["rating"] = hf.gen_rating(r["motion"]["tilt_duration_s"], r["motion"]["theta_max_deg"], r["ft"]["boot_log_std"], v2)
+            log(f"  {r['video']} ({r['group']}, {r['person_id']}): 기울기 {r['motion']['tilt_duration_s']:.1f}초, 최대 θ2d {r['motion']['theta_max_deg']:.0f}°, f {format(r['ft']['f'], '.1f') + ' px' if not r['ft']['at_grid_edge'] else '값 없음'}, "
+                f"로그 SD {long_fmt(r['ft']['boot_log_std'], 4)}, 등급 {r['rating']}")
+        else:
+            log(f"  {r['video']}: 분석 실패 ({r.get('failed')})")
+    ok = [r for r in results if "ft" in r]
+    # ---- groups
+    groups = {}
+    for g in hf.GEN_GROUPS:
+        gv = [r for r in results if r["group"] == g]
+        gok = [r for r in gv if "ft" in r]
+        if g == "G5":
+            groups[g] = {"verdict": "판정 없음 (궤적 분석용)" if gv else "영상 없음", "n_videos": len(gok), "n_excluded": len(gv) - len(gok)}
+            continue
+        if not gv:
+            groups[g] = {"verdict": "영상 없음", "n_videos": 0, "n_excluded": 0}
+            continue
+        ref = float(np.mean([r["ref_f"] for r in gv]))
+        grid = np.array(gok[0]["curve"]["grid"]) if gok else np.array([])
+        d = hf.gen_group_verdict([r["curve"]["cost"] for r in gok], grid, [None if r["ft"]["at_grid_edge"] else r["ft"]["f"] for r in gok], ref, cfg["generalization"], len(gv) - len(gok), len(gv)) if gok else \
+            {"verdict": "판단 불가", "n_videos": 0, "n_excluded": len(gv), "n_total": len(gv), "ref_f": ref, "reason": "분석된 영상이 없음"}
+        d["detect_fail_rates"] = [round(1 - r["detect_rate"], 4) for r in gv]
+        if g == "G1" and gok:
+            d["by_person"] = {}
+            for pid in sorted({r["person_id"] for r in gok}):
+                pv = [r for r in gok if r["person_id"] == pid]
+                d["by_person"][pid] = {"n_videos": len(pv), "pooled_f": hf.long_pooled_estimate([r["curve"]["cost"] for r in pv], grid)["f"], "at_grid_edge": hf.long_pooled_estimate([r["curve"]["cost"] for r in pv], grid)["at_grid_edge"]}
+        groups[g] = d
+        log(f"  {g} ({GEN_GROUP_KO[g]}): {d['verdict']}" + (f" (합동 f {d['pooled_f']:.1f} px)" if "pooled_f" in d else ""))
+    rows = [{"video": r["video"], "rating": r["rating"], "f": None if r["ft"]["at_grid_edge"] else r["ft"]["f"], "ref_f": r["ref_f"], "sigma": r["ft"]["boot_log_std"]} for r in ok]
+    ver = hf.gen_verify(rows, cfg["verification_v2"])
+    log(f"  판정 v2 검증: {ver['verdict']}" + (f" ({ver.get('reason')})" if ver.get("reason") else ""))
+    # ---- existing videos, rated after the fact
+    ex_rows = hf.gen_existing_rows(cfg)
+    for r in ex_rows:
+        r["rating"] = hf.gen_rating(r["tilt_s"], r["theta_max"], r["sigma"], v2)
+    # ---- trajectories
+    traj = {}
+    for r in ok:
+        gp = groups.get(r["group"], {})
+        pooled = gp.get("pooled_f") if gp.get("verdict") in ("통과", "실패", "판단 불가") and not gp.get("at_grid_edge") else None
+        tv = gen_traj_variants(r, cfg, pooled)
+        if tv:
+            traj[r["video"]] = {"t": tv["t"], "variants": tv["variants"], "metrics": {k: hf.gen_step_metrics(tv["t"], tv["variants"]["ref"]["P"], x["P"], cfg["trajectory"]) for k, x in tv["variants"].items() if k != "ref"}}
+    gen_figures(run_root / "figures", results, ex_rows, groups, traj, cfg)
+    gen_report(run_root / "report.md", results, ex_rows, traj, cfg)
+    gen_summary(run_root / "summary.md", results, ex_rows, groups, ver, traj, cfg)
+    with (run_root / "per_frame.csv").open("w", newline="") as fh:
+        wr = csv.writer(fh)
+        wr.writerow(["video", "index", "time_s", "theta2d_deg", "centre_u", "centre_v", "size_ratio", "segment"])
+        for r in ok:
+            for q in r["traj"]["rows"]:
+                wr.writerow([r["video"], q["index"], f"{q['time_s']:.4f}", "" if q["theta2d_deg"] is None else f"{q['theta2d_deg']:.2f}", f"{q['u']:.2f}", f"{q['v']:.2f}", f"{q['size_ratio']:.5f}", r["traj"]["segment"]])
+    with (run_root / "trajectory.csv").open("w", newline="") as fh:
+        wr = csv.writer(fh)
+        names = None
+        for vid, tj in traj.items():
+            if names is None:
+                names = list(tj["variants"])
+                wr.writerow(["video", "time_s"] + [f"{n}_{c}" for n in names for c in ("X_mm", "Y_mm", "Z_mm")])
+            for i, ti in enumerate(tj["t"]):
+                wr.writerow([vid, f"{ti:.4f}"] + [f"{tj['variants'][n]['P'][i][k]:.3f}" for n in names if n in tj["variants"] for k in range(3)])
+    (run_root / "results.json").write_text(json.dumps(hf.jsonable({"videos": results, "groups": groups, "verification_v2": ver, "existing": ex_rows,
+                                                                "trajectory_metrics": {k: v["metrics"] for k, v in traj.items()}}), ensure_ascii=False, indent=1))
+    meta = hf.provenance_build(text, a.config, {"code_25": cfg["code_25"], "videos": [e["file"] for e in entries], "elapsed_s": time.time() - t0})
+    (run_root / "metadata.json").write_text(json.dumps(hf.jsonable(meta), ensure_ascii=False, indent=1))
+    log(f"완료 {time.time() - t0:.0f} s → {run_root}")
+    log.close()
+    return run_root, results, groups, ver
+
+
+def gen_figures(out: Path, results: list, ex_rows: list, groups: dict, traj: dict, cfg: dict):
+    plt = _plt()
+    ok = [r for r in results if "ft" in r]
+    gs = [g for g in ("G1", "G2", "G3", "G4") if any(r["group"] == g for r in ok)]
+    if gs:
+        fig, axs = plt.subplots(1, len(gs), figsize=(4.4 * len(gs), 4), squeeze=False)
+        for ax, g in zip(axs[0], gs):
+            vs = [r for r in ok if r["group"] == g]
+            for i, r in enumerate(vs):
+                f, sg = r["ft"]["f"], r["ft"]["boot_log_std"]
+                if r["ft"]["at_grid_edge"]:
+                    ax.plot(i, f, "x", color="#c00")
+                else:
+                    ax.errorbar(i, f, yerr=[[f - f * np.exp(-sg)], [f * np.exp(sg) - f]], fmt="o", color="#2a6fbb", capsize=3)
+            gp = groups.get(g, {})
+            if "pooled_f" in gp and not gp["at_grid_edge"]:
+                ax.axhspan(*gp["interval_95"], color="#c47a00", alpha=0.18)
+                ax.axhline(gp["pooled_f"], color="#c47a00", lw=1.5, label=f"합동 f {gp['pooled_f']:.0f} px (95% 구간)")
+                ax.legend(fontsize=7)
+            ax.set_xticks(range(len(vs)))
+            ax.set_xticklabels([r["video"][4:8] for r in vs], fontsize=8)
+            ax.set_title(f"{g} {GEN_GROUP_KO[g]}", fontsize=9)
+            ax.set_ylabel("f (px), 막대 = 로그 SD ±1σ")
+            ax.grid(alpha=0.3)
+        fig.tight_layout()
+        fig.savefig(out / "f_by_group.png", dpi=110)
+        plt.close(fig)
+    fig, ax = plt.subplots(figsize=(6.4, 4))
+    cols = {"사용 가능": "#3a9a4a", "참고": "#c47a00", "사용 불가": "#c00"}
+    pts = [(r["rating"], abs(r["ft"]["f"] / r["ref_f"] - 1) * 100, "새") for r in ok if not r["ft"]["at_grid_edge"]] + \
+          [(r["rating"], abs(r["f"] / r["ref_f"] - 1) * 100, "기존") for r in ex_rows if not r["at_grid_edge"]]
+    for k, name in enumerate(("사용 가능", "참고", "사용 불가")):
+        for src, mk in (("기존", "o"), ("새", "D")):
+            ys = [y for rt, y, s_ in pts if rt == name and s_ == src]
+            ax.plot([k + (0.12 if src == "새" else -0.12)] * len(ys) + np.random.default_rng(0).uniform(-0.05, 0.05, len(ys)), ys, mk, color=cols[name], alpha=0.8, label=f"{src} 영상" if k == 0 else None)
+    ax.set_xticks(range(3))
+    ax.set_xticklabels(["사용 가능", "참고", "사용 불가"])
+    ax.set_ylabel("|f 오차| (%) (ref_f 대비)")
+    ax.legend(fontsize=8)
+    ax.grid(alpha=0.3)
+    fig.tight_layout()
+    fig.savefig(out / "error_by_rating.png", dpi=110)
+    plt.close(fig)
+    if traj:
+        eps = [int(e) for e in cfg["trajectory"]["epsilons_pct"]]
+        fig, axs = plt.subplots(1, 3, figsize=(12, 3.6))
+        for vid, tj in traj.items():
+            for ax, key in zip(axs, ("magnitude_err_median_pct", "direction_err_median_deg", "depth_err_median_mm")):
+                ax.plot(eps, [tj["metrics"][f"eps_{e:+d}"][key] if tj["metrics"][f"eps_{e:+d}"][key] is not None else np.nan for e in eps], "o-", ms=4, label=vid[4:8])
+        for ax, ttl in zip(axs, ("이동량 오차 중앙값 (%)", "방향 오차 중앙값 (°)", "깊이 이동 오차 중앙값 (mm)")):
+            ax.set_xlabel("ε (f = ref_f × (1+ε), %)")
+            ax.set_title(ttl, fontsize=9)
+            ax.grid(alpha=0.3)
+        axs[0].legend(fontsize=7)
+        fig.tight_layout()
+        fig.savefig(out / "trajectory_eps_error.png", dpi=110)
+        plt.close(fig)
+        vid, tj = next(iter(traj.items()))
+        fig = plt.figure(figsize=(6.4, 5))
+        ax = fig.add_subplot(111, projection="3d")
+        for name, col in (("ref", "k"), ("eps_-20", "#2a6fbb"), ("eps_+20", "#c47a00")):
+            P = tj["variants"][name]["P"]
+            ax.plot(P[:, 0], P[:, 2], -P[:, 1], color=col, lw=1.2, label=("기준 f" if name == "ref" else name.replace("eps_", "ε ") + "%"))
+        ax.set_xlabel("X (mm)")
+        ax.set_ylabel("Z 깊이 (mm)")
+        ax.set_zlabel("−Y (mm)")
+        ax.set_title(f"{vid} 손 중심 궤적", fontsize=9)
+        ax.legend(fontsize=8)
+        fig.tight_layout()
+        fig.savefig(out / "trajectory_3d.png", dpi=110)
+        plt.close(fig)
+
+
+def gen_report(path: Path, results: list, ex_rows: list, traj: dict, cfg: dict):
+    v2 = cfg["rating_v2"]
+    ok = [r for r in results if "ft" in r]
+    L = ["# 실험 26: 판정 v2, 일반화, f 오차의 궤적 영향", "", GEN_NOTE, "",
+         f"후보: {cfg['candidate']['detector']} + wrist_mode {cfg['candidate']['wrist_mode']} + {cfg['candidate']['estimator']} (22·25와 같음). 사람은 person_id로만 적고, 폰은 main / teammate로만 적는다.", "",
+         "## 1. 영상 목록과 제외", "", f"제외 규칙(실행 전 고정): 유효한 정면 창(1초) 없음, 가장자리 접촉 프레임 > {100 * cfg['exclusion']['edge_rate_max']:.0f}%, 손 검출 실패 프레임 > {100 * cfg['exclusion']['detect_fail_max']:.0f}%.", "",
+         "| 그룹 | 영상 | person_id | 폰 | 렌즈 | 장갑 | 길이(초) | 검출 실패율 | 가장자리 접촉 | 포함 | 이유 |", "|---|---|---|---|---|---|---|---|---|---|---|"]
+    for r in results:
+        L.append(f"| {r['group']} {GEN_GROUP_KO[r['group']]} | {r['video']} | {r['person_id']} | {r['phone']} | {r['lens']} | {'예' if r['glove'] else '아니오'} | {r['duration_s']:.1f} | {100 * (1 - r['detect_rate']):.1f}% | "
+                 f"{100 * r['edge_rate']:.1f}% | {'제외' if r['excluded'] else ('포함' if 'ft' in r else '분석 실패')} | {'; '.join(r['excluded']) or r.get('failed', '-')} |")
+    L += ["", "## 2. 영상별 촬영 지표와 신뢰 등급(v2)", "",
+          f"등급 규칙: 사용 가능 = 기울기 구간 ≥ {v2['tilt_min_s']:.0f}초, θ2d 최댓값 ≥ {v2['theta_max_min_deg']:.0f}°, 부트스트랩 로그 SD ≤ {v2['usable_log_std_max']}; 참고 = 촬영 조건 둘은 만족하고 로그 SD ≤ {v2['reference_log_std_max']}; 그 외 사용 불가.", "",
+          "| 영상 | 기울기 구간(초) | 기울기 프레임 | θ2d 중앙값 / 90번째 / 최댓값(°) | 정면 창 손 박스/짧은 변 | 가이드 v2 | 전환 시각(초) | 부트스트랩 로그 SD | 등급 |", "|---|---|---|---|---|---|---|---|---|"]
+    for r in ok:
+        m, g = r["motion"], r.get("guide") or {}
+        L.append(f"| {r['video']} | {m['tilt_duration_s']:.1f} | {m['n_tilt_frames']} | {long_fmt(m['theta_median_deg'], 1)} / {long_fmt(m['theta_p90_deg'], 1)} / {long_fmt(m['theta_max_deg'], 1)} | {r['hand_box_short_ratio_front']:.3f} | "
+                 f"{('충족' if g.get('guide') else '미충족') if 'guide' in g else '-'}{(': ' + '; '.join(g['reasons'])) if g.get('reasons') else ''} | {long_fmt(g.get('t_transition'), 2)} | {long_fmt(r['ft']['boot_log_std'], 4)} | **{r['rating']}** |")
+    L += ["", "## 3. 초점거리와 불확실성 (값만)", "", "| 영상 | f (px) | f 판정(추정기) | 부트스트랩 로그 SD | 상대 SD(22·25와 같은 지표) |", "|---|---|---|---|---|"]
+    for r in ok:
+        f = r["ft"]
+        L.append(f"| {r['video']} | {'값 없음 (' + str(f['side']) + ')' if f['at_grid_edge'] else format(f['f'], '.1f')} | {f['verdict']} | {long_fmt(f['boot_log_std'], 4)} | {long_fmt(f['boot_rel_std'], 4)} |")
+    L += ["", "## 4. 궤적 지표: f = ref_f × (1+ε)로 바꿨을 때 (기준 궤적 = f가 ref_f일 때)", "",
+          f"손 중심 궤적을 {cfg['trajectory']['median_window_s']}초 중앙값 필터로 평활화하고 {cfg['trajectory']['step_s']}초 간격 이동 벡터를 비교했다(기준 이동 {cfg['trajectory']['min_step_mm']:.0f} mm 미만은 제외). "
+          "X, Y는 f와 무관하고 Z만 f에 비례하므로 오차는 깊이 이동에서 생긴다.", ""]
+    for vid, tj in traj.items():
+        r = next(x for x in ok if x["video"] == vid)
+        L += [f"**{vid}** (구간: {r['traj']['segment']}, 프레임 {len(tj['t'])}장, 이동 벡터 {next(iter(tj['metrics'].values()))['n_steps']}개)", "",
+              "| 비교 | 이동량 오차 중앙값 / 90번째(%) | 방향 오차 중앙값 / 90번째(°) | 깊이 이동 오차 중앙값 / 90번째(mm) | 기준 이동의 깊이 성분(중앙값) |", "|---|---|---|---|---|"]
+        for k, m in tj["metrics"].items():
+            if k in ("est", "pooled"):
+                continue
+            L.append(f"| {k.replace('eps_', 'ε ')}% | {long_fmt(m['magnitude_err_median_pct'], 1)} / {long_fmt(m['magnitude_err_p90_pct'], 1)} | {long_fmt(m['direction_err_median_deg'], 1)} / {long_fmt(m['direction_err_p90_deg'], 1)} | "
+                     f"{long_fmt(m['depth_err_median_mm'], 1)} / {long_fmt(m['depth_err_p90_mm'], 1)} | {long_fmt(m['depth_share_median'], 2)} |")
+        L.append("")
+    L += ["## 5. 한계", "",
+          "- 궤적은 기울기 구간(손을 제자리에서 기울이는 구간)으로 계산했다. 제자리 회전이라 실제 작업보다 깊이 이동이 작아서, 깊이 방향 오차를 과소평가할 수 있다.",
+          "- 0.5배 렌즈 영상의 수치는 1배 영상과 직접 비교하기 어렵다(렌즈가 다르고 왜곡이 크다).",
+          "- 손 길이 L은 입력값(hand_length_mm)이고, 손 크기는 정면 창 대비 비율로 구한 값이라 절대 깊이에는 L과 정면 창의 크기 오차가 그대로 들어간다.",
+          "- ref_f 대비 비교, 그룹 판정의 근거 표, 추정 f·합동 f로 만든 궤적의 오차는 summary.md에 있다.", ""]
+    path.write_text("\n".join(L) + "\n")
+
+
+def gen_summary(path: Path, results: list, ex_rows: list, groups: dict, ver: dict, traj: dict, cfg: dict):
+    pct = lambda x: "-" if x is None else f"{100 * x:+.1f}%"      # noqa: E731
+    ok = [r for r in results if "ft" in r]
+    L = ["# 실험 26 summary", "", f"**{GEN_NOTE}**", "", "## 판정", "",
+         f"- **판정 v2 검증: {ver['verdict']}**" + (f" — {ver['reason']}" if ver.get("reason") else "") + f" (사용 가능 {ver['n_usable']} / 새 영상 {ver['n_videos']})"]
+    for g in hf.GEN_GROUPS:
+        d = groups.get(g, {"verdict": "영상 없음"})
+        extra = ""
+        if "pooled_f" in d:
+            extra = f" — 합동 f {d['pooled_f']:.1f} px (95% 구간 {d['interval_95'][0]:.0f}–{d['interval_95'][1]:.0f}), ref_f {d['ref_f']:.0f}, 합동이 ±{100 * cfg['generalization']['pooled_tol']:.0f}% 안: {'예' if d['pooled_within_tol'] else '아니오'}, " \
+                    f"영상 중 ±{100 * cfg['generalization']['video_tol']:.0f}% 안 {100 * d['video_share_within_tol']:.0f}% (영상 {d['n_videos']}개, 제외 {d['n_excluded']}개)"
+        elif d.get("reason"):
+            extra = f" — {d['reason']}"
+        L.append(f"- **{g} {GEN_GROUP_KO[g]}: {d['verdict']}**{extra}")
+    L += ["", "## 1. 영상별 ref_f 대비 오차", "", "| 영상 | 그룹 | ref_f | f | 오차 | 로그 SD | 2σ 안 | 등급 | 가이드 v2 |", "|---|---|---|---|---|---|---|---|---|"]
+    for r in ok:
+        f = r["ft"]
+        e = None if f["at_grid_edge"] else f["f"] / r["ref_f"] - 1
+        w = None if f["at_grid_edge"] or not f["boot_log_std"] else abs(np.log(f["f"] / r["ref_f"])) <= cfg["verification_v2"]["within_sigma"] * f["boot_log_std"]
+        L.append(f"| {r['video']} | {r['group']} | {r['ref_f']:.0f} | {'값 없음' if f['at_grid_edge'] else format(f['f'], '.1f')} | {pct(e)} | {long_fmt(f['boot_log_std'], 4)} | {'-' if w is None else ('예' if w else '아니오')} | {r['rating']} | "
+                 f"{('충족' if (r.get('guide') or {}).get('guide') else '미충족') if 'guide' in (r.get('guide') or {}) else '-'} |")
+    L += ["", "## 2. 그룹 합동 추정 (근거 표)", "", "| 그룹 | 영상 | 제외 | 합동 f | 95% 구간 | ref_f 대비 | 영상 중 ±15% 안 | 검출 실패율(영상별) | 판정 |", "|---|---|---|---|---|---|---|---|---|"]
+    for g, d in groups.items():
+        if "pooled_f" in d:
+            L.append(f"| {g} | {d['n_videos']} | {d['n_excluded']} | {'값 없음' if d['at_grid_edge'] else format(d['pooled_f'], '.1f')} | {d['interval_95'][0]:.0f}–{d['interval_95'][1]:.0f} | {pct(None if d['at_grid_edge'] else d['pooled_f'] / d['ref_f'] - 1)} | "
+                     f"{100 * d['video_share_within_tol']:.0f}% | {', '.join(f'{100 * x:.1f}%' for x in d['detect_fail_rates'])} | {d['verdict']} |")
+        elif d.get("n_videos", 0) or d.get("n_excluded", 0):
+            L.append(f"| {g} | {d.get('n_videos', 0)} | {d.get('n_excluded', 0)} | - | - | - | - | {', '.join(f'{100 * x:.1f}%' for x in d.get('detect_fail_rates', []))} | {d['verdict']} |")
+        else:
+            L.append(f"| {g} | 0 | 0 | - | - | - | - | - | 영상 없음 |")
+    for g, d in groups.items():
+        if d.get("by_person"):
+            L += ["", f"{g} 사람별 합동 f: " + ", ".join(f"{k} {'값 없음' if v['at_grid_edge'] else format(v['pooled_f'], '.1f')} px ({v['n_videos']}개)" for k, v in d["by_person"].items())]
+    L += ["", "## 3. 기존 영상과의 비교 (사후 기술, 검증 아님)", "",
+          "기존 영상 22개 중 22·25의 1배 14개와 7184를 같은 v2 규칙으로 등급을 매겼다. 판정 v2를 기존 영상으로 검증한 것이 아니다.", "",
+          "| 영상 | 출처 | ref_f | f | 오차 | 기울기 구간(초) | θ2d 최댓값(°) | 로그 SD | 등급 |", "|---|---|---|---|---|---|---|---|---|"]
+    for r in ex_rows:
+        L.append(f"| {r['video']} | {r['source']} | {r['ref_f']:.0f} | {'값 없음' if r['at_grid_edge'] else format(r['f'], '.1f')} | {pct(None if r['at_grid_edge'] else r['f'] / r['ref_f'] - 1)} | {r['tilt_s']:.1f} | "
+                 f"{long_fmt(r['theta_max'], 0)} | {long_fmt(r['sigma'], 4)}{' (상대 SD)' if r.get('sigma_is_rel_std') else ''} | {r['rating']} |")
+    lens_old = [r for r in ex_rows if r["source"] == "22 (0.5x)"]
+    lens_new = [r for r in ok if r["lens"] == "0.5x"]
+    if lens_old and lens_new:
+        o = lens_old[0]
+        L += ["", f"### 0.5배: {o['video']}(실험 22, 약 15초)와 이번 영상", "", "| 영상 | 길이/기울기 구간(초) | f | ref_f 대비 | 로그 SD | θ2d 최댓값(°) | 등급 |", "|---|---|---|---|---|---|---|",
+              f"| {o['video']} | 15 / {o['tilt_s']:.1f} | {format(o['f'], '.1f')} | {pct(o['f'] / o['ref_f'] - 1)} | {long_fmt(o['sigma'], 4)} (상대 SD) | {long_fmt(o['theta_max'], 0)} | {o['rating']} |"]
+        for r in lens_new:
+            f = r["ft"]
+            L.append(f"| {r['video']} | {r['duration_s']:.1f} / {r['motion']['tilt_duration_s']:.1f} | {'값 없음' if f['at_grid_edge'] else format(f['f'], '.1f')} | {pct(None if f['at_grid_edge'] else f['f'] / r['ref_f'] - 1)} | {long_fmt(f['boot_log_std'], 4)} | {long_fmt(r['motion']['theta_max_deg'], 0)} | {r['rating']} |")
+    L += ["", "## 4. 궤적 영향: 추정 f와 그룹 합동 f", "", "| 영상 | 비교 | 사용한 f (px) | 이동량 오차 중앙값 / 90번째(%) | 방향 오차 중앙값 / 90번째(°) | 깊이 이동 오차 중앙값 / 90번째(mm) |", "|---|---|---|---|---|---|"]
+    tol = cfg["trajectory"]["tolerance"]
+    for vid, tj in traj.items():
+        for k in ("est", "pooled"):
+            if k in tj["metrics"]:
+                m = tj["metrics"][k]
+                L.append(f"| {vid} | {'이 영상의 추정 f' if k == 'est' else '그룹 합동 f'} | {tj['variants'][k]['f']:.1f} | {long_fmt(m['magnitude_err_median_pct'], 1)} / {long_fmt(m['magnitude_err_p90_pct'], 1)} | "
+                         f"{long_fmt(m['direction_err_median_deg'], 1)} / {long_fmt(m['direction_err_p90_deg'], 1)} | {long_fmt(m['depth_err_median_mm'], 1)} / {long_fmt(m['depth_err_p90_mm'], 1)} |")
+    L += ["", "## 5. 허용 오차 비교", ""]
+    if tol.get("motion_pct") is None or tol.get("direction_deg") is None:
+        L.append("- 허용 오차(tolerance)가 비어 있어 값만 보고하고 판정하지 않았다.")
+    else:
+        L += [f"- 허용 오차: 이동량 {tol['motion_pct']}%, 방향 {tol['direction_deg']}° (중앙값이 이 값을 넘으면 초과; 90번째 백분위수도 함께 표시)", "", "| 영상 | 비교 | 이동량 중앙값 초과 | 이동량 90번째 초과 | 방향 중앙값 초과 | 방향 90번째 초과 |", "|---|---|---|---|---|---|"]
+        for vid, tj in traj.items():
+            for k, m in tj["metrics"].items():
+                if m["magnitude_err_median_pct"] is None:
+                    continue
+                yn = lambda x, t: "초과" if x > t else "이내"      # noqa: E731
+                L.append(f"| {vid} | {k.replace('eps_', 'ε ')} | {yn(m['magnitude_err_median_pct'], tol['motion_pct'])} | {yn(m['magnitude_err_p90_pct'], tol['motion_pct'])} | "
+                         f"{yn(m['direction_err_median_deg'], tol['direction_deg'])} | {yn(m['direction_err_p90_deg'], tol['direction_deg'])} |")
+    L += ["", "## 한계", "", "- 판정 v2 검증은 \"사용 가능\" 영상이 5개 미만이면 판단하지 않는다(규칙). 그룹 판정은 영상이 3개 미만이면 판단하지 않는다.",
+          "- 기준 f는 사용자 제공 값이며 원본 보정 파일은 서버에 없다. 0.5배는 880 px, 1배는 1680 px.", "- 궤적은 기울기 구간(제자리 회전)이라 깊이 이동이 실제 작업보다 작다.", ""]
+    path.write_text("\n".join(L) + "\n")
+
+
+def gen_results_yaml(run_dir: Path, cfg: dict):
+    r = json.loads((run_dir / "results.json").read_text())
+    m = json.loads((run_dir / "metadata.json").read_text())
+    try:
+        run_name = str(run_dir.resolve().relative_to(hf.PROJECT_ROOT))
+    except ValueError:
+        run_name = str(run_dir)
+    rd = lambda x, n=4: None if x is None or (isinstance(x, float) and not np.isfinite(x)) else round(x, n)      # noqa: E731
+    out = {"experiment": "26_generalization", "run": run_name, "code_commit": m["git"]["commit"][:7], "git_dirty_at_run": m["git"]["git_dirty"], "note": GEN_NOTE, "candidate": cfg["candidate"], "videos": {}}
+    for v in r["videos"]:
+        e = {"group": v["group"], "person_id": v["person_id"], "phone": v["phone"], "lens": v["lens"], "glove": v["glove"], "duration_s": rd(v["duration_s"], 2), "detect_fail_rate": rd(1 - v["detect_rate"]),
+             "edge_rate": rd(v["edge_rate"]), "excluded": v["excluded"] or None}
+        if "ft" in v:
+            f, mo, g = v["ft"], v["motion"], v.get("guide") or {}
+            e.update({"f_px": None if f["at_grid_edge"] else round(f["f"], 1), "status": "value" if not f["at_grid_edge"] else f"값 없음 ({f['side']})", "f_verdict_estimator": f["verdict"], "rating_v2": v["rating"],
+                      "boot_log_std": rd(f["boot_log_std"], 5), "tilt_duration_s": rd(mo["tilt_duration_s"], 2), "n_tilt_frames": mo["n_tilt_frames"], "theta_median_deg": rd(mo["theta_median_deg"], 1),
+                      "theta_p90_deg": rd(mo["theta_p90_deg"], 1), "theta_max_deg": rd(mo["theta_max_deg"], 1), "hand_box_short_ratio_front": rd(v["hand_box_short_ratio_front"]),
+                      "guide_v2": {k: g.get(k) for k in ("guide", "reasons", "t_transition")} if "guide" in g else None})
+        out["videos"][v["video"]] = e
+    out["verification_v2"] = {"verdict": r["verification_v2"]["verdict"], "n_usable": r["verification_v2"]["n_usable"], "n_videos": r["verification_v2"]["n_videos"], "reason": r["verification_v2"].get("reason")}
+    out["groups"] = {g: {"verdict": d["verdict"], "n_videos": d.get("n_videos"), "n_excluded": d.get("n_excluded"), "pooled_f_px": None if d.get("pooled_f") is None or d.get("at_grid_edge") else round(d["pooled_f"], 1),
+                         "interval_95_px": None if "interval_95" not in d else [round(x, 1) for x in d["interval_95"]]} for g, d in r["groups"].items()}
+    out["trajectory_eps_metrics"] = {vid: {k: {a: rd(b, 3) for a, b in m_.items()} for k, m_ in ms.items() if k.startswith("eps_")} for vid, ms in r["trajectory_metrics"].items()}
+    p = hf.resolve(cfg["output"]["results_yaml"])
+    p.write_text(yaml.safe_dump(hf.jsonable(out), allow_unicode=True, sort_keys=False))
+    return p
+
+
+# ====================================================================================================
 # command line
 # ====================================================================================================
 
-COMMANDS = {"protocol": protocol_main, "frame-filter": ff_main, "same-session": session_main, "overlay": overlay_main, "phase-segmentation": pseg_main, "guide-revision": grev_main, "f-response": fresp_main, "error-factors": ferr_main, "long-video-check": long_main}
+COMMANDS = {"protocol": protocol_main, "frame-filter": ff_main, "same-session": session_main, "overlay": overlay_main, "phase-segmentation": pseg_main, "guide-revision": grev_main, "f-response": fresp_main, "error-factors": ferr_main, "long-video-check": long_main, "generalization": gen_main}
 
 
 def main(argv=None):

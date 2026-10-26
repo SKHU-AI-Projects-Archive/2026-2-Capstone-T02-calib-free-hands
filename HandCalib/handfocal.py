@@ -3613,3 +3613,260 @@ def long_video(args) -> dict:
                 ac = anycalib_run(frames, acfg, float(pc["phases"]["front_phase_s"]), lambda m="": None)
             res["anycalib"] = {m: {"median": v["summary"].get("median"), "n": v["summary"].get("n")} for m, v in ac["models"].items()}
     return res
+
+
+# ====================================================================================================
+# gen  (experiment 26: new judgment rule v2, generalisation groups, hand-trajectory effect of the f error; new section, earlier functions are used unchanged)
+# Videos carry group (G1 other person, G2 other phone, G3 other lens, G4 gloves, G5 calibration + work), person_id, phone, lens, glove and ref_f. Candidate = 22 / 25's.
+# Rating v2 (per video): from the tilt length, the largest theta2d and the bootstrap log SD, not from the sharpness. Verification of v2 and the group verdicts: see gen_verify / gen_group_verdict.
+# Trajectory: from the 2D hand centre and the hand size ratio, X = (u - cx) L / l, Y = (v - cy) L / l, Z = f L / l; changing f only scales Z.
+# ====================================================================================================
+
+GEN_GROUPS = ("G1", "G2", "G3", "G4", "G5")
+GEN_REQUIRED = ("file", "group", "person_id", "phone", "lens", "glove", "ref_f")
+
+
+def gen_check_videos(entries) -> list:
+    """Validates the videos list of the yaml (every entry needs file, group, person_id, phone, lens, glove, ref_f). Stops (SystemExit) with the reason otherwise."""
+    if not entries:
+        raise SystemExit("videos is empty: give the video entries in the yaml (file, group, person_id, phone, lens, glove, ref_f)")
+    for i, e in enumerate(entries):
+        miss = [k for k in GEN_REQUIRED if e.get(k) is None]
+        if miss:
+            raise SystemExit(f"videos[{i}] ({e.get('file')}): missing {miss}")
+        if e["group"] not in GEN_GROUPS:
+            raise SystemExit(f"videos[{i}] ({e['file']}): group must be one of {GEN_GROUPS}")
+        if float(e["ref_f"]) <= 0:
+            raise SystemExit(f"videos[{i}] ({e['file']}): ref_f must be positive")
+    return list(entries)
+
+
+def gen_rating(tilt_s, theta_max_deg, boot_log_std, v2: dict) -> str:
+    """Rating v2 of one video. '사용 가능': tilt >= tilt_min_s, largest theta2d >= theta_max_min_deg and bootstrap log SD <= usable_log_std_max.
+    '참고': both shooting conditions hold and the log SD is <= reference_log_std_max. Otherwise '사용 불가'."""
+    if tilt_s is None or theta_max_deg is None or boot_log_std is None or not np.isfinite(boot_log_std):
+        return "사용 불가"
+    shoot = bool(tilt_s >= float(v2["tilt_min_s"]) and theta_max_deg >= float(v2["theta_max_min_deg"]))
+    if shoot and boot_log_std <= float(v2["usable_log_std_max"]):
+        return "사용 가능"
+    if shoot and boot_log_std <= float(v2["reference_log_std_max"]):
+        return "참고"
+    return "사용 불가"
+
+
+def gen_verify(rows: list, ver: dict) -> dict:
+    """Verification of rating v2 on videos (rows: dict with rating, f, ref_f, sigma): among the usable videos the share with |log(f / ref_f)| <= within_sigma * sigma must be >= within_share_min and
+    their median |error| <= median_abs_err_max. Fewer than min_usable usable videos: not judged."""
+    use = [r for r in rows if r["rating"] == "사용 가능" and r.get("f") is not None]
+    out = {"n_usable": len(use), "n_videos": len(rows)}
+    if use:
+        e = np.array([abs(r["f"] / r["ref_f"] - 1.0) for r in use])
+        w = np.array([abs(np.log(r["f"] / r["ref_f"])) <= float(ver["within_sigma"]) * r["sigma"] for r in use])
+        out.update({"within_share": float(w.mean()), "median_abs_err": float(np.median(e))})
+    if len(use) < int(ver["min_usable"]):
+        return {**out, "verdict": "판단 불가", "reason": f"사용 가능 영상 {len(use)}개 < {int(ver['min_usable'])}개"}
+    ok = out["within_share"] >= float(ver["within_share_min"]) and out["median_abs_err"] <= float(ver["median_abs_err_max"])
+    return {**out, "verdict": "판정 v2 검증됨" if ok else "검증 안 됨"}
+
+
+def gen_group_verdict(curves, grid, f_videos, ref_f: float, gcfg: dict, n_excluded: int = 0, n_total: int | None = None) -> dict:
+    """Generalisation verdict of one group. curves = the group's per-video fixed_template cost curves; f_videos = their f (None = no value). Pooled f (curves summed) and a
+    video-level bootstrap interval; pass: pooled f within +-pooled_tol of ref_f and at least video_fraction of the videos within +-video_tol; fewer than min_videos videos: not judged."""
+    n = len(curves)
+    out = {"n_videos": n, "n_excluded": int(n_excluded), "n_total": int(n_total if n_total is not None else n + n_excluded), "ref_f": float(ref_f)}
+    if n == 0:
+        return {**out, "verdict": "영상 없음"}
+    est = long_pooled_estimate(curves, grid)
+    b = long_pooled_bootstrap(curves, grid, int(gcfg["bootstrap_n"]), int(gcfg["bootstrap_seed"]))
+    inside = [f is not None and abs(f / ref_f - 1.0) <= float(gcfg["video_tol"]) for f in f_videos]
+    out.update({"pooled_f": est["f"], "at_grid_edge": est["at_grid_edge"], "side": est["side"], "interval_95": [float(np.quantile(b["f"], 0.025)), float(np.quantile(b["f"], 0.975))],
+                "pooled_within_tol": bool(not est["at_grid_edge"] and abs(est["f"] / ref_f - 1.0) <= float(gcfg["pooled_tol"])), "video_share_within_tol": float(np.mean(inside))})
+    if n < int(gcfg["min_videos"]):
+        return {**out, "verdict": "판단 불가", "reason": f"영상 {n}개 < {int(gcfg['min_videos'])}개"}
+    return {**out, "verdict": "통과" if (out["pooled_within_tol"] and out["video_share_within_tol"] >= float(gcfg["video_fraction"]) - 1e-9) else "실패"}
+
+
+def gen_trajectory(u, v, ell, f: float, L_mm: float, W: float, H: float) -> np.ndarray:
+    """Camera coordinates (mm), shape (n, 3): X = (u - cx) L / l, Y = (v - cy) L / l, Z = f L / l (pinhole, principal point at the image centre, l = apparent hand length in px).
+    f enters only through Z."""
+    u, v, ell = np.asarray(u, float), np.asarray(v, float), np.asarray(ell, float)
+    return np.c_[(u - W / 2.0) * L_mm / ell, (v - H / 2.0) * L_mm / ell, f * L_mm / ell]
+
+
+def gen_smooth_traj(times, P: np.ndarray, window_s: float) -> np.ndarray:
+    """0.3 s centred running median of every coordinate (analysis only)."""
+    return np.c_[[pseg_median_filter(times, P[:, k], window_s) for k in range(P.shape[1])]].T
+
+
+def gen_step_vectors(times, P: np.ndarray, step_s: float, max_gap_s: float) -> tuple:
+    """Movement vectors between points step_s apart on a regular time grid: (grid index pairs' start times, vectors (m, 3)). A grid point is used when a valid frame lies within max_gap_s."""
+    t = np.asarray(times, float)
+    ok = np.isfinite(P).all(axis=1)
+    t, P = t[ok], P[ok]
+    if len(t) < 2:
+        return np.zeros(0), np.zeros((0, 3))
+    grid = np.arange(t[0], t[-1] + 1e-9, step_s)
+    keep = np.array([np.abs(t - g).min() <= max_gap_s for g in grid])
+    Q = np.c_[[np.interp(grid, t, P[:, k]) for k in range(3)]].T
+    idx = [i for i in range(len(grid) - 1) if keep[i] and keep[i + 1]]
+    return grid[idx], np.array([Q[i + 1] - Q[i] for i in idx]).reshape(-1, 3)
+
+
+def gen_step_metrics(times, P_ref: np.ndarray, P_cmp: np.ndarray, tcfg: dict) -> dict:
+    """Errors of a comparison trajectory against the reference trajectory on step_s movement vectors: magnitude error (%), direction error (deg), depth-movement error (mm) with
+    their median and 90th percentile, and the median share of the depth component in the reference movement. Steps with a reference movement below min_step_mm are not used."""
+    _, dr = gen_step_vectors(times, P_ref, float(tcfg["step_s"]), float(tcfg["max_gap_s"]))
+    _, dc = gen_step_vectors(times, P_cmp, float(tcfg["step_s"]), float(tcfg["max_gap_s"]))
+    n = min(len(dr), len(dc))
+    dr, dc = dr[:n], dc[:n]
+    nr, nc = np.linalg.norm(dr, axis=1), np.linalg.norm(dc, axis=1)
+    use = nr >= float(tcfg["min_step_mm"])
+    out = {"n_steps": int(use.sum())}
+    if not use.any():
+        return {**out, "magnitude_err_median_pct": None, "magnitude_err_p90_pct": None, "direction_err_median_deg": None, "direction_err_p90_deg": None, "depth_err_median_mm": None, "depth_err_p90_mm": None,
+               "depth_share_median": None}
+    mag = 100.0 * np.abs(nc[use] / nr[use] - 1.0)
+    cos = np.clip((dr[use] * dc[use]).sum(1) / np.maximum(nr[use] * nc[use], 1e-12), -1.0, 1.0)
+    ang = np.degrees(np.arccos(cos))
+    dep = np.abs(dc[use, 2] - dr[use, 2])
+    share = np.abs(dr[use, 2]) / nr[use]
+    return {**out, "magnitude_err_median_pct": float(np.median(mag)), "magnitude_err_p90_pct": float(np.percentile(mag, 90)), "direction_err_median_deg": float(np.median(ang)),
+            "direction_err_p90_deg": float(np.percentile(ang, 90)), "depth_err_median_mm": float(np.median(dep)), "depth_err_p90_mm": float(np.percentile(dep, 90)), "depth_share_median": float(np.median(share))}
+
+
+def gen_present_until(times, present, calib_end_s) -> np.ndarray:
+    """Frames the f estimate may use: detected frames up to calib_end_s (None = all). Later frames never enter the estimate (G5: they are the work segment)."""
+    p = np.asarray(present, bool)
+    return p if calib_end_s is None else (p & (np.asarray(times, float) <= float(calib_end_s)))
+
+
+def gen_s1(T: np.ndarray, P: np.ndarray) -> float:
+    """Larger singular value of the linear part of the least-squares affine map template T -> frame points P (the in-plane scale that tilt does not shrink)."""
+    A = np.c_[T, np.ones(len(T))]
+    M, *_ = np.linalg.lstsq(A, P, rcond=None)
+    return float(np.linalg.svd(M[:2].T, compute_uv=False)[0])
+
+
+def gen_guide(kp, mask, present, box, cls, times, size_wh, pcfg: dict, c: dict, seed: int) -> dict:
+    """21's transition (linear_d) and shooting guide with the guide settings of this experiment (guide v2: hand box <= 0.65), the same steps as grev_analyze without the f estimates."""
+    W, H = size_wh
+    p, ccfg = c["guide"]["phase_segmentation"], c["guide"]["conditions"]
+    est_ids = list(pcfg["joints"]["sets"][pcfg["joints"]["estimate_set"]])
+    a0 = analyze(kp, mask, present, box, cls, times, size_wh, pcfg, tilt_start=None, methods_full=(), seed=seed)
+    if "solutions" not in a0:
+        return {"failed": a0.get("failed", "분석 실패")}
+    theta = np.array([np.nan if x is None else x for x in a0["theta2d_deg"]], float)
+    fw0 = a0["front_window"]
+    fw = fw0 if not p.get("front_search_s") else grev_front_window(times, present, kp, mask, box, pcfg["phases"], p["front_search_s"])
+    if len(fw["idx"]) == 0:
+        return {"failed": "정면 창을 만들 수 없음"}
+    tr_ = grev_transition(times, present, kp, mask, box, np.array(a0["template"]), est_ids, fw["idx"], p)
+    m = grev_metrics(times, present, box, W, H, theta, a0["role"], tr_.get("t_transition"), a0.get("front_jitter_rel"), a0["axis_coverage"]["bins"], a0["finger_extension"]["min"],
+                     float(ccfg.get("tilt_max_deg", 45.0)))
+    g = grev_conditions_check(m, ccfg)
+    return {"t_transition": tr_.get("t_transition"), "guide": bool(g["guide"]), "reasons": g["reasons"], "items": {k: bool(v) for k, v in g["items"].items()},
+            "box_short_ratio": m.get("box_short_ratio"), "d0": tr_.get("d0"), "d_thr": tr_.get("d_thr")}
+
+
+def gen_video(args) -> dict:
+    """One video of experiment 26 -> f (candidate), bootstrap, motion statistics, guide v2 and the inputs of the trajectory analysis. args = (entry, prep, npz, pcfg, c, seed_unused).
+    entry = the yaml video entry; G5 estimates f only from the frames up to calib_end_s and uses the later frames for the trajectory."""
+    entry, prep, npz, pcfg, c = args[:5]
+    os.environ.setdefault("OMP_NUM_THREADS", "1")
+    cv2.setNumThreads(1)
+    cand, ex, tcfg = c["candidate"], c["exclusion"], c["trajectory"]
+    dset = c["detector_settings"][cand["detector"]]
+    pc = copy.deepcopy(pcfg)
+    pc["tracking"]["conf_min"] = float(dset["conf_min"])
+    frames = prep["frames"]
+    times = np.array([r["time_s"] for r in frames])
+    W, H = prep["size"]
+    dets = load_detections(Path(npz))
+    check_alignment(frames, dets)
+    tr = track(dets, times, (W, H), pc["tracking"], front_start_s=float(pc["phases"]["front_skip_s"]))
+    kp, mask, present, box = tr["kp"], tr["mask"], tr["present"], tr["box"]
+    calib_end = None
+    if entry["group"] == "G5":
+        calib_end = float(entry.get("calib_end_s") or c.get("calib_end_default_s", 25.0))
+    pres = gen_present_until(times, present, calib_end)
+    cal = np.ones(len(times), bool) if calib_end is None else (times <= calib_end)
+    res = {"video": entry["file"], "group": entry["group"], "person_id": entry["person_id"], "phone": entry["phone"], "lens": entry["lens"], "glove": bool(entry["glove"]), "ref_f": float(entry["ref_f"]),
+           "calib_end_s": calib_end, "n_frames": int(len(times)), "duration_s": float(times[-1] - times[0]) if len(times) else 0.0, "size": [W, H],
+           "detect_rate": float(present[cal].mean()), "edge_rate": fresp_edge_rate(box[cal], present[cal], W, H)}
+    fw = front_window(times, pres, kp, mask, box, pc["phases"])
+    res["front_window"] = [fw.get("t0"), fw.get("t1")]
+    reasons = []
+    if len(fw["idx"]) == 0 or fw["detect_rate"] < float(pc["phases"]["front_min_detect_rate"]):
+        reasons.append("유효한 정면 창(1초)이 없음")
+    if res["edge_rate"] > float(ex["edge_rate_max"]):
+        reasons.append(f"가장자리 접촉 프레임 {100 * res['edge_rate']:.1f}% > {100 * float(ex['edge_rate_max']):.0f}%")
+    if 1.0 - res["detect_rate"] > float(ex["detect_fail_max"]):
+        reasons.append(f"손 검출 실패 프레임 {100 * (1.0 - res['detect_rate']):.1f}% > {100 * float(ex['detect_fail_max']):.0f}%")
+    res["excluded"] = reasons
+    if reasons:
+        return res
+    seed = int(pc["experiment"]["seed"])
+    cfg_ex = pseg_wrist_cfg(pc) if cand["wrist_mode"] == "exclude" else pc
+    a = analyze(kp, mask, pres, box, tr["cls"], times, (W, H), cfg_ex, tilt_start=None, methods_full=("fixed_template",), seed=seed)
+    if "per_method" not in a:
+        res["failed"] = a.get("failed", "분석 실패")
+        return res
+    sol, pm = a["solutions"]["fixed_template"], a["per_method"]["fixed_template"]
+    grid = np.array(a["grid"])
+    hi = grid[-1]
+    bf = pm["bootstrap"]["f"]
+    res["ft"] = {"f": float(sol["f"]), "at_grid_edge": bool(sol["at_grid_edge"]), "side": None if not sol["at_grid_edge"] else ("상한" if sol["f"] >= hi * (1 - 1e-6) else "하한"),
+                 "verdict": pm["verdict"]["verdict"], "sharpness": float(pm["diagnostics"]["sharpness"]), "boot_log_std": long_boot_log_std(bf),
+                 "boot_rel_std": float(pm["bootstrap"]["rel_std"]) if np.isfinite(pm["bootstrap"]["rel_std"]) else None, "n_boot": int(pm["bootstrap"]["n_done"])}
+    res["curve"] = {"grid": grid.tolist(), "cost": [float(x) for x in sol["profile_cost"]]}
+    theta = np.array([np.nan if x is None else x for x in a["theta2d_deg"]], float)
+    role = a["role"]
+    tilt = [i for i, r in enumerate(role) if r == "tilt"]
+    th = theta[tilt]
+    bl = box_long(box)
+    fidx = [int(i) for i in a["front_window"]["idx"]]
+    res["motion"] = {"tilt_start_s": float(a["tilt_start_s"]), "n_tilt_frames": len(tilt), "tilt_duration_s": float(times[tilt].max() - a["tilt_start_s"]) if tilt else 0.0,
+                     "theta_median_deg": float(np.nanmedian(th)) if len(th) else None, "theta_p90_deg": float(np.nanpercentile(th, 90)) if len(th) else None,
+                     "theta_max_deg": float(np.nanmax(th)) if len(th) else None, "theta_over_45_frac": float(np.nanmean(th > 45.0)) if len(th) else None}
+    res["hand_box_short_ratio_front"] = float(np.nanmedian(bl[fidx]) / min(W, H))
+    res["guide"] = gen_guide(kp, mask, pres, box, tr["cls"], times, (W, H), pc, c, seed)
+    # ---- trajectory inputs: hand centre (wrist + 4 MCP), size ratio against the front window, hand length l = l_front * s1 / s1_front
+    ids = list(cfg_ex["joints"]["sets"][cfg_ex["joints"]["estimate_set"]])
+    T = np.array(a["template"])
+    front_frames = [int(i) for i in a["template_frames"]]
+    s1_front = float(np.median([gen_s1(T, kp[i][ids]) for i in front_frames]))
+    lf = [float(np.linalg.norm(kp[i][12] - kp[i][0])) for i in front_frames if mask[i][0] and mask[i][12]]
+    ell_front = float(np.median(lf)) if lf else float("nan")
+    target = [i for i in range(len(times)) if present[i] and times[i] > calib_end] if calib_end is not None else tilt
+    rows, centre = [], [0, 5, 9, 13, 17]
+    for i in target:
+        vis = mask[i][ids]
+        if not (present[i] and vis.sum() >= 6 and mask[i][centre].all()):
+            continue
+        u, v = kp[i][centre].mean(0)
+        s1 = gen_s1(T[vis], kp[i][ids][vis])
+        rows.append({"index": int(i), "time_s": float(times[i]), "u": float(u), "v": float(v), "size_ratio": float(s1 / s1_front), "theta2d_deg": None if not np.isfinite(theta[i]) else float(theta[i])})
+    res["traj"] = {"rows": rows, "ell_front_px": ell_front, "s1_front": s1_front, "segment": "work (after calib_end_s)" if calib_end is not None else "tilt phase"}
+    return res
+
+
+def gen_existing_rows(cfg: dict) -> list:
+    """Existing videos for the descriptive comparison (never a verification): tilt length, largest theta2d, bootstrap log SD, f and its reference f, from the stored results of 22 / 23 / 25."""
+    ex = cfg["existing"]
+    rows = []
+    base = json.loads(resolve(ex["baseline_json"]).read_text())["videos"]
+    for j in base:
+        rows.append({"video": j["video"], "source": "22 (1x)", "ref_f": float(ex["ref_f_1x"]), "f": j["ft"]["f"], "at_grid_edge": j["ft"]["at_grid_edge"], "sigma": j["ft"]["boot_log_std"],
+                     "tilt_s": j["motion"]["tilt_duration_s"], "theta_max": j["motion"]["theta_max_deg"]})
+    for j in json.loads(resolve(ex["results_25"]).read_text())["new"]:
+        rows.append({"video": j["video"], "source": "25 (1x)", "ref_f": float(ex["ref_f_1x"]), "f": j["ft"]["f"], "at_grid_edge": j["ft"]["at_grid_edge"], "sigma": j["ft"]["boot_log_std"],
+                     "tilt_s": j["motion"]["tilt_duration_s"], "theta_max": j["motion"]["theta_max_deg"]})
+    j23 = {j["video"]: j for j in json.loads(resolve(ex["results_23"]).read_text())["jobs"]}.get(ex["lens_video"])
+    j22 = {j["video"]: j for j in json.loads(resolve(ex["results_22"]).read_text())["jobs"]}.get(ex["lens_video"])
+    if j23 and j22:
+        s = j22["original"][ex["lens_mode"]]["solutions"]["fixed_template"]
+        th = [r["theta2d_deg"] for r in j23["frames"]]
+        tt = [r["time_s"] for r in j23["frames"]]
+        rows.append({"video": ex["lens_video"], "source": "22 (0.5x)", "ref_f": float(ex["ref_f_lens"]), "f": s["f"], "at_grid_edge": s["at_grid_edge"], "sigma": j23["factors"]["bootstrap_rel_std"],
+                     "tilt_s": float(max(tt) - 3.0) if tt else 0.0, "theta_max": float(max(th)) if th else None, "sigma_is_rel_std": True})
+    return rows
