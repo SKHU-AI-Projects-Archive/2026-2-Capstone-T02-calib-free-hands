@@ -33,6 +33,7 @@ CFG22 = yaml.safe_load((ROOT / "configs/22_f_response.yaml").read_text())
 CFG23 = yaml.safe_load((ROOT / "configs/23_error_factors.yaml").read_text())
 CFG25 = yaml.safe_load((ROOT / "configs/25_long_video_check.yaml").read_text())
 CFGE2E = yaml.safe_load((ROOT / "configs/e2e_pipeline.yaml").read_text())
+CFGFOC = yaml.safe_load((ROOT / "configs/video_to_focal.yaml").read_text())
 PIPE = CFG17["pipeline"]                           # the 14 pipeline settings (identical in 16, 17 and 18)
 SYN = {"f_px": 1650, "image": [1920, 1080], "distance_mm": 350, "front_frames": 10, "tilt_frames": 40}     # 14's synthetic camera
 BASE_COND = {"name": "base", "delta_deg": 0, "noise": {"px": 1.0}, "heavy_tail": False, "tilt_range_deg": [25, 50], "arch_mm": 0,
@@ -2011,6 +2012,89 @@ class E2EEndToEnd(unittest.TestCase):
             self.assertNotIn("1680", (run_dir / "e2e_summary.md").read_text())
         finally:
             shutil.rmtree(out, ignore_errors=True)
+
+
+# ====================================================================================================
+# video -> focal length
+# ====================================================================================================
+
+class FocalPool(unittest.TestCase):
+    def test_pooled_f_interval_and_formatting(self):
+        grid, cur = toy_curves((1500.0, 1800.0, 2100.0, 1700.0))
+        res = [{"video": f"V{i}.MOV", "curve": {"grid": grid.tolist(), "cost": c.tolist()}} for i, c in enumerate(cur)]
+        P = CFGFOC["pool"]
+        one = hf.focal_pool(res[:1], P)
+        self.assertEqual(one["f_px"], hf.long_curve_min(cur[0], grid)["f"])
+        self.assertIsNone(one["interval_95"])                                   # fewer videos than min_videos_for_interval
+        allv = hf.focal_pool(res, P)
+        np.testing.assert_allclose(allv["f_px"], hf.long_pooled_estimate(cur, grid)["f"])
+        self.assertEqual(allv["n_videos"], 4)
+        lo, hi = allv["interval_95"]
+        self.assertLess(lo, allv["f_px"] + 50.0)
+        self.assertGreater(hi, allv["f_px"] - 50.0)
+        self.assertEqual(hf.focal_pool(res, P)["interval_95"], allv["interval_95"])        # fixed seed
+        self.assertIsNone(hf.focal_pool([{"video": "x", "failed": "no template"}], P))
+        self.assertEqual(run.focal_fval({"f_px": 1234.56, "at_grid_edge": False, "side": None}), "1234.6 px")
+        self.assertEqual(run.focal_fval({"f_px": 3072.0, "at_grid_edge": True, "side": "상한"}), "값 없음 (상한)")
+
+    def test_yaml_has_no_judgment_bias_or_reference_keys(self):
+        for k in ("hypotheses", "baseline", "reference_f", "reference_f_px", "bias_b"):
+            self.assertNotIn(k, CFGFOC)
+        self.assertEqual(CFGFOC["videos"], [])
+        self.assertEqual((CFGFOC["candidate"]["detector"], CFGFOC["candidate"]["wrist_mode"], CFGFOC["candidate"]["estimator"]), ("mediapipe_hands", "exclude", "fixed_template"))
+        self.assertFalse(any(CFGFOC["compare"].values()))                       # references are off by default
+
+    def test_stops_without_videos_or_with_a_missing_file(self):
+        with tempfile.TemporaryDirectory() as d:
+            cp = Path(d) / "c.yaml"
+            cp.write_text(yaml.safe_dump(dict(CFGFOC, videos=[], output={"root": str(Path(d) / "runs")})))
+            with self.assertRaises(SystemExit):
+                run.focal_main(["--config", str(cp)])
+            with self.assertRaises(SystemExit):
+                run.focal_main(["--config", str(cp), "--videos", "IMG_9999.MOV"])
+            self.assertFalse((Path(d) / "runs").exists())
+
+
+@unittest.skipUnless(VID7158.exists() and (ROOT / "runs/22_f_response/20261021T042524Z/results.json").exists(), "the input videos and 22's official run are needed")
+class FocalEndToEnd(unittest.TestCase):
+    def test_videos_in_focal_lengths_out_matching_22_without_any_judgment(self):
+        vids = ["IMG_7157.MOV", "IMG_7158.MOV"]
+        r22 = {j["video"]: j for j in json.loads((ROOT / "runs/22_f_response/20261021T042524Z/results.json").read_text())["jobs"]}
+        with tempfile.TemporaryDirectory() as d:
+            d = Path(d)
+            cfg = dict(CFGFOC, videos=vids, workers=2, n_workers=2, output={"root": str(d / "runs")}, compare={"keep": True, "joint_delta": True, "anycalib": False},
+                       pool=dict(CFGFOC["pool"], min_videos_for_interval=2, bootstrap_n=100))
+            cp = d / "c.yaml"
+            cp.write_text(yaml.safe_dump(cfg, allow_unicode=True))
+            root, results, pooled = run.focal_main(["--config", str(cp), "--out", str(d / "o")])
+            for f in ("report.md", "results.yaml", "focal.csv", "results.json", "metadata.json", "log.txt"):
+                self.assertTrue((root / f).exists(), f)
+            for v in vids:
+                self.assertTrue((root / "figures" / f"{Path(v).stem}_cost_curve.png").exists())
+            self.assertFalse((root / "_frames").exists())
+            by = {r["video"]: r for r in results}
+            for v in vids:
+                self.assertEqual(by[v]["f"]["f_px"], r22[v]["original"]["exclude"]["solutions"]["fixed_template"]["f"], v)     # the candidate of 22
+                self.assertEqual(by[v]["f"]["verdict"], r22[v]["original"]["exclude"]["verdict"])
+                self.assertEqual(by[v]["keep_f"]["f_px"], r22[v]["original"]["keep"]["solutions"]["fixed_template"]["f"], v)
+                self.assertEqual(by[v]["joint_delta_f"]["f_px"], r22[v]["original"]["exclude"]["solutions"]["joint_delta"]["f"], v)
+            grid = np.array(by[vids[0]]["curve"]["grid"])
+            self.assertEqual(pooled["f_px"], hf.long_pooled_estimate([by[v]["curve"]["cost"] for v in vids], grid)["f"])
+            self.assertEqual(pooled["n_videos"], 2)
+            y = yaml.safe_load((root / "results.yaml").read_text())
+            self.assertEqual(sorted(y["videos"]), vids)
+            self.assertIn("pooled", y)
+            texts = "".join(p.read_text(errors="ignore") for p in root.rglob("*") if p.is_file() and p.suffix in (".json", ".yaml", ".md", ".csv", ".txt"))
+            for val in FAKE_TAGS.values():
+                self.assertNotIn(val, texts)
+            for key in ("ISO6709", "com.apple.quicktime", '"make"', '"model"'):
+                self.assertNotIn(key, texts)
+            ref_f = re.compile(r"(?<![\d.])(?:1680|880)(?:\.0+)?(?!\d)(?!\.\d)")
+            for name in ("report.md", "results.yaml", "focal.csv"):
+                self.assertIsNone(ref_f.search((root / name).read_text()), name)            # no reference f anywhere
+            rep = (root / "report.md").read_text()
+            for word in ("H1", "H2", "H3", "H4", "편향 보정", "보정 효과"):
+                self.assertNotIn(word, rep)                                                 # no hypothesis judgment
 
 
 if __name__ == "__main__":

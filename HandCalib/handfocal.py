@@ -3613,3 +3613,91 @@ def long_video(args) -> dict:
                 ac = anycalib_run(frames, acfg, float(pc["phases"]["front_phase_s"]), lambda m="": None)
             res["anycalib"] = {m: {"median": v["summary"].get("median"), "n": v["summary"].get("n")} for m, v in ac["models"].items()}
     return res
+
+
+# ====================================================================================================
+# focal  (video -> focal length; new section, earlier functions are used unchanged)
+# The candidate of 22 / 25 (mediapipe_hands, wrist_mode exclude, fixed_template, 17's front window, tilt phase from 3.0 s) applied to videos: per video f with its uncertainty and the
+# estimator's own quality verdict; optionally the f of all videos pooled (same camera). No hypothesis test, no bias correction, no reference f.
+# ====================================================================================================
+
+def focal_video(args) -> dict:
+    """One video -> focal length. args = (video, prep, npz, pcfg, c, lock_dir, gpu_id | None); prep from fresp_prepare, npz = the mediapipe detection of its frames."""
+    video, prep, npz, pcfg, c, lock_dir, gpu_id = args
+    if gpu_id is not None:
+        os.environ["CUDA_VISIBLE_DEVICES"] = str(gpu_id)
+    os.environ.setdefault("OMP_NUM_THREADS", "1")
+    cv2.setNumThreads(1)
+    cand, wr, cmp_ = c["candidate"], c["warnings"], c.get("compare") or {}
+    dset = c["detector_settings"][cand["detector"]]
+    pc = copy.deepcopy(pcfg)
+    pc["tracking"]["conf_min"] = float(dset["conf_min"])
+    frames = prep["frames"]
+    times = np.array([r["time_s"] for r in frames])
+    W, H = prep["size"]
+    dets = load_detections(Path(npz))
+    check_alignment(frames, dets)
+    tr = track(dets, times, (W, H), pc["tracking"], front_start_s=float(pc["phases"]["front_skip_s"]))
+    kp, mask, present, box = tr["kp"], tr["mask"], tr["present"], tr["box"]
+    res = {"video": video, "n_frames": int(len(times)), "duration_s": float(times[-1] - times[0]) if len(times) else 0.0, "size": [W, H], "detect_rate": float(present.mean()),
+           "edge_rate": fresp_edge_rate(box, present, W, H)}
+    fw = front_window(times, present, kp, mask, box, pc["phases"])
+    res["front_window"] = [fw.get("t0"), fw.get("t1")]
+    warns = []
+    if len(fw["idx"]) == 0 or fw["detect_rate"] < float(pc["phases"]["front_min_detect_rate"]):
+        warns.append("유효한 정면 창(1초)이 없음")
+    if res["edge_rate"] > float(wr["edge_rate_max"]):
+        warns.append(f"가장자리 접촉 프레임 {100 * res['edge_rate']:.1f}% > {100 * float(wr['edge_rate_max']):.0f}%")
+    if 1.0 - res["detect_rate"] > float(wr["detect_fail_max"]):
+        warns.append(f"손 검출 실패 프레임 {100 * (1.0 - res['detect_rate']):.1f}% > {100 * float(wr['detect_fail_max']):.0f}%")
+    res["warnings"] = warns
+    seed = int(pc["experiment"]["seed"])
+    cfg_ex = pseg_wrist_cfg(pc) if cand["wrist_mode"] == "exclude" else pc
+    a = analyze(kp, mask, present, box, tr["cls"], times, (W, H), cfg_ex, tilt_start=None, methods_full=("fixed_template",), seed=seed)
+    if "per_method" not in a:
+        res["failed"] = a.get("failed", "분석 실패")
+        return res
+    sol, jd, pm = a["solutions"]["fixed_template"], a["solutions"]["joint_delta"], a["per_method"]["fixed_template"]
+    grid = np.array(a["grid"])
+    hi = grid[-1]
+    side = lambda s: None if not s["at_grid_edge"] else ("상한" if s["f"] >= hi * (1 - 1e-6) else "하한")      # noqa: E731
+    bf = pm["bootstrap"]["f"]
+    res["f"] = {"f_px": float(sol["f"]), "at_grid_edge": bool(sol["at_grid_edge"]), "side": side(sol), "verdict": pm["verdict"]["verdict"], "sharpness": float(pm["diagnostics"]["sharpness"]),
+                "f_rel_uncertainty": float(pm["f_rel_uncertainty"]) if np.isfinite(pm["f_rel_uncertainty"]) else None,
+                "boot_log_std": long_boot_log_std(bf), "boot_rel_std": float(pm["bootstrap"]["rel_std"]) if np.isfinite(pm["bootstrap"]["rel_std"]) else None, "n_boot": int(pm["bootstrap"]["n_done"])}
+    res["curve"] = {"grid": grid.tolist(), "cost": [float(x) for x in sol["profile_cost"]]}
+    theta = np.array([np.nan if x is None else x for x in a["theta2d_deg"]], float)
+    tilt = [i for i, r in enumerate(a["role"]) if r == "tilt"]
+    th = theta[tilt]
+    res["motion"] = {"tilt_start_s": float(a["tilt_start_s"]), "n_tilt_frames": len(tilt), "tilt_duration_s": float(times[tilt].max() - a["tilt_start_s"]) if tilt else 0.0,
+                     "theta_median_deg": float(np.nanmedian(th)) if len(th) else None, "theta_p90_deg": float(np.nanpercentile(th, 90)) if len(th) else None,
+                     "theta_max_deg": float(np.nanmax(th)) if len(th) else None}
+    if cmp_.get("joint_delta"):
+        res["joint_delta_f"] = {"f_px": float(jd["f"]), "at_grid_edge": bool(jd["at_grid_edge"]), "side": side(jd)}
+    if cmp_.get("keep"):
+        k = fresp_f_pair(kp, mask, present, box, tr["cls"], times, (W, H), pc, ["keep"], seed)["keep"]
+        res["keep_f"] = None if "fixed_template" not in k else {"f_px": float(k["fixed_template"]["f"]), "at_grid_edge": bool(k["fixed_template"]["at_grid_edge"]), "side": k["fixed_template"]["side"]}
+    if cmp_.get("anycalib") and pc["anycalib"]["enabled"]:
+        with fresp_gpu_lock(Path(lock_dir) / f"gpu_{'' if gpu_id is None else gpu_id}.lock"):
+            fresp_thermal_wait(float(c["anycalib_guard"]["gpu_pause_c"]), float(c["anycalib_guard"]["gpu_resume_c"]))
+            ac = anycalib_run(frames, copy.deepcopy(pc["anycalib"]), float(pc["phases"]["front_phase_s"]), lambda m="": None)
+        res["anycalib_f"] = {m: {"f_px": v["summary"].get("median"), "n_frames": v["summary"].get("n")} for m, v in ac["models"].items()}
+    return res
+
+
+def focal_pool(results: list, pool_cfg: dict) -> dict | None:
+    """Pooled f of the videos that have an estimate (the per-video cost curves are summed, see long_pooled_estimate) and, with enough videos, a video-level bootstrap interval of f.
+    Meaningful only for videos of the same camera and lens."""
+    ok = [r for r in results if "curve" in r]
+    if len(ok) < 1:
+        return None
+    grid = np.array(ok[0]["curve"]["grid"])
+    curves = np.array([r["curve"]["cost"] for r in ok])
+    est = long_pooled_estimate(curves, grid)
+    out = {"n_videos": len(ok), "videos": [r["video"] for r in ok], "f_px": est["f"], "at_grid_edge": est["at_grid_edge"], "side": est["side"], "interval_95": None, "log_std": None}
+    if len(ok) >= int(pool_cfg["min_videos_for_interval"]):
+        b = long_pooled_bootstrap(curves, grid, int(pool_cfg["bootstrap_n"]), int(pool_cfg["bootstrap_seed"]))
+        out["interval_95"] = [float(np.quantile(b["f"], 0.025)), float(np.quantile(b["f"], 0.975))]
+        out["log_std"] = long_boot_log_std(b["f"])
+        out["bootstrap"] = {"n": b["n"], "seed": b["seed"], "n_edge": b["n_edge"]}
+    return out

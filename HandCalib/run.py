@@ -10,6 +10,7 @@
     python HandCalib/run.py error-factors  --config HandCalib/configs/23_error_factors.yaml [--videos A,B] [results-yaml --run DIR]
     python HandCalib/run.py long-video-check --config HandCalib/configs/25_long_video_check.yaml [bias | --videos A,B | results-yaml --run DIR]
     python HandCalib/run.py end-to-end     --config HandCalib/configs/e2e_pipeline.yaml [--videos A,B] [--detectors a,b]     # 17 protocol -> 20 phase segmentation
+    python HandCalib/run.py estimate-focal --config HandCalib/configs/video_to_focal.yaml [--videos A,B]                      # video -> focal length (candidate of 22 / 25)
 
 Consolidated from run_hand_focal.py (14, process_video only), run_detector_swap.py (16, the per-detector processing that 17 calls),
 run_protocol_rerun.py and run_frame_filter_diag.py (17),
@@ -3454,10 +3455,173 @@ def e2e_main(argv=None):
 
 
 # ====================================================================================================
+# focal  (video -> focal length; new section)
+# The candidate of experiments 22 / 25 applied to videos: frames -> mediapipe detection -> template, tilt frames -> f with its uncertainty and the estimator's quality verdict;
+# optionally the pooled f of all videos (same camera). No hypothesis test, no bias correction, no reference f.
+#
+#     python HandCalib/run.py estimate-focal --config HandCalib/configs/video_to_focal.yaml [--videos A.MOV,B.MOV] [--out DIR]
+# ====================================================================================================
+
+FOCAL_NOTE = ("영상에서 손 템플릿 방법(mediapipe + 손목 제외 + fixed_template)으로 추정한 초점거리다. 단위는 처리 영상(긴 변 1920 px)의 픽셀이고, 핀홀·주점 중심·왜곡 없음 가정에서 2D 키포인트만으로 얻은 값이다. "
+              "정답 데이터와 비교하지 않았다. 판정은 이 추정기의 품질 판정(GOOD / ROUGH / REJECT)이며 정확도를 뜻하지 않는다.")
+
+
+def focal_fval(f: dict, key: str = "f_px") -> str:
+    return "값 없음 (" + str(f["side"]) + ")" if f["at_grid_edge"] else f"{f[key]:.1f} px"
+
+
+def focal_figure(path: Path, r: dict):
+    plt = _plt()
+    g, c = np.array(r["curve"]["grid"]), np.array(r["curve"]["cost"])
+    fig, ax = plt.subplots(figsize=(6.4, 3.8))
+    ax.plot(g, c / c.min(), color="#2a6fbb")
+    if not r["f"]["at_grid_edge"]:
+        ax.axvline(r["f"]["f_px"], color="#c47a00", ls="--", label=f"추정 f {r['f']['f_px']:.0f} px")
+        ax.legend(fontsize=8)
+    ax.set_xscale("log")
+    ax.set_xlabel("f (px)")
+    ax.set_ylabel("비용 / 최솟값")
+    ax.set_title(r["video"], fontsize=9)
+    ax.grid(alpha=0.3)
+    fig.tight_layout()
+    fig.savefig(path, dpi=110)
+    plt.close(fig)
+
+
+def focal_report(path: Path, results: list, pooled: dict | None, cfg: dict):
+    ok = [r for r in results if "f" in r]
+    L = ["# 영상 → 초점거리", "", FOCAL_NOTE, "",
+         f"설정: 검출기 {cfg['candidate']['detector']}, wrist_mode {cfg['candidate']['wrist_mode']}, 추정기 {cfg['candidate']['estimator']}, 17의 정면 창, 기울기 구간 3.0초부터.", "",
+         "## 1. 영상별 초점거리", "",
+         "| 영상 | 초점거리 f | 품질 판정 | 날카로움 | 부트스트랩 로그 SD | 결합 불확실성(상대) | 영상 길이(초) | 정면 창(초) | 기울기 프레임 | 기울기 구간(초) | θ2d 중앙값 / 최댓값(°) | 경고 |",
+         "|---|---|---|---|---|---|---|---|---|---|---|---|"]
+    for r in results:
+        if "f" not in r:
+            L.append(f"| {r['video']} | 분석 실패: {r.get('failed')} | | | | | {r['duration_s']:.1f} | | | | | {'; '.join(r['warnings']) or '-'} |")
+            continue
+        f, m = r["f"], r["motion"]
+        fw = r["front_window"]
+        L.append(f"| {r['video']} | {focal_fval(f)} | {f['verdict']} | {f['sharpness']:.3f} | {long_fmt(f['boot_log_std'], 4)} | {long_fmt(f['f_rel_uncertainty'], 3)} | {r['duration_s']:.1f} | "
+                 f"{'-' if fw[0] is None else f'{fw[0]:.2f}–{fw[1]:.2f}'} | {m['n_tilt_frames']} | {m['tilt_duration_s']:.1f} | {long_fmt(m['theta_median_deg'], 1)} / {long_fmt(m['theta_max_deg'], 1)} | {'; '.join(r['warnings']) or '-'} |")
+    L += ["", "- 부트스트랩 로그 SD: 영상 안에서 10프레임 블록을 복원 추출해 다시 추정한 f(30회)의 로그 표준편차. 값이 작을수록 그 영상 안에서는 추정이 안정적이다(실제 f와의 차이를 뜻하지 않는다).",
+          "- f가 탐색 범위(긴 변의 0.35~1.6배) 경계에 붙으면 '값 없음'으로 적는다. 경고는 추정을 막지 않고 옆에 적는다.", ""]
+    if pooled:
+        L += ["## 2. 영상을 합친 초점거리 (같은 카메라·렌즈로 찍은 영상일 때만 의미가 있다)", "",
+              f"- 영상 {pooled['n_videos']}개의 영상별 비용 곡선을 더해 하나의 f를 추정했다(영상마다 자기 템플릿).", f"- 합동 f = **{focal_fval(pooled)}**"]
+        if pooled.get("interval_95"):
+            L.append(f"- 영상 단위 부트스트랩({pooled['bootstrap']['n']}회, 시드 {pooled['bootstrap']['seed']}) 95% 구간 {pooled['interval_95'][0]:.0f}–{pooled['interval_95'][1]:.0f} px, 로그 SD {pooled['log_std']:.4f}")
+        else:
+            L.append("- 영상이 적어 영상 단위 구간은 계산하지 않았다.")
+        L.append("")
+    ex = [r for r in ok if r.get("keep_f") or r.get("joint_delta_f") or r.get("anycalib_f")]
+    if ex:
+        L += ["## 3. 참고용 추정 (결과 f에 쓰이지 않음)", "", "| 영상 | 손목 포함 f | joint_delta f | AnyCalib pinhole | AnyCalib gen |", "|---|---|---|---|---|"]
+        for r in ex:
+            k, jd, ac = r.get("keep_f"), r.get("joint_delta_f"), r.get("anycalib_f") or {}
+            cell = lambda x: "-" if not x else focal_fval(x)      # noqa: E731
+            acp, acg = ac.get("anycalib_pinhole"), ac.get("anycalib_gen")
+            L.append(f"| {r['video']} | {cell(k)} | {cell(jd)} | {'-' if not acp else format(acp['f_px'], '.1f') + ' px'} | {'-' if not acg else format(acg['f_px'], '.1f') + ' px'} |")
+        L.append("")
+    path.write_text("\n".join(L) + "\n")
+
+
+def focal_results_yaml(path: Path, run_dir: Path, results: list, pooled: dict | None, cfg: dict, commit: str):
+    rd = lambda x, n=4: None if x is None or (isinstance(x, float) and not np.isfinite(x)) else round(x, n)      # noqa: E731
+    out = {"experiment": "video_to_focal", "run": run_dir.name, "code_commit": commit, "note": FOCAL_NOTE, "candidate": cfg["candidate"], "videos": {}}
+    for r in results:
+        e = {"duration_s": rd(r["duration_s"], 2), "warnings": r["warnings"] or None}
+        if "f" in r:
+            f, m = r["f"], r["motion"]
+            e.update({"f_px": None if f["at_grid_edge"] else round(f["f_px"], 1), "status": "value" if not f["at_grid_edge"] else f"값 없음 ({f['side']})", "quality_verdict": f["verdict"], "sharpness": rd(f["sharpness"]),
+                      "boot_log_std": rd(f["boot_log_std"], 5), "f_rel_uncertainty": rd(f["f_rel_uncertainty"]), "front_window_s": [rd(x, 3) for x in r["front_window"]],
+                      "n_tilt_frames": m["n_tilt_frames"], "tilt_duration_s": rd(m["tilt_duration_s"], 2), "theta_median_deg": rd(m["theta_median_deg"], 1), "theta_max_deg": rd(m["theta_max_deg"], 1)})
+            for k, name in (("keep_f", "keep_f_px"), ("joint_delta_f", "joint_delta_f_px")):
+                if r.get(k):
+                    e[name] = None if r[k]["at_grid_edge"] else round(r[k]["f_px"], 1)
+            if r.get("anycalib_f"):
+                e["anycalib_f_px"] = {m_: rd(v["f_px"], 1) for m_, v in r["anycalib_f"].items()}
+        else:
+            e["failed"] = r.get("failed")
+        out["videos"][r["video"]] = e
+    if pooled:
+        out["pooled"] = {"n_videos": pooled["n_videos"], "f_px": None if pooled["at_grid_edge"] else round(pooled["f_px"], 1), "status": "value" if not pooled["at_grid_edge"] else f"값 없음 ({pooled['side']})",
+                         "interval_95_px": None if not pooled.get("interval_95") else [round(x, 1) for x in pooled["interval_95"]], "log_std": rd(pooled.get("log_std"), 5)}
+    path.write_text(yaml.safe_dump(hf.jsonable(out), allow_unicode=True, sort_keys=False))
+    return path
+
+
+def focal_main(argv=None):
+    ap = argparse.ArgumentParser()
+    ap.add_argument("--config", default=str(hf.PROJECT_ROOT / "configs/video_to_focal.yaml"))
+    ap.add_argument("--videos", default=None, help="comma list overriding yaml videos")
+    ap.add_argument("--out", default=None)
+    a = ap.parse_args(argv)
+    text = Path(a.config).read_text()
+    cfg = yaml.safe_load(text)
+    videos = a.videos.split(",") if a.videos else list(cfg.get("videos") or [])
+    if not videos:
+        raise SystemExit("videos is empty: give input_dir file names in the yaml or with --videos")
+    missing = [v for v in videos if not (Path(cfg["input_dir"]).expanduser() / v).exists()]
+    if missing:
+        raise SystemExit(f"영상이 없습니다: {missing}")
+    run_root = Path(a.out).expanduser() if a.out else hf.resolve(cfg["output"]["root"]) / utc_stamp()
+    run_root.mkdir(parents=True)
+    (run_root / "figures").mkdir()
+    log = Log(run_root / "log.txt")
+    log(f"영상 → 초점거리: 영상 {videos}, 후보 {cfg['candidate']['detector']} + wrist_mode {cfg['candidate']['wrist_mode']} → {run_root}")
+    t0 = time.time()
+    tmp_root = run_root / "_frames"
+    tmp_root.mkdir()
+    cjob = {k: cfg[k] for k in ("candidate", "warnings", "compare", "detector_settings", "anycalib_guard") if k in cfg}
+    for k in ("OMP_NUM_THREADS", "OPENBLAS_NUM_THREADS", "MKL_NUM_THREADS"):
+        os.environ[k] = "1"
+    import multiprocessing as mp
+    from concurrent.futures import ProcessPoolExecutor
+    gpus = list(cfg.get("gpu_ids") or []) if (cfg.get("compare") or {}).get("anycalib") else []
+    try:
+        with ProcessPoolExecutor(max_workers=int(cfg["workers"]), mp_context=mp.get_context("spawn")) as ex:
+            preps = list(ex.map(hf.fresp_prepare, [(v, cfg["input_dir"], cfg["pipeline"], {}, str(tmp_root)) for v in videos]))
+            npz = hf.fresp_detect_many([((p["video"], "orig"), p["frames"]) for p in preps], cfg["detector_settings"][cfg["candidate"]["detector"]], run_root / "detection_cache", int(cfg["n_workers"]), log)
+            args = [(p["video"], p, npz[(p["video"], "orig")], cfg["pipeline"], cjob, str(tmp_root), gpus[i % len(gpus)] if gpus else None) for i, p in enumerate(preps)]
+            with ProcessPoolExecutor(max_workers=int(cfg["workers"]), mp_context=mp.get_context("spawn"), max_tasks_per_child=1) as ex3:
+                results = list(ex3.map(hf.focal_video, args))
+    finally:
+        shutil.rmtree(tmp_root, ignore_errors=True)
+    for r in results:
+        if "f" in r:
+            log(f"  {r['video']}: f {focal_fval(r['f'])}, 품질 판정 {r['f']['verdict']}, 부트스트랩 로그 SD {long_fmt(r['f']['boot_log_std'], 4)}" + (f", 경고 {r['warnings']}" if r["warnings"] else ""))
+            focal_figure(run_root / "figures" / f"{Path(r['video']).stem}_cost_curve.png", r)
+        else:
+            log(f"  {r['video']}: 분석 실패 ({r.get('failed')}) {r['warnings']}")
+    pooled = hf.focal_pool(results, cfg["pool"]) if (cfg.get("pool") or {}).get("enabled") and sum("f" in r for r in results) >= 2 else None
+    if pooled:
+        log(f"  합동 f ({pooled['n_videos']}개 영상): {focal_fval(pooled)}")
+    git = hf.git_state()
+    focal_report(run_root / "report.md", results, pooled, cfg)
+    focal_results_yaml(run_root / "results.yaml", run_root, results, pooled, cfg, str(git.get("commit", ""))[:7])
+    with (run_root / "focal.csv").open("w", newline="") as fh:
+        wr = csv.writer(fh)
+        wr.writerow(["video", "f_px", "status", "quality_verdict", "boot_log_std", "f_rel_uncertainty", "n_tilt_frames", "warnings"])
+        for r in results:
+            if "f" in r:
+                f = r["f"]
+                wr.writerow([r["video"], "" if f["at_grid_edge"] else f"{f['f_px']:.2f}", "value" if not f["at_grid_edge"] else f"no value ({f['side']})", f["verdict"], long_fmt(f["boot_log_std"], 5), long_fmt(f["f_rel_uncertainty"], 4),
+                             r["motion"]["n_tilt_frames"], "; ".join(r["warnings"])])
+            else:
+                wr.writerow([r["video"], "", f"failed: {r.get('failed')}", "", "", "", "", "; ".join(r["warnings"])])
+    (run_root / "results.json").write_text(json.dumps(hf.jsonable({"videos": results, "pooled": pooled}), ensure_ascii=False, indent=1))
+    meta = hf.provenance_build(text, a.config, {"videos": videos, "elapsed_s": time.time() - t0})
+    (run_root / "metadata.json").write_text(json.dumps(hf.jsonable(meta), ensure_ascii=False, indent=1))
+    log(f"완료 {time.time() - t0:.0f} s → {run_root}")
+    log.close()
+    return run_root, results, pooled
+
+
+# ====================================================================================================
 # command line
 # ====================================================================================================
 
-COMMANDS = {"protocol": protocol_main, "frame-filter": ff_main, "same-session": session_main, "overlay": overlay_main, "phase-segmentation": pseg_main, "guide-revision": grev_main, "f-response": fresp_main, "error-factors": ferr_main, "long-video-check": long_main, "end-to-end": e2e_main}
+COMMANDS = {"protocol": protocol_main, "frame-filter": ff_main, "same-session": session_main, "overlay": overlay_main, "phase-segmentation": pseg_main, "guide-revision": grev_main, "f-response": fresp_main, "error-factors": ferr_main, "long-video-check": long_main, "end-to-end": e2e_main, "estimate-focal": focal_main}
 
 
 def main(argv=None):
