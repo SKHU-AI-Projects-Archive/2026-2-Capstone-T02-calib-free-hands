@@ -1,0 +1,337 @@
+experiment: 34_printed_hand
+run: runs/34_printed_hand/20261027T030524Z
+code_commit: 0c195be
+git_dirty_at_run: false
+note: 프린트한 손(평면, 모양이 변하지 않음)을 같은 카메라·같은 거리 50 / 60 / 75 cm에서 찍은 영상으로, 손 모양 변화가 없어도
+  추정 f가 거리에 반비례하는지 본 실험이다. 후보 설정(mediapipe_hands + 손목 제외 + fixed_template)과 판정 규칙은
+  실행 전에 고정했고 바꾸지 않았다. 기준 f와의 비교는 summary.md에만 있다.
+candidate:
+  detector: mediapipe_hands
+  wrist_mode: exclude
+  estimator: fixed_template
+  front_window: 17's (phase_mode nominal, tilt phase from 3.0 s)
+verdict_rules:
+  slope_none_min: -0.3
+  slope_yes_max: -0.7
+  f_tol: 0.1
+videos:
+  IMG_7249.MOV:
+    kind: printed
+    distance_cm: 60.0
+    duration_s: 25.27
+    detect_fail_rate: 0.0184
+    edge_rate: 0.0
+    excluded: null
+    multi_hand_share: 0.0
+    f_px: 2410.4
+    status: value
+    f_keep_px: 2202.7
+    sharpness: 1.00162
+    boot_log_std: 0.09446
+    tilt_duration_s: 22.27
+    theta_median_deg: 27.9
+    theta_max_deg: 87.0
+    box_long_median_px: 682.9
+    reproj_rms_front_pct: 0.1747
+    reproj_rms_tilt_pct: 1.6469
+    bone_ratio_pct_median: 2.211
+    spread_change_deg_median: 1.252
+    rating_v2: 사용 가능
+  IMG_7251.MOV:
+    kind: printed
+    distance_cm: 50.0
+    duration_s: 26.0
+    detect_fail_rate: 0.0
+    edge_rate: 0.0
+    excluded: null
+    multi_hand_share: 0.0
+    f_px: 2543.8
+    status: value
+    f_keep_px: null
+    sharpness: 1.00197
+    boot_log_std: 0.08838
+    tilt_duration_s: 23.0
+    theta_median_deg: 26.4
+    theta_max_deg: 89.1
+    box_long_median_px: 858.0
+    reproj_rms_front_pct: 0.0946
+    reproj_rms_tilt_pct: 1.6942
+    bone_ratio_pct_median: 1.878
+    spread_change_deg_median: 1.283
+    rating_v2: 사용 가능
+  IMG_7253.MOV:
+    kind: printed
+    distance_cm: 75.0
+    duration_s: 25.73
+    detect_fail_rate: 0.3643
+    edge_rate: 0.0
+    excluded:
+    - 유효한 정면 창(1초)이 없음
+    - 손 검출 실패 프레임 36.4% > 20%
+    multi_hand_share: 0.0
+  IMG_7254.MOV:
+    kind: printed
+    distance_cm: 75.0
+    duration_s: 27.33
+    detect_fail_rate: 1.0
+    edge_rate: 0.0
+    excluded:
+    - 유효한 정면 창(1초)이 없음
+    - 손 검출 실패 프레임 100.0% > 20%
+    multi_hand_share: 0.0
+  IMG_7255.MOV:
+    kind: printed
+    distance_cm: 60.0
+    duration_s: 26.13
+    detect_fail_rate: 0.0331
+    edge_rate: 0.0
+    excluded: null
+    multi_hand_share: 0.0
+    f_px: 2523.8
+    status: value
+    f_keep_px: 2426.7
+    sharpness: 1.00437
+    boot_log_std: 0.07113
+    tilt_duration_s: 23.13
+    theta_median_deg: 27.5
+    theta_max_deg: 43.7
+    box_long_median_px: 681.5
+    reproj_rms_front_pct: 0.1727
+    reproj_rms_tilt_pct: 0.4307
+    bone_ratio_pct_median: 1.792
+    spread_change_deg_median: 1.144
+    rating_v2: 사용 불가
+  IMG_7256.MOV:
+    kind: printed
+    distance_cm: 50.0
+    duration_s: 26.13
+    detect_fail_rate: 0.0102
+    edge_rate: 0.0
+    excluded: null
+    multi_hand_share: 0.0
+    f_px: 2920.7
+    status: value
+    f_keep_px: 2602.3
+    sharpness: 1.00369
+    boot_log_std: 0.06368
+    tilt_duration_s: 23.13
+    theta_median_deg: 26.1
+    theta_max_deg: 48.6
+    box_long_median_px: 837.5
+    reproj_rms_front_pct: 0.1199
+    reproj_rms_tilt_pct: 0.4801
+    bone_ratio_pct_median: 1.818
+    spread_change_deg_median: 1.279
+    rating_v2: 사용 불가
+  IMG_7216.MOV:
+    kind: real
+    distance_cm: 50.0
+    duration_s: 24.2
+    detect_fail_rate: 0.0
+    edge_rate: 0.0632
+    excluded:
+    - 가장자리 접촉 프레임 6.3% > 5%
+    multi_hand_share: 0.0
+  IMG_7217.MOV:
+    kind: real
+    distance_cm: 60.0
+    duration_s: 24.87
+    detect_fail_rate: 0.0
+    edge_rate: 0.0
+    excluded: null
+    multi_hand_share: 0.0
+    f_px: 1527.3
+    status: value
+    f_keep_px: 1799.0
+    sharpness: 1.00808
+    boot_log_std: 0.04665
+    tilt_duration_s: 21.87
+    theta_median_deg: 34.6
+    theta_max_deg: 52.5
+    box_long_median_px: 675.3
+    reproj_rms_front_pct: 0.093
+    reproj_rms_tilt_pct: 0.6448
+    bone_ratio_pct_median: 3.169
+    spread_change_deg_median: 1.65
+    rating_v2: 사용 불가
+  IMG_7218.MOV:
+    kind: real
+    distance_cm: 75.0
+    duration_s: 24.87
+    detect_fail_rate: 0.0
+    edge_rate: 0.0
+    excluded: null
+    multi_hand_share: 0.0
+    f_px: 1399.1
+    status: value
+    f_keep_px: 1471.8
+    sharpness: 1.00527
+    boot_log_std: 0.07413
+    tilt_duration_s: 21.87
+    theta_median_deg: 32.7
+    theta_max_deg: 65.5
+    box_long_median_px: 528.0
+    reproj_rms_front_pct: 0.1357
+    reproj_rms_tilt_pct: 0.6078
+    bone_ratio_pct_median: 3.043
+    spread_change_deg_median: 1.233
+    rating_v2: 사용 가능
+  IMG_7219.MOV:
+    kind: real
+    distance_cm: 50.0
+    duration_s: 23.6
+    detect_fail_rate: 0.0
+    edge_rate: 0.0
+    excluded: null
+    multi_hand_share: 0.0
+    f_px: 1993.9
+    status: value
+    f_keep_px: 1939.6
+    sharpness: 1.00779
+    boot_log_std: 0.08052
+    tilt_duration_s: 20.6
+    theta_median_deg: 34.0
+    theta_max_deg: 52.6
+    box_long_median_px: 818.0
+    reproj_rms_front_pct: 0.0933
+    reproj_rms_tilt_pct: 0.6312
+    bone_ratio_pct_median: 3.638
+    spread_change_deg_median: 1.568
+    rating_v2: 사용 불가
+  IMG_7220.MOV:
+    kind: real
+    distance_cm: 60.0
+    duration_s: 21.4
+    detect_fail_rate: 0.0
+    edge_rate: 0.0
+    excluded: null
+    multi_hand_share: 0.0
+    f_px: 2122.1
+    status: value
+    f_keep_px: 2037.6
+    sharpness: 1.00511
+    boot_log_std: 0.04077
+    tilt_duration_s: 18.4
+    theta_median_deg: 29.8
+    theta_max_deg: 49.9
+    box_long_median_px: 661.2
+    reproj_rms_front_pct: 0.134
+    reproj_rms_tilt_pct: 0.4965
+    bone_ratio_pct_median: 2.777
+    spread_change_deg_median: 0.987
+    rating_v2: 사용 불가
+  IMG_7221.MOV:
+    kind: real
+    distance_cm: 75.0
+    duration_s: 24.0
+    detect_fail_rate: 0.0
+    edge_rate: 0.0
+    excluded: null
+    multi_hand_share: 0.0
+    f_px: 1298.0
+    status: value
+    f_keep_px: 1722.8
+    sharpness: 1.00499
+    boot_log_std: 0.0628
+    tilt_duration_s: 21.0
+    theta_median_deg: 31.8
+    theta_max_deg: 55.1
+    box_long_median_px: 528.9
+    reproj_rms_front_pct: 0.1288
+    reproj_rms_tilt_pct: 0.6731
+    bone_ratio_pct_median: 3.516
+    spread_change_deg_median: 1.658
+    rating_v2: 사용 가능
+  IMG_7222.MOV:
+    kind: real
+    distance_cm: 50.0
+    duration_s: 23.4
+    detect_fail_rate: 0.0
+    edge_rate: 0.0
+    excluded: null
+    multi_hand_share: 0.0
+    f_px: 2230.6
+    status: value
+    f_keep_px: 2228.2
+    sharpness: 1.0052
+    boot_log_std: 0.0856
+    tilt_duration_s: 20.4
+    theta_median_deg: 30.4
+    theta_max_deg: 45.1
+    box_long_median_px: 818.9
+    reproj_rms_front_pct: 0.1785
+    reproj_rms_tilt_pct: 0.6062
+    bone_ratio_pct_median: 3.081
+    spread_change_deg_median: 1.852
+    rating_v2: 사용 불가
+  IMG_7223.MOV:
+    kind: real
+    distance_cm: 60.0
+    duration_s: 22.13
+    detect_fail_rate: 0.0
+    edge_rate: 0.0
+    excluded: null
+    multi_hand_share: 0.0
+    f_px: 1866.2
+    status: value
+    f_keep_px: 1700.9
+    sharpness: 1.00558
+    boot_log_std: 0.04846
+    tilt_duration_s: 19.13
+    theta_median_deg: 31.3
+    theta_max_deg: 48.1
+    box_long_median_px: 672.7
+    reproj_rms_front_pct: 0.1039
+    reproj_rms_tilt_pct: 0.5338
+    bone_ratio_pct_median: 2.436
+    spread_change_deg_median: 1.067
+    rating_v2: 사용 불가
+  IMG_7224.MOV:
+    kind: real
+    distance_cm: 75.0
+    duration_s: 23.47
+    detect_fail_rate: 0.0
+    edge_rate: 0.0
+    excluded: null
+    multi_hand_share: 0.0
+    f_px: 1554.4
+    status: value
+    f_keep_px: 1518.2
+    sharpness: 1.00357
+    boot_log_std: 0.07561
+    tilt_duration_s: 20.47
+    theta_median_deg: 30.9
+    theta_max_deg: 48.4
+    box_long_median_px: 514.0
+    reproj_rms_front_pct: 0.1212
+    reproj_rms_tilt_pct: 0.5965
+    bone_ratio_pct_median: 3.137
+    spread_change_deg_median: 1.037
+    rating_v2: 사용 불가
+by_kind:
+  printed:
+    pooled_f_px:
+      '50': 2711.7
+      '60': 2462.2
+    slope: -0.5293
+    slope_interval_95:
+    - -1.0534
+    - -0.0434
+    slope_keep: null
+  real:
+    pooled_f_px:
+      '50': 2092.4
+      '60': 1766.8
+      '75': 1398.4
+    slope: -0.9958
+    slope_interval_95:
+    - -1.2747
+    - -0.7095
+    slope_keep: -0.6625
+verdict:
+  verdict: 판단 불가
+  reason: 영상이 없는 거리가 있음
+  slope: -0.5293
+  interval_95:
+  - -1.0534
+  - -0.0434
