@@ -1,0 +1,245 @@
+experiment:
+  name: 30_jointset_sets
+  seed: 42
+
+# 30: the candidate (mediapipe_hands + wrist_mode exclude + fixed_template) is unchanged (f and every other diagnostic are 25-29's). Only the uncertainty joint sets behind the verdict's jointset_range check change.
+# Why: with the wrist excluded 17's palm5 (wrist + 4 MCP) is only the 4 nearly collinear MCP points, its f sits on the grid edge and jointset_range <= 0.12 (the ROUGH condition) fails for every video (audit 2026-10-26).
+# New sets (no wrist, 8 points each, not collinear): prox8 = MCP + proximal phalanx of the four fingers, index_middle8, ring_pinky8; plus the full set flat17 (16 points without the wrist), as in 17.
+# Fixed 2026-10-27 before the run; nothing here is changed after seeing results.
+jointset:
+  sets:
+    prox8: [5, 6, 9, 10, 13, 14, 17, 18]
+    index_middle8: [5, 6, 7, 8, 9, 10, 11, 12]
+    ring_pinky8: [13, 14, 15, 16, 17, 18, 19, 20]
+  uncertainty_sets: [prox8, index_middle8, ring_pinky8, flat17]
+# Decision on the replacement: adopted when the new jointset_range is within the ROUGH limit (pipeline.verdict.rough.jointset_range_max, unchanged) for at least min_within_share of the videos AND
+# at most max_edge_share of the (video, set) pairs sit on the f grid edge; otherwise the replacement does not help.
+decision:
+  min_within_share: 0.5
+  max_edge_share: 0.10
+input_dir: /home/juson/data/hand_focal_videos
+detections:                          # content-keyed caches (any run) or, for a video with source17, that 17 run (22's rule: the frame list must equal)
+  search_dirs: [runs/*/*/detection_cache]
+candidate:
+  detector: mediapipe_hands
+  wrist_mode: exclude
+  estimator: fixed_template
+  front_window: 17's (phase_mode nominal, tilt phase from 3.0 s)
+videos:                              # every video of 22-29 that the candidate processed: file, lens, ref_f (user-provided checkerboard f: 1x 1680 px, 0.5x 880 px), source17 for the 17 runs of 22 / 23 / 25's baseline
+  - {file: IMG_7148.MOV, lens: 1x, ref_f: 1680, source17: runs/17_protocol_rerun/20261016T083019Z/IMG_7148}
+  - {file: IMG_7157.MOV, lens: 1x, ref_f: 1680, source17: runs/17_protocol_rerun/20261019T024522Z/IMG_7157}
+  - {file: IMG_7158.MOV, lens: 1x, ref_f: 1680, source17: runs/17_protocol_rerun/20261019T030703Z/IMG_7158}
+  - {file: IMG_7176.MOV, lens: 1x, ref_f: 1680, source17: runs/17_protocol_rerun/20261020T011004Z/IMG_7176}
+  - {file: IMG_7177.MOV, lens: 1x, ref_f: 1680, source17: runs/17_protocol_rerun/20261020T012620Z/IMG_7177}
+  - {file: IMG_7178.MOV, lens: 1x, ref_f: 1680, source17: runs/17_protocol_rerun/20261020T014136Z/IMG_7178}
+  - {file: IMG_7180.MOV, lens: 1x, ref_f: 1680, source17: runs/17_protocol_rerun/20261020T015845Z/IMG_7180}
+  - {file: IMG_7181.MOV, lens: 1x, ref_f: 1680, source17: runs/17_protocol_rerun/20261020T040532Z/IMG_7181}
+  - {file: IMG_7184.MOV, lens: 0.5x, ref_f: 880}
+  - {file: IMG_7190.MOV, lens: 1x, ref_f: 1680}
+  - {file: IMG_7191.MOV, lens: 1x, ref_f: 1680}
+  - {file: IMG_7192.MOV, lens: 1x, ref_f: 1680}
+  - {file: IMG_7193.MOV, lens: 1x, ref_f: 1680}
+  - {file: IMG_7194.MOV, lens: 1x, ref_f: 1680}
+  - {file: IMG_7195.MOV, lens: 1x, ref_f: 1680}
+  - {file: IMG_7213.MOV, lens: 0.5x, ref_f: 880}
+  - {file: IMG_7214.MOV, lens: 0.5x, ref_f: 880}
+  - {file: IMG_7215.MOV, lens: 0.5x, ref_f: 880}
+  - {file: IMG_7216.MOV, lens: 1x, ref_f: 1680}
+  - {file: IMG_7217.MOV, lens: 1x, ref_f: 1680}
+  - {file: IMG_7218.MOV, lens: 1x, ref_f: 1680}
+  - {file: IMG_7219.MOV, lens: 1x, ref_f: 1680}
+  - {file: IMG_7220.MOV, lens: 1x, ref_f: 1680}
+  - {file: IMG_7221.MOV, lens: 1x, ref_f: 1680}
+  - {file: IMG_7222.MOV, lens: 1x, ref_f: 1680}
+  - {file: IMG_7223.MOV, lens: 1x, ref_f: 1680}
+  - {file: IMG_7224.MOV, lens: 1x, ref_f: 1680}
+  - {file: IMG_7225.MOV, lens: 1x, ref_f: 1680}
+  - {file: IMG_7226.MOV, lens: 1x, ref_f: 1680}
+  - {file: IMG_7227.MOV, lens: 1x, ref_f: 1680}
+  - {file: IMG_7231.MOV, lens: 0.5x, ref_f: 880}
+  - {file: IMG_7232.MOV, lens: 0.5x, ref_f: 880}
+  - {file: IMG_7233.MOV, lens: 0.5x, ref_f: 880}
+n_workers: 16
+workers: 9
+code_29: {branch: exp/29-wide-60cm, commit: 093bd1a, modules: [HandCalib/handfocal.py, HandCalib/run.py]}
+
+output:
+  root: runs/30_jointset_sets
+  results_yaml: results/30_jointset_sets.yaml
+
+pipeline:
+  experiment:
+    name: 30_jointset_sets
+    seed: 42
+  input_dir: /home/juson/data/hand_focal_videos
+  video_extensions:
+  - .mov
+  - .mp4
+  - .m4v
+  - .mkv
+  - .avi
+  min_duration_s: 5.0
+  normalize:
+    long_side: 1920
+    max_fps: 60
+    sdr_target: bt709
+    hdr_path:
+    - zscale_tonemap
+    - colorspace
+    codec: ffv1
+  frames:
+    detect_fps: 15
+    tmp_dir: null
+  detector:
+    name: mock
+    mock_npz: null
+    classes:
+      0: left
+      1: right
+    cache: true
+  tracking:
+    init_window_s: 1.0
+    iou_min: 0.3
+    conf_min: 0.5
+    smoothing:
+      enabled: false
+      window: 3
+  phases:
+    phase_mode: nominal
+    front_phase_s: 3.0
+    front_skip_s: 0.5
+    front_window_s: 1.0
+    front_min_detect_rate: 0.9
+    finger_extension_min: 0.9
+    auto_theta_deg: 10.0
+    auto_sustain_s: 0.5
+    auto_warn_diff_s: 1.0
+  joints:
+    sets:
+      palm4:
+      - 0
+      - 5
+      - 9
+      - 13
+      palm5:
+      - 0
+      - 5
+      - 9
+      - 13
+      - 17
+      palm_proximal9:
+      - 0
+      - 5
+      - 6
+      - 9
+      - 10
+      - 13
+      - 14
+      - 17
+      - 18
+      flat17:
+      - 0
+      - 5
+      - 6
+      - 7
+      - 8
+      - 9
+      - 10
+      - 11
+      - 12
+      - 13
+      - 14
+      - 15
+      - 16
+      - 17
+      - 18
+      - 19
+      - 20
+    estimate_set: flat17
+    uncertainty_sets:
+    - palm5
+    - palm_proximal9
+    - flat17
+    template_align_iters: 4
+  estimate:
+    estimator: fixed_template
+    synthetic_study_result: null
+    principal_point: center
+    distortion: null
+    f_grid_n: 60
+    f_ratio_range:
+    - 0.35
+    - 1.6
+    huber_rel: 0.02
+    min_points: 4
+    joint_delta:
+      delta_grid_deg:
+      - 0
+      - 4
+      - 8
+      - 12
+      - 16
+      - 20
+      phi_n: 6
+      delta_prior_deg: 8.0
+      prior_weight: auto
+      nm_max_iter: 300
+  anycalib:
+    enabled: true
+    model_id: anycalib_pinhole
+    cam_id: pinhole
+    stride: 1
+    device: cuda:0
+    extra_models:
+    - anycalib_gen
+    offline_env:
+      HF_HUB_OFFLINE: '1'
+      TRANSFORMERS_OFFLINE: '1'
+    torch_hub_dir: ~/.cache/torch/hub
+  uncertainty:
+    n_bootstrap: 30
+    block_frames: 10
+    time_budget_s: 600
+  verdict:
+    good:
+      detect_rate_min: 0.9
+      front_frames_min: 15
+      finger_extension_required: true
+      theta_p90_min_deg: 25.0
+      axis_bins_min: 5
+      reproj_rms_rel_max: 0.01
+      jointset_range_max: 0.04
+      bootstrap_rel_std_max: 0.03
+      consistency_range_max: 0.06
+      delta_abs_max_deg: 12.0
+      sharpness_min: 1.3
+    rough:
+      detect_rate_min: 0.7
+      theta_p90_min_deg: 12.0
+      axis_bins_min: 3
+      reproj_rms_rel_max: 0.025
+      jointset_range_max: 0.12
+    min_target_frames: 20
+  target_sizes:
+  - - 1920
+    - 1080
+  - - 1280
+    - 720
+  - - 3840
+    - 2160
+  output:
+    root: runs/26_generalization
+    results_yaml: results/26_generalization.yaml
+
+detector_settings:
+  mediapipe_hands:
+    model: MediaPipe Hand Landmarker (hand_landmarker.task float16/1)
+    weights: /home/juson/models/mediapipe/hand_landmarker.task
+    python: /home/juson/venvs/det_mediapipe/bin/python
+    device: cpu
+    num_hands: 2
+    min_hand_detection_confidence: 0.5
+    min_hand_presence_confidence: 0.5
+    box_margin: 0.1
+    conf_min: 0.5
+    remap: null
