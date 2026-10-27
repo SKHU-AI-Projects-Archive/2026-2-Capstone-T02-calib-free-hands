@@ -4518,9 +4518,10 @@ def mk_color_mask(hsv: np.ndarray, mcfg: dict) -> np.ndarray:
     return cv2.morphologyEx(m.astype(np.uint8), cv2.MORPH_OPEN, np.ones((3, 3), np.uint8))
 
 
-def mk_blobs(bgr: np.ndarray, region: tuple, mcfg: dict) -> dict:
+def mk_blobs(bgr: np.ndarray, region: tuple, mcfg: dict, area_min_px: float | None = None) -> dict:
     """Marker centres in a region of a BGR frame. Components with area in [area_min, area_max] and roundness 4 pi A / P^2 >= circularity_min are kept; the centre of a component is its
-    saturation-weighted centroid (continuous image coordinates). Returns {xy (m, 2), area (m,), circularity (m,)}."""
+    saturation-weighted centroid (continuous image coordinates). area_min_px replaces area_min when given (the share-of-box lower limit of the subset run).
+    Returns {xy (m, 2), area (m,), circularity (m,)}."""
     x0, y0, x1, y1 = region
     crop = bgr[y0:y1, x0:x1]
     hsv = cv2.cvtColor(crop, cv2.COLOR_BGR2HSV)
@@ -4529,7 +4530,7 @@ def mk_blobs(bgr: np.ndarray, region: tuple, mcfg: dict) -> dict:
     xy, areas, circs = [], [], []
     for c in cnts:
         a, p = cv2.contourArea(c), cv2.arcLength(c, True)
-        if p <= 0 or not (float(mcfg["area_min"]) <= a <= float(mcfg["area_max"])):
+        if p <= 0 or not ((float(mcfg["area_min"]) if area_min_px is None else float(area_min_px)) <= a <= float(mcfg["area_max"])):
             continue
         circ = 4.0 * np.pi * a / (p * p)
         if circ < float(mcfg["circularity_min"]):
@@ -4569,10 +4570,12 @@ def mk_homography(src: np.ndarray, dst: np.ndarray, thr_px: float | None = None)
     return H, None if m is None else m.ravel().astype(bool)
 
 
-def mk_track(dets_xy: list, ref_index: int, ref_xy: np.ndarray, box_long_px: np.ndarray, mcfg: dict) -> dict:
+def mk_track(dets_xy: list, ref_index: int, ref_xy: np.ndarray, box_long_px: np.ndarray, mcfg: dict, used: list | None = None) -> dict:
     """Follow the reference markers through the frames (forward and backward from ref_index). dets_xy[i] = detected centres (k, 2) or None. A frame is dropped when it has more detections than markers or fewer
     than min_markers_ratio x markers, when fewer than that ratio of the markers can be matched, or when the homography reference -> frame (RANSAC) keeps fewer than min_inlier_ratio of them
     (a swapped pair breaks it). Matching: Hungarian on the distances to the last accepted frame; a pair moving more than move_frac x hand box x min(gap, gap_cap) frames is cut.
+    used = indices of the reference markers that count for the share (None: all, the first behaviour): then the ratio is taken of those markers, the others are followed but never required; the homography uses every
+    matched marker. mcfg['max_detections'] (default: the number of reference markers) is the most detections a frame may have.
     Returns {xy (n, m, 2) NaN where missing, ok (n,) bool, reason (n,) str}."""
     from scipy.optimize import linear_sum_assignment
     n, m = len(dets_xy), len(ref_xy)
@@ -4580,7 +4583,9 @@ def mk_track(dets_xy: list, ref_index: int, ref_xy: np.ndarray, box_long_px: np.
     ok = np.zeros(n, bool)
     reason = np.array([""] * n, dtype=object)
     xy[ref_index], ok[ref_index] = ref_xy, True
-    need = int(np.ceil(float(mcfg["min_markers_ratio"]) * m - 1e-9))
+    used = list(range(m)) if used is None else [int(j) for j in used]
+    need = int(np.ceil(float(mcfg["min_markers_ratio"]) * len(used) - 1e-9))
+    max_det = int(mcfg.get("max_detections", m))
     for order in (range(ref_index + 1, n), range(ref_index - 1, -1, -1)):
         last, last_i = ref_xy.copy(), ref_index
         for i in order:
@@ -4588,7 +4593,7 @@ def mk_track(dets_xy: list, ref_index: int, ref_xy: np.ndarray, box_long_px: np.
             if d is None:
                 reason[i] = "no_hand_box"
                 continue
-            if len(d) > m:
+            if len(d) > max_det:
                 reason[i] = "too_many_markers"
                 continue
             if len(d) < need:
@@ -4599,14 +4604,14 @@ def mk_track(dets_xy: list, ref_index: int, ref_xy: np.ndarray, box_long_px: np.
             r, c = linear_sum_assignment(cost)
             good = cost[r, c] <= lim
             r, c = r[good], c[good]
-            if len(r) < need:
+            if np.isin(r, used).sum() < need:
                 reason[i] = "match_failed"
                 continue
             cur = np.full((m, 2), np.nan)
             cur[r] = d[c]
             thr = float(mcfg["ransac_frac"]) * float(box_long_px[i])
             H, inl = mk_homography(ref_xy[r], cur[r], thr)
-            if H is None or inl is None or inl.sum() < float(mcfg["min_inlier_ratio"]) * len(r) or inl.sum() < need:
+            if H is None or inl is None or inl.sum() < float(mcfg["min_inlier_ratio"]) * len(r) or np.isin(r[inl], used).sum() < need:
                 reason[i] = "homography_failed"
                 continue
             keep = r[inl]
@@ -4659,9 +4664,13 @@ def mk_sharpness(bgr: np.ndarray, region: tuple) -> float:
 
 
 def mk_process(prep: dict, npz, pcfg: dict, c: dict) -> dict:
-    """Markers of one video from the stored MediaPipe detection (hand box and reference naming only): per-frame blobs, reference frame (sharpest front-window frame with every marker found), names,
-    tracking with the homography check. Returns the marker arrays in the 21-joint layout (kp (n, 21, 2), mask, present), the MediaPipe track and the frame statistics, or {'failed': reason}."""
+    """Markers of one video from the stored MediaPipe detection (hand box and reference naming only): per-frame blobs, reference frame (sharpest front-window frame, see below), names, tracking with the
+    homography check. Returns the marker arrays in the 21-joint layout (kp (n, 21, 2), mask, present), the MediaPipe track and the frame statistics, or {'failed': reason}.
+    Default (no markers.used_ids): every one of markers.count markers must be found in the reference frame and in every kept frame. Subset mode (markers.used_ids): the lower area limit is markers.area_min_frac
+    x the MediaPipe box area, the reference frame must show every used marker (nearest MediaPipe joint within markers.naming_radius_frac x box), the tracked markers beyond the used ones are only followed, and a
+    frame is kept when at least min_markers_ratio of the used markers are matched; the share of kept frames in the tilt phase and the detection rate of every marker are reported."""
     mcfg = c["markers"]
+    used_ids = mcfg.get("used_ids")
     dset = c["detector_settings"][c["candidate"]["detector"]]
     pc = copy.deepcopy(pcfg)
     pc["tracking"]["conf_min"] = float(dset["conf_min"])
@@ -4671,36 +4680,63 @@ def mk_process(prep: dict, npz, pcfg: dict, c: dict) -> dict:
     dets = load_detections(Path(npz))
     check_alignment(frames, dets)
     tr = track(dets, times, (W, H), pc["tracking"], front_start_s=float(pc["phases"]["front_skip_s"]))
-    n, m = len(times), int(mcfg["count"])
+    n, m_cfg = len(times), int(mcfg["count"])
     bl = box_long(tr["box"])
     det, regions = [None] * n, [None] * n
     for i in range(n):
         if tr["present"][i]:
             regions[i] = mk_region(tr["box"][i], float(mcfg["region_margin"]), W, H)
-            det[i] = mk_blobs(cv2.imread(frames[i]["png"], cv2.IMREAD_COLOR), regions[i], mcfg)["xy"]
+            amin = None if "area_min_frac" not in mcfg else float(mcfg["area_min_frac"]) * float((tr["box"][i][2] - tr["box"][i][0]) * (tr["box"][i][3] - tr["box"][i][1]))
+            det[i] = mk_blobs(cv2.imread(frames[i]["png"], cv2.IMREAD_COLOR), regions[i], mcfg, amin)["xy"]
     seen = [i for i in range(n) if det[i] is not None]
-    out = {"n_frames": n, "size": [W, H], "times": times, "tr": tr, "det": det, "regions": regions, "box_long": bl, "count": m,
-           "all_found_ratio": float(np.mean([len(det[i]) == m for i in seen])) if seen else 0.0, "hand_frames": len(seen),
+    out = {"n_frames": n, "size": [W, H], "times": times, "tr": tr, "det": det, "regions": regions, "box_long": bl, "count": m_cfg,
+           "all_found_ratio": float(np.mean([len(det[i]) == m_cfg for i in seen])) if seen else 0.0, "hand_frames": len(seen),
            "n_detected_median": float(np.median([len(det[i]) for i in seen])) if seen else 0.0}
     fw = front_window(times, tr["present"], tr["kp"], tr["mask"], tr["box"], pc["phases"])
-    cands = [int(i) for i in fw["idx"] if det[i] is not None and len(det[i]) == m]
-    if not cands:
-        return {**out, "failed": "정면 창에 표시가 모두 잡힌 프레임이 없음"}
-    sharp = [mk_sharpness(cv2.imread(frames[i]["png"], cv2.IMREAD_COLOR), regions[i]) for i in cands]
-    ref = cands[int(np.argmax(sharp))]
-    names = mk_assign_names(det[ref], tr["kp"][ref])
-    trk = mk_track(det, ref, det[ref], bl, mcfg)
+    sharp, ref, names, used_idx = [], None, None, None
+    if used_ids is None:
+        cands = [int(i) for i in fw["idx"] if det[i] is not None and len(det[i]) == m_cfg]
+        if cands:
+            sharp = [mk_sharpness(cv2.imread(frames[i]["png"], cv2.IMREAD_COLOR), regions[i]) for i in cands]
+            ref = cands[int(np.argmax(sharp))]
+            names = mk_assign_names(det[ref], tr["kp"][ref])
+    else:
+        uid = [int(x) for x in used_ids]
+        cands, cnames = [], {}
+        for i in (int(j) for j in fw["idx"]):
+            if det[i] is None or not (len(uid) <= len(det[i]) <= 21):
+                continue
+            nm = mk_assign_names(det[i], tr["kp"][i])
+            dist = np.linalg.norm(det[i] - tr["kp"][i][nm], axis=1)
+            if all(any(nm[j] == u and dist[j] <= float(mcfg["naming_radius_frac"]) * bl[i] for j in range(len(nm))) for u in uid):
+                cands.append(i)
+                cnames[i] = nm
+        if cands:
+            sharp = [mk_sharpness(cv2.imread(frames[i]["png"], cv2.IMREAD_COLOR), regions[i]) for i in cands]
+            ref = cands[int(np.argmax(sharp))]
+            names = cnames[ref]
+            used_idx = [j for j, x in enumerate(names) if int(x) in uid]
+    if ref is None:
+        return {**out, "failed": "정면 창에 기준 프레임이 없음" + ("" if used_ids is None else " (사용 표시가 모두 보이는 프레임)")}
+    m = len(det[ref])
+    out["count"] = m if used_ids is not None else m_cfg
+    trk = mk_track(det, ref, det[ref], bl, mcfg, used_idx)
     kp = np.full((n, 21, 2), np.nan)
     for j in range(m):
         kp[:, names[j]] = trk["xy"][:, j]
     mask = np.isfinite(kp[..., 0]) & trk["ok"][:, None]
     win = [i for i in range(n) if 0.5 <= times[i] < 1.5]
+    tilt_hand = np.array([det[i] is not None and times[i] >= float(pc["phases"]["front_phase_s"]) for i in range(n)])
     reasons = {}
     for r in trk["reason"]:
         if r:
             reasons[r] = reasons.get(r, 0) + 1
-    out.update({"ref_index": ref, "ref_time_s": float(times[ref]), "ref_sharpness": float(max(sharp)), "names": names, "track": trk, "kp": kp, "mask": mask, "present": trk["ok"].copy(),
-                "valid_ratio": float(trk["ok"].sum() / max(len(seen), 1)), "reasons": reasons, "window_success": int(trk["ok"][win].sum()), "window_frames": len(win), "front_window": [fw.get("t0"), fw.get("t1")]})
+    loose = mk_track(det, ref, det[ref], bl, {**mcfg, "min_markers_ratio": 0.3}, used_idx)
+    seen_loose = loose["ok"] & tilt_hand
+    per = {int(names[j]): float(np.isfinite(loose["xy"][seen_loose, j, 0]).sum() / max(tilt_hand.sum(), 1)) for j in range(m)}
+    out.update({"ref_index": ref, "ref_time_s": float(times[ref]), "ref_sharpness": float(max(sharp)), "names": names, "used_idx": used_idx, "track": trk, "kp": kp, "mask": mask, "present": trk["ok"].copy(),
+                "valid_ratio": float(trk["ok"].sum() / max(len(seen), 1)), "tilt_valid_ratio": float((trk["ok"] & tilt_hand).sum() / max(tilt_hand.sum(), 1)), "tilt_hand_frames": int(tilt_hand.sum()),
+                "reasons": reasons, "window_success": int(trk["ok"][win].sum()), "window_frames": len(win), "front_window": [fw.get("t0"), fw.get("t1")], "per_marker_rate": per})
     return out
 
 
@@ -4720,24 +4756,18 @@ def mk_draw_reference(prep: dict, proc: dict, path) -> None:
 
 
 def mk_precheck_video(args) -> dict:
-    """Pre-check of one video: marker statistics and the reference-frame picture; no analysis. args = (entry, prep, npz, pcfg, c); c['out_dir'] gets the picture."""
+    """Pre-check of one video: marker statistics and the reference-frame picture; no analysis. args = (entry, prep, npz, pcfg, c); c['out_dir'] gets the picture. In subset mode the pass rule is
+    precheck.min_tilt_valid_ratio (share of the tilt-phase hand frames that are kept) and a reference frame showing every used marker; otherwise precheck.min_all_found_ratio."""
     entry, prep, npz, pcfg, c = args[:5]
     proc = mk_process(prep, npz, pcfg, c)
     res = {"video": entry["file"], "distance_cm": float(entry["distance_cm"]), "size": proc["size"], "n_frames": proc["n_frames"], "hand_frames": proc["hand_frames"], "all_found_ratio": proc["all_found_ratio"],
            "n_detected_median": proc["n_detected_median"], "count": proc["count"]}
+    subset = c["markers"].get("used_ids") is not None
     if "failed" in proc:
-        return {**res, "failed": proc["failed"]}
-    res.update({k: proc[k] for k in ("ref_index", "ref_time_s", "ref_sharpness", "valid_ratio", "reasons", "window_success", "window_frames", "front_window")})
+        return {**res, "failed": proc["failed"], "passes": False}
+    res.update({k: proc[k] for k in ("ref_index", "ref_time_s", "ref_sharpness", "valid_ratio", "tilt_valid_ratio", "reasons", "window_success", "window_frames", "front_window", "per_marker_rate")})
     res["names"] = [int(x) for x in proc["names"]]
-    # for information: the same tracking with a lower minimum share of markers, to see which markers are lost and how many frames would stay with fewer markers
-    mc = c["markers"]
-    loose = mk_track(proc["det"], proc["ref_index"], proc["det"][proc["ref_index"]], proc["box_long"], {**mc, "min_markers_ratio": 0.5})
-    times = proc["times"]
-    tilt = (times >= 3.0) & loose["ok"]
-    seen_t = np.array([proc["det"][i] is not None and times[i] >= 3.0 for i in range(len(times))])
-    per = np.isfinite(loose["xy"][..., 0])
-    res["loose"] = {"valid_ratio": float(loose["ok"].sum() / max(proc["hand_frames"], 1)), "per_marker_visible_tilt": {int(proc["names"][j]): float(per[tilt, j].mean()) if tilt.any() else None for j in range(proc["count"])},
-                    "share_frames_with_at_least": {str(k): float(np.mean(per[loose["ok"]].sum(1) >= k)) if loose["ok"].any() else None for k in (21, 19, 18, 16, 14)}, "tilt_frames_valid": int(tilt.sum()), "tilt_frames_with_hand": int(seen_t.sum())}
+    res["passes"] = bool(proc["tilt_valid_ratio"] >= float(c["precheck"]["min_tilt_valid_ratio"])) if subset else bool(proc["all_found_ratio"] >= float(c["precheck"]["min_all_found_ratio"]))
     if c.get("out_dir"):
         mk_draw_reference(prep, proc, Path(c["out_dir"]) / f"reference_{Path(entry['file']).stem}.png")
     return res
@@ -4770,9 +4800,44 @@ def mk_overlay(frames: list, proc: dict, path, max_side: int = 960, fps: float =
         vw.release()
 
 
+def mk_mediapipe_subset(prep: dict, npz, pcfg: dict, c: dict) -> dict:
+    """MediaPipe joints markers.used_ids through the unchanged fixed_template analysis (the same joints the markers stand for; MediaPipe's own frames, the exclusion rules of 27). Same fields as the marker result."""
+    cand = c["candidate"]
+    dset = c["detector_settings"][cand["detector"]]
+    pc = copy.deepcopy(pcfg)
+    pc["tracking"]["conf_min"] = float(dset["conf_min"])
+    times = np.array([r["time_s"] for r in prep["frames"]])
+    W, H = prep["size"]
+    tr = track(load_detections(Path(npz)), times, (W, H), pc["tracking"], front_start_s=float(pc["phases"]["front_skip_s"]))
+    ex = c["exclusion"]
+    edge = fresp_edge_rate(tr["box"][tr["present"]], np.ones(int(tr["present"].sum()), bool), W, H) if tr["present"].any() else 1.0
+    fail = 1.0 - float(tr["present"].mean())
+    reasons = ([f"가장자리 접촉 프레임 {100 * edge:.1f}% > {100 * float(ex['edge_rate_max']):.0f}%"] if edge > float(ex["edge_rate_max"]) else []) + \
+              ([f"손 검출 실패 프레임 {100 * fail:.1f}% > {100 * float(ex['detect_fail_max']):.0f}%"] if fail > float(ex["detect_fail_max"]) else [])
+    out = {"excluded": reasons, "edge_rate": float(edge)}
+    if reasons:
+        return out
+    cfg_s = copy.deepcopy(pc)
+    cfg_s["joints"]["sets"]["mp_subset"] = sorted(int(x) for x in c["markers"]["used_ids"])
+    cfg_s["joints"]["estimate_set"] = "mp_subset"
+    cfg_s["joints"]["uncertainty_sets"] = ["mp_subset"]
+    a = analyze(tr["kp"], tr["mask"], tr["present"], tr["box"], tr["cls"], times, (W, H), cfg_s, tilt_start=None, methods_full=("fixed_template",), seed=int(pc["experiment"]["seed"]))
+    if "per_method" not in a:
+        return {**out, "failed": a.get("failed", "분석 실패")}
+    sol, pm = a["solutions"]["fixed_template"], a["per_method"]["fixed_template"]
+    grid = np.array(a["grid"])
+    tilt = [i for i, r in enumerate(a["role"]) if r == "tilt"]
+    out.update({"f": float(sol["f"]), "at_grid_edge": bool(sol["at_grid_edge"]), "side": None if not sol["at_grid_edge"] else ("상한" if sol["f"] >= grid[-1] * (1 - 1e-6) else "하한"),
+                "sharpness": float(pm["diagnostics"]["sharpness"]), "boot_log_std": long_boot_log_std(pm["bootstrap"]["f"]), "curve": {"grid": grid.tolist(), "cost": [float(x) for x in sol["profile_cost"]]},
+                "n_used_frames": int(a["n_target_frames"]), "theta_median": a["theta_tilt"]["median"], "theta_max": a["theta_tilt"]["max"], "theta_p90": a["theta_tilt"]["p90"],
+                "tilt_duration_s": float(times[tilt].max() - a["tilt_start_s"]) if tilt else 0.0, "phase_rms_pct": pr_phase_rms(a, tr["box"])})
+    return out
+
+
 def mk_video(args) -> dict:
-    """One video of experiment 35: the marker points in place of the joints through the unchanged analysis (fixed_template, front window, nominal tilt phase, block bootstrap), MediaPipe beside it (pr_video),
-    and the diagnostics of the planar-hand check (perspective components, planar gap). args = (entry, prep, npz, pcfg, c); c needs candidate, exclusion, detector_settings, guide, markers."""
+    """One video of experiment 35: the marker points in place of the joints through the unchanged analysis (fixed_template, front window, nominal tilt phase, block bootstrap), MediaPipe beside it (pr_video: the
+    16-point candidate; in subset mode also the same joints as the markers, mk_mediapipe_subset), and the diagnostics of the planar-hand check (perspective components, planar gap).
+    args = (entry, prep, npz, pcfg, c); c needs candidate, exclusion, detector_settings, guide, markers (and marker_exclusion in subset mode)."""
     entry, prep, npz, pcfg, c = args[:5]
     os.environ.setdefault("OMP_NUM_THREADS", "1")
     cv2.setNumThreads(1)
@@ -4780,12 +4845,15 @@ def mk_video(args) -> dict:
     dset = c["detector_settings"][cand["detector"]]
     pc = copy.deepcopy(pcfg)
     pc["tracking"]["conf_min"] = float(dset["conf_min"])
+    subset = c["markers"].get("used_ids") is not None
     proc = mk_process(prep, npz, pcfg, c)
     W, H = proc["size"]
     res = {"video": entry["file"], "distance_cm": float(entry["distance_cm"]), "size": [W, H], "n_frames": proc["n_frames"], "duration_s": float(proc["times"][-1] - proc["times"][0]),
-           "marker_stats": {k: proc.get(k) for k in ("all_found_ratio", "valid_ratio", "n_detected_median", "hand_frames", "window_success", "window_frames", "ref_time_s", "reasons", "front_window")}}
-    mp = pr_video((entry, prep, npz, pcfg, {k: v for k, v in c.items() if k not in ("overlay_dir", "markers")}))
-    res["mediapipe"] = mp
+           "marker_stats": {k: proc.get(k) for k in ("all_found_ratio", "valid_ratio", "tilt_valid_ratio", "n_detected_median", "hand_frames", "window_success", "window_frames", "ref_time_s", "reasons", "front_window", "per_marker_rate")}}
+    cc = {k: v for k, v in c.items() if k not in ("overlay_dir", "markers")}
+    res["mediapipe"] = pr_video((entry, prep, npz, pcfg, cc))
+    if subset:
+        res["mediapipe8"] = mk_mediapipe_subset(prep, npz, pcfg, c)
     if "failed" in proc:
         res["marker"] = {"failed": proc["failed"]}
         return res
@@ -4795,7 +4863,11 @@ def mk_video(args) -> dict:
     ex = c["exclusion"]
     edge = fresp_edge_rate(tr["box"][proc["present"]], np.ones(int(proc["present"].sum()), bool), W, H) if proc["present"].any() else 1.0
     reasons = []
-    if 1.0 - proc["valid_ratio"] > float(ex["detect_fail_max"]):
+    if subset:
+        lim = float(c["marker_exclusion"]["min_tilt_valid_ratio"])
+        if proc["tilt_valid_ratio"] < lim:
+            reasons.append(f"기울기 구간 유효 프레임 {100 * proc['tilt_valid_ratio']:.1f}% < {100 * lim:.0f}%")
+    elif 1.0 - proc["valid_ratio"] > float(ex["detect_fail_max"]):
         reasons.append(f"표시 유효 프레임 {100 * proc['valid_ratio']:.1f}% < {100 * (1 - float(ex['detect_fail_max'])):.0f}%")
     if edge > float(ex["edge_rate_max"]):
         reasons.append(f"가장자리 접촉 프레임 {100 * edge:.1f}% > {100 * float(ex['edge_rate_max']):.0f}%")
@@ -4804,7 +4876,7 @@ def mk_video(args) -> dict:
     if reasons:
         return res
     cfg_mk = copy.deepcopy(pc)
-    names = sorted({int(x) for x in proc["names"]})
+    names = sorted(int(x) for x in c["markers"]["used_ids"]) if subset else sorted({int(x) for x in proc["names"]})
     cfg_mk["joints"]["sets"]["markers"] = names
     cfg_mk["joints"]["estimate_set"] = "markers"
     cfg_mk["joints"]["uncertainty_sets"] = ["markers"]
@@ -4831,7 +4903,7 @@ def mk_video(args) -> dict:
     for i in range(n):
         if not proc["present"][i] or not tr["mask"][i][ids].all() or not tr["mask"][r0][ids].all():
             continue
-        okm = np.isfinite(proc["track"]["xy"][i][:, 0])
+        okm = np.isfinite(proc["track"]["xy"][i][:, 0]) & np.isfinite(ref_mk[:, 0])
         if okm.sum() < 6:
             continue
         p_mk = mk_perspective(ref_mk[okm], proc["track"]["xy"][i][okm], scale)

@@ -5010,15 +5010,16 @@ def pr_results_yaml(run_dir: Path, cfg: dict):
 # ====================================================================================================
 # mk  (experiment 35: hand markers, does the slope survive when the points are measured by image processing?; new section)
 #
-#     python HandCalib/run.py hand-markers --config HandCalib/configs/35_hand_markers.yaml [--videos A.MOV,B.MOV] [--out DIR] precheck
+#     python HandCalib/run.py hand-markers --config HandCalib/configs/35b_hand_markers_subset.yaml [--videos A.MOV,B.MOV] [--out DIR] precheck
 #     python HandCalib/run.py hand-markers --config ... [--videos A.MOV,B.MOV] [--out DIR]
 #     python HandCalib/run.py hand-markers --config ... results-yaml --run runs/35_hand_markers/<UTC>
-# precheck: marker statistics and the reference-frame picture of every video, no analysis (the official run waits for the user's go). Detection of the MediaPipe hand (box and naming only) is run anew, CPU.
+# precheck: marker statistics, per-marker detection rates and the reference-frame picture of every video, no analysis; the official run needs every distance to have a video that passes the rule.
+# The MediaPipe hand (box and naming only) is detected anew, CPU. markers.used_ids: the markers (= MediaPipe joint numbers) that enter the estimate; without it all markers are used (35's first config).
 # ====================================================================================================
 
 MK_NOTE = ("실제 손의 손바닥 면에 붙인 표시 점을 학습 모델 대신 영상 처리로 측정해 같은 fixed_template 계산에 넣으면, 손 모양 변화와 비평면성이 그대로인 실제 손에서도 거리 반비례가 사라지는지 본 실험이다. "
-           "후보 설정, 표시 검출 설정, 판정 규칙은 실행 전에 고정했고 바꾸지 않았다. 기준 f와의 비교는 summary.md에만 있다.")
-MK_INTERP = {"원인은 검출 모델": "표시 점은 반비례가 없고 MediaPipe는 반비례가 있다", "원인은 손 자체": "표시 점과 MediaPipe 모두 반비례가 있다", "해석 보류": "그 외"}
+           "쓰는 점, 표시 검출 설정, 판정 규칙은 실행 전에 고정했고 바꾸지 않았다. 기준 f와의 비교는 summary.md에만 있다.")
+MK_METHODS = {"markers": "표시 점", "mediapipe8": "MediaPipe 같은 관절 (주 비교)", "mediapipe16": "MediaPipe 손목 제외 16점 (기록용)"}
 
 
 def mk_interpret(marker_verdict: str, mp_verdict: str) -> str:
@@ -5030,9 +5031,24 @@ def mk_interpret(marker_verdict: str, mp_verdict: str) -> str:
     return "해석 보류"
 
 
+def mk_norm(r: dict, key: str):
+    """One method's result of a video in a common shape (f, at_grid_edge, sharpness, boot_log_std, curve cost, phase RMS, theta, used frames) or None when it was excluded / failed."""
+    if key == "markers":
+        x = r["marker"]
+        return x if "f" in x else None
+    if key == "mediapipe8":
+        x = r.get("mediapipe8") or {}
+        return x if "f" in x else None
+    x = r["mediapipe"]
+    if "ft" not in x:
+        return None
+    return {"f": x["ft"]["f"], "at_grid_edge": x["ft"]["at_grid_edge"], "side": x["ft"]["side"], "sharpness": x["ft"]["sharpness"], "boot_log_std": x["ft"]["boot_log_std"], "curve": x["curve"], "phase_rms_pct": x["phase_rms_pct"],
+            "theta_median": x["motion"]["theta_median_deg"], "theta_max": x["motion"]["theta_max_deg"], "n_used_frames": x["motion"]["n_tilt_frames"]}
+
+
 def mk_main(argv=None):
     ap = argparse.ArgumentParser()
-    ap.add_argument("--config", default=str(hf.PROJECT_ROOT / "configs/35_hand_markers.yaml"))
+    ap.add_argument("--config", default=str(hf.PROJECT_ROOT / "configs/35b_hand_markers_subset.yaml"))
     sub = ap.add_subparsers(dest="cmd")
     sub.add_parser("precheck")
     ry = sub.add_parser("results-yaml")
@@ -5052,16 +5068,16 @@ def mk_main(argv=None):
     missing = [e["file"] for e in entries if not (Path(cfg["input_dir"]).expanduser() / e["file"]).exists()]
     if missing:
         raise SystemExit(f"영상이 없습니다: {missing}")
-    stamp = utc_stamp()
-    run_root = Path(a.out).expanduser() if a.out else hf.resolve(cfg["output"]["root"]) / (stamp + ("_precheck" if pre else ""))
+    run_root = Path(a.out).expanduser() if a.out else hf.resolve(cfg["output"]["root"]) / (utc_stamp() + ("_precheck" if pre else ""))
     run_root.mkdir(parents=True)
     (run_root / "figures").mkdir()
     log = Log(run_root / "log.txt")
-    log(f"35 손 표시 점 {'사전 확인' if pre else '공식 실행'}: 영상 {len(entries)}개, 표시 {cfg['markers']['color']} {cfg['markers']['count']}개 → {run_root}")
+    used = cfg["markers"].get("used_ids")
+    log(f"35 손 표시 점 {'사전 확인' if pre else '공식 실행'}: 영상 {len(entries)}개, 표시 {cfg['markers']['color']} {cfg['markers']['count']}개" + (f", 추정에 쓰는 점 {used}" if used else "") + f" → {run_root}")
     t0 = time.time()
     tmp_root = run_root / "_frames"
     tmp_root.mkdir()
-    base = {k: cfg[k] for k in ("candidate", "exclusion", "detector_settings", "guide", "session", "markers") if k in cfg}
+    base = {k: cfg[k] for k in ("candidate", "exclusion", "detector_settings", "guide", "session", "markers", "marker_exclusion", "precheck") if k in cfg}
     dset = cfg["detector_settings"][cfg["candidate"]["detector"]]
     for k in ("OMP_NUM_THREADS", "OPENBLAS_NUM_THREADS", "MKL_NUM_THREADS"):
         os.environ[k] = "1"
@@ -5076,52 +5092,56 @@ def mk_main(argv=None):
             results = list(ex.map(hf.mk_precheck_video if pre else hf.mk_video, [(e, p, found[(e["file"], "orig")], cfg["pipeline"], cj) for e, p in zip(entries, preps)]))
     finally:
         shutil.rmtree(tmp_root, ignore_errors=True)
+    ref = {float(d): float(f) for d, f in cfg["ref_f_by_distance"].items()}
     if pre:
-        mk_precheck_report(run_root / "precheck.md", results, infos, cfg)
-        (run_root / "precheck.json").write_text(json.dumps(hf.jsonable({"videos": results}), ensure_ascii=False, indent=1))
-        lim = float(cfg["precheck"]["min_all_found_ratio"])
-        low = [r["video"] for r in results if r["all_found_ratio"] < lim]
-        log(f"  표시가 모두 잡힌 프레임 비율 < {100 * lim:.0f}%인 영상: {low or '없음'}")
+        ok_by_d = {d: [r["video"] for r in results if r["distance_cm"] == d and r.get("passes")] for d in sorted(ref)}
+        proceed = all(len(v) >= 1 for v in ok_by_d.values())
+        mk_precheck_report(run_root / "precheck.md", results, infos, ok_by_d, proceed, cfg)
+        (run_root / "precheck.json").write_text(json.dumps(hf.jsonable({"videos": results, "passing_by_distance": ok_by_d, "official_run_ok": proceed}), ensure_ascii=False, indent=1))
+        for r in results:
+            log(f"  {r['video']} ({r['distance_cm']:g} cm): " + ("기준 프레임 없음" if "tilt_valid_ratio" not in r else f"기울기 구간 유효 {100 * r['tilt_valid_ratio']:.1f}%, 0.5~1.5초 성공 {r['window_success']}/{r['window_frames']}") + f" → {'통과' if r.get('passes') else '탈락'}")
+        log(f"  거리별 통과 영상: {ok_by_d} → 공식 실행 {'진행 가능' if proceed else '하지 않음 (보고하고 멈춤)'}")
         log(f"완료 {time.time() - t0:.0f} s → {run_root}")
         log.close()
-        return run_root, results
+        return run_root, results, proceed
     v2 = cfg["rating_v2"]
     for r in results:
-        mkr, mp_ = r["marker"], r["mediapipe"]
+        mkr = r["marker"]
         if "f" in mkr:
             mkr["rating"] = hf.gen_rating(mkr["tilt_duration_s"], mkr["theta_max"], mkr["boot_log_std"], v2)
-        line = f"  {r['video']} ({r['distance_cm']:g} cm): 표시 " + (f"f {mkr['f']:.1f} px, 로그 SD {long_fmt(mkr['boot_log_std'], 4)}, θ2d 최댓값 {mkr['theta_max']:.0f}°, 사용 프레임 {mkr['n_used_frames']}" if "f" in mkr else
-                                                                  f"제외 ({'; '.join(mkr.get('excluded') or []) or mkr.get('failed')})")
-        line += " / MediaPipe " + (f"f {mp_['ft']['f']:.1f} px" if "ft" in mp_ else "제외")
+        parts = []
+        for key in MK_METHODS:
+            x = mk_norm(r, key)
+            parts.append(f"{MK_METHODS[key].split(' ')[0]}{'(8)' if key == 'mediapipe8' else ''} " + (f"f {x['f']:.1f} px" if x else "제외"))
+        line = f"  {r['video']} ({r['distance_cm']:g} cm): " + " / ".join(parts)
+        if mkr.get("excluded"):
+            line += f" [표시 제외: {'; '.join(mkr['excluded'])}]"
         if r.get("diag"):
             line += f" / 원근 반영률 k {long_fmt(r['diag']['k']['k'], 2)}, 평면 예측과의 차이 중앙값 {long_fmt(r['diag']['gap_median_pct'], 2)}%"
         log(line)
     grid = None
     for r in results:
-        if "curve" in r["marker"]:
-            grid = np.array(r["marker"]["curve"]["grid"])
-            break
+        for key in MK_METHODS:
+            x = mk_norm(r, key)
+            if x and grid is None:
+                grid = np.array(x["curve"]["grid"])
     bn, bs = int(cfg["bootstrap"]["n"]), int(cfg["bootstrap"]["seed"])
-    ref = {float(d): float(f) for d, f in cfg["ref_f_by_distance"].items()}
     ana = {}
-    for name, get in (("markers", lambda r: r["marker"] if "f" in r["marker"] else None), ("mediapipe", lambda r: r["mediapipe"]["ft"] and r["mediapipe"] if "ft" in r["mediapipe"] else None)):
-        inc = []
-        for r in results:
-            x = get(r)
-            if x is None:
-                continue
-            inc.append((r["distance_cm"], x["curve"]["cost"] if name == "markers" else r["mediapipe"]["curve"]["cost"]))
+    for key in MK_METHODS:
+        inc = [(r["distance_cm"], mk_norm(r, key)["curve"]["cost"]) for r in results if mk_norm(r, key)]
         ds = sorted({d for d, _ in inc})
         if not ds or grid is None:
-            ana[name] = {"verdict": {"verdict": "판단 불가", "reason": "분석된 영상이 없음"}}
+            ana[key] = {"verdict": {"verdict": "판단 불가", "reason": "분석된 영상이 없음"}}
             continue
         cur = {d: [c for dd, c in inc if dd == d] for d in ds}
         sl = hf.pr_slope(cur, grid, bn, bs)
         per = {d: {**hf.ext_pooled(cur[d], grid, {"bootstrap_n": bn, "bootstrap_seed": bs}), "n_total": sum(1 for r in results if r["distance_cm"] == d)} for d in ds}
         nv = {d: len(cur.get(d, [])) for d in ref}
-        ana[name] = {"slope": sl, "per_distance": per, "verdict": hf.pr_verdict(sl, ref, cfg["verdict"], nv)}
-        log(f"  {name}: {ana[name]['verdict']['verdict']}" + (f" (기울기 {sl['slope']:+.3f}, 구간 {sl['interval_95'][0]:+.3f} ~ {sl['interval_95'][1]:+.3f})" if sl["slope"] is not None and sl["interval_95"] else ""))
-    ana["interpretation"] = mk_interpret(ana["markers"]["verdict"]["verdict"], ana["mediapipe"]["verdict"]["verdict"])
+        ana[key] = {"slope": sl, "per_distance": per, "verdict": hf.pr_verdict(sl, ref, cfg["verdict"], nv)}
+        log(f"  {key}: {ana[key]['verdict']['verdict']}" + (f" (기울기 {sl['slope']:+.3f}, 구간 {sl['interval_95'][0]:+.3f} ~ {sl['interval_95'][1]:+.3f})" if sl["slope"] is not None and sl["interval_95"] else ""))
+    main = "mediapipe8" if used else "mediapipe16"
+    ana["interpretation"] = mk_interpret(ana["markers"]["verdict"]["verdict"], ana[main]["verdict"]["verdict"])
+    ana["main_comparison"] = main
     ana["checkerboard_slope"] = hf.ext_loglog_slope(sorted(ref), [ref[d] for d in sorted(ref)])
     ana["diag"] = mk_diag_summary(results)
     log(f"  해석: {ana['interpretation']}")
@@ -5136,25 +5156,27 @@ def mk_main(argv=None):
     return run_root, results, ana
 
 
-def mk_precheck_report(path: Path, results: list, infos: list, cfg: dict):
-    lim = float(cfg["precheck"]["min_all_found_ratio"])
-    L = ["# 실험 35 사전 확인", "", f"표시: {cfg['markers']['color']}, {cfg['markers']['count']}개. 영상마다 파일 정보, 표시가 모두 잡힌 프레임 비율, 0.5~1.5초 구간의 성공 프레임 수, 정면 기준 프레임의 표시 위치 그림을 적는다. 모두 잡힌 비율이 {100 * lim:.0f}% 미만인 영상이 있으면 공식 실행을 하지 않고 기다린다.", "",
-         "| 영상 | 거리(cm) | 길이(초) | 저장 해상도 | 회전 | 처리 후 해상도 | 손 검출 프레임 | 표시가 모두 잡힌 프레임 | 프레임당 검출 표시 수(중앙값) | 추적 후 유효 프레임 | 0.5~1.5초 성공 프레임 | 기준 프레임 시각(초) | 버려진 이유 |", "|---|---|---|---|---|---|---|---|---|---|---|---|---|"]
+def mk_precheck_report(path: Path, results: list, infos: list, ok_by_d: dict, proceed: bool, cfg: dict):
+    sub = cfg["markers"].get("used_ids") is not None
+    pc = cfg["precheck"]
+    rule = (f"통과 규칙: 기울기 구간(3초 이후)에서 사용 표시 {len(cfg['markers']['used_ids'])}개 중 {100 * float(cfg['markers']['min_markers_ratio']):.0f}% 이상이 잡힌 프레임의 비율 ≥ {100 * float(pc['min_tilt_valid_ratio']):.0f}%이고 정면 창에 사용 표시가 모두 보이는 기준 프레임이 있을 것; 거리마다 통과한 영상이 1개 이상이어야 공식 실행."
+            if sub else f"모두 잡힌 비율이 {100 * float(pc['min_all_found_ratio']):.0f}% 미만인 영상이 있으면 공식 실행을 하지 않는다.")
+    L = ["# 실험 35 사전 확인", "", f"표시: {cfg['markers']['color']}, {cfg['markers']['count']}개" + (f", 추정에 쓰는 점 {cfg['markers']['used_ids']}" if sub else "") + f". {rule}", "",
+         "| 영상 | 거리(cm) | 길이(초) | 저장 해상도 | 회전 | 처리 후 해상도 | 손 검출 프레임 | 프레임당 검출 표시 수(중앙값) | 기울기 구간 유효 프레임 | 0.5~1.5초 성공 프레임 | 기준 프레임 시각(초) | 통과 | 버려진 이유 |", "|---|---|---|---|---|---|---|---|---|---|---|---|---|"]
     for r, i in zip(results, infos):
-        L.append(f"| {r['video']} | {r['distance_cm']:g} | {i['duration_s']:.1f} | {i['width']}x{i['height']} | {i['rotation_deg']}° | {r['size'][0]}x{r['size'][1]} | {r['hand_frames']} / {r['n_frames']} | {100 * r['all_found_ratio']:.1f}% | {r['n_detected_median']:.0f} | "
-                 f"{'-' if 'valid_ratio' not in r else format(100 * r['valid_ratio'], '.1f') + '%'} | {'-' if 'window_success' not in r else str(r['window_success']) + ' / ' + str(r['window_frames'])} | {long_fmt(r.get('ref_time_s'), 1)} | "
-                 f"{r.get('failed') or ', '.join(f'{k} {v}' for k, v in (r.get('reasons') or {}).items()) or '-'} |")
-    L += ["", "정면 기준 프레임 그림: figures/reference_IMG_xxxx.png (표시 위치와 이름이 붙은 MediaPipe 관절 번호).", "",
-          "## 참고: 최소 표시 비율을 0.5로 낮춰 같은 추적을 했을 때 (공식 설정이 아님)", "",
-          "| 영상 | 유효 프레임 | 표시 21개 이상 / 19개 이상 / 16개 이상 인 프레임 비율 | 기울기 구간에서 가장 자주 안 보이는 표시(관절 번호: 보이는 비율) |", "|---|---|---|---|"]
-    for r in results:
-        lo = r.get("loose")
-        if not lo:
-            continue
-        worst = sorted(lo["per_marker_visible_tilt"].items(), key=lambda kv: (kv[1] is None, kv[1]))[:5]
-        sh = lo["share_frames_with_at_least"]
-        L.append(f"| {r['video']} | {100 * lo['valid_ratio']:.1f}% | {100 * (sh['21'] or 0):.0f}% / {100 * (sh['19'] or 0):.0f}% / {100 * (sh['16'] or 0):.0f}% | " + ", ".join(f"{k}: {100 * (v or 0):.0f}%" for k, v in worst) + " |")
-    L += [""]
+        L.append(f"| {r['video']} | {r['distance_cm']:g} | {i['duration_s']:.1f} | {i['width']}x{i['height']} | {i['rotation_deg']}° | {r['size'][0]}x{r['size'][1]} | {r['hand_frames']} / {r['n_frames']} | {r['n_detected_median']:.0f} | "
+                 f"{'-' if 'tilt_valid_ratio' not in r else format(100 * r['tilt_valid_ratio'], '.1f') + '%'} | {'-' if 'window_success' not in r else str(r['window_success']) + ' / ' + str(r['window_frames'])} | {long_fmt(r.get('ref_time_s'), 1)} | "
+                 f"{'통과' if r.get('passes') else '탈락'} | {r.get('failed') or ', '.join(f'{k} {v}' for k, v in (r.get('reasons') or {}).items()) or '-'} |")
+    L += ["", f"거리별 통과 영상: " + ", ".join(f"{d:g} cm {v or '없음'}" for d, v in ok_by_d.items()) + f" → 공식 실행 {'진행 가능' if proceed else '하지 않음'}.", "",
+          "## 표시 번호별 검출률 (기울기 구간, 손이 잡힌 프레임 기준, 관절 번호 = 표시 이름)", "",
+          "표시를 추적한 비율이다(최소 표시 비율을 0.3으로 낮춘 추적, 호모그래피 검사는 켬). * = 추정에 쓰는 점.", ""]
+    used = set(int(x) for x in cfg["markers"].get("used_ids") or [])
+    vids = [r for r in results if r.get("per_marker_rate")]
+    if vids:
+        L += ["| 표시 번호 | " + " | ".join(r["video"][4:8] for r in vids) + " |", "|---|" + "---|" * len(vids)]
+        for j in range(21):
+            L.append(f"| {j}{'*' if j in used else ''} | " + " | ".join(("-" if j not in r["per_marker_rate"] else f"{100 * r['per_marker_rate'][j]:.0f}%") for r in vids) + " |")
+    L += ["", "정면 기준 프레임 그림: figures/reference_IMG_xxxx.png (표시 위치와 이름이 붙은 MediaPipe 관절 번호).", ""]
     path.write_text("\n".join(L) + "\n")
 
 
@@ -5183,27 +5205,27 @@ def mk_diag_summary(results: list) -> dict:
 def mk_figures(out: Path, results: list, ana: dict, ref: dict, cfg: dict):
     plt = _plt()
     ds = sorted(ref)
-    fig, ax = plt.subplots(figsize=(6.2, 4.6))
+    fig, ax = plt.subplots(figsize=(6.4, 4.8))
     ax.plot(ds, [ref[d] for d in ds], "s-", color="#555", label="체커보드 (같은 날 거리 실험)")
     anchor = None
-    for key, label, col in (("mediapipe", "MediaPipe", "#c47a00"), ("markers", "표시 점", "#2a6fbb")):
-        sl = ana[key].get("slope")
+    for key, col in (("mediapipe16", "#999"), ("mediapipe8", "#c47a00"), ("markers", "#2a6fbb")):
+        sl = ana.get(key, {}).get("slope")
         if sl:
             pf = sl["pooled_f"]
-            ax.plot(sorted(pf), [pf[d] for d in sorted(pf)], "o-", color=col, label=label)
+            ax.plot(sorted(pf), [pf[d] for d in sorted(pf)], "o-" if key != "mediapipe16" else "x--", color=col, label=MK_METHODS[key])
             if key == "markers" and 60.0 in pf:
                 anchor = (60.0, pf[60.0])
     anchor = anchor or (60.0, ref.get(60.0, 1650.0))
     xs = np.array([min(ds) * 0.9, max(ds) * 1.1])
-    ax.plot(xs, anchor[1] * (xs / anchor[0]) ** 0.0, ":", color="#999", label="기울기 0")
-    ax.plot(xs, anchor[1] * (xs / anchor[0]) ** -1.0, "--", color="#999", label="기울기 -1")
+    ax.plot(xs, anchor[1] * (xs / anchor[0]) ** 0.0, ":", color="#bbb", label="기울기 0")
+    ax.plot(xs, anchor[1] * (xs / anchor[0]) ** -1.0, "--", color="#bbb", label="기울기 -1")
     ax.set_xscale("log")
     ax.set_yscale("log")
     ax.set_xticks(ds)
     ax.set_xticklabels([f"{d:g}" for d in ds])
     ax.set_xlabel("손-카메라 거리 (cm)")
     ax.set_ylabel("합동 f (px)")
-    ax.legend(fontsize=8)
+    ax.legend(fontsize=7)
     ax.grid(alpha=0.3, which="both")
     fig.tight_layout()
     fig.savefig(out / "f_vs_distance_loglog.png", dpi=110)
@@ -5237,41 +5259,37 @@ def mk_figures(out: Path, results: list, ana: dict, ref: dict, cfg: dict):
 
 
 def mk_report(path: Path, results: list, ana: dict, cfg: dict):
-    L = ["# 실험 35: 손 표시 점", "", MK_NOTE, "", f"표시: {cfg['markers']['color']} {cfg['markers']['count']}개. MediaPipe 분석은 실험 27과 같은 후보 설정(wrist_mode exclude, fixed_template)이고, 표시 점 분석은 같은 계산에 관절 대신 표시 점을 넣었다.", "",
-         "## 1. 영상별 표시 통계", "", "| 영상 | 거리(cm) | 표시가 모두 잡힌 프레임 | 추적 후 유효 프레임 | 0.5~1.5초 성공 프레임 | 포함 | 이유 |", "|---|---|---|---|---|---|---|"]
+    used = cfg["markers"].get("used_ids")
+    L = ["# 실험 35: 손 표시 점", "", MK_NOTE, "", f"표시: {cfg['markers']['color']} {cfg['markers']['count']}개" + (f", 추정에 쓰는 점 {used}" if used else "") + ". MediaPipe 분석은 같은 계산에 관절을 넣었다(주 비교: 같은 관절, 기록용: 실험 27의 후보 설정).", "",
+         "## 1. 영상별 표시 통계", "", "| 영상 | 거리(cm) | 기울기 구간 유효 프레임 | 0.5~1.5초 성공 프레임 | 포함 | 이유 |", "|---|---|---|---|---|---|"]
     for r in results:
         st, mkr = r["marker_stats"], r["marker"]
-        L.append(f"| {r['video']} | {r['distance_cm']:g} | {100 * (st['all_found_ratio'] or 0):.1f}% | {long_fmt(None if st['valid_ratio'] is None else 100 * st['valid_ratio'], 1)}% | {st['window_success']} / {st['window_frames']} | "
-                 f"{'포함' if 'f' in mkr else '제외'} | {'; '.join(mkr.get('excluded') or []) or mkr.get('failed') or '-'} |")
-    L += ["", "## 2. 영상별 값 (표시 점과 MediaPipe)", "",
-          "| 영상 | 거리(cm) | 방법 | 사용 프레임 | θ2d 중앙값 / 최댓값(°) | f (px) | 날카로움 | 부트스트랩 로그 SD | 재투영 RMS 정면 / 기울기 (박스 대비 %) | 마디 길이 비 변화(%) | 손가락 벌어짐 변화(°) |", "|---|---|---|---|---|---|---|---|---|---|---|"]
+        L.append(f"| {r['video']} | {r['distance_cm']:g} | {long_fmt(None if st.get('tilt_valid_ratio') is None else 100 * st['tilt_valid_ratio'], 1)}% | {st['window_success']} / {st['window_frames']} | {'포함' if 'f' in mkr else '제외'} | {'; '.join(mkr.get('excluded') or []) or mkr.get('failed') or '-'} |")
+    L += ["", "## 2. 영상별 값", "", "| 영상 | 거리(cm) | 방법 | 사용 프레임 | θ2d 중앙값 / 최댓값(°) | f (px) | 날카로움 | 부트스트랩 로그 SD | 재투영 RMS 정면 / 기울기 (박스 대비 %) |", "|---|---|---|---|---|---|---|---|---|"]
     for r in results:
-        mkr, mp_ = r["marker"], r["mediapipe"]
-        if "f" in mkr:
-            L.append(f"| {r['video']} | {r['distance_cm']:g} | 표시 점 | {mkr['n_used_frames']} | {long_fmt(mkr['theta_median'], 1)} / {long_fmt(mkr['theta_max'], 1)} | {'값 없음' if mkr['at_grid_edge'] else format(mkr['f'], '.1f')} | {mkr['sharpness']:.4f} | "
-                     f"{long_fmt(mkr['boot_log_std'], 4)} | {long_fmt(mkr['phase_rms_pct']['front'], 3)} / {long_fmt(mkr['phase_rms_pct']['tilt'], 3)} | 정의 없음 | 정의 없음 |")
-        if "ft" in mp_:
-            m_, d_, rm = mp_["motion"], mp_["dynamics"], mp_["phase_rms_pct"]
-            L.append(f"| {r['video']} | {r['distance_cm']:g} | MediaPipe | {m_['n_tilt_frames']} | {long_fmt(m_['theta_median_deg'], 1)} / {long_fmt(m_['theta_max_deg'], 1)} | {'값 없음' if mp_['ft']['at_grid_edge'] else format(mp_['ft']['f'], '.1f')} | {mp_['ft']['sharpness']:.4f} | "
-                     f"{long_fmt(mp_['ft']['boot_log_std'], 4)} | {long_fmt(rm['front'], 3)} / {long_fmt(rm['tilt'], 3)} | {long_fmt(d_['bone_ratio_pct']['median'], 2)} | {long_fmt(d_['spread_change_deg']['median'], 2)} |")
-    L += ["", "손 모양 변화 지표(실험 23의 정의)는 손가락 관절 번호로 정의되어 있어 표시 점에는 정의되지 않는다.", "",
-          "## 3. 거리별 합동 f (값만)", ""]
-    for key, name in (("markers", "표시 점"), ("mediapipe", "MediaPipe")):
+        for key in MK_METHODS:
+            x = mk_norm(r, key)
+            if x:
+                L.append(f"| {r['video']} | {r['distance_cm']:g} | {MK_METHODS[key]} | {x['n_used_frames']} | {long_fmt(x['theta_median'], 1)} / {long_fmt(x['theta_max'], 1)} | {'값 없음' if x['at_grid_edge'] else format(x['f'], '.1f')} | {x['sharpness']:.4f} | "
+                         f"{long_fmt(x['boot_log_std'], 4)} | {long_fmt(x['phase_rms_pct']['front'], 3)} / {long_fmt(x['phase_rms_pct']['tilt'], 3)} |")
+    L += ["", "## 3. 거리별 합동 f (값만)", ""]
+    for key in MK_METHODS:
         a_ = ana[key]
         if "slope" not in a_:
             continue
-        L += [f"{name}:", "", "| 거리(cm) | 영상 | 합동 f (px) | 95% 구간 (px) |", "|---|---|---|---|"]
+        L += [f"{MK_METHODS[key]}:", "", "| 거리(cm) | 영상 | 합동 f (px) | 95% 구간 (px) |", "|---|---|---|---|"]
         for d, p in a_["per_distance"].items():
             L.append(f"| {float(d):g} | {p['n_videos']} / {p['n_total']} | {format(p['pooled_f'], '.1f') if 'pooled_f' in p else '-'} | {'-' if 'interval_95' not in p else format(p['interval_95'][0], '.0f') + '–' + format(p['interval_95'][1], '.0f')} |")
         sl = a_["slope"]
         L += ["", f"- 기울기 {long_fmt(sl['slope'], 3)}" + ("" if sl["interval_95"] is None else f", 95% 구간 {sl['interval_95'][0]:+.3f} ~ {sl['interval_95'][1]:+.3f}"), ""]
-    L += ["## 4. 한계", "", "- 이 보고서는 값만 적는다. 기준 f와의 비교, 판정, 해석은 summary.md에 있다.", ""]
+    L += ["## 4. 한계", "", "- 이 보고서는 값만 적는다. 기준 f와의 비교, 판정, 해석은 summary.md에 있다. 손 모양 변화 지표(실험 23의 정의)는 손가락 관절 번호로 정의되어 표시 점에는 정의되지 않는다.", ""]
     path.write_text("\n".join(L) + "\n")
 
 
 def mk_summary(path: Path, results: list, ana: dict, ref: dict, cfg: dict):
     pct = lambda x: "-" if x is None else f"{100 * x:+.1f}%"      # noqa: E731
     vcfg = cfg["verdict"]
+    main = ana["main_comparison"]
     def vline(key, name):
         v = ana[key]["verdict"]
         s_ = f"- **{name} 판정: {v['verdict']}**"
@@ -5282,44 +5300,48 @@ def mk_summary(path: Path, results: list, ana: dict, ref: dict, cfg: dict):
         elif v.get("reason"):
             s_ += f" — {v['reason']}"
         return s_
-    L = ["# 실험 35 summary", "", f"**{MK_NOTE}**", "", "## 판정", "", vline("markers", "표시 점"), vline("mediapipe", "MediaPipe"),
-         f"- **해석: {ana['interpretation']}** (규칙: 표시 점 반비례 없음 + MediaPipe 반비례 있음 → 원인은 검출 모델; 둘 다 반비례 있음 → 원인은 손 자체; 그 외 해석 보류)",
+    L = ["# 실험 35 summary", "", f"**{MK_NOTE}**", "", "## 판정", "", vline("markers", "표시 점"), vline(main, MK_METHODS[main]),
+         f"- **해석: {ana['interpretation']}** (규칙: 표시 점 반비례 없음 + MediaPipe 반비례 있음 → 원인은 검출 모델; 둘 다 반비례 있음 → 원인은 손 자체; 그 외 해석 보류. MediaPipe는 {MK_METHODS[main]})",
          f"- 판정 규칙(실행 전 고정): 반비례 없음 = 기울기 구간 전체가 {vcfg['slope_none_min']:g}보다 위이고 세 거리의 합동 f가 모두 기준 f의 ±{100 * float(vcfg['f_tol']):.0f}% 안; 반비례 있음 = 구간 전체가 {vcfg['slope_yes_max']:g}보다 아래; 그 외 판단 보류; 거리에 영상이 없으면 판단 불가.", ""]
+    others = [k for k in MK_METHODS if k not in ("markers", main)]
+    L += ["기록용 판정: " + ", ".join(f"{MK_METHODS[k]} {ana[k]['verdict']['verdict']}" for k in others), ""]
     L += ["## 1. 거리별 합동 f와 기준 f", "", "| 방법 | 거리(cm) | 영상 | 합동 f (px) | 95% 구간 (px) | 같은 거리 기준 f | 기준 f 대비 | 1680 대비 |", "|---|---|---|---|---|---|---|---|"]
-    for key, name in (("markers", "표시 점"), ("mediapipe", "MediaPipe")):
+    for key in MK_METHODS:
         for d, p in (ana[key].get("per_distance") or {}).items():
             pf = p.get("pooled_f")
-            L.append(f"| {name} | {float(d):g} | {p['n_videos']} / {p['n_total']} | {format(pf, '.1f') if pf else '-'} | {'-' if 'interval_95' not in p else format(p['interval_95'][0], '.0f') + '–' + format(p['interval_95'][1], '.0f')} | {ref[float(d)]:.1f} | "
+            L.append(f"| {MK_METHODS[key]} | {float(d):g} | {p['n_videos']} / {p['n_total']} | {format(pf, '.1f') if pf else '-'} | {'-' if 'interval_95' not in p else format(p['interval_95'][0], '.0f') + '–' + format(p['interval_95'][1], '.0f')} | {ref[float(d)]:.1f} | "
                      f"{pct(None if not pf else pf / ref[float(d)] - 1.0)} | {pct(None if not pf else pf / 1680.0 - 1.0)} |")
     L += ["", "| 대상 | 기울기 | 95% 구간 |", "|---|---|---|"]
-    for key, name in (("markers", "표시 점 (영상 처리)"), ("mediapipe", "MediaPipe (같은 영상)")):
+    for key in MK_METHODS:
         sl = ana[key].get("slope")
         if sl:
-            L.append(f"| {name} | {long_fmt(sl['slope'], 3)} | {'-' if sl['interval_95'] is None else format(sl['interval_95'][0], '+.3f') + ' ~ ' + format(sl['interval_95'][1], '+.3f')} |")
+            L.append(f"| {MK_METHODS[key]} | {long_fmt(sl['slope'], 3)} | {'-' if sl['interval_95'] is None else format(sl['interval_95'][0], '+.3f') + ' ~ ' + format(sl['interval_95'][1], '+.3f')} |")
     r27 = hf.resolve(cfg["compare"]["results_27"])
+    pf27 = {}
     if r27.exists():
         g6 = json.loads(r27.read_text())["groups"]["G6"]["distances"]
         pf27 = {float(d): x["pooled_f"] for d, x in g6.items() if x.get("pooled_f")}
-        L.append(f"| 실제 손, 표시 없음 (실험 27) | {long_fmt(hf.ext_loglog_slope(sorted(pf27), [pf27[d] for d in sorted(pf27)]), 3)} | - |")
-        L += ["", "거리별 비교 (합동 f, px):", "", "| 거리(cm) | 표시 점 | MediaPipe (이번 영상) | 실제 손 27 (표시 없음) | 체커보드 |", "|---|---|---|---|---|"]
-        for d in sorted(ref):
-            a_ = (ana["markers"].get("slope") or {}).get("pooled_f", {}).get(d)
-            b_ = (ana["mediapipe"].get("slope") or {}).get("pooled_f", {}).get(d)
-            L.append(f"| {d:g} | {format(a_, '.1f') if a_ else '-'} | {format(b_, '.1f') if b_ else '-'} | {format(pf27[d], '.1f') if d in pf27 else '-'} | {ref[d]:.1f} |")
+        L.append(f"| 실제 손, 표시 없음, 16점 (실험 27) | {long_fmt(hf.ext_loglog_slope(sorted(pf27), [pf27[d] for d in sorted(pf27)]), 3)} | - |")
     L.append(f"| 체커보드 | {long_fmt(ana['checkerboard_slope'], 3)} | - |")
+    L += ["", "거리별 비교 (합동 f, px):", "", "| 거리(cm) | " + " | ".join(MK_METHODS[k] for k in MK_METHODS) + " | 실제 손 27 (표시 없음, 16점) | 체커보드 |", "|---|" + "---|" * (len(MK_METHODS) + 2)]
+    for d in sorted(ref):
+        cells = []
+        for key in MK_METHODS:
+            v = (ana[key].get("slope") or {}).get("pooled_f", {}).get(d)
+            cells.append(format(v, ".1f") if v else "-")
+        L.append(f"| {d:g} | " + " | ".join(cells) + f" | {format(pf27[d], '.1f') if d in pf27 else '-'} | {ref[d]:.1f} |")
     L += ["", "![거리 대 합동 f](figures/f_vs_distance_loglog.png)", "", "## 2. 표시 점과 MediaPipe의 재투영 RMS와 날카로움 (기록용)", "",
           "| 거리(cm) | 방법 | 영상 | 재투영 RMS 정면 (%) | 재투영 RMS 기울기 (%) | 날카로움 | 부트스트랩 로그 SD |", "|---|---|---|---|---|---|---|"]
     med = lambda v: float(np.median([x for x in v if x is not None])) if any(x is not None for x in v) else None      # noqa: E731
     for d in sorted(ref):
-        mk_ = [r["marker"] for r in results if r["distance_cm"] == d and "f" in r["marker"]]
-        mp_ = [r["mediapipe"] for r in results if r["distance_cm"] == d and "ft" in r["mediapipe"]]
-        if mk_:
-            L.append(f"| {d:g} | 표시 점 | {len(mk_)} | {long_fmt(med([x['phase_rms_pct']['front'] for x in mk_]), 3)} | {long_fmt(med([x['phase_rms_pct']['tilt'] for x in mk_]), 3)} | {long_fmt(med([x['sharpness'] for x in mk_]), 4)} | {long_fmt(med([x['boot_log_std'] for x in mk_]), 4)} |")
-        if mp_:
-            L.append(f"| {d:g} | MediaPipe | {len(mp_)} | {long_fmt(med([x['phase_rms_pct']['front'] for x in mp_]), 3)} | {long_fmt(med([x['phase_rms_pct']['tilt'] for x in mp_]), 3)} | {long_fmt(med([x['ft']['sharpness'] for x in mp_]), 4)} | {long_fmt(med([x['ft']['boot_log_std'] for x in mp_]), 4)} |")
+        for key in MK_METHODS:
+            xs_ = [mk_norm(r, key) for r in results if r["distance_cm"] == d]
+            xs_ = [x for x in xs_ if x]
+            if xs_:
+                L.append(f"| {d:g} | {MK_METHODS[key]} | {len(xs_)} | {long_fmt(med([x['phase_rms_pct']['front'] for x in xs_]), 3)} | {long_fmt(med([x['phase_rms_pct']['tilt'] for x in xs_]), 3)} | {long_fmt(med([x['sharpness'] for x in xs_]), 4)} | {long_fmt(med([x['boot_log_std'] for x in xs_]), 4)} |")
     dg = ana["diag"]
     L += ["", "## 3. MediaPipe의 원근 반영률 (기록용, 근사값)", "",
-          "표시 점으로 프레임마다 기준 프레임 → 현재의 호모그래피를 구하고, 정면 기준 프레임의 MediaPipe 관절을 그 호모그래피로 옮긴 위치를 \"손이 평면이라면 있어야 할 관절 위치\"로 두었다. 손은 완전한 평면이 아니므로 이 비교는 근사값이다. "
+          "표시 점으로 프레임마다 기준 프레임 → 현재의 호모그래피를 구하고, 정면 기준 프레임의 MediaPipe 관절(5~20)을 그 호모그래피로 옮긴 위치를 \"손이 평면이라면 있어야 할 관절 위치\"로 두었다. 손은 완전한 평면이 아니므로 이 비교는 근사값이다. "
           "k는 두 점 집합의 호모그래피 원근 성분(정규화한 h31, h32)을 회귀한 기울기이다(1이면 원근을 그대로 반영, 0이면 반영 안 함).", ""]
     if dg.get("k"):
         L += ["| 구분 | 원근 반영률 k | 상관 | 프레임 수 |", "|---|---|---|---|"] + [f"| {'전체' if k_ == 'all' else k_ + ' cm'} | {long_fmt(v['k'], 2)} | {long_fmt(v['corr'], 2)} | {v['n']} |" for k_, v in dg["k"].items()]
@@ -5329,17 +5351,14 @@ def mk_summary(path: Path, results: list, ana: dict, ref: dict, cfg: dict):
     L += ["", "## 4. 영상별 f와 오차", "", "| 영상 | 거리(cm) | 방법 | f (px) | 같은 거리 기준 f 대비 | 1680 대비 | 로그 SD | 사용 프레임 |", "|---|---|---|---|---|---|---|---|"]
     for r in results:
         d = r["distance_cm"]
-        mkr, mp_ = r["marker"], r["mediapipe"]
-        if "f" in mkr:
-            L.append(f"| {r['video']} | {d:g} | 표시 점 | {format(mkr['f'], '.1f')} | {pct(mkr['f'] / ref[d] - 1.0)} | {pct(mkr['f'] / 1680.0 - 1.0)} | {long_fmt(mkr['boot_log_std'], 4)} | {mkr['n_used_frames']} |")
-        else:
-            L.append(f"| {r['video']} | {d:g} | 표시 점 | 제외: {'; '.join(mkr.get('excluded') or []) or mkr.get('failed')} | - | - | - | - |")
-        if "ft" in mp_:
-            f = mp_["ft"]["f"]
-            L.append(f"| {r['video']} | {d:g} | MediaPipe | {format(f, '.1f')} | {pct(f / ref[d] - 1.0)} | {pct(f / 1680.0 - 1.0)} | {long_fmt(mp_['ft']['boot_log_std'], 4)} | {mp_['motion']['n_tilt_frames']} |")
-        else:
-            L.append(f"| {r['video']} | {d:g} | MediaPipe | 제외: {'; '.join(mp_.get('excluded') or []) or mp_.get('failed')} | - | - | - | - |")
-    L += ["", "## 한계", "", "- 영상은 거리마다 2개씩이라 기울기 구간이 거칠고, 판정은 이 세션·이 카메라에 대한 것이다.", "- 표시 점도 손의 3차원 구조(손바닥 곡면, 엄지, 손가락 굽힘)를 그대로 갖는다. 표시가 검출기에 주는 영향은 MediaPipe 결과와 실험 27의 같은 거리 영상을 비교해서만 짐작할 수 있다.",
+        for key in MK_METHODS:
+            x = mk_norm(r, key)
+            if x:
+                L.append(f"| {r['video']} | {d:g} | {MK_METHODS[key]} | {format(x['f'], '.1f')} | {pct(x['f'] / ref[d] - 1.0)} | {pct(x['f'] / 1680.0 - 1.0)} | {long_fmt(x['boot_log_std'], 4)} | {x['n_used_frames']} |")
+            else:
+                why = ("; ".join(r["marker"].get("excluded") or []) or r["marker"].get("failed")) if key == "markers" else ("; ".join((r.get("mediapipe8") or r["mediapipe"]).get("excluded") or []) or "제외")
+                L.append(f"| {r['video']} | {d:g} | {MK_METHODS[key]} | 제외: {why} | - | - | - | - |")
+    L += ["", "## 한계", "", "- 영상은 거리마다 2개씩이라 기울기 구간이 거칠고, 판정은 이 세션·이 카메라에 대한 것이다.", "- 표시 점도 손의 3차원 구조(손바닥 곡면, 손가락 굽힘)를 그대로 갖는다. 표시가 검출기에 주는 영향은 MediaPipe 결과와 실험 27의 같은 거리 영상을 비교해서만 짐작할 수 있다.",
           "- 기준 f는 같은 날 체커보드 거리 실험의 값(사용자 제공)이며 보정 파일은 서버에 없다.", ""]
     path.write_text("\n".join(L) + "\n")
 
@@ -5355,27 +5374,25 @@ def mk_results_yaml(run_dir: Path, cfg: dict):
     out = {"experiment": "35_hand_markers", "run": run_name, "code_commit": m["git"]["commit"][:7], "git_dirty_at_run": m["git"]["git_dirty"], "note": MK_NOTE, "candidate": cfg["candidate"], "markers": cfg["markers"],
            "verdict_rules": cfg["verdict"], "videos": {}}
     for v in r["videos"]:
-        mkr, mp_ = v["marker"], v["mediapipe"]
-        e = {"distance_cm": v["distance_cm"], "duration_s": rd(v["duration_s"], 2), "marker_all_found_ratio": rd(v["marker_stats"]["all_found_ratio"]), "marker_valid_ratio": rd(v["marker_stats"]["valid_ratio"])}
-        if "f" in mkr:
-            e["markers"] = {"f_px": None if mkr["at_grid_edge"] else round(mkr["f"], 1), "sharpness": rd(mkr["sharpness"], 5), "boot_log_std": rd(mkr["boot_log_std"], 5), "n_used_frames": mkr["n_used_frames"],
-                            "theta_median_deg": rd(mkr["theta_median"], 1), "theta_max_deg": rd(mkr["theta_max"], 1), "reproj_rms_front_pct": rd(mkr["phase_rms_pct"]["front"], 4), "reproj_rms_tilt_pct": rd(mkr["phase_rms_pct"]["tilt"], 4)}
-        else:
-            e["markers"] = {"excluded": mkr.get("excluded") or mkr.get("failed")}
-        if "ft" in mp_:
-            e["mediapipe"] = {"f_px": None if mp_["ft"]["at_grid_edge"] else round(mp_["ft"]["f"], 1), "sharpness": rd(mp_["ft"]["sharpness"], 5), "boot_log_std": rd(mp_["ft"]["boot_log_std"], 5),
-                              "reproj_rms_front_pct": rd(mp_["phase_rms_pct"]["front"], 4), "reproj_rms_tilt_pct": rd(mp_["phase_rms_pct"]["tilt"], 4),
-                              "bone_ratio_pct_median": rd(mp_["dynamics"]["bone_ratio_pct"]["median"], 3), "spread_change_deg_median": rd(mp_["dynamics"]["spread_change_deg"]["median"], 3)}
-        else:
-            e["mediapipe"] = {"excluded": mp_.get("excluded") or mp_.get("failed")}
+        e = {"distance_cm": v["distance_cm"], "duration_s": rd(v["duration_s"], 2), "marker_all_found_ratio": rd(v["marker_stats"]["all_found_ratio"]), "marker_valid_ratio": rd(v["marker_stats"]["valid_ratio"]),
+             "marker_tilt_valid_ratio": rd(v["marker_stats"].get("tilt_valid_ratio")),
+             "marker_detection_rate_by_joint": {str(k): rd(x, 3) for k, x in (v["marker_stats"].get("per_marker_rate") or {}).items()}}
+        for key in MK_METHODS:
+            x = mk_norm(v, key)
+            if x:
+                e[key] = {"f_px": None if x["at_grid_edge"] else round(x["f"], 1), "sharpness": rd(x["sharpness"], 5), "boot_log_std": rd(x["boot_log_std"], 5), "n_used_frames": x["n_used_frames"],
+                          "theta_median_deg": rd(x["theta_median"], 1), "theta_max_deg": rd(x["theta_max"], 1), "reproj_rms_front_pct": rd(x["phase_rms_pct"]["front"], 4), "reproj_rms_tilt_pct": rd(x["phase_rms_pct"]["tilt"], 4)}
+            else:
+                e[key] = {"excluded": (v["marker"].get("excluded") or v["marker"].get("failed")) if key == "markers" else ((v.get("mediapipe8") or v["mediapipe"]).get("excluded") or "제외")}
         if v.get("diag"):
             e["perspective_k"] = rd(v["diag"]["k"]["k"], 4)
             e["planar_gap_median_pct"] = rd(v["diag"]["gap_median_pct"], 4)
         out["videos"][v["video"]] = e
     a = r["analysis"]
     out["by_method"] = {k: {"pooled_f_px": {f"{float(d):g}": rd(f, 1) for d, f in a[k]["slope"]["pooled_f"].items()}, "slope": rd(a[k]["slope"]["slope"]),
-                            "slope_interval_95": None if a[k]["slope"]["interval_95"] is None else [round(x, 4) for x in a[k]["slope"]["interval_95"]]} for k in ("markers", "mediapipe") if "slope" in a[k]}
-    out["verdict"] = {k: {"verdict": a[k]["verdict"]["verdict"], "reason": a[k]["verdict"].get("reason")} for k in ("markers", "mediapipe")}
+                            "slope_interval_95": None if a[k]["slope"]["interval_95"] is None else [round(x, 4) for x in a[k]["slope"]["interval_95"]]} for k in MK_METHODS if "slope" in a[k]}
+    out["verdict"] = {k: {"verdict": a[k]["verdict"]["verdict"], "reason": a[k]["verdict"].get("reason")} for k in MK_METHODS}
+    out["main_comparison"] = a["main_comparison"]
     out["interpretation"] = a["interpretation"]
     out["perspective_k"] = {k: rd(v["k"], 4) for k, v in a["diag"].get("k", {}).items()}
     p = hf.resolve(cfg["output"]["results_yaml"])
