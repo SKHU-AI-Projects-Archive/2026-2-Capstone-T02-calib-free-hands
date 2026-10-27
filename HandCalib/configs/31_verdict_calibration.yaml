@@ -1,0 +1,44 @@
+experiment:
+  name: 31_verdict_calibration
+  seed: 42
+
+# 31: do the verdict's diagnostics predict the real f error? Reads experiment 30's per-video results (candidate f and every diagnostic stored) and the user-provided reference f stored with them; no video is processed.
+# Protocol fixed 2026-10-27 before the run; nothing is changed after seeing results.
+#   population: the 1x videos of experiment 30 not excluded by the shooting rules of 26 / 27 and with f off the grid edge (calibration); the 0.5x videos are held out and only described.
+#   error e = |f / ref_f - 1|; accurate = e <= accurate_tol.
+#   informative: Spearman rho(predictor, e) has the expected sign (expected_sign 0: either), |rho| >= rho_min and the video-level bootstrap 95% interval excludes 0.
+#   useful: informative and the leave-one-out balanced accuracy of the best-threshold classifier (threshold chosen on the other videos) >= loo_ba_min.
+#   decision: 보정 가능 if any predictor is useful (its full-data threshold is then proposed, not applied); else 보정 불가.
+source:
+  results_30: runs/30_jointset_sets/20261027T011405Z/results.json
+accurate_tol: 0.15
+calibration_lens: 1x
+exclusion:
+  edge_rate_max: 0.05
+  detect_fail_max: 0.20
+rho_min: 0.4
+loo_ba_min: 0.70
+bootstrap_n: 1000
+bootstrap_seed: 42
+predictors:                          # name: expected sign of rho with the error (+1 larger value = larger error, -1 smaller, 0 no expectation)
+  boot_log_std: {expected_sign: 1}
+  bootstrap_rel_std: {expected_sign: 1}
+  consistency_range: {expected_sign: 1}
+  jointset_range_new: {expected_sign: 1}
+  sharpness: {expected_sign: -1}
+  reproj_rms_rel: {expected_sign: 1}
+  front_jitter_rel: {expected_sign: 1}
+  theta_p90: {expected_sign: -1}
+  theta_max: {expected_sign: -1}
+  tilt_duration_s: {expected_sign: -1}
+  hand_box_short_ratio_front: {expected_sign: 0}
+  n_target_frames: {expected_sign: -1}
+rating_v2:
+  tilt_min_s: 18.0
+  theta_max_min_deg: 55.0
+  usable_log_std_max: 0.1
+  reference_log_std_max: 0.15
+code_30: {branch: exp/30-jointset-sets, commit: d15d79f, modules: [HandCalib/handfocal.py, HandCalib/run.py]}
+output:
+  root: runs/31_verdict_calibration
+  results_yaml: results/31_verdict_calibration.yaml
