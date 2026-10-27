@@ -270,7 +270,7 @@ def _calibration_result_id(item: PipelineConfiguration, backend: str) -> str:
 
 
 def _calibrate(
-    model_id: str, frames: list[DecodedFrame], backend, settings: dict, cancelled, progress, offset: int, total: int
+    model_id: str, model_name: str, frames: list[DecodedFrame], backend, settings: dict, cancelled, progress
 ) -> CalibrationResult:
     if getattr(backend, "reference_focal_px", None) is not None:
         if cancelled and cancelled():
@@ -291,7 +291,7 @@ def _calibrate(
             raise InterruptedError("Processing cancelled during calibration")
         focals.append(float(backend.estimate_focal(frames[int(index)].rgb)))
         if progress:
-            progress("Estimating focal", offset + position, total)
+            progress(f"Estimating focal ({model_name})", position, len(indices))
     mode = settings.get("aggregation", "median")
     focal = float(aggregate_focal(focals, mode))
     return CalibrationResult(model_id, model_id, focal, {
@@ -355,8 +355,8 @@ def process_comparison_session(
             if result_id in unique_calibrations:
                 continue
             backend = calibration_factory(item.calibration_model_id, item.reference_focal_px)
-            result = _calibrate(item.calibration_model_id, frames, backend, settings, cancelled, progress,
-                                len(unique_calibrations), len(configurations))
+            result = _calibrate(item.calibration_model_id, model.display_name, frames, backend, settings,
+                                cancelled, progress)
             result = CalibrationResult(result_id, item.calibration_model_id, result.focal_px, result.metadata)
             relative_path = Path("calibration") / f"{_stable_file_key(result_id)}.json"
             calibration_path = output_dir / relative_path
@@ -410,13 +410,21 @@ def process_comparison_session(
             raw_path = output_dir / pose_info["path"]
             raw_pose = RawPoseResult.load(raw_path)
             canonical = raw_pose.apply_focal(calibration.focal_px, calibration.metadata)
-            result_dir = output_dir / "results" / _stable_file_key(item.id)
+            result_dir = (output_dir if len(configurations) == 1
+                          else output_dir / "results" / _stable_file_key(item.id))
             result_dir.mkdir(parents=True, exist_ok=True)
             preview_path = None
             if settings.get("create_preview", False):
                 preview_path = result_dir / "preview.mp4"
+                def preview_frames():
+                    for frame_index, frame in enumerate(frames, 1):
+                        if cancelled and cancelled():
+                            raise InterruptedError("Processing cancelled during preview encoding")
+                        if progress:
+                            progress(f"Creating preview ({item.name})", frame_index, len(frames))
+                        yield frame.rgb
                 encode_result_preview(
-                    (frame.rgb for frame in frames), canonical, preview_path,
+                    preview_frames(), canonical, preview_path,
                     float(settings.get("fps", 30.0)),
                     Path(source_media) if settings.get("preserve_audio") and source_media else None,
                 )

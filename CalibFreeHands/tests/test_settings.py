@@ -3,6 +3,7 @@ from PySide6.QtWidgets import QCheckBox, QComboBox, QLabel, QListWidgetItem
 import importlib
 import threading
 import time
+import pytest
 from PySide6.QtCore import Qt
 from pathlib import Path
 from types import SimpleNamespace
@@ -25,8 +26,12 @@ def test_model_and_preset_defaults_persist_and_missing_ids_fall_back(tmp_path, m
     window = main.MainWindow()
 
     assert window.preset_combo.currentData() == "original"
+    assert len(window.configuration_rows) == 1
     assert window.calibration_combo.currentData() == "anycalib_original"
     assert window.reconstruction_combo.currentData() == "wilor_original"
+    assert window.sampling_combo.currentData() == "uniform"
+    assert window.sample_count_combo.currentText() == "8"
+    assert window.aggregation_combo.currentData() == "median"
     handcalib_index = window.calibration_combo.findData("handcalib")
     assert handcalib_index >= 0
     assert not window.calibration_combo.model().item(handcalib_index).isEnabled()
@@ -88,9 +93,89 @@ def test_configuration_rows_allow_duplicates_and_keep_one_row(tmp_path, monkeypa
     assert second.reference_focal.isEnabled()
     second.reference_focal.setValue(1234.5)
     assert second.configuration().reference_focal_px == 1234.5
+    assert window.preset_combo.currentData() == "custom"
     second.remove.click()
     assert len(window.configuration_rows) == 1
     assert not window.configuration_rows[0].remove.isEnabled()
+    window.close()
+
+
+def test_all_configuration_rows_and_processing_settings_persist_across_restart(tmp_path, monkeypatch, qapp):
+    main = importlib.import_module("calibfreehands.app.main")
+    settings_path = tmp_path / "settings.ini"
+    monkeypatch.setattr(main, "AppSettings", lambda: AppSettings(settings_path))
+    window = main.MainWindow()
+    first = window.configuration_rows[0]
+    first.name.setText("Reference")
+    first.calibration.setCurrentIndex(first.calibration.findData("checkerboard_reference"))
+    first.reference_focal.setValue(1280.5)
+    window._add_configuration_row()
+    second = window.configuration_rows[-1]
+    second.name.setText("Baseline")
+    second.calibration.setCurrentIndex(second.calibration.findData("anycalib_original"))
+    window._add_configuration_row()
+    third = window.configuration_rows[-1]
+    third.name.setText("Proposed")
+    third.calibration.setCurrentIndex(third.calibration.findData("checkerboard_reference"))
+    third.reference_focal.setValue(900.0)
+    window.sampling_combo.setCurrentIndex(window.sampling_combo.findData("all"))
+    window.sample_count_combo.setCurrentText("16")
+    window.aggregation_combo.setCurrentIndex(window.aggregation_combo.findData("mean"))
+    ids = [row.id for row in window.configuration_rows]
+    window._save_defaults()
+    assert window.configuration.presets["original"].calibration_model_id == "anycalib_original"
+    window.close()
+
+    restored = main.MainWindow()
+    assert restored.preset_combo.currentData() == "custom"
+    assert [row.id for row in restored.configuration_rows] == ids
+    assert [row.name.text() for row in restored.configuration_rows] == ["Reference", "Baseline", "Proposed"]
+    assert [row.calibration.currentData() for row in restored.configuration_rows] == [
+        "checkerboard_reference", "anycalib_original", "checkerboard_reference"
+    ]
+    assert [row.reconstruction.currentData() for row in restored.configuration_rows] == ["wilor_original"] * 3
+    assert [row.reference_focal.value() for row in restored.configuration_rows] == [1280.5, 1000.0, 900.0]
+    assert restored.sampling_combo.currentData() == "all"
+    assert restored.sample_count_combo.currentText() == "16"
+    assert restored.aggregation_combo.currentData() == "mean"
+    restored.close()
+
+
+@pytest.mark.parametrize("saved_json", ["{broken", "[]", "{}"])
+def test_malformed_or_empty_saved_configuration_falls_back_to_original(tmp_path, monkeypatch, qapp, saved_json):
+    main = importlib.import_module("calibfreehands.app.main")
+    settings_path = tmp_path / "settings.ini"
+    settings = AppSettings(settings_path)
+    settings.set("default_preset_id", "custom")
+    settings.set("default_configurations_json", saved_json)
+    settings.sync()
+    monkeypatch.setattr(main, "AppSettings", lambda: AppSettings(settings_path))
+    window = main.MainWindow()
+    assert window.preset_combo.currentData() == "original"
+    assert len(window.configuration_rows) == 1
+    assert window.calibration_combo.currentData() == "anycalib_original"
+    assert window.reconstruction_combo.currentData() == "wilor_original"
+    assert window.sampling_combo.currentData() == "uniform"
+    assert window.sample_count_combo.currentText() == "8"
+    assert window.aggregation_combo.currentData() == "median"
+    window.close()
+
+
+def test_unavailable_model_in_saved_configuration_falls_back_to_original(tmp_path, monkeypatch, qapp):
+    import json
+    main = importlib.import_module("calibfreehands.app.main")
+    settings_path = tmp_path / "settings.ini"
+    settings = AppSettings(settings_path)
+    settings.set("default_preset_id", "custom")
+    settings.set("default_configurations_json", json.dumps({"schema_version": 1, "configurations": [
+        {"id": "row", "name": "Invalid", "calibration_model_id": "handcalib",
+         "reconstruction_model_id": "wilor_original"}
+    ]}))
+    settings.sync()
+    monkeypatch.setattr(main, "AppSettings", lambda: AppSettings(settings_path))
+    window = main.MainWindow()
+    assert window.preset_combo.currentData() == "original"
+    assert window.calibration_combo.currentData() == "anycalib_original"
     window.close()
 
 
@@ -255,20 +340,32 @@ def test_main_window_restores_controls_after_cancellation(tmp_path, monkeypatch,
     window.close()
 
 
-def test_open_saved_session_selects_comparison_viewer(tmp_path, monkeypatch, qapp):
+@pytest.mark.parametrize(
+    "selected_filter, filename, expected_viewer",
+    [("NumPy result (*.npz)", "session.json", "comparison"),
+     ("Comparison session (session.json)", "result.npz", "result")],
+)
+def test_open_saved_result_uses_selected_file_type(tmp_path, monkeypatch, qapp,
+                                                   selected_filter, filename, expected_viewer):
     main = importlib.import_module("calibfreehands.app.main")
     monkeypatch.setattr(main, "AppSettings", lambda: AppSettings(tmp_path / "settings.ini"))
     opened = {}
 
     class Viewer:
-        def __init__(self, path): opened["path"] = path
+        viewer_type = "unknown"
+        def __init__(self, path): opened["path"] = path; opened["viewer"] = self.viewer_type
         def setAttribute(self, *_args): pass
         def show(self): opened["shown"] = True
 
-    monkeypatch.setattr(main.QFileDialog, "getOpenFileName", lambda *args: (str(tmp_path / "session.json"), "Comparison session (session.json)"))
-    monkeypatch.setattr(main, "ComparisonViewer", Viewer)
+    class ComparisonStub(Viewer): viewer_type = "comparison"
+    class ResultStub(Viewer): viewer_type = "result"
+
+    monkeypatch.setattr(main.QFileDialog, "getOpenFileName", lambda *args: (str(tmp_path / filename), selected_filter))
+    monkeypatch.setattr(main, "ComparisonViewer", ComparisonStub)
+    monkeypatch.setattr(main, "ResultViewer", ResultStub)
     window = main.MainWindow()
     window._open_result()
-    assert opened["path"].name == "session.json"
+    assert opened["path"].name == filename
+    assert opened["viewer"] == expected_viewer
     assert opened["shown"]
     window.close()

@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+import math
 from dataclasses import dataclass
 from pathlib import Path, PurePosixPath, PureWindowsPath
 
@@ -21,6 +22,15 @@ class ModelDefinition:
 
 
 @dataclass(frozen=True)
+class PresetConfiguration:
+    id: str
+    name: str
+    calibration_model_id: str
+    reconstruction_model_id: str
+    reference_focal_px: float | None = None
+
+
+@dataclass(frozen=True)
 class PresetDefinition:
     id: str
     display_name: str
@@ -29,6 +39,7 @@ class PresetDefinition:
     sampling: str
     sample_count: int
     aggregation: str
+    configurations: tuple[PresetConfiguration, ...] = ()
 
 
 @dataclass(frozen=True)
@@ -137,7 +148,43 @@ def load_configuration(path: Path | None = None) -> ApplicationConfiguration:
             raise ConfigError(f"Preset {preset_id} sample_count must be at least 1")
         if not isinstance(entry["aggregation"], str) or entry["aggregation"] not in {"median", "mean"}:
             raise ConfigError(f"Preset {preset_id} has invalid aggregation")
-        presets[preset_id] = PresetDefinition(**{key: entry[key] for key in fields})
+        configurations = entry.get("configurations", [])
+        if not isinstance(configurations, list):
+            raise ConfigError(f"Preset {preset_id} configurations must be a list")
+        rows = []
+        row_ids = set()
+        for row in configurations:
+            if not isinstance(row, dict):
+                raise ConfigError(f"Preset {preset_id} configuration rows must be objects")
+            _required(row, {"id", "name", "calibration_model_id", "reconstruction_model_id"}, f"Preset {preset_id} configuration")
+            row_id = row["id"]
+            name = row["name"]
+            calibration_id = row["calibration_model_id"]
+            reconstruction_id = row["reconstruction_model_id"]
+            if not isinstance(row_id, str) or not row_id or row_id in row_ids:
+                raise ConfigError(f"Preset {preset_id} configuration IDs must be non-empty and unique")
+            if not isinstance(name, str) or not name.strip():
+                raise ConfigError(f"Preset {preset_id} configuration name must not be empty")
+            if calibration_id not in calibration_models or reconstruction_id not in reconstruction_models:
+                raise ConfigError(f"Preset {preset_id} configuration has an unknown model")
+            calibration = calibration_models[calibration_id]
+            reconstruction = reconstruction_models[reconstruction_id]
+            if not calibration.available or not reconstruction.available:
+                raise ConfigError(f"Preset {preset_id} configuration selects a model that is not available")
+            focal = row.get("reference_focal_px")
+            if calibration.backend == "reference_focal":
+                if isinstance(focal, bool) or not isinstance(focal, (int, float)) or not math.isfinite(focal) or focal <= 0:
+                    raise ConfigError(f"Preset {preset_id} reference focal must be finite and positive")
+                focal = float(focal)
+            elif focal is not None:
+                raise ConfigError(f"Preset {preset_id} reference focal requires the reference calibration model")
+            row_ids.add(row_id)
+            rows.append(PresetConfiguration(row_id, name.strip(), calibration_id, reconstruction_id, focal))
+        if "configurations" in entry and not rows:
+            raise ConfigError(f"Preset {preset_id} configurations must not be empty")
+        presets[preset_id] = PresetDefinition(
+            **{key: entry[key] for key in fields}, configurations=tuple(rows)
+        )
     if "original" not in presets:
         raise ConfigError("Application config must define the original preset")
     return ApplicationConfiguration(source.resolve(), calibration_models, reconstruction_models, presets)

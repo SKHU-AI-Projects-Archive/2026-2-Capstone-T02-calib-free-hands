@@ -19,6 +19,23 @@ def test_built_in_configuration_exposes_original_default_and_unavailable_models(
     assert config.calibration_models["anycalib_original"].available
     assert not config.calibration_models["handcalib"].available
     assert not config.reconstruction_models["anyhand_wilor"].available
+    assert original.configurations == ()
+
+
+def test_preset_may_optionally_define_multiple_named_configurations(tmp_path):
+    data = json.loads(load_configuration().source_path.read_text(encoding="utf-8"))
+    data["presets"][0]["configurations"] = [
+        {"id": "reference", "name": "Reference", "calibration_model_id": "checkerboard_reference",
+         "reconstruction_model_id": "wilor_original", "reference_focal_px": 1280.5},
+        {"id": "baseline", "name": "Baseline", "calibration_model_id": "anycalib_original",
+         "reconstruction_model_id": "wilor_original"},
+    ]
+    path = tmp_path / "models.json"
+    path.write_text(json.dumps(data), encoding="utf-8")
+    preset = load_configuration(path).presets["original"].configurations
+    assert [(row.id, row.name) for row in preset] == [("reference", "Reference"), ("baseline", "Baseline")]
+    assert preset[0].reference_focal_px == 1280.5
+    assert preset[1].reference_focal_px is None
 
 
 @pytest.mark.parametrize(

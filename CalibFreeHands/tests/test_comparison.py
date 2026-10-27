@@ -1,4 +1,5 @@
 import json
+from pathlib import Path
 
 import numpy as np
 import pytest
@@ -72,7 +73,7 @@ def _configurations():
     ]
 
 
-def _run(tmp_path, configs=None, cancelled=None):
+def _run(tmp_path, configs=None, cancelled=None, settings=None, frames=None):
     app_config = load_configuration()
     app_config.calibration_models["reference"] = ModelDefinition(
         "reference", "Checkerboard Reference", "reference_focal", True
@@ -93,9 +94,9 @@ def _run(tmp_path, configs=None, cancelled=None):
         return CountingPose(500, calls)
 
     session = process_comparison_session(
-        _frames(), configs or _configurations(), app_config, tmp_path, tmp_path / "session",
-        {"input_path": "input.mp4", "sampling_mode": "uniform", "sample_count": 1,
-         "aggregation": "median", "preserve_audio": False},
+        frames or _frames(), configs or _configurations(), app_config, tmp_path, tmp_path / "session",
+        settings or {"input_path": "input.mp4", "sampling_mode": "uniform", "sample_count": 1,
+                    "aggregation": "median", "preserve_audio": False},
         calibration_factory=make_calibration,
         pose_factory=make_pose,
         cancelled=cancelled,
@@ -187,3 +188,74 @@ def test_empty_or_duplicate_configuration_ids_are_rejected(tmp_path):
     ]
     with pytest.raises(ValueError, match="unique"):
         process_comparison_session(_frames(), duplicate, app_config, tmp_path, tmp_path / "duplicate", {})
+
+
+def test_each_calibration_stage_reports_bounded_sample_progress(tmp_path):
+    app_config = load_configuration()
+    app_config.calibration_models["second_calibration"] = ModelDefinition(
+        "second_calibration", "Second Calibration", "anycalib", True
+    )
+    configs = [
+        PipelineConfiguration("first", "First", "anycalib_original", "wilor_original"),
+        PipelineConfiguration("second", "Second", "second_calibration", "wilor_original"),
+    ]
+    events = []
+    process_comparison_session(
+        [DecodedFrame(i, i / 30, np.full((8, 8, 3), i, np.uint8)) for i in range(12)],
+        configs, app_config, tmp_path, tmp_path / "progress",
+        {"sampling_mode": "uniform", "sample_count": 8, "aggregation": "median"},
+        progress=lambda stage, current, total: events.append((stage, current, total)),
+        calibration_factory=lambda *_: CountingCalibration(500, []),
+        pose_factory=lambda *_: CountingPose(500, []),
+    )
+    calibration_events = [event for event in events if event[0].startswith("Estimating focal")]
+    assert [stage for stage, _, _ in calibration_events] == ["Estimating focal (Original AnyCalib)"] * 8 + ["Estimating focal (Second Calibration)"] * 8
+    assert all(total >= 1 and 0 <= current <= total and current / total <= 1 for _, current, total in calibration_events)
+    assert [current for stage, current, _ in calibration_events if "Original AnyCalib" in stage] == list(range(1, 9))
+    assert [current for stage, current, _ in calibration_events if "Second Calibration" in stage] == list(range(1, 9))
+
+
+def test_reference_focal_does_not_emit_invalid_sample_progress(tmp_path):
+    configs = [PipelineConfiguration("reference", "Reference", "reference", "wilor_original", 1280.5)]
+    session, _, _ = _run(tmp_path, configs)
+    assert session.state == "completed"
+
+
+def test_preview_cancellation_keeps_session_cancelled(tmp_path, monkeypatch):
+    import calibfreehands.pipeline.comparison as comparison
+    cancelled = {"value": False}
+
+    def consume_then_cancel(frames, *_args):
+        iterator = iter(frames)
+        next(iterator)
+        cancelled["value"] = True
+        next(iterator)
+
+    monkeypatch.setattr(comparison, "encode_result_preview", consume_then_cancel)
+    settings = {"input_path": "input.mp4", "sampling_mode": "uniform", "sample_count": 1,
+                "aggregation": "median", "preserve_audio": False, "create_preview": True, "fps": 30}
+    with pytest.raises(InterruptedError, match="preview"):
+        _run(tmp_path, configs=[PipelineConfiguration("one", "One", "anycalib_original", "wilor_original")],
+             settings=settings, cancelled=lambda: cancelled["value"])
+    session = load_comparison_session(tmp_path / "session" / "session.json")
+    assert session.state == "cancelled"
+
+
+def test_single_configuration_keeps_top_level_legacy_outputs(tmp_path, monkeypatch):
+    import calibfreehands.pipeline.comparison as comparison
+    from calibfreehands.visualization.viewer import load_npz_result
+
+    monkeypatch.setattr(comparison, "encode_result_preview", lambda frames, _result, path, *_args: (list(frames), Path(path).write_bytes(b"preview")))
+    settings = {"input_path": "input.mp4", "sampling_mode": "uniform", "sample_count": 1,
+                "aggregation": "median", "preserve_audio": False, "create_preview": True, "fps": 30}
+    session, _, _ = _run(
+        tmp_path, [PipelineConfiguration("one", "One", "anycalib_original", "wilor_original")], settings=settings,
+    )
+    output = tmp_path / "session"
+    assert (output / "results.npz").is_file()
+    assert (output / "run.json").is_file()
+    assert (output / "preview.mp4").is_file()
+    assert session.final_results["one"]["path"] == "results.npz"
+    assert session.final_results["one"]["run_json"] == "run.json"
+    assert session.final_results["one"]["preview"] == "preview.mp4"
+    assert load_npz_result(output / "results.npz").frame_count == 2

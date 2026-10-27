@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import json
+import math
 import sys
 from pathlib import Path
 
@@ -12,7 +14,12 @@ from PySide6.QtWidgets import (
 from calibfreehands.media import discover_media
 from calibfreehands.media.ffmpeg import FFmpegDecoder
 from calibfreehands.media.probe import probe_media
-from calibfreehands.app.configuration import ApplicationConfiguration, ModelDefinition, PresetDefinition, load_configuration
+from calibfreehands.app.configuration import (
+    ApplicationConfiguration,
+    ModelDefinition,
+    PresetDefinition,
+    load_configuration,
+)
 from calibfreehands.app.settings import AppSettings
 from calibfreehands.export.paths import choose_output_directory
 from calibfreehands.pipeline import JobThread, ProcessingJob
@@ -156,11 +163,13 @@ class MainWindow(QMainWindow):
     def reconstruction_combo(self):
         return self.configuration_rows[0].reconstruction
 
-    def _add_row(self, name, calibration_id, reconstruction_id, reference_focal_px=1000.0):
-        row = ConfigurationRow(self.configuration, name, calibration_id, reconstruction_id, reference_focal_px)
+    def _add_row(self, name, calibration_id, reconstruction_id, reference_focal_px=1000.0, config_id=None):
+        row = ConfigurationRow(self.configuration, name, calibration_id, reconstruction_id, reference_focal_px, config_id)
         row.remove.clicked.connect(lambda: self._remove_configuration_row(row))
         row.calibration.currentIndexChanged.connect(self._model_or_processing_changed)
         row.reconstruction.currentIndexChanged.connect(self._model_or_processing_changed)
+        row.name.textEdited.connect(self._model_or_processing_changed)
+        row.reference_focal.valueChanged.connect(self._model_or_processing_changed)
         self.configuration_rows.append(row)
         self.rows_layout.addWidget(row)
         self._refresh_row_buttons()
@@ -186,40 +195,124 @@ class MainWindow(QMainWindow):
         self._model_or_processing_changed()
 
     def _replace_rows(self, name, calibration_id, reconstruction_id):
+        self._replace_configurations([PipelineConfiguration(
+            uuid.uuid4().hex, name, calibration_id, reconstruction_id
+        )])
+
+    def _replace_configurations(self, configurations):
         for row in self.configuration_rows:
             self.rows_layout.removeWidget(row)
             row.deleteLater()
         self.configuration_rows.clear()
-        self._add_row(name, calibration_id, reconstruction_id)
+        for item in configurations:
+            self._add_row(item.name, item.calibration_model_id, item.reconstruction_model_id,
+                          item.reference_focal_px or 1000.0, item.id)
 
     def _restore_model_defaults(self) -> None:
+        saved = self.settings.get("default_configurations_json")
+        if saved:
+            try:
+                snapshot = json.loads(saved)
+                configurations, preset_id, sampling, count, aggregation = self._validate_default_snapshot(snapshot)
+                if preset_id != "custom" and not self._matches_preset_values(
+                    self.configuration.presets[preset_id], configurations, sampling, count, aggregation
+                ):
+                    raise ValueError("saved configurations do not match their built-in preset")
+                self._updating_controls = True
+                try:
+                    if preset_id == "custom":
+                        self._select_preset_id("custom")
+                    else:
+                        self._select_data(self.preset_combo, preset_id)
+                    self._replace_configurations(configurations)
+                    self._set_processing_controls(sampling, count, aggregation)
+                finally:
+                    self._updating_controls = False
+                return
+            except (ValueError, TypeError, KeyError, json.JSONDecodeError):
+                self._apply_preset_values(self.configuration.presets["original"])
+                return
+
         preset_id = self.settings.get("default_preset_id")
         calibration_id = self.settings.get("default_calibration_model_id")
         reconstruction_id = self.settings.get("default_reconstruction_model_id")
-        valid_ids = (
-            calibration_id in self.configuration.calibration_models
-            and reconstruction_id in self.configuration.reconstruction_models
-            and self.configuration.calibration_models[calibration_id].available
-            and self.configuration.reconstruction_models[reconstruction_id].available
-        )
-        valid_custom_settings = (
-            self.settings.get("sampling_mode") in {"uniform", "all"}
-            and self.settings.get("sample_count") >= 1
-            and self.settings.get("aggregation") in {"median", "mean"}
-        )
-        if preset_id == "custom" and valid_ids and valid_custom_settings:
-            self.preset_combo.addItem("Custom", "custom")
-            self.preset_combo.setCurrentIndex(self.preset_combo.count() - 1)
+        valid_ids = (calibration_id in self.configuration.calibration_models
+                     and reconstruction_id in self.configuration.reconstruction_models
+                     and self.configuration.calibration_models[calibration_id].available
+                     and self.configuration.reconstruction_models[reconstruction_id].available)
+        valid_settings = (self.settings.get("sampling_mode") in {"uniform", "all"}
+                          and isinstance(self.settings.get("sample_count"), int)
+                          and self.settings.get("sample_count") >= 1
+                          and self.settings.get("aggregation") in {"median", "mean"})
+        if preset_id == "custom" and valid_ids and valid_settings:
+            self._select_preset_id("custom")
             self._replace_rows("Configuration 1", calibration_id, reconstruction_id)
-            self._set_processing_controls(
-                self.settings.get("sampling_mode"), self.settings.get("sample_count"),
-                self.settings.get("aggregation"),
-            )
-        elif preset_id in self.configuration.presets and valid_ids:
-            preset = self.configuration.presets[preset_id]
-            self._apply_preset_values(preset)
+            self._set_processing_controls(self.settings.get("sampling_mode"), self.settings.get("sample_count"),
+                                          self.settings.get("aggregation"))
+        elif preset_id in self.configuration.presets:
+            self._apply_preset_values(self.configuration.presets[preset_id])
         else:
             self._apply_preset_values(self.configuration.presets["original"])
+
+    def _select_preset_id(self, preset_id):
+        if self.preset_combo.findData(preset_id) < 0:
+            self.preset_combo.addItem("Custom", preset_id)
+        self._select_data(self.preset_combo, preset_id)
+
+    def _validate_default_snapshot(self, snapshot):
+        if not isinstance(snapshot, dict) or snapshot.get("schema_version") != 1:
+            raise ValueError("unsupported saved default schema")
+        preset_id = snapshot.get("preset_id")
+        sampling = snapshot.get("sampling_mode")
+        count = snapshot.get("sample_count")
+        aggregation = snapshot.get("aggregation")
+        configurations = snapshot.get("configurations")
+        if (preset_id != "custom" and preset_id not in self.configuration.presets
+                or sampling not in {"uniform", "all"}
+                or isinstance(count, bool) or not isinstance(count, int) or count < 1
+                or aggregation not in {"median", "mean"}
+                or not isinstance(configurations, list) or not configurations):
+            raise ValueError("invalid saved default values")
+        ids = set()
+        restored = []
+        for item in configurations:
+            if not isinstance(item, dict):
+                raise ValueError("saved configuration rows must be objects")
+            row_id, name = item.get("id"), item.get("name")
+            calibration_id, reconstruction_id = item.get("calibration_model_id"), item.get("reconstruction_model_id")
+            if (not isinstance(row_id, str) or not row_id or row_id in ids
+                    or not isinstance(name, str) or not name.strip()
+                    or calibration_id not in self.configuration.calibration_models
+                    or reconstruction_id not in self.configuration.reconstruction_models):
+                raise ValueError("invalid saved configuration row")
+            calibration = self.configuration.calibration_models[calibration_id]
+            reconstruction = self.configuration.reconstruction_models[reconstruction_id]
+            if not calibration.available or not reconstruction.available:
+                raise ValueError("saved configuration selects an unavailable model")
+            focal = item.get("reference_focal_px")
+            if calibration.backend == "reference_focal":
+                if isinstance(focal, bool) or not isinstance(focal, (int, float)) or not math.isfinite(focal) or not 0 < focal <= 100000:
+                    raise ValueError("invalid saved reference focal")
+                focal = float(focal)
+            elif focal is not None:
+                raise ValueError("non-reference configuration contains reference focal")
+            ids.add(row_id)
+            restored.append(PipelineConfiguration(row_id, name.strip(), calibration_id, reconstruction_id, focal))
+        return restored, preset_id, sampling, count, aggregation
+
+    def _preset_configurations(self, preset):
+        if preset.configurations:
+            return [PipelineConfiguration(row.id, row.name, row.calibration_model_id,
+                                          row.reconstruction_model_id, row.reference_focal_px)
+                    for row in preset.configurations]
+        return [PipelineConfiguration(f"{preset.id}-1", preset.display_name,
+                                      preset.calibration_model_id, preset.reconstruction_model_id)]
+
+    def _matches_preset_values(self, preset, configurations, sampling, count, aggregation):
+        expected = self._preset_configurations(preset)
+        return ([(c.name, c.calibration_model_id, c.reconstruction_model_id, c.reference_focal_px) for c in configurations]
+                == [(c.name, c.calibration_model_id, c.reconstruction_model_id, c.reference_focal_px) for c in expected]
+                and (sampling, count, aggregation) == (preset.sampling, preset.sample_count, preset.aggregation))
 
     @staticmethod
     def _select_data(combo: QComboBox, value) -> None:
@@ -239,7 +332,7 @@ class MainWindow(QMainWindow):
         self._updating_controls = True
         try:
             self._select_data(self.preset_combo, preset.id)
-            self._replace_rows(preset.display_name, preset.calibration_model_id, preset.reconstruction_model_id)
+            self._replace_configurations(self._preset_configurations(preset))
             self._set_processing_controls(preset.sampling, preset.sample_count, preset.aggregation)
         finally:
             self._updating_controls = False
@@ -255,14 +348,10 @@ class MainWindow(QMainWindow):
         if self._updating_controls:
             return
         self.sample_count_combo.setEnabled(self.sampling_combo.currentData() == "uniform")
-        first = self.configuration_rows[0].configuration()
-        preset = next((preset for preset in self.configuration.presets.values() if (
-            len(self.configuration_rows) == 1
-            and preset.calibration_model_id == first.calibration_model_id
-            and preset.reconstruction_model_id == first.reconstruction_model_id
-            and preset.sampling == self.sampling_combo.currentData()
-            and preset.sample_count == int(self.sample_count_combo.currentText())
-            and preset.aggregation == self.aggregation_combo.currentData()
+        configurations = [row.configuration() for row in self.configuration_rows]
+        preset = next((preset for preset in self.configuration.presets.values() if self._matches_preset_values(
+            preset, configurations, self.sampling_combo.currentData(), int(self.sample_count_combo.currentText()),
+            self.aggregation_combo.currentData()
         )), None)
         if preset is not None:
             self._select_data(self.preset_combo, preset.id)
@@ -273,6 +362,22 @@ class MainWindow(QMainWindow):
 
     def _save_defaults(self) -> None:
         first = self.configuration_rows[0].configuration()
+        snapshot = {
+            "schema_version": 1,
+            "preset_id": self.preset_combo.currentData(),
+            "sampling_mode": self.sampling_combo.currentData(),
+            "sample_count": int(self.sample_count_combo.currentText()),
+            "aggregation": self.aggregation_combo.currentData(),
+            "configurations": [],
+        }
+        for row in self.configuration_rows:
+            configuration = row.configuration()
+            item = {"id": configuration.id, "name": configuration.name,
+                    "calibration_model_id": configuration.calibration_model_id,
+                    "reconstruction_model_id": configuration.reconstruction_model_id}
+            if configuration.reference_focal_px is not None:
+                item["reference_focal_px"] = configuration.reference_focal_px
+            snapshot["configurations"].append(item)
         for key, value in (
             ("default_preset_id", self.preset_combo.currentData()),
             ("default_calibration_model_id", first.calibration_model_id),
@@ -280,6 +385,7 @@ class MainWindow(QMainWindow):
             ("sampling_mode", self.sampling_combo.currentData()),
             ("sample_count", int(self.sample_count_combo.currentText())),
             ("aggregation", self.aggregation_combo.currentData()),
+            ("default_configurations_json", json.dumps(snapshot, separators=(",", ":"))),
         ):
             self.settings.set(key, value)
         self.settings.sync()
@@ -371,11 +477,12 @@ class MainWindow(QMainWindow):
             self._job_thread.cancel()
 
     def _open_result(self) -> None:
-        path, selected_filter = QFileDialog.getOpenFileName(
+        path, _selected_filter = QFileDialog.getOpenFileName(
             self, "Open saved result", "", "NumPy result (*.npz);;Comparison session (session.json)"
         )
         if path:
-            viewer = ComparisonViewer(Path(path)) if selected_filter.startswith("Comparison") else ResultViewer(Path(path))
+            result_path = Path(path)
+            viewer = ComparisonViewer(result_path) if result_path.name == "session.json" else ResultViewer(result_path)
             viewer.setAttribute(Qt.WidgetAttribute.WA_DeleteOnClose)
             viewer.show()
             self._result_viewer = viewer

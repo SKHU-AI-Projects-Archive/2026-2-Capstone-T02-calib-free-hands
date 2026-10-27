@@ -58,7 +58,9 @@
 - [x] Shared raw pose with distinct focal values produces independent canonical NPZ outputs
 - [x] Session JSON/NPZ round-trip, cancellation state, and unavailable backend validation
 - [x] Configuration row add/remove, stable IDs, duplicate selection, and reference focal UI tests
-- [x] Full pytest suite and offscreen Qt tests (75 passed)
+- [x] Full pytest suite and offscreen Qt tests (86 passed)
+- [x] Regression tests for focal progress bounds, cancellation during preview, and single-configuration output compatibility
+- [x] Multi-row preset loading, persistent configuration snapshots, malformed snapshot fallback, and saved-result routing independent of file dialog filter
 - [x] Comparison viewer construction from a saved three-result session and Overlay/Split frame retention
 - [x] Split camera initialization, preset, orbit/pan/zoom state synchronization tests
 - [x] Configuration hue, frame/hand confidence alpha, NaN fallback, and visibility tests
@@ -68,6 +70,7 @@
 - [x] Official model asset setup script with network access
 - [ ] Interactive viewer/manual validation
 - [ ] P1-B new original WiLoR run confirming MANO parameter persistence in a fresh real result
+- [x] Actual AnyCalib + WiLoR/MANO smoke on first 3 frames of existing `4_assemble.mp4`; single and two-configuration outputs validated without network downloads
 - [ ] `git diff` final review
 
 Known remaining validation gap: interactive Windows GUI and visual viewer controls
