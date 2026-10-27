@@ -5020,7 +5020,7 @@ def pr_results_yaml(run_dir: Path, cfg: dict):
 
 MK_NOTE = ("실제 손의 손바닥 면에 붙인 표시 점을 학습 모델 대신 영상 처리로 측정해 같은 fixed_template 계산에 넣으면, 손 모양 변화와 비평면성이 그대로인 실제 손에서도 거리 반비례가 사라지는지 본 실험이다. "
            "쓰는 점, 표시 검출 설정, 판정 규칙은 실행 전에 고정했고 바꾸지 않았다. 기준 f와의 비교는 summary.md에만 있다.")
-MK_METHODS = {"markers": "표시 점", "mediapipe8": "MediaPipe 같은 관절 (주 비교)", "mediapipe16": "MediaPipe 손목 제외 16점 (기록용)"}
+MK_METHODS = {"markers": "표시 점", "mediapipe8": "MediaPipe 같은 관절 (주 비교)", "mediapipe16": "MediaPipe 손목 제외 16점 (기록용)", "markers_nearfree": "표시 점, 2% 근접 프레임 제외 (참고용, 판정에 쓰지 않음)"}
 
 
 def mk_interpret(marker_verdict: str, mp_verdict: str) -> str:
@@ -5039,6 +5039,9 @@ def mk_norm(r: dict, key: str):
         return x if "f" in x else None
     if key == "mediapipe8":
         x = r.get("mediapipe8") or {}
+        return x if "f" in x else None
+    if key == "markers_nearfree":
+        x = r.get("marker_nearfree") or {}
         return x if "f" in x else None
     x = r["mediapipe"]
     if "ft" not in x:
@@ -5416,7 +5419,7 @@ def mk_summary(path: Path, results: list, ana: dict, ref: dict, cfg: dict):
             if x:
                 L.append(f"| {r['video']} | {d:g} | {MK_METHODS[key]} | {format(x['f'], '.1f')} | {pct(x['f'] / ref[d] - 1.0)} | {pct(x['f'] / 1680.0 - 1.0)} | {long_fmt(x['boot_log_std'], 4)} | {x['n_used_frames']} |")
             else:
-                why = ("; ".join(r["marker"].get("excluded") or []) or r["marker"].get("failed")) if key == "markers" else ("; ".join((r.get("mediapipe8") or r["mediapipe"]).get("excluded") or []) or "제외")
+                why = ("; ".join(r["marker"].get("excluded") or []) or r["marker"].get("failed") or "제외") if key in ("markers", "markers_nearfree") else ("; ".join((r.get("mediapipe8") or r["mediapipe"]).get("excluded") or []) or "제외")
                 L.append(f"| {r['video']} | {d:g} | {MK_METHODS[key]} | 제외: {why} | - | - | - | - |")
     L += ["", "## 한계", "", "- 영상은 거리마다 2개씩이라 기울기 구간이 거칠고, 판정은 이 세션·이 카메라에 대한 것이다.", "- 표시 점도 손의 3차원 구조(손바닥 곡면, 손가락 굽힘)를 그대로 갖는다. 표시가 검출기에 주는 영향은 MediaPipe 결과와 실험 27의 같은 거리 영상을 비교해서만 짐작할 수 있다.",
           "- 기준 f는 같은 날 체커보드 거리 실험의 값(사용자 제공)이며 보정 파일은 서버에 없다.", ""]
@@ -5443,7 +5446,7 @@ def mk_results_yaml(run_dir: Path, cfg: dict):
                 e[key] = {"f_px": None if x["at_grid_edge"] else round(x["f"], 1), "sharpness": rd(x["sharpness"], 5), "boot_log_std": rd(x["boot_log_std"], 5), "n_used_frames": x["n_used_frames"],
                           "theta_median_deg": rd(x["theta_median"], 1), "theta_max_deg": rd(x["theta_max"], 1), "reproj_rms_front_pct": rd(x["phase_rms_pct"]["front"], 4), "reproj_rms_tilt_pct": rd(x["phase_rms_pct"]["tilt"], 4)}
             else:
-                e[key] = {"excluded": (v["marker"].get("excluded") or v["marker"].get("failed")) if key == "markers" else ((v.get("mediapipe8") or v["mediapipe"]).get("excluded") or "제외")}
+                e[key] = {"excluded": (v["marker"].get("excluded") or v["marker"].get("failed")) if key in ("markers", "markers_nearfree") else ((v.get("mediapipe8") or v["mediapipe"]).get("excluded") or "제외")}
         if v.get("diag"):
             e["perspective_k"] = rd(v["diag"]["k"]["k"], 4)
             e["planar_gap_median_pct"] = rd(v["diag"]["gap_median_pct"], 4)

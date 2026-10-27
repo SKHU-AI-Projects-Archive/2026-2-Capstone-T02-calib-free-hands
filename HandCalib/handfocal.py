@@ -4961,6 +4961,29 @@ def mk_video(args) -> dict:
                "sharpness": float(pm["diagnostics"]["sharpness"]), "boot_log_std": long_boot_log_std(pm["bootstrap"]["f"]), "curve": {"grid": grid.tolist(), "cost": [float(x) for x in sol["profile_cost"]]},
                "n_used_frames": int(a["n_target_frames"]), "theta_median": a["theta_tilt"]["median"], "theta_max": a["theta_tilt"]["max"], "theta_p90": a["theta_tilt"]["p90"],
                "tilt_duration_s": float(times[tilt].max() - a["tilt_start_s"]) if tilt else 0.0, "phase_rms_pct": pr_phase_rms(a, tr["box"]), "box_long_median_px": float(np.nanmedian(proc["box_long"][proc["present"]]))})
+    # reference run (not a verdict input): the frames in which a blob without a marker lay within 2 % of the hand box of a tracked used marker are left out
+    trk, used_idx = proc["track"], proc["used_idx"]
+    if used_idx is not None and "ignored_xy" in trk:
+        near = np.zeros(n, bool)
+        for i in np.flatnonzero(proc["present"]):
+            ig = trk["ignored_xy"][i]
+            xy = trk["xy"][i][used_idx]
+            xy = xy[np.isfinite(xy[:, 0])]
+            if len(ig) and len(xy) and np.linalg.norm(ig[:, None, :] - xy[None, :, :], axis=-1).min() <= 0.02 * float(proc["box_long"][i]):
+                near[i] = True
+        pres2 = proc["present"] & ~near
+        nf = {"n_dropped_frames": int(near.sum())}
+        a2 = analyze(proc["kp"], proc["mask"] & pres2[:, None], pres2, tr["box"], tr["cls"], times, (W, H), cfg_mk, tilt_start=None, methods_full=("fixed_template",), seed=seed)
+        if "per_method" in a2:
+            s2, pm2 = a2["solutions"]["fixed_template"], a2["per_method"]["fixed_template"]
+            tilt2 = [i for i, r in enumerate(a2["role"]) if r == "tilt"]
+            nf.update({"f": float(s2["f"]), "at_grid_edge": bool(s2["at_grid_edge"]), "side": None if not s2["at_grid_edge"] else ("상한" if s2["f"] >= grid[-1] * (1 - 1e-6) else "하한"),
+                       "sharpness": float(pm2["diagnostics"]["sharpness"]), "boot_log_std": long_boot_log_std(pm2["bootstrap"]["f"]), "curve": {"grid": grid.tolist(), "cost": [float(x) for x in s2["profile_cost"]]},
+                       "n_used_frames": int(a2["n_target_frames"]), "theta_median": a2["theta_tilt"]["median"], "theta_max": a2["theta_tilt"]["max"], "theta_p90": a2["theta_tilt"]["p90"],
+                       "tilt_duration_s": float(times[tilt2].max() - a2["tilt_start_s"]) if tilt2 else 0.0, "phase_rms_pct": pr_phase_rms(a2, tr["box"])})
+        else:
+            nf["failed"] = a2.get("failed", "분석 실패")
+        res["marker_nearfree"] = nf
     # planar-hand check: markers define the homography reference -> frame; MediaPipe joints 5-20 against it
     r0 = proc["ref_index"]
     ids = list(range(5, 21))
