@@ -1,0 +1,1284 @@
+experiment: 30_jointset_sets
+run: runs/30_jointset_sets/20261027T011405Z
+code_commit: 8be33e6
+git_dirty_at_run: false
+note: 후보 방법(mediapipe_hands + 손목 제외 + fixed_template)과 f는 그대로 두고, 판정의 jointset_range가
+  쓰는 불확실성 관절 집합만 손목 제외에 맞게 바꿨을 때 판정이 어떻게 달라지는지 본 실험이다. 집합과 채택 규칙은 실행 전에 고정했고 바꾸지 않았다.
+candidate:
+  detector: mediapipe_hands
+  wrist_mode: exclude
+  estimator: fixed_template
+  front_window: 17's (phase_mode nominal, tilt phase from 3.0 s)
+jointset:
+  sets:
+    prox8:
+    - 5
+    - 6
+    - 9
+    - 10
+    - 13
+    - 14
+    - 17
+    - 18
+    index_middle8:
+    - 5
+    - 6
+    - 7
+    - 8
+    - 9
+    - 10
+    - 11
+    - 12
+    ring_pinky8:
+    - 13
+    - 14
+    - 15
+    - 16
+    - 17
+    - 18
+    - 19
+    - 20
+  uncertainty_sets:
+  - prox8
+  - index_middle8
+  - ring_pinky8
+  - flat17
+decision:
+  min_within_share: 0.5
+  max_edge_share: 0.1
+videos:
+  IMG_7148.MOV:
+    lens: 1x
+    f_px: 1873.6
+    detection_source: '17'
+    bootstrap_rel_std: 0.1297
+    boot_log_std: 0.1371
+    consistency_range: 0.6192
+    sharpness: 1.00067
+    reproj_rms_rel: 0.01725
+    theta_p90_deg: 44.9
+    axis_bins: 6
+    n_target_frames: 136
+    front_jitter_rel: 0.002235
+    tilt_duration_s: 8.0
+    jointsets_new_px:
+      prox8: 672.0
+      index_middle8: 2456.2
+      ring_pinky8: 775.2
+      flat17: 1873.6
+    jointset_range_new: 0.9523
+    jointset_edge_new:
+    - prox8
+    jointsets_old_px:
+      palm5: 691.3
+      palm_proximal9: 672.0
+      flat17: 1873.6
+    jointset_range_old: 0.6413
+    jointset_edge_old:
+    - palm_proximal9
+    verdict_new: REJECT
+    failed_rough_new:
+    - jointset_range
+    failed_good_new:
+    - reproj_rms
+    - jointset_range
+    - bootstrap
+    - consistency
+    - sharpness
+    verdict_old_sets: REJECT
+  IMG_7157.MOV:
+    lens: 1x
+    f_px: 2077.4
+    detection_source: '17'
+    bootstrap_rel_std: 0.11175
+    boot_log_std: 0.11039
+    consistency_range: 0.4301
+    sharpness: 1.00457
+    reproj_rms_rel: 0.00312
+    theta_p90_deg: 28.9
+    axis_bins: 6
+    n_target_frames: 152
+    front_jitter_rel: 0.001899
+    tilt_duration_s: 9.07
+    jointsets_new_px:
+      prox8: 1755.9
+      index_middle8: 1947.9
+      ring_pinky8: 2733.1
+      flat17: 2077.4
+    jointset_range_new: 0.4704
+    jointset_edge_new: []
+    jointsets_old_px:
+      palm5: 1179.3
+      palm_proximal9: 1755.9
+      flat17: 2077.4
+    jointset_range_old: 0.4323
+    jointset_edge_old: []
+    verdict_new: REJECT
+    failed_rough_new:
+    - jointset_range
+    failed_good_new:
+    - jointset_range
+    - bootstrap
+    - consistency
+    - sharpness
+    verdict_old_sets: REJECT
+  IMG_7158.MOV:
+    lens: 1x
+    f_px: 1748.2
+    detection_source: '17'
+    bootstrap_rel_std: 0.12725
+    boot_log_std: 0.12369
+    consistency_range: 0.6258
+    sharpness: 1.00467
+    reproj_rms_rel: 0.0047
+    theta_p90_deg: 49.4
+    axis_bins: 6
+    n_target_frames: 189
+    front_jitter_rel: 0.00194
+    tilt_duration_s: 11.53
+    jointsets_new_px:
+      prox8: 1626.4
+      index_middle8: 1832.7
+      ring_pinky8: 2107.0
+      flat17: 1748.2
+    jointset_range_new: 0.2749
+    jointset_edge_new: []
+    jointsets_old_px:
+      palm5: 1059.0
+      palm_proximal9: 1626.4
+      flat17: 1748.2
+    jointset_range_old: 0.3942
+    jointset_edge_old: []
+    verdict_new: REJECT
+    failed_rough_new:
+    - jointset_range
+    failed_good_new:
+    - jointset_range
+    - bootstrap
+    - consistency
+    - sharpness
+    verdict_old_sets: REJECT
+  IMG_7176.MOV:
+    lens: 1x
+    f_px: 1314.0
+    detection_source: '17'
+    bootstrap_rel_std: 0.12999
+    boot_log_std: 0.12434
+    consistency_range: 0.9604
+    sharpness: 1.01214
+    reproj_rms_rel: 0.00375
+    theta_p90_deg: 35.5
+    axis_bins: 6
+    n_target_frames: 108
+    front_jitter_rel: 0.005014
+    tilt_duration_s: 6.14
+    jointsets_new_px:
+      prox8: 1598.2
+      index_middle8: 2256.4
+      ring_pinky8: 1253.7
+      flat17: 1314.0
+    jointset_range_new: 0.763
+    jointset_edge_new: []
+    jointsets_old_px:
+      palm5: 1017.1
+      palm_proximal9: 1598.2
+      flat17: 1314.0
+    jointset_range_old: 0.4422
+    jointset_edge_old: []
+    verdict_new: REJECT
+    failed_rough_new:
+    - jointset_range
+    failed_good_new:
+    - jointset_range
+    - bootstrap
+    - consistency
+    - sharpness
+    verdict_old_sets: REJECT
+  IMG_7177.MOV:
+    lens: 1x
+    f_px: 2138.1
+    detection_source: '17'
+    bootstrap_rel_std: 0.1712
+    boot_log_std: 0.16875
+    consistency_range: 0.7815
+    sharpness: 1.00602
+    reproj_rms_rel: 0.00372
+    theta_p90_deg: 48.0
+    axis_bins: 6
+    n_target_frames: 128
+    front_jitter_rel: 0.001937
+    tilt_duration_s: 7.47
+    jointsets_new_px:
+      prox8: 2246.5
+      index_middle8: 2625.2
+      ring_pinky8: 2940.5
+      flat17: 2138.1
+    jointset_range_new: 0.3753
+    jointset_edge_new: []
+    jointsets_old_px:
+      palm5: 672.0
+      palm_proximal9: 2246.5
+      flat17: 2138.1
+    jointset_range_old: 0.7364
+    jointset_edge_old:
+    - palm5
+    verdict_new: REJECT
+    failed_rough_new:
+    - jointset_range
+    failed_good_new:
+    - jointset_range
+    - bootstrap
+    - consistency
+    - sharpness
+    verdict_old_sets: REJECT
+  IMG_7178.MOV:
+    lens: 1x
+    f_px: 1761.6
+    detection_source: '17'
+    bootstrap_rel_std: 0.16094
+    boot_log_std: 0.1463
+    consistency_range: 0.6076
+    sharpness: 1.00526
+    reproj_rms_rel: 0.00408
+    theta_p90_deg: 44.1
+    axis_bins: 6
+    n_target_frames: 169
+    front_jitter_rel: 0.00157
+    tilt_duration_s: 10.2
+    jointsets_new_px:
+      prox8: 1401.2
+      index_middle8: 2692.2
+      ring_pinky8: 3001.0
+      flat17: 1761.6
+    jointset_range_new: 0.9082
+    jointset_edge_new: []
+    jointsets_old_px:
+      palm5: 672.0
+      palm_proximal9: 1401.2
+      flat17: 1761.6
+    jointset_range_old: 0.6185
+    jointset_edge_old:
+    - palm5
+    verdict_new: REJECT
+    failed_rough_new:
+    - jointset_range
+    failed_good_new:
+    - jointset_range
+    - bootstrap
+    - consistency
+    - sharpness
+    verdict_old_sets: REJECT
+  IMG_7180.MOV:
+    lens: 1x
+    f_px: 1843.0
+    detection_source: '17'
+    bootstrap_rel_std: 0.12964
+    boot_log_std: 0.1303
+    consistency_range: 0.1722
+    sharpness: 1.00439
+    reproj_rms_rel: 0.00629
+    theta_p90_deg: 55.0
+    axis_bins: 6
+    n_target_frames: 195
+    front_jitter_rel: 0.001368
+    tilt_duration_s: 11.93
+    jointsets_new_px:
+      prox8: 2072.1
+      index_middle8: 1608.0
+      ring_pinky8: 2155.3
+      flat17: 1843.0
+    jointset_range_new: 0.2969
+    jointset_edge_new: []
+    jointsets_old_px:
+      palm5: 672.0
+      palm_proximal9: 2072.1
+      flat17: 1843.0
+    jointset_range_old: 0.7597
+    jointset_edge_old:
+    - palm5
+    verdict_new: REJECT
+    failed_rough_new:
+    - jointset_range
+    failed_good_new:
+    - jointset_range
+    - bootstrap
+    - consistency
+    - sharpness
+    verdict_old_sets: REJECT
+  IMG_7181.MOV:
+    lens: 1x
+    f_px: 1727.7
+    detection_source: '17'
+    bootstrap_rel_std: 0.10763
+    boot_log_std: 0.10357
+    consistency_range: 0.123
+    sharpness: 1.00478
+    reproj_rms_rel: 0.00554
+    theta_p90_deg: 49.8
+    axis_bins: 6
+    n_target_frames: 140
+    front_jitter_rel: 0.001238
+    tilt_duration_s: 8.27
+    jointsets_new_px:
+      prox8: 2757.9
+      index_middle8: 1454.9
+      ring_pinky8: 1587.5
+      flat17: 1727.7
+    jointset_range_new: 0.7542
+    jointset_edge_new: []
+    jointsets_old_px:
+      palm5: 1123.4
+      palm_proximal9: 2757.9
+      flat17: 1727.7
+    jointset_range_old: 0.946
+    jointset_edge_old: []
+    verdict_new: REJECT
+    failed_rough_new:
+    - jointset_range
+    failed_good_new:
+    - jointset_range
+    - bootstrap
+    - consistency
+    - sharpness
+    verdict_old_sets: REJECT
+  IMG_7184.MOV:
+    lens: 0.5x
+    f_px: 987.8
+    detection_source: cache
+    bootstrap_rel_std: 0.11767
+    boot_log_std: 0.11959
+    consistency_range: 0.3587
+    sharpness: 1.00516
+    reproj_rms_rel: 0.00548
+    theta_p90_deg: 42.7
+    axis_bins: 6
+    n_target_frames: 169
+    front_jitter_rel: 0.000846
+    tilt_duration_s: 10.21
+    jointsets_new_px:
+      prox8: 1085.2
+      index_middle8: 1180.8
+      ring_pinky8: 1605.4
+      flat17: 987.8
+    jointset_range_new: 0.6252
+    jointset_edge_new: []
+    jointsets_old_px:
+      palm5: 1051.9
+      palm_proximal9: 1085.2
+      flat17: 987.8
+    jointset_range_old: 0.0987
+    jointset_edge_old: []
+    verdict_new: REJECT
+    failed_rough_new:
+    - jointset_range
+    failed_good_new:
+    - jointset_range
+    - bootstrap
+    - consistency
+    - sharpness
+    verdict_old_sets: ROUGH
+  IMG_7190.MOV:
+    lens: 1x
+    f_px: 1568.8
+    detection_source: cache
+    bootstrap_rel_std: 0.07704
+    boot_log_std: 0.07458
+    consistency_range: 0.2152
+    sharpness: 1.006
+    reproj_rms_rel: 0.00681
+    theta_p90_deg: 54.3
+    axis_bins: 6
+    n_target_frames: 306
+    front_jitter_rel: 0.001499
+    tilt_duration_s: 19.33
+    jointsets_new_px:
+      prox8: 2299.7
+      index_middle8: 1227.9
+      ring_pinky8: 1764.4
+      flat17: 1568.8
+    jointset_range_new: 0.6832
+    jointset_edge_new: []
+    jointsets_old_px:
+      palm5: 672.0
+      palm_proximal9: 2299.7
+      flat17: 1568.8
+    jointset_range_old: 1.0375
+    jointset_edge_old:
+    - palm5
+    verdict_new: REJECT
+    failed_rough_new:
+    - jointset_range
+    failed_good_new:
+    - jointset_range
+    - bootstrap
+    - consistency
+    - sharpness
+    verdict_old_sets: REJECT
+  IMG_7191.MOV:
+    lens: 1x
+    f_px: 2390.8
+    detection_source: cache
+    bootstrap_rel_std: 0.112
+    boot_log_std: 0.11137
+    consistency_range: 0.3224
+    sharpness: 1.00264
+    reproj_rms_rel: 0.00593
+    theta_p90_deg: 44.9
+    axis_bins: 4
+    n_target_frames: 174
+    front_jitter_rel: 0.000969
+    tilt_duration_s: 10.53
+    jointsets_new_px:
+      prox8: 2868.9
+      index_middle8: 1685.4
+      ring_pinky8: 2619.2
+      flat17: 2390.8
+    jointset_range_new: 0.495
+    jointset_edge_new: []
+    jointsets_old_px:
+      palm5: 672.0
+      palm_proximal9: 2868.9
+      flat17: 2390.8
+    jointset_range_old: 0.9189
+    jointset_edge_old:
+    - palm5
+    verdict_new: REJECT
+    failed_rough_new:
+    - jointset_range
+    failed_good_new:
+    - axis_bins
+    - jointset_range
+    - bootstrap
+    - consistency
+    - sharpness
+    verdict_old_sets: REJECT
+  IMG_7192.MOV:
+    lens: 1x
+    f_px: 1742.2
+    detection_source: cache
+    bootstrap_rel_std: 0.07869
+    boot_log_std: 0.0794
+    consistency_range: 0.1181
+    sharpness: 1.00391
+    reproj_rms_rel: 0.00769
+    theta_p90_deg: 50.6
+    axis_bins: 6
+    n_target_frames: 326
+    front_jitter_rel: 0.001559
+    tilt_duration_s: 20.67
+    jointsets_new_px:
+      prox8: 2084.2
+      index_middle8: 1830.2
+      ring_pinky8: 2275.3
+      flat17: 1742.2
+    jointset_range_new: 0.306
+    jointset_edge_new: []
+    jointsets_old_px:
+      palm5: 672.0
+      palm_proximal9: 2084.2
+      flat17: 1742.2
+    jointset_range_old: 0.8106
+    jointset_edge_old:
+    - palm5
+    verdict_new: REJECT
+    failed_rough_new:
+    - jointset_range
+    failed_good_new:
+    - jointset_range
+    - bootstrap
+    - consistency
+    - sharpness
+    verdict_old_sets: REJECT
+  IMG_7193.MOV:
+    lens: 1x
+    f_px: 1534.4
+    detection_source: cache
+    bootstrap_rel_std: 0.11942
+    boot_log_std: 0.11707
+    consistency_range: 0.2265
+    sharpness: 1.00472
+    reproj_rms_rel: 0.00804
+    theta_p90_deg: 61.8
+    axis_bins: 6
+    n_target_frames: 317
+    front_jitter_rel: 0.001076
+    tilt_duration_s: 20.07
+    jointsets_new_px:
+      prox8: 1814.9
+      index_middle8: 1659.4
+      ring_pinky8: 2127.4
+      flat17: 1534.4
+    jointset_range_new: 0.3865
+    jointset_edge_new: []
+    jointsets_old_px:
+      palm5: 672.0
+      palm_proximal9: 1814.9
+      flat17: 1534.4
+    jointset_range_old: 0.7449
+    jointset_edge_old:
+    - palm5
+    verdict_new: REJECT
+    failed_rough_new:
+    - jointset_range
+    failed_good_new:
+    - jointset_range
+    - bootstrap
+    - consistency
+    - sharpness
+    verdict_old_sets: REJECT
+  IMG_7194.MOV:
+    lens: 1x
+    f_px: 1875.1
+    detection_source: cache
+    bootstrap_rel_std: 0.08393
+    boot_log_std: 0.08224
+    consistency_range: 0.1195
+    sharpness: 1.00291
+    reproj_rms_rel: 0.00735
+    theta_p90_deg: 54.6
+    axis_bins: 6
+    n_target_frames: 329
+    front_jitter_rel: 0.001299
+    tilt_duration_s: 20.87
+    jointsets_new_px:
+      prox8: 2005.2
+      index_middle8: 1979.6
+      ring_pinky8: 2766.7
+      flat17: 1875.1
+    jointset_range_new: 0.4755
+    jointset_edge_new: []
+    jointsets_old_px:
+      palm5: 672.0
+      palm_proximal9: 2005.2
+      flat17: 1875.1
+    jointset_range_old: 0.711
+    jointset_edge_old:
+    - palm5
+    verdict_new: REJECT
+    failed_rough_new:
+    - jointset_range
+    failed_good_new:
+    - jointset_range
+    - bootstrap
+    - consistency
+    - sharpness
+    verdict_old_sets: REJECT
+  IMG_7195.MOV:
+    lens: 1x
+    f_px: 1663.9
+    detection_source: cache
+    bootstrap_rel_std: 0.07457
+    boot_log_std: 0.07509
+    consistency_range: 0.3593
+    sharpness: 1.00466
+    reproj_rms_rel: 0.00676
+    theta_p90_deg: 51.7
+    axis_bins: 6
+    n_target_frames: 371
+    front_jitter_rel: 0.001073
+    tilt_duration_s: 23.67
+    jointsets_new_px:
+      prox8: 1993.3
+      index_middle8: 1548.0
+      ring_pinky8: 1401.6
+      flat17: 1663.9
+    jointset_range_new: 0.3556
+    jointset_edge_new: []
+    jointsets_old_px:
+      palm5: 1029.9
+      palm_proximal9: 1993.3
+      flat17: 1663.9
+    jointset_range_old: 0.579
+    jointset_edge_old: []
+    verdict_new: REJECT
+    failed_rough_new:
+    - jointset_range
+    failed_good_new:
+    - jointset_range
+    - bootstrap
+    - consistency
+    - sharpness
+    verdict_old_sets: REJECT
+  IMG_7213.MOV:
+    lens: 0.5x
+    f_px: 1073.5
+    detection_source: cache
+    bootstrap_rel_std: 0.06223
+    boot_log_std: 0.06356
+    consistency_range: 0.2448
+    sharpness: 1.00874
+    reproj_rms_rel: 0.00565
+    theta_p90_deg: 41.3
+    axis_bins: 6
+    n_target_frames: 296
+    front_jitter_rel: 0.000718
+    tilt_duration_s: 18.69
+    jointsets_new_px:
+      prox8: 1669.1
+      index_middle8: 914.4
+      ring_pinky8: 1150.2
+      flat17: 1073.5
+    jointset_range_new: 0.7031
+    jointset_edge_new: []
+    jointsets_old_px:
+      palm5: 1166.4
+      palm_proximal9: 1669.1
+      flat17: 1073.5
+    jointset_range_old: 0.5549
+    jointset_edge_old: []
+    verdict_new: REJECT
+    failed_rough_new:
+    - jointset_range
+    failed_good_new:
+    - jointset_range
+    - bootstrap
+    - consistency
+    - sharpness
+    verdict_old_sets: REJECT
+  IMG_7214.MOV:
+    lens: 0.5x
+    f_px: 920.9
+    detection_source: cache
+    bootstrap_rel_std: 0.04416
+    boot_log_std: 0.04453
+    consistency_range: 0.1866
+    sharpness: 1.01612
+    reproj_rms_rel: 0.00571
+    theta_p90_deg: 47.8
+    axis_bins: 6
+    n_target_frames: 326
+    front_jitter_rel: 0.001402
+    tilt_duration_s: 20.69
+    jointsets_new_px:
+      prox8: 1434.5
+      index_middle8: 982.1
+      ring_pinky8: 1245.5
+      flat17: 920.9
+    jointset_range_new: 0.5576
+    jointset_edge_new: []
+    jointsets_old_px:
+      palm5: 867.0
+      palm_proximal9: 1434.5
+      flat17: 920.9
+    jointset_range_old: 0.6162
+    jointset_edge_old: []
+    verdict_new: REJECT
+    failed_rough_new:
+    - jointset_range
+    failed_good_new:
+    - jointset_range
+    - bootstrap
+    - consistency
+    - sharpness
+    verdict_old_sets: REJECT
+  IMG_7215.MOV:
+    lens: 0.5x
+    f_px: 1193.7
+    detection_source: cache
+    bootstrap_rel_std: 0.06766
+    boot_log_std: 0.06628
+    consistency_range: 0.3704
+    sharpness: 1.00767
+    reproj_rms_rel: 0.00649
+    theta_p90_deg: 49.9
+    axis_bins: 5
+    n_target_frames: 318
+    front_jitter_rel: 0.001714
+    tilt_duration_s: 20.16
+    jointsets_new_px:
+      prox8: 1396.8
+      index_middle8: 1073.1
+      ring_pinky8: 1343.7
+      flat17: 1193.7
+    jointset_range_new: 0.2712
+    jointset_edge_new: []
+    jointsets_old_px:
+      palm5: 775.6
+      palm_proximal9: 1396.8
+      flat17: 1193.7
+    jointset_range_old: 0.5205
+    jointset_edge_old: []
+    verdict_new: REJECT
+    failed_rough_new:
+    - jointset_range
+    failed_good_new:
+    - jointset_range
+    - bootstrap
+    - consistency
+    - sharpness
+    verdict_old_sets: REJECT
+  IMG_7216.MOV:
+    lens: 1x
+    f_px: 1559.3
+    detection_source: cache
+    bootstrap_rel_std: 0.0655
+    boot_log_std: 0.06542
+    consistency_range: 0.0641
+    sharpness: 1.01643
+    reproj_rms_rel: 0.00513
+    theta_p90_deg: 46.5
+    axis_bins: 6
+    n_target_frames: 334
+    front_jitter_rel: 0.001069
+    tilt_duration_s: 21.2
+    jointsets_new_px:
+      prox8: 1815.1
+      index_middle8: 1659.0
+      ring_pinky8: 2100.7
+      flat17: 1559.3
+    jointset_range_new: 0.3472
+    jointset_edge_new: []
+    jointsets_old_px:
+      palm5: 1162.9
+      palm_proximal9: 1815.1
+      flat17: 1559.3
+    jointset_range_old: 0.4183
+    jointset_edge_old: []
+    verdict_new: REJECT
+    failed_rough_new:
+    - jointset_range
+    failed_good_new:
+    - jointset_range
+    - bootstrap
+    - consistency
+    - sharpness
+    verdict_old_sets: REJECT
+  IMG_7217.MOV:
+    lens: 1x
+    f_px: 1527.3
+    detection_source: cache
+    bootstrap_rel_std: 0.04655
+    boot_log_std: 0.04665
+    consistency_range: 0.0824
+    sharpness: 1.00808
+    reproj_rms_rel: 0.00631
+    theta_p90_deg: 45.6
+    axis_bins: 6
+    n_target_frames: 344
+    front_jitter_rel: 0.0009
+    tilt_duration_s: 21.87
+    jointsets_new_px:
+      prox8: 1802.5
+      index_middle8: 1778.5
+      ring_pinky8: 2099.6
+      flat17: 1527.3
+    jointset_range_new: 0.3747
+    jointset_edge_new: []
+    jointsets_old_px:
+      palm5: 957.1
+      palm_proximal9: 1802.5
+      flat17: 1527.3
+    jointset_range_old: 0.5535
+    jointset_edge_old: []
+    verdict_new: REJECT
+    failed_rough_new:
+    - jointset_range
+    failed_good_new:
+    - jointset_range
+    - bootstrap
+    - consistency
+    - sharpness
+    verdict_old_sets: REJECT
+  IMG_7218.MOV:
+    lens: 1x
+    f_px: 1399.1
+    detection_source: cache
+    bootstrap_rel_std: 0.07356
+    boot_log_std: 0.07413
+    consistency_range: 0.2772
+    sharpness: 1.00527
+    reproj_rms_rel: 0.00594
+    theta_p90_deg: 49.1
+    axis_bins: 6
+    n_target_frames: 344
+    front_jitter_rel: 0.001519
+    tilt_duration_s: 21.87
+    jointsets_new_px:
+      prox8: 1802.5
+      index_middle8: 1075.0
+      ring_pinky8: 2268.9
+      flat17: 1399.1
+    jointset_range_new: 0.8533
+    jointset_edge_new: []
+    jointsets_old_px:
+      palm5: 672.0
+      palm_proximal9: 1802.5
+      flat17: 1399.1
+    jointset_range_old: 0.8081
+    jointset_edge_old:
+    - palm5
+    verdict_new: REJECT
+    failed_rough_new:
+    - jointset_range
+    failed_good_new:
+    - jointset_range
+    - bootstrap
+    - consistency
+    - sharpness
+    verdict_old_sets: REJECT
+  IMG_7219.MOV:
+    lens: 1x
+    f_px: 1993.9
+    detection_source: cache
+    bootstrap_rel_std: 0.08077
+    boot_log_std: 0.08052
+    consistency_range: 0.2487
+    sharpness: 1.00779
+    reproj_rms_rel: 0.00619
+    theta_p90_deg: 44.8
+    axis_bins: 6
+    n_target_frames: 325
+    front_jitter_rel: 0.00101
+    tilt_duration_s: 20.6
+    jointsets_new_px:
+      prox8: 2856.5
+      index_middle8: 2168.4
+      ring_pinky8: 2436.5
+      flat17: 1993.9
+    jointset_range_new: 0.4326
+    jointset_edge_new: []
+    jointsets_old_px:
+      palm5: 811.3
+      palm_proximal9: 2856.5
+      flat17: 1993.9
+    jointset_range_old: 1.0257
+    jointset_edge_old: []
+    verdict_new: REJECT
+    failed_rough_new:
+    - jointset_range
+    failed_good_new:
+    - jointset_range
+    - bootstrap
+    - consistency
+    - sharpness
+    verdict_old_sets: REJECT
+  IMG_7220.MOV:
+    lens: 1x
+    f_px: 2122.1
+    detection_source: cache
+    bootstrap_rel_std: 0.04084
+    boot_log_std: 0.04077
+    consistency_range: 0.2426
+    sharpness: 1.00511
+    reproj_rms_rel: 0.00485
+    theta_p90_deg: 40.8
+    axis_bins: 6
+    n_target_frames: 292
+    front_jitter_rel: 0.001498
+    tilt_duration_s: 18.4
+    jointsets_new_px:
+      prox8: 2992.7
+      index_middle8: 2147.9
+      ring_pinky8: 2642.1
+      flat17: 2122.1
+    jointset_range_new: 0.4102
+    jointset_edge_new: []
+    jointsets_old_px:
+      palm5: 1033.0
+      palm_proximal9: 2992.7
+      flat17: 2122.1
+    jointset_range_old: 0.9235
+    jointset_edge_old: []
+    verdict_new: REJECT
+    failed_rough_new:
+    - jointset_range
+    failed_good_new:
+    - jointset_range
+    - bootstrap
+    - consistency
+    - sharpness
+    verdict_old_sets: REJECT
+  IMG_7221.MOV:
+    lens: 1x
+    f_px: 1298.0
+    detection_source: cache
+    bootstrap_rel_std: 0.06284
+    boot_log_std: 0.0628
+    consistency_range: 0.2918
+    sharpness: 1.00499
+    reproj_rms_rel: 0.00657
+    theta_p90_deg: 46.1
+    axis_bins: 6
+    n_target_frames: 331
+    front_jitter_rel: 0.00145
+    tilt_duration_s: 21.0
+    jointsets_new_px:
+      prox8: 1702.9
+      index_middle8: 1156.2
+      ring_pinky8: 1903.4
+      flat17: 1298.0
+    jointset_range_new: 0.5756
+    jointset_edge_new: []
+    jointsets_old_px:
+      palm5: 672.0
+      palm_proximal9: 1702.9
+      flat17: 1298.0
+    jointset_range_old: 0.7942
+    jointset_edge_old:
+    - palm5
+    verdict_new: REJECT
+    failed_rough_new:
+    - jointset_range
+    failed_good_new:
+    - jointset_range
+    - bootstrap
+    - consistency
+    - sharpness
+    verdict_old_sets: REJECT
+  IMG_7222.MOV:
+    lens: 1x
+    f_px: 2230.6
+    detection_source: cache
+    bootstrap_rel_std: 0.08753
+    boot_log_std: 0.0856
+    consistency_range: 0.341
+    sharpness: 1.0052
+    reproj_rms_rel: 0.00594
+    theta_p90_deg: 39.3
+    axis_bins: 6
+    n_target_frames: 322
+    front_jitter_rel: 0.001971
+    tilt_duration_s: 20.4
+    jointsets_new_px:
+      prox8: 3072.0
+      index_middle8: 2456.7
+      ring_pinky8: 2256.2
+      flat17: 2230.6
+    jointset_range_new: 0.3772
+    jointset_edge_new:
+    - prox8
+    jointsets_old_px:
+      palm5: 1167.8
+      palm_proximal9: 3072.0
+      flat17: 2230.6
+    jointset_range_old: 0.8537
+    jointset_edge_old:
+    - palm_proximal9
+    verdict_new: REJECT
+    failed_rough_new:
+    - jointset_range
+    failed_good_new:
+    - jointset_range
+    - bootstrap
+    - consistency
+    - sharpness
+    verdict_old_sets: REJECT
+  IMG_7223.MOV:
+    lens: 1x
+    f_px: 1866.2
+    detection_source: cache
+    bootstrap_rel_std: 0.04869
+    boot_log_std: 0.04846
+    consistency_range: 0.3086
+    sharpness: 1.00558
+    reproj_rms_rel: 0.00522
+    theta_p90_deg: 43.2
+    axis_bins: 6
+    n_target_frames: 303
+    front_jitter_rel: 0.001095
+    tilt_duration_s: 19.13
+    jointsets_new_px:
+      prox8: 2910.2
+      index_middle8: 1435.7
+      ring_pinky8: 2528.0
+      flat17: 1866.2
+    jointset_range_new: 0.7901
+    jointset_edge_new: []
+    jointsets_old_px:
+      palm5: 717.3
+      palm_proximal9: 2910.2
+      flat17: 1866.2
+    jointset_range_old: 1.1751
+    jointset_edge_old: []
+    verdict_new: REJECT
+    failed_rough_new:
+    - jointset_range
+    failed_good_new:
+    - jointset_range
+    - bootstrap
+    - consistency
+    - sharpness
+    verdict_old_sets: REJECT
+  IMG_7224.MOV:
+    lens: 1x
+    f_px: 1554.4
+    detection_source: cache
+    bootstrap_rel_std: 0.07711
+    boot_log_std: 0.07561
+    consistency_range: 0.4114
+    sharpness: 1.00357
+    reproj_rms_rel: 0.00582
+    theta_p90_deg: 39.4
+    axis_bins: 6
+    n_target_frames: 323
+    front_jitter_rel: 0.001635
+    tilt_duration_s: 20.47
+    jointsets_new_px:
+      prox8: 2320.2
+      index_middle8: 1003.4
+      ring_pinky8: 1530.5
+      flat17: 1554.4
+    jointset_range_new: 0.8472
+    jointset_edge_new: []
+    jointsets_old_px:
+      palm5: 762.6
+      palm_proximal9: 2320.2
+      flat17: 1554.4
+    jointset_range_old: 1.002
+    jointset_edge_old: []
+    verdict_new: REJECT
+    failed_rough_new:
+    - jointset_range
+    failed_good_new:
+    - jointset_range
+    - bootstrap
+    - consistency
+    - sharpness
+    verdict_old_sets: REJECT
+  IMG_7225.MOV:
+    lens: 1x
+    f_px: 1753.7
+    detection_source: cache
+    bootstrap_rel_std: 0.05533
+    boot_log_std: 0.05566
+    consistency_range: 0.2083
+    sharpness: 1.00805
+    reproj_rms_rel: 0.00568
+    theta_p90_deg: 41.2
+    axis_bins: 6
+    n_target_frames: 293
+    front_jitter_rel: 0.001003
+    tilt_duration_s: 18.47
+    jointsets_new_px:
+      prox8: 1610.6
+      index_middle8: 1692.5
+      ring_pinky8: 3072.0
+      flat17: 1753.7
+    jointset_range_new: 0.8333
+    jointset_edge_new:
+    - ring_pinky8
+    jointsets_old_px:
+      palm5: 672.0
+      palm_proximal9: 1610.6
+      flat17: 1753.7
+    jointset_range_old: 0.6168
+    jointset_edge_old:
+    - palm5
+    verdict_new: REJECT
+    failed_rough_new:
+    - jointset_range
+    failed_good_new:
+    - jointset_range
+    - bootstrap
+    - consistency
+    - sharpness
+    verdict_old_sets: REJECT
+  IMG_7226.MOV:
+    lens: 1x
+    f_px: 1368.0
+    detection_source: cache
+    bootstrap_rel_std: 0.04385
+    boot_log_std: 0.04328
+    consistency_range: 0.4098
+    sharpness: 1.01035
+    reproj_rms_rel: 0.00476
+    theta_p90_deg: 39.4
+    axis_bins: 6
+    n_target_frames: 293
+    front_jitter_rel: 0.000958
+    tilt_duration_s: 18.47
+    jointsets_new_px:
+      prox8: 1498.4
+      index_middle8: 1305.5
+      ring_pinky8: 3072.0
+      flat17: 1368.0
+    jointset_range_new: 1.2914
+    jointset_edge_new:
+    - ring_pinky8
+    jointsets_old_px:
+      palm5: 672.0
+      palm_proximal9: 1498.4
+      flat17: 1368.0
+    jointset_range_old: 0.6041
+    jointset_edge_old:
+    - palm5
+    verdict_new: REJECT
+    failed_rough_new:
+    - jointset_range
+    failed_good_new:
+    - jointset_range
+    - bootstrap
+    - consistency
+    - sharpness
+    verdict_old_sets: REJECT
+  IMG_7227.MOV:
+    lens: 1x
+    f_px: 1387.7
+    detection_source: cache
+    bootstrap_rel_std: 0.05007
+    boot_log_std: 0.05029
+    consistency_range: 0.416
+    sharpness: 1.00963
+    reproj_rms_rel: 0.00446
+    theta_p90_deg: 38.4
+    axis_bins: 6
+    n_target_frames: 307
+    front_jitter_rel: 0.001221
+    tilt_duration_s: 19.4
+    jointsets_new_px:
+      prox8: 1604.8
+      index_middle8: 1417.6
+      ring_pinky8: 2446.8
+      flat17: 1387.7
+    jointset_range_new: 0.7632
+    jointset_edge_new: []
+    jointsets_old_px:
+      palm5: 672.0
+      palm_proximal9: 1604.8
+      flat17: 1387.7
+    jointset_range_old: 0.6722
+    jointset_edge_old:
+    - palm5
+    verdict_new: REJECT
+    failed_rough_new:
+    - jointset_range
+    failed_good_new:
+    - jointset_range
+    - bootstrap
+    - consistency
+    - sharpness
+    verdict_old_sets: REJECT
+  IMG_7231.MOV:
+    lens: 0.5x
+    f_px: 1112.7
+    detection_source: cache
+    bootstrap_rel_std: 0.09723
+    boot_log_std: 0.09618
+    consistency_range: 0.1411
+    sharpness: 1.00477
+    reproj_rms_rel: 0.00508
+    theta_p90_deg: 42.6
+    axis_bins: 6
+    n_target_frames: 325
+    front_jitter_rel: 0.001188
+    tilt_duration_s: 20.62
+    jointsets_new_px:
+      prox8: 1302.8
+      index_middle8: 1024.5
+      ring_pinky8: 1614.9
+      flat17: 1112.7
+    jointset_range_new: 0.5306
+    jointset_edge_new: []
+    jointsets_old_px:
+      palm5: 672.0
+      palm_proximal9: 1302.8
+      flat17: 1112.7
+    jointset_range_old: 0.5669
+    jointset_edge_old:
+    - palm5
+    verdict_new: REJECT
+    failed_rough_new:
+    - jointset_range
+    failed_good_new:
+    - jointset_range
+    - bootstrap
+    - consistency
+    - sharpness
+    verdict_old_sets: REJECT
+  IMG_7232.MOV:
+    lens: 0.5x
+    f_px: 1016.9
+    detection_source: cache
+    bootstrap_rel_std: 0.06768
+    boot_log_std: 0.06691
+    consistency_range: 0.2945
+    sharpness: 1.00456
+    reproj_rms_rel: 0.00617
+    theta_p90_deg: 49.0
+    axis_bins: 6
+    n_target_frames: 333
+    front_jitter_rel: 0.00152
+    tilt_duration_s: 21.36
+    jointsets_new_px:
+      prox8: 1487.8
+      index_middle8: 885.3
+      ring_pinky8: 1430.7
+      flat17: 1016.9
+    jointset_range_new: 0.5925
+    jointset_edge_new: []
+    jointsets_old_px:
+      palm5: 672.0
+      palm_proximal9: 1487.8
+      flat17: 1016.9
+    jointset_range_old: 0.8023
+    jointset_edge_old:
+    - palm5
+    verdict_new: REJECT
+    failed_rough_new:
+    - jointset_range
+    failed_good_new:
+    - jointset_range
+    - bootstrap
+    - consistency
+    - sharpness
+    verdict_old_sets: REJECT
+  IMG_7233.MOV:
+    lens: 0.5x
+    f_px: 1143.3
+    detection_source: cache
+    bootstrap_rel_std: 0.09125
+    boot_log_std: 0.08916
+    consistency_range: 0.5911
+    sharpness: 1.00526
+    reproj_rms_rel: 0.00678
+    theta_p90_deg: 40.7
+    axis_bins: 6
+    n_target_frames: 334
+    front_jitter_rel: 0.002053
+    tilt_duration_s: 21.22
+    jointsets_new_px:
+      prox8: 1252.6
+      index_middle8: 1421.5
+      ring_pinky8: 1820.7
+      flat17: 1143.3
+    jointset_range_new: 0.5925
+    jointset_edge_new: []
+    jointsets_old_px:
+      palm5: 672.0
+      palm_proximal9: 1252.6
+      flat17: 1143.3
+    jointset_range_old: 0.5078
+    jointset_edge_old:
+    - palm5
+    verdict_new: REJECT
+    failed_rough_new:
+    - jointset_range
+    failed_good_new:
+    - jointset_range
+    - bootstrap
+    - consistency
+    - sharpness
+    verdict_old_sets: REJECT
+summary:
+  n_videos: 33
+  limit: 0.12
+  within_new: 0
+  within_old: 1
+  edge_pairs_new: 4
+  pairs_new: 132
+  edge_pairs_old: 18
+  pairs_old: 99
+  verdict_counts_new:
+    GOOD: 0
+    ROUGH: 0
+    REJECT: 33
+  verdict_counts_old_sets:
+    GOOD: 0
+    ROUGH: 1
+    REJECT: 32
+  median_range_new: 0.5576
+  median_range_old: 0.6722
+  within_share_new: 0.0
+  edge_share_new: 0.0303
+  adopted: false
+  decision: 교체해도 도움이 되지 않음
