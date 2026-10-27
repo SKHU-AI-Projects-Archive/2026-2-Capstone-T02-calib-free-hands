@@ -54,6 +54,11 @@
 - [x] Model config validation, original preset values, and registry factory tests
 - [x] Model/preset GUI controls, unavailable model state, custom default persistence, and stale-ID fallback tests
 - [x] Selected backend wiring and model/preset provenance regression tests
+- [x] Comparison session calibration and raw-pose deduplication tests
+- [x] Shared raw pose with distinct focal values produces independent canonical NPZ outputs
+- [x] Session JSON/NPZ round-trip, cancellation state, and unavailable backend validation
+- [x] Configuration row add/remove, stable IDs, duplicate selection, and reference focal UI tests
+- [x] Full pytest suite and offscreen Qt tests (69 passed)
 - [x] Official WiLoR checkpoint and detector downloaded outside protected source tree
 - [x] Official model asset setup script with network access
 - [ ] Interactive viewer/manual validation

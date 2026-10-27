@@ -48,3 +48,6 @@
 - [x] Original AnyCalib + Original WiLoR preset and persistent user default selection
 - [x] GUI model/preset controls with unavailable HandCalib and AnyHand WiLoR entries
 - [x] Selected model/preset provenance retained in `run.json`
+- [x] Explicit comparison configuration rows with add/remove, stable IDs, duplicate model selection, and reference focal input
+- [x] Comparison session manifest with shared calibration/raw-pose outputs and per-row canonical result/preview
+- [x] Original WiLoR raw-pose path preserving source focal and relative MANO geometry before focal application

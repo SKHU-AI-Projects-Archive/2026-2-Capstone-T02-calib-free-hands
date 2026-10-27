@@ -100,7 +100,7 @@ def load_configuration(path: Path | None = None) -> ApplicationConfiguration:
     if not isinstance(data["schema_version"], int) or isinstance(data["schema_version"], bool) or data["schema_version"] != 1:
         raise ConfigError(f"Unsupported application config schema_version: {data['schema_version']}")
     calibration_models = _models(
-        data["calibration_models"], "calibration_models", {"anycalib", "handcalib"}
+        data["calibration_models"], "calibration_models", {"anycalib", "handcalib", "reference_focal"}
     )
     reconstruction_models = _models(
         data["reconstruction_models"], "reconstruction_models", {"wilor", "anyhand_wilor"}

@@ -71,6 +71,29 @@ def test_preset_updates_controls_and_manual_change_does_not_mutate_definition(tm
     window.close()
 
 
+def test_configuration_rows_allow_duplicates_and_keep_one_row(tmp_path, monkeypatch, qapp):
+    main = importlib.import_module("calibfreehands.app.main")
+    monkeypatch.setattr(main, "AppSettings", lambda: AppSettings(tmp_path / "settings.ini"))
+    window = main.MainWindow()
+    first = window.configuration_rows[0]
+    first_id = first.id
+    window._add_configuration_row()
+    second = window.configuration_rows[1]
+    assert second.calibration.currentData() == first.calibration.currentData()
+    assert second.reconstruction.currentData() == first.reconstruction.currentData()
+    assert first.id == first_id and second.id != first_id
+    assert first.remove.isEnabled() and second.remove.isEnabled()
+
+    second.calibration.setCurrentIndex(second.calibration.findData("checkerboard_reference"))
+    assert second.reference_focal.isEnabled()
+    second.reference_focal.setValue(1234.5)
+    assert second.configuration().reference_focal_px == 1234.5
+    second.remove.click()
+    assert len(window.configuration_rows) == 1
+    assert not window.configuration_rows[0].remove.isEnabled()
+    window.close()
+
+
 def test_custom_default_selection_is_restored_after_restart(tmp_path, monkeypatch, qapp):
     main = importlib.import_module("calibfreehands.app.main")
     settings_path = tmp_path / "settings.ini"
@@ -95,30 +118,23 @@ def test_processing_path_uses_selected_registry_models_and_records_selection(tmp
     monkeypatch.setattr(main, "AppSettings", lambda: AppSettings(tmp_path / "settings.ini"))
     window = main.MainWindow()
     created = []
-    calibrator = SimpleNamespace(name="Selected calibration")
-    pose = SimpleNamespace(name="Selected pose", checkpoint=tmp_path / "wilor.ckpt", preflight=lambda: None)
     monkeypatch.setattr(main, "probe_media", lambda path: SimpleNamespace(width=8, height=8, frame_rate=25.0))
-    monkeypatch.setattr(main, "create_calibration_backend", lambda model_id, config: created.append(("calibration", model_id)) or calibrator)
-    monkeypatch.setattr(main, "create_pose_backend", lambda model_id, config, root: created.append(("pose", model_id)) or pose)
     monkeypatch.setattr(main, "FFmpegDecoder", lambda: SimpleNamespace(decode_rgb=lambda *args: ["frame"]))
     monkeypatch.setattr(main, "choose_output_directory", lambda *args: tmp_path)
     captured = {}
-    monkeypatch.setattr(main, "process_and_save", lambda frames, cal, rec, out, settings, *args: captured.update(
-        calibration=cal, reconstruction=rec, settings=settings
+    monkeypatch.setattr(main, "process_comparison_session", lambda frames, configurations, config, root, out, settings, *args: captured.update(
+        configurations=configurations, settings=settings
     ))
     selection = {
-        "calibration_model_id": "anycalib_original",
-        "reconstruction_model_id": "wilor_original",
+        "configurations": [main.PipelineConfiguration("stable-id", "Original", "anycalib_original", "wilor_original")],
         "preset_id": "original",
     }
 
     window._process_media(Path("input.mp4"), selection=selection)
 
-    assert created == [("calibration", "anycalib_original"), ("pose", "wilor_original")]
-    assert captured["calibration"] is calibrator
-    assert captured["reconstruction"] is pose
-    assert captured["settings"]["model_selection"]["preset_name"] == "Original"
-    assert captured["settings"]["model_selection"]["calibration_model_id"] == "anycalib_original"
+    assert captured["configurations"][0].calibration_model_id == "anycalib_original"
+    assert captured["configurations"][0].reconstruction_model_id == "wilor_original"
+    assert captured["settings"]["preset_id"] == "original"
     window.close()
 
 
@@ -131,7 +147,7 @@ def test_main_window_groups_sample_count_and_preserves_sampling_toggle(tmp_path,
     window = MainWindow()
     labels = [label.text() for label in window.findChildren(QLabel)]
     combos = window.findChildren(QComboBox)
-    processing_row = window.centralWidget().layout().itemAt(5).layout()
+    processing_row = next(item.layout() for item in (window.centralWidget().layout().itemAt(i) for i in range(window.centralWidget().layout().count())) if item and item.layout() and item.layout().count() == 5 and item.layout().itemAt(0).layout() is not None and item.layout().itemAt(0).layout().itemAt(0).widget().text() == "Collision")
     sampling = next(combo for combo in combos if [combo.itemText(i) for i in range(combo.count())] == ["Uniform", "All frames"])
     sample_count = next(combo for combo in combos if [combo.itemText(i) for i in range(combo.count())] == ["4", "8", "16", "32"])
     collision = next(combo for combo in combos if [combo.itemText(i) for i in range(combo.count())] == ["Ask", "Overwrite", "Auto rename", "Skip"])

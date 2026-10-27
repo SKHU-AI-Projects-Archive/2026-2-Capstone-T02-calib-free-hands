@@ -14,6 +14,12 @@
       "backend": "handcalib",
       "available": false,
       "unavailable_reason": "HandCalib currently has research/evaluation code but no confirmed CalibFreeHands runtime adapter."
+    },
+    {
+      "id": "checkerboard_reference",
+      "display_name": "Checkerboard Reference",
+      "backend": "reference_focal",
+      "available": true
     }
   ],
   "reconstruction_models": [
