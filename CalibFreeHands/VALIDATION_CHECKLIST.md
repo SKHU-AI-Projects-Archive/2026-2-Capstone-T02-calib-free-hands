@@ -58,7 +58,12 @@
 - [x] Shared raw pose with distinct focal values produces independent canonical NPZ outputs
 - [x] Session JSON/NPZ round-trip, cancellation state, and unavailable backend validation
 - [x] Configuration row add/remove, stable IDs, duplicate selection, and reference focal UI tests
-- [x] Full pytest suite and offscreen Qt tests (69 passed)
+- [x] Full pytest suite and offscreen Qt tests (75 passed)
+- [x] Comparison viewer construction from a saved three-result session and Overlay/Split frame retention
+- [x] Split camera initialization, preset, orbit/pan/zoom state synchronization tests
+- [x] Configuration hue, frame/hand confidence alpha, NaN fallback, and visibility tests
+- [x] Reference joint/depth/translation metrics and CSV/JSON numerical export test
+- [x] Shared media source is decoded once and its frame list is reused across configurations
 - [x] Official WiLoR checkpoint and detector downloaded outside protected source tree
 - [x] Official model asset setup script with network access
 - [ ] Interactive viewer/manual validation

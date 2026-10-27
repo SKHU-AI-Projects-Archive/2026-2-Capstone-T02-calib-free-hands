@@ -17,6 +17,7 @@ from calibfreehands.app.settings import AppSettings
 from calibfreehands.export.paths import choose_output_directory
 from calibfreehands.pipeline import JobThread, ProcessingJob
 from calibfreehands.pipeline.comparison import PipelineConfiguration, process_comparison_session
+from calibfreehands.visualization.comparison import ComparisonViewer
 from calibfreehands.visualization.viewer import ResultViewer
 import uuid
 
@@ -370,9 +371,11 @@ class MainWindow(QMainWindow):
             self._job_thread.cancel()
 
     def _open_result(self) -> None:
-        path, _ = QFileDialog.getOpenFileName(self, "Open saved result", "", "NumPy result (*.npz)")
+        path, selected_filter = QFileDialog.getOpenFileName(
+            self, "Open saved result", "", "NumPy result (*.npz);;Comparison session (session.json)"
+        )
         if path:
-            viewer = ResultViewer(Path(path))
+            viewer = ComparisonViewer(Path(path)) if selected_filter.startswith("Comparison") else ResultViewer(Path(path))
             viewer.setAttribute(Qt.WidgetAttribute.WA_DeleteOnClose)
             viewer.show()
             self._result_viewer = viewer

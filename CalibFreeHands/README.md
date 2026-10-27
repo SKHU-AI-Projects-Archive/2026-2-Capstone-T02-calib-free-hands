@@ -62,6 +62,8 @@ The packaged `src/calibfreehands/app/model_config.json` lists the model and pres
 
 Each processing run can contain explicitly added comparison configurations. Rows may reuse the same calibration or reconstruction model; the pipeline runs each unique calibration and raw pose model once, then applies the selected focal to create a separate canonical `results.npz` and `run.json` for every row. The session directory contains `session.json`, calibration metadata, reusable raw-pose NPZ files, per-configuration results, and previews. Raw pose geometry is retained before focal correction; camera translation depth is rescaled as `tz_new = tz_source * f_target / f_source`, while x/y translation is unchanged. Checkerboard Reference accepts a focal length in pixels for comparison and does not represent ground-truth 3D.
 
+Open `session.json` with the comparison viewer to switch between Overlay and Split without rerunning inference. The viewer synchronizes frame/timestamp and split-view cameras, shares one decoded source-media frame list, and colors each configuration consistently; alpha represents the stored frame/hand confidence scalar, with a neutral fallback for missing values. If a Reference configuration is recorded, per-frame and per-hand camera-space joint/depth/translation differences can be exported to CSV or JSON. These are reference differences, not ground-truth errors. Opening an individual `results.npz` continues to use the single-result viewer.
+
 To prepare the publicly downloadable original WiLoR checkpoint and detector in the repository's expected external `WiLoR/pretrained_models/` directory:
 
 ```powershell

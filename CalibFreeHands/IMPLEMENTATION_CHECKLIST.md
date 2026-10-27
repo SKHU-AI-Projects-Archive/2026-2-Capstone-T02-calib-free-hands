@@ -51,3 +51,6 @@
 - [x] Explicit comparison configuration rows with add/remove, stable IDs, duplicate model selection, and reference focal input
 - [x] Comparison session manifest with shared calibration/raw-pose outputs and per-row canonical result/preview
 - [x] Original WiLoR raw-pose path preserving source focal and relative MANO geometry before focal application
+- [x] Comparison viewer Overlay/Split modes with per-configuration visibility, stable colors, and shared frame control
+- [x] Linked split cameras, confidence alpha, reference metrics, and CSV/JSON metric export
+- [x] Comparison viewer session opening without inference rerun; source frames decoded once and shared

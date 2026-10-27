@@ -253,3 +253,22 @@ def test_main_window_restores_controls_after_cancellation(tmp_path, monkeypatch,
     assert window.start_button.isEnabled()
     assert not window.cancel.isEnabled()
     window.close()
+
+
+def test_open_saved_session_selects_comparison_viewer(tmp_path, monkeypatch, qapp):
+    main = importlib.import_module("calibfreehands.app.main")
+    monkeypatch.setattr(main, "AppSettings", lambda: AppSettings(tmp_path / "settings.ini"))
+    opened = {}
+
+    class Viewer:
+        def __init__(self, path): opened["path"] = path
+        def setAttribute(self, *_args): pass
+        def show(self): opened["shown"] = True
+
+    monkeypatch.setattr(main.QFileDialog, "getOpenFileName", lambda *args: (str(tmp_path / "session.json"), "Comparison session (session.json)"))
+    monkeypatch.setattr(main, "ComparisonViewer", Viewer)
+    window = main.MainWindow()
+    window._open_result()
+    assert opened["path"].name == "session.json"
+    assert opened["shown"]
+    window.close()

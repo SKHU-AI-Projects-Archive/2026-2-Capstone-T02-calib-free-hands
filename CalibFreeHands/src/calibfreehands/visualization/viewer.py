@@ -45,7 +45,7 @@ class LoadedResult:
     def detected(self) -> np.ndarray: return self.result.detected
 
 
-def load_npz_result(path: Path) -> LoadedResult:
+def load_npz_result(path: Path, decode_media: bool = True) -> LoadedResult:
     with np.load(path) as data:
         optional = lambda name: data[name] if name in data else None
         result = CanonicalResult(
@@ -56,7 +56,7 @@ def load_npz_result(path: Path) -> LoadedResult:
             mano_pose=optional("mano_pose"), mano_shape=optional("mano_shape"), camera_translation=optional("camera_translation"))
     media_frames = None
     run_path = Path(path).with_name("run.json")
-    if run_path.is_file():
+    if decode_media and run_path.is_file():
         try:
             input_path = json.loads(run_path.read_text(encoding="utf-8")).get("input_path")
             if input_path and Path(input_path).is_file():
