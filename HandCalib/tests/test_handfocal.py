@@ -37,6 +37,7 @@ CFG27 = yaml.safe_load((ROOT / "configs/27_main_camera_extension.yaml").read_tex
 CFG29 = yaml.safe_load((ROOT / "configs/29_wide_60cm.yaml").read_text())
 CFG30 = yaml.safe_load((ROOT / "configs/30_jointset_sets.yaml").read_text())
 CFG31 = yaml.safe_load((ROOT / "configs/31_verdict_calibration.yaml").read_text())
+CFG34 = yaml.safe_load((ROOT / "configs/34_printed_hand.yaml").read_text())
 PIPE = CFG17["pipeline"]                           # the 14 pipeline settings (identical in 16, 17 and 18)
 SYN = {"f_px": 1650, "image": [1920, 1080], "distance_mm": 350, "front_frames": 10, "tilt_frames": 40}     # 14's synthetic camera
 BASE_COND = {"name": "base", "delta_deg": 0, "noise": {"px": 1.0}, "heavy_tail": False, "tilt_range_deg": [25, 50], "arch_mm": 0,
@@ -2852,6 +2853,155 @@ class CalEndToEnd(unittest.TestCase):
             texts = "".join(q.read_text(errors="ignore") for q in list(root.rglob("*")) + [Path(y)] if q.is_file() and q.suffix in (".json", ".yaml", ".md", ".csv", ".txt"))
             for val in FAKE_TAGS.values():
                 self.assertNotIn(val, texts)
+
+
+# ====================================================================================================
+# 34: printed hand, is the f-versus-distance slope still there when the hand cannot change shape?
+# ====================================================================================================
+
+REF34 = {float(d): float(f) for d, f in CFG34["ref_f_by_distance"].items()}
+
+
+def curves34(spec):
+    """{distance: [cost curves with their minimum at the listed f]} on the shared test grid."""
+    return {float(d): [curve27(f) for f in fs] for d, fs in spec.items()}
+
+
+class PrVerdict(unittest.TestCase):
+    V = CFG34["verdict"]
+
+    def test_none_yes_hold_and_not_judged_on_synthetic_curves(self):
+        flat = hf.pr_slope(curves34({50: [1662, 1658], 60: [1655, 1651], 75: [1646, 1643]}), GRID27, 300, 42)
+        self.assertLess(abs(flat["slope"]), 0.05)                                                       # the checkerboard values themselves have slope -0.02
+        v = hf.pr_verdict(flat, REF34, self.V, {50.0: 2, 60.0: 2, 75.0: 2})
+        self.assertEqual(v["verdict"], "반비례 없음")
+        self.assertTrue(all(v["within_f_tol"].values()))
+        inv = hf.pr_slope(curves34({50: [2100, 2090], 60: [1750, 1745], 75: [1400, 1395]}), GRID27, 300, 42)
+        self.assertLess(inv["slope"], -0.95)
+        self.assertEqual(hf.pr_verdict(inv, REF34, self.V, {50.0: 2, 60.0: 2, 75.0: 2})["verdict"], "반비례 있음")
+        hold = hf.pr_slope(curves34({50: [1900, 1890], 60: [1700, 1695], 75: [1500, 1490]}), GRID27, 300, 42)
+        self.assertTrue(-0.7 < hold["slope"] < -0.3, hold["slope"])
+        self.assertEqual(hf.pr_verdict(hold, REF34, self.V, {50.0: 2, 60.0: 2, 75.0: 2})["verdict"], "판단 보류")
+        far = hf.pr_slope(curves34({50: [1990, 1980], 60: [1985, 1975], 75: [1980, 1975]}), GRID27, 300, 42)       # flat but 20 % above the reference f: the f_tol condition fails
+        self.assertEqual(hf.pr_verdict(far, REF34, self.V, {50.0: 2, 60.0: 2, 75.0: 2})["verdict"], "판단 보류")
+        self.assertEqual(hf.pr_verdict(flat, REF34, self.V, {50.0: 2, 60.0: 0, 75.0: 2})["verdict"], "판단 불가")     # a distance without an included video
+
+    def test_thresholds_come_from_the_yaml_and_the_slope_matches_pooling(self):
+        flat = hf.pr_slope(curves34({50: [1662, 1658], 60: [1655, 1651], 75: [1646, 1643]}), GRID27, 200, 42)
+        tight = dict(self.V, f_tol=0.0001)
+        self.assertEqual(hf.pr_verdict(flat, REF34, tight, None)["verdict"], "판단 보류")
+        self.assertEqual(hf.pr_verdict(flat, REF34, dict(self.V, slope_none_min=0.5), None)["verdict"], "판단 보류")
+        c = curves34({50: [1700, 1720], 60: [1650, 1660], 75: [1600, 1610]})
+        r = hf.pr_slope(c, GRID27, 50, 7)
+        for d in (50.0, 60.0, 75.0):
+            self.assertEqual(r["pooled_f"][d], hf.long_pooled_estimate(np.sum(c[d], axis=0)[None, :], GRID27)["f"])      # pooled f = the sum of the distance's cost curves
+        self.assertAlmostEqual(r["slope"], hf.ext_loglog_slope([50.0, 60.0, 75.0], [r["pooled_f"][d] for d in (50.0, 60.0, 75.0)]))
+        self.assertEqual(hf.pr_slope(c, GRID27, 50, 7)["interval_95"], r["interval_95"])                            # fixed seed: reproducible
+        self.assertEqual(CFG34["verdict"], {"slope_none_min": -0.3, "slope_yes_max": -0.7, "f_tol": 0.1})
+        self.assertEqual(CFG34["ref_f_by_distance"], {50: 1660.6, 60: 1653.7, 75: 1644.9})
+        self.assertEqual((CFG34["bootstrap"]["n"], CFG34["bootstrap"]["seed"]), (1000, 42))
+        self.assertEqual([e["file"] for e in CFG34["videos"]], ["IMG_7249.MOV", "IMG_7251.MOV", "IMG_7253.MOV", "IMG_7254.MOV", "IMG_7255.MOV", "IMG_7256.MOV"])
+
+
+class PrSynthetic(unittest.TestCase):
+    def test_exact_planar_hand_gives_a_slope_near_zero_and_f_near_the_truth(self):
+        ce = hf.pseg_wrist_cfg(PIPE)
+        curves = {}
+        grid = None
+        for dist in (500.0, 600.0, 750.0):
+            cs = []
+            for seed in (0, 1):
+                g = synth({"noise": {"px": 0.3}, "tilt_range_deg": [30, 30]}, seed=seed, scfg=dict(SYN, f_px=1660.0, distance_mm=dist, tilt_frames=120))
+                a = analyze_synth(g, methods_full=(), cfg=ce)
+                self.assertLess(abs(a["solutions"]["fixed_template"]["f"] / 1660.0 - 1.0), 0.03, (dist, seed))
+                cs.append(a["solutions"]["fixed_template"]["profile_cost"])
+                grid = np.array(a["grid"])
+            curves[dist / 10.0] = cs
+        r = hf.pr_slope(curves, grid, 200, 42)
+        self.assertLessEqual(abs(r["slope"]), 0.1)                                                     # exact joints: no distance dependence
+        self.assertLessEqual(max(abs(f / 1660.0 - 1.0) for f in r["pooled_f"].values()), 0.03)
+        self.assertGreater(r["interval_95"][0], -0.3)
+
+
+class PrTwoHands(unittest.TestCase):
+    def _det(self, n, W, H, other_conf, other_scale, share):
+        rng = np.random.default_rng(0)
+        times = np.arange(n) / 15.0
+        kp = hand_track(n, times, W, H, 1660.0, 600.0, rng)
+        boxes, kxy, kconf, cls, offs = [], [], [], [], [0]
+        for i in range(n):
+            ks = [kp[i]]
+            confs = [0.95]
+            if i < int(share * n):                                                                      # a second hand: another hand-sized picture elsewhere
+                c0 = np.nanmean(kp[i], axis=0)
+                ks.append((kp[i] - c0) * other_scale + c0 + np.array([650.0, -120.0]))
+                confs.append(other_conf)
+            for k, cf in zip(ks, confs):
+                lo, hi = k.min(0), k.max(0)
+                boxes.append([lo[0], lo[1], hi[0], hi[1]])
+                kxy.append(k)
+                kconf.append(np.full(21, cf))
+                cls.append(1)
+            offs.append(len(boxes))
+        det = {"offsets": np.array(offs), "boxes": np.array(boxes), "box_conf": np.array([float(c[0]) for c in kconf]), "cls": np.array(cls), "kxy": np.array(kxy), "kconf": np.array(kconf)}
+        return det, times, kp
+
+    def test_the_tracked_hand_is_the_big_confident_one_and_the_two_hand_share_is_reported(self):
+        W, H = 1920, 1080
+        for conf, scale in ((0.9, 0.4), (0.3, 1.4)):                                                      # a smaller hand; a bigger but unsure one (area x confidence stays lower)
+            det, times, kp = self._det(120, W, H, conf, scale, 0.4)
+            tr = hf.track(det, times, (W, H), PIPE["tracking"], front_start_s=float(PIPE["phases"]["front_skip_s"]))
+            self.assertTrue(tr["present"].all())
+            self.assertTrue(np.allclose(tr["kp"][tr["present"]], kp[tr["present"]]))                      # the first hand is followed in every frame
+            sh = hf.pr_multi_hand_share(tr["n_candidates"])
+            self.assertEqual(sh["frames_with_hand"], 120)
+            self.assertEqual(sh["frames_with_two_or_more"], 48)
+            self.assertAlmostEqual(sh["share"], 0.4)
+        self.assertEqual(hf.pr_multi_hand_share(np.zeros(5, int))["share"], 0.0)
+
+
+R27P = ROOT / "runs/27_main_camera_extension/20261026T044322Z/results.json"
+
+
+@unittest.skipUnless(R27P.exists() and (Path(CFG34["input_dir"]) / "IMG_7249.MOV").exists() and (Path(CFG34["input_dir"]) / "IMG_7220.MOV").exists(),
+                     "27's official run and the input videos IMG_7249 / IMG_7220 are needed")
+class PrEndToEnd(unittest.TestCase):
+    def test_27_reproduction_outputs_overlay_and_no_tags(self):
+        r27 = {j["video"]: j for j in json.loads(R27P.read_text())["videos"]}
+        with tempfile.TemporaryDirectory() as d:
+            d = Path(d)
+            cfg = copy.deepcopy(CFG34)
+            cfg["videos"] = [e for e in CFG34["videos"] if e["file"] == "IMG_7249.MOV"]
+            cfg["compare_videos"] = [e for e in CFG34["compare_videos"] if e["file"] == "IMG_7220.MOV"]
+            cfg["workers"], cfg["n_workers"] = 2, 2
+            cfg["output"] = {"root": str(d / "runs"), "results_yaml": str(d / "r34.yaml")}
+            cp = d / "c.yaml"
+            cp.write_text(yaml.safe_dump(cfg, allow_unicode=True))
+            root, results, ana = run.pr_main(["--config", str(cp), "--out", str(d / "o")])
+            for f in ("report.md", "summary.md", "results.json", "metadata.json", "log.txt"):
+                self.assertTrue((root / f).exists(), f)
+            self.assertTrue((root / "figures/f_vs_distance_loglog.png").exists())
+            self.assertGreater((root / "overlays/overlay_IMG_7249.mp4").stat().st_size, 10000)            # one overlay video per printed-hand video, only in the run folder
+            self.assertFalse((root / "overlays/overlay_IMG_7220.mp4").exists())
+            self.assertFalse((root / "_frames").exists())
+            by = {r["video"]: r for r in results}
+            self.assertEqual(by["IMG_7220.MOV"]["ft"]["f"], r27["IMG_7220.MOV"]["ft"]["f"])              # 27's value for the same video: the same candidate, the same detections
+            self.assertEqual(by["IMG_7249.MOV"]["kind"], "printed")
+            self.assertTrue(0.0 <= by["IMG_7249.MOV"]["multi_hand"]["share"] <= 1.0)
+            self.assertEqual(ana["verdict"]["verdict"], "판단 불가")                                       # one printed video at one distance: the other distances have no video
+            y = run.pr_results_yaml(root, cfg)
+            ytext = Path(y).read_text()
+            for val in ("1660.6", "1653.7", "1644.9"):
+                self.assertNotIn(val, ytext)                                                              # no reference-f values in the results yaml
+            self.assertIsNone(re.compile(r"(?<![\d.])1680(?:\.0+)?(?!\d)(?!\.\d)").search(ytext))
+            for line in (root / "summary.md").read_text().splitlines():
+                if line.startswith("|") and "---" not in line:
+                    self.assertEqual(line.count("|") - 1, (line.strip().count("|") - 1), line)             # every table row is a plain row
+            texts = "".join(q.read_text(errors="ignore") for q in list(root.rglob("*")) + [Path(y)] if q.is_file() and q.suffix in (".json", ".yaml", ".md", ".csv", ".txt"))
+            for val in FAKE_TAGS.values():
+                self.assertNotIn(val, texts)
+            for key in ("ISO6709", "com.apple.quicktime", '"make"', '"model"'):
+                self.assertNotIn(key, texts)
 
 
 if __name__ == "__main__":

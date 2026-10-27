@@ -4357,3 +4357,137 @@ def cal_analyse(rows: list, cfg: dict) -> dict:
 def hf_rating_usable(r: dict, v2: dict) -> bool:
     """True when rating v2 (gen_rating) is '사용 가능' for the row's tilt length, largest theta2d and bootstrap log SD."""
     return gen_rating(r.get("tilt_duration_s"), r.get("theta_max"), r.get("boot_log_std"), v2) == "사용 가능"
+
+
+# ====================================================================================================
+# pr  (experiment 34: printed hand, is the f-versus-distance slope still there when the hand cannot change shape?; new section, earlier functions are used unchanged)
+# A life-size hand picture on a flat board is a perfectly planar, rigid hand. Its videos go through the candidate (26's gen_video unchanged), with extras: the keep-mode f, the reprojection RMS of the front window
+# and of the tilt phase (percent of the hand box), the hand-shape change indicators of experiment 23 (ext_motion), and the share of frames with more than one detected hand (the printed hand is the one the
+# tracker follows: largest box area x confidence in the front phase, then IoU continuity).
+# Verdict on the slope of log f against log distance (pooled f per distance, video-level bootstrap within each distance): 반비례 없음 / 반비례 있음 / 판단 보류 / 판단 불가.
+# ====================================================================================================
+
+def pr_multi_hand_share(n_candidates) -> dict:
+    """Share of the frames with at least one detected hand that have two or more (tracked-hand selection is IoU continuity, see track)."""
+    n = np.asarray(n_candidates)
+    some = n > 0
+    return {"frames_with_hand": int(some.sum()), "frames_with_two_or_more": int((n >= 2).sum()), "share": float((n >= 2).sum() / max(some.sum(), 1))}
+
+
+def pr_phase_rms(a: dict, box) -> dict:
+    """Reprojection RMS of the front window and of the tilt phase, percent of the median hand box long side of those frames (from the diagnostics of a fixed_template analysis)."""
+    diag = a["per_method"]["fixed_template"]["diagnostics"]
+    used, rms = list(diag["frames_used"]), np.array(diag["frame_rms_px"], float)
+    role = a["role"]
+    bl = box_long(np.asarray(box, float))
+    out = {}
+    for name in ("front", "tilt"):
+        k = [j for j, i in enumerate(used) if role[i] == name]
+        out[name] = float(100.0 * np.sqrt(np.mean(rms[k] ** 2)) / np.nanmedian(bl[[used[j] for j in k]])) if k else None
+    return out
+
+
+def pr_overlay(frames: list, dets: dict, tr: dict, path, max_side: int = 960, fps: float = 15.0) -> None:
+    """Keypoint overlay video of a run (tracked hand: green points, wrist red, box blue; other detected hands: yellow). Written only into the run folder."""
+    path = Path(path)
+    path.parent.mkdir(parents=True, exist_ok=True)
+    vw = None
+    for i, r in enumerate(frames):
+        img = cv2.imread(r["png"], cv2.IMREAD_COLOR)
+        h, w = img.shape[:2]
+        for k in candidates(dets, i):
+            for x, y in dets["kxy"][k]:
+                cv2.circle(img, (int(round(x)), int(round(y))), 4, (0, 255, 255), -1)
+        if tr["present"][i]:
+            for j, (x, y) in enumerate(tr["kp"][i]):
+                cv2.circle(img, (int(round(x)), int(round(y))), 6, (0, 0, 255) if j == 0 else (0, 255, 0), -1)
+            b = tr["box"][i]
+            cv2.rectangle(img, (int(b[0]), int(b[1])), (int(b[2]), int(b[3])), (255, 0, 0), 2)
+        s = float(max_side) / max(h, w)
+        img = cv2.resize(img, (int(w * s), int(h * s)))
+        cv2.putText(img, f"t {r['time_s']:.1f}s  hands {len(candidates(dets, i))}", (10, 28), cv2.FONT_HERSHEY_SIMPLEX, 0.8, (255, 255, 255), 2)
+        if vw is None:
+            vw = cv2.VideoWriter(str(path), cv2.VideoWriter_fourcc(*"mp4v"), fps, (img.shape[1], img.shape[0]))
+        vw.write(img)
+    if vw is not None:
+        vw.release()
+
+
+def pr_video(args) -> dict:
+    """One video of experiment 34 (printed hand, or a real-hand video of 27 for the comparison): 26's gen_video unchanged, plus distance_cm and kind, the multi-hand share, the keep-mode f and cost curve,
+    the phase RMS and the hand-shape change indicators. args = (entry, prep, npz, pcfg, c); c needs candidate, exclusion, detector_settings, guide; c['overlay_dir'] (optional) gets the overlay video."""
+    entry, prep, npz, pcfg, c = args[:5]
+    os.environ.setdefault("OMP_NUM_THREADS", "1")
+    cv2.setNumThreads(1)
+    ses = c.get("session") or {}
+    e2 = {"person_id": ses.get("person_id"), "phone": ses.get("phone", "main"), "lens": ses.get("lens", "1x"), "glove": bool(ses.get("glove", False)), "group": "G9", "ref_f": 1680.0, **entry}
+    res = gen_video((e2, prep, npz, pcfg, {**c, "trajectory": {}}))
+    res.update({"distance_cm": float(entry["distance_cm"]), "kind": entry.get("kind", "printed")})
+    cand = c["candidate"]
+    dset = c["detector_settings"][cand["detector"]]
+    pc = copy.deepcopy(pcfg)
+    pc["tracking"]["conf_min"] = float(dset["conf_min"])
+    frames = prep["frames"]
+    times = np.array([r["time_s"] for r in frames])
+    W, H = prep["size"]
+    dets = load_detections(Path(npz))
+    tr = track(dets, times, (W, H), pc["tracking"], front_start_s=float(pc["phases"]["front_skip_s"]))
+    res["multi_hand"] = pr_multi_hand_share(tr["n_candidates"])
+    if c.get("overlay_dir"):
+        pr_overlay(frames, dets, tr, Path(c["overlay_dir"]) / f"overlay_{Path(entry['file']).stem}.mp4")
+    if "ft" not in res:
+        return res
+    seed = int(pc["experiment"]["seed"])
+    cfg_ex = pseg_wrist_cfg(pc) if cand["wrist_mode"] == "exclude" else pc
+    kp, mask, present, box = tr["kp"], tr["mask"], tr["present"], tr["box"]
+    a2 = analyze(kp, mask, present, box, tr["cls"], times, (W, H), cfg_ex, tilt_start=None, methods_full=("fixed_template",), seed=seed, n_boot=2)
+    res["phase_rms_pct"] = pr_phase_rms(a2, box)
+    res["dynamics"] = ext_motion(kp, mask, present, box, times, a2, cfg_ex, (W, H))
+    a_keep = analyze(kp, mask, present, box, tr["cls"], times, (W, H), pc, tilt_start=None, methods_full=(), seed=seed)
+    sk = a_keep["solutions"]["fixed_template"]
+    res["keep"] = {"f": float(sk["f"]), "at_grid_edge": bool(sk["at_grid_edge"]), "curve": [float(x) for x in sk["profile_cost"]]}
+    res["box_long_median_px"] = float(np.nanmedian(box_long(box)[present]))
+    return res
+
+
+def pr_slope(curves_by_distance: dict, grid, n: int, seed: int) -> dict:
+    """Slope of log f against log distance from the pooled f of every distance (cost curves of the included videos summed) and its video-level bootstrap interval: the videos of each distance are drawn
+    with replacement n times (fixed seed), the pooled f and the slope recomputed; draws with a pooled f on the grid edge are skipped. curves_by_distance = {distance_cm: [cost curves]}."""
+    ds = sorted(curves_by_distance)
+    est = {d: long_pooled_estimate(curves_by_distance[d], grid) for d in ds}
+    out = {"distances": ds, "pooled_f": {d: est[d]["f"] for d in ds}, "pooled_edge": {d: est[d]["at_grid_edge"] for d in ds}}
+    out["slope"] = None if any(est[d]["at_grid_edge"] for d in ds) else ext_loglog_slope(ds, [est[d]["f"] for d in ds])
+    rng = np.random.default_rng(int(seed))
+    sl, skipped = [], 0
+    for _ in range(int(n)):
+        fs = []
+        for d in ds:
+            cs = np.asarray(curves_by_distance[d], float)
+            e = long_pooled_estimate(cs[rng.integers(0, len(cs), len(cs))], grid)
+            fs.append(None if e["at_grid_edge"] else e["f"])
+        s_ = None if any(f is None for f in fs) else ext_loglog_slope(ds, fs)
+        if s_ is None:
+            skipped += 1
+            continue
+        sl.append(s_)
+    out["interval_95"] = None if len(sl) < 10 else [float(np.quantile(sl, 0.025)), float(np.quantile(sl, 0.975))]
+    out["n_boot_used"], out["n_boot_skipped"] = int(len(sl)), int(skipped)
+    return out
+
+
+def pr_verdict(slope: dict, ref_by_distance: dict, vcfg: dict, n_videos: dict | None = None) -> dict:
+    """Verdict from the slope result of pr_slope: 반비례 없음 when the whole interval lies above slope_none_min and every pooled f is within f_tol of the reference f of its distance; 반비례 있음 when the
+    whole interval lies below slope_yes_max; otherwise 판단 보류; 판단 불가 when a distance has no included video or the slope has no value / interval."""
+    out = {"slope": slope.get("slope"), "interval_95": slope.get("interval_95")}
+    if n_videos is not None and any(int(n) < 1 for n in n_videos.values()):
+        return {**out, "verdict": "판단 불가", "reason": "영상이 없는 거리가 있음"}
+    if slope.get("slope") is None or slope.get("interval_95") is None:
+        return {**out, "verdict": "판단 불가", "reason": "기울기나 구간이 값 없음(격자 경계)"}
+    lo, hi = slope["interval_95"]
+    within = {d: bool(abs(slope["pooled_f"][d] / float(ref_by_distance[d]) - 1.0) <= float(vcfg["f_tol"])) for d in slope["distances"]}
+    out["within_f_tol"] = within
+    if lo > float(vcfg["slope_none_min"]) and all(within.values()):
+        return {**out, "verdict": "반비례 없음"}
+    if hi < float(vcfg["slope_yes_max"]):
+        return {**out, "verdict": "반비례 있음"}
+    return {**out, "verdict": "판단 보류"}

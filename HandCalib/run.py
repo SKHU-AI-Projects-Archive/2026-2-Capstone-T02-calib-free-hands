@@ -14,6 +14,7 @@
     python HandCalib/run.py wide-60cm --config HandCalib/configs/29_wide_60cm.yaml [--videos A,B] [results-yaml --run DIR]
     python HandCalib/run.py jointset-sets --config HandCalib/configs/30_jointset_sets.yaml [--videos A,B] [results-yaml --run DIR]
     python HandCalib/run.py verdict-calibration --config HandCalib/configs/31_verdict_calibration.yaml [results-yaml --run DIR]
+    python HandCalib/run.py printed-hand --config HandCalib/configs/34_printed_hand.yaml [--videos A,B] [results-yaml --run DIR]
 
 Consolidated from run_hand_focal.py (14, process_video only), run_detector_swap.py (16, the per-detector processing that 17 calls),
 run_protocol_rerun.py and run_frame_filter_diag.py (17),
@@ -4737,10 +4738,279 @@ def cal_results_yaml(run_dir: Path, cfg: dict):
 
 
 # ====================================================================================================
+# pr  (experiment 34: printed hand, is the f-versus-distance slope still there when the hand cannot change shape?; new section)
+#
+#     python HandCalib/run.py printed-hand --config HandCalib/configs/34_printed_hand.yaml [--videos A.MOV,B.MOV] [--out DIR]
+#     python HandCalib/run.py printed-hand --config ... results-yaml --run runs/34_printed_hand/<UTC>
+# The printed-hand videos are detected anew (mediapipe, CPU); the real-hand videos of 27 (compare_videos) are read from their stored detections and only used for the comparison.
+# ====================================================================================================
+
+PR_NOTE = ("프린트한 손(평면, 모양이 변하지 않음)을 같은 카메라·같은 거리 50 / 60 / 75 cm에서 찍은 영상으로, 손 모양 변화가 없어도 추정 f가 거리에 반비례하는지 본 실험이다. "
+           "후보 설정(mediapipe_hands + 손목 제외 + fixed_template)과 판정 규칙은 실행 전에 고정했고 바꾸지 않았다. 기준 f와의 비교는 summary.md에만 있다.")
+
+
+def pr_main(argv=None):
+    ap = argparse.ArgumentParser()
+    ap.add_argument("--config", default=str(hf.PROJECT_ROOT / "configs/34_printed_hand.yaml"))
+    sub = ap.add_subparsers(dest="cmd")
+    ry = sub.add_parser("results-yaml")
+    ry.add_argument("--run", required=True)
+    ap.add_argument("--videos", default=None, help="comma list of file names narrowing the yaml entries (printed and real)")
+    ap.add_argument("--out", default=None)
+    a = ap.parse_args(argv)
+    text = Path(a.config).read_text()
+    cfg = yaml.safe_load(text)
+    if a.cmd == "results-yaml":
+        print(pr_results_yaml(hf.resolve(a.run), cfg))
+        return None
+    printed = [{**e, "kind": "printed"} for e in cfg["videos"]]
+    real = [{**e, "kind": "real"} for e in cfg.get("compare_videos") or []]
+    if a.videos:
+        keep = set(a.videos.split(","))
+        printed, real = [e for e in printed if e["file"] in keep], [e for e in real if e["file"] in keep]
+    entries = printed + real
+    missing = [e["file"] for e in entries if not (Path(cfg["input_dir"]).expanduser() / e["file"]).exists()]
+    if missing:
+        raise SystemExit(f"영상이 없습니다: {missing}")
+    run_root = Path(a.out).expanduser() if a.out else hf.resolve(cfg["output"]["root"]) / utc_stamp()
+    run_root.mkdir(parents=True)
+    (run_root / "figures").mkdir()
+    log = Log(run_root / "log.txt")
+    log(f"34 프린트 손: 프린트 영상 {len(printed)}개, 비교용 실제 손 영상 {len(real)}개 → {run_root}")
+    t0 = time.time()
+    tmp_root = run_root / "_frames"
+    tmp_root.mkdir()
+    base = {k: cfg[k] for k in ("candidate", "exclusion", "detector_settings", "guide", "session") if k in cfg}
+    dset = cfg["detector_settings"][cfg["candidate"]["detector"]]
+    for k in ("OMP_NUM_THREADS", "OPENBLAS_NUM_THREADS", "MKL_NUM_THREADS"):
+        os.environ[k] = "1"
+    import multiprocessing as mp
+    from concurrent.futures import ProcessPoolExecutor
+    try:
+        with ProcessPoolExecutor(max_workers=int(cfg["workers"]), mp_context=mp.get_context("spawn")) as ex:
+            preps = list(ex.map(hf.fresp_prepare, [(e["file"], cfg["input_dir"], cfg["pipeline"], {}, str(tmp_root)) for e in entries]))
+            by_file = dict(zip([e["file"] for e in entries], preps))
+            npz = {}
+            if printed:
+                found = hf.fresp_detect_many([((e["file"], "orig"), by_file[e["file"]]["frames"]) for e in printed], dset, run_root / "detection_cache", int(cfg["n_workers"]), log)
+                npz.update({e["file"]: found[(e["file"], "orig")] for e in printed})
+            for e in real:
+                npz[e["file"]] = hf.jset_find_detection(by_file[e["file"]]["frames"], dset, cfg["detections"]["search_dirs"], None, cfg["candidate"]["detector"])["npz"]
+            jobs = [(e, by_file[e["file"]], npz[e["file"]], cfg["pipeline"], {**base, **({"overlay_dir": str(run_root / "overlays")} if e["kind"] == "printed" else {})}) for e in entries]
+            results = list(ex.map(hf.pr_video, jobs))
+    finally:
+        shutil.rmtree(tmp_root, ignore_errors=True)
+    v2 = cfg["rating_v2"]
+    for r in results:
+        tag = f"{r['kind']} {r['distance_cm']:g} cm"
+        if r["excluded"]:
+            log(f"  {r['video']} ({tag}): 제외 — {'; '.join(r['excluded'])} (손 검출 실패 {100 * (1 - r['detect_rate']):.1f}%)")
+        elif "ft" in r:
+            r["rating"] = hf.gen_rating(r["motion"]["tilt_duration_s"], r["motion"]["theta_max_deg"], r["ft"]["boot_log_std"], v2)
+            log(f"  {r['video']} ({tag}): f {format(r['ft']['f'], '.1f') + ' px' if not r['ft']['at_grid_edge'] else '값 없음'} (keep {r['keep']['f']:.1f}), 로그 SD {long_fmt(r['ft']['boot_log_std'], 4)}, "
+                f"θ2d 최댓값 {r['motion']['theta_max_deg']:.0f}°, 두 손 이상 프레임 {100 * r['multi_hand']['share']:.1f}%, RMS 정면/기울기 {long_fmt(r['phase_rms_pct']['front'], 3)}/{long_fmt(r['phase_rms_pct']['tilt'], 3)}%")
+        else:
+            log(f"  {r['video']}: 분석 실패 ({r.get('failed')})")
+    ok = [r for r in results if "ft" in r]
+    grid = np.array(ok[0]["curve"]["grid"]) if ok else np.array([])
+    if any(not np.allclose(np.array(r["curve"]["grid"]), grid) for r in ok):
+        raise SystemExit("비용 곡선의 f 격자가 영상마다 다릅니다")
+    bn, bs = int(cfg["bootstrap"]["n"]), int(cfg["bootstrap"]["seed"])
+    ref = {float(d): float(f) for d, f in cfg["ref_f_by_distance"].items()}
+    ana = {}
+    for kind in ("printed", "real"):
+        rs = [r for r in ok if r["kind"] == kind]
+        if not rs:
+            continue
+        ds = sorted({r["distance_cm"] for r in rs})
+        cur = {d: [r["curve"]["cost"] for r in rs if r["distance_cm"] == d] for d in ds}
+        curk = {d: [r["keep"]["curve"] for r in rs if r["distance_cm"] == d] for d in ds}
+        sl, slk = hf.pr_slope(cur, grid, bn, bs), hf.pr_slope(curk, grid, bn, bs)
+        per = {d: {**hf.ext_pooled(cur[d], grid, {"bootstrap_n": bn, "bootstrap_seed": bs}), "n_total": sum(1 for r in results if r["kind"] == kind and r["distance_cm"] == d)} for d in ds}
+        ana[kind] = {"slope": sl, "slope_keep": slk, "per_distance": per}
+    if "printed" in ana:
+        nv = {d: p["n_videos"] for d, p in ana["printed"]["per_distance"].items()}
+        for d in ref:
+            nv.setdefault(d, 0)
+        verdict = hf.pr_verdict(ana["printed"]["slope"], ref, cfg["verdict"], nv)
+    else:
+        verdict = {"verdict": "판단 불가", "reason": "프린트 영상이 없음"}
+    verdict["ref_f_by_distance"] = ref
+    ana["checkerboard_slope"] = hf.ext_loglog_slope(sorted(ref), [ref[d] for d in sorted(ref)])
+    ana["verdict"] = verdict
+    log(f"  판정: {verdict['verdict']}" + (f" (기울기 {verdict['slope']:+.3f}, 구간 {verdict['interval_95'][0]:+.3f} ~ {verdict['interval_95'][1]:+.3f})" if verdict.get("slope") is not None and verdict.get("interval_95") else f" ({verdict.get('reason')})"))
+    pr_figures(run_root / "figures", ana, ref, cfg)
+    pr_report(run_root / "report.md", results, ana, cfg)
+    pr_summary(run_root / "summary.md", results, ana, cfg)
+    (run_root / "results.json").write_text(json.dumps(hf.jsonable({"videos": [{k: v for k, v in r.items() if k != "traj"} for r in results], "analysis": ana}), ensure_ascii=False, indent=1))
+    meta = hf.provenance_build(text, a.config, {"code_31": cfg["code_31"], "videos": [e["file"] for e in entries], "elapsed_s": time.time() - t0})
+    (run_root / "metadata.json").write_text(json.dumps(hf.jsonable(meta), ensure_ascii=False, indent=1))
+    log(f"완료 {time.time() - t0:.0f} s → {run_root}")
+    log.close()
+    return run_root, results, ana
+
+
+def pr_figures(out: Path, ana: dict, ref: dict, cfg: dict):
+    plt = _plt()
+    fig, ax = plt.subplots(figsize=(6.2, 4.6))
+    ds = sorted(ref)
+    series = [("체커보드 (같은 날 거리 실험)", ds, [ref[d] for d in ds], "#555", "s")]
+    for kind, label, col in (("real", "실제 손 (실험 27)", "#c47a00"), ("printed", "프린트 손", "#2a6fbb")):
+        if kind in ana:
+            pf = ana[kind]["slope"]["pooled_f"]
+            series.append((label, sorted(pf), [pf[d] for d in sorted(pf)], col, "o"))
+    for label, xs_, fs, col, mk in series:
+        ax.plot(xs_, fs, mk + "-", color=col, label=label)
+    anchor = (60.0, ana["printed"]["slope"]["pooled_f"][60.0]) if "printed" in ana and 60.0 in ana["printed"]["slope"]["pooled_f"] else (60.0, ref.get(60.0, 1650.0))
+    xs = np.array([min(ds) * 0.9, max(ds) * 1.1])
+    ax.plot(xs, anchor[1] * (xs / anchor[0]) ** 0.0, ":", color="#999", label="기울기 0")
+    ax.plot(xs, anchor[1] * (xs / anchor[0]) ** -1.0, "--", color="#999", label="기울기 -1")
+    ax.set_xscale("log")
+    ax.set_yscale("log")
+    ax.set_xticks(ds)
+    ax.set_xticklabels([f"{d:g}" for d in ds])
+    ax.set_xlabel("손(판)-카메라 거리 (cm)")
+    ax.set_ylabel("합동 f (px)")
+    ax.legend(fontsize=8)
+    ax.grid(alpha=0.3, which="both")
+    fig.tight_layout()
+    fig.savefig(out / "f_vs_distance_loglog.png", dpi=110)
+    plt.close(fig)
+
+
+def pr_report(path: Path, results: list, ana: dict, cfg: dict):
+    ok = [r for r in results if "ft" in r]
+    L = ["# 실험 34: 프린트 손", "", PR_NOTE, "",
+         f"후보: {cfg['candidate']['detector']} + wrist_mode {cfg['candidate']['wrist_mode']} + {cfg['candidate']['estimator']} (실험 27과 같음). 프린트 손 영상과 비교용 실제 손 영상(실험 27의 오른손 G6, 저장된 검출) 모두 같은 처리이다.", "",
+         "## 1. 영상 목록, 검출 상태, 제외", "", f"제외 규칙(27과 같음): 유효한 정면 창 없음, 가장자리 접촉 프레임 > {100 * cfg['exclusion']['edge_rate_max']:.0f}%, 손 검출 실패 프레임 > {100 * cfg['exclusion']['detect_fail_max']:.0f}%.", "",
+         "| 종류 | 영상 | 거리(cm) | 길이(초) | 검출 실패율 | 가장자리 접촉 | 두 손 이상 프레임 | 포함 | 이유 |", "|---|---|---|---|---|---|---|---|---|"]
+    for r in results:
+        L.append(f"| {'프린트' if r['kind'] == 'printed' else '실제 손'} | {r['video']} | {r['distance_cm']:g} | {r['duration_s']:.1f} | {100 * (1 - r['detect_rate']):.1f}% | {100 * r['edge_rate']:.1f}% | "
+                 f"{100 * r['multi_hand']['share']:.1f}% | {'제외' if r['excluded'] else ('포함' if 'ft' in r else '분석 실패')} | {'; '.join(r['excluded']) or r.get('failed', '-')} |")
+    L += ["", "## 2. 영상별 촬영 지표와 진단값", "",
+          "| 영상 | 거리(cm) | 기울기 구간(초) | θ2d 중앙값 / 최댓값(°) | 손 박스 긴 변(px) | 날카로움 | 부트스트랩 로그 SD | 재투영 RMS 정면 / 기울기 (박스 대비 %) | 마디 길이 비 변화 중앙값(%) | 손가락 벌어짐 변화 중앙값(°) |", "|---|---|---|---|---|---|---|---|---|---|"]
+    for r in ok:
+        m, d, rm = r["motion"], r["dynamics"], r["phase_rms_pct"]
+        L.append(f"| {r['video']} | {r['distance_cm']:g} | {m['tilt_duration_s']:.1f} | {long_fmt(m['theta_median_deg'], 1)} / {long_fmt(m['theta_max_deg'], 1)} | {r['box_long_median_px']:.0f} | {r['ft']['sharpness']:.4f} | {long_fmt(r['ft']['boot_log_std'], 4)} | "
+                 f"{long_fmt(rm['front'], 3)} / {long_fmt(rm['tilt'], 3)} | {long_fmt(d['bone_ratio_pct']['median'], 2)} | {long_fmt(d['spread_change_deg']['median'], 2)} |")
+    L += ["", "## 3. 초점거리와 거리별 합동 (값만)", "", "| 영상 | 거리(cm) | f 제외(후보) (px) | f keep (px) | f 판정(추정기) |", "|---|---|---|---|---|"]
+    for r in ok:
+        f = r["ft"]
+        L.append(f"| {r['video']} | {r['distance_cm']:g} | {'값 없음 (' + str(f['side']) + ')' if f['at_grid_edge'] else format(f['f'], '.1f')} | {'값 없음' if r['keep']['at_grid_edge'] else format(r['keep']['f'], '.1f')} | {f['verdict']} |")
+    for kind, name in (("printed", "프린트 손"), ("real", "실제 손")):
+        if kind not in ana:
+            continue
+        L += ["", f"{name}의 거리별 합동 f (영상별 fixed_template 비용 곡선의 합, 영상 단위 부트스트랩 95% 구간):", "", "| 거리(cm) | 영상 | 합동 f (px) | 95% 구간 (px) |", "|---|---|---|---|"]
+        for d, p in ana[kind]["per_distance"].items():
+            L.append(f"| {float(d):g} | {p['n_videos']} / {p['n_total']} | {format(p['pooled_f'], '.1f') if 'pooled_f' in p else '-'} | {'-' if 'interval_95' not in p else format(p['interval_95'][0], '.0f') + '–' + format(p['interval_95'][1], '.0f')} |")
+        sl = ana[kind]["slope"]
+        L.append("")
+        L.append(f"- log f와 log 거리의 기울기: {long_fmt(sl['slope'], 3)}" + ("" if sl["interval_95"] is None else f" (영상 단위 부트스트랩 95% 구간 {sl['interval_95'][0]:+.3f} ~ {sl['interval_95'][1]:+.3f}, 사용 {sl['n_boot_used']}회)") + f"; keep 모드 {long_fmt(ana[kind]['slope_keep']['slope'], 3)}")
+    L += ["", "## 4. 한계", "", "- 이 보고서는 값만 적는다. 기준 f와의 비교, 판정, 실험 27·체커보드와의 비교는 summary.md에 있다.",
+          "- 프린트 손 영상은 거리마다 2개씩이라 부트스트랩 구간이 거칠다(거리 안에서 영상 2개를 복원 추출하면 조합이 3가지뿐이다).", ""]
+    path.write_text("\n".join(L) + "\n")
+
+
+def pr_summary(path: Path, results: list, ana: dict, cfg: dict):
+    pct = lambda x: "-" if x is None else f"{100 * x:+.1f}%"      # noqa: E731
+    vd, vcfg = ana["verdict"], cfg["verdict"]
+    ref = vd["ref_f_by_distance"]
+    line = f"- **판정: {vd['verdict']}**"
+    if vd.get("slope") is not None and vd.get("interval_95"):
+        line += f" — 기울기 {vd['slope']:+.3f}, 95% 구간 {vd['interval_95'][0]:+.3f} ~ {vd['interval_95'][1]:+.3f} (반비례 없음: 구간 전체가 {vcfg['slope_none_min']:g}보다 위이고 세 거리의 합동 f가 모두 기준 f의 ±{100 * float(vcfg['f_tol']):.0f}% 안; 반비례 있음: 구간 전체가 {vcfg['slope_yes_max']:g}보다 아래)"
+        if vd.get("within_f_tol"):
+            line += "; 합동 f가 기준 f의 ±10% 안: " + ", ".join(f"{d:g} cm {'예' if w else '아니오'}" for d, w in vd["within_f_tol"].items())
+    elif vd.get("reason"):
+        line += f" — {vd['reason']}"
+    L = ["# 실험 34 summary", "", f"**{PR_NOTE}**", "", "## 판정", "", line, ""]
+    pr = ana.get("printed")
+    L += ["## 1. 프린트 손: 거리별 합동 f와 기준 f", "", "| 거리(cm) | 영상 | 합동 f (px) | 95% 구간 (px) | 같은 거리 기준 f | 기준 f 대비 | 1680 대비 |", "|---|---|---|---|---|---|---|"]
+    if pr:
+        for d, p in pr["per_distance"].items():
+            pf = p.get("pooled_f")
+            L.append(f"| {float(d):g} | {p['n_videos']} / {p['n_total']} | {format(pf, '.1f') if pf else '-'} | {'-' if 'interval_95' not in p else format(p['interval_95'][0], '.0f') + '–' + format(p['interval_95'][1], '.0f')} | {ref[float(d)]:.1f} | "
+                     f"{pct(None if not pf else pf / ref[float(d)] - 1.0)} | {pct(None if not pf else pf / 1680.0 - 1.0)} |")
+        sl = pr["slope"]
+        L += ["", f"- 기울기(log f 대 log 거리): {long_fmt(sl['slope'], 3)}" + ("" if sl["interval_95"] is None else f", 95% 구간 {sl['interval_95'][0]:+.3f} ~ {sl['interval_95'][1]:+.3f} (영상 단위 부트스트랩 {sl['n_boot_used']}회, 시드 {cfg['bootstrap']['seed']})"),
+              f"- keep 모드 기울기: {long_fmt(pr['slope_keep']['slope'], 3)}" + ("" if pr["slope_keep"]["interval_95"] is None else f" (구간 {pr['slope_keep']['interval_95'][0]:+.3f} ~ {pr['slope_keep']['interval_95'][1]:+.3f})")]
+    L += ["", "## 2. 프린트 손, 실제 손(실험 27), 체커보드의 비교 (기록용)", "", "| 거리(cm) | 프린트 손 합동 f | 실제 손 합동 f (27) | 체커보드 f |", "|---|---|---|---|"]
+    for d in sorted(ref):
+        a_ = pr["slope"]["pooled_f"].get(d) if pr else None
+        b_ = ana["real"]["slope"]["pooled_f"].get(d) if "real" in ana else None
+        L.append(f"| {d:g} | {format(a_, '.1f') if a_ else '-'} | {format(b_, '.1f') if b_ else '-'} | {ref[d]:.1f} |")
+    L += ["", "| 대상 | 기울기 (제외 모드) | 95% 구간 | keep 모드 기울기 |", "|---|---|---|---|"]
+    for kind, name in (("printed", "프린트 손"), ("real", "실제 손 (실험 27 영상)")):
+        if kind in ana:
+            sl = ana[kind]["slope"]
+            L.append(f"| {name} | {long_fmt(sl['slope'], 3)} | {'-' if sl['interval_95'] is None else format(sl['interval_95'][0], '+.3f') + ' ~ ' + format(sl['interval_95'][1], '+.3f')} | {long_fmt(ana[kind]['slope_keep']['slope'], 3)} |")
+    L.append(f"| 체커보드 | {long_fmt(ana['checkerboard_slope'], 3)} | - | - |")
+    L += ["", "![거리 대 합동 f](figures/f_vs_distance_loglog.png)", "", "## 3. 재투영 RMS와 손 모양 변화: 프린트 손 대 실제 손 (같은 거리, 영상 중앙값, 기록용)", "",
+          "| 거리(cm) | 종류 | 영상 | 재투영 RMS 정면 (%) | 재투영 RMS 기울기 (%) | 마디 길이 비 변화 (%) | 손가락 벌어짐 변화 (°) | θ2d 최댓값 (°) | 손 박스 긴 변 (px) |", "|---|---|---|---|---|---|---|---|---|"]
+    ok = [r for r in results if "ft" in r]
+    med = lambda vals: float(np.median([v for v in vals if v is not None])) if any(v is not None for v in vals) else None      # noqa: E731
+    for d in sorted(ref):
+        for kind, name in (("printed", "프린트"), ("real", "실제 손")):
+            rs = [r for r in ok if r["kind"] == kind and r["distance_cm"] == d]
+            if not rs:
+                continue
+            L.append(f"| {d:g} | {name} | {len(rs)} | {long_fmt(med([r['phase_rms_pct']['front'] for r in rs]), 3)} | {long_fmt(med([r['phase_rms_pct']['tilt'] for r in rs]), 3)} | {long_fmt(med([r['dynamics']['bone_ratio_pct']['median'] for r in rs]), 2)} | "
+                     f"{long_fmt(med([r['dynamics']['spread_change_deg']['median'] for r in rs]), 2)} | {long_fmt(med([r['motion']['theta_max_deg'] for r in rs]), 1)} | {long_fmt(med([r['box_long_median_px'] for r in rs]), 0)} |")
+    for kind, name in (("printed", "프린트 손"), ("real", "실제 손")):
+        rs = [r for r in ok if r["kind"] == kind]
+        if rs:
+            L.append(f"| 전체 | {name} | {len(rs)} | {long_fmt(med([r['phase_rms_pct']['front'] for r in rs]), 3)} | {long_fmt(med([r['phase_rms_pct']['tilt'] for r in rs]), 3)} | {long_fmt(med([r['dynamics']['bone_ratio_pct']['median'] for r in rs]), 2)} | "
+                     f"{long_fmt(med([r['dynamics']['spread_change_deg']['median'] for r in rs]), 2)} | {long_fmt(med([r['motion']['theta_max_deg'] for r in rs]), 1)} | {long_fmt(med([r['box_long_median_px'] for r in rs]), 0)} |")
+    L += ["", "프린트 손이 실제로 더 평평하고 단단하게 측정되면 재투영 RMS와 마디 길이 비·손가락 벌어짐 변화가 실제 손보다 작아야 한다.", "",
+          "## 4. 영상별 f와 오차", "", "| 영상 | 종류 | 거리(cm) | f (px) | 같은 거리 기준 f 대비 | 1680 대비 | 로그 SD | 날카로움 | 두 손 이상 프레임 |", "|---|---|---|---|---|---|---|---|---|"]
+    for r in results:
+        if "ft" not in r:
+            L.append(f"| {r['video']} | {r['kind']} | {r['distance_cm']:g} | 제외: {'; '.join(r['excluded']) or r.get('failed', '-')} | - | - | - | - | {100 * r['multi_hand']['share']:.1f}% |")
+            continue
+        f = r["ft"]
+        L.append(f"| {r['video']} | {'프린트' if r['kind'] == 'printed' else '실제 손'} | {r['distance_cm']:g} | {'값 없음' if f['at_grid_edge'] else format(f['f'], '.1f')} | "
+                 f"{pct(None if f['at_grid_edge'] else f['f'] / ref[r['distance_cm']] - 1.0)} | {pct(None if f['at_grid_edge'] else f['f'] / 1680.0 - 1.0)} | {long_fmt(f['boot_log_std'], 4)} | {f['sharpness']:.4f} | {100 * r['multi_hand']['share']:.1f}% |")
+    L += ["", "## 한계", "", "- 프린트 손 영상은 거리마다 2개씩이라 기울기의 구간이 거칠고, 판정은 이 세션·이 카메라에 대한 것이다.",
+          "- 기준 f는 같은 날 체커보드 거리 실험의 값(사용자 제공)이며 보정 파일은 서버에 없다.",
+          "- 프린트 손이 \"더 평평하고 단단하다\"는 것은 위 3절의 지표로 확인한 범위에서만 말할 수 있다. 판에 인쇄한 사진은 손의 3차원 구조가 없는 대신, 실제 손 사진의 검출기 반응과 판 표면의 반사 같은 새 요인이 있다.", ""]
+    path.write_text("\n".join(L) + "\n")
+
+
+def pr_results_yaml(run_dir: Path, cfg: dict):
+    r = json.loads((run_dir / "results.json").read_text())
+    m = json.loads((run_dir / "metadata.json").read_text())
+    try:
+        run_name = str(run_dir.resolve().relative_to(hf.PROJECT_ROOT))
+    except ValueError:
+        run_name = str(run_dir)
+    rd = lambda x, n=4: None if x is None or (isinstance(x, float) and not np.isfinite(x)) else round(x, n)      # noqa: E731
+    out = {"experiment": "34_printed_hand", "run": run_name, "code_commit": m["git"]["commit"][:7], "git_dirty_at_run": m["git"]["git_dirty"], "note": PR_NOTE, "candidate": cfg["candidate"],
+           "verdict_rules": cfg["verdict"], "videos": {}}
+    for v in r["videos"]:
+        e = {"kind": v["kind"], "distance_cm": v["distance_cm"], "duration_s": rd(v["duration_s"], 2), "detect_fail_rate": rd(1 - v["detect_rate"]), "edge_rate": rd(v["edge_rate"]), "excluded": v["excluded"] or None,
+             "multi_hand_share": rd(v["multi_hand"]["share"])}
+        if "ft" in v:
+            f, mo = v["ft"], v["motion"]
+            e.update({"f_px": None if f["at_grid_edge"] else round(f["f"], 1), "status": "value" if not f["at_grid_edge"] else f"값 없음 ({f['side']})", "f_keep_px": None if v["keep"]["at_grid_edge"] else round(v["keep"]["f"], 1),
+                      "sharpness": rd(f["sharpness"], 5), "boot_log_std": rd(f["boot_log_std"], 5), "tilt_duration_s": rd(mo["tilt_duration_s"], 2), "theta_median_deg": rd(mo["theta_median_deg"], 1),
+                      "theta_max_deg": rd(mo["theta_max_deg"], 1), "box_long_median_px": rd(v["box_long_median_px"], 1), "reproj_rms_front_pct": rd(v["phase_rms_pct"]["front"], 4),
+                      "reproj_rms_tilt_pct": rd(v["phase_rms_pct"]["tilt"], 4), "bone_ratio_pct_median": rd(v["dynamics"]["bone_ratio_pct"]["median"], 3),
+                      "spread_change_deg_median": rd(v["dynamics"]["spread_change_deg"]["median"], 3), "rating_v2": v.get("rating")})
+        out["videos"][v["video"]] = e
+    a = r["analysis"]
+    out["by_kind"] = {k: {"pooled_f_px": {f"{float(d):g}": rd(f, 1) for d, f in a[k]["slope"]["pooled_f"].items()}, "slope": rd(a[k]["slope"]["slope"]), "slope_interval_95": None if a[k]["slope"]["interval_95"] is None else [round(x, 4) for x in a[k]["slope"]["interval_95"]],
+                           "slope_keep": rd(a[k]["slope_keep"]["slope"])} for k in ("printed", "real") if k in a}
+    vd = a["verdict"]
+    out["verdict"] = {"verdict": vd["verdict"], "reason": vd.get("reason"), "slope": rd(vd.get("slope")), "interval_95": None if not vd.get("interval_95") else [round(x, 4) for x in vd["interval_95"]]}
+    p = hf.resolve(cfg["output"]["results_yaml"])
+    p.write_text(yaml.safe_dump(hf.jsonable(out), allow_unicode=True, sort_keys=False))
+    return p
+
+
+# ====================================================================================================
 # command line
 # ====================================================================================================
 
-COMMANDS = {"protocol": protocol_main, "frame-filter": ff_main, "same-session": session_main, "overlay": overlay_main, "phase-segmentation": pseg_main, "guide-revision": grev_main, "f-response": fresp_main, "error-factors": ferr_main, "long-video-check": long_main, "generalization": gen_main, "main-camera-extension": ext_main, "wide-60cm": wide_main, "jointset-sets": jset_main, "verdict-calibration": cal_main}
+COMMANDS = {"protocol": protocol_main, "frame-filter": ff_main, "same-session": session_main, "overlay": overlay_main, "phase-segmentation": pseg_main, "guide-revision": grev_main, "f-response": fresp_main, "error-factors": ferr_main, "long-video-check": long_main, "generalization": gen_main, "main-camera-extension": ext_main, "wide-60cm": wide_main, "jointset-sets": jset_main, "verdict-calibration": cal_main, "printed-hand": pr_main}
 
 
 def main(argv=None):
