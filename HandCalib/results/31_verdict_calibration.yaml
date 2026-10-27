@@ -1,0 +1,26 @@
+experiment: 31_verdict_calibration
+run: runs/31_verdict_calibration/20261027T013343Z
+code_commit: ad88024
+git_dirty_at_run: false
+note: 검증된 진단값(부트스트랩 SD, 일관성 범위, 날카로움 등)이 실제 f 오차를 예측하는지 보고, 예측하는 것이 있으면 판정 문턱을 다시
+  정하는 실험이다. 기준 f(ref_f)는 사용자 제공 값이며 판정 규칙과 문턱 선택 절차는 실행 전에 고정했고 바꾸지 않았다. 오차에 대한 근거는
+  summary.md에만 있다.
+rules:
+  accurate_tol: 0.15
+  calibration_lens: 1x
+  rho_min: 0.4
+  loo_ba_min: 0.7
+  bootstrap_n: 1000
+  bootstrap_seed: 42
+n_calibration_videos: 24
+decision: 보정 가능
+useful_predictors:
+- theta_p90
+- theta_max
+proposal:
+  theta_p90:
+    accurate_if: above
+    threshold: 49.284579
+  theta_max:
+    accurate_if: above
+    threshold: 55.803814
