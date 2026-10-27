@@ -4636,10 +4636,13 @@ def mk_track_reacquire(dets_xy: list, ref_index: int, ref_xy: np.ndarray, box_lo
     accepted position OR of its predicted position (the reference position moved by the homography of the last accepted frame); the limit is move_frac x hand box x min(frames since the last accepted frame, gap_cap),
     the same around both. Hungarian assignment on the smaller of the two distances. A frame is kept when at least min_markers_ratio of the used markers are matched and their homography reference -> frame
     (RANSAC, ransac_frac x hand box, used markers only) keeps at least min_inlier_ratio of them; detections without a marker are ignored (their number per frame is returned), non-used markers are followed only.
-    Returns {xy (n, m, 2) NaN where missing, ok (n,), reason (n,), ignored (n,) int (-1 where the frame was not kept)}."""
+    Returns {xy (n, m, 2) NaN where missing, ok (n,), reason (n,), ignored (n,) int (-1 where the frame was not kept), pred (n, m, 2) the predicted positions used for a kept frame (NaN elsewhere),
+    ignored_xy (list of the ignored detections of every kept frame)}."""
     from scipy.optimize import linear_sum_assignment
     n, m = len(dets_xy), len(ref_xy)
     xy = np.full((n, m, 2), np.nan)
+    pred_all = np.full((n, m, 2), np.nan)
+    ignored_xy = [np.zeros((0, 2))] * n
     ok = np.zeros(n, bool)
     reason = np.array([""] * n, dtype=object)
     ignored = np.full(n, -1, int)
@@ -4678,9 +4681,12 @@ def mk_track_reacquire(dets_xy: list, ref_index: int, ref_xy: np.ndarray, box_lo
             cur[r] = d[c]
             drop = ru[~chk["inliers"]]
             cur[drop] = np.nan
+            taken = np.zeros(len(d), bool)
+            taken[c[~np.isin(r, drop)]] = True
             xy[i], ok[i], ignored[i] = cur, True, int(len(d) - np.isfinite(cur[:, 0]).sum())
+            pred_all[i], ignored_xy[i] = pred, d[~taken]
             last, last_i, H_last = np.where(np.isnan(cur), last, cur), i, chk["H"]
-    return {"xy": xy, "ok": ok, "reason": reason, "ignored": ignored}
+    return {"xy": xy, "ok": ok, "reason": reason, "ignored": ignored, "pred": pred_all, "ignored_xy": ignored_xy}
 
 
 def mk_normalise(P: np.ndarray, scale: float):
@@ -4976,4 +4982,81 @@ def mk_video(args) -> dict:
     pmk = np.array([r["p_mk"] for r in rows]).reshape(-1, 2)
     pmp = np.array([r["p_mp"] for r in rows]).reshape(-1, 2)
     res["diag"] = {"frames": rows, "k": mk_perspective_k(pmp, pmk), "gap_median_pct": float(np.nanmedian([r["gap_pct"] for r in rows])) if rows else None}
+    return res
+
+
+def mk_pairing_stats(proc: dict) -> dict:
+    """Pairing quality of a marker run: the distance (px) of the tracked used markers from their predicted positions, for the kept frames with and without ignored blobs (median, 95th percentile, number of
+    marker positions), and the share of the frames with ignored blobs in which an ignored blob lay within 2 % of the hand box of a tracked used marker (a risk of a wrong pairing)."""
+    trk, used, bl = proc["track"], proc["used_idx"], proc["box_long"]
+    d_with, d_without, near, n_with = [], [], 0, 0
+    for i in np.flatnonzero(trk["ok"]):
+        pr, xy = trk["pred"][i][used], trk["xy"][i][used]
+        m = np.isfinite(xy[:, 0]) & np.isfinite(pr[:, 0])
+        if not m.any():
+            continue
+        d = np.linalg.norm(xy[m] - pr[m], axis=1)
+        if trk["ignored"][i] > 0:
+            d_with.extend(d.tolist())
+            n_with += 1
+            ig = trk["ignored_xy"][i]
+            if len(ig) and (np.linalg.norm(ig[:, None, :] - xy[m][None, :, :], axis=-1).min() <= 0.02 * bl[i]):
+                near += 1
+        else:
+            d_without.extend(d.tolist())
+    stat = lambda v: {"n_points": int(len(v)), "median_px": float(np.median(v)) if len(v) else None, "p95_px": float(np.percentile(v, 95)) if len(v) else None}      # noqa: E731
+    return {"with_ignored": {**stat(d_with), "frames": int(n_with)}, "without_ignored": {**stat(d_without), "frames": int(np.sum(trk["ok"] & (trk["ignored"] == 0)))},
+            "near_2pct_frames": int(near), "near_2pct_share": float(near / n_with) if n_with else None}
+
+
+def mk_draw_pairing(prep: dict, proc: dict, path, seed: int = 42, n_panels: int = 10) -> int:
+    """One picture of the pairing: 10 random (fixed seed) kept frames that have ignored blobs, each cropped to the hand: the 8 used markers (green, numbered), the ignored blobs (orange crosses), the predicted
+    positions of the used markers (cyan rings). Returns the number of panels. Run folder only."""
+    trk, used = proc["track"], proc["used_idx"]
+    cand = [i for i in np.flatnonzero(trk["ok"]) if trk["ignored"][i] > 0 and np.isfinite(trk["pred"][i][used][:, 0]).any()]
+    if not cand:
+        return 0
+    pick = sorted(np.random.default_rng(int(seed)).choice(cand, size=min(n_panels, len(cand)), replace=False).tolist())
+    panels = []
+    for i in pick:
+        img = cv2.imread(prep["frames"][i]["png"], cv2.IMREAD_COLOR)
+        x0, y0, x1, y1 = proc["regions"][i]
+        for x, y in trk["ignored_xy"][i]:
+            cv2.drawMarker(img, (int(round(x - 0.5)), int(round(y - 0.5))), (0, 140, 255), cv2.MARKER_TILTED_CROSS, 22, 3)
+        for j in used:
+            px, py = trk["pred"][i][j]
+            if np.isfinite(px):
+                cv2.circle(img, (int(round(px - 0.5)), int(round(py - 0.5))), 13, (255, 255, 0), 2)
+        for j in used:
+            x, y = trk["xy"][i][j]
+            if np.isfinite(x):
+                cv2.circle(img, (int(round(x - 0.5)), int(round(y - 0.5))), 5, (0, 255, 0), -1)
+                cv2.putText(img, f"{proc['names'][j]}", (int(x) + 8, int(y) - 8), cv2.FONT_HERSHEY_SIMPLEX, 0.9, (0, 255, 0), 2)
+        crop = img[y0:y1, x0:x1]
+        s = 420.0 / max(crop.shape[:2])
+        crop = cv2.resize(crop, (int(crop.shape[1] * s), int(crop.shape[0] * s)))
+        cv2.putText(crop, f"t {prep['frames'][i]['time_s']:.1f}s ignored {int(trk['ignored'][i])}", (6, 22), cv2.FONT_HERSHEY_SIMPLEX, 0.6, (255, 255, 255), 2)
+        panels.append(crop)
+    h = max(p.shape[0] for p in panels)
+    w = max(p.shape[1] for p in panels)
+    canvas = np.zeros((2 * h, 5 * w, 3), np.uint8)
+    for k, pn in enumerate(panels):
+        r, c = divmod(k, 5)
+        canvas[r * h:r * h + pn.shape[0], c * w:c * w + pn.shape[1]] = pn
+    Path(path).parent.mkdir(parents=True, exist_ok=True)
+    cv2.imwrite(str(path), canvas)
+    return len(panels)
+
+
+def mk_pairing_video(args) -> dict:
+    """Pairing-quality check of one video (no analysis, no f): statistics and the 10-panel picture. args = (entry, prep, npz, pcfg, c); c['out_dir'] gets the picture."""
+    entry, prep, npz, pcfg, c = args[:5]
+    proc = mk_process(prep, npz, pcfg, c)
+    res = {"video": entry["file"], "distance_cm": float(entry["distance_cm"]), "n_frames": proc["n_frames"], "hand_frames": proc["hand_frames"]}
+    if "failed" in proc:
+        return {**res, "failed": proc["failed"]}
+    st = mk_pairing_stats(proc)
+    res.update({"kept_frames": int(proc["track"]["ok"].sum()), **st})
+    if c.get("out_dir"):
+        res["panels"] = mk_draw_pairing(prep, proc, Path(c["out_dir"]) / f"pairing_{Path(entry['file']).stem}.png")
     return res

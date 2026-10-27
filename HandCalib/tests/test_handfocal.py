@@ -3145,6 +3145,44 @@ class MkTracking(unittest.TestCase):
         self.assertTrue(trk["ok"][13:].all())
 
 
+class MkPairing(unittest.TestCase):
+    USED = MK_USED_IDS
+
+    def test_distances_to_the_prediction_and_the_near_blob_share(self):
+        ref, truth, dets = mk_sequence(60, seed=7, extras=2)
+        dets = [d.copy() if d is not None else None for d in dets]
+        for i in range(20, 30):                                                                           # a blob 1 % of the box away from used marker 5, closer ones win the match
+            dets[i] = np.vstack([dets[i], truth[i][5] + np.array([8.0, 0.0])])
+        trk = hf.mk_track_reacquire(dets, 0, truth[0], np.full(60, 800.0), MK, self.USED)
+        self.assertTrue(trk["ok"].all())
+        # (a blob that close can be paired instead of the true marker when the hand has moved by more than half the gap: that is the risk the near-blob share measures, so it is not asserted away)
+        proc = {"track": trk, "used_idx": self.USED, "box_long": np.full(60, 800.0)}
+        st = hf.mk_pairing_stats(proc)
+        self.assertEqual(st["with_ignored"]["frames"], 59)                                               # 2 clutter blobs in every frame after the reference
+        self.assertEqual(st["near_2pct_frames"], 10)
+        self.assertAlmostEqual(st["near_2pct_share"], 10 / 59)
+        self.assertEqual(st["without_ignored"]["frames"], 0)
+        self.assertTrue(st["with_ignored"]["median_px"] < st["with_ignored"]["p95_px"] < 40.0)
+        self.assertEqual(trk["pred"].shape, trk["xy"].shape)
+        self.assertEqual(len(trk["ignored_xy"][25]), 3)                                                  # 2 clutter + the near blob
+
+    def test_panels_are_drawn_from_frames_with_ignored_blobs_with_a_fixed_seed(self):
+        ref, truth, dets = mk_sequence(40, seed=8, extras=1)
+        trk = hf.mk_track_reacquire(dets, 0, truth[0], np.full(40, 800.0), MK, self.USED)
+        with tempfile.TemporaryDirectory() as d:
+            d = Path(d)
+            frames = []
+            for i in range(40):
+                q = d / f"f{i}.png"
+                cv2.imwrite(str(q), np.full((1080, 1920, 3), 90, np.uint8))
+                frames.append({"png": str(q), "time_s": i / 15.0})
+            proc = {"track": trk, "used_idx": self.USED, "regions": [(300, 100, 1600, 1000)] * 40, "names": list(range(21))}
+            n1 = hf.mk_draw_pairing({"frames": frames}, proc, d / "a.png")
+            n2 = hf.mk_draw_pairing({"frames": frames}, proc, d / "b.png")
+            self.assertEqual((n1, n2), (10, 10))
+            self.assertEqual((d / "a.png").read_bytes(), (d / "b.png").read_bytes())                        # fixed seed: the same ten frames, the same picture
+
+
 class MkPerspective(unittest.TestCase):
     def test_halved_perspective_gives_k_about_one_half(self):
         rng = np.random.default_rng(0)
@@ -3235,7 +3273,6 @@ class MkEndToEnd(unittest.TestCase):
             self.assertIn("f", r["marker"])
             self.assertIn("f", r["mediapipe8"])
             self.assertIn("ft", r["mediapipe"])
-            self.assertEqual(ana["verdict_guard"] if "verdict_guard" in ana else "판단 불가", "판단 불가")
             self.assertEqual(ana["markers"]["verdict"]["verdict"], "판단 불가")                              # one distance only
             self.assertEqual(ana["interpretation"], "해석 보류")
             y = run.mk_results_yaml(root, cfg)

@@ -5011,6 +5011,7 @@ def pr_results_yaml(run_dir: Path, cfg: dict):
 # mk  (experiment 35: hand markers, does the slope survive when the points are measured by image processing?; new section)
 #
 #     python HandCalib/run.py hand-markers --config HandCalib/configs/35b_hand_markers_subset.yaml [--videos A.MOV,B.MOV] [--out DIR] precheck
+#     python HandCalib/run.py hand-markers --config ... [--videos A.MOV,B.MOV] [--out DIR] pairing          (pairing-quality check, no f)
 #     python HandCalib/run.py hand-markers --config ... [--videos A.MOV,B.MOV] [--out DIR]
 #     python HandCalib/run.py hand-markers --config ... results-yaml --run runs/35_hand_markers/<UTC>
 # precheck: marker statistics, per-marker detection rates and the reference-frame picture of every video, no analysis; the official run needs every distance to have a video that passes the rule.
@@ -5051,6 +5052,7 @@ def mk_main(argv=None):
     ap.add_argument("--config", default=str(hf.PROJECT_ROOT / "configs/35b_hand_markers_subset.yaml"))
     sub = ap.add_subparsers(dest="cmd")
     sub.add_parser("precheck")
+    sub.add_parser("pairing")
     ry = sub.add_parser("results-yaml")
     ry.add_argument("--run", required=True)
     ap.add_argument("--videos", default=None, help="comma list of file names narrowing the yaml entries")
@@ -5061,6 +5063,8 @@ def mk_main(argv=None):
     if a.cmd == "results-yaml":
         print(mk_results_yaml(hf.resolve(a.run), cfg))
         return None
+    if a.cmd == "pairing":
+        return mk_pairing_main(a, cfg)
     pre = a.cmd == "precheck"
     entries = list(cfg["videos"])
     if a.videos:
@@ -5154,6 +5158,56 @@ def mk_main(argv=None):
     log(f"완료 {time.time() - t0:.0f} s → {run_root}")
     log.close()
     return run_root, results, ana
+
+
+def mk_pairing_main(a, cfg: dict):
+    """hand-markers pairing: the pairing-quality check of every video (statistics and the 10-panel pictures); computes no f, slope or error."""
+    entries = list(cfg["videos"])
+    if a.videos:
+        entries = [e for e in entries if e["file"] in a.videos.split(",")]
+    run_root = Path(a.out).expanduser() if a.out else hf.resolve(cfg["output"]["root"]) / (utc_stamp() + "_pairing")
+    run_root.mkdir(parents=True)
+    (run_root / "figures").mkdir()
+    log = Log(run_root / "log.txt")
+    log(f"35 짝짓기 품질 확인: 영상 {len(entries)}개 → {run_root}")
+    t0 = time.time()
+    tmp_root = run_root / "_frames"
+    tmp_root.mkdir()
+    base = {k: cfg[k] for k in ("candidate", "exclusion", "detector_settings", "guide", "session", "markers", "marker_exclusion", "precheck") if k in cfg}
+    dset = cfg["detector_settings"][cfg["candidate"]["detector"]]
+    for k in ("OMP_NUM_THREADS", "OPENBLAS_NUM_THREADS", "MKL_NUM_THREADS"):
+        os.environ[k] = "1"
+    import multiprocessing as mp
+    from concurrent.futures import ProcessPoolExecutor
+    try:
+        with ProcessPoolExecutor(max_workers=int(cfg["workers"]), mp_context=mp.get_context("spawn")) as ex:
+            preps = list(ex.map(hf.fresp_prepare, [(e["file"], cfg["input_dir"], cfg["pipeline"], {}, str(tmp_root)) for e in entries]))
+            found = hf.fresp_detect_many([((e["file"], "orig"), p["frames"]) for e, p in zip(entries, preps)], dset, run_root / "detection_cache", int(cfg["n_workers"]), log)
+            cj = {**base, "out_dir": str(run_root / "figures")}
+            results = list(ex.map(hf.mk_pairing_video, [(e, p, found[(e["file"], "orig")], cfg["pipeline"], cj) for e, p in zip(entries, preps)]))
+    finally:
+        shutil.rmtree(tmp_root, ignore_errors=True)
+    L = ["# 실험 35 짝짓기 품질 확인", "", "f, 기울기, 오차는 계산하지 않았다. 쓰인 8개 점이 예측 위치에서 떨어진 거리(px)와, 무시한 덩어리가 쓰인 점에서 손 박스의 2% 안에 있었던 프레임 비율을 본다. "
+         "예측 위치 = 기준 프레임의 점을 마지막으로 통과한 프레임의 호모그래피로 옮긴 위치. 그림: figures/pairing_IMG_xxxx.png (프레임 10장, 시드 42; 초록 = 쓰인 8개 점(번호), 주황 x = 무시한 덩어리, 하늘색 원 = 예측 위치).", "",
+         "## 쓰인 8개 점과 예측 위치의 거리 (px)", "", "| 영상 | 거리(cm) | 구분 | 프레임 | 점 위치 수 | 중앙값 (px) | 95번째 백분위수 (px) |", "|---|---|---|---|---|---|---|"]
+    for r in results:
+        if "failed" in r:
+            L.append(f"| {r['video']} | {r['distance_cm']:g} | - | - | - | - | {r['failed']} |")
+            continue
+        for key, name in (("with_ignored", "무시한 덩어리가 있는 프레임"), ("without_ignored", "무시한 덩어리가 없는 프레임")):
+            x = r[key]
+            L.append(f"| {r['video']} | {r['distance_cm']:g} | {name} | {x['frames']} | {x['n_points']} | {long_fmt(x['median_px'], 2)} | {long_fmt(x['p95_px'], 2)} |")
+    L += ["", "## 무시한 덩어리가 쓰인 점에서 손 박스의 2% 안에 있었던 프레임 (잘못 짝지어질 위험)", "", "| 영상 | 거리(cm) | 유지된 프레임 | 무시한 덩어리가 있는 프레임 | 그중 2% 안에 있었던 프레임 | 비율 | 그림 칸 수 |", "|---|---|---|---|---|---|---|"]
+    for r in results:
+        if "failed" in r:
+            continue
+        L.append(f"| {r['video']} | {r['distance_cm']:g} | {r['kept_frames']} | {r['with_ignored']['frames']} | {r['near_2pct_frames']} | {'-' if r['near_2pct_share'] is None else format(100 * r['near_2pct_share'], '.1f') + '%'} | {r.get('panels', 0)} |")
+    L += [""]
+    (run_root / "pairing.md").write_text("\n".join(L) + "\n")
+    (run_root / "pairing.json").write_text(json.dumps(hf.jsonable({"videos": results}), ensure_ascii=False, indent=1))
+    log(f"완료 {time.time() - t0:.0f} s → {run_root}")
+    log.close()
+    return run_root, results
 
 
 def mk_precheck_report(path: Path, results: list, infos: list, ok_by_d: dict, proceed: bool, cfg: dict):
