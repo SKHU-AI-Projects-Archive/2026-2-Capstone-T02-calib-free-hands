@@ -1,6 +1,6 @@
 # CalibFreeHands
 
-CalibFreeHands is a Windows-oriented research desktop prototype for inspecting camera-space hand reconstruction results. The current checked-in slice provides the PySide6 shell, media queue input, and a small canonical result contract; model inference is not silently faked.
+CalibFreeHands is a Windows-oriented research desktop prototype for estimating and inspecting camera-space hand reconstruction results. The PySide6 application processes queued media with the configured calibration and reconstruction backends; model inference is not silently faked.
 
 ## Setup
 
@@ -36,7 +36,9 @@ Run:
 .\scripts\run_windows.ps1
 ```
 
-The application currently accepts supported media files directly from a selected folder (without recursive traversal) or from the file picker. It does not modify the input media.
+Use **Open...** to add supported media files or media directly inside one selected folder. Folder discovery is non-recursive. Queue items can be removed or cleared without deleting source files, and **Start Processing** runs the queue sequentially. A single successful media item opens its result viewer automatically; multi-item runs finish without opening a viewer for every item.
+
+The effective output folder is shown in the main window, defaults to `Documents/CalibFreeHands`, and can be changed with **Browse...**. The selected folder persists between launches. Existing output formats and comparison-session structure remain in use; `.cfh` result bundles and the multi-result picker belong to a later milestone.
 
 FFmpeg can be supplied by a Windows system installation (`ffmpeg`/`ffprobe` on `PATH`) or by the optional project-local `imageio-ffmpeg` runtime. When only the bundled `ffmpeg` executable is available, decoding works with sequential timestamps; `ffprobe` is preferred for reliable source timestamps.
 

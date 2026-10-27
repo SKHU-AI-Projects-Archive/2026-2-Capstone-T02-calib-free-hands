@@ -59,6 +59,11 @@
 - [x] Session JSON/NPZ round-trip, cancellation state, and unavailable backend validation
 - [x] Configuration row add/remove, stable IDs, duplicate selection, and reference focal UI tests
 - [x] Full pytest suite and offscreen Qt tests (86 passed)
+- [x] Milestone A queue workflow regressions: Open menu, file/folder input, path identity, remove/clear, serial processing, partial failure, cancellation, control lock, output persistence, automatic Viewer routing, and focal visibility
+- [x] Full pytest and offscreen Qt suite after Milestone A (102 passed)
+- [x] Output-base write preflight stops the batch as `Failed`; per-media failure details remain on the queue item
+- [x] Python compileall for `src` and `tests`
+- [x] Bounded real queue smoke: 1-second local video, cached Original AnyCalib + WiLoR/MANO, output written, `Completed`, GUI-thread ResultViewer construction
 - [x] Regression tests for focal progress bounds, cancellation during preview, and single-configuration output compatibility
 - [x] Multi-row preset loading, persistent configuration snapshots, malformed snapshot fallback, and saved-result routing independent of file dialog filter
 - [x] Comparison viewer construction from a saved three-result session and Overlay/Split frame retention

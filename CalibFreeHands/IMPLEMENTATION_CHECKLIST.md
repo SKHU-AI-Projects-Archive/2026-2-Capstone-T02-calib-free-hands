@@ -9,6 +9,11 @@
 - [x] Backend-independent frame processing service and canonical result integration
 - [x] Preview encoder boundary with optional audio mapping
 - [x] Queue start/cancel UI bound to QThread lifecycle
+- [x] One Open menu for files/folder, canonical queue paths, duplicate prevention, Remove/Clear, and visible item states
+- [x] Sequential whole-queue processing with per-media failure handling, cancellation propagation, and immutable run settings
+- [x] Batch output writability preflight and per-item error details in queue tooltips
+- [x] Persistent resolved output directory with folder picker and single-media automatic result viewer
+- [x] Checkerboard Reference focal input hidden for other calibration backends
 - [x] Sampling and focal aggregation contract
 - [x] Canonical result model with NaN/mask representation
 - [x] NPZ and `run.json` persistence

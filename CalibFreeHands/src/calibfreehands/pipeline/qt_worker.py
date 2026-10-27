@@ -8,6 +8,7 @@ from .worker import JobState, JobUpdate, ProcessingJob
 class JobThread(QThread):
     update = Signal(object)
     failed = Signal(str)
+    item_state = Signal(int, str, str)
 
     def __init__(self, job: ProcessingJob) -> None:
         super().__init__()
@@ -16,6 +17,7 @@ class JobThread(QThread):
     def run(self) -> None:
         try:
             self.job._report = self.update.emit
+            self.job._item_report = self.item_state.emit
             for event in self.job.run():
                 self.update.emit(event)
         except InterruptedError:

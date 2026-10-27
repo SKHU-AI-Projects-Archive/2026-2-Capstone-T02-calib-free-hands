@@ -29,9 +29,11 @@ class ProcessingJob:
     def __init__(self, input_name: str, steps: int = 1, operation: Callable[["ProcessingJob"], object] | None = None) -> None:
         self.input_name, self.steps = input_name, max(1, steps)
         self.operation = operation
+        self.result = None
         self.state = JobState.WAITING
         self._cancelled = False
         self._report = None
+        self._item_report = None
 
     def cancel(self) -> None:
         self._cancelled = True
@@ -44,15 +46,19 @@ class ProcessingJob:
         if self._report is not None:
             self._report(JobUpdate(self.state, current / max(1, total), current, total, elapsed_s or 0.0, stage))
 
+    def report_item(self, index: int, state: str, detail: str = "") -> None:
+        if self._item_report is not None:
+            self._item_report(index, state, detail)
+
     def run(self):
         started = time.monotonic()
         self.state = JobState.PROCESSING
         if self.operation is not None:
             yield JobUpdate(self.state, 0.0, 0, 1, time.monotonic() - started)
             if len(inspect.signature(self.operation).parameters) == 0:
-                self.operation()
+                self.result = self.operation()
             else:
-                self.operation(self)
+                self.result = self.operation(self)
             self.state = JobState.COMPLETED
             yield JobUpdate(self.state, 1.0, 1, 1, time.monotonic() - started)
             return

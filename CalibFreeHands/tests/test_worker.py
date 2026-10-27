@@ -21,6 +21,15 @@ def test_job_operation_runs_once():
     assert updates[-1].state is JobState.COMPLETED
 
 
+def test_job_operation_result_is_available_after_run():
+    result = object()
+    job = ProcessingJob("sample.mp4", operation=lambda: result)
+
+    list(job.run())
+
+    assert job.result is result
+
+
 def test_qt_job_emits_failed_state(qapp):
     thread = JobThread(ProcessingJob("sample.mp4", operation=lambda: (_ for _ in ()).throw(RuntimeError("boom"))))
     updates = []

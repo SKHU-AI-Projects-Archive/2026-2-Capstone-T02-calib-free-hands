@@ -299,7 +299,9 @@ def test_main_window_restores_controls_after_job_failure(tmp_path, monkeypatch, 
     main = importlib.import_module("calibfreehands.app.main")
     monkeypatch.setattr(main, "AppSettings", lambda: AppSettings(tmp_path / "settings.ini"))
     window = main.MainWindow()
-    window.queue.addItem(QListWidgetItem("sample.mp4"))
+    source = tmp_path / "sample.mp4"
+    source.touch()
+    window._add_paths([source])
     window.queue.setCurrentRow(0)
     monkeypatch.setattr(window, "_process_media", lambda path, job, selection: (_ for _ in ()).throw(RuntimeError("failed")))
 
@@ -307,7 +309,9 @@ def test_main_window_restores_controls_after_job_failure(tmp_path, monkeypatch, 
     thread = window._job_thread
     assert thread.wait(2000)
     qapp.processEvents()
-    assert thread.job.state.value == "Failed"
+    assert thread.job.state.value == "Completed"
+    assert window.queue.item(0).data(window.STATE_ROLE) == "Failed"
+    assert window.progress.text().startswith("Completed with errors")
     assert window.start_button.isEnabled()
     assert not window.cancel.isEnabled()
     window.close()
