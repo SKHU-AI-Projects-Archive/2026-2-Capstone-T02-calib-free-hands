@@ -12,6 +12,7 @@
     python HandCalib/run.py generalization --config HandCalib/configs/26_generalization.yaml [--videos A,B] [results-yaml --run DIR]
     python HandCalib/run.py main-camera-extension --config HandCalib/configs/27_main_camera_extension.yaml [--videos A,B] [results-yaml --run DIR]
     python HandCalib/run.py wide-60cm --config HandCalib/configs/29_wide_60cm.yaml [--videos A,B] [results-yaml --run DIR]
+    python HandCalib/run.py jointset-sets --config HandCalib/configs/30_jointset_sets.yaml [--videos A,B] [results-yaml --run DIR]
 
 Consolidated from run_hand_focal.py (14, process_video only), run_detector_swap.py (16, the per-detector processing that 17 calls),
 run_protocol_rerun.py and run_frame_filter_diag.py (17),
@@ -4418,10 +4419,188 @@ def wide_results_yaml(run_dir: Path, cfg: dict):
 
 
 # ====================================================================================================
+# jset  (experiment 30: uncertainty joint sets that fit the wrist-excluded candidate; new section)
+#
+#     python HandCalib/run.py jointset-sets --config HandCalib/configs/30_jointset_sets.yaml [--videos A.MOV,B.MOV] [--out DIR]
+#     python HandCalib/run.py jointset-sets --config ... results-yaml --run runs/30_jointset_sets/<UTC>
+# Every video of 22-29 is analysed from its stored detections (no detector run). f and the other diagnostics are the candidate's; only the joint-set check of the verdict is replaced.
+# ====================================================================================================
+
+JSET_NOTE = ("후보 방법(mediapipe_hands + 손목 제외 + fixed_template)과 f는 그대로 두고, 판정의 jointset_range가 쓰는 불확실성 관절 집합만 손목 제외에 맞게 바꿨을 때 판정이 어떻게 달라지는지 본 실험이다. "
+             "집합과 채택 규칙은 실행 전에 고정했고 바꾸지 않았다.")
+
+
+def jset_main(argv=None):
+    ap = argparse.ArgumentParser()
+    ap.add_argument("--config", default=str(hf.PROJECT_ROOT / "configs/30_jointset_sets.yaml"))
+    sub = ap.add_subparsers(dest="cmd")
+    ry = sub.add_parser("results-yaml")
+    ry.add_argument("--run", required=True)
+    ap.add_argument("--videos", default=None, help="comma list of file names narrowing the yaml entries")
+    ap.add_argument("--out", default=None)
+    a = ap.parse_args(argv)
+    text = Path(a.config).read_text()
+    cfg = yaml.safe_load(text)
+    if a.cmd == "results-yaml":
+        print(jset_results_yaml(hf.resolve(a.run), cfg))
+        return None
+    entries = list(cfg["videos"])
+    if a.videos:
+        entries = [e for e in entries if e["file"] in a.videos.split(",")]
+    missing = [e["file"] for e in entries if not (Path(cfg["input_dir"]).expanduser() / e["file"]).exists()]
+    if missing:
+        raise SystemExit(f"영상이 없습니다: {missing}")
+    run_root = Path(a.out).expanduser() if a.out else hf.resolve(cfg["output"]["root"]) / utc_stamp()
+    run_root.mkdir(parents=True)
+    (run_root / "figures").mkdir()
+    log = Log(run_root / "log.txt")
+    log(f"30 불확실성 집합 교체: 영상 {len(entries)}개 → {run_root}")
+    t0 = time.time()
+    tmp_root = run_root / "_frames"
+    tmp_root.mkdir()
+    cjob = {k: cfg[k] for k in ("candidate", "detector_settings", "jointset") if k in cfg}
+    dset = cfg["detector_settings"][cfg["candidate"]["detector"]]
+    for k in ("OMP_NUM_THREADS", "OPENBLAS_NUM_THREADS", "MKL_NUM_THREADS"):
+        os.environ[k] = "1"
+    import multiprocessing as mp
+    from concurrent.futures import ProcessPoolExecutor
+    try:
+        with ProcessPoolExecutor(max_workers=int(cfg["workers"]), mp_context=mp.get_context("spawn")) as ex:
+            preps = list(ex.map(hf.fresp_prepare, [(e["file"], cfg["input_dir"], cfg["pipeline"], {}, str(tmp_root)) for e in entries]))
+            found = [hf.jset_find_detection(p["frames"], dset, cfg["detections"]["search_dirs"], e.get("source17"), cfg["candidate"]["detector"]) for e, p in zip(entries, preps)]
+            results = list(ex.map(hf.jset_video, [(e, p, f["npz"], cfg["pipeline"], cjob) for e, p, f in zip(entries, preps, found)]))
+    finally:
+        shutil.rmtree(tmp_root, ignore_errors=True)
+    for r, f in zip(results, found):
+        r["detection_source"] = f["source"]
+        if "f" in r:
+            log(f"  {r['video']}: f {r['f']:.1f} px, jointset_range 새 {r['jointset_range_new']:.3f} / 옛 {r['jointset_range_old']:.3f}, 판정 새 {r['verdict_new']} / 옛 집합 {r['verdict_old_sets']}")
+        else:
+            log(f"  {r['video']}: 분석 실패 ({r.get('failed')})")
+    ok = [r for r in results if "f" in r]
+    vcfg = cfg["pipeline"]["verdict"]
+    lim = float(vcfg["rough"]["jointset_range_max"])
+    dec = cfg["decision"]
+    pairs_new = sum(len(r["jointsets_new"]) for r in ok)
+    edge_new = sum(len(r["jointset_edge_new"]) for r in ok)
+    edge_old = sum(len(r["jointset_edge_old"]) for r in ok)
+    pairs_old = sum(len(r["jointsets_old"]) for r in ok)
+    summ = {"n_videos": len(ok), "limit": lim, "within_new": sum(1 for r in ok if r["jointset_range_new"] <= lim), "within_old": sum(1 for r in ok if r["jointset_range_old"] <= lim),
+            "edge_pairs_new": edge_new, "pairs_new": pairs_new, "edge_pairs_old": edge_old, "pairs_old": pairs_old,
+            "verdict_counts_new": {v: sum(1 for r in ok if r["verdict_new"] == v) for v in ("GOOD", "ROUGH", "REJECT")},
+            "verdict_counts_old_sets": {v: sum(1 for r in ok if r["verdict_old_sets"] == v) for v in ("GOOD", "ROUGH", "REJECT")},
+            "median_range_new": float(np.median([r["jointset_range_new"] for r in ok])) if ok else None, "median_range_old": float(np.median([r["jointset_range_old"] for r in ok])) if ok else None}
+    summ["within_share_new"] = summ["within_new"] / max(len(ok), 1)
+    summ["edge_share_new"] = edge_new / max(pairs_new, 1)
+    summ["adopted"] = bool(summ["within_share_new"] >= float(dec["min_within_share"]) and summ["edge_share_new"] <= float(dec["max_edge_share"]))
+    summ["decision"] = "교체 채택" if summ["adopted"] else "교체해도 도움이 되지 않음"
+    log(f"  결정: {summ['decision']} (새 범위가 한계 안인 영상 {summ['within_new']}/{len(ok)}, 격자 경계 집합 {edge_new}/{pairs_new})")
+    jset_figures(run_root / "figures", ok, lim)
+    jset_report(run_root / "report.md", results, summ, cfg)
+    jset_summary(run_root / "summary.md", results, summ, cfg)
+    (run_root / "results.json").write_text(json.dumps(hf.jsonable({"videos": results, "summary": summ}), ensure_ascii=False, indent=1))
+    meta = hf.provenance_build(text, a.config, {"code_29": cfg["code_29"], "videos": [e["file"] for e in entries], "elapsed_s": time.time() - t0})
+    (run_root / "metadata.json").write_text(json.dumps(hf.jsonable(meta), ensure_ascii=False, indent=1))
+    log(f"완료 {time.time() - t0:.0f} s → {run_root}")
+    log.close()
+    return run_root, results, summ
+
+
+def jset_figures(out: Path, ok: list, lim: float):
+    plt = _plt()
+    if not ok:
+        return
+    fig, ax = plt.subplots(figsize=(5.6, 4.4))
+    for r in ok:
+        ax.plot(r["jointset_range_old"], r["jointset_range_new"], "o", color="#2a6fbb" if r["lens"] == "1x" else "#c47a00", alpha=0.8)
+    ax.axhline(lim, color="#c00", ls="--", lw=1, label=f"ROUGH 한계 {lim:g}")
+    ax.plot([0, max(max(r["jointset_range_old"], r["jointset_range_new"]) for r in ok) * 1.05], [0, max(max(r["jointset_range_old"], r["jointset_range_new"]) for r in ok) * 1.05], color="#999", lw=1)
+    ax.set_xlabel("jointset_range (옛 집합: palm5, palm_proximal9, flat17 − 손목)")
+    ax.set_ylabel("jointset_range (새 집합)")
+    ax.set_title("파랑 1배 / 주황 0.5배", fontsize=9)
+    ax.legend(fontsize=8)
+    ax.grid(alpha=0.3)
+    fig.tight_layout()
+    fig.savefig(out / "jointset_range_old_vs_new.png", dpi=110)
+    plt.close(fig)
+
+
+def jset_report(path: Path, results: list, summ: dict, cfg: dict):
+    ok = [r for r in results if "f" in r]
+    L = ["# 실험 30: 불확실성 관절 집합 교체", "", JSET_NOTE, "",
+         f"새 집합: {', '.join(f'{k} {v}' for k, v in cfg['jointset']['sets'].items())}, 그리고 flat17(손목 제외 16점). 옛 집합: palm5, palm_proximal9, flat17에서 손목을 뺀 것(25~29가 쓴 것).", "",
+         "## 1. 영상별 값", "", "| 영상 | 렌즈 | f (px) | 검출 출처 | 부트스트랩 상대 SD | 일관성 범위 | 날카로움 | 새 집합 f (prox8 / index_middle8 / ring_pinky8 / flat17) | 새 jointset_range | 옛 집합 f (palm5 / palm_proximal9 / flat17) | 옛 jointset_range |",
+         "|---|---|---|---|---|---|---|---|---|---|---|"]
+    for r in ok:
+        mt = r["metrics"]
+        jn, jo = r["jointsets_new"], r["jointsets_old"]
+        L.append(f"| {r['video']} | {r['lens']} | {r['f']:.1f} | {r['detection_source'].split(' ')[0]} | {long_fmt(mt['bootstrap_rel_std'], 4)} | {long_fmt(mt['consistency_range'], 3)} | {long_fmt(mt['sharpness'], 4)} | "
+                 f"{' / '.join(format(jn[k], '.0f') for k in cfg['jointset']['uncertainty_sets'])} | {r['jointset_range_new']:.3f} | {' / '.join(format(v, '.0f') for v in jo.values())} | {r['jointset_range_old']:.3f} |")
+    L += ["", "## 2. 판정", "", "| 영상 | 판정 (새 집합) | 실패한 ROUGH 항목 | 실패한 GOOD 항목 | 판정 (옛 집합) |", "|---|---|---|---|---|"]
+    for r in ok:
+        L.append(f"| {r['video']} | {r['verdict_new']} | {', '.join(r['failed_rough_new']) or '-'} | {', '.join(r['failed_good_new']) or '-'} | {r['verdict_old_sets']} |")
+    L += ["", "## 3. 한계", "", "- 영상 33개의 값만 적는다. 기준 f와의 비교는 summary.md에 없다(이 실험은 판정 항목만 본다).", "- 같은 검출·같은 후보 설정이므로 f는 25~29의 값과 같다.", ""]
+    path.write_text("\n".join(L) + "\n")
+
+
+def jset_summary(path: Path, results: list, summ: dict, cfg: dict):
+    ok = [r for r in results if "f" in r]
+    dec = cfg["decision"]
+    L = ["# 실험 30 summary", "", f"**{JSET_NOTE}**", "", "## 판정", "",
+         f"- **불확실성 집합 교체: {summ['decision']}** — 새 jointset_range가 ROUGH 한계({summ['limit']:g}) 안인 영상 {summ['within_new']}/{summ['n_videos']} ({100 * summ['within_share_new']:.0f}%, 채택 기준 ≥ {100 * float(dec['min_within_share']):.0f}%), "
+         f"격자 경계에 붙은 (영상, 집합) {summ['edge_pairs_new']}/{summ['pairs_new']} ({100 * summ['edge_share_new']:.0f}%, 채택 기준 ≤ {100 * float(dec['max_edge_share']):.0f}%)",
+         f"- 옛 집합: 한계 안 {summ['within_old']}/{summ['n_videos']}, 격자 경계 집합 {summ['edge_pairs_old']}/{summ['pairs_old']}",
+         f"- jointset_range 중앙값: 새 {summ['median_range_new']:.3f}, 옛 {summ['median_range_old']:.3f}", "",
+         "## 1. 판정 분포", "", "| 집합 | GOOD | ROUGH | REJECT |", "|---|---|---|---|",
+         f"| 새 집합 | {summ['verdict_counts_new']['GOOD']} | {summ['verdict_counts_new']['ROUGH']} | {summ['verdict_counts_new']['REJECT']} |",
+         f"| 옛 집합 | {summ['verdict_counts_old_sets']['GOOD']} | {summ['verdict_counts_old_sets']['ROUGH']} | {summ['verdict_counts_old_sets']['REJECT']} |", "",
+         "## 2. 실패한 항목 (새 집합)", ""]
+    for kind, key in (("ROUGH", "failed_rough_new"), ("GOOD", "failed_good_new")):
+        cnt = {}
+        for r in ok:
+            for k in r[key]:
+                cnt[k] = cnt.get(k, 0) + 1
+        L.append(f"- {kind} 기준에서 실패한 항목과 영상 수: " + (", ".join(f"{k} {v}개" for k, v in sorted(cnt.items(), key=lambda x: -x[1])) or "없음"))
+    L += ["", "## 3. 영상별 jointset_range (새 / 옛)와 판정", "", "| 영상 | 렌즈 | 새 | 옛 | 판정 (새) | 실패한 ROUGH 항목 |", "|---|---|---|---|---|---|"]
+    for r in ok:
+        L.append(f"| {r['video']} | {r['lens']} | {r['jointset_range_new']:.3f} | {r['jointset_range_old']:.3f} | {r['verdict_new']} | {', '.join(r['failed_rough_new']) or '-'} |")
+    L += ["", "## 한계", "", "- f와 다른 진단값은 바뀌지 않는다. 바뀌는 것은 jointset_range와 그것이 들어가는 판정 라벨뿐이다.",
+          "- 판정 라벨이 실제 오차를 맞히는지는 이 실험이 아니라 실험 31에서 본다.", ""]
+    path.write_text("\n".join(L) + "\n")
+
+
+def jset_results_yaml(run_dir: Path, cfg: dict):
+    r = json.loads((run_dir / "results.json").read_text())
+    m = json.loads((run_dir / "metadata.json").read_text())
+    try:
+        run_name = str(run_dir.resolve().relative_to(hf.PROJECT_ROOT))
+    except ValueError:
+        run_name = str(run_dir)
+    rd = lambda x, n=4: None if x is None or (isinstance(x, float) and not np.isfinite(x)) else round(x, n)      # noqa: E731
+    out = {"experiment": "30_jointset_sets", "run": run_name, "code_commit": m["git"]["commit"][:7], "git_dirty_at_run": m["git"]["git_dirty"], "note": JSET_NOTE, "candidate": cfg["candidate"],
+           "jointset": cfg["jointset"], "decision": cfg["decision"], "videos": {}}
+    for v in r["videos"]:
+        if "f" not in v:
+            out["videos"][v["video"]] = {"failed": v.get("failed")}
+            continue
+        mt = v["metrics"]
+        out["videos"][v["video"]] = {"lens": v["lens"], "f_px": round(v["f"], 1), "detection_source": v["detection_source"].split(" ")[0], "bootstrap_rel_std": rd(mt["bootstrap_rel_std"], 5), "boot_log_std": rd(v["boot_log_std"], 5),
+                                     "consistency_range": rd(mt["consistency_range"], 4), "sharpness": rd(mt["sharpness"], 5), "reproj_rms_rel": rd(mt["reproj_rms_rel"], 5), "theta_p90_deg": rd(mt["theta_p90"], 1),
+                                     "axis_bins": mt["axis_bins6"], "n_target_frames": mt["n_target_frames"], "front_jitter_rel": rd(v["front_jitter_rel"], 6), "tilt_duration_s": rd(v["tilt_duration_s"], 2),
+                                     "jointsets_new_px": {k: round(x, 1) for k, x in v["jointsets_new"].items()}, "jointset_range_new": rd(v["jointset_range_new"]), "jointset_edge_new": v["jointset_edge_new"],
+                                     "jointsets_old_px": {k: round(x, 1) for k, x in v["jointsets_old"].items()}, "jointset_range_old": rd(v["jointset_range_old"]), "jointset_edge_old": v["jointset_edge_old"],
+                                     "verdict_new": v["verdict_new"], "failed_rough_new": v["failed_rough_new"], "failed_good_new": v["failed_good_new"], "verdict_old_sets": v["verdict_old_sets"]}
+    out["summary"] = {k: (rd(x, 4) if isinstance(x, float) else x) for k, x in r["summary"].items()}
+    p = hf.resolve(cfg["output"]["results_yaml"])
+    p.write_text(yaml.safe_dump(hf.jsonable(out), allow_unicode=True, sort_keys=False))
+    return p
+
+
+# ====================================================================================================
 # command line
 # ====================================================================================================
 
-COMMANDS = {"protocol": protocol_main, "frame-filter": ff_main, "same-session": session_main, "overlay": overlay_main, "phase-segmentation": pseg_main, "guide-revision": grev_main, "f-response": fresp_main, "error-factors": ferr_main, "long-video-check": long_main, "generalization": gen_main, "main-camera-extension": ext_main, "wide-60cm": wide_main}
+COMMANDS = {"protocol": protocol_main, "frame-filter": ff_main, "same-session": session_main, "overlay": overlay_main, "phase-segmentation": pseg_main, "guide-revision": grev_main, "f-response": fresp_main, "error-factors": ferr_main, "long-video-check": long_main, "generalization": gen_main, "main-camera-extension": ext_main, "wide-60cm": wide_main, "jointset-sets": jset_main}
 
 
 def main(argv=None):

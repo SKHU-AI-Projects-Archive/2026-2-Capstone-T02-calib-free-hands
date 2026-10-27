@@ -4129,3 +4129,99 @@ def wide_hypothesis_verdict(pooled: dict, hcfg: dict) -> dict:
     if f >= up - 1e-9 or f <= low + 1e-9:
         return {**out, "verdict": "가설 반박"}
     return {**out, "verdict": "판단 보류"}
+
+
+# ====================================================================================================
+# jset  (experiment 30: uncertainty joint sets that fit the wrist-excluded candidate; new section, earlier functions are used unchanged)
+# With wrist_mode exclude, pseg_wrist_cfg() removes joint 0 from every set, so 17's uncertainty set palm5 (wrist + 4 MCP) shrinks to the 4 nearly collinear MCP points and its f sits on the grid edge.
+# The jointset_range check of the verdict (max - min of the f of the uncertainty sets / f) then fails for every video. Here the uncertainty sets come from the yaml (jointset.sets / uncertainty_sets).
+# ====================================================================================================
+
+JSET_SETTINGS_KEYS = ("weights", "num_hands", "min_hand_detection_confidence", "min_hand_presence_confidence", "box_margin", "remap")
+
+
+def jset_find_detection(frames: list, dset: dict, search_dirs, src17=None, detector: str = "mediapipe_hands") -> dict:
+    """Detections of a frame list. src17 (a 17 run's video folder): that run's detections.npz when its frame list (index, sha256) equals the frames (22's rule). Otherwise the content-keyed cache
+    (frames_key of the frames and the detector settings) in the detection_cache folders matching search_dirs (glob patterns relative to HandCalib/). Raises FileNotFoundError when neither exists."""
+    if src17 is not None:
+        r17 = json.loads((resolve(src17) / detector / "results.json").read_text())
+        if [(x["index"], x["sha256"]) for x in frames] != [(x["index"], x["sha256"]) for x in r17["frames"]["list"]]:
+            raise RuntimeError(f"the frames differ from the 17 run's frame list: {src17}")
+        return {"npz": resolve(src17) / detector / "detections.npz", "source": f"17 run {src17}"}
+    settings = {k: dset[k] for k in JSET_SETTINGS_KEYS}
+    name = f"mediapipe_hands_{frames_key(frames, settings, detector)}.npz"
+    for pat in search_dirs:
+        for d in sorted(PROJECT_ROOT.glob(pat)):
+            if (d / name).exists():
+                return {"npz": d / name, "source": f"cache {d.relative_to(PROJECT_ROOT)}/{name}"}
+    raise FileNotFoundError(f"no cached detection {name}")
+
+
+def jset_config(pcfg: dict, jcfg: dict, wrist_mode: str) -> dict:
+    """The pipeline settings with the yaml's extra joint sets and uncertainty sets (jcfg = {sets, uncertainty_sets}); joint 0 removed from every set for wrist_mode exclude."""
+    c = copy.deepcopy(pcfg)
+    c["joints"]["sets"].update({k: list(v) for k, v in jcfg["sets"].items()})
+    c["joints"]["uncertainty_sets"] = list(jcfg["uncertainty_sets"])
+    return pseg_wrist_cfg(c) if wrist_mode == "exclude" else c
+
+
+def jset_range(fs: dict, f_ref: float) -> float:
+    """Range of the f of the uncertainty sets relative to f_ref (uncertainty.rel_range of the finite values)."""
+    return rel_range(list(fs.values()), f_ref)
+
+
+def jset_edge_sets(fs: dict, grid) -> list:
+    """Names of the sets whose f sits on the f grid edge (no interior minimum)."""
+    g = np.asarray(grid, float)
+    return [k for k, f in fs.items() if np.isfinite(f) and (f <= g[0] * (1 + 1e-6) or f >= g[-1] * (1 - 1e-6))]
+
+
+def jset_video(args) -> dict:
+    """One video of experiment 30: the candidate analysis (fixed_template, wrist_mode of the candidate) with the new uncertainty sets, the old sets' f beside it, the verdict with the new and with the old
+    jointset_range, and every diagnostic the verdict and the later calibration use. args = (entry, prep, npz, pcfg, c); c needs candidate, detector_settings, jointset."""
+    entry, prep, npz, pcfg, c = args[:5]
+    os.environ.setdefault("OMP_NUM_THREADS", "1")
+    cv2.setNumThreads(1)
+    cand = c["candidate"]
+    dset = c["detector_settings"][cand["detector"]]
+    pc = copy.deepcopy(pcfg)
+    pc["tracking"]["conf_min"] = float(dset["conf_min"])
+    frames = prep["frames"]
+    times = np.array([r["time_s"] for r in frames])
+    W, H = prep["size"]
+    dets = load_detections(Path(npz))
+    check_alignment(frames, dets)
+    tr = track(dets, times, (W, H), pc["tracking"], front_start_s=float(pc["phases"]["front_skip_s"]))
+    kp, mask, present, box = tr["kp"], tr["mask"], tr["present"], tr["box"]
+    seed = int(pc["experiment"]["seed"])
+    cfg_new = jset_config(pc, c["jointset"], cand["wrist_mode"])
+    cfg_old = pseg_wrist_cfg(pc) if cand["wrist_mode"] == "exclude" else pc
+    res = {"video": entry["file"], "lens": entry.get("lens"), "ref_f": float(entry["ref_f"]), "size": [W, H], "n_frames": int(len(times)), "duration_s": float(times[-1] - times[0]) if len(times) else 0.0}
+    a = analyze(kp, mask, present, box, tr["cls"], times, (W, H), cfg_new, tilt_start=None, methods_full=("fixed_template",), seed=seed)
+    if "per_method" not in a:
+        res["failed"] = a.get("failed", "분석 실패")
+        return res
+    sol, pm = a["solutions"]["fixed_template"], a["per_method"]["fixed_template"]
+    grid = np.array(a["grid"])
+    m, j = pm["metrics"], pm["verdict"]
+    # the old sets' f: the same analysis with the old uncertainty sets (2 bootstrap repetitions, only the joint-set f is read)
+    a_old = analyze(kp, mask, present, box, tr["cls"], times, (W, H), cfg_old, tilt_start=None, methods_full=("fixed_template",), seed=seed, n_boot=2)
+    js_old = a_old["per_method"]["fixed_template"]["jointsets"]
+    js_new = pm["jointsets"]
+    vcfg = pc["verdict"]
+    j_old = judge({**m, "jointset_range": jset_range(js_old, sol["f"])}, vcfg)
+    res.update({"f": float(sol["f"]), "at_grid_edge": bool(sol["at_grid_edge"]), "f_same_as_old_sets": bool(sol["f"] == a_old["solutions"]["fixed_template"]["f"]),
+                "metrics": {k: (None if v is None or (isinstance(v, float) and not np.isfinite(v)) else v) for k, v in m.items()},
+                "boot_log_std": float(np.std(np.log(pm["bootstrap"]["f"]), ddof=1)) if len(pm["bootstrap"]["f"]) > 1 else None,
+                "consistency": pm["consistency"], "theta_median": a["theta_tilt"]["median"], "theta_max": a["theta_tilt"]["max"], "tilt_duration_s": None,
+                "jointsets_new": {k: float(v) for k, v in js_new.items()}, "jointset_range_new": float(pm["jointset_range"]), "jointset_edge_new": jset_edge_sets(js_new, grid),
+                "jointsets_old": {k: float(v) for k, v in js_old.items()}, "jointset_range_old": float(jset_range(js_old, sol["f"])), "jointset_edge_old": jset_edge_sets(js_old, grid),
+                "verdict_new": j["verdict"], "failed_rough_new": j["failed_rough"], "failed_good_new": j["failed_good"],
+                "verdict_old_sets": j_old["verdict"], "failed_rough_old_sets": j_old["failed_rough"], "failed_good_old_sets": j_old["failed_good"], "grid": [float(grid[0]), float(grid[-1])]})
+    tilt = [i for i, r in enumerate(a["role"]) if r == "tilt"]
+    res["tilt_duration_s"] = float(times[tilt].max() - a["tilt_start_s"]) if tilt else 0.0
+    res["front_jitter_rel"] = float(a["front_jitter_rel"])
+    bl = box_long(box)
+    fidx = [int(i) for i in a["front_window"]["idx"]]
+    res["hand_box_short_ratio_front"] = float(np.nanmedian(bl[fidx]) / min(W, H)) if fidx else None
+    return res

@@ -35,6 +35,7 @@ CFG25 = yaml.safe_load((ROOT / "configs/25_long_video_check.yaml").read_text())
 CFG26 = yaml.safe_load((ROOT / "configs/26_generalization.yaml").read_text())
 CFG27 = yaml.safe_load((ROOT / "configs/27_main_camera_extension.yaml").read_text())
 CFG29 = yaml.safe_load((ROOT / "configs/29_wide_60cm.yaml").read_text())
+CFG30 = yaml.safe_load((ROOT / "configs/30_jointset_sets.yaml").read_text())
 PIPE = CFG17["pipeline"]                           # the 14 pipeline settings (identical in 16, 17 and 18)
 SYN = {"f_px": 1650, "image": [1920, 1080], "distance_mm": 350, "front_frames": 10, "tilt_frames": 40}     # 14's synthetic camera
 BASE_COND = {"name": "base", "delta_deg": 0, "noise": {"px": 1.0}, "heavy_tail": False, "tilt_range_deg": [25, 50], "arch_mm": 0,
@@ -2633,6 +2634,103 @@ class WideEndToEnd(unittest.TestCase):
                 self.assertNotIn(key, texts)
             self.assertIsNone(re.compile(r"(?<![\d.])(?:1680|880)(?:\.0+)?(?!\d)(?!\.\d)").search(Path(y).read_text()))        # no ref_f comparison in the results yaml
             self.assertNotIn("implied", Path(y).read_text())
+
+
+# ====================================================================================================
+# 30: uncertainty joint sets that fit the wrist-excluded candidate
+# ====================================================================================================
+
+class JsetSets(unittest.TestCase):
+    def test_new_sets_have_no_wrist_enough_points_and_flat17_is_kept(self):
+        jc = CFG30["jointset"]
+        cfg = hf.jset_config(CFG30["pipeline"], jc, "exclude")
+        est = cfg["joints"]["sets"][cfg["joints"]["estimate_set"]]
+        self.assertEqual(est, list(range(5, 21)))                                                      # the candidate's estimate set (wrist excluded) is unchanged
+        names = jc["uncertainty_sets"]
+        self.assertEqual(cfg["joints"]["uncertainty_sets"], names)
+        self.assertIn("flat17", names)
+        for k in names:
+            ids = cfg["joints"]["sets"][k]
+            self.assertNotIn(0, ids, k)
+            self.assertTrue(set(ids) <= set(est), k)
+            self.assertGreaterEqual(len(ids), 8, k)                                                    # the old palm5 had 4 collinear points left after the wrist was removed
+        old = hf.pseg_wrist_cfg(CFG30["pipeline"])
+        self.assertEqual(len(old["joints"]["sets"]["palm5"]), 4)
+        self.assertEqual(CFG30["pipeline"]["joints"]["uncertainty_sets"], ["palm5", "palm_proximal9", "flat17"])    # the old setting is untouched in the yaml
+        keep = hf.jset_config(CFG30["pipeline"], jc, "keep")
+        self.assertIn(0, keep["joints"]["sets"]["flat17"])                                              # keep mode keeps the wrist
+
+    def test_range_and_edge_helpers(self):
+        grid = np.geomspace(672.0, 3072.0, 60)
+        fs = {"a": 1000.0, "b": 1100.0, "c": 672.0}
+        self.assertAlmostEqual(hf.jset_range(fs, 1000.0), (1100.0 - 672.0) / 1000.0)
+        self.assertEqual(hf.jset_edge_sets(fs, grid), ["c"])
+        self.assertEqual(hf.jset_edge_sets({"x": 3072.0, "y": 2000.0}, grid), ["x"])
+        self.assertTrue(np.isnan(hf.jset_range({"a": 1.0}, 1.0)))
+
+    def test_thresholds_and_decision_rule_are_in_the_yaml(self):
+        self.assertEqual(CFG30["decision"], {"min_within_share": 0.5, "max_edge_share": 0.10})
+        self.assertEqual(CFG30["pipeline"]["verdict"]["rough"]["jointset_range_max"], 0.12)
+        self.assertEqual(len(CFG30["videos"]), 33)
+        self.assertTrue(all(e["ref_f"] == (1680 if e["lens"] == "1x" else 880) for e in CFG30["videos"]))
+        self.assertEqual(sum(1 for e in CFG30["videos"] if e.get("source17")), 8)
+
+
+class JsetSynthetic(unittest.TestCase):
+    def test_new_sets_agree_on_exact_planar_hands_and_f_is_the_candidates(self):
+        g = synth_wrist(seed=1, tilt_frames=120)
+        jc = CFG30["jointset"]
+        pc = CFG30["pipeline"]
+        cfg_new, cfg_old = hf.jset_config(pc, jc, "exclude"), hf.pseg_wrist_cfg(pc)
+        a_new = analyze_synth(g, methods_full=("fixed_template",), cfg=cfg_new, n_boot=2)
+        a_old = analyze_synth(g, methods_full=("fixed_template",), cfg=cfg_old, n_boot=2)
+        f = a_new["solutions"]["fixed_template"]["f"]
+        self.assertEqual(f, a_old["solutions"]["fixed_template"]["f"])                                 # the estimate does not depend on the uncertainty sets
+        self.assertLess(abs(f / g["f_true"] - 1.0), 0.02)
+        pm = a_new["per_method"]["fixed_template"]
+        self.assertLess(pm["jointset_range"], float(pc["verdict"]["rough"]["jointset_range_max"]))      # on an ideal planar hand the new sets agree within the ROUGH limit
+        self.assertEqual(set(pm["jointsets"]), set(jc["uncertainty_sets"]))
+        self.assertEqual(set(a_old["per_method"]["fixed_template"]["jointsets"]), {"palm5", "palm_proximal9", "flat17"})
+
+
+R27J = ROOT / "runs/27_main_camera_extension/20261026T044322Z/results.json"
+R26J = ROOT / "runs/26_generalization/20261026T031941Z/results.json"
+
+
+@unittest.skipUnless(R27J.exists() and R26J.exists() and all((Path(CFG30["input_dir"]) / f"IMG_{n}.MOV").exists() for n in (7213, 7220)),
+                     "26's and 27's official runs and the input videos IMG_7213 / IMG_7220 are needed")
+class JsetEndToEnd(unittest.TestCase):
+    def test_reproduction_of_f_old_sets_verdict_outputs_and_no_tags(self):
+        r27 = {j["video"]: j for j in json.loads(R27J.read_text())["videos"]}
+        r26 = {j["video"]: j for j in json.loads(R26J.read_text())["videos"]}
+        with tempfile.TemporaryDirectory() as d:
+            d = Path(d)
+            cfg = copy.deepcopy(CFG30)
+            cfg["videos"] = [e for e in CFG30["videos"] if e["file"] in ("IMG_7213.MOV", "IMG_7220.MOV")]
+            cfg["workers"], cfg["n_workers"] = 2, 2
+            cfg["output"] = {"root": str(d / "runs"), "results_yaml": str(d / "r30.yaml")}
+            cp = d / "c.yaml"
+            cp.write_text(yaml.safe_dump(cfg, allow_unicode=True))
+            root, results, summ = run.jset_main(["--config", str(cp), "--out", str(d / "o")])
+            for f in ("report.md", "summary.md", "results.json", "metadata.json", "log.txt"):
+                self.assertTrue((root / f).exists(), f)
+            self.assertTrue((root / "figures/jointset_range_old_vs_new.png").exists())
+            self.assertFalse((root / "_frames").exists())
+            by = {r["video"]: r for r in results}
+            self.assertEqual(by["IMG_7220.MOV"]["f"], r27["IMG_7220.MOV"]["ft"]["f"])                  # the candidate's f is 27's / 26's
+            self.assertEqual(by["IMG_7213.MOV"]["f"], r26["IMG_7213.MOV"]["ft"]["f"])
+            for r in results:
+                self.assertTrue(r["f_same_as_old_sets"])
+                self.assertEqual(r["verdict_old_sets"], "REJECT")                                      # what 25-29 stored: every video REJECT
+                self.assertEqual(r["failed_rough_old_sets"], ["jointset_range"])
+                self.assertEqual(r["detection_source"].split(" ")[0], "cache")
+            self.assertAlmostEqual(by["IMG_7220.MOV"]["jointset_range_old"], 0.9235, places=3)
+            y = run.jset_results_yaml(root, cfg)
+            texts = "".join(q.read_text(errors="ignore") for q in list(root.rglob("*")) + [Path(y)] if q.is_file() and q.suffix in (".json", ".yaml", ".md", ".csv", ".txt"))
+            for val in FAKE_TAGS.values():
+                self.assertNotIn(val, texts)
+            for key in ("ISO6709", "com.apple.quicktime", '"make"', '"model"'):
+                self.assertNotIn(key, texts)
 
 
 if __name__ == "__main__":
