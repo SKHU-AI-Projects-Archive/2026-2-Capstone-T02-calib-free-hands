@@ -4622,6 +4622,67 @@ def mk_track(dets_xy: list, ref_index: int, ref_xy: np.ndarray, box_long_px: np.
     return {"xy": xy, "ok": ok, "reason": reason}
 
 
+def mk_homography_check(ref_xy: np.ndarray, cur_xy: np.ndarray, thr_px: float, min_inlier_ratio: float, need: int) -> dict:
+    """Label check of one frame: the homography reference -> current (RANSAC, threshold thr_px) of the given marker pairs must keep at least min_inlier_ratio of them and at least `need`;
+    a swapped pair of labels breaks it. Returns {ok, H, inliers (bool per pair)}."""
+    H, inl = mk_homography(ref_xy, cur_xy, thr_px)
+    if H is None or inl is None:
+        return {"ok": False, "H": None, "inliers": np.zeros(len(ref_xy), bool)}
+    return {"ok": bool(inl.sum() >= float(min_inlier_ratio) * len(ref_xy) and inl.sum() >= need), "H": H, "inliers": inl}
+
+
+def mk_track_reacquire(dets_xy: list, ref_index: int, ref_xy: np.ndarray, box_long_px: np.ndarray, mcfg: dict, used: list) -> dict:
+    """Follow the reference markers through the frames (forward and backward from ref_index), with re-acquisition. A detection is matched to a marker when it lies within the movement limit of the marker's last
+    accepted position OR of its predicted position (the reference position moved by the homography of the last accepted frame); the limit is move_frac x hand box x min(frames since the last accepted frame, gap_cap),
+    the same around both. Hungarian assignment on the smaller of the two distances. A frame is kept when at least min_markers_ratio of the used markers are matched and their homography reference -> frame
+    (RANSAC, ransac_frac x hand box, used markers only) keeps at least min_inlier_ratio of them; detections without a marker are ignored (their number per frame is returned), non-used markers are followed only.
+    Returns {xy (n, m, 2) NaN where missing, ok (n,), reason (n,), ignored (n,) int (-1 where the frame was not kept)}."""
+    from scipy.optimize import linear_sum_assignment
+    n, m = len(dets_xy), len(ref_xy)
+    xy = np.full((n, m, 2), np.nan)
+    ok = np.zeros(n, bool)
+    reason = np.array([""] * n, dtype=object)
+    ignored = np.full(n, -1, int)
+    xy[ref_index], ok[ref_index], ignored[ref_index] = ref_xy, True, max(len(dets_xy[ref_index]) - m, 0)
+    used = [int(j) for j in used]
+    need = int(np.ceil(float(mcfg["min_markers_ratio"]) * len(used) - 1e-9))
+    big = 1e9
+    for order in (range(ref_index + 1, n), range(ref_index - 1, -1, -1)):
+        last, last_i, H_last = ref_xy.copy(), ref_index, np.eye(3)
+        for i in order:
+            d = dets_xy[i]
+            if d is None:
+                reason[i] = "no_hand_box"
+                continue
+            if len(d) < need:
+                reason[i] = "too_few_markers"
+                continue
+            lim = float(mcfg["move_frac"]) * float(box_long_px[i]) * min(abs(i - last_i), int(mcfg["gap_cap"]))
+            pred = cv2.perspectiveTransform(ref_xy.reshape(-1, 1, 2).astype(np.float64), H_last).reshape(-1, 2)
+            c_prev = np.linalg.norm(last[:, None, :] - d[None, :, :], axis=-1)
+            c_pred = np.linalg.norm(pred[:, None, :] - d[None, :, :], axis=-1)
+            cost = np.minimum(np.where(c_prev <= lim, c_prev, big), np.where(c_pred <= lim, c_pred, big))
+            r, c = linear_sum_assignment(cost)
+            good = cost[r, c] < big
+            r, c = r[good], c[good]
+            ru = r[np.isin(r, used)]
+            if len(ru) < need:
+                reason[i] = "match_failed"
+                continue
+            cu = c[np.isin(r, used)]
+            chk = mk_homography_check(ref_xy[ru], d[cu], float(mcfg["ransac_frac"]) * float(box_long_px[i]), float(mcfg["min_inlier_ratio"]), need)
+            if not chk["ok"]:
+                reason[i] = "homography_failed"
+                continue
+            cur = np.full((m, 2), np.nan)
+            cur[r] = d[c]
+            drop = ru[~chk["inliers"]]
+            cur[drop] = np.nan
+            xy[i], ok[i], ignored[i] = cur, True, int(len(d) - np.isfinite(cur[:, 0]).sum())
+            last, last_i, H_last = np.where(np.isnan(cur), last, cur), i, chk["H"]
+    return {"xy": xy, "ok": ok, "reason": reason, "ignored": ignored}
+
+
 def mk_normalise(P: np.ndarray, scale: float):
     """Similarity T (3 x 3) that moves the centroid of P to 0 and divides by scale."""
     c = P.mean(0)
@@ -4720,7 +4781,8 @@ def mk_process(prep: dict, npz, pcfg: dict, c: dict) -> dict:
         return {**out, "failed": "정면 창에 기준 프레임이 없음" + ("" if used_ids is None else " (사용 표시가 모두 보이는 프레임)")}
     m = len(det[ref])
     out["count"] = m if used_ids is not None else m_cfg
-    trk = mk_track(det, ref, det[ref], bl, mcfg, used_idx)
+    track_fn = mk_track_reacquire if mcfg.get("tracker") == "reacquire" else mk_track
+    trk = track_fn(det, ref, det[ref], bl, mcfg, used_idx)
     kp = np.full((n, 21, 2), np.nan)
     for j in range(m):
         kp[:, names[j]] = trk["xy"][:, j]
@@ -4731,12 +4793,13 @@ def mk_process(prep: dict, npz, pcfg: dict, c: dict) -> dict:
     for r in trk["reason"]:
         if r:
             reasons[r] = reasons.get(r, 0) + 1
-    loose = mk_track(det, ref, det[ref], bl, {**mcfg, "min_markers_ratio": 0.3}, used_idx)
+    loose = track_fn(det, ref, det[ref], bl, {**mcfg, "min_markers_ratio": 0.3}, used_idx)
     seen_loose = loose["ok"] & tilt_hand
     per = {int(names[j]): float(np.isfinite(loose["xy"][seen_loose, j, 0]).sum() / max(tilt_hand.sum(), 1)) for j in range(m)}
     out.update({"ref_index": ref, "ref_time_s": float(times[ref]), "ref_sharpness": float(max(sharp)), "names": names, "used_idx": used_idx, "track": trk, "kp": kp, "mask": mask, "present": trk["ok"].copy(),
                 "valid_ratio": float(trk["ok"].sum() / max(len(seen), 1)), "tilt_valid_ratio": float((trk["ok"] & tilt_hand).sum() / max(tilt_hand.sum(), 1)), "tilt_hand_frames": int(tilt_hand.sum()),
-                "reasons": reasons, "window_success": int(trk["ok"][win].sum()), "window_frames": len(win), "front_window": [fw.get("t0"), fw.get("t1")], "per_marker_rate": per})
+                "reasons": reasons, "ignored_median": None if "ignored" not in trk or not trk["ok"].any() else float(np.median(trk["ignored"][trk["ok"]])),
+                "ignored_share": None if "ignored" not in trk or not trk["ok"].any() else float(np.mean(trk["ignored"][trk["ok"]] > 0)), "window_success": int(trk["ok"][win].sum()), "window_frames": len(win), "front_window": [fw.get("t0"), fw.get("t1")], "per_marker_rate": per})
     return out
 
 
@@ -4765,7 +4828,7 @@ def mk_precheck_video(args) -> dict:
     subset = c["markers"].get("used_ids") is not None
     if "failed" in proc:
         return {**res, "failed": proc["failed"], "passes": False}
-    res.update({k: proc[k] for k in ("ref_index", "ref_time_s", "ref_sharpness", "valid_ratio", "tilt_valid_ratio", "reasons", "window_success", "window_frames", "front_window", "per_marker_rate")})
+    res.update({k: proc[k] for k in ("ref_index", "ref_time_s", "ref_sharpness", "valid_ratio", "tilt_valid_ratio", "reasons", "window_success", "window_frames", "front_window", "per_marker_rate", "ignored_median", "ignored_share")})
     res["names"] = [int(x) for x in proc["names"]]
     res["passes"] = bool(proc["tilt_valid_ratio"] >= float(c["precheck"]["min_tilt_valid_ratio"])) if subset else bool(proc["all_found_ratio"] >= float(c["precheck"]["min_all_found_ratio"]))
     if c.get("out_dir"):
@@ -4849,7 +4912,7 @@ def mk_video(args) -> dict:
     proc = mk_process(prep, npz, pcfg, c)
     W, H = proc["size"]
     res = {"video": entry["file"], "distance_cm": float(entry["distance_cm"]), "size": [W, H], "n_frames": proc["n_frames"], "duration_s": float(proc["times"][-1] - proc["times"][0]),
-           "marker_stats": {k: proc.get(k) for k in ("all_found_ratio", "valid_ratio", "tilt_valid_ratio", "n_detected_median", "hand_frames", "window_success", "window_frames", "ref_time_s", "reasons", "front_window", "per_marker_rate")}}
+           "marker_stats": {k: proc.get(k) for k in ("all_found_ratio", "valid_ratio", "tilt_valid_ratio", "n_detected_median", "hand_frames", "window_success", "window_frames", "ref_time_s", "reasons", "front_window", "per_marker_rate", "ignored_median", "ignored_share")}}
     cc = {k: v for k, v in c.items() if k not in ("overlay_dir", "markers")}
     res["mediapipe"] = pr_video((entry, prep, npz, pcfg, cc))
     if subset:

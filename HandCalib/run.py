@@ -5168,7 +5168,13 @@ def mk_precheck_report(path: Path, results: list, infos: list, ok_by_d: dict, pr
                  f"{'-' if 'tilt_valid_ratio' not in r else format(100 * r['tilt_valid_ratio'], '.1f') + '%'} | {'-' if 'window_success' not in r else str(r['window_success']) + ' / ' + str(r['window_frames'])} | {long_fmt(r.get('ref_time_s'), 1)} | "
                  f"{'통과' if r.get('passes') else '탈락'} | {r.get('failed') or ', '.join(f'{k} {v}' for k, v in (r.get('reasons') or {}).items()) or '-'} |")
     L += ["", f"거리별 통과 영상: " + ", ".join(f"{d:g} cm {v or '없음'}" for d, v in ok_by_d.items()) + f" → 공식 실행 {'진행 가능' if proceed else '하지 않음'}.", "",
-          "## 표시 번호별 검출률 (기울기 구간, 손이 잡힌 프레임 기준, 관절 번호 = 표시 이름)", "",
+          "## 버려진 이유별 프레임 수", "", "| 영상 | 손 검출 프레임 | 유지된 프레임 | 손 박스 없음 | 표시가 너무 적음 | 짝 찾기 실패 | 호모그래피 검사 탈락 | 표시가 너무 많음 | 무시한 덩어리 수 중앙값 | 무시한 덩어리가 있는 프레임 |", "|---|---|---|---|---|---|---|---|---|---|"]
+    for r in results:
+        rs = r.get("reasons") or {}
+        kept = None if "valid_ratio" not in r else int(round(r["valid_ratio"] * r["hand_frames"]))
+        L.append(f"| {r['video']} | {r['hand_frames']} | {'-' if kept is None else kept} | {rs.get('no_hand_box', 0)} | {rs.get('too_few_markers', 0)} | {rs.get('match_failed', 0)} | {rs.get('homography_failed', 0)} | {rs.get('too_many_markers', 0)} | "
+                 f"{long_fmt(r.get('ignored_median'), 1)} | {'-' if r.get('ignored_share') is None else format(100 * r['ignored_share'], '.0f') + '%'} |")
+    L += ["", "## 표시 번호별 검출률 (기울기 구간, 손이 잡힌 프레임 기준, 관절 번호 = 표시 이름)", "",
           "표시를 추적한 비율이다(최소 표시 비율을 0.3으로 낮춘 추적, 호모그래피 검사는 켬). * = 추정에 쓰는 점.", ""]
     used = set(int(x) for x in cfg["markers"].get("used_ids") or [])
     vids = [r for r in results if r.get("per_marker_rate")]

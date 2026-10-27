@@ -38,6 +38,7 @@ CFG29 = yaml.safe_load((ROOT / "configs/29_wide_60cm.yaml").read_text())
 CFG30 = yaml.safe_load((ROOT / "configs/30_jointset_sets.yaml").read_text())
 CFG31 = yaml.safe_load((ROOT / "configs/31_verdict_calibration.yaml").read_text())
 CFG34 = yaml.safe_load((ROOT / "configs/34_printed_hand.yaml").read_text())
+CFG35 = yaml.safe_load((ROOT / "configs/35c_hand_markers_tracking.yaml").read_text())
 PIPE = CFG17["pipeline"]                           # the 14 pipeline settings (identical in 16, 17 and 18)
 SYN = {"f_px": 1650, "image": [1920, 1080], "distance_mm": 350, "front_frames": 10, "tilt_frames": 40}     # 14's synthetic camera
 BASE_COND = {"name": "base", "delta_deg": 0, "noise": {"px": 1.0}, "heavy_tail": False, "tilt_range_deg": [25, 50], "arch_mm": 0,
@@ -3002,6 +3003,254 @@ class PrEndToEnd(unittest.TestCase):
                 self.assertNotIn(val, texts)
             for key in ("ISO6709", "com.apple.quicktime", '"make"', '"model"'):
                 self.assertNotIn(key, texts)
+
+
+# ====================================================================================================
+# 35: hand markers, does the slope survive when the points are measured by image processing?
+# ====================================================================================================
+
+MK = CFG35["markers"]
+MK_USED_IDS = [int(x) for x in MK["used_ids"]]
+
+
+def mk_layout(seed=0, size=700.0):
+    """21 marker positions of a hand-like layout (px): the planar hand points of the synthetic study for joints 5-20, stand-ins for 0-4."""
+    P = hf.synth_hand_points(0.0)
+    rng = np.random.default_rng(seed)
+    xy = np.zeros((21, 2))
+    for j in range(5, 21):
+        xy[j] = P[j, :2]
+    for j in range(5):
+        xy[j] = np.array([-40.0 + 25.0 * j, 70.0 + 10.0 * j]) + rng.normal(0, 3, 2)
+    xy = (xy - xy.mean(0)) / np.ptp(xy[:, 1]) * size
+    return xy + np.array([960.0, 540.0])
+
+
+def mk_homography_at(t, n):
+    """A smooth rotation / scale / translation / weak perspective of the layout about its centre, as a 3 x 3 homography in image pixels."""
+    th, s = np.radians(25.0) * np.sin(2 * np.pi * t / n), 1.0 + 0.05 * np.sin(2 * np.pi * t / n * 1.7)
+    R = np.array([[np.cos(th), -np.sin(th)], [np.sin(th), np.cos(th)]]) * s
+    c = np.array([960.0, 540.0])
+    T = np.eye(3)
+    T[:2, :2], T[:2, 2] = R, c - R @ c + np.array([12.0 * np.sin(t / 7.0), 8.0 * np.cos(t / 9.0)])
+    T[2, :2] = [2e-5 * np.sin(t / 5.0), 1e-5 * np.cos(t / 6.0)]
+    return T
+
+
+def mk_apply(H, xy):
+    return cv2.perspectiveTransform(xy.reshape(-1, 1, 2).astype(np.float64), H).reshape(-1, 2)
+
+
+def mk_sequence(n, seed=0, extras=0, hidden=None, missing=(), drift=0.0, noise=0.3):
+    """Detections of a synthetic marker sequence: truth (n, 21, 2), per-frame shuffled detections with `extras` clutter blobs far from every marker, markers in `hidden` = {marker: (first, last)} never detected
+    in those frames, frames in `missing` without any detection, a translation drift (px per frame) added to the whole hand."""
+    rng = np.random.default_rng(seed)
+    ref = mk_layout(seed)
+    truth = np.zeros((n, 21, 2))
+    dets = []
+    for i in range(n):
+        H = mk_homography_at(i, n)
+        pts = mk_apply(H, ref) + np.array([drift * i, 0.5 * drift * i])
+        truth[i] = pts + rng.normal(0, noise, pts.shape)
+        if i in missing:
+            dets.append(None)
+            continue
+        keep = [j for j in range(21) if not (hidden and j in hidden and hidden[j][0] <= i <= hidden[j][1])]
+        d = [truth[i][j] for j in keep]
+        while len(d) < len(keep) + extras:
+            q = np.array([rng.uniform(300, 1600), rng.uniform(100, 1000)])
+            if np.min(np.linalg.norm(truth[i] - q, axis=1)) > 0.1 * 800:
+                d.append(q)
+        d = np.array(d)
+        dets.append(d[rng.permutation(len(d))])
+    return ref, truth, dets
+
+
+def mk_match_errors(trk, truth, idx):
+    """Per frame and marker the distance of the tracked position to the truth (nan where the marker is not tracked)."""
+    return np.linalg.norm(trk["xy"][:, idx, :] - truth[:, idx, :], axis=-1)
+
+
+class MkBlobs(unittest.TestCase):
+    def test_centres_are_found_to_a_third_of_a_pixel_on_a_synthetic_frame(self):
+        rng = np.random.default_rng(1)
+        img = np.zeros((1080, 1920, 3), np.uint8)
+        img[:] = (150, 170, 205)                                                                           # skin / wood like background (BGR)
+        img = np.clip(img.astype(float) + rng.normal(0, 3, img.shape), 0, 255).astype(np.uint8)
+        centres = [(900.0 + 60.0 * (k % 5) + rng.uniform(0, 1), 400.0 + 70.0 * (k // 5) + rng.uniform(0, 1)) for k in range(16)]        # continuous coordinates (pixel centre = index + 0.5)
+        for cx, cy in centres:
+            cv2.circle(img, (int(round((cx - 0.5) * 16)), int(round((cy - 0.5) * 16))), int(7 * 16), (20, 20, 215), -1, lineType=cv2.LINE_AA, shift=4)
+        b = hf.mk_blobs(img, (800, 300, 1300, 700), MK)
+        self.assertEqual(len(b["xy"]), 16)
+        err = [np.min(np.linalg.norm(b["xy"] - np.array(c), axis=1)) for c in centres]
+        self.assertLessEqual(max(err), 0.3, err)
+        small = hf.mk_blobs(img, (800, 300, 1300, 700), MK, area_min_px=5000.0)                           # the area limit is an argument: a limit above every blob finds none
+        self.assertEqual(len(small["xy"]), 0)
+
+    def test_area_limit_scales_with_the_box_and_equals_40_px_at_50_cm(self):
+        self.assertAlmostEqual(MK["area_min_frac"] * 331091.6, 40.0, delta=0.05)
+        self.assertEqual(MK["used_ids"], [5, 6, 9, 10, 13, 14, 17, 18])
+        self.assertEqual((MK["min_markers_ratio"], MK["circularity_min"], MK["s_min"], MK["v_min"], MK["ransac_frac"], MK["tracker"]), (0.75, 0.6, 130, 90, 0.03, "reacquire"))
+        self.assertEqual(CFG35["precheck"]["min_tilt_valid_ratio"], 0.70)
+
+
+class MkTracking(unittest.TestCase):
+    USED = MK_USED_IDS
+
+    def test_swapped_labels_are_dropped_by_the_check_on_the_used_markers(self):
+        ref, truth, _ = mk_sequence(20, seed=2)
+        cur = truth[7]
+        thr = MK["ransac_frac"] * 800.0
+        good = hf.mk_homography_check(ref[self.USED], cur[self.USED], thr, MK["min_inlier_ratio"], 6)
+        self.assertTrue(good["ok"])
+        sw = cur.copy()
+        a, b = self.USED.index(5), self.USED.index(18)
+        sw[[5, 18]] = sw[[18, 5]]                                                                          # two of the 8 used markers carry each other's labels
+        bad = hf.mk_homography_check(ref[self.USED], sw[self.USED], thr, MK["min_inlier_ratio"], 6)
+        self.assertFalse(bad["ok"])
+        self.assertLess(bad["inliers"].sum(), 8 * MK["min_inlier_ratio"])
+        self.assertGreaterEqual(np.linalg.norm(ref[5] - ref[18]), 0.1 * 800.0)
+
+    def test_numbers_stay_through_motion_and_clutter_and_extras_are_ignored(self):
+        ref, truth, dets = mk_sequence(80, seed=3, extras=3)
+        ref_index = 0
+        trk = hf.mk_track_reacquire(dets, ref_index, truth[ref_index], np.full(80, 800.0), MK, self.USED)
+        self.assertTrue(trk["ok"].all(), trk["reason"][~trk["ok"]])
+        self.assertLess(np.nanmax(mk_match_errors(trk, truth, list(range(21)))), 1.5)                  # every marker keeps its own number
+        self.assertTrue(np.all(trk["ignored"][1:] == 3))                                                 # the clutter blobs are ignored and counted
+        _, truth6, dets6 = mk_sequence(80, seed=4, extras=6)                                            # (a hand moving at most about 2 % of the box per frame, as the real videos do)
+        wide = hf.mk_track_reacquire(dets6, 0, truth6[0], np.full(80, 800.0), MK, self.USED)
+        self.assertTrue(wide["ok"].all())
+        self.assertTrue(np.all(wide["ignored"][1:] == 6))                                                # more clutter: the 8 used markers are still the right ones
+        self.assertLess(np.nanmax(mk_match_errors(wide, truth6, MK_USED_IDS)), 1.5)
+        self.assertEqual(MK["tracker"], "reacquire")
+
+    def test_a_marker_that_drops_out_and_frames_that_are_missed_are_re_acquired(self):
+        ref, truth, dets = mk_sequence(70, seed=5, hidden={10: (10, 49)}, missing=(20, 21, 22, 23), drift=4.0)
+        trk = hf.mk_track_reacquire(dets, 0, truth[0], np.full(70, 800.0), MK, self.USED)
+        ok = trk["ok"]
+        self.assertTrue(ok[[i for i in range(70) if i not in (20, 21, 22, 23)]].all(), trk["reason"][~ok])
+        self.assertTrue(not ok[[20, 21, 22, 23]].any())                                                  # missed frames are skipped, the next frame is matched again
+        err = mk_match_errors(trk, truth, [10])[:, 0]
+        self.assertTrue(np.isnan(err[10:50]).all())                                                      # hidden: no position
+        self.assertLess(np.nanmax(err[50:]), 1.5)                                                        # reappears after the hand moved by far more than the last-position limit: re-acquired with its own number
+        self.assertLess(np.nanmax(mk_match_errors(trk, truth, [j for j in range(21) if j != 10])), 1.5)
+        old = hf.mk_track(dets, 0, truth[0], np.full(70, 800.0), {**MK, "min_markers_ratio": 0.75}, self.USED)
+        self.assertTrue(np.isnan(mk_match_errors(old, truth, [10])[50:, 0]).any() or not old["ok"][50:].all())   # the first tracker does not get it back
+
+    def test_a_frame_with_too_few_used_markers_is_dropped(self):
+        ref, truth, dets = mk_sequence(30, seed=6, hidden={5: (10, 12), 6: (10, 12), 9: (10, 12)})
+        trk = hf.mk_track_reacquire(dets, 0, truth[0], np.full(30, 800.0), MK, self.USED)
+        self.assertTrue(not trk["ok"][10:13].any())                                                      # 5 of 8 used markers: below 6
+        self.assertTrue(trk["ok"][13:].all())
+
+
+class MkPerspective(unittest.TestCase):
+    def test_halved_perspective_gives_k_about_one_half(self):
+        rng = np.random.default_rng(0)
+        src = mk_layout(0)[5:]
+        scale = 800.0
+        T_s = hf.mk_normalise(src, scale)
+        pm_mk, pm_mp, pm_same = [], [], []
+        for _ in range(60):
+            p = rng.uniform(-0.3, 0.3, 2)
+            ang = rng.uniform(-0.4, 0.4)
+            A = np.array([[np.cos(ang), -np.sin(ang), rng.uniform(-0.1, 0.1)], [np.sin(ang), np.cos(ang), rng.uniform(-0.1, 0.1)], [p[0], p[1], 1.0]])
+            for q, store in ((p, pm_mk), (0.5 * p, pm_mp)):
+                Hn = A.copy()
+                Hn[2, :2] = q
+                H = np.linalg.inv(T_s) @ Hn @ T_s                                                        # the same similarity part, only the perspective row differs
+                dst = mk_apply(H, src)
+                store.append(hf.mk_perspective(src, dst, scale))
+            pm_same.append(pm_mk[-1])
+        k = hf.mk_perspective_k(np.array(pm_mp), np.array(pm_mk))
+        self.assertAlmostEqual(k["k"], 0.5, delta=0.05)
+        self.assertGreater(k["corr"], 0.99)
+        self.assertAlmostEqual(hf.mk_perspective_k(np.array(pm_same), np.array(pm_mk))["k"], 1.0, places=6)
+        self.assertAlmostEqual(hf.mk_perspective_k(np.zeros((60, 2)), np.array(pm_mk))["k"], 0.0, places=6)
+
+    def test_planar_gap_is_zero_for_a_planar_hand_and_grows_with_relief(self):
+        src = mk_layout(1)
+        H = mk_homography_at(11, 40)
+        cur = mk_apply(H, src)
+        self.assertLess(hf.mk_planar_gap(src, cur, src[5:], cur[5:], 800.0), 1e-4)
+        bumped = cur[5:] + np.array([6.0, -4.0])
+        self.assertAlmostEqual(hf.mk_planar_gap(src, cur, src[5:], bumped, 800.0), 100.0 * np.hypot(6.0, 4.0) / 800.0, places=4)
+
+
+class MkSynthetic(unittest.TestCase):
+    def test_exact_planar_markers_give_a_slope_near_zero_through_the_unchanged_analysis(self):
+        cfg = copy.deepcopy(PIPE)
+        cfg["joints"]["sets"]["markers"] = MK_USED_IDS
+        cfg["joints"]["estimate_set"] = "markers"
+        cfg["joints"]["uncertainty_sets"] = ["markers"]
+        curves, grid = {}, None
+        for dist in (500.0, 600.0, 750.0):
+            cs = []
+            for seed in (0, 1):
+                g = synth({"noise": {"px": 0.3}, "tilt_range_deg": [30, 30]}, seed=seed, scfg=dict(SYN, f_px=1660.0, distance_mm=dist, tilt_frames=120))
+                g["mask"] = g["mask"].copy()
+                a = analyze_synth(g, methods_full=(), cfg=cfg)
+                self.assertLess(abs(a["solutions"]["fixed_template"]["f"] / 1660.0 - 1.0), 0.03, (dist, seed))
+                cs.append(a["solutions"]["fixed_template"]["profile_cost"])
+                grid = np.array(a["grid"])
+            curves[dist / 10.0] = cs
+        r = hf.pr_slope(curves, grid, 200, 42)
+        self.assertLessEqual(abs(r["slope"]), 0.1)                                                         # exact markers: no distance dependence
+        self.assertEqual(hf.pr_verdict(r, REF34, CFG35["verdict"], {50.0: 2, 60.0: 2, 75.0: 2})["verdict"], "반비례 없음")
+
+
+R27M = ROOT / "runs/27_main_camera_extension/20261026T044322Z/results.json"
+
+
+@unittest.skipUnless(R27M.exists() and all((Path(CFG35["input_dir"]) / f"IMG_{n}.MOV").exists() for n in (7220, 7267)), "27's official run and the input videos IMG_7220 / IMG_7267 are needed")
+class MkEndToEnd(unittest.TestCase):
+    def test_27_reproduction_official_run_outputs_overlay_and_no_tags(self):
+        r27 = {j["video"]: j for j in json.loads(R27M.read_text())["videos"]}
+        with tempfile.TemporaryDirectory() as d:
+            d = Path(d)
+            # 27's setting reproduces: the MediaPipe 16-point part of a marker run is pr_video (27's gen_video unchanged)
+            prep = hf.fresp_prepare(("IMG_7220.MOV", CFG35["input_dir"], CFG35["pipeline"], {}, str(d)))
+            from_cache = hf.jset_find_detection(prep["frames"], CFG35["detector_settings"]["mediapipe_hands"], ["runs/*/*/detection_cache"], None, "mediapipe_hands")["npz"]
+            base = {k: CFG35[k] for k in ("candidate", "exclusion", "detector_settings", "guide", "session")}
+            res = hf.pr_video(({"file": "IMG_7220.MOV", "distance_cm": 60, "kind": "real"}, prep, from_cache, CFG35["pipeline"], base))
+            self.assertEqual(res["ft"]["f"], r27["IMG_7220.MOV"]["ft"]["f"])
+            shutil.rmtree(d / "IMG_7220", ignore_errors=True)
+            cfg = copy.deepcopy(CFG35)
+            cfg["videos"] = [e for e in CFG35["videos"] if e["file"] == "IMG_7267.MOV"]
+            cfg["workers"], cfg["n_workers"] = 2, 2
+            cfg["output"] = {"root": str(d / "runs"), "results_yaml": str(d / "r35.yaml")}
+            cp = d / "c.yaml"
+            cp.write_text(yaml.safe_dump(cfg, allow_unicode=True))
+            pre_root, pre_res, proceed = run.mk_main(["--config", str(cp), "--out", str(d / "pre"), "precheck"])
+            self.assertTrue((pre_root / "precheck.md").exists())
+            self.assertTrue((pre_root / "figures/reference_IMG_7267.png").exists())
+            self.assertFalse(proceed)                                                                       # only a 50 cm video: the other distances have none
+            root, results, ana = run.mk_main(["--config", str(cp), "--out", str(d / "o")])
+            for f in ("report.md", "summary.md", "results.json", "metadata.json", "log.txt"):
+                self.assertTrue((root / f).exists(), f)
+            self.assertGreater((root / "overlays/overlay_IMG_7267.mp4").stat().st_size, 10000)
+            self.assertFalse((root / "_frames").exists())
+            r = results[0]
+            self.assertIn("f", r["marker"])
+            self.assertIn("f", r["mediapipe8"])
+            self.assertIn("ft", r["mediapipe"])
+            self.assertEqual(ana["verdict_guard"] if "verdict_guard" in ana else "판단 불가", "판단 불가")
+            self.assertEqual(ana["markers"]["verdict"]["verdict"], "판단 불가")                              # one distance only
+            self.assertEqual(ana["interpretation"], "해석 보류")
+            y = run.mk_results_yaml(root, cfg)
+            ytext = Path(y).read_text()
+            for val in ("1660.6", "1653.7", "1644.9"):
+                self.assertNotIn(val, ytext)
+            self.assertIsNone(re.compile(r"(?<![\d.])1680(?:\.0+)?(?!\d)(?!\.\d)").search(ytext))
+            texts = "".join(q.read_text(errors="ignore") for q in list(root.rglob("*")) + [Path(y)] if q.is_file() and q.suffix in (".json", ".yaml", ".md", ".csv", ".txt"))
+            for val in FAKE_TAGS.values():
+                self.assertNotIn(val, texts)
+            for key in ("ISO6709", "com.apple.quicktime", '"make"', '"model"'):
+                self.assertNotIn(key, texts)
+            for line in (root / "summary.md").read_text().splitlines():
+                if line.startswith("|") and "---" not in line:
+                    self.assertEqual(line.count("|"), line.strip().count("|"), line)
 
 
 if __name__ == "__main__":
