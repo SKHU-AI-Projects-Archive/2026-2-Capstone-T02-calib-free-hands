@@ -4491,3 +4491,354 @@ def pr_verdict(slope: dict, ref_by_distance: dict, vcfg: dict, n_videos: dict | 
     if hi < float(vcfg["slope_yes_max"]):
         return {**out, "verdict": "반비례 있음"}
     return {**out, "verdict": "판단 보류"}
+
+
+# ====================================================================================================
+# mk  (experiment 35: hand markers, does the f-versus-distance slope survive when the points are measured by image processing instead of a learned model?; new section, earlier functions are used unchanged)
+# Small colour dots stuck on the palm side of the real hand. They are found by colour (HSV), connected components, area and roundness, weighted centres; named once on the sharpest front-window frame by the nearest
+# MediaPipe joints (naming only), followed with Hungarian matching and a homography check, and fed to the unchanged fixed_template analysis in place of the joints. MediaPipe is analysed beside it (pr_video).
+# Image coordinates are continuous (a pixel centre is index + 0.5), like MediaPipe's normalised coordinates times the frame size, so the principal point (W / 2, H / 2) means the same for both.
+# ====================================================================================================
+
+def mk_region(box, margin: float, W: int, H: int) -> tuple:
+    """The hand box enlarged by margin (0.30 = 30 % wider and taller about its centre), clipped to the frame, as integer pixel limits (x0, y0, x1, y1). Only a search area, never a coordinate."""
+    b = np.asarray(box, float)
+    cx, cy = (b[0] + b[2]) / 2.0, (b[1] + b[3]) / 2.0
+    hw, hh = (b[2] - b[0]) / 2.0 * (1.0 + margin), (b[3] - b[1]) / 2.0 * (1.0 + margin)
+    return (int(max(0, np.floor(cx - hw))), int(max(0, np.floor(cy - hh))), int(min(W, np.ceil(cx + hw))), int(min(H, np.ceil(cy + hh))))
+
+
+def mk_color_mask(hsv: np.ndarray, mcfg: dict) -> np.ndarray:
+    """Pixels of the marker colour: hue inside one of mcfg['hue_ranges'] (OpenCV 0-179, ranges may wrap), saturation >= s_min and value >= v_min; a 3 x 3 opening removes single pixels."""
+    h = hsv[..., 0].astype(int)
+    m = np.zeros(h.shape, bool)
+    for lo, hi in mcfg["hue_ranges"]:
+        m |= (h >= int(lo)) & (h <= int(hi))
+    m &= (hsv[..., 1] >= int(mcfg["s_min"])) & (hsv[..., 2] >= int(mcfg["v_min"]))
+    return cv2.morphologyEx(m.astype(np.uint8), cv2.MORPH_OPEN, np.ones((3, 3), np.uint8))
+
+
+def mk_blobs(bgr: np.ndarray, region: tuple, mcfg: dict) -> dict:
+    """Marker centres in a region of a BGR frame. Components with area in [area_min, area_max] and roundness 4 pi A / P^2 >= circularity_min are kept; the centre of a component is its
+    saturation-weighted centroid (continuous image coordinates). Returns {xy (m, 2), area (m,), circularity (m,)}."""
+    x0, y0, x1, y1 = region
+    crop = bgr[y0:y1, x0:x1]
+    hsv = cv2.cvtColor(crop, cv2.COLOR_BGR2HSV)
+    mask = mk_color_mask(hsv, mcfg)
+    cnts, _ = cv2.findContours(mask, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_NONE)
+    xy, areas, circs = [], [], []
+    for c in cnts:
+        a, p = cv2.contourArea(c), cv2.arcLength(c, True)
+        if p <= 0 or not (float(mcfg["area_min"]) <= a <= float(mcfg["area_max"])):
+            continue
+        circ = 4.0 * np.pi * a / (p * p)
+        if circ < float(mcfg["circularity_min"]):
+            continue
+        bx, by, bw, bh = cv2.boundingRect(c)
+        roi = np.zeros((bh, bw), np.uint8)
+        cv2.drawContours(roi, [c - np.array([bx, by])], -1, 1, -1)
+        w = hsv[by:by + bh, bx:bx + bw, 1].astype(float) * roi
+        yy, xx = np.mgrid[by:by + bh, bx:bx + bw]
+        s = w.sum()
+        if s <= 0:
+            continue
+        xy.append([(w * (xx + 0.5)).sum() / s + x0, (w * (yy + 0.5)).sum() / s + y0])
+        areas.append(a)
+        circs.append(circ)
+    return {"xy": np.array(xy, float).reshape(-1, 2), "area": np.array(areas, float), "circularity": np.array(circs, float)}
+
+
+def mk_assign_names(marker_xy: np.ndarray, joints_xy: np.ndarray) -> np.ndarray:
+    """Name every marker with the MediaPipe joint (0-20) nearest to it, one joint per marker (Hungarian assignment on the distances). Used once, on the reference frame; never for a coordinate."""
+    from scipy.optimize import linear_sum_assignment
+    d = np.linalg.norm(marker_xy[:, None, :] - joints_xy[None, :, :], axis=-1)
+    r, c = linear_sum_assignment(d)
+    names = np.full(len(marker_xy), -1, int)
+    names[r] = c
+    return names
+
+
+def mk_homography(src: np.ndarray, dst: np.ndarray, thr_px: float | None = None):
+    """Homography src -> dst (RANSAC with thr_px, or least squares when None). Returns (H, inlier mask) or (None, None)."""
+    if len(src) < 4:
+        return None, None
+    if thr_px is None:
+        H, _ = cv2.findHomography(src.astype(np.float64), dst.astype(np.float64), 0)
+        return H, np.ones(len(src), bool)
+    H, m = cv2.findHomography(src.astype(np.float64), dst.astype(np.float64), cv2.RANSAC, float(thr_px))
+    return H, None if m is None else m.ravel().astype(bool)
+
+
+def mk_track(dets_xy: list, ref_index: int, ref_xy: np.ndarray, box_long_px: np.ndarray, mcfg: dict) -> dict:
+    """Follow the reference markers through the frames (forward and backward from ref_index). dets_xy[i] = detected centres (k, 2) or None. A frame is dropped when it has more detections than markers or fewer
+    than min_markers_ratio x markers, when fewer than that ratio of the markers can be matched, or when the homography reference -> frame (RANSAC) keeps fewer than min_inlier_ratio of them
+    (a swapped pair breaks it). Matching: Hungarian on the distances to the last accepted frame; a pair moving more than move_frac x hand box x min(gap, gap_cap) frames is cut.
+    Returns {xy (n, m, 2) NaN where missing, ok (n,) bool, reason (n,) str}."""
+    from scipy.optimize import linear_sum_assignment
+    n, m = len(dets_xy), len(ref_xy)
+    xy = np.full((n, m, 2), np.nan)
+    ok = np.zeros(n, bool)
+    reason = np.array([""] * n, dtype=object)
+    xy[ref_index], ok[ref_index] = ref_xy, True
+    need = int(np.ceil(float(mcfg["min_markers_ratio"]) * m - 1e-9))
+    for order in (range(ref_index + 1, n), range(ref_index - 1, -1, -1)):
+        last, last_i = ref_xy.copy(), ref_index
+        for i in order:
+            d = dets_xy[i]
+            if d is None:
+                reason[i] = "no_hand_box"
+                continue
+            if len(d) > m:
+                reason[i] = "too_many_markers"
+                continue
+            if len(d) < need:
+                reason[i] = "too_few_markers"
+                continue
+            lim = float(mcfg["move_frac"]) * float(box_long_px[i]) * min(abs(i - last_i), int(mcfg["gap_cap"]))
+            cost = np.linalg.norm(last[:, None, :] - d[None, :, :], axis=-1)
+            r, c = linear_sum_assignment(cost)
+            good = cost[r, c] <= lim
+            r, c = r[good], c[good]
+            if len(r) < need:
+                reason[i] = "match_failed"
+                continue
+            cur = np.full((m, 2), np.nan)
+            cur[r] = d[c]
+            thr = float(mcfg["ransac_frac"]) * float(box_long_px[i])
+            H, inl = mk_homography(ref_xy[r], cur[r], thr)
+            if H is None or inl is None or inl.sum() < float(mcfg["min_inlier_ratio"]) * len(r) or inl.sum() < need:
+                reason[i] = "homography_failed"
+                continue
+            keep = r[inl]
+            cur2 = np.full((m, 2), np.nan)
+            cur2[keep] = cur[keep]
+            xy[i], ok[i] = cur2, True
+            last, last_i = np.where(np.isnan(cur2), last, cur2), i
+    return {"xy": xy, "ok": ok, "reason": reason}
+
+
+def mk_normalise(P: np.ndarray, scale: float):
+    """Similarity T (3 x 3) that moves the centroid of P to 0 and divides by scale."""
+    c = P.mean(0)
+    return np.array([[1.0 / scale, 0, -c[0] / scale], [0, 1.0 / scale, -c[1] / scale], [0, 0, 1.0]])
+
+
+def mk_perspective(src: np.ndarray, dst: np.ndarray, scale: float):
+    """Perspective components (h31, h32) of the homography src -> dst after both point sets are normalised (centroid 0, divided by scale) and h33 set to 1; (nan, nan) when it cannot be fitted."""
+    H, _ = mk_homography(src, dst)
+    if H is None:
+        return np.array([np.nan, np.nan])
+    Hn = mk_normalise(dst, scale) @ H @ np.linalg.inv(mk_normalise(src, scale))
+    if abs(Hn[2, 2]) < 1e-12:
+        return np.array([np.nan, np.nan])
+    Hn = Hn / Hn[2, 2]
+    return np.array([Hn[2, 0], Hn[2, 1]])
+
+
+def mk_perspective_k(p_mp: np.ndarray, p_mk: np.ndarray) -> dict:
+    """Regression slope k (through the origin) of the perspective components of the MediaPipe joints on those of the markers over the frames: 1 = MediaPipe follows the perspective, 0 = it does not.
+    p_mp, p_mk (n, 2); frames with a nan are skipped. Also the correlation of the two."""
+    ok = np.isfinite(p_mp).all(1) & np.isfinite(p_mk).all(1)
+    a, b = p_mp[ok], p_mk[ok]
+    den = float((b * b).sum())
+    return {"k": float((a * b).sum() / den) if den > 0 else None, "corr": float(np.corrcoef(a.ravel(), b.ravel())[0, 1]) if ok.sum() > 2 and a.std() > 0 and b.std() > 0 else None, "n": int(ok.sum())}
+
+
+def mk_planar_gap(ref_markers: np.ndarray, cur_markers: np.ndarray, ref_joints: np.ndarray, cur_joints: np.ndarray, box_long_px: float) -> float:
+    """Mean distance (percent of the hand box) between the current MediaPipe joints and where a planar hand would put them: the reference joints moved by the homography reference -> current markers."""
+    H, _ = mk_homography(ref_markers, cur_markers)
+    if H is None:
+        return float("nan")
+    pred = cv2.perspectiveTransform(ref_joints.reshape(-1, 1, 2).astype(np.float64), H).reshape(-1, 2)
+    return float(100.0 * np.linalg.norm(pred - cur_joints, axis=1).mean() / box_long_px)
+
+
+def mk_sharpness(bgr: np.ndarray, region: tuple) -> float:
+    x0, y0, x1, y1 = region
+    return float(cv2.Laplacian(cv2.cvtColor(bgr[y0:y1, x0:x1], cv2.COLOR_BGR2GRAY), cv2.CV_64F).var())
+
+
+def mk_process(prep: dict, npz, pcfg: dict, c: dict) -> dict:
+    """Markers of one video from the stored MediaPipe detection (hand box and reference naming only): per-frame blobs, reference frame (sharpest front-window frame with every marker found), names,
+    tracking with the homography check. Returns the marker arrays in the 21-joint layout (kp (n, 21, 2), mask, present), the MediaPipe track and the frame statistics, or {'failed': reason}."""
+    mcfg = c["markers"]
+    dset = c["detector_settings"][c["candidate"]["detector"]]
+    pc = copy.deepcopy(pcfg)
+    pc["tracking"]["conf_min"] = float(dset["conf_min"])
+    frames = prep["frames"]
+    times = np.array([r["time_s"] for r in frames])
+    W, H = prep["size"]
+    dets = load_detections(Path(npz))
+    check_alignment(frames, dets)
+    tr = track(dets, times, (W, H), pc["tracking"], front_start_s=float(pc["phases"]["front_skip_s"]))
+    n, m = len(times), int(mcfg["count"])
+    bl = box_long(tr["box"])
+    det, regions = [None] * n, [None] * n
+    for i in range(n):
+        if tr["present"][i]:
+            regions[i] = mk_region(tr["box"][i], float(mcfg["region_margin"]), W, H)
+            det[i] = mk_blobs(cv2.imread(frames[i]["png"], cv2.IMREAD_COLOR), regions[i], mcfg)["xy"]
+    seen = [i for i in range(n) if det[i] is not None]
+    out = {"n_frames": n, "size": [W, H], "times": times, "tr": tr, "det": det, "regions": regions, "box_long": bl, "count": m,
+           "all_found_ratio": float(np.mean([len(det[i]) == m for i in seen])) if seen else 0.0, "hand_frames": len(seen),
+           "n_detected_median": float(np.median([len(det[i]) for i in seen])) if seen else 0.0}
+    fw = front_window(times, tr["present"], tr["kp"], tr["mask"], tr["box"], pc["phases"])
+    cands = [int(i) for i in fw["idx"] if det[i] is not None and len(det[i]) == m]
+    if not cands:
+        return {**out, "failed": "정면 창에 표시가 모두 잡힌 프레임이 없음"}
+    sharp = [mk_sharpness(cv2.imread(frames[i]["png"], cv2.IMREAD_COLOR), regions[i]) for i in cands]
+    ref = cands[int(np.argmax(sharp))]
+    names = mk_assign_names(det[ref], tr["kp"][ref])
+    trk = mk_track(det, ref, det[ref], bl, mcfg)
+    kp = np.full((n, 21, 2), np.nan)
+    for j in range(m):
+        kp[:, names[j]] = trk["xy"][:, j]
+    mask = np.isfinite(kp[..., 0]) & trk["ok"][:, None]
+    win = [i for i in range(n) if 0.5 <= times[i] < 1.5]
+    reasons = {}
+    for r in trk["reason"]:
+        if r:
+            reasons[r] = reasons.get(r, 0) + 1
+    out.update({"ref_index": ref, "ref_time_s": float(times[ref]), "ref_sharpness": float(max(sharp)), "names": names, "track": trk, "kp": kp, "mask": mask, "present": trk["ok"].copy(),
+                "valid_ratio": float(trk["ok"].sum() / max(len(seen), 1)), "reasons": reasons, "window_success": int(trk["ok"][win].sum()), "window_frames": len(win), "front_window": [fw.get("t0"), fw.get("t1")]})
+    return out
+
+
+def mk_draw_reference(prep: dict, proc: dict, path) -> None:
+    """One picture: the reference frame (sharpest front-window frame with every marker found) with the numbered marker centres and their MediaPipe joint names (hand crop, run folder only)."""
+    i = proc["ref_index"]
+    img = cv2.imread(prep["frames"][i]["png"], cv2.IMREAD_COLOR)
+    for j, (x, y) in enumerate(proc["det"][i]):
+        cv2.circle(img, (int(round(x - 0.5)), int(round(y - 0.5))), 7, (255, 200, 0), 2)
+        cv2.putText(img, f"{proc['names'][j]}", (int(x) + 8, int(y) - 8), cv2.FONT_HERSHEY_SIMPLEX, 0.9, (255, 255, 0), 2)
+    for x, y in proc["tr"]["kp"][i]:
+        cv2.circle(img, (int(round(x)), int(round(y))), 3, (0, 255, 0), -1)
+    x0, y0, x1, y1 = proc["regions"][i]
+    crop = img[y0:y1, x0:x1]
+    Path(path).parent.mkdir(parents=True, exist_ok=True)
+    cv2.imwrite(str(path), crop)
+
+
+def mk_precheck_video(args) -> dict:
+    """Pre-check of one video: marker statistics and the reference-frame picture; no analysis. args = (entry, prep, npz, pcfg, c); c['out_dir'] gets the picture."""
+    entry, prep, npz, pcfg, c = args[:5]
+    proc = mk_process(prep, npz, pcfg, c)
+    res = {"video": entry["file"], "distance_cm": float(entry["distance_cm"]), "size": proc["size"], "n_frames": proc["n_frames"], "hand_frames": proc["hand_frames"], "all_found_ratio": proc["all_found_ratio"],
+           "n_detected_median": proc["n_detected_median"], "count": proc["count"]}
+    if "failed" in proc:
+        return {**res, "failed": proc["failed"]}
+    res.update({k: proc[k] for k in ("ref_index", "ref_time_s", "ref_sharpness", "valid_ratio", "reasons", "window_success", "window_frames", "front_window")})
+    res["names"] = [int(x) for x in proc["names"]]
+    # for information: the same tracking with a lower minimum share of markers, to see which markers are lost and how many frames would stay with fewer markers
+    mc = c["markers"]
+    loose = mk_track(proc["det"], proc["ref_index"], proc["det"][proc["ref_index"]], proc["box_long"], {**mc, "min_markers_ratio": 0.5})
+    times = proc["times"]
+    tilt = (times >= 3.0) & loose["ok"]
+    seen_t = np.array([proc["det"][i] is not None and times[i] >= 3.0 for i in range(len(times))])
+    per = np.isfinite(loose["xy"][..., 0])
+    res["loose"] = {"valid_ratio": float(loose["ok"].sum() / max(proc["hand_frames"], 1)), "per_marker_visible_tilt": {int(proc["names"][j]): float(per[tilt, j].mean()) if tilt.any() else None for j in range(proc["count"])},
+                    "share_frames_with_at_least": {str(k): float(np.mean(per[loose["ok"]].sum(1) >= k)) if loose["ok"].any() else None for k in (21, 19, 18, 16, 14)}, "tilt_frames_valid": int(tilt.sum()), "tilt_frames_with_hand": int(seen_t.sum())}
+    if c.get("out_dir"):
+        mk_draw_reference(prep, proc, Path(c["out_dir"]) / f"reference_{Path(entry['file']).stem}.png")
+    return res
+
+
+def mk_overlay(frames: list, proc: dict, path, max_side: int = 960, fps: float = 15.0) -> None:
+    """Overlay video of a marker run: tracked markers (cyan, numbered with their joint name), MediaPipe joints (green, wrist red). Written only into the run folder."""
+    path = Path(path)
+    path.parent.mkdir(parents=True, exist_ok=True)
+    vw = None
+    for i, r in enumerate(frames):
+        img = cv2.imread(r["png"], cv2.IMREAD_COLOR)
+        h, w = img.shape[:2]
+        if proc["tr"]["present"][i]:
+            for j, (x, y) in enumerate(proc["tr"]["kp"][i]):
+                cv2.circle(img, (int(round(x)), int(round(y))), 4, (0, 0, 255) if j == 0 else (0, 255, 0), -1)
+        if proc["present"][i]:
+            for j in range(proc["count"]):
+                x, y = proc["track"]["xy"][i, j]
+                if np.isfinite(x):
+                    cv2.circle(img, (int(round(x - 0.5)), int(round(y - 0.5))), 8, (255, 200, 0), 2)
+                    cv2.putText(img, f"{proc['names'][j]}", (int(x) + 9, int(y) - 9), cv2.FONT_HERSHEY_SIMPLEX, 0.6, (255, 255, 0), 2)
+        s = float(max_side) / max(h, w)
+        img = cv2.resize(img, (int(w * s), int(h * s)))
+        cv2.putText(img, f"t {r['time_s']:.1f}s  markers {'ok' if proc['present'][i] else proc['track']['reason'][i] or '-'}", (10, 28), cv2.FONT_HERSHEY_SIMPLEX, 0.8, (255, 255, 255), 2)
+        if vw is None:
+            vw = cv2.VideoWriter(str(path), cv2.VideoWriter_fourcc(*"mp4v"), fps, (img.shape[1], img.shape[0]))
+        vw.write(img)
+    if vw is not None:
+        vw.release()
+
+
+def mk_video(args) -> dict:
+    """One video of experiment 35: the marker points in place of the joints through the unchanged analysis (fixed_template, front window, nominal tilt phase, block bootstrap), MediaPipe beside it (pr_video),
+    and the diagnostics of the planar-hand check (perspective components, planar gap). args = (entry, prep, npz, pcfg, c); c needs candidate, exclusion, detector_settings, guide, markers."""
+    entry, prep, npz, pcfg, c = args[:5]
+    os.environ.setdefault("OMP_NUM_THREADS", "1")
+    cv2.setNumThreads(1)
+    cand = c["candidate"]
+    dset = c["detector_settings"][cand["detector"]]
+    pc = copy.deepcopy(pcfg)
+    pc["tracking"]["conf_min"] = float(dset["conf_min"])
+    proc = mk_process(prep, npz, pcfg, c)
+    W, H = proc["size"]
+    res = {"video": entry["file"], "distance_cm": float(entry["distance_cm"]), "size": [W, H], "n_frames": proc["n_frames"], "duration_s": float(proc["times"][-1] - proc["times"][0]),
+           "marker_stats": {k: proc.get(k) for k in ("all_found_ratio", "valid_ratio", "n_detected_median", "hand_frames", "window_success", "window_frames", "ref_time_s", "reasons", "front_window")}}
+    mp = pr_video((entry, prep, npz, pcfg, {k: v for k, v in c.items() if k not in ("overlay_dir", "markers")}))
+    res["mediapipe"] = mp
+    if "failed" in proc:
+        res["marker"] = {"failed": proc["failed"]}
+        return res
+    tr, times, n = proc["tr"], proc["times"], proc["n_frames"]
+    if c.get("overlay_dir"):
+        mk_overlay(prep["frames"], proc, Path(c["overlay_dir"]) / f"overlay_{Path(entry['file']).stem}.mp4")
+    ex = c["exclusion"]
+    edge = fresp_edge_rate(tr["box"][proc["present"]], np.ones(int(proc["present"].sum()), bool), W, H) if proc["present"].any() else 1.0
+    reasons = []
+    if 1.0 - proc["valid_ratio"] > float(ex["detect_fail_max"]):
+        reasons.append(f"표시 유효 프레임 {100 * proc['valid_ratio']:.1f}% < {100 * (1 - float(ex['detect_fail_max'])):.0f}%")
+    if edge > float(ex["edge_rate_max"]):
+        reasons.append(f"가장자리 접촉 프레임 {100 * edge:.1f}% > {100 * float(ex['edge_rate_max']):.0f}%")
+    mk = {"excluded": reasons, "edge_rate": float(edge), "valid_ratio": proc["valid_ratio"], "names": [int(x) for x in proc["names"]]}
+    res["marker"] = mk
+    if reasons:
+        return res
+    cfg_mk = copy.deepcopy(pc)
+    names = sorted({int(x) for x in proc["names"]})
+    cfg_mk["joints"]["sets"]["markers"] = names
+    cfg_mk["joints"]["estimate_set"] = "markers"
+    cfg_mk["joints"]["uncertainty_sets"] = ["markers"]
+    seed = int(pc["experiment"]["seed"])
+    a = analyze(proc["kp"], proc["mask"], proc["present"], tr["box"], tr["cls"], times, (W, H), cfg_mk, tilt_start=None, methods_full=("fixed_template",), seed=seed)
+    if "per_method" not in a:
+        mk["failed"] = a.get("failed", "분석 실패")
+        return res
+    sol, pm = a["solutions"]["fixed_template"], a["per_method"]["fixed_template"]
+    grid = np.array(a["grid"])
+    tilt = [i for i, r in enumerate(a["role"]) if r == "tilt"]
+    mk.update({"f": float(sol["f"]), "at_grid_edge": bool(sol["at_grid_edge"]), "side": None if not sol["at_grid_edge"] else ("상한" if sol["f"] >= grid[-1] * (1 - 1e-6) else "하한"),
+               "sharpness": float(pm["diagnostics"]["sharpness"]), "boot_log_std": long_boot_log_std(pm["bootstrap"]["f"]), "curve": {"grid": grid.tolist(), "cost": [float(x) for x in sol["profile_cost"]]},
+               "n_used_frames": int(a["n_target_frames"]), "theta_median": a["theta_tilt"]["median"], "theta_max": a["theta_tilt"]["max"], "theta_p90": a["theta_tilt"]["p90"],
+               "tilt_duration_s": float(times[tilt].max() - a["tilt_start_s"]) if tilt else 0.0, "phase_rms_pct": pr_phase_rms(a, tr["box"]), "box_long_median_px": float(np.nanmedian(proc["box_long"][proc["present"]]))})
+    # planar-hand check: markers define the homography reference -> frame; MediaPipe joints 5-20 against it
+    r0 = proc["ref_index"]
+    ids = list(range(5, 21))
+    ref_mk = proc["track"]["xy"][r0]
+    ref_j = tr["kp"][r0][ids]
+    scale = float(proc["box_long"][r0])
+    theta = np.array([np.nan if x is None else x for x in a["theta2d_deg"]], float)
+    rows = []
+    for i in range(n):
+        if not proc["present"][i] or not tr["mask"][i][ids].all() or not tr["mask"][r0][ids].all():
+            continue
+        okm = np.isfinite(proc["track"]["xy"][i][:, 0])
+        if okm.sum() < 6:
+            continue
+        p_mk = mk_perspective(ref_mk[okm], proc["track"]["xy"][i][okm], scale)
+        p_mp = mk_perspective(ref_j, tr["kp"][i][ids], scale)
+        gap = mk_planar_gap(ref_mk[okm], proc["track"]["xy"][i][okm], ref_j, tr["kp"][i][ids], float(proc["box_long"][i]))
+        rows.append({"index": int(i), "time_s": float(times[i]), "theta2d_deg": None if not np.isfinite(theta[i]) else float(theta[i]), "gap_pct": gap, "p_mk": [float(x) for x in p_mk], "p_mp": [float(x) for x in p_mp]})
+    pmk = np.array([r["p_mk"] for r in rows]).reshape(-1, 2)
+    pmp = np.array([r["p_mp"] for r in rows]).reshape(-1, 2)
+    res["diag"] = {"frames": rows, "k": mk_perspective_k(pmp, pmk), "gap_median_pct": float(np.nanmedian([r["gap_pct"] for r in rows])) if rows else None}
+    return res
