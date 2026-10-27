@@ -6,7 +6,7 @@ from PySide6.QtCore import QSettings
 
 
 class AppSettings:
-    defaults = {"theme": "system", "language": "en", "output_directory": "", "collision_policy": "ask",
+    defaults = {"theme": "system", "language": "en", "output_directory": "", "last_input_directory": "", "last_result_directory": "", "collision_policy": "ask",
                 "preserve_audio": True, "sampling_mode": "uniform", "sample_count": 8, "aggregation": "median",
                 "default_preset_id": "original", "default_calibration_model_id": "anycalib_original",
                 "default_reconstruction_model_id": "wilor_original", "default_configurations_json": ""}

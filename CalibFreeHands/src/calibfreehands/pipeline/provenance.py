@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import hashlib
+import importlib.util
 import platform
 import sys
 from pathlib import Path
@@ -28,4 +29,7 @@ def runtime_metadata() -> dict:
         metadata["cuda_available"] = bool(torch.cuda.is_available())
     except ImportError:
         metadata["torch"] = None
+    spec = importlib.util.find_spec("anycalib")
+    if spec is not None:
+        metadata["anycalib_module"] = {"name": "anycalib", "origin": spec.origin}
     return metadata

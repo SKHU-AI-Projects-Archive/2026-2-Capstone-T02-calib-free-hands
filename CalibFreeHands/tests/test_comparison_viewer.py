@@ -5,6 +5,7 @@ import pytest
 from PySide6.QtWidgets import QCheckBox
 
 from calibfreehands.pipeline import CanonicalResult, save_result
+from calibfreehands.pipeline.result_bundle import write_result_bundle
 
 
 def _session(tmp_path, count=3, mesh=False):
@@ -154,3 +155,52 @@ def test_comparison_viewer_decodes_shared_source_media_once(tmp_path, monkeypatc
     assert len(calls) == 1
     assert all(loaded.media_frames is viewer.loaded_results[0].media_frames for loaded in viewer.loaded_results)
     viewer.close()
+
+
+def _bundle(tmp_path, name, model_id, source_name, source_sha, index):
+    result = CanonicalResult(
+        np.array([0, 1]), np.array([0., .1]), np.zeros((2, 2, 21, 2), np.float32),
+        np.full((2, 2, 21, 3), index, np.float32), np.ones((2, 2), bool),
+        np.full(2, 500., np.float32), (32, 24), confidence=np.full((2, 2), .8, np.float32),
+    )
+    npz, _ = save_result(result, tmp_path / f"{name}-internal", {})
+    metadata = {
+        "application_version": "0.1.0", "source_media_name": source_name,
+        "source_media_path": str(tmp_path / source_name), "source_media_sha256": source_sha,
+        "calibration_model_id": model_id, "calibration_display_name": name,
+        "reconstruction_model_id": "wilor_original", "reconstruction_display_name": "Original WiLoR",
+        "configuration_id": model_id, "configuration_name": name,
+        "reference_configuration_id": "reference", "coordinate_system": "camera_space", "unit": "metre",
+        "focal_px": 500.0, "sampling_mode": "uniform", "sample_count": 8, "aggregation": "median",
+        "principal_point_applied": False, "distortion_applied": False, "run_provenance": {},
+    }
+    path = write_result_bundle(npz, metadata, tmp_path / f"{name}.cfh")
+    from calibfreehands.pipeline.result_bundle import load_result_bundle
+    return load_result_bundle(path)
+
+
+def test_comparison_viewer_accepts_same_source_bundles_and_keeps_existing_modes(tmp_path, qapp):
+    from calibfreehands.visualization.comparison import ComparisonViewer
+    bundles = [
+        _bundle(tmp_path, "Reference", "reference", "source-a.mp4", "a" * 64, 1),
+        _bundle(tmp_path, "Proposed", "proposed", "different-name.mp4", "a" * 64, 2),
+    ]
+    viewer = ComparisonViewer(bundles)
+    assert len(viewer.loaded_results) == 2
+    assert viewer.mode == "overlay"
+    assert viewer.export_csv_button.isEnabled()
+    viewer.set_mode("split")
+    viewer.slider.setValue(1)
+    assert viewer.slider.value() == 1
+    assert all(item.result.keypoints_3d[1, 0, 0, 0] == index for index, item in enumerate(viewer.loaded_results, 1))
+    viewer.close()
+
+
+def test_comparison_viewer_rejects_different_source_hashes(tmp_path):
+    from calibfreehands.visualization.comparison import ComparisonViewer
+    bundles = [
+        _bundle(tmp_path, "Reference", "reference", "same-name.mp4", "a" * 64, 1),
+        _bundle(tmp_path, "Proposed", "proposed", "same-name.mp4", "b" * 64, 2),
+    ]
+    with pytest.raises(ValueError, match="different source media"):
+        ComparisonViewer(bundles)

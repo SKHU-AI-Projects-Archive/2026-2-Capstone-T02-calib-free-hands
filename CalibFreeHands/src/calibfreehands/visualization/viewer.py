@@ -17,6 +17,8 @@ from PySide6.QtWidgets import QCheckBox, QHBoxLayout, QLabel, QPushButton, QSize
 from calibfreehands.media.ffmpeg import FFmpegDecoder
 from calibfreehands.media.probe import probe_media
 from calibfreehands.pipeline.result import CanonicalResult
+from calibfreehands.pipeline.provenance import sha256_file
+from calibfreehands.pipeline.result_bundle import ResultBundle, load_result_bundle
 from .topology import HAND_CONNECTIONS, RAW_TO_VIEW
 
 
@@ -34,6 +36,8 @@ def _reset_gl_shader_cache() -> None:
 class LoadedResult:
     result: CanonicalResult
     media_frames: list[np.ndarray] | None = None
+    source_status: str | None = None
+    metadata: dict | None = None
 
     @property
     def frame_count(self) -> int: return len(self.result.frame_indices)
@@ -46,7 +50,13 @@ class LoadedResult:
 
 
 def load_npz_result(path: Path, decode_media: bool = True) -> LoadedResult:
-    with np.load(path) as data:
+    with np.load(path, allow_pickle=False) as data:
+        required = {"frame_indices", "timestamps", "keypoints_2d", "keypoints_3d", "detected", "focal_px", "image_size"}
+        missing = required - set(data.files)
+        if missing:
+            if "keypoints_3d" not in data.files and "keypoints_3d_relative" in data.files:
+                raise ValueError("This NPZ is an internal raw-pose cache, not a final CalibFreeHands result.")
+            raise ValueError(f"Result NPZ is missing canonical arrays: {', '.join(sorted(missing))}")
         optional = lambda name: data[name] if name in data else None
         result = CanonicalResult(
             frame_indices=data["frame_indices"], timestamps=data["timestamps"], keypoints_2d=data["keypoints_2d"],
@@ -55,15 +65,39 @@ def load_npz_result(path: Path, decode_media: bool = True) -> LoadedResult:
             mano_faces=optional("mano_faces"), confidence=optional("confidence"), bbox=optional("bbox"),
             mano_pose=optional("mano_pose"), mano_shape=optional("mano_shape"), camera_translation=optional("camera_translation"))
     media_frames = None
+    source_status = "unavailable"
     run_path = Path(path).with_name("run.json")
     if decode_media and run_path.is_file():
         try:
-            input_path = json.loads(run_path.read_text(encoding="utf-8")).get("input_path")
-            if input_path and Path(input_path).is_file():
-                info = probe_media(Path(input_path))
-                media_frames = [frame.rgb for frame in FFmpegDecoder().decode_rgb(Path(input_path), info.width, info.height, info.frame_rate)]
-        except (OSError, ValueError, RuntimeError): media_frames = None
-    return LoadedResult(result, media_frames)
+            provenance = json.loads(run_path.read_text(encoding="utf-8"))
+            input_path = provenance.get("input_path")
+            if input_path:
+                media_frames, source_status = _decode_source(Path(input_path), provenance.get("input_sha256"))
+        except (OSError, ValueError, RuntimeError):
+            source_status = "unavailable"
+    return LoadedResult(result, media_frames, source_status)
+
+
+def _decode_source(path: Path, expected_sha256: str | None) -> tuple[list[np.ndarray] | None, str]:
+    if not path.is_file():
+        return None, "missing"
+    try:
+        if expected_sha256 and sha256_file(path).casefold() != expected_sha256.casefold():
+            return None, "changed"
+        info = probe_media(path)
+        frames = [frame.rgb for frame in FFmpegDecoder().decode_rgb(path, info.width, info.height, info.frame_rate)]
+    except (OSError, ValueError, RuntimeError):
+        return None, "unavailable"
+    return frames, "available"
+
+
+def load_bundle_result(bundle: ResultBundle, decode_media: bool = True) -> LoadedResult:
+    metadata = bundle.metadata
+    media, status = None, "unavailable"
+    source_path = metadata.get("source_media_path", "")
+    if decode_media and source_path:
+        media, status = _decode_source(Path(source_path), metadata.get("source_media_sha256"))
+    return LoadedResult(bundle.result, media, status, metadata)
 
 
 class _OverlayCanvas(QWidget):
@@ -75,7 +109,11 @@ class _OverlayCanvas(QWidget):
         painter = QPainter(self)
         try:
             painter.fillRect(self.rect(), Qt.GlobalColor.black)
-            if not self.loaded.media_frames or self.frame >= len(self.loaded.media_frames): return
+            if not self.loaded.media_frames or self.frame >= len(self.loaded.media_frames):
+                message = "Source media is missing" if self.loaded.source_status == "missing" else "Source media is unavailable"
+                painter.setPen(Qt.GlobalColor.lightGray)
+                painter.drawText(self.rect(), Qt.AlignmentFlag.AlignCenter, message)
+                return
             rgb = self.loaded.media_frames[self.frame]; image = QImage(rgb.data, rgb.shape[1], rgb.shape[0], rgb.strides[0], QImage.Format.Format_RGB888)
             painter.drawImage(self.rect(), image); sx, sy = self.width() / rgb.shape[1], self.height() / rgb.shape[0]
             for hand_i, hand in enumerate(self.loaded.result.keypoints_2d[self.frame]):
@@ -200,8 +238,15 @@ class _GLResultView(gl.GLViewWidget):
 
 
 class ResultViewer(QWidget):
-    def __init__(self, result_path: Path):
-        super().__init__(); self.loaded = load_npz_result(result_path); self.setWindowTitle("CalibFreeHands — Result"); self.setMinimumSize(960, 640)
+    def __init__(self, result_path: Path | ResultBundle):
+        super().__init__()
+        if isinstance(result_path, ResultBundle):
+            self.loaded = load_bundle_result(result_path)
+        elif Path(result_path).suffix.lower() == ".cfh":
+            self.loaded = load_bundle_result(load_result_bundle(result_path))
+        else:
+            self.loaded = load_npz_result(result_path)
+        self.setWindowTitle("CalibFreeHands — Result"); self.setMinimumSize(960, 640)
         screen = QGuiApplication.primaryScreen().availableGeometry(); self.resize(min(1400, int(screen.width() * .8)), min(900, int(screen.height() * .8)))
         self._arrow_mode = "frame"
         self.overlay = _OverlayCanvas(self.loaded); self.gl_view = _GLResultView(self.loaded); split = QSplitter(Qt.Orientation.Horizontal); split.addWidget(self.overlay); split.addWidget(self.gl_view); split.setSizes([600, 600])
@@ -284,4 +329,5 @@ class ResultViewer(QWidget):
     def _update_status(self):
         timestamp = self.loaded.result.timestamps[self.slider.value()]
         suffix = f" · {float(timestamp):.3f} s" if np.isfinite(timestamp) else ""
-        self.status.setText(f"Frame {self.slider.value() + 1} / {self.loaded.frame_count}{suffix}")
+        source = " · Source media missing" if self.loaded.source_status == "missing" else (" · Source media changed" if self.loaded.source_status == "changed" else "")
+        self.status.setText(f"Frame {self.slider.value() + 1} / {self.loaded.frame_count}{suffix}{source}")

@@ -40,7 +40,7 @@
 - [x] P0.1 cooperative cancellation regression test
 - [x] P0.2 existing NPZ structural validation for 1_insert and 5_fold_p0
 - [x] P0.2 native Windows minimal GL smoke test with grid/axis/line/scatter/mesh
-- [x] P0.2 repeated ResultViewer lifecycle: 5_fold_p0 → 1_insert → 5_fold_p0
+- [x] P0.2 repeated ResultViewer lifecycle: 5_fold_p0 ??1_insert ??5_fold_p0
 - [x] P0.2 shared display-transform regression test
 - [x] P1-A viewer mesh/grid/axis toggle, auto-fit and raw-data immutability tests
 - [x] P1-A native Qt viewer construction for `1_insert` and `5_fold_p0` results
@@ -81,3 +81,25 @@
 Known remaining validation gap: interactive Windows GUI and visual viewer controls
 still require a human manual check; automated offscreen construction and saved
 result reopening pass.
+
+## Milestone B ??UX Polish / CFH Result Bundle / Result Loading
+
+- [x] Unified file/folder picker opens directly from a menu-free Open button; multi-file and direct-folder selection tested
+- [x] Last input and result directories persist; drag/drop and non-recursive discovery remain covered
+- [x] Configuration headings, input widths, sequential default naming, aligned Theme/Language and separate Output row tested
+- [x] Preserve audio control removed from normal processing UI; automatic preview is false while preview encoder remains
+- [x] `.cfh` round-trip preserves canonical arrays and metadata; archive contains exactly `result.npz` and `metadata.json`
+- [x] Invalid ZIP, missing/extra members, malformed metadata/schema, malformed SHA, and raw-pose NPZ rejected
+- [x] Atomic write failure leaves no partial result or temporary file
+- [x] Safe filename and Ask/Overwrite/Auto rename/Skip result-file collision behavior tested
+- [x] Processing writes one or more `.cfh` files to Output and cleans the internal temporary workspace
+- [x] Same-source comparison uses SHA256 even with different source filenames; mixed-source selection displays a readable error
+- [x] Single and comparison viewers load bundles directly; missing source still permits 3D viewing
+- [x] Legacy canonical NPZ and session APIs remain covered; raw pose NPZ has a readable error
+- [x] Offscreen Qt application suite: 125 passed
+- [x] Real one-frame Original AnyCalib + Original WiLoR smoke produced one `.cfh`; bundle load and ResultViewer construction passed
+- [x] Real two-configuration smoke produced two same-source `.cfh` files, only bundles in Output, shared one WiLoR pose model, and constructed ComparisonViewer
+- [x] Actual AnyCalib module provenance recorded from `HandCalib/AnyCalib/anycalib/__init__.py`
+- [x] No automatic preview was created; temporary internal workspace was removed
+- [ ] Interactive Windows GUI visual check (requires user)
+- [x] Final full diff review

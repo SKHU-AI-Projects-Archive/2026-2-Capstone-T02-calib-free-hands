@@ -459,8 +459,9 @@ def process_comparison_session(
                 if pose_info["checkpoint_sha256"] else {},
                 "mano_assets": pose_info["mano_assets"],
             }
+            source_sha256 = settings.get("source_media_sha256")
             if source_media and Path(source_media).is_file():
-                provenance["input_sha256"] = sha256_file(Path(source_media))
+                provenance["input_sha256"] = source_sha256 or sha256_file(Path(source_media))
             result_npz, run_json = save_result(canonical, result_dir, provenance)
             session.final_results[item.id] = {
                 "name": item.name,

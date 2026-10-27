@@ -1,5 +1,6 @@
 import numpy as np
 from pyqtgraph.opengl.GLGraphicsItem import GLOptions
+import pytest
 from PySide6.QtCore import QEvent, QPointF, Qt
 from PySide6.QtGui import QKeyEvent, QMouseEvent
 from PySide6.QtWidgets import QCheckBox, QSizePolicy, QWidget
@@ -22,6 +23,39 @@ def test_viewer_loads_saved_multiframe_result(tmp_path):
     assert loaded.has_mesh
     assert loaded.has_mesh_topology
     assert not loaded.detected[0, 1]
+
+
+def test_legacy_raw_pose_npz_has_a_readable_validation_error(tmp_path):
+    path = tmp_path / "raw.npz"
+    np.savez(path, keypoints_3d_relative=np.zeros((1, 2, 21, 3)))
+    with pytest.raises(ValueError, match="internal raw-pose cache"):
+        load_npz_result(path)
+
+
+def test_bundle_viewer_opens_3d_when_source_media_is_missing(tmp_path, qapp):
+    from calibfreehands.pipeline.result_bundle import write_result_bundle
+    from calibfreehands.visualization.viewer import ResultViewer
+
+    result = _viewer_result(mesh=False)
+    result_dir = tmp_path / "internal"
+    npz, run = save_result(result, result_dir, {"input_path": str(tmp_path / "removed.mp4")})
+    metadata = {
+        "application_version": "0.1.0", "source_media_name": "removed.mp4",
+        "source_media_path": str(tmp_path / "removed.mp4"), "source_media_sha256": "a" * 64,
+        "calibration_model_id": "anycalib_original", "calibration_display_name": "Original AnyCalib",
+        "reconstruction_model_id": "wilor_original", "reconstruction_display_name": "Original WiLoR",
+        "coordinate_system": "camera_space", "unit": "metre", "focal_px": 500.0,
+        "sampling_mode": "uniform", "sample_count": 8, "aggregation": "median",
+        "principal_point_applied": False, "distortion_applied": False,
+        "run_provenance": {"input_path": str(tmp_path / "removed.mp4")},
+    }
+    bundle = write_result_bundle(npz, metadata, tmp_path / "removed.cfh")
+    viewer = ResultViewer(bundle)
+    assert viewer.loaded.frame_count == 2
+    assert viewer.loaded.media_frames is None
+    assert viewer.loaded.source_status == "missing"
+    assert "Source media missing" in viewer.status.text()
+    viewer.close()
 
 
 def test_viewer_widget_constructs_offscreen(tmp_path, qapp):

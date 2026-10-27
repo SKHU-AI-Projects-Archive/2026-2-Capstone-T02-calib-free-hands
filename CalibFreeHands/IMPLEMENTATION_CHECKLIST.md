@@ -9,7 +9,7 @@
 - [x] Backend-independent frame processing service and canonical result integration
 - [x] Preview encoder boundary with optional audio mapping
 - [x] Queue start/cancel UI bound to QThread lifecycle
-- [x] One Open menu for files/folder, canonical queue paths, duplicate prevention, Remove/Clear, and visible item states
+- [x] One Open button with a unified file/folder picker, canonical queue paths, duplicate prevention, Remove/Clear, and visible item states
 - [x] Sequential whole-queue processing with per-media failure handling, cancellation propagation, and immutable run settings
 - [x] Batch output writability preflight and per-item error details in queue tooltips
 - [x] Persistent resolved output directory with folder picker and single-media automatic result viewer
@@ -61,3 +61,12 @@
 - [x] Comparison viewer Overlay/Split modes with per-configuration visibility, stable colors, and shared frame control
 - [x] Linked split cameras, confidence alpha, reference metrics, and CSV/JSON metric export
 - [x] Comparison viewer session opening without inference rerun; source frames decoded once and shared
+- [x] Milestone B bundle format: atomic ZIP-compatible `.cfh` with canonical `result.npz` and validated `metadata.json`
+- [x] Safe result filenames, SHA256 source identity, model/checkpoint/MANO provenance, and file-scoped collision handling
+- [x] Temporary per-media processing workspace; normal Output contains only user-facing `.cfh` results
+- [x] Automatic preview generation disabled while retaining the audio preference for future explicit preview export
+- [x] `View Results...` opens one or multiple `.cfh` files and rejects mixed source SHA256 selections
+- [x] ResultViewer and ComparisonViewer load bundles without extracting them; missing/changed source media does not block 3D viewing
+- [x] Canonical legacy NPZ/session loading remains available; raw-pose NPZ gives a readable validation error
+- [x] Unified picker, stable configuration headings, aligned settings, persistent input/result directories, and no unused Preserve audio control
+- [x] Milestone B Offscreen Qt, bundle validation, atomic cleanup, output cleanliness, source identity, and auto-viewer tests

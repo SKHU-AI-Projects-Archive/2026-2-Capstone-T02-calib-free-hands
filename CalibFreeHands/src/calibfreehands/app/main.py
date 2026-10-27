@@ -11,12 +11,11 @@ from pathlib import Path
 from PySide6.QtCore import Qt, QStandardPaths
 from PySide6.QtWidgets import (
     QApplication, QFileDialog, QLabel, QListWidget, QListWidgetItem, QMainWindow, QPushButton,
-    QHBoxLayout, QVBoxLayout, QWidget, QComboBox, QLineEdit, QCheckBox, QDoubleSpinBox,
-    QMenu, QAbstractItemView,
+    QHBoxLayout, QVBoxLayout, QWidget, QComboBox, QLineEdit, QDoubleSpinBox,
+    QAbstractItemView, QGridLayout, QMessageBox,
 )
 
 from calibfreehands.media import discover_media
-from calibfreehands.media.discovery import SUPPORTED_EXTENSIONS
 from calibfreehands.media.ffmpeg import FFmpegDecoder
 from calibfreehands.media.probe import probe_media
 from calibfreehands.app.configuration import (
@@ -26,7 +25,7 @@ from calibfreehands.app.configuration import (
     load_configuration,
 )
 from calibfreehands.app.settings import AppSettings
-from calibfreehands.export.paths import choose_output_directory
+from calibfreehands.export.paths import choose_output_file, result_filename
 from calibfreehands.pipeline import JobState, JobThread, ProcessingJob
 from calibfreehands.pipeline.comparison import (
     ComparisonSession,
@@ -34,6 +33,9 @@ from calibfreehands.pipeline.comparison import (
     _validate_configurations,
     process_comparison_session,
 )
+from calibfreehands.pipeline.provenance import sha256_file
+from calibfreehands.pipeline.result_bundle import ResultBundle, load_result_bundle, write_result_bundle
+from calibfreehands.app.media_picker import MediaOpenDialog
 from calibfreehands.visualization.comparison import ComparisonViewer
 from calibfreehands.visualization.viewer import ResultViewer
 import uuid
@@ -54,7 +56,7 @@ class ProcessingSnapshot:
 
 @dataclass(frozen=True)
 class BatchResult:
-    completed: tuple[tuple[Path, Path, ComparisonSession], ...]
+    completed: tuple[tuple[Path, tuple[Path, ...], ComparisonSession | None], ...]
     failures: tuple[str, ...]
 
 
@@ -76,14 +78,22 @@ class ConfigurationRow(QWidget):
         self.reference_focal_container = QWidget()
         focal_layout = QHBoxLayout(self.reference_focal_container)
         focal_layout.setContentsMargins(0, 0, 0, 0)
-        focal_layout.addWidget(QLabel("Reference Focal"))
-        focal_layout.addWidget(self.reference_focal)
+        self.reference_focal_controls = QWidget()
+        focal_controls_layout = QHBoxLayout(self.reference_focal_controls)
+        focal_controls_layout.setContentsMargins(0, 0, 0, 0)
+        focal_controls_layout.addWidget(QLabel("Reference Focal"))
+        focal_controls_layout.addWidget(self.reference_focal)
+        focal_layout.addWidget(self.reference_focal_controls)
+        self.reference_focal_container.setMinimumWidth(190)
         self.remove = QPushButton("Remove")
         layout = QHBoxLayout(self)
         layout.setContentsMargins(0, 0, 0, 0)
-        layout.addWidget(self.name, 1)
-        layout.addWidget(self.calibration, 2)
-        layout.addWidget(self.reconstruction, 2)
+        self.name.setMinimumWidth(150)
+        self.calibration.setMinimumWidth(170)
+        self.reconstruction.setMinimumWidth(170)
+        layout.addWidget(self.name, 3)
+        layout.addWidget(self.calibration, 4)
+        layout.addWidget(self.reconstruction, 4)
         layout.addWidget(self.reference_focal_container)
         layout.addWidget(self.remove)
         self.calibration.currentIndexChanged.connect(self._update_reference)
@@ -91,7 +101,7 @@ class ConfigurationRow(QWidget):
 
     def _update_reference(self, *_args):
         visible = self.calibration.currentData() == "checkerboard_reference"
-        self.reference_focal_container.setVisible(visible)
+        self.reference_focal_controls.setVisible(visible)
         self.reference_focal.setEnabled(visible)
 
     def configuration(self) -> PipelineConfiguration:
@@ -109,7 +119,7 @@ class MainWindow(QMainWindow):
     def __init__(self) -> None:
         super().__init__()
         self.setWindowTitle("CalibFreeHands")
-        self.setMinimumSize(760, 520)
+        self.setMinimumSize(980, 560)
         self.queue = QListWidget()
         self.queue.setSelectionMode(QAbstractItemView.SelectionMode.ExtendedSelection)
         self.queue.itemSelectionChanged.connect(self._refresh_queue_buttons)
@@ -118,19 +128,14 @@ class MainWindow(QMainWindow):
         self.configuration = load_configuration()
         self._updating_controls = False
         self.open_button = QPushButton("Open...")
-        open_menu = QMenu(self.open_button)
-        self.open_files_action = open_menu.addAction("Files...")
-        self.open_folder_action = open_menu.addAction("Folder...")
-        self.open_files_action.triggered.connect(self._browse_files)
-        self.open_folder_action.triggered.connect(self._browse_folder)
-        self.open_button.setMenu(open_menu)
+        self.open_button.clicked.connect(self._open_media)
         self.remove_button = QPushButton("Remove")
         self.remove_button.clicked.connect(self._remove_selected)
         self.clear_button = QPushButton("Clear")
         self.clear_button.clicked.connect(self._clear_queue)
         self.start_button = QPushButton("Start Processing")
         self.start_button.clicked.connect(self._start_selected)
-        open_result = QPushButton("Open saved result")
+        open_result = QPushButton("View Results...")
         open_result.clicked.connect(self._open_result)
         self.cancel = QPushButton("Cancel")
         self.cancel.setEnabled(False)
@@ -150,6 +155,17 @@ class MainWindow(QMainWindow):
         self.rows_widget = QWidget()
         self.rows_layout = QVBoxLayout(self.rows_widget)
         self.rows_layout.setContentsMargins(0, 0, 0, 0)
+        self.rows_header = QWidget()
+        header_layout = QHBoxLayout(self.rows_header)
+        header_layout.setContentsMargins(0, 0, 0, 0)
+        for text, stretch in (("Name", 3), ("Calibration", 4), ("Reconstruction", 4), ("Reference Focal", 0), ("Action", 0)):
+            label = QLabel(text)
+            if text == "Reference Focal":
+                label.setMinimumWidth(190)
+            elif text == "Action":
+                label.setMinimumWidth(80)
+            header_layout.addWidget(label, stretch)
+        self.rows_layout.addWidget(self.rows_header)
         self.set_default_button = QPushButton("Set as default")
         self.set_default_button.clicked.connect(self._save_defaults)
         model_row = QHBoxLayout()
@@ -159,9 +175,11 @@ class MainWindow(QMainWindow):
         self.add_configuration_button.clicked.connect(self._add_configuration_row)
         model_row.addWidget(self.add_configuration_button)
         model_row.addWidget(self.set_default_button)
-        settings_row = QHBoxLayout()
+        settings_row = QGridLayout()
+        settings_row.setColumnStretch(1, 1); settings_row.setColumnStretch(3, 1)
         theme = QComboBox(); theme.addItems(["System", "Light", "Dark"]); theme.setCurrentText(self.settings.get("theme").title()); theme.currentTextChanged.connect(self._set_theme)
         language = QComboBox(); language.addItems(["English", "한국어"]); language.setCurrentText("한국어" if self.settings.get("language") == "ko" else "English"); language.currentTextChanged.connect(lambda value: self._set_setting("language", "ko" if value == "한국어" else "en"))
+        self.theme_combo, self.language_combo = theme, language
         self.output_path = QLineEdit()
         self.output_path.setReadOnly(True)
         saved_output = str(self.settings.get("output_directory")).strip()
@@ -183,10 +201,8 @@ class MainWindow(QMainWindow):
         self.sample_count_combo = sample_count
         self.aggregation_combo = aggregation
         self.collision_combo = collision
-        self.preserve_audio = QCheckBox("Preserve audio")
-        self.preserve_audio.setChecked(bool(self.settings.get("preserve_audio")))
-        self.preserve_audio.toggled.connect(lambda value: self._set_setting("preserve_audio", value))
-        settings_row.addWidget(QLabel("Theme")); settings_row.addWidget(theme); settings_row.addWidget(QLabel("Language")); settings_row.addWidget(language)
+        settings_row.addWidget(QLabel("Theme"), 0, 0); settings_row.addWidget(theme, 0, 1)
+        settings_row.addWidget(QLabel("Language"), 0, 2); settings_row.addWidget(language, 0, 3)
         output_row = QHBoxLayout()
         output_row.addWidget(QLabel("Output"))
         output_row.addWidget(self.output_path, 1)
@@ -196,7 +212,6 @@ class MainWindow(QMainWindow):
         for label, control in (("Collision", collision), ("Sampling", sampling), ("Sample count", sample_count), ("Aggregate", aggregation)):
             group = QHBoxLayout(); group.setContentsMargins(0, 0, 0, 0); group.setSpacing(4)
             group.addWidget(QLabel(label)); group.addWidget(control); processing_row.addLayout(group)
-        processing_row.addWidget(self.preserve_audio)
         layout = QVBoxLayout()
         layout.addWidget(QLabel("Input / Queue"))
         layout.addWidget(self.queue, 1)
@@ -215,6 +230,7 @@ class MainWindow(QMainWindow):
         self._processing = False
         self._active_snapshot = None
         self._result_viewer = None
+        self._open_viewers = []
         self._restore_model_defaults()
         self.preset_combo.currentIndexChanged.connect(self._apply_selected_preset)
         for control in (sampling, sample_count, aggregation):
@@ -258,7 +274,11 @@ class MainWindow(QMainWindow):
 
     def _add_configuration_row(self):
         current = self.configuration_rows[-1].configuration()
-        self._add_row(f"Configuration {len(self.configuration_rows) + 1}", current.calibration_model_id,
+        used_names = {row.name.text().strip() for row in self.configuration_rows}
+        next_index = 1
+        while f"Configuration {next_index}" in used_names:
+            next_index += 1
+        self._add_row(f"Configuration {next_index}", current.calibration_model_id,
                       current.reconstruction_model_id, current.reference_focal_px or 1000.0)
         self._model_or_processing_changed()
 
@@ -532,15 +552,20 @@ class MainWindow(QMainWindow):
         self._add_paths(paths)
         event.acceptProposedAction()
 
-    def _browse_files(self) -> None:
-        extensions = " ".join(f"*{suffix}" for suffix in sorted(SUPPORTED_EXTENSIONS))
-        files, _ = QFileDialog.getOpenFileNames(self, "Select media", "", f"Supported media ({extensions})")
-        self._add_paths([Path(item) for item in files])
-
-    def _browse_folder(self) -> None:
-        folder = QFileDialog.getExistingDirectory(self, "Select media folder")
-        if folder:
-            self._add_paths(discover_media(Path(folder)))
+    def _open_media(self) -> None:
+        start = Path(self.settings.get("last_input_directory") or Path.home()).expanduser()
+        if not start.is_dir():
+            start = Path.home()
+        dialog = MediaOpenDialog(self, start)
+        if not dialog.exec():
+            return
+        selected = dialog.selected_paths()
+        if not selected:
+            return
+        self._add_paths(selected)
+        last = selected[-1] if selected[-1].is_dir() else selected[-1].parent
+        self.settings.set("last_input_directory", str(last.resolve()))
+        self.settings.sync()
 
     def _browse_output(self) -> None:
         folder = QFileDialog.getExistingDirectory(self, "Select output folder", self.output_path.text())
@@ -565,7 +590,7 @@ class MainWindow(QMainWindow):
             self.aggregation_combo.currentData(),
             output_directory,
             str(self.collision_combo.currentText()).lower().replace(" ", "_"),
-            self.preserve_audio.isChecked(),
+            bool(self.settings.get("preserve_audio")),
         )
 
     @staticmethod
@@ -581,7 +606,7 @@ class MainWindow(QMainWindow):
             self.open_button, self.queue, self.start_button, self.output_browse_button,
             self.preset_combo, self.add_configuration_button, self.set_default_button,
             self.sampling_combo, self.sample_count_combo, self.aggregation_combo,
-            self.collision_combo, self.preserve_audio,
+            self.collision_combo,
             *(control for row in self.configuration_rows for control in (
                 row.name, row.calibration, row.reconstruction, row.reference_focal_container, row.remove
             )),
@@ -667,16 +692,13 @@ class MainWindow(QMainWindow):
             return
         self.progress.setText("Completed")
         if len(self._active_snapshot.queue_paths) == 1 and len(result.completed) == 1:
-            _, output_dir, session = result.completed[0]
+            _, bundle_paths, _session = result.completed[0]
+            if not bundle_paths:
+                self.progress.setText("Completed — no new results (all outputs skipped)")
+                return
             try:
-                if len(session.configurations) == 1:
-                    result_path = output_dir / session.final_results[session.configurations[0].id]["path"]
-                    viewer = ResultViewer(result_path)
-                else:
-                    viewer = ComparisonViewer(output_dir / "session.json")
-                viewer.setAttribute(Qt.WidgetAttribute.WA_DeleteOnClose)
-                viewer.show()
-                self._result_viewer = viewer
+                bundles = [load_result_bundle(path) for path in bundle_paths]
+                self._show_result_bundles(bundles)
             except Exception as exc:
                 self.progress.setText(f"Completed — Viewer could not open: {exc}")
 
@@ -704,44 +726,141 @@ class MainWindow(QMainWindow):
                 self.sampling_combo.currentData(), int(self.sample_count_combo.currentText()),
                 self.aggregation_combo.currentData(),
             )
-            preserve_audio = self.preserve_audio.isChecked()
+            preserve_audio = bool(self.settings.get("preserve_audio"))
         if job: job.report(1, 1, stage="Preparing media")
+        if job:
+            job.report(1, 1, stage="Hashing source media")
+        source_sha256 = sha256_file(input_path)
         frames = []
         for frame in FFmpegDecoder().decode_rgb(input_path, info.width, info.height, info.frame_rate):
             if job and job.cancelled:
                 raise InterruptedError("Queue processing cancelled during media decoding")
             frames.append(frame)
-        output_dir = choose_output_directory(output_base, input_path.stem, collision_policy)
+        destinations = []
+        reserved = set()
+        for configuration in configurations:
+            calibration = self.configuration.calibration_models[configuration.calibration_model_id]
+            reconstruction = self.configuration.reconstruction_models[configuration.reconstruction_model_id]
+            filename = result_filename(input_path.stem, calibration.display_name, reconstruction.display_name)
+            destination = choose_output_file(output_base, filename, collision_policy)
+            if destination is not None and destination in reserved:
+                index = 1
+                while (output_base / f"{Path(filename).stem}_{index}{Path(filename).suffix}") in reserved or (output_base / f"{Path(filename).stem}_{index}{Path(filename).suffix}").exists():
+                    index += 1
+                destination = output_base / f"{Path(filename).stem}_{index}{Path(filename).suffix}"
+            if destination is not None:
+                reserved.add(destination)
+            destinations.append(destination)
+        active_configurations = [configuration for configuration, destination in zip(configurations, destinations)
+                                 if destination is not None]
+        if not active_configurations:
+            if job:
+                job.report(1, 1, stage="All result files skipped")
+            return (), None
         settings = {
             "sampling_mode": sampling_mode, "sample_count": sample_count, "aggregation": aggregation,
             "preserve_audio": preserve_audio, "input_path": str(input_path), "preset_id": preset_id,
-            "fps": info.frame_rate or 30.0, "create_preview": True,
+            "fps": info.frame_rate or 30.0, "create_preview": False, "source_media_sha256": source_sha256,
         }
         def progress(stage, current, total):
             if job:
                 position = selection.queue_paths.index(input_path) + 1 if isinstance(selection, ProcessingSnapshot) else 1
                 queue_total = len(selection.queue_paths) if isinstance(selection, ProcessingSnapshot) else 1
                 job.report(current, total, stage=f"{position}/{queue_total} {input_path.name}: {stage}")
-        session = process_comparison_session(
-            frames, list(configurations), self.configuration, root, output_dir, settings,
-            progress, lambda: bool(job and job.cancelled),
-        )
-        return output_dir, session
+        bundle_paths = []
+        mano_hashes = {}
+        with tempfile.TemporaryDirectory(prefix="calibfreehands-") as working_directory:
+            working_directory = Path(working_directory)
+            session = process_comparison_session(
+                frames, active_configurations, self.configuration, root, working_directory, settings,
+                progress, lambda: bool(job and job.cancelled),
+            )
+            destination_by_id = {item.id: destination for item, destination in zip(configurations, destinations)}
+            for item in active_configurations:
+                if job and job.cancelled:
+                    raise InterruptedError("Queue processing cancelled while packaging results")
+                record = session.final_results[item.id]
+                run_path = working_directory / record["run_json"]
+                run_metadata = json.loads(run_path.read_text(encoding="utf-8"))
+                calibration = session.calibration_results[record["calibration_result_id"]]
+                pose = session.raw_pose_results[item.reconstruction_model_id]
+                mano_provenance = {}
+                for hand, asset_path in pose.get("mano_assets", {}).items():
+                    asset = Path(asset_path)
+                    if hand not in mano_hashes:
+                        mano_hashes[hand] = sha256_file(asset) if asset.is_file() else None
+                    mano_provenance[hand] = {"path": str(asset), "sha256": mano_hashes[hand]}
+                model_calibration = self.configuration.calibration_models[item.calibration_model_id]
+                model_reconstruction = self.configuration.reconstruction_models[item.reconstruction_model_id]
+                metadata = {
+                    "application_version": "0.1.0", "source_media_name": input_path.name,
+                    "source_media_path": str(input_path.resolve()), "source_media_sha256": source_sha256,
+                    "image_size": {"width": info.width, "height": info.height},
+                    "calibration_model_id": item.calibration_model_id,
+                    "calibration_display_name": model_calibration.display_name,
+                    "reconstruction_model_id": item.reconstruction_model_id,
+                    "reconstruction_display_name": model_reconstruction.display_name,
+                    "configuration_id": item.id, "configuration_name": item.name,
+                    "reference_configuration_id": session.reference_configuration_id,
+                    "focal_px": float(record["focal_px"]), "sampling_mode": sampling_mode,
+                    "sample_count": int(sample_count), "aggregation": aggregation,
+                    "coordinate_system": run_metadata.get("coordinate_system", "camera_space"),
+                    "unit": run_metadata.get("unit", "metre"),
+                    "principal_point_applied": run_metadata.get("applied_camera_parameters", {}).get("principal_point_applied", False),
+                    "distortion_applied": run_metadata.get("applied_camera_parameters", {}).get("distortion_applied", False),
+                    "calibration_provenance": calibration.get("metadata", {}),
+                    "reconstruction_checkpoint": pose.get("checkpoint"),
+                    "reconstruction_checkpoint_sha256": pose.get("checkpoint_sha256"),
+                    "mano_provenance": mano_provenance, "run_provenance": run_metadata,
+                }
+                destination = destination_by_id[item.id]
+                final_path = destination
+                if final_path.exists() and collision_policy != "overwrite":
+                    if collision_policy == "skip":
+                        continue
+                    if collision_policy == "auto_rename":
+                        final_path = choose_output_file(output_base, final_path.name, "auto_rename")
+                    else:
+                        raise FileExistsError(f"result appeared during processing; refusing to overwrite: {final_path}")
+                bundle_paths.append(write_result_bundle(working_directory / record["path"], metadata, final_path))
+                if job and job.cancelled:
+                    raise InterruptedError("Queue processing cancelled after atomically writing a result")
+        return tuple(bundle_paths), session
 
     def _cancel_job(self) -> None:
         if self._job_thread is not None:
             self._job_thread.cancel()
 
+    def _show_result_bundles(self, bundles: list[ResultBundle]) -> None:
+        if len(bundles) > 1:
+            source_ids = {bundle.metadata["source_media_sha256"].casefold() for bundle in bundles}
+            if len(source_ids) != 1:
+                raise ValueError("Selected results were generated from different source media.")
+            viewer = ComparisonViewer(bundles)
+        else:
+            viewer = ResultViewer(bundles[0])
+        viewer.setAttribute(Qt.WidgetAttribute.WA_DeleteOnClose)
+        viewer.show()
+        self._result_viewer = viewer
+        self._open_viewers.append(viewer)
+
     def _open_result(self) -> None:
-        path, _selected_filter = QFileDialog.getOpenFileName(
-            self, "Open saved result", "", "NumPy result (*.npz);;Comparison session (session.json)"
+        start_directory = Path(self.settings.get("last_result_directory") or self.output_path.text()).expanduser()
+        if not start_directory.is_dir():
+            start_directory = Path(self.output_path.text())
+        paths, _selected_filter = QFileDialog.getOpenFileNames(
+            self, "View Results...", str(start_directory), "CalibFreeHands Result (*.cfh)"
         )
-        if path:
-            result_path = Path(path)
-            viewer = ComparisonViewer(result_path) if result_path.name == "session.json" else ResultViewer(result_path)
-            viewer.setAttribute(Qt.WidgetAttribute.WA_DeleteOnClose)
-            viewer.show()
-            self._result_viewer = viewer
+        if not paths:
+            return
+        result_paths = [Path(path).resolve() for path in paths]
+        self.settings.set("last_result_directory", str(result_paths[-1].parent))
+        self.settings.sync()
+        try:
+            bundles = [load_result_bundle(path) for path in result_paths]
+            self._show_result_bundles(bundles)
+        except (OSError, ValueError, KeyError) as exc:
+            QMessageBox.warning(self, "Could not open results", str(exc))
 
 
 def main() -> int:

@@ -202,28 +202,34 @@ def test_processing_path_uses_selected_registry_models_and_records_selection(tmp
     main = importlib.import_module("calibfreehands.app.main")
     monkeypatch.setattr(main, "AppSettings", lambda: AppSettings(tmp_path / "settings.ini"))
     window = main.MainWindow()
-    created = []
+    source = tmp_path / "input.mp4"
+    source.touch()
     monkeypatch.setattr(main, "probe_media", lambda path: SimpleNamespace(width=8, height=8, frame_rate=25.0))
     monkeypatch.setattr(main, "FFmpegDecoder", lambda: SimpleNamespace(decode_rgb=lambda *args: ["frame"]))
-    monkeypatch.setattr(main, "choose_output_directory", lambda *args: tmp_path)
+    monkeypatch.setattr(main, "choose_output_file", lambda *args: tmp_path / "output.cfh")
     captured = {}
-    monkeypatch.setattr(main, "process_comparison_session", lambda frames, configurations, config, root, out, settings, *args: captured.update(
-        configurations=configurations, settings=settings
-    ))
+    def process(frames, configurations, config, root, out, settings, *args):
+        captured.update(configurations=configurations, settings=settings)
+        from test_queue_workflow import _synthetic_session
+        return _synthetic_session(out, configurations, settings)
+    monkeypatch.setattr(main, "process_comparison_session", process)
     selection = {
         "configurations": [main.PipelineConfiguration("stable-id", "Original", "anycalib_original", "wilor_original")],
         "preset_id": "original",
     }
 
-    window._process_media(Path("input.mp4"), selection=selection)
+    window._process_media(source, selection=selection)
 
     assert captured["configurations"][0].calibration_model_id == "anycalib_original"
     assert captured["configurations"][0].reconstruction_model_id == "wilor_original"
     assert captured["settings"]["preset_id"] == "original"
+    assert captured["settings"]["create_preview"] is False
+    assert (tmp_path / "output.cfh").is_file()
+    assert {path.name for path in tmp_path.iterdir()} == {"settings.ini", "input.mp4", "output.cfh"}
     window.close()
 
 
-def test_main_window_groups_sample_count_and_preserves_sampling_toggle(tmp_path, monkeypatch, qapp):
+def test_main_window_groups_processing_settings_without_unused_audio_control(tmp_path, monkeypatch, qapp):
     main = importlib.import_module("calibfreehands.app.main")
 
     monkeypatch.setattr(main, "AppSettings", lambda: AppSettings(tmp_path / "settings.ini"))
@@ -232,7 +238,7 @@ def test_main_window_groups_sample_count_and_preserves_sampling_toggle(tmp_path,
     window = MainWindow()
     labels = [label.text() for label in window.findChildren(QLabel)]
     combos = window.findChildren(QComboBox)
-    processing_row = next(item.layout() for item in (window.centralWidget().layout().itemAt(i) for i in range(window.centralWidget().layout().count())) if item and item.layout() and item.layout().count() == 5 and item.layout().itemAt(0).layout() is not None and item.layout().itemAt(0).layout().itemAt(0).widget().text() == "Collision")
+    processing_row = next(item.layout() for item in (window.centralWidget().layout().itemAt(i) for i in range(window.centralWidget().layout().count())) if item and item.layout() and item.layout().count() == 4 and item.layout().itemAt(0).layout() is not None and item.layout().itemAt(0).layout().itemAt(0).widget().text() == "Collision")
     sampling = next(combo for combo in combos if [combo.itemText(i) for i in range(combo.count())] == ["Uniform", "All frames"])
     sample_count = next(combo for combo in combos if [combo.itemText(i) for i in range(combo.count())] == ["4", "8", "16", "32"])
     collision = next(combo for combo in combos if [combo.itemText(i) for i in range(combo.count())] == ["Ask", "Overwrite", "Auto rename", "Skip"])
@@ -248,7 +254,7 @@ def test_main_window_groups_sample_count_and_preserves_sampling_toggle(tmp_path,
     assert sampling.currentText() == "Uniform"
     assert sample_count.currentText() == str(window.settings.get("sample_count"))
     assert aggregation.currentText() == "Median"
-    assert next(box for box in window.findChildren(QCheckBox) if box.text() == "Preserve audio").isChecked()
+    assert not any(box.text() == "Preserve audio" for box in window.findChildren(QCheckBox))
     sampling.setCurrentText("All frames")
     assert not sample_count.isEnabled()
     sampling.setCurrentText("Uniform")
@@ -345,12 +351,11 @@ def test_main_window_restores_controls_after_cancellation(tmp_path, monkeypatch,
 
 
 @pytest.mark.parametrize(
-    "selected_filter, filename, expected_viewer",
-    [("NumPy result (*.npz)", "session.json", "comparison"),
-     ("Comparison session (session.json)", "result.npz", "result")],
+    "filenames, expected_viewer",
+    [(["result.cfh"], "result"), (["a.cfh", "b.cfh"], "comparison")],
 )
-def test_open_saved_result_uses_selected_file_type(tmp_path, monkeypatch, qapp,
-                                                   selected_filter, filename, expected_viewer):
+def test_view_results_opens_single_bundle_or_same_source_comparison(tmp_path, monkeypatch, qapp,
+                                                                    filenames, expected_viewer):
     main = importlib.import_module("calibfreehands.app.main")
     monkeypatch.setattr(main, "AppSettings", lambda: AppSettings(tmp_path / "settings.ini"))
     opened = {}
@@ -364,12 +369,17 @@ def test_open_saved_result_uses_selected_file_type(tmp_path, monkeypatch, qapp,
     class ComparisonStub(Viewer): viewer_type = "comparison"
     class ResultStub(Viewer): viewer_type = "result"
 
-    monkeypatch.setattr(main.QFileDialog, "getOpenFileName", lambda *args: (str(tmp_path / filename), selected_filter))
+    paths = [tmp_path / filename for filename in filenames]
+    monkeypatch.setattr(main.QFileDialog, "getOpenFileNames", lambda *args: ([str(path) for path in paths], ""))
     monkeypatch.setattr(main, "ComparisonViewer", ComparisonStub)
     monkeypatch.setattr(main, "ResultViewer", ResultStub)
+    monkeypatch.setattr(main, "load_result_bundle", lambda path: SimpleNamespace(metadata={"source_media_sha256": "a" * 64}))
     window = main.MainWindow()
     window._open_result()
-    assert opened["path"].name == filename
     assert opened["viewer"] == expected_viewer
+    if expected_viewer == "comparison":
+        assert len(opened["path"]) == 2
+    else:
+        assert opened["path"].metadata["source_media_sha256"] == "a" * 64
     assert opened["shown"]
     window.close()

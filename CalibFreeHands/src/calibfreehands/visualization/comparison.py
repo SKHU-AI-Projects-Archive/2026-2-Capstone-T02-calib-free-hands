@@ -16,7 +16,8 @@ from PySide6.QtWidgets import (
 from calibfreehands.media.ffmpeg import FFmpegDecoder
 from calibfreehands.media.probe import probe_media
 from .topology import HAND_CONNECTIONS, RAW_TO_VIEW
-from .viewer import _GLResultView, _OverlayCanvas, load_npz_result
+from calibfreehands.pipeline.result_bundle import ResultBundle
+from .viewer import _GLResultView, _OverlayCanvas, load_bundle_result, load_npz_result
 
 METRIC_FIELDS = (
     "configuration_id", "configuration_name", "reference_configuration_id", "frame_index", "timestamp_s", "hand",
@@ -61,6 +62,40 @@ def _session_results(session_path: Path):
     return data, results
 
 
+def _bundle_results(bundles: list[ResultBundle]):
+    if not bundles:
+        raise ValueError("no result bundles were selected")
+    source_ids = {bundle.metadata.get("source_media_sha256", "").casefold() for bundle in bundles}
+    if "" in source_ids or len(source_ids) != 1:
+        raise ValueError("Selected results were generated from different source media.")
+    results, configurations = [], []
+    for index, bundle in enumerate(bundles):
+        metadata = bundle.metadata
+        config = {
+            "id": metadata.get("configuration_id", f"bundle-{index + 1}"),
+            "name": metadata.get("configuration_name") or
+                    f"{metadata['calibration_display_name']} + {metadata['reconstruction_display_name']}",
+            "calibration_model_id": metadata["calibration_model_id"],
+            "reconstruction_model_id": metadata["reconstruction_model_id"],
+        }
+        configurations.append(config)
+        results.append((config, load_bundle_result(bundle, decode_media=False)))
+    media_loaded = load_bundle_result(bundles[0], decode_media=True)
+    for _, loaded in results:
+        loaded.media_frames = media_loaded.media_frames
+        loaded.source_status = media_loaded.source_status
+    session = {
+        "schema_version": 1, "configurations": configurations, "final_results": {},
+        "source_media": bundles[0].metadata.get("source_media_path", ""),
+        "reference_configuration_id": bundles[0].metadata.get("reference_configuration_id"),
+    }
+    return session, results
+
+
+def _comparison_results(source):
+    return _bundle_results(source) if isinstance(source, (list, tuple)) else _session_results(source)
+
+
 def _color_for_index(index: int):
     palette = ((0.91, 0.30, 0.24), (0.20, 0.56, 0.86), (0.20, 0.68, 0.42),
                (0.63, 0.42, 0.78), (0.93, 0.61, 0.18), (0.17, 0.70, 0.70))
@@ -69,8 +104,8 @@ def _color_for_index(index: int):
     return colorsys.hsv_to_rgb((index * 0.61803398875) % 1, 0.72, 0.9)
 
 
-def calculate_reference_metrics(session_path: Path) -> list[dict]:
-    data, entries = _session_results(session_path)
+def calculate_reference_metrics(session_path: Path | list[ResultBundle]) -> list[dict]:
+    data, entries = _comparison_results(session_path)
     reference_id = data.get("reference_configuration_id")
     reference = next((loaded.result for config, loaded in entries if config["id"] == reference_id), None)
     if reference is None:
@@ -110,14 +145,14 @@ def calculate_reference_metrics(session_path: Path) -> list[dict]:
     return rows
 
 
-def export_metrics_json(session_path: Path, output_path: Path) -> Path:
+def export_metrics_json(session_path: Path | list[ResultBundle], output_path: Path) -> Path:
     rows = calculate_reference_metrics(session_path)
     output_path = Path(output_path)
     output_path.write_text(json.dumps(rows, indent=2, allow_nan=False), encoding="utf-8")
     return output_path
 
 
-def export_metrics_csv(session_path: Path, output_path: Path) -> Path:
+def export_metrics_csv(session_path: Path | list[ResultBundle], output_path: Path) -> Path:
     rows = calculate_reference_metrics(session_path)
     output_path = Path(output_path)
     with output_path.open("w", newline="", encoding="utf-8") as stream:
@@ -282,10 +317,11 @@ class _OverlayComparisonView(_GLResultView):
 
 
 class ComparisonViewer(QWidget):
-    def __init__(self, session_path: Path):
+    def __init__(self, session_path: Path | list[ResultBundle]):
         super().__init__()
-        self.session_path = Path(session_path).resolve()
-        self.session, entries = _session_results(self.session_path)
+        self.bundle_results = list(session_path) if isinstance(session_path, (list, tuple)) else None
+        self.session_path = None if self.bundle_results is not None else Path(session_path).resolve()
+        self.session, entries = _comparison_results(session_path)
         self.configurations = [config for config, _ in entries]
         self.loaded_results = [loaded for _, loaded in entries]
         self.configuration_colors = [_color_for_index(i) for i in range(len(entries))]
@@ -366,6 +402,10 @@ class ComparisonViewer(QWidget):
         self.metric_status = QLabel()
         self.metric_status.setToolTip("Camera-space differences from the selected Reference configuration; these are not ground-truth errors.")
         exports.addWidget(self.export_csv_button); exports.addWidget(self.export_json_button); exports.addWidget(self.metric_status, 1)
+        has_reference = any(config["id"] == self.session.get("reference_configuration_id") for config in self.configurations)
+        self.export_csv_button.setEnabled(has_reference); self.export_json_button.setEnabled(has_reference)
+        if not has_reference:
+            self.metric_status.setText("Select a saved reference configuration to export reference metrics")
         layout = QVBoxLayout(self); layout.addLayout(top); layout.addWidget(self.views, 1); layout.addWidget(self.slider); layout.addLayout(geometry); layout.addLayout(self.view_buttons); layout.addLayout(playback); layout.addWidget(self.status); layout.addLayout(exports)
         self.installEventFilter(self)
         for widget in self.findChildren(QWidget): widget.installEventFilter(self)
@@ -422,7 +462,8 @@ class ComparisonViewer(QWidget):
         for view in self.split_views: view.set_frame(frame)
         timestamp = self.loaded_results[0].result.timestamps[frame]
         suffix = f" · {float(timestamp):.3f} s" if np.isfinite(timestamp) else ""
-        self.status.setText(f"Frame {frame + 1} / {self.loaded_results[0].frame_count}{suffix}")
+        source = " · Source media missing" if self.loaded_results[0].source_status == "missing" else (" · Source media changed" if self.loaded_results[0].source_status == "changed" else "")
+        self.status.setText(f"Frame {frame + 1} / {self.loaded_results[0].frame_count}{suffix}{source}")
 
     def _sync_camera(self, source):
         if self._syncing_camera or not self.split_views:
@@ -449,10 +490,15 @@ class ComparisonViewer(QWidget):
     def _export_csv(self): self._export("csv")
     def _export_json(self): self._export("json")
     def _export(self, kind):
-        path, _ = QFileDialog.getSaveFileName(self, "Export reference metrics", str(self.session_path.with_suffix(f".{kind}")), f"{kind.upper()} (*.{kind})")
+        if self.session_path is not None:
+            initial = self.session_path.with_suffix(f".{kind}")
+        else:
+            source_name = self.bundle_results[0].metadata.get("source_media_name", "comparison")
+            initial = Path(self.bundle_results[0].metadata["source_media_path"]).with_name(f"{Path(source_name).stem}-metrics.{kind}")
+        path, _ = QFileDialog.getSaveFileName(self, "Export reference metrics", str(initial), f"{kind.upper()} (*.{kind})")
         if not path: return
         try:
-            (export_metrics_csv if kind == "csv" else export_metrics_json)(self.session_path, Path(path))
+            (export_metrics_csv if kind == "csv" else export_metrics_json)(self.bundle_results or self.session_path, Path(path))
             self.metric_status.setText(f"Saved {Path(path).name}")
         except (OSError, ValueError) as exc:
             self.metric_status.setText(f"Export failed: {exc}")

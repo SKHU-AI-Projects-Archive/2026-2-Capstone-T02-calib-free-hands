@@ -1,9 +1,11 @@
 # CalibFreeHands UX / Result Packaging Specification
 
-**Status:** Frozen for next implementation milestone  
+**Status:** Frozen implementation contract
 **Repository:** `D:\2026-2-Capstone-T02-calib-free-hands`  
 **Application root:** `CalibFreeHands/`  
 **Working branch:** `CalibFreeHands`
+
+**Implementation status:** Milestones A and B are implemented; see `VALIDATION_CHECKLIST.md` for verification.
 
 ## 1. Purpose
 
@@ -119,7 +121,7 @@ Replace them with:
 Open...
 ```
 
-The user should be able to add either:
+Clicking **Open...** immediately opens one unified picker, without a dropdown or an intermediate choice. In that dialog, the user can add either:
 
 - one or more supported media files
 - one folder
@@ -185,8 +187,8 @@ For multiple media files:
 - process sequentially
 - do not open one new viewer per item during the batch
 - update each item state
-- after the whole batch ends, show `Completed`
-- then present/open one result-selection workflow
+- after the whole batch ends, show `Completed` or `Completed with errors`
+- let the user choose results later with **View Results...**
 
 ## 5. Output directory UX
 
@@ -376,6 +378,8 @@ Export Preview Video...
 
 Keep the existing preview encoder for explicit export.
 
+Because automatic preview generation is disabled, the normal processing UI does not show **Preserve audio**. Its saved setting remains available for a future explicit preview export.
+
 ## 12. Result opening UX
 
 Rename:
@@ -399,6 +403,8 @@ CalibFreeHands Result (*.cfh)
 ```
 
 Multiple selection must be supported.
+
+The picker starts in the last result directory, or the current Output directory if no prior result directory is saved.
 
 ## 13. Opening results
 
@@ -466,7 +472,9 @@ Show fewer result columns when fewer results are selected.
 
 ## 15. Separate windows
 
-Add a way to detach results into individual windows.
+Separate-window viewing is deferred to Milestone C and is not implemented in Milestone B.
+
+Milestone C adds a way to detach results into individual windows.
 
 Suggested label:
 
@@ -805,7 +813,7 @@ results/<hash>/
 
 The following are frozen for the next implementation milestone unless explicitly changed by the user:
 
-1. One user-facing `Open...` entry point.
+1. One `Open...` button immediately opens a unified file/folder picker; no dropdown or intermediate choice.
 2. File or folder input.
 3. Folder input adds supported media directly inside the folder.
 4. Queue includes `Remove` and `Clear`.
@@ -822,7 +830,7 @@ The following are frozen for the next implementation milestone unless explicitly
 15. `View Results...` supports multiple `.cfh` files.
 16. Multiple same-source `.cfh` files open in Comparison Viewer.
 17. Existing Overlay / Split remain.
-18. Separate-window viewing is added.
+18. Separate-window viewing is deferred to Milestone C.
 19. Reference focal is visible only for Checkerboard Reference.
 20. Original AnyCalib + Original WiLoR remains the default.
 21. Fine-tuned AnyCalib and HandCalib remain distinct.
