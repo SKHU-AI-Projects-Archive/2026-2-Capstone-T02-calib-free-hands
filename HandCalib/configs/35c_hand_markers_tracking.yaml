@@ -1,0 +1,302 @@
+experiment:
+  name: 35c_hand_markers_tracking
+  seed: 42
+
+# 35c: third configuration of experiment 35 (35_hand_markers.yaml and 35b_hand_markers_subset.yaml stay as they are). The 35b precheck stopped: no 75 cm video passed (15.8 % / 16.2 % of the tilt frames kept); the
+# frames were dropped by the homography label check over all matched markers (RANSAC threshold 3 % of the hand box) and the tracker never re-acquired. No f had been computed.
+# New rules fixed 2026-10-27 before the new precheck (user's instructions): (1) the homography check uses only the 8 used markers (5, 6, 9, 10, 13, 14, 17, 18), threshold ratio unchanged (3 %);
+# (2) re-acquisition: a detection is matched to a marker when it is within the movement limit of the marker's last accepted position OR of its predicted position (reference position moved by the homography of the last
+# accepted frame); the limit is move_frac x hand box x min(frames since the last accepted frame, gap_cap), applied around both; (3) detections left without a marker are ignored, their number is recorded per frame
+# (max_detections is no longer used: a frame is not dropped for having extra blobs). Everything else (6 of 8, area share, roundness / colour thresholds, precheck rule, verdict and interpretation) is unchanged.
+# 35b: second configuration of experiment 35 (35_hand_markers.yaml stays as it is; its precheck stopped: every video had under 80 % of the frames with all 21 markers found, 2026-10-27). No f had been computed.
+# New rules fixed 2026-10-27 before the new precheck (user's instructions): the 21 red ink dots (joint numbers 0-20) are all detected, but only the MCP and PIP markers (joints 5, 6, 9, 10, 13, 14, 17, 18) enter the
+# estimate; a frame is kept when at least 6 of those 8 (min_markers_ratio 0.75) are found, the fixed_template cost uses the points that are found; the lower blob area is a share of the MediaPipe hand box area
+# (area_min_frac = 40 px / 331,092 px^2, the mean over the two 50 cm videos IMG_7267 / IMG_7266 of the median box area of the tracked hand, so that it equals today's 40 px lower limit at 50 cm); roundness and colour
+# thresholds are unchanged. Precheck: the share of kept frames in the tilt phase (from 3 s) must be at least 70 % and the front window must hold a reference frame showing all 8 used markers; every distance
+# needs at least one video that passes, else the official run is not started. MediaPipe main comparison: the same 8 joints through fixed_template; 27's candidate (wrist excluded, 16 points) is reported as a record.
+# 35: does the f-versus-distance slope of experiment 27 (real hand, MediaPipe, slope about -1.0) survive when the points are measured by image processing instead of a learned model? Small colour dots on the palm side
+# of the real hand are found by colour / blob detection, named once by the nearest MediaPipe joints (naming only), followed with Hungarian matching and a homography check, and fed to the unchanged fixed_template analysis in
+# place of the joints. MediaPipe is analysed beside it with 27's candidate settings. The checkerboard slope of the same camera was -0.02.
+# Fixed 2026-10-27 before the run; nothing is changed after seeing results.
+videos:                              # file, distance_cm (1x, default settings, landscape, same session)
+  - {file: IMG_7267.MOV, distance_cm: 50}
+  - {file: IMG_7266.MOV, distance_cm: 50}
+  - {file: IMG_7265.MOV, distance_cm: 60}
+  - {file: IMG_7264.MOV, distance_cm: 60}
+  - {file: IMG_7263.MOV, distance_cm: 75}
+  - {file: IMG_7262.MOV, distance_cm: 75}
+input_dir: /home/juson/data/hand_focal_videos
+ref_f_by_distance: {50: 1660.6, 60: 1653.7, 75: 1644.9}     # the checkerboard distance experiment of the same day (user-provided); the errors against 1680 are recorded as well
+# The marker colour and count are what the frames show (red ink dots, 21 of them, about one on each MediaPipe landmark); the request text said green / 16, to be replaced by the user with the real values.
+markers:
+  color: red
+  count: 21
+  hue_ranges: [[0, 6], [174, 179]]   # OpenCV hue 0-179 (red wraps around 0)
+  s_min: 130
+  v_min: 90
+  area_min: 40                       # px of a blob
+  area_max: 3000
+  circularity_min: 0.6               # 4 pi A / P^2
+  region_margin: 0.30                # the MediaPipe hand box is enlarged by this: only the search area, never a coordinate
+  used_ids: [5, 6, 9, 10, 13, 14, 17, 18]   # MCP and PIP joints: the markers named so enter the estimate; the other markers are only detected (and followed)
+  area_min_frac: 1.208e-4            # lower blob area as a share of the MediaPipe hand box area (area_min is not used when this is set)
+  naming_radius_frac: 0.08           # a used marker is "seen" in the reference frame when its nearest MediaPipe joint is within this x the hand box long side
+  max_detections: 21                 # (35b tracker only; the reacquire tracker ignores extra blobs instead)
+  min_markers_ratio: 0.75            # share of the used markers that must be matched for a frame to be kept (6 of 8)
+  tracker: reacquire                 # match against the last accepted position or the homography-predicted position; homography check on the used markers only; extra blobs ignored
+  move_frac: 0.03                    # a marker pair moving more than this x the hand box (x min(gap in frames, gap_cap)) is cut
+  gap_cap: 5
+  ransac_frac: 0.03                  # homography reference -> frame, RANSAC threshold as a share of the hand box
+  min_inlier_ratio: 0.9              # a frame whose homography keeps fewer of the matched markers is dropped (swapped labels)
+precheck:
+  min_all_found_ratio: 0.8           # (first configuration only)
+  min_tilt_valid_ratio: 0.70         # share of the tilt-phase hand frames that are kept; every distance needs a video at or above it
+marker_exclusion:                    # the official run excludes a video whose kept share in the tilt phase is below this (the 27 rule of "detection failures" for the markers)
+  min_tilt_valid_ratio: 0.70
+session:                             # what the entries do not say: main camera, 1x, no gloves; the person is not named
+  phone: main
+  lens: 1x
+  glove: false
+  person_id:
+candidate:                           # MediaPipe side: 27's settings, unchanged
+  detector: mediapipe_hands
+  wrist_mode: exclude
+  estimator: fixed_template
+  front_window: 17's (phase_mode nominal, tilt phase from 3.0 s)
+exclusion:                           # same as 27
+  edge_rate_max: 0.05
+  detect_fail_max: 0.20
+# Verdict of each method on the slope of log f against log distance of the pooled f (video-level bootstrap within each distance):
+#   반비례 없음: the whole 95% interval above slope_none_min and every pooled f within f_tol of the reference f of its distance
+#   반비례 있음: the whole 95% interval below slope_yes_max
+#   otherwise 판단 보류; 판단 불가 when a distance has no included video
+# Interpretation: markers 반비례 없음 + MediaPipe 반비례 있음 -> 원인은 검출 모델; both 반비례 있음 -> 원인은 손 자체; otherwise 해석 보류.
+verdict:
+  slope_none_min: -0.3
+  slope_yes_max: -0.7
+  f_tol: 0.10
+bootstrap:
+  n: 1000
+  seed: 42
+compare:
+  results_27: runs/27_main_camera_extension/20261026T044322Z/results.json
+rating_v2:
+  tilt_min_s: 18.0
+  theta_max_min_deg: 55.0
+  usable_log_std_max: 0.1
+  reference_log_std_max: 0.15
+guide:
+  phase_segmentation:
+    noise_percentile: 95
+    k_d: 3.0
+    theta_min_deg: 15.0
+    median_window_s: 0.3
+    sustain_s: 0.5
+    front_search_s:
+    - 0.5
+    - 2.5
+    d0_cap_theta_deg: 20.0
+    use_motion: false
+    k_v: 3.0
+    motion_window_s: 0.3
+    exclude_large_tilt: false
+    max_tilt_deg: 45.0
+  conditions:
+    reference_detector: wilor_yolo
+    box_short_ratio_max: 0.65
+    edge_rate_max: 0.05
+    transition_min_s: 2.5
+    tilt_rule: frames_median
+    tilt_max_deg: 45.0
+    min_tilt_frames: 30
+    theta_tilt_median_range_deg:
+    - 20.0
+    - 40.0
+    axis_bins_min: 5
+    finger_extension_min: 0.9
+
+code_34: {branch: exp/35-hand-markers, commit: f18b119, modules: [HandCalib/handfocal.py, HandCalib/run.py]}
+n_workers: 16
+workers: 6
+output:
+  root: runs/35_hand_markers
+  results_yaml: results/35c_hand_markers_tracking.yaml
+
+pipeline:
+  experiment:
+    name: 35c_hand_markers_tracking
+    seed: 42
+  input_dir: /home/juson/data/hand_focal_videos
+  video_extensions:
+  - .mov
+  - .mp4
+  - .m4v
+  - .mkv
+  - .avi
+  min_duration_s: 5.0
+  normalize:
+    long_side: 1920
+    max_fps: 60
+    sdr_target: bt709
+    hdr_path:
+    - zscale_tonemap
+    - colorspace
+    codec: ffv1
+  frames:
+    detect_fps: 15
+    tmp_dir: null
+  detector:
+    name: mock
+    mock_npz: null
+    classes:
+      0: left
+      1: right
+    cache: true
+  tracking:
+    init_window_s: 1.0
+    iou_min: 0.3
+    conf_min: 0.5
+    smoothing:
+      enabled: false
+      window: 3
+  phases:
+    phase_mode: nominal
+    front_phase_s: 3.0
+    front_skip_s: 0.5
+    front_window_s: 1.0
+    front_min_detect_rate: 0.9
+    finger_extension_min: 0.9
+    auto_theta_deg: 10.0
+    auto_sustain_s: 0.5
+    auto_warn_diff_s: 1.0
+  joints:
+    sets:
+      palm4:
+      - 0
+      - 5
+      - 9
+      - 13
+      palm5:
+      - 0
+      - 5
+      - 9
+      - 13
+      - 17
+      palm_proximal9:
+      - 0
+      - 5
+      - 6
+      - 9
+      - 10
+      - 13
+      - 14
+      - 17
+      - 18
+      flat17:
+      - 0
+      - 5
+      - 6
+      - 7
+      - 8
+      - 9
+      - 10
+      - 11
+      - 12
+      - 13
+      - 14
+      - 15
+      - 16
+      - 17
+      - 18
+      - 19
+      - 20
+    estimate_set: flat17
+    uncertainty_sets:
+    - palm5
+    - palm_proximal9
+    - flat17
+    template_align_iters: 4
+  estimate:
+    estimator: fixed_template
+    synthetic_study_result: null
+    principal_point: center
+    distortion: null
+    f_grid_n: 60
+    f_ratio_range:
+    - 0.35
+    - 1.6
+    huber_rel: 0.02
+    min_points: 4
+    joint_delta:
+      delta_grid_deg:
+      - 0
+      - 4
+      - 8
+      - 12
+      - 16
+      - 20
+      phi_n: 6
+      delta_prior_deg: 8.0
+      prior_weight: auto
+      nm_max_iter: 300
+  anycalib:
+    enabled: true
+    model_id: anycalib_pinhole
+    cam_id: pinhole
+    stride: 1
+    device: cuda:0
+    extra_models:
+    - anycalib_gen
+    offline_env:
+      HF_HUB_OFFLINE: '1'
+      TRANSFORMERS_OFFLINE: '1'
+    torch_hub_dir: ~/.cache/torch/hub
+  uncertainty:
+    n_bootstrap: 30
+    block_frames: 10
+    time_budget_s: 600
+  verdict:
+    good:
+      detect_rate_min: 0.9
+      front_frames_min: 15
+      finger_extension_required: true
+      theta_p90_min_deg: 25.0
+      axis_bins_min: 5
+      reproj_rms_rel_max: 0.01
+      jointset_range_max: 0.04
+      bootstrap_rel_std_max: 0.03
+      consistency_range_max: 0.06
+      delta_abs_max_deg: 12.0
+      sharpness_min: 1.3
+    rough:
+      detect_rate_min: 0.7
+      theta_p90_min_deg: 12.0
+      axis_bins_min: 3
+      reproj_rms_rel_max: 0.025
+      jointset_range_max: 0.12
+    min_target_frames: 20
+  target_sizes:
+  - - 1920
+    - 1080
+  - - 1280
+    - 720
+  - - 3840
+    - 2160
+  output:
+    root: runs/26_generalization
+    results_yaml: results/26_generalization.yaml
+
+detector_settings:
+  mediapipe_hands:
+    model: MediaPipe Hand Landmarker (hand_landmarker.task float16/1)
+    weights: /home/juson/models/mediapipe/hand_landmarker.task
+    python: /home/juson/venvs/det_mediapipe/bin/python
+    device: cpu
+    num_hands: 2
+    min_hand_detection_confidence: 0.5
+    min_hand_presence_confidence: 0.5
+    box_margin: 0.1
+    conf_min: 0.5
+    remap: null
+
+
