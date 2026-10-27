@@ -36,6 +36,7 @@ CFG26 = yaml.safe_load((ROOT / "configs/26_generalization.yaml").read_text())
 CFG27 = yaml.safe_load((ROOT / "configs/27_main_camera_extension.yaml").read_text())
 CFG29 = yaml.safe_load((ROOT / "configs/29_wide_60cm.yaml").read_text())
 CFG30 = yaml.safe_load((ROOT / "configs/30_jointset_sets.yaml").read_text())
+CFG31 = yaml.safe_load((ROOT / "configs/31_verdict_calibration.yaml").read_text())
 PIPE = CFG17["pipeline"]                           # the 14 pipeline settings (identical in 16, 17 and 18)
 SYN = {"f_px": 1650, "image": [1920, 1080], "distance_mm": 350, "front_frames": 10, "tilt_frames": 40}     # 14's synthetic camera
 BASE_COND = {"name": "base", "delta_deg": 0, "noise": {"px": 1.0}, "heavy_tail": False, "tilt_range_deg": [25, 50], "arch_mm": 0,
@@ -2731,6 +2732,126 @@ class JsetEndToEnd(unittest.TestCase):
                 self.assertNotIn(val, texts)
             for key in ("ISO6709", "com.apple.quicktime", '"make"', '"model"'):
                 self.assertNotIn(key, texts)
+
+
+# ====================================================================================================
+# 31: do the verdict's diagnostics predict the real f error?
+# ====================================================================================================
+
+def cal_fake_rows(n, predictor_fn, seed=0, lens="1x"):
+    """Rows like cal_rows': error from a hidden rule, every predictor of the yaml filled (random unless predictor_fn sets it)."""
+    rng = np.random.default_rng(seed)
+    rows = []
+    for i in range(n):
+        r = {"video": f"V{i}", "lens": lens, "ref_f": 1680.0, "excluded": False, "at_grid_edge": False, "tilt_duration_s": 20.0, "theta_max": 60.0, "boot_log_std": 0.05, "verdict_new": "REJECT"}
+        for k in CFG31["predictors"]:
+            r[k] = float(rng.uniform(0.0, 1.0))
+        r.update(predictor_fn(i, rng, r))
+        r["signed_error"] = r["error"]
+        r["f"] = 1680.0 * (1 + r["error"])
+        r["accurate"] = bool(r["error"] <= CFG31["accurate_tol"])
+        rows.append(r)
+    return rows
+
+
+class CalStats(unittest.TestCase):
+    def test_spearman_interval_balanced_accuracy_and_thresholds(self):
+        x = np.arange(20.0)
+        sp = hf.cal_spearman_ci(x, x * 2 + 1, 500, 42)
+        self.assertAlmostEqual(sp["rho"], 1.0)
+        self.assertGreater(sp["ci"][0], 0.9)
+        self.assertEqual(hf.cal_spearman_ci(x, np.zeros(20), 100, 1)["rho"], None)                      # a constant input has no correlation
+        ba = hf.cal_balanced_accuracy([True, True, False, False], [True, False, False, False])
+        self.assertAlmostEqual(ba["sensitivity"], 1.0)
+        self.assertAlmostEqual(ba["specificity"], 2 / 3)
+        self.assertAlmostEqual(ba["balanced_accuracy"], 0.5 * (1.0 + 2 / 3))
+        self.assertIsNone(hf.cal_balanced_accuracy([True, True], [True, True])["balanced_accuracy"])     # one class only
+        truth = np.array([True] * 10 + [False] * 10)
+        xs = np.r_[np.linspace(0.0, 0.4, 10), np.linspace(0.6, 1.0, 10)]
+        b = hf.cal_best_threshold(xs, truth, good_below=True)
+        self.assertEqual(b["balanced_accuracy"], 1.0)
+        self.assertTrue(0.4 < b["threshold"] < 0.6)
+        self.assertEqual(hf.cal_loo(xs, truth, True)["balanced_accuracy"], 1.0)
+        self.assertEqual(hf.cal_best_threshold(-xs, truth, good_below=False)["balanced_accuracy"], 1.0)  # the other direction
+        bas = [hf.cal_loo(np.random.default_rng(s).uniform(size=20), truth, True)["balanced_accuracy"] for s in range(30)]
+        self.assertLess(float(np.mean(bas)), 0.65)                                                     # unrelated predictors stay near chance by leave-one-out (single draws can reach 0.7 by luck)
+
+
+class CalAnalyse(unittest.TestCase):
+    def test_a_predictor_that_tracks_the_error_makes_the_verdict_calibratable(self):
+        def fn(i, rng, r):
+            x = float(rng.uniform(0.0, 1.0))
+            return {"boot_log_std": x, "error": 0.02 + 0.30 * x}
+        rows = cal_fake_rows(30, fn)
+        res = hf.cal_analyse(rows, CFG31)
+        self.assertEqual(res["decision"], "보정 가능")
+        self.assertIn("boot_log_std", res["useful_predictors"])
+        self.assertTrue(res["predictors"]["boot_log_std"]["informative"])
+        th = res["proposal"]["boot_log_std"]
+        self.assertEqual(th["accurate_if"], "below")
+        self.assertTrue(abs(th["threshold"] - (CFG31["accurate_tol"] - 0.02) / 0.30) < 0.15)         # near the true cut (error 0.15 at x = 0.43)
+        self.assertEqual(res["n_calibration"], 30)
+
+    def test_unrelated_predictors_give_not_calibratable(self):
+        def fn(i, rng, r):
+            return {"error": float(rng.uniform(0.0, 0.4))}
+        res = hf.cal_analyse(cal_fake_rows(25, fn, seed=5), CFG31)
+        self.assertEqual(res["decision"], "보정 불가")
+        self.assertEqual(res["useful_predictors"], [])
+        self.assertEqual(res["proposal"], {})
+
+    def test_excluded_edge_and_other_lens_rows_do_not_enter_the_calibration(self):
+        def fn(i, rng, r):
+            x = float(rng.uniform(0.0, 1.0))
+            return {"boot_log_std": x, "error": 0.02 + 0.30 * x}
+        rows = cal_fake_rows(24, fn)
+        rows += [dict(r, video=r["video"] + "x", lens="0.5x") for r in cal_fake_rows(5, fn, seed=9)]
+        rows[0]["excluded"] = True
+        rows[1]["at_grid_edge"] = True
+        res = hf.cal_analyse(rows, CFG31)
+        self.assertEqual(res["n_calibration"], 22)
+        self.assertEqual(res["n_held_out"], 5)
+        self.assertIn("boot_log_std", res["held_out_check"])                                           # the held-out lens is only checked, never used to choose the threshold
+
+    def test_rule_values_are_the_ones_fixed_in_the_yaml(self):
+        self.assertEqual((CFG31["accurate_tol"], CFG31["rho_min"], CFG31["loo_ba_min"], CFG31["bootstrap_n"], CFG31["bootstrap_seed"], CFG31["calibration_lens"]), (0.15, 0.4, 0.70, 1000, 42, "1x"))
+        self.assertEqual(CFG31["predictors"]["sharpness"]["expected_sign"], -1)
+        self.assertEqual(CFG31["predictors"]["boot_log_std"]["expected_sign"], 1)
+
+
+R30C = ROOT / CFG31["source"]["results_30"]
+
+
+@unittest.skipUnless(R30C.exists(), "experiment 30's official run is needed")
+class CalEndToEnd(unittest.TestCase):
+    def test_outputs_numbers_and_no_tags(self):
+        src = json.loads(R30C.read_text())
+        with tempfile.TemporaryDirectory() as d:
+            d = Path(d)
+            cfg = copy.deepcopy(CFG31)
+            cfg["output"] = {"root": str(d / "runs"), "results_yaml": str(d / "r31.yaml")}
+            cp = d / "c.yaml"
+            cp.write_text(yaml.safe_dump(cfg, allow_unicode=True))
+            root, rows, res = run.cal_main(["--config", str(cp), "--out", str(d / "o")])
+            for f in ("report.md", "summary.md", "results.json", "metadata.json", "log.txt"):
+                self.assertTrue((root / f).exists(), f)
+            self.assertTrue((root / "figures/predictors_vs_error.png").exists())
+            n1x = [v for v in src["videos"] if "f" in v and v["lens"] == "1x"]
+            self.assertEqual(len(rows), len([v for v in src["videos"] if "f" in v]))
+            self.assertLessEqual(res["n_calibration"], len(n1x))
+            by = {r["video"]: r for r in rows}
+            v = next(x for x in src["videos"] if x["video"] == "IMG_7220.MOV")
+            self.assertAlmostEqual(by["IMG_7220.MOV"]["error"], abs(v["f"] / 1680.0 - 1.0))                # error = |f / ref_f - 1| with the stored ref_f
+            self.assertAlmostEqual(by["IMG_7220.MOV"]["signed_error"], v["f"] / 1680.0 - 1.0)
+            self.assertTrue(by["IMG_7216.MOV"]["excluded"])                                               # 27's edge-contact exclusion is reproduced
+            self.assertIn(res["decision"], ("보정 가능", "보정 불가"))
+            y = run.cal_results_yaml(root, cfg)
+            ytext = Path(y).read_text()
+            self.assertIn(res["decision"], ytext)
+            self.assertNotIn("1680", ytext)                                                              # no reference-f comparison in the results yaml
+            texts = "".join(q.read_text(errors="ignore") for q in list(root.rglob("*")) + [Path(y)] if q.is_file() and q.suffix in (".json", ".yaml", ".md", ".csv", ".txt"))
+            for val in FAKE_TAGS.values():
+                self.assertNotIn(val, texts)
 
 
 if __name__ == "__main__":

@@ -4225,3 +4225,135 @@ def jset_video(args) -> dict:
     fidx = [int(i) for i in a["front_window"]["idx"]]
     res["hand_box_short_ratio_front"] = float(np.nanmedian(bl[fidx]) / min(W, H)) if fidx else None
     return res
+
+
+# ====================================================================================================
+# cal  (experiment 31: do the verdict's diagnostics predict the real f error? calibration protocol; new section, earlier functions are used unchanged)
+# Population: the videos of experiment 30 (candidate f and every diagnostic stored), error e = |f / ref_f - 1|, accurate = e <= accurate_tol. Calibration uses the 1x videos only (the 0.5x videos are held out).
+# A diagnostic is informative when its Spearman correlation with e has the expected sign, |rho| >= rho_min and its video-level bootstrap interval excludes 0; it is useful when a threshold classifier
+# chosen by leave-one-out (balanced accuracy on the training videos) reaches loo_ba_min on the held-out video. No useful diagnostic: the verdict cannot be calibrated.
+# ====================================================================================================
+
+def cal_rows(videos: list, cfg: dict) -> list:
+    """Rows of the calibration table from experiment 30's per-video results: error, accurate flag, exclusion (edge rate / detect rate as in 26 / 27) and every predictor (None when missing)."""
+    ex = cfg["exclusion"]
+    rows = []
+    for v in videos:
+        if "f" not in v:
+            continue
+        m = v["metrics"]
+        row = {"video": v["video"], "lens": v["lens"], "ref_f": float(v["ref_f"]), "f": float(v["f"]), "at_grid_edge": bool(v["at_grid_edge"]),
+               "error": abs(v["f"] / v["ref_f"] - 1.0), "signed_error": v["f"] / v["ref_f"] - 1.0,
+               "excluded": bool((m.get("edge_frame_rate") or 0.0) > float(ex["edge_rate_max"]) or 1.0 - (m.get("detect_rate") or 0.0) > float(ex["detect_fail_max"])),
+               "boot_log_std": v.get("boot_log_std"), "theta_max": v.get("theta_max"), "tilt_duration_s": v.get("tilt_duration_s"), "verdict_new": v["verdict_new"]}
+        row["accurate"] = bool(row["error"] <= float(cfg["accurate_tol"]))
+        for k in cfg["predictors"]:
+            row[k] = cal_predictor_value(v, k)
+        rows.append(row)
+    return rows
+
+
+def cal_predictor_value(v: dict, name: str):
+    m = v["metrics"]
+    top = {"boot_log_std": v.get("boot_log_std"), "tilt_duration_s": v.get("tilt_duration_s"), "front_jitter_rel": v.get("front_jitter_rel"), "hand_box_short_ratio_front": v.get("hand_box_short_ratio_front"),
+           "jointset_range_new": v.get("jointset_range_new"), "consistency_range": m.get("consistency_range"), "theta_max": v.get("theta_max")}
+    x = top[name] if name in top else m.get(name)
+    return None if x is None or (isinstance(x, float) and not np.isfinite(x)) else float(x)
+
+
+def cal_spearman_ci(x, y, n: int, seed: int, level: float = 0.95) -> dict:
+    """Spearman correlation of x and y and a video-level bootstrap percentile interval (pairs drawn with replacement n times, fixed seed; draws with a constant input are skipped)."""
+    x, y = np.asarray(x, float), np.asarray(y, float)
+    rho = ext_spearman(x, y)
+    rng = np.random.default_rng(int(seed))
+    rs = []
+    for _ in range(int(n)):
+        k = rng.integers(0, len(x), len(x))
+        r = ext_spearman(x[k], y[k])
+        if r is not None:
+            rs.append(r)
+    lo, hi = ((1 - level) / 2, 1 - (1 - level) / 2)
+    return {"rho": rho, "ci": None if len(rs) < 10 else [float(np.quantile(rs, lo)), float(np.quantile(rs, hi))], "n": int(len(x)), "n_boot_used": int(len(rs))}
+
+
+def cal_balanced_accuracy(pred, truth) -> dict:
+    """Balanced accuracy of boolean predictions of 'accurate' against the truth (mean of sensitivity and specificity; None when a class is empty)."""
+    pred, truth = np.asarray(pred, bool), np.asarray(truth, bool)
+    tp, fn = int((pred & truth).sum()), int((~pred & truth).sum())
+    tn, fp = int((~pred & ~truth).sum()), int((pred & ~truth).sum())
+    sens = tp / (tp + fn) if tp + fn else None
+    spec = tn / (tn + fp) if tn + fp else None
+    ba = None if sens is None or spec is None else 0.5 * (sens + spec)
+    return {"balanced_accuracy": ba, "sensitivity": sens, "specificity": spec, "tp": tp, "fn": fn, "tn": tn, "fp": fp}
+
+
+def cal_best_threshold(x, truth, good_below: bool) -> dict:
+    """Threshold on x (candidates: midpoints of adjacent sorted values) that maximises the balanced accuracy of 'accurate = x below (good_below) / above the threshold' on the training data;
+    ties go to the lower threshold. Returns {threshold, balanced_accuracy}."""
+    x, truth = np.asarray(x, float), np.asarray(truth, bool)
+    u = np.unique(x)
+    cands = (u[:-1] + u[1:]) / 2.0 if len(u) > 1 else u
+    best = None
+    for th in cands:
+        pred = (x <= th) if good_below else (x >= th)
+        ba = cal_balanced_accuracy(pred, truth)["balanced_accuracy"]
+        if ba is not None and (best is None or ba > best["balanced_accuracy"] + 1e-12):
+            best = {"threshold": float(th), "balanced_accuracy": float(ba)}
+    return best or {"threshold": None, "balanced_accuracy": None}
+
+
+def cal_loo(x, truth, good_below: bool) -> dict:
+    """Leave-one-out: the threshold is chosen on all other videos, the held-out video is classified with it. Returns the balanced accuracy of the held-out predictions and the thresholds used."""
+    x, truth = np.asarray(x, float), np.asarray(truth, bool)
+    pred, ths = [], []
+    for i in range(len(x)):
+        keep = np.arange(len(x)) != i
+        b = cal_best_threshold(x[keep], truth[keep], good_below)
+        ths.append(b["threshold"])
+        pred.append(False if b["threshold"] is None else bool(x[i] <= b["threshold"] if good_below else x[i] >= b["threshold"]))
+    return {**cal_balanced_accuracy(pred, truth), "thresholds": ths}
+
+
+def cal_analyse(rows: list, cfg: dict) -> dict:
+    """The protocol on the calibration rows (lens == calibration_lens, not excluded, f not on the grid edge): per predictor rho with interval, informative flag, full-data threshold and leave-one-out balanced accuracy;
+    the existing classifiers (rating v2 usable, verdict ROUGH or better) as baselines; the held-out lens only described. Decision: calibratable when a predictor is informative and its LOO balanced accuracy >= loo_ba_min."""
+    use = [r for r in rows if r["lens"] == cfg["calibration_lens"] and not r["excluded"] and not r["at_grid_edge"]]
+    held = [r for r in rows if r["lens"] != cfg["calibration_lens"] and not r["excluded"] and not r["at_grid_edge"]]
+    out = {"n_calibration": len(use), "n_held_out": len(held), "n_accurate": int(sum(r["accurate"] for r in use)), "predictors": {}, "baselines": {}}
+    truth = [r["accurate"] for r in use]
+    for name, spec in cfg["predictors"].items():
+        pts = [(r[name], r["error"], r["accurate"]) for r in use if r[name] is not None]
+        if len(pts) < 5 or len({p[0] for p in pts}) < 3:
+            out["predictors"][name] = {"skipped": "값이 5개 미만이거나 거의 같다", "n": len(pts)}
+            continue
+        x, e, tr = [p[0] for p in pts], [p[1] for p in pts], [p[2] for p in pts]
+        sp = cal_spearman_ci(x, e, int(cfg["bootstrap_n"]), int(cfg["bootstrap_seed"]))
+        sign = int(spec["expected_sign"])
+        informative = bool(sp["rho"] is not None and sp["ci"] is not None and abs(sp["rho"]) >= float(cfg["rho_min"]) and (sign == 0 or np.sign(sp["rho"]) == sign)
+                           and (sp["ci"][0] > 0 or sp["ci"][1] < 0))
+        good_below = bool(sign >= 0)
+        if sign == 0 and sp["rho"] is not None:
+            good_below = bool(sp["rho"] > 0)
+        full = cal_best_threshold(x, tr, good_below)
+        loo = cal_loo(x, tr, good_below)
+        out["predictors"][name] = {**sp, "expected_sign": sign, "informative": informative, "good_below": good_below, "full_data_threshold": full["threshold"], "full_data_balanced_accuracy": full["balanced_accuracy"],
+                                   "loo": {k: loo[k] for k in ("balanced_accuracy", "sensitivity", "specificity")},
+                                   "useful": bool(informative and loo["balanced_accuracy"] is not None and loo["balanced_accuracy"] >= float(cfg["loo_ba_min"]))}
+    v2 = cfg["rating_v2"]
+    usable = [hf_rating_usable(r, v2) for r in use]
+    out["baselines"]["rating_v2_usable"] = cal_balanced_accuracy(usable, truth)
+    out["baselines"]["verdict_rough_or_better"] = cal_balanced_accuracy([r["verdict_new"] in ("GOOD", "ROUGH") for r in use], truth)
+    out["baselines"]["always_accurate"] = cal_balanced_accuracy([True] * len(use), truth)
+    useful = [k for k, d in out["predictors"].items() if d.get("useful")]
+    out["useful_predictors"] = useful
+    out["decision"] = "보정 가능" if useful else "보정 불가"
+    out["proposal"] = {k: {"accurate_if": "below" if out["predictors"][k]["good_below"] else "above", "threshold": out["predictors"][k]["full_data_threshold"]} for k in useful}
+    if held and useful:
+        out["held_out_check"] = {k: cal_balanced_accuracy([(r[k] <= out["predictors"][k]["full_data_threshold"]) if out["predictors"][k]["good_below"] else (r[k] >= out["predictors"][k]["full_data_threshold"])
+                                                           for r in held if r[k] is not None], [r["accurate"] for r in held if r[k] is not None]) for k in useful}
+    return out
+
+
+def hf_rating_usable(r: dict, v2: dict) -> bool:
+    """True when rating v2 (gen_rating) is '사용 가능' for the row's tilt length, largest theta2d and bootstrap log SD."""
+    return gen_rating(r.get("tilt_duration_s"), r.get("theta_max"), r.get("boot_log_std"), v2) == "사용 가능"

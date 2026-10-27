@@ -13,6 +13,7 @@
     python HandCalib/run.py main-camera-extension --config HandCalib/configs/27_main_camera_extension.yaml [--videos A,B] [results-yaml --run DIR]
     python HandCalib/run.py wide-60cm --config HandCalib/configs/29_wide_60cm.yaml [--videos A,B] [results-yaml --run DIR]
     python HandCalib/run.py jointset-sets --config HandCalib/configs/30_jointset_sets.yaml [--videos A,B] [results-yaml --run DIR]
+    python HandCalib/run.py verdict-calibration --config HandCalib/configs/31_verdict_calibration.yaml [results-yaml --run DIR]
 
 Consolidated from run_hand_focal.py (14, process_video only), run_detector_swap.py (16, the per-detector processing that 17 calls),
 run_protocol_rerun.py and run_frame_filter_diag.py (17),
@@ -4597,10 +4598,149 @@ def jset_results_yaml(run_dir: Path, cfg: dict):
 
 
 # ====================================================================================================
+# cal  (experiment 31: do the verdict's diagnostics predict the real f error? calibration protocol; new section)
+#
+#     python HandCalib/run.py verdict-calibration --config HandCalib/configs/31_verdict_calibration.yaml [--out DIR]
+#     python HandCalib/run.py verdict-calibration --config ... results-yaml --run runs/31_verdict_calibration/<UTC>
+# Reads experiment 30's per-video results (candidate f and every diagnostic) and the user-provided reference f stored with them; no video is processed.
+# ====================================================================================================
+
+CAL_NOTE = ("검증된 진단값(부트스트랩 SD, 일관성 범위, 날카로움 등)이 실제 f 오차를 예측하는지 보고, 예측하는 것이 있으면 판정 문턱을 다시 정하는 실험이다. "
+            "기준 f(ref_f)는 사용자 제공 값이며 판정 규칙과 문턱 선택 절차는 실행 전에 고정했고 바꾸지 않았다. 오차에 대한 근거는 summary.md에만 있다.")
+CAL_PRED_KO = {"boot_log_std": "부트스트랩 로그 SD", "bootstrap_rel_std": "부트스트랩 상대 SD", "consistency_range": "일관성 범위", "jointset_range_new": "관절 집합 범위(새 집합)", "sharpness": "날카로움",
+               "reproj_rms_rel": "재투영 RMS(상대)", "front_jitter_rel": "정면 창 떨림(상대)", "theta_p90": "θ2d 90번째(°)", "theta_max": "θ2d 최댓값(°)", "tilt_duration_s": "기울기 구간(초)",
+               "hand_box_short_ratio_front": "정면 창 손 박스/짧은 변", "n_target_frames": "사용 프레임 수"}
+
+
+def cal_main(argv=None):
+    ap = argparse.ArgumentParser()
+    ap.add_argument("--config", default=str(hf.PROJECT_ROOT / "configs/31_verdict_calibration.yaml"))
+    sub = ap.add_subparsers(dest="cmd")
+    ry = sub.add_parser("results-yaml")
+    ry.add_argument("--run", required=True)
+    ap.add_argument("--out", default=None)
+    a = ap.parse_args(argv)
+    text = Path(a.config).read_text()
+    cfg = yaml.safe_load(text)
+    if a.cmd == "results-yaml":
+        print(cal_results_yaml(hf.resolve(a.run), cfg))
+        return None
+    run_root = Path(a.out).expanduser() if a.out else hf.resolve(cfg["output"]["root"]) / utc_stamp()
+    run_root.mkdir(parents=True)
+    (run_root / "figures").mkdir()
+    log = Log(run_root / "log.txt")
+    t0 = time.time()
+    src = json.loads(hf.resolve(cfg["source"]["results_30"]).read_text())
+    rows = hf.cal_rows(src["videos"], cfg)
+    res = hf.cal_analyse(rows, cfg)
+    log(f"31 판정 문턱 재보정: 영상 {len(rows)}개 (보정 {res['n_calibration']}개, 제외·보류 {res['n_held_out']}개), 정확(오차 ≤ {100 * float(cfg['accurate_tol']):.0f}%) {res['n_accurate']}개")
+    for k, d in res["predictors"].items():
+        if "skipped" in d:
+            log(f"  {k}: {d['skipped']}")
+        else:
+            log(f"  {k}: ρ {d['rho']:+.2f} (구간 {d['ci'][0]:+.2f}~{d['ci'][1]:+.2f}), 정보 있음 {d['informative']}, LOO 균형 정확도 {long_fmt(d['loo']['balanced_accuracy'], 2)}")
+    log(f"  결정: {res['decision']}" + (f" ({', '.join(res['useful_predictors'])})" if res["useful_predictors"] else ""))
+    cal_figures(run_root / "figures", rows, res, cfg)
+    cal_report(run_root / "report.md", rows, res, cfg)
+    cal_summary(run_root / "summary.md", rows, res, cfg)
+    (run_root / "results.json").write_text(json.dumps(hf.jsonable({"rows": rows, "analysis": res}), ensure_ascii=False, indent=1))
+    meta = hf.provenance_build(text, a.config, {"code_30": cfg["code_30"], "source": cfg["source"], "elapsed_s": time.time() - t0})
+    (run_root / "metadata.json").write_text(json.dumps(hf.jsonable(meta), ensure_ascii=False, indent=1))
+    log(f"완료 {time.time() - t0:.0f} s → {run_root}")
+    log.close()
+    return run_root, rows, res
+
+
+def cal_figures(out: Path, rows: list, res: dict, cfg: dict):
+    plt = _plt()
+    names = [k for k, d in res["predictors"].items() if "skipped" not in d]
+    if not names:
+        return
+    ncol = 4
+    nrow = (len(names) + ncol - 1) // ncol
+    fig, axs = plt.subplots(nrow, ncol, figsize=(4.0 * ncol, 3.2 * nrow), squeeze=False)
+    for ax, k in zip(axs.ravel(), names):
+        d = res["predictors"][k]
+        for r in rows:
+            if r[k] is None or r["excluded"] or r["at_grid_edge"]:
+                continue
+            ax.plot(r[k], 100 * r["error"], "o" if r["lens"] == cfg["calibration_lens"] else "s", color="#2a6fbb" if r["lens"] == cfg["calibration_lens"] else "#c47a00", alpha=0.8)
+        ax.axhline(100 * float(cfg["accurate_tol"]), color="#999", ls="--", lw=1)
+        ax.set_xlabel(CAL_PRED_KO.get(k, k), fontsize=8)
+        ax.set_ylabel("|f 오차| (%)", fontsize=8)
+        ax.set_title(f"ρ {d['rho']:+.2f}" + (" (정보 있음)" if d["informative"] else ""), fontsize=9)
+        ax.grid(alpha=0.3)
+    for ax in axs.ravel()[len(names):]:
+        ax.axis("off")
+    fig.tight_layout()
+    fig.savefig(out / "predictors_vs_error.png", dpi=105)
+    plt.close(fig)
+
+
+def cal_report(path: Path, rows: list, res: dict, cfg: dict):
+    names = list(cfg["predictors"])
+    L = ["# 실험 31: 판정 진단값 재보정", "", CAL_NOTE, "",
+         "## 1. 영상별 진단값 (값만)", "", "| 영상 | 렌즈 | 제외 | " + " | ".join(CAL_PRED_KO.get(k, k) for k in names) + " | 판정(새 집합) |", "|---|---|---|" + "---|" * len(names) + "---|"]
+    for r in rows:
+        L.append(f"| {r['video']} | {r['lens']} | {'예' if r['excluded'] else '-'} | " + " | ".join(long_fmt(r[k], 4) for k in names) + f" | {r['verdict_new']} |")
+    L += ["", "## 2. 한계", "", "- 이 보고서는 진단값만 적는다. 오차와의 상관, 분류 성능, 결정은 summary.md에 있다.", ""]
+    path.write_text("\n".join(L) + "\n")
+
+
+def cal_summary(path: Path, rows: list, res: dict, cfg: dict):
+    pct = lambda x: "-" if x is None else f"{100 * x:+.1f}%"      # noqa: E731
+    L = ["# 실험 31 summary", "", f"**{CAL_NOTE}**", "", "## 판정", "",
+         f"- **판정 문턱 재보정: {res['decision']}**" + (f" — 유용한 진단값: {', '.join(CAL_PRED_KO.get(k, k) for k in res['useful_predictors'])}" if res["useful_predictors"] else
+                                                      f" — 정보가 있는 진단값 {sum(1 for d in res['predictors'].values() if d.get('informative'))}개, 그중 leave-one-out 균형 정확도 ≥ {float(cfg['loo_ba_min']):.2f}인 것이 없다"),
+         f"- 보정 영상 {res['n_calibration']}개({cfg['calibration_lens']}, 제외·격자 경계 제외), 그중 정확(오차 ≤ {100 * float(cfg['accurate_tol']):.0f}%) {res['n_accurate']}개. 보류 영상(다른 렌즈) {res['n_held_out']}개.",
+         f"- 규칙(실행 전 고정): 정보 있음 = 기대 부호의 Spearman |ρ| ≥ {cfg['rho_min']}이고 영상 단위 부트스트랩 95% 구간이 0을 포함하지 않음; 유용 = 정보 있음이고 leave-one-out 균형 정확도 ≥ {cfg['loo_ba_min']}.", "",
+         "## 1. 진단값과 오차의 상관 (보정 영상)", "", "| 진단값 | 기대 부호 | ρ | 95% 구간 | 정보 있음 | 전체 자료 문턱 (정확 = 이쪽) | LOO 균형 정확도 | 유용 |", "|---|---|---|---|---|---|---|---|"]
+    for k, d in res["predictors"].items():
+        if "skipped" in d:
+            L.append(f"| {CAL_PRED_KO.get(k, k)} | - | - | - | - | - | - | {d['skipped']} |")
+            continue
+        sign = {1: "+", -1: "−", 0: "없음"}[d["expected_sign"]]
+        L.append(f"| {CAL_PRED_KO.get(k, k)} | {sign} | {d['rho']:+.2f} | {d['ci'][0]:+.2f} ~ {d['ci'][1]:+.2f} | {'예' if d['informative'] else '아니오'} | "
+                 f"{'-' if d['full_data_threshold'] is None else format(d['full_data_threshold'], '.4g') + (' 이하' if d['good_below'] else ' 이상')} | {long_fmt(d['loo']['balanced_accuracy'], 2)} | {'예' if d['useful'] else '아니오'} |")
+    L += ["", "## 2. 지금 쓰는 분류기의 성능 (보정 영상, 정확 = 오차 ≤ 한계)", "", "| 분류기 | 균형 정확도 | 민감도 | 특이도 | 참양성/거짓음성/참음성/거짓양성 |", "|---|---|---|---|---|"]
+    for name, b in (("판정 v2 '사용 가능'", res["baselines"]["rating_v2_usable"]), ("옛 판정 ROUGH 이상 (새 집합)", res["baselines"]["verdict_rough_or_better"]), ("항상 '정확'이라고 답함", res["baselines"]["always_accurate"])):
+        L.append(f"| {name} | {long_fmt(b['balanced_accuracy'], 2)} | {long_fmt(b['sensitivity'], 2)} | {long_fmt(b['specificity'], 2)} | {b['tp']}/{b['fn']}/{b['tn']}/{b['fp']} |")
+    if res["proposal"]:
+        L += ["", "## 3. 제안 문턱 (적용하지 않음)", ""] + [f"- {CAL_PRED_KO.get(k, k)}: {p['threshold']:.4g} {'이하' if p['accurate_if'] == 'below' else '이상'}이면 정확으로 본다." for k, p in res["proposal"].items()]
+        if res.get("held_out_check"):
+            L += ["", "다른 렌즈(0.5배)에서의 확인(문턱을 정하는 데 쓰지 않음):"] + [f"- {CAL_PRED_KO.get(k, k)}: 균형 정확도 {long_fmt(b['balanced_accuracy'], 2)} (참양성 {b['tp']}, 거짓음성 {b['fn']}, 참음성 {b['tn']}, 거짓양성 {b['fp']})" for k, b in res["held_out_check"].items()]
+    L += ["", "## 4. 영상별 오차와 진단값", "", "| 영상 | 렌즈 | f | 오차 | 정확 | 제외 | 부트스트랩 로그 SD | 일관성 범위 | 날카로움 | 등급 v2 |", "|---|---|---|---|---|---|---|---|---|---|"]
+    for r in rows:
+        rt = hf.gen_rating(r.get("tilt_duration_s"), r.get("theta_max"), r.get("boot_log_std"), cfg["rating_v2"])
+        L.append(f"| {r['video']} | {r['lens']} | {r['f']:.1f} | {pct(r['signed_error'])} | {'예' if r['accurate'] else '아니오'} | {'예' if r['excluded'] else '-'} | {long_fmt(r['boot_log_std'], 4)} | {long_fmt(r['consistency_range'], 3)} | {long_fmt(r['sharpness'], 4)} | {rt} |")
+    L += ["", "## 한계", "", "- 보정 영상은 1배 한 폰·한 세션 계열이라 문턱은 이 조건에 대한 것이다. 보정 영상 수가 작아 문턱 선택이 불안정하다(leave-one-out 문턱을 results.json에 적었다).",
+          "- 기준 f는 사용자 제공 값이며 원본 보정 파일은 서버에 없다. 0.5배 영상은 문턱 선택에 쓰지 않았다.", "- 이 절차는 진단값이 오차를 \"예측하는지\"만 본다. 오차를 줄이는 방법은 아니다.", ""]
+    path.write_text("\n".join(L) + "\n")
+
+
+def cal_results_yaml(run_dir: Path, cfg: dict):
+    r = json.loads((run_dir / "results.json").read_text())
+    m = json.loads((run_dir / "metadata.json").read_text())
+    try:
+        run_name = str(run_dir.resolve().relative_to(hf.PROJECT_ROOT))
+    except ValueError:
+        run_name = str(run_dir)
+    a = r["analysis"]
+    rd = lambda x, n=4: None if x is None or (isinstance(x, float) and not np.isfinite(x)) else round(x, n)      # noqa: E731
+    out = {"experiment": "31_verdict_calibration", "run": run_name, "code_commit": m["git"]["commit"][:7], "git_dirty_at_run": m["git"]["git_dirty"], "note": CAL_NOTE,
+           "rules": {k: cfg[k] for k in ("accurate_tol", "calibration_lens", "rho_min", "loo_ba_min", "bootstrap_n", "bootstrap_seed")},
+           "n_calibration_videos": a["n_calibration"], "decision": a["decision"], "useful_predictors": a["useful_predictors"],
+           "proposal": {k: {"accurate_if": p["accurate_if"], "threshold": rd(p["threshold"], 6)} for k, p in a["proposal"].items()}}
+    p = hf.resolve(cfg["output"]["results_yaml"])
+    p.write_text(yaml.safe_dump(hf.jsonable(out), allow_unicode=True, sort_keys=False))
+    return p
+
+
+# ====================================================================================================
 # command line
 # ====================================================================================================
 
-COMMANDS = {"protocol": protocol_main, "frame-filter": ff_main, "same-session": session_main, "overlay": overlay_main, "phase-segmentation": pseg_main, "guide-revision": grev_main, "f-response": fresp_main, "error-factors": ferr_main, "long-video-check": long_main, "generalization": gen_main, "main-camera-extension": ext_main, "wide-60cm": wide_main, "jointset-sets": jset_main}
+COMMANDS = {"protocol": protocol_main, "frame-filter": ff_main, "same-session": session_main, "overlay": overlay_main, "phase-segmentation": pseg_main, "guide-revision": grev_main, "f-response": fresp_main, "error-factors": ferr_main, "long-video-check": long_main, "generalization": gen_main, "main-camera-extension": ext_main, "wide-60cm": wide_main, "jointset-sets": jset_main, "verdict-calibration": cal_main}
 
 
 def main(argv=None):
