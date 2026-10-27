@@ -1,0 +1,276 @@
+experiment:
+  name: 34b_printed_hand_rerun
+  seed: 42
+
+# 34b: second run of experiment 34. Run 1 (configs/34_printed_hand.yaml, results/34_printed_hand.yaml) ended 판단 불가 because both 75 cm printed-hand videos were excluded by the unchanged exclusion rule; the user re-shot two
+# 75 cm videos (IMG_7257, IMG_7258) and they are added to the list. IMG_7253 / IMG_7254 stay in the list and stay subject to the same rule. Code, candidate, exclusion rule, verdict thresholds, bootstrap and the reference f
+# are unchanged from run 1. The 50 / 60 cm results of run 1 were seen before adding the videos (their slope alone, -0.53, is not a verdict); the thresholds were not touched. Run 1's files are kept as they are.
+# 34: does the f-versus-distance slope of experiment 27 (real hand: 50 cm 2092, 60 cm 1767, 75 cm 1398 px, slope about -1.0) remain when the hand cannot change shape? A life-size hand picture on a flat board
+# (perfectly planar, rigid) was filmed with the same camera, 1x default, landscape, same session, at 50 / 60 / 75 cm. The candidate (mediapipe_hands + wrist_mode exclude + fixed_template, 27's settings) is unchanged.
+# Fixed 2026-10-27 before the run; nothing is changed after seeing results.
+videos:                              # printed hand: file, distance_cm (detected anew with mediapipe, CPU)
+  - {file: IMG_7249.MOV, distance_cm: 60}
+  - {file: IMG_7251.MOV, distance_cm: 50}
+  - {file: IMG_7253.MOV, distance_cm: 75}
+  - {file: IMG_7254.MOV, distance_cm: 75}
+  - {file: IMG_7255.MOV, distance_cm: 60}
+  - {file: IMG_7256.MOV, distance_cm: 50}
+  - {file: IMG_7257.MOV, distance_cm: 75}      # re-shot 2026-10-27 after run 1 ended 판단 불가 (both 75 cm videos IMG_7253 / IMG_7254 were excluded: the printed hand was not detected in enough frames)
+  - {file: IMG_7258.MOV, distance_cm: 75}
+compare_videos:                      # real hand of experiment 27 (G6, right hand): stored detections, only for the comparison (same processing)
+  - {file: IMG_7216.MOV, distance_cm: 50}
+  - {file: IMG_7217.MOV, distance_cm: 60}
+  - {file: IMG_7218.MOV, distance_cm: 75}
+  - {file: IMG_7219.MOV, distance_cm: 50}
+  - {file: IMG_7220.MOV, distance_cm: 60}
+  - {file: IMG_7221.MOV, distance_cm: 75}
+  - {file: IMG_7222.MOV, distance_cm: 50}
+  - {file: IMG_7223.MOV, distance_cm: 60}
+  - {file: IMG_7224.MOV, distance_cm: 75}
+input_dir: /home/juson/data/hand_focal_videos
+ref_f_by_distance: {50: 1660.6, 60: 1653.7, 75: 1644.9}     # the checkerboard distance experiment of the same day (user-provided); the errors against 1680 are recorded as well
+session:                             # what the entries do not say: main camera, 1x, no gloves; the person is not named
+  phone: main
+  lens: 1x
+  glove: false
+  person_id:
+detections:                          # content-keyed caches of the real-hand videos (any run)
+  search_dirs: [runs/*/*/detection_cache]
+candidate:                           # fixed (22 / 25 / 26 / 27 / 29)
+  detector: mediapipe_hands
+  wrist_mode: exclude
+  estimator: fixed_template
+  front_window: 17's (phase_mode nominal, tilt phase from 3.0 s)
+exclusion:                           # same as 27
+  edge_rate_max: 0.05
+  detect_fail_max: 0.20
+# Verdict on the slope of log f against log distance of the pooled f of the printed-hand videos (video-level bootstrap within each distance):
+#   반비례 없음: the whole 95% interval above slope_none_min and every pooled f within f_tol of the reference f of its distance
+#   반비례 있음: the whole 95% interval below slope_yes_max
+#   otherwise 판단 보류; 판단 불가 when a distance has no included video
+verdict:
+  slope_none_min: -0.3
+  slope_yes_max: -0.7
+  f_tol: 0.10
+bootstrap:
+  n: 1000
+  seed: 42
+rating_v2:
+  tilt_min_s: 18.0
+  theta_max_min_deg: 55.0
+  usable_log_std_max: 0.1
+  reference_log_std_max: 0.15
+guide:
+  phase_segmentation:
+    noise_percentile: 95
+    k_d: 3.0
+    theta_min_deg: 15.0
+    median_window_s: 0.3
+    sustain_s: 0.5
+    front_search_s:
+    - 0.5
+    - 2.5
+    d0_cap_theta_deg: 20.0
+    use_motion: false
+    k_v: 3.0
+    motion_window_s: 0.3
+    exclude_large_tilt: false
+    max_tilt_deg: 45.0
+  conditions:
+    reference_detector: wilor_yolo
+    box_short_ratio_max: 0.65
+    edge_rate_max: 0.05
+    transition_min_s: 2.5
+    tilt_rule: frames_median
+    tilt_max_deg: 45.0
+    min_tilt_frames: 30
+    theta_tilt_median_range_deg:
+    - 20.0
+    - 40.0
+    axis_bins_min: 5
+    finger_extension_min: 0.9
+
+code_31: {branch: exp/31-verdict-calibration, commit: 69d41a2, modules: [HandCalib/handfocal.py, HandCalib/run.py]}
+n_workers: 16
+workers: 9
+output:
+  root: runs/34_printed_hand
+  results_yaml: results/34b_printed_hand.yaml
+
+pipeline:
+  experiment:
+    name: 34b_printed_hand_rerun
+    seed: 42
+  input_dir: /home/juson/data/hand_focal_videos
+  video_extensions:
+  - .mov
+  - .mp4
+  - .m4v
+  - .mkv
+  - .avi
+  min_duration_s: 5.0
+  normalize:
+    long_side: 1920
+    max_fps: 60
+    sdr_target: bt709
+    hdr_path:
+    - zscale_tonemap
+    - colorspace
+    codec: ffv1
+  frames:
+    detect_fps: 15
+    tmp_dir: null
+  detector:
+    name: mock
+    mock_npz: null
+    classes:
+      0: left
+      1: right
+    cache: true
+  tracking:
+    init_window_s: 1.0
+    iou_min: 0.3
+    conf_min: 0.5
+    smoothing:
+      enabled: false
+      window: 3
+  phases:
+    phase_mode: nominal
+    front_phase_s: 3.0
+    front_skip_s: 0.5
+    front_window_s: 1.0
+    front_min_detect_rate: 0.9
+    finger_extension_min: 0.9
+    auto_theta_deg: 10.0
+    auto_sustain_s: 0.5
+    auto_warn_diff_s: 1.0
+  joints:
+    sets:
+      palm4:
+      - 0
+      - 5
+      - 9
+      - 13
+      palm5:
+      - 0
+      - 5
+      - 9
+      - 13
+      - 17
+      palm_proximal9:
+      - 0
+      - 5
+      - 6
+      - 9
+      - 10
+      - 13
+      - 14
+      - 17
+      - 18
+      flat17:
+      - 0
+      - 5
+      - 6
+      - 7
+      - 8
+      - 9
+      - 10
+      - 11
+      - 12
+      - 13
+      - 14
+      - 15
+      - 16
+      - 17
+      - 18
+      - 19
+      - 20
+    estimate_set: flat17
+    uncertainty_sets:
+    - palm5
+    - palm_proximal9
+    - flat17
+    template_align_iters: 4
+  estimate:
+    estimator: fixed_template
+    synthetic_study_result: null
+    principal_point: center
+    distortion: null
+    f_grid_n: 60
+    f_ratio_range:
+    - 0.35
+    - 1.6
+    huber_rel: 0.02
+    min_points: 4
+    joint_delta:
+      delta_grid_deg:
+      - 0
+      - 4
+      - 8
+      - 12
+      - 16
+      - 20
+      phi_n: 6
+      delta_prior_deg: 8.0
+      prior_weight: auto
+      nm_max_iter: 300
+  anycalib:
+    enabled: true
+    model_id: anycalib_pinhole
+    cam_id: pinhole
+    stride: 1
+    device: cuda:0
+    extra_models:
+    - anycalib_gen
+    offline_env:
+      HF_HUB_OFFLINE: '1'
+      TRANSFORMERS_OFFLINE: '1'
+    torch_hub_dir: ~/.cache/torch/hub
+  uncertainty:
+    n_bootstrap: 30
+    block_frames: 10
+    time_budget_s: 600
+  verdict:
+    good:
+      detect_rate_min: 0.9
+      front_frames_min: 15
+      finger_extension_required: true
+      theta_p90_min_deg: 25.0
+      axis_bins_min: 5
+      reproj_rms_rel_max: 0.01
+      jointset_range_max: 0.04
+      bootstrap_rel_std_max: 0.03
+      consistency_range_max: 0.06
+      delta_abs_max_deg: 12.0
+      sharpness_min: 1.3
+    rough:
+      detect_rate_min: 0.7
+      theta_p90_min_deg: 12.0
+      axis_bins_min: 3
+      reproj_rms_rel_max: 0.025
+      jointset_range_max: 0.12
+    min_target_frames: 20
+  target_sizes:
+  - - 1920
+    - 1080
+  - - 1280
+    - 720
+  - - 3840
+    - 2160
+  output:
+    root: runs/26_generalization
+    results_yaml: results/26_generalization.yaml
+
+detector_settings:
+  mediapipe_hands:
+    model: MediaPipe Hand Landmarker (hand_landmarker.task float16/1)
+    weights: /home/juson/models/mediapipe/hand_landmarker.task
+    python: /home/juson/venvs/det_mediapipe/bin/python
+    device: cpu
+    num_hands: 2
+    min_hand_detection_confidence: 0.5
+    min_hand_presence_confidence: 0.5
+    box_margin: 0.1
+    conf_min: 0.5
+    remap: null
+
