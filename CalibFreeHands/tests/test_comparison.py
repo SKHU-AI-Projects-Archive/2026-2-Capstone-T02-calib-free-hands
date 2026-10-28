@@ -140,6 +140,32 @@ def test_shared_raw_pose_with_different_focals_produces_distinct_camera_space_re
         assert reference["mano_vertices"][0, 1, 0, 2] == 22
 
 
+def test_same_wilor_backend_is_constructed_once_across_calibration_rows(tmp_path):
+    config = load_configuration()
+    pose_constructions = []
+
+    session = process_comparison_session(
+        _frames(),
+        [
+            PipelineConfiguration("baseline", "Baseline", "anycalib_original", "wilor_original"),
+            PipelineConfiguration("reference", "Reference", "checkerboard_reference", "wilor_original", 1200.0),
+        ],
+        config,
+        tmp_path,
+        tmp_path / "session",
+        {"input_path": "input.mp4", "sampling_mode": "uniform", "sample_count": 1,
+         "aggregation": "median", "preserve_audio": False},
+        calibration_factory=lambda model_id, focal: (
+            ReferenceFocalBackend(focal) if model_id == "checkerboard_reference"
+            else CountingCalibration(500, [])
+        ),
+        pose_factory=lambda model_id: (pose_constructions.append(model_id) or CountingPose(500, [])),
+    )
+
+    assert pose_constructions == ["wilor_original"]
+    assert set(session.raw_pose_results) == {"wilor_original"}
+
+
 def test_same_calibration_with_different_pose_models_calibrates_once(tmp_path):
     configs = [
         PipelineConfiguration("original", "Original", "anycalib_original", "wilor_original"),

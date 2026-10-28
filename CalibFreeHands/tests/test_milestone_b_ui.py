@@ -16,28 +16,60 @@ def _window(tmp_path, monkeypatch):
     return main, main.MainWindow()
 
 
-def test_open_uses_one_unified_picker_with_persistent_input_location(tmp_path, monkeypatch, qapp):
+def test_open_uses_native_selection_boundary_with_persistent_input_location(tmp_path, monkeypatch, qapp):
     main, window = _window(tmp_path, monkeypatch)
     source = tmp_path / "media" / "clip.mp4"
     source.parent.mkdir()
     source.touch()
     calls = []
 
-    class Picker:
-        def __init__(self, _parent, start):
-            calls.append(start)
-        def exec(self):
-            return QDialog.DialogCode.Accepted
-        def selected_paths(self):
-            return [source]
-
-    monkeypatch.setattr(main, "MediaOpenDialog", Picker)
+    monkeypatch.setattr(main, "select_media_paths", lambda parent, start: calls.append((parent, start)) or [source])
     window.open_button.click()
     assert window.open_button.menu() is None
     assert len(calls) == 1
-    assert calls[0] == Path.home()
+    assert calls[0][1] == Path.home()
     assert window.queue.count() == 1
     assert Path(window.settings.get("last_input_directory")) == source.parent
+    window.close()
+
+
+def test_native_dialog_error_shows_readable_fallback_and_keeps_open_flow(tmp_path, monkeypatch, qapp):
+    from calibfreehands.app.native_media_dialog import NativeMediaDialogError
+
+    main, window = _window(tmp_path, monkeypatch)
+    source = tmp_path / "media" / "fallback.mp4"
+    source.parent.mkdir()
+    source.touch()
+    warnings = []
+
+    class Fallback:
+        def __init__(self, *_args): pass
+        def exec(self): return 1
+        def selected_paths(self): return [source]
+
+    def unavailable(*_args):
+        raise NativeMediaDialogError("COM unavailable")
+
+    monkeypatch.setattr(main, "select_media_paths", unavailable)
+    monkeypatch.setattr(main.QMessageBox, "warning", lambda *args: warnings.append(args[-1]))
+    monkeypatch.setattr(main, "MediaOpenDialog", Fallback)
+    window._open_media()
+
+    assert warnings and "fallback media picker" in warnings[0]
+    assert window.queue.count() == 1
+    assert Path(window.settings.get("last_input_directory")) == source.parent
+    window.close()
+
+
+def test_cancelled_native_picker_does_not_mutate_queue_or_last_directory(tmp_path, monkeypatch, qapp):
+    main, window = _window(tmp_path, monkeypatch)
+    initial = window.settings.get("last_input_directory")
+    monkeypatch.setattr(main, "select_media_paths", lambda *_: [])
+
+    window.open_button.click()
+
+    assert window.queue.count() == 0
+    assert window.settings.get("last_input_directory") == initial
     window.close()
 
 
@@ -121,9 +153,10 @@ def test_configuration_layout_and_audio_preview_controls_match_bundle_workflow(t
     labels = {label.text() for label in window.findChildren(__import__("PySide6.QtWidgets", fromlist=["QLabel"]).QLabel)}
     assert {"Name", "Calibration", "Reconstruction", "Reference Focal", "Action", "Theme", "Language", "Output"} <= labels
     row = window.configuration_rows[0]
-    assert row.name.minimumWidth() >= 130
-    assert row.calibration.minimumWidth() >= 150
-    assert row.reconstruction.minimumWidth() >= 150
+    readable_name_width = row.name.fontMetrics().horizontalAdvance("Configuration 1")
+    assert row.name.minimumWidth() >= readable_name_width
+    for combo in (row.calibration, row.reconstruction):
+        assert combo.sizeAdjustPolicy() == combo.SizeAdjustPolicy.AdjustToContents
     assert not any(box.text() == "Preserve audio" for box in window.findChildren(__import__("PySide6.QtWidgets", fromlist=["QCheckBox"]).QCheckBox))
     assert window.minimumWidth() >= 900
     window.close()
@@ -142,5 +175,7 @@ def test_added_configuration_uses_first_free_default_number_and_keeps_custom_nam
     assert window.configuration_rows[-1].name.text() == "Configuration 1"
     assert window.configuration_rows[0].name.text() == "Reference"
     assert window.configuration_rows[1].name.text() == "Proposed"
+    assert [window.rows_layout.getItemPosition(window.rows_layout.indexOf(row.name))[0]
+            for row in window.configuration_rows] == [1, 2, 3]
     window.close()
 

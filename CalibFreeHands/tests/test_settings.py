@@ -238,7 +238,7 @@ def test_main_window_groups_processing_settings_without_unused_audio_control(tmp
     window = MainWindow()
     labels = [label.text() for label in window.findChildren(QLabel)]
     combos = window.findChildren(QComboBox)
-    processing_row = next(item.layout() for item in (window.centralWidget().layout().itemAt(i) for i in range(window.centralWidget().layout().count())) if item and item.layout() and item.layout().count() == 4 and item.layout().itemAt(0).layout() is not None and item.layout().itemAt(0).layout().itemAt(0).widget().text() == "Collision")
+    processing_row = window.processing_row
     sampling = next(combo for combo in combos if [combo.itemText(i) for i in range(combo.count())] == ["Uniform", "All frames"])
     sample_count = next(combo for combo in combos if [combo.itemText(i) for i in range(combo.count())] == ["4", "8", "16", "32"])
     collision = next(combo for combo in combos if [combo.itemText(i) for i in range(combo.count())] == ["Ask", "Overwrite", "Auto rename", "Skip"])
@@ -246,9 +246,10 @@ def test_main_window_groups_processing_settings_without_unused_audio_control(tmp
 
     assert "N" not in labels
     assert {"Collision", "Sampling", "Sample count", "Aggregate"}.issubset(labels)
-    compact_groups = [processing_row.itemAt(index).layout() for index in range(4)]
+    compact_groups = [processing_row.itemAt(index).widget().layout() for index in range(4)]
     assert all(group is not None and group.contentsMargins().left() == 0 and group.spacing() <= 6 for group in compact_groups)
     assert processing_row.spacing() > max(group.spacing() for group in compact_groups)
+    assert processing_row.stretch(4) == 1
     assert [group.itemAt(0).widget().text() for group in compact_groups] == ["Collision", "Sampling", "Sample count", "Aggregate"]
     assert collision.currentText() == "Ask"
     assert sampling.currentText() == "Uniform"

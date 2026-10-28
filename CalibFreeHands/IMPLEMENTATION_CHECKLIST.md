@@ -9,7 +9,7 @@
 - [x] Backend-independent frame processing service and canonical result integration
 - [x] Preview encoder boundary with optional audio mapping
 - [x] Queue start/cancel UI bound to QThread lifecycle
-- [x] One Open button with a unified file/folder picker, canonical queue paths, duplicate prevention, Remove/Clear, and visible item states
+- [x] One Open button with Windows Common Item Dialog file/folder selection, a warned Qt fallback, canonical queue paths, duplicate prevention, Remove/Clear, and visible item states
 - [x] Sequential whole-queue processing with per-media failure handling, cancellation propagation, and immutable run settings
 - [x] Batch output writability preflight and per-item error details in queue tooltips
 - [x] Persistent resolved output directory with folder picker and single-media automatic result viewer
@@ -68,5 +68,8 @@
 - [x] `View Results...` opens one or multiple `.cfh` files and rejects mixed source SHA256 selections
 - [x] ResultViewer and ComparisonViewer load bundles without extracting them; missing/changed source media does not block 3D viewing
 - [x] Canonical legacy NPZ/session loading remains available; raw-pose NPZ gives a readable validation error
-- [x] Unified picker, stable configuration headings, aligned settings, persistent input/result directories, and no unused Preserve audio control
+- [x] Windows-native media picker, stable configuration headings, aligned settings, persistent input/result directories, and no unused Preserve audio control
 - [x] Milestone B Offscreen Qt, bundle validation, atomic cleanup, output cleanliness, source identity, and auto-viewer tests
+- [x] Milestone C-1 native media dialog, compact controls, Checkerboard focal filenames, validated persistent/importable User Presets, and unique WiLoR reuse
+- [x] C-1 Fix Pass shared configuration grid, compact local control groups, preset origin tracking, and explicit overwrite/Save As
+- [x] C-1 Fix Pass manually approved in the Windows GUI

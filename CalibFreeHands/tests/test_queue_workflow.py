@@ -79,11 +79,7 @@ def test_open_files_adds_supported_paths_once_and_path_survives_state_text(tmp_p
     unsupported = tmp_path / "notes.txt"
     supported.touch()
     unsupported.touch()
-    class Picker:
-        def __init__(self, *_): pass
-        def exec(self): return 1
-        def selected_paths(self): return [supported, unsupported]
-    monkeypatch.setattr(main, "MediaOpenDialog", Picker)
+    monkeypatch.setattr(main, "select_media_paths", lambda *_: [supported, unsupported])
     window._open_media()
     window._add_paths([supported.parent / "." / supported.name])
 
@@ -104,11 +100,7 @@ def test_open_folder_is_nonrecursive_and_skips_duplicate_input(tmp_path, monkeyp
     nested_file = nested / "nested.mp4"
     direct.touch()
     nested_file.touch()
-    class Picker:
-        def __init__(self, *_): pass
-        def exec(self): return 1
-        def selected_paths(self): return [folder]
-    monkeypatch.setattr(main, "MediaOpenDialog", Picker)
+    monkeypatch.setattr(main, "select_media_paths", lambda *_: [folder])
     window._open_media()
     window._add_paths([direct])
 
@@ -299,6 +291,30 @@ def test_media_processing_exposes_only_cfh_and_cleans_internal_workspace(tmp_pat
     window.close()
 
 
+def test_checkerboard_result_filename_contains_reference_focal_without_changing_anycalib(tmp_path, monkeypatch, qapp):
+    main, window, _ = make_window(tmp_path, monkeypatch)
+    source = tmp_path / "clip.mp4"
+    source.touch()
+    window._add_configuration_row()
+    reference_row = window.configuration_rows[1]
+    reference_row.calibration.setCurrentIndex(reference_row.calibration.findData("checkerboard_reference"))
+    reference_row.reference_focal.setValue(1280.5)
+    output = tmp_path / "output"
+    output.mkdir()
+    window.output_path.setText(str(output))
+    monkeypatch.setattr(main, "probe_media", lambda *_: SimpleNamespace(width=8, height=8, frame_rate=30.0))
+    monkeypatch.setattr(main, "FFmpegDecoder", lambda: SimpleNamespace(decode_rgb=lambda *_: ["frame"]))
+    monkeypatch.setattr(main, "process_comparison_session", lambda _f, c, _cfg, _r, w, s, *_: _synthetic_session(w, c, s))
+
+    paths, _ = window._process_media(source)
+
+    assert {path.name for path in paths} == {
+        "clip__Original-AnyCalib__Original-WiLoR.cfh",
+        "clip__Checkerboard-Reference-1280.5px__Original-WiLoR.cfh",
+    }
+    window.close()
+
+
 @pytest.mark.parametrize("policy", ["ask", "skip"])
 def test_existing_result_collision_never_overwrites_silently_or_runs_inference(tmp_path, monkeypatch, qapp, policy):
     main, window, _ = make_window(tmp_path, monkeypatch)
@@ -464,14 +480,14 @@ def test_unusable_output_base_fails_batch_before_any_media_starts(tmp_path, monk
 def test_reference_focal_container_visibility_and_value_are_preserved(tmp_path, monkeypatch, qapp):
     _, window, _ = make_window(tmp_path, monkeypatch)
     row = window.configuration_rows[0]
-    assert not row.reference_focal_controls.isVisibleTo(window)
+    assert not row.reference_focal_container.isVisibleTo(window)
     row.calibration.setCurrentIndex(row.calibration.findData("checkerboard_reference"))
-    assert row.reference_focal_controls.isVisibleTo(window)
+    assert row.reference_focal_container.isVisibleTo(window)
     assert row.reference_focal.isEnabled()
     row.reference_focal.setValue(1400.0)
     row.calibration.setCurrentIndex(row.calibration.findData("anycalib_original"))
-    assert not row.reference_focal_controls.isVisibleTo(window)
+    assert not row.reference_focal_container.isVisibleTo(window)
     row.calibration.setCurrentIndex(row.calibration.findData("checkerboard_reference"))
-    assert row.reference_focal_controls.isVisibleTo(window)
+    assert row.reference_focal_container.isVisibleTo(window)
     assert row.reference_focal.value() == 1400.0
     window.close()

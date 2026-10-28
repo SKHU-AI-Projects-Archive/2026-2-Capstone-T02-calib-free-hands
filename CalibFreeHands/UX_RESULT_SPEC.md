@@ -1,62 +1,76 @@
-# CalibFreeHands UX / Result Packaging Specification
+# CalibFreeHands UX / Result / Comparison Specification
 
-**Status:** Frozen implementation contract
+**Status:** Frozen implementation contract for the next milestones
 **Repository:** `D:\2026-2-Capstone-T02-calib-free-hands`  
 **Application root:** `CalibFreeHands/`  
 **Working branch:** `CalibFreeHands`
 
-**Implementation status:** Milestones A and B are implemented; see `VALIDATION_CHECKLIST.md` for verification.
+**Current implementation status**
+- Milestone A — implemented and manually validated
+- Milestone B — implemented and manually validated
+- Milestone C-1 — implemented and manually approved after Fix Pass
+- Next: Milestone C-2A — Metric Engine
+- Then: Milestone C-2B — Comparison Dashboard
+- Then: Milestone D — Calibration model expansion
+- Later: Milestone E — Performance / packaging
 
-## 1. Purpose
+---
 
-This document freezes the intended user experience and result-packaging behavior for the next CalibFreeHands implementation milestone.
+# 1. Purpose
 
-The current application already has a useful internal research architecture:
+CalibFreeHands is a Windows research/demo application for comparing how different camera-calibration methods affect reconstructed 3D hands.
 
-- calibration backends
-- reconstruction backends
-- `CalibrationResult`
-- `RawPoseResult`
-- `CanonicalResult`
-- comparison configurations
-- comparison sessions
-- Overlay / Split comparison viewer
-- confidence visualization
-- reference metrics
+The user-facing research question is:
 
-These internal structures should remain reusable.
+> If the same RGB media and the same hand-reconstruction model are used, how much does the resulting 3D hand differ when the camera focal/calibration source changes?
 
-However, the current application exposes too much of its internal processing structure directly to the user, including `session.json`, `calibration/`, `pose/`, hashed result directories, and multiple intermediate `.npz` / `.json` files.
+The application must support:
 
-The target UX is:
+1. processing one or many media files;
+2. processing one media file with multiple Calibration/Reconstruction configurations;
+3. storing one user-facing `.cfh` result per configuration;
+4. reopening several results from the same source;
+5. selecting one result as a Reference;
+6. comparing every other result against that Reference numerically and visually;
+7. changing visible metrics while the Viewer is running;
+8. showing any practical number of results, not only two or three;
+9. preserving scientific raw coordinates while allowing flexible visualization.
 
-> **One input media + one Calibration model + one Reconstruction model = one user-facing result file.**
+---
 
-## 2. Design principles
+# 2. Scientific language
 
-### 2.1 User-facing simplicity
+## 2.1 Checkerboard is a Reference, not automatically true GT
 
-Normal workflow:
+The preferred terminology in code, UI, documentation, and files is:
 
 ```text
-Open...
-  ↓
-Select file or folder
-  ↓
-Choose model configuration(s)
-  ↓
-Start Processing
-  ↓
-Completed
-  ↓
-Viewer opens automatically
+Reference
+Checkerboard Reference
+Reference 3D
 ```
 
-The user should not need to understand raw-pose NPZ files, calibration cache JSON files, hashed output directories, or session internals.
+A checkerboard-calibrated focal/result may be treated as an **assumed reference** for the experiment.
 
-### 2.2 Preserve scientific correctness
+Do not automatically claim:
 
-Do not change the current scientific contracts during UX work.
+```text
+true 3D Ground Truth
+mocap Ground Truth
+absolute Ground Truth
+```
+
+unless the experiment genuinely provides such data.
+
+For informal presentation, the team may describe the checkerboard result as a practical GT/reference, but implementation terminology should remain `Reference`.
+
+---
+
+# 3. Preserve scientific contracts
+
+The following existing behavior is frozen.
+
+Focal propagation:
 
 ```text
 tz_new = tz_source * target_focal / source_focal
@@ -64,7 +78,7 @@ tz_new = tz_source * target_focal / source_focal
 
 - camera translation X unchanged
 - camera translation Y unchanged
-- only Z is rescaled by focal ratio
+- camera translation Z rescaled by focal ratio
 
 Final camera-space joints:
 
@@ -72,7 +86,7 @@ Final camera-space joints:
 keypoints_3d_relative + corrected_translation
 ```
 
-Final MANO vertices:
+Final camera-space MANO vertices:
 
 ```text
 vertices_relative + corrected_translation
@@ -87,11 +101,22 @@ Z = camera forward
 unit = metre
 ```
 
-`RAW_TO_VIEW` remains display-only. Missing hands remain `detected=false` with NaN coordinates.
+`RAW_TO_VIEW` is display-only.
 
-### 2.3 Preserve internal reuse
+Missing hands:
 
-The separation between Calibration and Reconstruction must remain.
+```text
+detected = false
+coordinates = NaN
+```
+
+Do not mutate raw scientific data to make plots visually closer.
+
+---
+
+# 4. Internal reuse remains mandatory
+
+Calibration and Reconstruction remain separated.
 
 Example:
 
@@ -100,61 +125,54 @@ Checkerboard Reference + Original WiLoR
 Original AnyCalib      + Original WiLoR
 Fine-tuned AnyCalib    + Original WiLoR
 Original GeoCalib      + Original WiLoR
+HandCalib              + Original WiLoR
 ```
 
-must not require Original WiLoR inference four times when the same raw pose can be reused.
+For the same source media, the same Reconstruction backend/variant should be reused whenever scientifically valid.
 
-## 3. Input UX
+A multi-calibration comparison must not rerun identical raw WiLoR inference once per Calibration configuration.
 
-### 3.1 One Open button
-
-Remove the separate user-facing buttons:
+Conceptually:
 
 ```text
-Browse files
-Browse folder
+RGB media
+ ├─ Calibration backend(s)
+ │      ↓
+ │  CalibrationResult(s)
+ │
+ └─ Reconstruction backend(s)
+        ↓
+     RawPoseResult(s)
+
+CalibrationResult + RawPoseResult
+             ↓
+       CanonicalResult
+             ↓
+          .cfh
 ```
 
-Replace them with:
+---
 
-```text
-Open...
-```
+# 5. Input / Queue / Result behavior
 
-Clicking **Open...** immediately opens one unified picker, without a dropdown or an intermediate choice. In that dialog, the user can add either:
+These Milestone A/B decisions remain frozen.
 
-- one or more supported media files
-- one folder
-
-If files are selected, add those supported files only.
-
-If a folder is selected, add all supported media files directly inside that folder.
-
-Default folder discovery remains non-recursive.
-
-### 3.2 Queue controls
-
-Minimum controls:
+## 5.1 Main controls
 
 ```text
 Open...
 Remove
 Clear
 Start Processing
+View Results...
 Cancel
 ```
 
-`Remove` removes selected queue entries only.  
-`Clear` removes all queue entries only.  
-Neither operation deletes source media from disk.
+## 5.2 Queue
 
-### 3.3 Queue processing
+`Start Processing` processes the full queue sequentially.
 
-`Start Processing` means:
-
-> Process the whole current queue sequentially.
-
-Each media item should have an understandable state:
+States:
 
 ```text
 Waiting
@@ -164,136 +182,44 @@ Failed
 Cancelled
 ```
 
-## 4. Completion behavior
+## 5.3 Result unit
 
-### 4.1 Single media
+One user-facing result is:
 
-When one media item is processed successfully:
-
-```text
-Processing
-  ↓
-Completed
-  ↓
-Viewer automatically opens
-```
-
-The main UI must clearly show `Completed`.
-
-### 4.2 Batch input
-
-For multiple media files:
-
-- process sequentially
-- do not open one new viewer per item during the batch
-- update each item state
-- after the whole batch ends, show `Completed` or `Completed with errors`
-- let the user choose results later with **View Results...**
-
-## 5. Output directory UX
-
-The application must show a real effective output path at all times.
-
-Target form:
-
-```text
-Output    D:\example\CalibFreeHandsResults    [Browse...]
-```
-
-Requirements:
-
-- actual path always visible
-- clicking Browse opens a folder picker
-- selected path persists in application settings
-- no placeholder-only output field
-- if no saved output exists, select and display a deterministic concrete default
-
-## 6. User-facing result model
-
-The user-facing result unit is:
-
-> **one source media + one Calibration model + one Reconstruction model = one result file**
+> one source media + one Calibration model + one Reconstruction model = one `.cfh`
 
 Examples:
 
 ```text
 1_insert__Original-AnyCalib__Original-WiLoR.cfh
-1_insert__FineTuned-AnyCalib__Original-WiLoR.cfh
 1_insert__Original-GeoCalib__Original-WiLoR.cfh
 ```
 
-A multi-configuration run therefore creates multiple result files, while internal shared inference may still be reused.
-
-## 7. `.cfh` result bundle
-
-Introduce:
+Checkerboard Reference includes its user-specified focal:
 
 ```text
-.cfh
+1_insert__Checkerboard-Reference-1200px__Original-WiLoR.cfh
+1_insert__Checkerboard-Reference-1280.5px__Original-WiLoR.cfh
 ```
 
-as the normal user-facing result format.
+Predicted focal values from learned Calibration models do not belong in filenames.
 
-Recommended implementation:
+---
 
-> `.cfh` is a ZIP-compatible container created with the Python standard library.
+# 6. `.cfh` behavior
 
-Minimum conceptual contents:
+`.cfh` remains a ZIP-compatible user-facing result bundle.
+
+Conceptual minimum contents:
 
 ```text
 result.npz
 metadata.json
 ```
 
-### 7.1 NPZ role
+Source media is referenced, not embedded.
 
-`result.npz` remains the canonical numeric-array payload and may contain:
-
-- frame indices
-- timestamps
-- 2D keypoints
-- 3D keypoints
-- detected mask
-- focal values
-- MANO vertices
-- MANO faces
-- confidence
-- bbox
-- MANO pose
-- MANO shape
-- camera translation
-
-### 7.2 Metadata role
-
-`metadata.json` should contain provenance and human-readable metadata, including where available:
-
-- schema version
-- application version
-- source media name
-- source media path
-- source media SHA256
-- image/video dimensions
-- Calibration model ID and display name
-- Reconstruction model ID and display name
-- final focal
-- sampling mode
-- sample count
-- aggregation
-- Calibration provenance
-- checkpoint hash
-- runtime metadata
-- coordinate-system description
-- unit
-- whether principal point was applied
-- whether distortion was applied
-
-Do not claim parameters were applied when they were not.
-
-## 8. Source media
-
-Do not embed the original video/image in `.cfh` by default.
-
-Store:
+Store at least:
 
 ```text
 source_media_name
@@ -301,182 +227,171 @@ source_media_path
 source_media_sha256
 ```
 
-If the source still exists, the viewer can show it.
+The SHA256 is the authoritative same-source identity.
 
-If the source is missing, show a clear missing-source state while still allowing the stored 3D result to open.
+If source media is missing, stored 3D data must still open.
 
-## 9. Result filenames
+---
 
-Default:
+# 7. Preset system
+
+The Preset system remains:
 
 ```text
-{source-stem}__{calibration-display-name}__{reconstruction-display-name}.cfh
+Built-in Preset
+User Preset
+Custom (unsaved)
 ```
+
+User Presets store research-processing settings only:
+
+- configuration rows
+- row names
+- Calibration model IDs
+- Reconstruction model IDs
+- Reference Focal where applicable
+- Sampling
+- Sample count
+- Aggregation
+
+They do not store:
+
+- Theme
+- Language
+- Output path
+- Viewer colors
+- window geometry
+
+Preset actions:
+
+```text
+Save Preset...
+Manage Presets...
+Import Preset...
+Export Preset...
+Set as Default
+```
+
+Modified User Presets remember their origin so the user may explicitly:
+
+```text
+Overwrite
+Save As...
+Cancel
+```
+
+Built-in presets cannot be overwritten.
+
+---
+
+# 8. Comparison Viewer — overall purpose
+
+The Comparison Viewer is not only a visualization tool.
+
+Its primary purpose is:
+
+> **A demonstration/research dashboard that shows how multiple 3D reconstruction results differ from a selected Reference, both visually and quantitatively.**
+
+The Viewer must support:
+
+- one source video/image;
+- N selected `.cfh` results from that same source;
+- a runtime-selectable Reference result;
+- runtime-selectable metrics;
+- Overlay visualization;
+- Split/adaptive multi-panel visualization;
+- optional separate/detached windows;
+- no inference rerun for display changes.
+
+---
+
+# 9. N-result requirement
+
+Do not hard-code the Comparison Viewer to exactly:
+
+```text
+2 results
+3 results
+```
+
+It must be architected for:
+
+```text
+N results
+```
+
+Examples include:
+
+```text
+2
+3
+4
+5
+```
+
+and should remain functional for more, subject to practical UI limits.
+
+The number of selected result files determines the number of result views.
+
+---
+
+# 10. Overlay mode
+
+Overlay remains conceptually:
+
+```text
+┌────────────────────┬────────────────────────────┐
+│ Original media     │ Overlaid 3D results       │
+└────────────────────┴────────────────────────────┘
+```
+
+All selected result hands occupy the same scientific camera-space coordinate system.
+
+Do not introduce arbitrary per-result translations or scales.
+
+---
+
+# 11. Split / Adaptive Grid mode
+
+The source media must remain visible in Split mode.
+
+The previous behavior where Split removed the source and showed only 3D views is not acceptable.
+
+For a few results:
+
+```text
+Original media | Reference 3D | Result B 3D | Result C 3D
+```
+
+For more results, use an adaptive grid instead of forcing every panel into one extremely narrow row.
 
 Example:
 
 ```text
-1_insert__Original-AnyCalib__Original-WiLoR.cfh
+┌───────────────┬───────────────┬───────────────┐
+│ Original      │ Reference     │ Original      │
+│ media         │ 3D            │ AnyCalib 3D   │
+├───────────────┼───────────────┼───────────────┤
+│ Fine-tuned    │ GeoCalib      │ HandCalib     │
+│ 3D            │ 3D            │ 3D            │
+└───────────────┴───────────────┴───────────────┘
 ```
 
-Unsafe filesystem characters must be sanitized.
+Requirements:
 
-Reuse the existing collision concepts:
+- source media always occupies one panel;
+- every selected result has one 3D panel;
+- current frame remains synchronized;
+- camera views remain synchronized by default;
+- adding more results should not require new hard-coded UI branches.
 
-```text
-Ask
-Overwrite
-Auto rename
-Skip
-```
+---
 
-An Auto rename example:
+# 12. Separate Windows / Detach
 
-```text
-1_insert__Original-AnyCalib__Original-WiLoR_1.cfh
-```
+The default demo view is one large Comparison Viewer with multiple panels.
 
-## 10. Internal intermediate files
-
-Keep internal structures such as:
-
-```text
-CalibrationResult
-RawPoseResult
-session/cache metadata
-```
-
-but do not normally expose these in the user output directory as:
-
-```text
-calibration/
-pose/
-results/<hash>/
-```
-
-Use an internal working/cache location such as a temporary directory or:
-
-```text
-%LOCALAPPDATA%\CalibFreeHands\cache\
-```
-
-The exact cache path may be chosen during implementation.
-
-Do not remove inference deduplication/reuse just to achieve a one-file UX.
-
-## 11. Preview video
-
-Do not generate `preview.mp4` automatically for every result by default.
-
-Preferred future workflow:
-
-```text
-Viewer
-  ↓
-Export Preview Video...
-```
-
-Keep the existing preview encoder for explicit export.
-
-Because automatic preview generation is disabled, the normal processing UI does not show **Preserve audio**. Its saved setting remains available for a future explicit preview export.
-
-## 12. Result opening UX
-
-Rename:
-
-```text
-Open saved result
-```
-
-to:
-
-```text
-View Results...
-```
-
-The dialog should open in the most recently used/result output directory.
-
-Normal selectable type:
-
-```text
-CalibFreeHands Result (*.cfh)
-```
-
-Multiple selection must be supported.
-
-The picker starts in the last result directory, or the current Output directory if no prior result directory is saved.
-
-## 13. Opening results
-
-### One `.cfh`
-
-Open a single Result Viewer.
-
-### Multiple `.cfh`
-
-1. read metadata from each selected result
-2. compare source-media identity
-3. if they came from the same source, open Comparison Viewer
-4. if they came from different sources, do not silently compare them
-
-Initial acceptable mixed-source behavior:
-
-```text
-Selected results were generated from different source media.
-```
-
-### Same-source identity
-
-Use:
-
-```text
-source_media_sha256
-```
-
-as the authoritative identity.
-
-Do not rely only on filenames.
-
-## 14. Comparison Viewer
-
-Preserve existing:
-
-```text
-Overlay
-Split
-```
-
-### Overlay
-
-Preferred concept:
-
-```text
-Original media | overlaid 3D results
-```
-
-Method/configuration identity remains a stable color.
-
-Confidence remains based on the actual stored frame × hand confidence scalar, using alpha/opacity.
-
-Do not invent joint-level confidence.
-
-### Split
-
-Preferred concept:
-
-```text
-Original media | Result A 3D | Result B 3D | Result C 3D
-```
-
-Show fewer result columns when fewer results are selected.
-
-## 15. Separate windows
-
-Separate-window viewing is deferred to Milestone C and is not implemented in Milestone B.
-
-Milestone C adds a way to detach results into individual windows.
-
-Suggested label:
+Also provide:
 
 ```text
 Separate Windows
@@ -488,63 +403,948 @@ or:
 Detach
 ```
 
+to open individual result/source views in separate windows.
+
+Initial requirement:
+
+- detaching does not rerun inference;
+- frame/playback remains synchronized where practical;
+- detached 3D cameras may remain synchronized;
+- recombining can be deferred.
+
+---
+
+# 13. Runtime Reference selection
+
+The Viewer must expose a Reference selector.
+
+Example:
+
+```text
+Reference [Checkerboard Reference 1500 px ▼]
+```
+
+Behavior:
+
+- if exactly one selected result uses Checkerboard Reference, choose it by default;
+- if multiple Checkerboard Reference results exist, select deterministically and let the user change it;
+- if none exists, select a sensible result and clearly indicate that there is no checkerboard reference;
+- user may change Reference while Viewer is open;
+- changing Reference recomputes/reselects metrics from loaded arrays only;
+- no model inference rerun;
+- no source-media reload unless already required by existing Viewer behavior.
+
+The Reference result itself should display `REFERENCE` rather than misleading non-zero comparison values.
+
+---
+
+# 14. Metric categories
+
+Metrics are grouped by scientific meaning.
+
+Primary categories:
+
+```text
+Reference Accuracy
+Pose / Mesh Shape
+Temporal Stability
+```
+
+---
+
+# 15. Reference Accuracy metrics — primary
+
+These metrics directly compare candidate camera-space results with the selected Reference.
+
+They are the most important metrics for the HandCalib camera-calibration experiment.
+
+## 15.1 Per-Joint 3D Error
+
+For corresponding joint `j`:
+
+```text
+e_j = || P_candidate[j] - P_reference[j] ||_2
+```
+
+Use canonical absolute camera-space coordinates.
+
+Stored coordinates are metres.
+
+Display in:
+
+```text
+mm
+```
+
+so:
+
+```text
+display_mm = error_m * 1000
+```
+
+Compute only for valid aligned detections.
+
+The joint correspondence is the existing canonical 21-joint ordering.
+
+## 15.2 Wrist Position Error
+
+Joint 0 is the canonical wrist.
+
+```text
+Wrist Error =
+|| wrist_candidate - wrist_reference ||_2
+```
+
+Display in mm.
+
+## 15.3 Raw Camera-Space MPJPE
+
+For valid corresponding joints:
+
+```text
+MPJPE =
+mean_j || P_candidate[j] - P_reference[j] ||_2
+```
+
+No Procrustes alignment.
+
+No translation removal.
+
+No scale normalization.
+
+Display in mm.
+
+Suggested UI display name:
+
+```text
+Camera-space MPJPE
+```
+
+## 15.4 Median Joint Error
+
+Median of valid per-joint Euclidean errors.
+
+Display in mm.
+
+## 15.5 Max Joint Error
+
+Maximum valid per-joint Euclidean error.
+
+Display in mm.
+
+## 15.6 Joint Error RMSE
+
+```text
+sqrt(mean(e_j^2))
+```
+
+Display in mm.
+
+---
+
+# 16. Depth metrics
+
+## 16.1 Wrist Depth Error
+
+Signed:
+
+```text
+candidate_wrist_Z - reference_wrist_Z
+```
+
+Absolute:
+
+```text
+abs(candidate_wrist_Z - reference_wrist_Z)
+```
+
+Primary display should use absolute magnitude in mm.
+
+## 16.2 Mean Joint Depth Error
+
+```text
+mean_j |Z_candidate[j] - Z_reference[j]|
+```
+
+Display in mm.
+
+## 16.3 Signed Mean Depth Bias
+
+```text
+mean_j (Z_candidate[j] - Z_reference[j])
+```
+
+Display in mm.
+
+---
+
+# 17. Camera Translation metrics
+
+If both results contain compatible camera translation:
+
+## 17.1 Translation Vector Error
+
+```text
+|| t_candidate - t_reference ||_2
+```
+
+Display in mm.
+
+## 17.2 Translation Z Error
+
+```text
+|tz_candidate - tz_reference|
+```
+
+Display in mm.
+
+## 17.3 Translation XY Error
+
+```text
+sqrt((tx_c - tx_r)^2 + (ty_c - ty_r)^2)
+```
+
+Display in mm.
+
+If unavailable, show `N/A`.
+
+Do not fabricate translation from joints.
+
+---
+
+# 18. Relative / percentage metrics
+
+Percentage metrics are secondary and require an explicit denominator.
+
+## 18.1 Relative Wrist Error
+
+```text
+Relative Wrist Error (%) =
+Wrist Position Error
+/
+Reference camera-to-wrist distance
+* 100
+```
+
+with:
+
+```text
+Reference camera-to-wrist distance = || wrist_reference ||
+```
+
+The UI/help text must expose this denominator.
+
+If invalid, return N/A.
+
+---
+
+# 19. Raw Mesh Error
+
+If both results contain compatible MANO vertices:
+
+## 19.1 Camera-space MPVPE
+
+```text
+MPVPE =
+mean_v || V_candidate[v] - V_reference[v] ||_2
+```
+
+No Procrustes alignment.
+
+Display in mm.
+
+Only calculate when vertex counts/topology are compatible.
+
+---
+
+# 20. Procrustes-aligned metrics — supplemental
+
+These are useful for local pose/shape agreement but are not primary calibration metrics.
+
+## 20.1 PA-MPJPE
+
+Apply a clearly defined similarity Procrustes alignment of candidate joints to Reference joints, then compute mean joint error.
+
+Display in mm.
+
+## 20.2 PA-MPVPE
+
+Same concept for compatible MANO vertices.
+
+Display in mm.
+
+## 20.3 Interpretation
+
+Do not use PA-MPJPE alone to claim improved camera calibration.
+
+A result may have:
+
+```text
+low PA-MPJPE
+high Camera-space MPJPE
+```
+
+which can indicate similar local articulation but incorrect global placement.
+
+---
+
+# 21. F@5 / F@15
+
+WiLoR benchmark terminology includes:
+
+```text
+F@5
+F@15
+```
+
+Do not invent an implementation merely because the names exist.
+
+Before implementation, verify/reproduce the exact benchmark protocol for the available Reference representation.
+
+Only expose when the protocol is explicitly defined and tested.
+
+Until then:
+
+```text
+PROTOCOL_PENDING
+```
+
+---
+
+# 22. AUC-J / AUC-V
+
+WiLoR reports:
+
+```text
+AUC_J
+AUC_V
+```
+
+under benchmark-specific protocols.
+
+Implementation rule:
+
+- verify exact evaluation curve/range/protocol;
+- implement only when reproducible from current data;
+- cover with deterministic tests;
+- otherwise keep unavailable.
+
+Do not manufacture a generic AUC definition.
+
+---
+
+# 23. Temporal Stability metrics
+
+These answer:
+
+> How stable is this reconstructed sequence over time?
+
+They are separate from Reference Accuracy.
+
+## 23.1 MPFJE
+
+WiLoR describes mean per-frame Euclidean joint displacement between consecutive frames.
+
 Conceptually:
 
 ```text
-Original media window
-Result A window
-Result B window
-Result C window
+MPFJE =
+mean over valid consecutive frames and joints
+|| J[t] - J[t-1] ||_2
 ```
 
-The first implementation only needs detaching. Recombining may be deferred.
+Units/scaling must be documented explicitly.
 
-Overlay/Split must not be removed.
+## 23.2 MPFVE
 
-## 16. Viewer synchronization
+Analogous consecutive-frame vertex displacement:
 
-Keep synchronization for:
+```text
+MPFVE =
+mean over valid consecutive frames and vertices
+|| V[t] - V[t-1] ||_2
+```
 
-- frame index
-- timestamp
-- playback state
+Only when compatible vertices exist.
 
-Split 3D cameras remain synchronized for:
+## 23.3 Jitter
 
-- orbit
-- zoom
-- pan
+WiLoR uses joint-motion jerk.
+
+Exact derivative/discretization and units must be verified before exposing a number.
+
+Until verified:
+
+```text
+PROTOCOL_PENDING
+```
+
+## 23.4 RTE
+
+WiLoR describes RTE as a global Root Translation Error related to wrist displacement across frames.
+
+Exact protocol/normalization must be verified.
+
+Do not confuse it with static Wrist Position Error.
+
+Until verified:
+
+```text
+PROTOCOL_PENDING
+```
+
+---
+
+# 24. Metric implementation states
+
+Metrics use explicit states:
+
+```text
+READY
+PROTOCOL_PENDING
+UNAVAILABLE_FOR_DATA
+```
+
+The UI only allows metrics valid for loaded data/protocol.
+
+Never return fake zero values for unsupported metrics.
+
+---
+
+# 25. Frame alignment and hand matching
+
+Reference-vs-candidate comparisons must align:
+
+- source frame;
+- hand side/identity;
+- canonical joint index.
+
+Requirements:
+
+- respect frame indices/timestamps;
+- respect `detected`;
+- NaN is not zero;
+- left compares with left;
+- right compares with right;
+- invalid pairs are skipped;
+- expose valid sample count where useful.
+
+---
+
+# 26. Per-frame vs sequence summaries
+
+## 26.1 Current-frame metrics
+
+Suitable for live playback:
+
+```text
+Wrist Error
+Camera-space MPJPE
+Median Joint Error
+Max Joint Error
+Depth Error
+Translation Error
+Per-Joint Error
+```
+
+## 26.2 Sequence summaries
+
+Optional:
+
+```text
+Mean over frames
+Median over frames
+RMSE over frames
+95th percentile
+Valid frame count
+```
+
+Always label summary scope clearly.
+
+---
+
+# 27. Per-Joint Error UI
+
+Support all canonical 21 joint errors.
+
+Optional panel:
+
+```text
+Joint                     Error
+Wrist                     24.3 mm
+Thumb 1                   ...
+...
+Pinky Tip                 ...
+```
+
+Use existing canonical joint ordering/naming.
+
+Hide by default if necessary for demo clarity.
+
+---
+
+# 28. Joint error visualization
+
+Optional toggle:
+
+```text
+Show Error Vectors
+```
+
+Draw residual lines from Reference joints to candidate joints.
+
+Requirements:
+
+- display-only;
+- no raw-data mutation;
+- valid paired joints only;
+- avoid clutter with many results.
+
+This may follow basic metric text/table support.
+
+---
+
+# 29. Runtime metric selector
+
+Metrics must be selectable while Viewer is open.
+
+Preferred:
+
+```text
+Metrics ▾
+```
+
+with checkable items grouped by category.
+
+Conceptual menu:
+
+```text
+Reference Accuracy
+☑ Wrist Error
+☑ Camera-space MPJPE
+☑ Wrist Depth Error
+☐ Median Joint Error
+☐ Max Joint Error
+☐ Per-Joint Error
+☐ Mean Joint Depth Error
+☐ Camera Translation Error
+☐ Relative Wrist Error
+
+Pose / Mesh
+☐ Camera-space MPVPE
+☐ PA-MPJPE
+☐ PA-MPVPE
+☐ F@5
+☐ F@15
+☐ AUC-J
+☐ AUC-V
+
+Temporal Stability
+☐ MPFJE
+☐ MPFVE
+☐ Jitter
+☐ RTE
+```
+
+Protocol-pending metrics are disabled/omitted with explanation.
+
+---
+
+# 30. Default visible metrics
+
+Do not enable everything by default.
+
+Recommended default:
+
+```text
+Wrist Error
+Camera-space MPJPE
+Wrist Depth Error
+```
+
+Optional fourth default when available:
+
+```text
+Translation Z Error
+```
+
+---
+
+# 31. Metric display
+
+Every non-reference result should have an associated readout.
+
+Example:
+
+```text
+Original AnyCalib
+Wrist Error          24.3 mm
+Camera-space MPJPE   18.7 mm
+Wrist Depth Error    19.1 mm
+```
+
+Reference result:
+
+```text
+Checkerboard Reference 1500 px
+REFERENCE
+```
+
+---
+
+# 32. Runtime updates
+
+When frame changes:
+
+- current-frame metrics update immediately;
+- no inference;
+- no bundle reopen.
+
+When selected metrics change:
+
+- display updates immediately;
+- no inference.
+
+When Reference changes:
+
+- recompute from loaded arrays;
+- no inference.
+
+---
+
+# 33. Metric caching
+
+Expensive sequence metrics may be cached.
+
+Cache key should include:
+
+```text
+reference result ID
+candidate result ID
+metric ID
+protocol/version
+```
+
+Display/layout/color changes must not invalidate scientific caches.
+
+---
+
+# 34. Result visibility controls
+
+Each result uses:
+
+```text
+[standard checkbox] [color swatch] [result name]
+```
+
+Example:
+
+```text
+☑ ■ Checkerboard Reference
+☑ ■ Original AnyCalib
+```
+
+Fix the current checkbox-indicator bug.
+
+Do not color-style the checkbox indicator itself in a way that hides checked state.
+
+---
+
+# 35. Color semantics
+
+Frozen mapping:
+
+```text
+Configuration identity = base hue
+Handedness             = deterministic variants of base hue
+Confidence             = alpha
+```
+
+Left/right variants must be distinguishable but related.
+
+---
+
+# 36. User-selectable colors
+
+Each result has a clickable base-color swatch.
+
+Changing color is display-only.
+
+It must not modify:
+
+- `.cfh`;
+- coordinates;
+- confidence;
+- metric values.
+
+Persistence across sessions is optional initially.
+
+---
+
+# 37. Mesh opacity
+
+Compact UI:
+
+```text
+Opacity [────●────]
+```
+
+Mesh opacity and confidence alpha remain distinct concepts.
+
+---
+
+# 38. Existing Viewer controls
+
+Preserve:
+
+- Joint
+- Bone
+- Mesh
+- mesh opacity
+- Left Hand
+- Right Hand
+- Grid
+- Axis
 - Front
 - Side
 - Top
 - Fit Hands
 - Reset View
+- Previous
+- Play / Pause
+- Next
+- frame slider
+- metrics CSV
+- metrics JSON
 
-Changing view modes must not rerun inference, rebuild scientific data, mutate raw coordinates, or unnecessarily reset the current frame.
+---
 
-## 17. Checkerboard Reference focal input
+# 39. Metric export
 
-The current always-visible disabled `1000.0 px` control is confusing.
+Extend CSV/JSON metric export so records clearly identify:
 
-New behavior:
+- source identity;
+- Reference result;
+- candidate result;
+- metric ID/name;
+- protocol/version;
+- frame index;
+- hand side;
+- joint index/name where applicable;
+- value;
+- unit;
+- valid status.
 
-If Calibration is not Checkerboard Reference:
+Do not export ambiguous unlabeled numbers.
 
-> hide the Reference Focal control.
+---
 
-If Calibration is Checkerboard Reference:
+# 40. Milestone C-2A — Metric Engine
 
-show:
+C-2A comes before major dashboard UI changes.
+
+Goal:
+
+> Make metric calculations scientifically correct and independently testable.
+
+## 40.1 Required first metrics
+
+Implement/test:
 
 ```text
-Reference Focal    [ 1000.0 px ]
+Per-Joint 3D Error
+Wrist Position Error
+Camera-space MPJPE
+Median Joint Error
+Max Joint Error
+Joint Error RMSE
+Wrist Depth Error
+Mean Joint Depth Error
+Signed Mean Depth Bias
+Camera Translation Vector Error
+Translation Z Error
+Relative Wrist Error
 ```
 
-and allow editing.
+Where data permits:
 
-## 18. Calibration model roadmap
+```text
+Camera-space MPVPE
+PA-MPJPE
+PA-MPVPE
+```
 
-Intended model list:
+## 40.2 Secondary metrics
+
+Implement only after exact protocol verification:
+
+```text
+F@5
+F@15
+AUC-J
+AUC-V
+MPFJE
+MPFVE
+Jitter
+RTE
+```
+
+Do not guess protocols.
+
+## 40.3 Metric registry
+
+Prefer a lightweight descriptor/registry containing:
+
+```text
+id
+display name
+category
+unit
+frame/sequence scope
+data requirements
+reference requirement
+protocol version
+implementation status
+```
+
+Do not build a generic plugin framework.
+
+---
+
+# 41. C-2A tests
+
+Use synthetic data with obvious analytical answers.
+
+## Exact match
+
+All Reference errors = 0.
+
+## Known +10 mm X translation
+
+Expected:
+
+```text
+all joint errors = 10 mm
+Wrist = 10 mm
+MPJPE = 10 mm
+Depth = 0
+```
+
+## Known +25 mm Z translation
+
+Expected:
+
+```text
+MPJPE = 25 mm
+Wrist Depth Error = 25 mm
+Mean Joint Depth Error = 25 mm
+```
+
+## Single-joint outlier
+
+Validate:
+
+```text
+mean
+median
+max
+RMSE
+```
+
+## Missing/NaN
+
+Invalid samples skipped; no zero substitution.
+
+## Left/right
+
+No cross-hand matching.
+
+## PA test
+
+Candidate differs only by known similarity transform.
+
+Expected:
+
+```text
+Camera-space MPJPE > 0
+PA-MPJPE ≈ 0
+```
+
+---
+
+# 42. Milestone C-2B — Comparison Dashboard
+
+After C-2A passes:
+
+- N-result loading;
+- runtime Reference selector;
+- runtime metric multi-select;
+- current-frame metrics;
+- optional sequence summaries;
+- per-joint table;
+- Overlay;
+- adaptive Split;
+- source media always visible;
+- checkbox visual fix;
+- color swatches;
+- handedness variants;
+- confidence alpha;
+- compact opacity;
+- Separate Windows / Detach.
+
+---
+
+# 43. Demo-first layout
+
+Priority:
+
+1. source video;
+2. result identity;
+3. selected Reference;
+4. 3D comparison;
+5. 2–4 selected metrics;
+6. optional advanced tools.
+
+Do not show every supported metric by default.
+
+---
+
+# 44. No inference for Viewer actions
+
+The following must never rerun models:
+
+```text
+Overlay ↔ Split
+adaptive grid changes
+Reference selection
+metric selection
+color selection
+Left/Right toggles
+Joint/Bone/Mesh
+Grid/Axis
+Opacity
+Detach
+frame navigation
+```
+
+---
+
+# 45. No scientific-data mutation
+
+Metrics/visualization never rewrite:
+
+- canonical arrays;
+- raw joints;
+- vertices;
+- focal provenance;
+- camera translation;
+- source hashes.
+
+---
+
+# 46. Milestone D — Calibration model expansion
+
+After C-2:
 
 ```text
 Original AnyCalib
@@ -554,302 +1354,147 @@ HandCalib
 Checkerboard Reference
 ```
 
-Only verified runnable models may be enabled.
+Only verified runnable backends may be enabled.
 
-### 18.1 Original AnyCalib
+Fine-tuned AnyCalib remains distinct from HandCalib.
 
-Current intended status:
+GeoCalib requires upstream/license/runtime/API/focal-semantics verification before integration.
 
-```text
-available
-```
+HandCalib remains unavailable until a real scientifically defined runtime model exists.
 
-The repository contains official AnyCalib as:
+---
 
-```text
-HandCalib/AnyCalib
-```
+# 47. Milestone E — Performance / packaging
 
-but the app currently imports:
-
-```python
-from anycalib import AnyCalib
-```
-
-Therefore runtime provenance should verify the actual imported module location rather than assuming it.
-
-### 18.2 Fine-tuned AnyCalib
-
-Treat as distinct from HandCalib:
+Later:
 
 ```text
-Original AnyCalib != Fine-tuned AnyCalib != HandCalib
+long-video RAM usage
+lazy media decoding
+viewer frame cache
+backend/model VRAM lifecycle
+portable Windows build
+release packaging
 ```
 
-Do not label a fine-tuned AnyCalib checkpoint as HandCalib.
+Realtime remains deferred unless reprioritized.
 
-### 18.3 Original GeoCalib
+---
 
-Target repository layout:
+# 48. Current milestone status
 
 ```text
-HandCalib/
-├─ AnyCalib/
-└─ GeoCalib/
+A     COMPLETE
+B     COMPLETE
+C-1   IMPLEMENTED + MANUALLY APPROVED
+C-2A  NEXT
+C-2B  AFTER C-2A
+D     LATER
+E     LATER
 ```
 
-Before integration:
-
-- verify official upstream
-- verify license
-- verify Python/PyTorch requirements
-- verify pretrained weight mechanism
-- verify inference API
-- verify focal semantics
-
-Prefer repository-managed dependency handling such as a Git submodule if appropriate.
-
-Do not hard-code personal absolute paths.
-
-### 18.4 HandCalib
-
-Current status:
-
-```text
-unavailable
-```
-
-until a real runtime adapter and checkpoint are scientifically defined.
-
-Do not fake HandCalib by renaming/reusing another backend or returning constant focal values.
-
-## 19. Reconstruction model roadmap
-
-Current default:
-
-```text
-Original WiLoR
-```
-
-Future variants may use the existing reconstruction registry.
-
-The result filename must always include the reconstruction model name.
-
-## 20. Default configuration
-
-Default remains:
-
-```text
-Calibration: Original AnyCalib
-Reconstruction: Original WiLoR
-Sampling: Uniform
-Sample count: 8
-Aggregation: Median
-```
-
-Users may persist their own defaults through the settings system.
-
-## 21. Legacy compatibility
-
-Existing historical:
-
-```text
-results.npz
-run.json
-session.json
-```
-
-results should not be intentionally broken.
-
-Legacy loading may remain available for migration/development.
-
-Normal future user interaction should use `.cfh`.
-
-Internal raw-pose/cache NPZ files must not be presented as normal user results.
-
-## 22. Invalid-result protection
-
-The previous error:
-
-```text
-KeyError: 'keypoints_3d is not a file in the archive'
-```
-
-occurred because an internal raw-pose NPZ was opened as if it were a final canonical result.
-
-The new workflow should structurally prevent this.
-
-`View Results...` should expose `.cfh` files, not arbitrary NPZ files.
-
-Any legacy NPZ importer should validate the schema and show a human-readable error instead of an uncaught traceback.
-
-## 23. Processing warnings
-
-Warnings such as:
-
-- Lightning checkpoint auto-upgrade notice
-- MANO 10 shape coefficients warning
-- `torch.cross` deprecation warning
-
-are not automatically processing failures.
-
-Report the actual exception that caused a failure.
-
-## 24. Implementation milestones
-
-### Milestone A — Input / Queue / Output / Completion UX
-
-Implement:
-
-- one `Open...` entry point
-- file/folder input
-- `Remove`
-- `Clear`
-- queue-wide sequential processing
-- real visible Output path
-- Output Browse
-- clear item/job states
-- `Completed`
-- auto-open Viewer after single-media processing
-- sensible batch completion behavior
-- hide Reference Focal unless Checkerboard Reference is selected
-
-Do not redesign scientific result formats here.
-
-### Milestone B — `.cfh` Result Bundle / View Results
-
-Implement:
-
-- `.cfh` writer
-- `.cfh` reader
-- `result.npz`
-- `metadata.json`
-- readable filename convention
-- source SHA256 identity
-- internal temp/cache separation
-- disable automatic preview by default
-- rename to `View Results...`
-- multiple `.cfh` selection
-- same-source validation
-- single-result opening
-- comparison opening from multiple result files
-- schema validation
-- legacy compatibility where practical
-
-### Milestone C — Comparison Viewer UX
-
-Implement/refine:
-
-- Original media column in Split
-- existing Overlay
-- existing Split
-- Separate Windows / detach
-- frame synchronization
-- camera synchronization
-- result visibility
-- current confidence semantics
-- reference metric compatibility
-
-Do not alter scientific coordinates for layout convenience.
-
-### Milestone D — Calibration model expansion
-
-After UX/result packaging is stable:
-
-- audit actual AnyCalib runtime source
-- add Fine-tuned AnyCalib adapter if validated
-- add official GeoCalib dependency
-- add Original GeoCalib adapter
-- keep HandCalib unavailable until real runtime support exists
-- add presets only for genuinely available models
-
-## 25. Immediate non-goals
-
-Not required for Milestones A/B:
-
-- full long-video streaming rewrite
-- realtime processing
-- true multi-frame calibration network
-- localization redesign
-- installer/release packaging
-- arbitrary plugin system
-- database
-- cloud processing
-- fake HandCalib support
-- Ground Truth claims
-
-## 26. Acceptance criteria
-
-A user should be able to:
-
-```text
-1. Open CalibFreeHands.
-2. Click Open...
-3. Select a video or folder.
-4. Remove an accidentally added item if needed.
-5. See/change the actual Output directory.
-6. Choose one or more model configurations.
-7. Click Start Processing.
-8. See Processing.
-9. See Completed.
-10. Have the Viewer open automatically for a single-media run.
-11. See readable .cfh result files in the Output directory.
-12. Later click View Results...
-13. Select one .cfh → single result opens.
-14. Select multiple same-source .cfh files → comparison opens.
-15. Switch Overlay / Split.
-16. Optionally detach results into separate windows.
-```
-
-The normal workflow must not require manually navigating into:
-
-```text
-calibration/
-pose/
-results/<hash>/
-```
-
-## 27. Frozen decisions
-
-The following are frozen for the next implementation milestone unless explicitly changed by the user:
-
-1. One `Open...` button immediately opens a unified file/folder picker; no dropdown or intermediate choice.
-2. File or folder input.
-3. Folder input adds supported media directly inside the folder.
-4. Queue includes `Remove` and `Clear`.
-5. Start Processing processes the whole queue sequentially.
-6. Output path is always visibly resolved.
-7. One source + one Calibration + one Reconstruction = one `.cfh`.
-8. `.cfh` packages numeric NPZ + metadata JSON.
-9. Source media is referenced, not embedded by default.
-10. Source SHA256 is the authoritative same-source identity.
-11. Intermediate calibration/pose files are hidden from normal output.
-12. Automatic `preview.mp4` generation is disabled by default.
-13. Finished single-media processing automatically opens the Viewer.
-14. `Open saved result` becomes `View Results...`.
-15. `View Results...` supports multiple `.cfh` files.
-16. Multiple same-source `.cfh` files open in Comparison Viewer.
-17. Existing Overlay / Split remain.
-18. Separate-window viewing is deferred to Milestone C.
-19. Reference focal is visible only for Checkerboard Reference.
-20. Original AnyCalib + Original WiLoR remains the default.
-21. Fine-tuned AnyCalib and HandCalib remain distinct.
-22. Only real, verified model backends may be enabled.
-23. Scientific camera-space data must not be modified for display convenience.
-24. Existing internal calibration/reconstruction reuse remains.
-
-## 28. Change control
-
-This specification is the implementation reference for the next UX/result milestones.
-
-Any implementation agent should:
-
-1. read this file before changing the workflow;
-2. inspect current repository code first;
-3. reuse existing architecture where possible;
-4. not silently reinterpret frozen decisions;
-5. report unavoidable conflicts before replacing architecture;
-6. preserve backward compatibility where reasonably possible;
-7. never fake unavailable scientific/model functionality.
-
-If a frozen decision changes later, update this document first or in the same change set.
+If C-1 changes are still uncommitted, finalize their normal commit/push before beginning C-2.
+
+---
+
+# 49. Acceptance criteria — C-2A
+
+C-2A is complete only when:
+
+- Reference/candidate alignment is explicit;
+- 21-joint correspondence preserved;
+- Per-Joint Error implemented;
+- Wrist Error implemented;
+- Camera-space MPJPE implemented;
+- Median/Max/RMSE implemented;
+- Depth metrics implemented;
+- translation metrics implemented when data exists;
+- Relative Wrist denominator documented;
+- MPVPE guarded by compatible topology;
+- PA-MPJPE tested;
+- PA-MPVPE guarded appropriately;
+- unsupported benchmark protocols are not fabricated;
+- missing/NaN behavior tested;
+- left/right matching tested;
+- units explicit;
+- synthetic analytical tests pass;
+- raw arrays unchanged.
+
+---
+
+# 50. Acceptance criteria — C-2B
+
+C-2B is complete only when:
+
+- source plus N results supported;
+- Overlay works;
+- Split always retains source media;
+- Split uses adaptive N-panel layout;
+- runtime Reference selector works;
+- Checkerboard Reference auto-selected when unambiguous;
+- metric multi-select works live;
+- concise default metric set;
+- current-frame values update during playback;
+- Reference change needs no inference;
+- Per-Joint table available;
+- visibility checkbox visually correct;
+- separate color swatch;
+- selectable base hue;
+- left/right variants distinguishable;
+- confidence remains alpha;
+- compact Opacity;
+- Separate Windows / Detach works;
+- Viewer-only actions rerun no inference;
+- metric export works;
+- missing-source results still viewable.
+
+---
+
+# 51. Frozen decisions
+
+1. Checkerboard is `Reference`, not automatically true GT.
+2. One source + one Calibration + one Reconstruction = one `.cfh`.
+3. Same-source identity uses SHA256.
+4. Internal intermediate files remain hidden.
+5. No automatic preview video.
+6. Existing focal propagation remains unchanged.
+7. Existing raw coordinate convention remains unchanged.
+8. Same Reconstruction backend is reused when scientifically valid.
+9. Comparison supports N results.
+10. Split always shows Original media.
+11. Default Split is one adaptive multi-panel window.
+12. Separate Windows is secondary.
+13. Reference can change at runtime.
+14. Metrics can change at runtime.
+15. Metric changes never rerun inference.
+16. Primary calibration metrics are raw camera-space Reference errors.
+17. PA metrics are supplemental.
+18. 21-joint errors are supported.
+19. Wrist Error is a primary demo metric.
+20. Percentage errors require explicit denominators.
+21. Undefined benchmark protocols are never fabricated.
+22. Configuration identity = base hue.
+23. Handedness = hue variants.
+24. Confidence = alpha.
+25. Viewer colors do not mutate result files.
+26. C-2A correctness precedes C-2B dashboard expansion.
+27. New Calibration models belong to D.
+
+---
+
+# 52. Change control
+
+Every implementation agent must:
+
+1. read this specification first;
+2. inspect current repository before editing;
+3. preserve existing working features;
+4. not silently change metric definitions;
+5. document metric formulas and units;
+6. distinguish Reference Accuracy, Pose/Mesh, and Temporal Stability;
+7. never guess unknown metric protocols;
+8. add analytical tests for implemented metrics;
+9. avoid hard-coded result counts;
+10. avoid inference in Viewer-only interactions;
+11. preserve backward compatibility where practical;
+12. update this specification with any explicitly approved frozen-decision change.

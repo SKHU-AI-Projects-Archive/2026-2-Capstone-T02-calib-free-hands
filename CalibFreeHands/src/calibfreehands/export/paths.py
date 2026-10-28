@@ -21,7 +21,8 @@ def choose_output_directory(base: Path, stem: str, policy: str = "ask") -> Path:
     raise FileExistsError(f"output already exists; confirmation required: {candidate}")
 
 
-def result_filename(source_stem: str, calibration_name: str, reconstruction_name: str) -> str:
+def result_filename(source_stem: str, calibration_name: str, reconstruction_name: str,
+                    reference_focal_px: float | None = None) -> str:
     def safe(value: str) -> str:
         cleaned = re.sub(r'[<>:"/\\|?*]', "_", value).rstrip(" .") or "result"
         cleaned = re.sub(r"\s+", "-", cleaned)
@@ -31,7 +32,11 @@ def result_filename(source_stem: str, calibration_name: str, reconstruction_name
             cleaned = f"_{cleaned}"
         return cleaned
 
-    return f"{safe(source_stem)}__{safe(calibration_name)}__{safe(reconstruction_name)}.cfh"
+    calibration = calibration_name
+    if calibration_name == "Checkerboard Reference" and reference_focal_px is not None:
+        value = format(float(reference_focal_px), ".15f").rstrip("0").rstrip(".")
+        calibration = f"{calibration_name}-{value}px"
+    return f"{safe(source_stem)}__{safe(calibration)}__{safe(reconstruction_name)}.cfh"
 
 
 def choose_output_file(base: Path, filename: str, policy: str = "ask") -> Path | None:

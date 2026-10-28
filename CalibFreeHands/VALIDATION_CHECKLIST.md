@@ -84,7 +84,7 @@ result reopening pass.
 
 ## Milestone B ??UX Polish / CFH Result Bundle / Result Loading
 
-- [x] Unified file/folder picker opens directly from a menu-free Open button; multi-file and direct-folder selection tested
+- [x] Windows-native file/folder selection boundary opens directly from a menu-free Open button; multi-file/direct-folder queue semantics tested
 - [x] Last input and result directories persist; drag/drop and non-recursive discovery remain covered
 - [x] Configuration headings, input widths, sequential default naming, aligned Theme/Language and separate Output row tested
 - [x] Preserve audio control removed from normal processing UI; automatic preview is false while preview encoder remains
@@ -101,5 +101,22 @@ result reopening pass.
 - [x] Real two-configuration smoke produced two same-source `.cfh` files, only bundles in Output, shared one WiLoR pose model, and constructed ComparisonViewer
 - [x] Actual AnyCalib module provenance recorded from `HandCalib/AnyCalib/anycalib/__init__.py`
 - [x] No automatic preview was created; temporary internal workspace was removed
-- [ ] Interactive Windows GUI visual check (requires user)
+- [x] C-1 preset schema validation, persistence, import/export, built-in protection, custom-state detection, and default reset tests
+- [x] C-1 Checkerboard focal filename formatting and collision behavior tests
+- [x] C-1 native dialog boundary, cancellation, readable fallback warning, and Queue routing tests
+- [x] C-1 Windows Common Item Dialog smoke: initialized on C: and D:, selected current folder, and returned the selected folder path
+- [x] User-reported Windows check: native dialog file selection and D: navigation work
+- [x] C-1 comparison run constructs the shared WiLoR reconstruction backend once across rows
+- [x] C-1 focused pytest suite: 82 passed
+- [x] C-1 full pytest suite: 153 passed
+- [x] C-1 Python compileall for `src` and `tests`
+- [x] C-1 `git diff --check` and final changed-file/scope review
+- [x] C-1 Fix Pass preset origin/prefill, stable-ID overwrite, Save As identity, built-in reservation, and Custom item regressions
+- [x] C-1 Fix Pass targeted tests: 118 passed
+- [x] C-1 Fix Pass full pytest suite: 163 passed
+- [x] C-1 Fix Pass Python compileall for `src` and `tests`
+- [x] C-1 Fix Pass offscreen MainWindow screenshots reviewed at 980x560 and 1180x720: one Original row and Original + Checkerboard Reference; shared grid columns, compact settings groups, and expanding Output row
+- [x] C-1 Fix Pass `git diff --check`
+- [x] C-1 Fix Pass user-reported final visual approval in the normal Windows GUI
+- [x] User-reported interactive Windows GUI check and approval for C-1 Fix Pass
 - [x] Final full diff review
