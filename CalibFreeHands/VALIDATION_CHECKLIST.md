@@ -119,4 +119,8 @@ result reopening pass.
 - [x] C-1 Fix Pass `git diff --check`
 - [x] C-1 Fix Pass user-reported final visual approval in the normal Windows GUI
 - [x] User-reported interactive Windows GUI check and approval for C-1 Fix Pass
+- [x] C-2A analytical metric tests: exact match, 10 mm lateral offset, 25 mm depth offset, missing/NaN joints, left/right and frame-index alignment
+- [x] C-2A translation availability, topology-gated MPVPE, PA-MPJPE/PA-MPVPE similarity alignment, and raw-array immutability tests
+- [x] C-2A protocol registry keeps unverified WiLoR benchmark and temporal metrics pending
+- [ ] C-2A saved `.cfh` smoke test (no `.cfh` result bundle is present in the repository)
 - [x] Final full diff review

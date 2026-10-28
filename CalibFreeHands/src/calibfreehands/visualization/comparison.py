@@ -17,13 +17,13 @@ from calibfreehands.media.ffmpeg import FFmpegDecoder
 from calibfreehands.media.probe import probe_media
 from .topology import HAND_CONNECTIONS, RAW_TO_VIEW
 from calibfreehands.pipeline.result_bundle import ResultBundle
+from calibfreehands.pipeline.metrics import compare_results, metric_registry
+from calibfreehands.export.tabular import JOINT_NAMES
 from .viewer import _GLResultView, _OverlayCanvas, load_bundle_result, load_npz_result
 
-METRIC_FIELDS = (
-    "configuration_id", "configuration_name", "reference_configuration_id", "frame_index", "timestamp_s", "hand",
-    "joint_count", "joint_distance_mean_m", "joint_distance_median_m", "joint_distance_rmse_m",
-    "depth_error_mean_m", "depth_error_rmse_m", "translation_distance_m", "translation_depth_error_m",
-)
+METRIC_FIELDS = ("source_identity", "reference_result_id", "candidate_result_id", "candidate_name", "metric_id",
+                 "metric_name", "category", "protocol_version", "frame_index", "timestamp_s", "hand",
+                 "joint_index", "joint_name", "value", "unit", "valid_status")
 
 
 def _finite(value):
@@ -87,6 +87,7 @@ def _bundle_results(bundles: list[ResultBundle]):
     session = {
         "schema_version": 1, "configurations": configurations, "final_results": {},
         "source_media": bundles[0].metadata.get("source_media_path", ""),
+        "source_media_sha256": bundles[0].metadata["source_media_sha256"],
         "reference_configuration_id": bundles[0].metadata.get("reference_configuration_id"),
     }
     return session, results
@@ -115,51 +116,95 @@ def calculate_reference_metrics(session_path: Path | list[ResultBundle]) -> list
         if config["id"] == reference_id:
             continue
         result = loaded.result
-        reference_frames = {int(value): i for i, value in enumerate(reference.frame_indices)}
-        for current_position, frame_index in enumerate(result.frame_indices):
-            reference_position = reference_frames.get(int(frame_index))
-            if reference_position is None:
-                continue
-            for hand_index, hand_name in enumerate(("left", "right")):
-                if not (result.detected[current_position, hand_index] and reference.detected[reference_position, hand_index]):
-                    continue
-                delta = result.keypoints_3d[current_position, hand_index] - reference.keypoints_3d[reference_position, hand_index]
-                valid = np.isfinite(delta).all(axis=1)
-                if not valid.any():
-                    continue
-                distance = np.linalg.norm(delta[valid], axis=1)
-                row = {"configuration_id": config["id"], "configuration_name": config["name"],
-                       "reference_configuration_id": reference_id, "frame_index": int(frame_index),
-                       "timestamp_s": _finite(result.timestamps[current_position]), "hand": hand_name,
-                       "joint_count": int(valid.sum()), "joint_distance_mean_m": float(distance.mean()),
-                       "joint_distance_median_m": float(np.median(distance)),
-                       "joint_distance_rmse_m": float(np.sqrt(np.mean(distance ** 2))),
-                       "depth_error_mean_m": float(np.abs(delta[valid, 2]).mean()),
-                       "depth_error_rmse_m": float(np.sqrt(np.mean(delta[valid, 2] ** 2)))}
-                if result.camera_translation is not None and reference.camera_translation is not None:
-                    translation_delta = result.camera_translation[current_position, hand_index] - reference.camera_translation[reference_position, hand_index]
-                    if np.isfinite(translation_delta).all():
-                        row["translation_distance_m"] = float(np.linalg.norm(translation_delta))
-                        row["translation_depth_error_m"] = float(abs(translation_delta[2]))
-                rows.append(row)
+        for metrics in compare_results(reference, result):
+            joint_errors_m = metrics.joint_errors_mm / 1000.0
+            finite_errors = joint_errors_m[np.isfinite(joint_errors_m)]
+            depth_error_m = (result.keypoints_3d[np.flatnonzero(result.frame_indices == metrics.frame_index)[0],
+                                                 ("left", "right").index(metrics.hand), :, 2] -
+                             reference.keypoints_3d[np.flatnonzero(reference.frame_indices == metrics.frame_index)[0],
+                                                    ("left", "right").index(metrics.hand), :, 2])
+            depth_error_m = depth_error_m[np.isfinite(depth_error_m)]
+            metric_values = {key: value for key, value in metrics.metrics.items()}
+            metric_status = {key: value.value for key, value in metrics.metric_status.items()}
+            row = {"configuration_id": config["id"], "configuration_name": config["name"],
+                   "reference_configuration_id": reference_id, "frame_index": metrics.frame_index,
+                   "timestamp_s": _finite(metrics.timestamp_s), "hand": metrics.hand,
+                   "joint_count": metrics.valid_joint_count,
+                   "joint_distance_mean_m": float(finite_errors.mean()),
+                   "joint_distance_median_m": float(np.median(finite_errors)),
+                   "joint_distance_rmse_m": float(np.sqrt(np.mean(finite_errors ** 2))),
+                   "depth_error_mean_m": float(np.abs(depth_error_m).mean()),
+                   "depth_error_rmse_m": float(np.sqrt(np.mean(depth_error_m ** 2))),
+                   "translation_distance_m": (metric_values["translation_error"] / 1000
+                                              if metric_values["translation_error"] is not None else None),
+                   "translation_depth_error_m": (metric_values["translation_z_error"] / 1000
+                                                 if metric_values["translation_z_error"] is not None else None),
+                   "metric_values": metric_values, "metric_status": metric_status,
+                   "per_joint_error_mm": [float(value) if np.isfinite(value) else None
+                                          for value in metrics.joint_errors_mm]}
+            rows.append(row)
     return rows
 
 
 def export_metrics_json(session_path: Path | list[ResultBundle], output_path: Path) -> Path:
-    rows = calculate_reference_metrics(session_path)
+    rows = _metric_export_rows(session_path)
     output_path = Path(output_path)
     output_path.write_text(json.dumps(rows, indent=2, allow_nan=False), encoding="utf-8")
     return output_path
 
 
 def export_metrics_csv(session_path: Path | list[ResultBundle], output_path: Path) -> Path:
-    rows = calculate_reference_metrics(session_path)
+    rows = _metric_export_rows(session_path)
     output_path = Path(output_path)
     with output_path.open("w", newline="", encoding="utf-8") as stream:
         writer = csv.DictWriter(stream, fieldnames=METRIC_FIELDS)
         writer.writeheader()
         writer.writerows(rows)
     return output_path
+
+
+def _metric_export_rows(session_path: Path | list[ResultBundle]) -> list[dict]:
+    data, entries = _comparison_results(session_path)
+    reference_id = data.get("reference_configuration_id")
+    reference_entry = next(((config, loaded.result) for config, loaded in entries
+                            if config["id"] == reference_id), None)
+    if reference_entry is None:
+        raise ValueError("session reference configuration has no saved result")
+    _, reference = reference_entry
+    source_identity = data.get("source_media_sha256") or data.get("source_media") or "unknown"
+    definitions = metric_registry()
+    records = []
+    for config, loaded in entries:
+        if config["id"] == reference_id:
+            continue
+        for pair in compare_results(reference, loaded.result):
+            for definition in definitions:
+                status = pair.metric_status[definition.metric_id]
+                value = pair.metrics.get(definition.metric_id)
+                if definition.metric_id == "per_joint_error":
+                    for joint_index, joint_value in enumerate(value):
+                        joint_status = status.value if joint_value is not None else "UNAVAILABLE_FOR_DATA"
+                        records.append({
+                            "source_identity": source_identity, "reference_result_id": reference_id,
+                            "candidate_result_id": config["id"], "candidate_name": config["name"],
+                            "metric_id": definition.metric_id, "metric_name": definition.name,
+                            "category": definition.category, "protocol_version": definition.protocol_version,
+                            "frame_index": pair.frame_index, "timestamp_s": _finite(pair.timestamp_s),
+                            "hand": pair.hand, "joint_index": joint_index,
+                            "joint_name": JOINT_NAMES[joint_index], "value": joint_value,
+                            "unit": definition.unit, "valid_status": joint_status,
+                        })
+                    continue
+                records.append({
+                    "source_identity": source_identity, "reference_result_id": reference_id,
+                    "candidate_result_id": config["id"], "candidate_name": config["name"],
+                    "metric_id": definition.metric_id, "metric_name": definition.name,
+                    "category": definition.category, "protocol_version": definition.protocol_version,
+                    "frame_index": pair.frame_index, "timestamp_s": _finite(pair.timestamp_s),
+                    "hand": pair.hand, "joint_index": None, "joint_name": None,
+                    "value": value, "unit": definition.unit, "valid_status": status.value,
+                })
+    return records
 
 
 class _LinkedResultView(_GLResultView):

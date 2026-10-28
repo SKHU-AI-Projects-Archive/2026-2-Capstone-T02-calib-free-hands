@@ -54,8 +54,14 @@ def test_comparison_metrics_and_exports_are_numerically_correct(tmp_path):
     assert rows[0]["translation_distance_m"] == pytest.approx(1.0)
     export_metrics_csv(path, tmp_path / "metrics.csv")
     export_metrics_json(path, tmp_path / "metrics.json")
-    assert "joint_distance_mean_m" in (tmp_path / "metrics.csv").read_text(encoding="utf-8")
-    assert json.loads((tmp_path / "metrics.json").read_text(encoding="utf-8"))[0] == rows[0]
+    csv_text = (tmp_path / "metrics.csv").read_text(encoding="utf-8")
+    assert "metric_id" in csv_text and "protocol_version" in csv_text and "joint_index" in csv_text
+    exported = json.loads((tmp_path / "metrics.json").read_text(encoding="utf-8"))
+    mpjpe = next(row for row in exported if row["metric_id"] == "mpjpe" and row["frame_index"] == 0 and row["hand"] == "left")
+    assert mpjpe["value"] == pytest.approx(np.sqrt(2) * 1000)
+    assert mpjpe["unit"] == "mm" and mpjpe["valid_status"] == "READY"
+    assert any(row["metric_id"] == "f@5" and row["valid_status"] == "PROTOCOL_PENDING" for row in exported)
+    assert all(row["reference_result_id"] == "cfg-0" for row in exported)
 
 
 def test_comparison_viewer_loads_three_results_and_preserves_frame_across_modes(tmp_path, qapp):

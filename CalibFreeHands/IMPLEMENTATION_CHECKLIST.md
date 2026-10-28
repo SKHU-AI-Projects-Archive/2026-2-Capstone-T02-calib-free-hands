@@ -73,3 +73,6 @@
 - [x] Milestone C-1 native media dialog, compact controls, Checkerboard focal filenames, validated persistent/importable User Presets, and unique WiLoR reuse
 - [x] C-1 Fix Pass shared configuration grid, compact local control groups, preset origin tracking, and explicit overwrite/Save As
 - [x] C-1 Fix Pass manually approved in the Windows GUI
+- [x] C-2A Qt-independent metric registry and canonical frame/hand alignment
+- [x] C-2A per-joint, wrist, raw camera-space, depth, translation, relative wrist, MPVPE, and Procrustes metrics
+- [x] C-2A explicit protocol-pending states for unreproduced WiLoR benchmark/temporal metrics

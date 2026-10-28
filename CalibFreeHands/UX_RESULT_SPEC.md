@@ -9,10 +9,18 @@
 - Milestone A — implemented and manually validated
 - Milestone B — implemented and manually validated
 - Milestone C-1 — implemented and manually approved after Fix Pass
-- Next: Milestone C-2A — Metric Engine
-- Then: Milestone C-2B — Comparison Dashboard
+- Milestone C-2A ??implemented and automated tests pass — Metric Engine
+- Next: Milestone C-2B — Comparison Dashboard
 - Then: Milestone D — Calibration model expansion
 - Later: Milestone E — Performance / packaging
+
+---
+
+# C-2A implementation status
+
+The Qt-independent reference metric engine aligns canonical results by source `frame_indices` and left/right hand slots, skips undetected/non-finite joint pairs, and reports spatial errors in millimetres. It implements per-joint error, wrist error, raw camera-space MPJPE, median/max/RMSE, depth bias, translation errors when compatible arrays exist, relative wrist error with its camera-to-wrist denominator, camera-space MPVPE with matching MANO faces, and supplemental PA-MPJPE/PA-MPVPE similarity alignment. Raw result arrays are not modified.
+
+F@5/F@15, AUC-J/AUC-V, MPFJE/MPFVE, Jitter, and RTE remain `PROTOCOL_PENDING`: the official WiLoR project and paper report benchmark metrics, but this implementation has not established a reproducible protocol compatible with the application's saved camera-space Reference data. See the [official WiLoR repository](https://github.com/rolpotamias/WiLoR) and [CVPR 2025 paper](https://openaccess.thecvf.com/content/CVPR2025/html/Potamias_WiLoR_End-to-end_3D_Hand_Localization_and_Reconstruction_in-the-wild_CVPR_2025_paper.html).
 
 ---
 
