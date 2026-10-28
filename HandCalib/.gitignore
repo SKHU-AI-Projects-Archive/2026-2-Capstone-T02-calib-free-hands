@@ -88,3 +88,7 @@ runs/*
 
 # Agent planning scratch from local bootstrapping
 docs/superpowers/
+
+# local-only data / exports
+datasets/camera/
+presentation_exports/
