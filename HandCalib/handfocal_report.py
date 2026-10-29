@@ -5203,3 +5203,63 @@ def provenance_build(cfg_text: str, cfg_path: str, extra: dict) -> dict:
     return {"git": git_state(), "config_path": cfg_path, "config_sha256": sha256_text(cfg_text), "config": cfg_text, "versions": versions(),
             "worktrees": {"used": [], "note": "다른 실험 코드는 쓰지 않음. AnyCalib는 같은 체크아웃의 models/anycalib.py(01 어댑터, main에 있음)를 수정 없이 import"},
             **extra}
+
+
+# ====================================================================================================
+# e3  (experiment 45: free_shape3d on the real-hand videos of 27 with the MediaPipe joints; new section, earlier functions are used unchanged)
+# The tracks are 27's (track with the candidate's detector settings, 17's phases), the exclusion rules are gen_video's; the f estimate is the supervisor's call free_problem -> s3_estimate_run('free_shape3d')
+# on the joints of the candidate's estimate set (wrist removed), all present frames (front and tilt).
+# ====================================================================================================
+
+def e3_video(args) -> dict:
+    """One video of experiment 45. args = (entry, prep, npz, pcfg, c); c needs candidate, exclusion, detector_settings, free_shape3d {z_rel, alt_iters, max_frames}.
+    Returns {video, group, distance_cm, hand, ..., excluded, est: {f, f_planar, relief_rel, ...}} (est as the marker dict of s3_video; absent when excluded or failed)."""
+    entry, prep, npz, pcfg, c = args[:5]
+    os.environ.setdefault("OMP_NUM_THREADS", "1")
+    cv2.setNumThreads(1)
+    cand, ex = c["candidate"], c["exclusion"]
+    dset = c["detector_settings"][cand["detector"]]
+    pc = copy.deepcopy(pcfg)
+    pc["tracking"]["conf_min"] = float(dset["conf_min"])
+    frames = prep["frames"]
+    times = np.array([r["time_s"] for r in frames])
+    W, H = prep["size"]
+    dets = load_detections(Path(npz))
+    check_alignment(frames, dets)
+    tr = track(dets, times, (W, H), pc["tracking"], front_start_s=float(pc["phases"]["front_skip_s"]))
+    kp, mask, present, box = tr["kp"], tr["mask"], tr["present"], tr["box"]
+    res = {"video": entry["file"], "group": entry["group"], "distance_cm": float(entry["distance_cm"]), "hand": entry["hand"], "size": [W, H], "n_frames": int(len(times)),
+           "duration_s": float(times[-1] - times[0]) if len(times) else 0.0, "detect_rate": float(present.mean()), "edge_rate": fresp_edge_rate(box, present, W, H)}
+    fw = front_window(times, present, kp, mask, box, pc["phases"])
+    res["front_window"] = [fw.get("t0"), fw.get("t1")]
+    reasons = []
+    if len(fw["idx"]) == 0 or fw["detect_rate"] < float(pc["phases"]["front_min_detect_rate"]):
+        reasons.append("유효한 정면 창(1초)이 없음")
+    if res["edge_rate"] > float(ex["edge_rate_max"]):
+        reasons.append(f"가장자리 접촉 프레임 {100 * res['edge_rate']:.1f}% > {100 * float(ex['edge_rate_max']):.0f}%")
+    if 1.0 - res["detect_rate"] > float(ex["detect_fail_max"]):
+        reasons.append(f"손 검출 실패 프레임 {100 * (1.0 - res['detect_rate']):.1f}% > {100 * float(ex['detect_fail_max']):.0f}%")
+    res["excluded"] = reasons
+    if reasons:
+        return res
+    cfg_ex = pseg_wrist_cfg(pc) if cand["wrist_mode"] == "exclude" else pc
+    ids = sorted(int(j) for j in cfg_ex["joints"]["sets"][cfg_ex["joints"]["estimate_set"]])
+    ecfg = pcfg["estimate"]
+    grid = f_grid(ecfg, max(W, H))
+    t0 = time.time()
+    try:
+        pb, idx = free_problem({"kp": kp, "mask": mask, "present": present, "box": box}, (W, H), ecfg, float(ecfg["huber_rel"]), ids=ids)
+        r = s3_estimate_run(pb, "free_shape3d", grid, {**ecfg, "free_template": c["free_shape3d"]}, 1.0)
+    except Exception as e:                                            # a failure is a result, not a crash of the run
+        res["failed"] = f"{type(e).__name__}: {e}"
+        return res
+    pg = np.asarray(r["profile_f"], float)
+    k = int(np.argmin(r["profile_cost"]))
+    f_grid_min = float(np.exp(np.clip(_parabola(np.log(pg), np.asarray(r["profile_cost"]), k), np.log(pg[0]), np.log(pg[-1]))))
+    res["est"] = {"f": float(r["f"]), "f_planar": float(r["f_planar"]), "f_grid": f_grid_min, "at_grid_edge": bool(r["at_grid_edge"]), "at_bound": bool(r["at_bound"]),
+                  "relief_rel": float(r["relief_rel"]), "relief_per_joint": [float(x) for x in r["relief_per_joint"]], "cost": float(r["cost"]), "cost_planar": float(r["cost_planar"]),
+                  "curve": {"grid": pg.tolist(), "cost": [float(x) for x in r["profile_cost"]]}, "sharpness": ft_sharpness(pg, r["profile_cost"], f_grid_min),
+                  "ba3_success": r["ba"]["success"], "ba3_nfev": r["ba"]["nfev"], "ba3_rms_px": r["ba"]["rms_px"], "anchors": [int(x) for x in r["ba"]["anchors"]],
+                  "n_frames_in_problem": int(len(pb.keep)), "n_points": int(pb.n_points), "joint_ids": [int(x) for x in r["joint_ids"]], "elapsed_s": float(time.time() - t0),
+                  "box_long_median_px": float(np.nanmedian(box_long(box)[present]))}
+    return res

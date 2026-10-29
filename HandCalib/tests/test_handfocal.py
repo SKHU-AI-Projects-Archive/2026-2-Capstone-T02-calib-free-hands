@@ -3887,5 +3887,121 @@ class H3Reports(unittest.TestCase):
             self.assertEqual(run.h3_prior({"compare": {"35c": str(d / "none.json")}}), {"markers": {"video": {}, "pooled": {}}, "mediapipe8": {"video": {}, "pooled": {}}})
 
 
+
+# ---- experiment 45: free_shape3d on the real-hand videos of 27 -------------------------------------------
+CFG45 = yaml.safe_load((ROOT / "configs/45_free_shape3d_27.yaml").read_text())
+
+
+def e3_fake_track(n=200, edge=False, seconds=20.0, f=1700.0):
+    """What track() returns for a planar 16-joint hand (joints 5-20) seen in a tilt sequence at 1920 x 1080."""
+    rng = np.random.default_rng(0)
+    base = np.array([[-60, -40], [-20, -45], [20, -42], [60, -38], [-58, 10], [-18, 12], [22, 9], [62, 14]], float)
+    T = np.r_[base, base + np.array([5.0, 40.0])]
+    K = hf.K_of(f, 960.0, 540.0)
+    kp = np.full((n, 21, 2), np.nan)
+    for i in range(n):
+        a = np.deg2rad(40 * max(0.0, i / (n - 1) - 0.15))
+        R = cv2.Rodrigues(np.array([a, 0.2 * a, 0.0]))[0]
+        X = np.c_[T, np.zeros(len(T))] @ R.T + np.array([10.0, 5.0, 600.0])
+        uv = (K @ X.T).T
+        kp[i, 5:21] = uv[:, :2] / uv[:, 2:3] + rng.normal(0, 0.1, (16, 2))
+    box = np.tile([760.0, 340.0, 1160.0, 740.0], (n, 1))
+    if edge:
+        box = np.tile([0.0, 340.0, 400.0, 740.0], (n, 1))
+    mask = np.isfinite(kp[..., 0])
+    return {"present": np.ones(n, bool), "box": box, "cls": np.zeros(n, int), "box_conf": np.ones(n), "kp": kp, "kconf": np.ones((n, 21)), "mask": mask, "n_candidates": np.ones(n, int), "init_frame": 0}, np.linspace(0, seconds, n)
+
+
+class E3Video(unittest.TestCase):
+    def run_e3(self, tr, times, c=None, entry=None):
+        from unittest import mock
+        pcfg = copy.deepcopy(CFG45["pipeline"])
+        pcfg["estimate"]["f_grid_n"] = 6
+        c = c or {k: CFG45[k] for k in run.E3_KEYS}
+        c["free_shape3d"] = {"z_rel": 0.2, "alt_iters": 1, "max_frames": 10}
+        prep = {"frames": [{"time_s": float(t)} for t in times], "size": (1920, 1080)}
+        with mock.patch.object(hf._report, "load_detections", return_value=None), mock.patch.object(hf._report, "check_alignment", return_value=None), mock.patch.object(hf._report, "track", return_value=tr):
+            return hf.e3_video((entry or {"file": "x.MOV", "group": "G6", "distance_cm": 50, "hand": "right"}, prep, "none.npz", pcfg, c))
+
+    def test_tracks_go_through_the_supervisors_call_and_27s_exclusion_rules_apply(self):
+        tr, times = e3_fake_track()
+        r = self.run_e3(tr, times)
+        self.assertEqual(r["excluded"], [], r)
+        x = r["est"]
+        self.assertEqual(sorted(x["joint_ids"]), list(range(5, 21)))
+        for k in ("f", "f_planar", "relief_rel", "at_bound", "curve", "anchors"):
+            self.assertIn(k, x)
+        self.assertEqual((r["group"], r["hand"], r["distance_cm"]), ("G6", "right", 50.0))
+        tr2, t2 = e3_fake_track(edge=True)
+        r2 = self.run_e3(tr2, t2)
+        self.assertTrue(r2["excluded"] and "est" not in r2)                                                  # hand box on the frame edge
+        tr3, t3 = e3_fake_track()
+        tr3["present"][:] = False
+        r3 = self.run_e3(tr3, t3)
+        self.assertTrue(r3["excluded"] and "est" not in r3)                                                  # no hand detected
+        tr4, t4 = e3_fake_track()
+        tr4["mask"][:] = False
+        self.assertIn("failed", self.run_e3(tr4, t4))                                                        # nothing visible: a result, not a crash
+
+
+class E3Config(unittest.TestCase):
+    def test_the_config_has_every_section_the_run_command_reads_and_27_settings_are_unchanged(self):
+        for k in run.E3_KEYS + ("videos", "input_dir", "ref_f_by_distance", "pipeline", "verdict", "bootstrap", "workers", "n_workers", "output", "code_45", "compare"):
+            self.assertIn(k, CFG45, k)
+        C27 = yaml.safe_load((ROOT / "configs/27_main_camera_extension.yaml").read_text())
+        for k in ("videos", "candidate", "exclusion", "detector_settings", "input_dir"):
+            self.assertEqual(CFG45[k], C27[k], k)
+        self.assertEqual(CFG45["pipeline"]["estimate"], C27["pipeline"]["estimate"])
+        self.assertEqual(CFG45["free_shape3d"], CFG41["free_shape3d"])
+        self.assertEqual(CFG45["verdict"], CFG41["verdict"])
+        files = [e["file"] for e in CFG45["videos"]]
+        self.assertFalse(set(files) & {f"IMG_{n}.MOV" for n in list(range(7249, 7259)) + list(range(7289, 7295))})   # printed hand (34) and tablet picture are not used
+
+
+class E3Reports(unittest.TestCase):
+    def test_summary_report_and_yaml_keep_the_reference_in_summary_only(self):
+        ref = {float(d): float(f) for d, f in CFG45["ref_f_by_distance"].items()}
+        grid = np.geomspace(0.35 * 1920, 1.6 * 1920, 8)
+        cost = ((np.log(grid) - np.log(1700.0)) ** 2 + 0.01).tolist()
+        est = {"f": 1705.0, "f_planar": 1710.0, "f_grid": 1700.0, "at_grid_edge": False, "at_bound": False, "relief_rel": 0.01, "relief_per_joint": [0.01] * 16, "cost": 0.01, "cost_planar": 0.011,
+               "curve": {"grid": grid.tolist(), "cost": cost}, "sharpness": 1.4, "ba3_success": True, "ba3_nfev": 20, "ba3_rms_px": 0.2, "anchors": [0, 1, 2], "n_frames_in_problem": 120, "n_points": 900, "joint_ids": list(range(5, 21)), "elapsed_s": 60.0}
+        results = []
+        for e in CFG45["videos"]:
+            r = {"video": e["file"], "group": e["group"], "distance_cm": float(e["distance_cm"]), "hand": e["hand"], "size": [1920, 1080], "n_frames": 300, "duration_s": 20.0, "detect_rate": 1.0, "edge_rate": 0.0, "excluded": [], "est": est}
+            results.append(r)
+        results[0].pop("est")
+        results[0]["excluded"] = ["가장자리 접촉 프레임 6.3% > 5%"]
+        inc = [r for r in results if "est" in r and r["group"] == "G6"]
+        fb = {d: [r["est"]["f"] for r in inc if r["distance_cm"] == d] for d in (50.0, 60.0, 75.0)}
+        sl = hf.s3_slope(fb, {d: [False] * len(fb[d]) for d in fb}, 50, 42)
+        cur = {d: [r["est"]["curve"]["cost"] for r in inc if r["distance_cm"] == d] for d in fb}
+        psl = hf.pr_slope(cur, grid, 50, 42)
+        nv = {d: len(fb[d]) for d in fb}
+        ana = {"shape3d": {"slope": sl, "verdict": hf.pr_verdict(sl, ref, CFG45["verdict"], nv)}, "planar": {"slope": psl, "verdict": hf.pr_verdict(psl, ref, CFG45["verdict"], nv)}}
+        prior = {r["video"]: 1800.0 for r in results}
+        with tempfile.TemporaryDirectory() as d:
+            d = Path(d)
+            (d / "figures").mkdir()
+            run.e3_figures(d / "figures", results, ana, ref, prior)
+            run.e3_report(d / "report.md", results, CFG45)
+            run.e3_summary(d / "summary.md", results, ana, ref, CFG45, prior)
+            (d / "results.json").write_text(json.dumps(hf.jsonable({"videos": results, "analysis": ana}), ensure_ascii=False))
+            (d / "metadata.json").write_text(json.dumps({"git": {"commit": "abcdef1234", "git_dirty": False}}))
+            cfg = copy.deepcopy(CFG45)
+            cfg["output"]["results_yaml"] = str(d / "r.yaml")
+            y = Path(run.e3_results_yaml(d, cfg)).read_text()
+            self.assertTrue((d / "figures/f_vs_distance_loglog.png").exists())
+            summ = (d / "summary.md").read_text()
+            self.assertIn("판정 (G6", summ)
+            self.assertIn("1660.6", summ)
+            for name, text in (("report", (d / "report.md").read_text()), ("yaml", y)):
+                for val in ("1660.6", "1653.7", "1644.9", "1680"):
+                    self.assertNotIn(val, text, name)
+            for line in summ.splitlines():
+                if line.startswith("|") and "---" not in line:
+                    self.assertEqual(line.count("|"), line.strip().count("|"), line)
+            self.assertEqual(run.e3_prior({"compare": {"27": str(d / "none.json")}}), {})
+
+
 if __name__ == "__main__":
     unittest.main()
