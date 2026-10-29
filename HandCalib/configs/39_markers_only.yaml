@@ -1,0 +1,263 @@
+# 39: experiment 35's question (does f follow the camera distance when the points are markers?) asked of the markers alone, with no hand detector. The same six videos as 38 (IMG_7294 / 7293 at 50 cm, 7292 / 7291 at
+# 60 cm, 7290 / 7289 at 75 cm; a hand picture with 21 red dots on a tablet screen, filmed from above, 1x main camera). Reason: 38 followed 35c and needed the MediaPipe hand box, which was missing in the 60 and 75 cm
+# videos (box rate 0 % in the tracker), so those four videos were excluded and 38's slope had no value. Nothing of 35, 35b, 35c and 38 (configs, runs, results) is changed.
+# What is the same as 35c: the analysis (analyze, fixed_template, nominal front window 0.5-1.5 s, tilt phase from 3 s, block bootstrap), the used markers (5, 6, 9, 10, 13, 14, 17, 18), the re-acquisition tracker
+# (mk_track_reacquire, same move_frac / gap_cap / ransac_frac / min_inlier_ratio / min_markers_ratio), the precheck and exclusion share (70 % of the tilt-phase frames), the verdict rules (slope_none_min -0.3, slope_yes_max -0.7,
+# f_tol 10 %, video-level bootstrap), the reference f.
+# What is new: (1) markers are found in the whole frame by local redness (Lab a*, minus its 31 x 31 median, >= 30), components of area 20-3000 px and roundness >= 0.3, no opening (35c: HSV colour in the enlarged hand box, area 40 px at
+# 50 cm); (2) markers are named on the sharpest front-window frame that names every used marker, by a stored layout (configs/39_marker_layout.json: the 20 markers found in the front reference frames of IMG_7294 and
+# IMG_7293, named there by the nearest MediaPipe joints in 38, normalised) with a similarity vote (naming: scale 40-400 px per layout unit, rotation within 30 degrees, tolerance 8 % of the scale, at least 12 named);
+# (3) the length scale of the tracker and the frame box of the analysis come from the markers: the box of the reference markers enlarged by box_margin 0.1 on every side (the rule of the MediaPipe worker), moved to each
+# frame by the homography reference -> frame; (4) a tilt-phase frame is any frame from 3 s (35c: a frame with a hand box); (5) no MediaPipe analysis and no MediaPipe-based comparison.
+# Looked at before the precheck, for the record: the first frames of all six videos, the red-component counts of two frames per video (t = 1 s and 8 s) with the 35c colour rule (too few dots at 75 cm: 4 / 1 found at 1 s) and
+# with the local-redness rule (21 components in the tablet area in 11 of the 12 frames, 20 in one), from which contrast_min 30, area_min 20 and circularity_min 0.3 were chosen (0.5 dropped real dots with tails); so the detection settings were tuned on these same videos. The reference f is the
+# 35c value of the same camera and lens, not re-measured for this session. The video content is a flat picture, so the result says nothing about a real hand's own shape; no interpretation text of 35 applies.
+# Code: branch exp/39-markers-only; code commit in code_39 below (set after the code commit, before the first run).
+experiment:
+  name: 39_markers_only
+  seed: 42
+videos:
+- file: IMG_7294.MOV
+  distance_cm: 50
+- file: IMG_7293.MOV
+  distance_cm: 50
+- file: IMG_7292.MOV
+  distance_cm: 60
+- file: IMG_7291.MOV
+  distance_cm: 60
+- file: IMG_7290.MOV
+  distance_cm: 75
+- file: IMG_7289.MOV
+  distance_cm: 75
+input_dir: /home/juson/data/hand_focal_videos
+ref_f_by_distance:
+  50: 1660.6
+  60: 1653.7
+  75: 1644.9
+markers:
+  color: red
+  count: 21
+  used_ids:
+  - 5
+  - 6
+  - 9
+  - 10
+  - 13
+  - 14
+  - 17
+  - 18
+  contrast_min: 30
+  median_ksize: 31
+  area_min: 20
+  area_max: 3000
+  circularity_min: 0.3
+  box_margin: 0.1
+  min_markers_ratio: 0.75
+  tracker: reacquire
+  move_frac: 0.03
+  gap_cap: 5
+  ransac_frac: 0.03
+  min_inlier_ratio: 0.9
+naming:
+  min_detections: 8
+  pair_min: 0.8
+  scale_min_px: 40
+  scale_max_px: 400
+  rot_max_deg: 30
+  tol_frac: 0.08
+  min_named: 12
+layout: configs/39_marker_layout.json
+precheck:
+  min_tilt_valid_ratio: 0.7
+marker_exclusion:
+  min_tilt_valid_ratio: 0.7
+exclusion:
+  edge_rate_max: 0.05
+verdict:
+  slope_none_min: -0.3
+  slope_yes_max: -0.7
+  f_tol: 0.1
+bootstrap:
+  n: 1000
+  seed: 42
+rating_v2:
+  tilt_min_s: 18.0
+  theta_max_min_deg: 55.0
+  usable_log_std_max: 0.1
+  reference_log_std_max: 0.15
+compare:
+  35c: /home/juson/project/2026-2-Capstone-T02-calib-free-hands/HandCalib/runs/35_hand_markers/20261027T045805Z/results.json
+  '38': runs/38_hand_markers_new_videos/20261029T050318Z/results.json
+code_39:
+  branch: exp/39-markers-only
+  commit: 3dad204
+  modules:
+  - HandCalib/handfocal.py
+  - HandCalib/run.py
+workers: 6
+output:
+  root: runs/39_markers_only
+  results_yaml: results/39_markers_only.yaml
+pipeline:
+  experiment:
+    name: 39_markers_only
+    seed: 42
+  input_dir: /home/juson/data/hand_focal_videos
+  video_extensions:
+  - .mov
+  - .mp4
+  - .m4v
+  - .mkv
+  - .avi
+  min_duration_s: 5.0
+  normalize:
+    long_side: 1920
+    max_fps: 60
+    sdr_target: bt709
+    hdr_path:
+    - zscale_tonemap
+    - colorspace
+    codec: ffv1
+  frames:
+    detect_fps: 15
+    tmp_dir: null
+  detector:
+    name: mock
+    mock_npz: null
+    classes:
+      0: left
+      1: right
+    cache: true
+  tracking:
+    init_window_s: 1.0
+    iou_min: 0.3
+    conf_min: 0.5
+    smoothing:
+      enabled: false
+      window: 3
+  phases:
+    phase_mode: nominal
+    front_phase_s: 3.0
+    front_skip_s: 0.5
+    front_window_s: 1.0
+    front_min_detect_rate: 0.9
+    finger_extension_min: 0.9
+    auto_theta_deg: 10.0
+    auto_sustain_s: 0.5
+    auto_warn_diff_s: 1.0
+  joints:
+    sets:
+      palm4:
+      - 0
+      - 5
+      - 9
+      - 13
+      palm5:
+      - 0
+      - 5
+      - 9
+      - 13
+      - 17
+      palm_proximal9:
+      - 0
+      - 5
+      - 6
+      - 9
+      - 10
+      - 13
+      - 14
+      - 17
+      - 18
+      flat17:
+      - 0
+      - 5
+      - 6
+      - 7
+      - 8
+      - 9
+      - 10
+      - 11
+      - 12
+      - 13
+      - 14
+      - 15
+      - 16
+      - 17
+      - 18
+      - 19
+      - 20
+    estimate_set: flat17
+    uncertainty_sets:
+    - palm5
+    - palm_proximal9
+    - flat17
+    template_align_iters: 4
+  estimate:
+    estimator: fixed_template
+    synthetic_study_result: null
+    principal_point: center
+    distortion: null
+    f_grid_n: 60
+    f_ratio_range:
+    - 0.35
+    - 1.6
+    huber_rel: 0.02
+    min_points: 4
+    joint_delta:
+      delta_grid_deg:
+      - 0
+      - 4
+      - 8
+      - 12
+      - 16
+      - 20
+      phi_n: 6
+      delta_prior_deg: 8.0
+      prior_weight: auto
+      nm_max_iter: 300
+  anycalib:
+    enabled: true
+    model_id: anycalib_pinhole
+    cam_id: pinhole
+    stride: 1
+    device: cuda:0
+    extra_models:
+    - anycalib_gen
+    offline_env:
+      HF_HUB_OFFLINE: '1'
+      TRANSFORMERS_OFFLINE: '1'
+    torch_hub_dir: ~/.cache/torch/hub
+  uncertainty:
+    n_bootstrap: 30
+    block_frames: 10
+    time_budget_s: 600
+  verdict:
+    good:
+      detect_rate_min: 0.9
+      front_frames_min: 15
+      finger_extension_required: true
+      theta_p90_min_deg: 25.0
+      axis_bins_min: 5
+      reproj_rms_rel_max: 0.01
+      jointset_range_max: 0.04
+      bootstrap_rel_std_max: 0.03
+      consistency_range_max: 0.06
+      delta_abs_max_deg: 12.0
+      sharpness_min: 1.3
+    rough:
+      detect_rate_min: 0.7
+      theta_p90_min_deg: 12.0
+      axis_bins_min: 3
+      reproj_rms_rel_max: 0.025
+      jointset_range_max: 0.12
+    min_target_frames: 20
+  target_sizes:
+  - - 1920
+    - 1080
+  - - 1280
+    - 720
+  - - 3840
+    - 2160
+  output:
+    root: runs/26_generalization
+    results_yaml: results/26_generalization.yaml

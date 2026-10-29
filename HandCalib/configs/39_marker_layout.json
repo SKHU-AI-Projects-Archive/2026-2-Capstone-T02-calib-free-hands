@@ -1,0 +1,85 @@
+{
+ "note": "Marker layout of the hand picture on the tablet (joint numbers 0-20 as in 35), from the front reference frames of IMG_7294 and IMG_7293 (50 cm) of run 20261029T050318Z of experiment 38, named there by the nearest MediaPipe joints; mean of the two after a similarity alignment (median difference 0.004 RMS radii); marker 3 was found in neither. Normalised: centroid 0, RMS radius 1; image y points down. Used only to name the markers of a frame.",
+ "points": {
+  "0": [
+   -0.0215,
+   1.94827
+  ],
+  "1": [
+   0.47307,
+   1.58312
+  ],
+  "2": [
+   0.86419,
+   1.17128
+  ],
+  "4": [
+   1.10957,
+   0.29117
+  ],
+  "5": [
+   0.41732,
+   0.44777
+  ],
+  "6": [
+   0.37265,
+   -0.27006
+  ],
+  "7": [
+   0.31908,
+   -0.72792
+  ],
+  "8": [
+   0.2392,
+   -1.10971
+  ],
+  "9": [
+   0.01779,
+   0.44128
+  ],
+  "10": [
+   -0.00971,
+   -0.41199
+  ],
+  "11": [
+   -0.04105,
+   -0.963
+  ],
+  "12": [
+   -0.0613,
+   -1.30083
+  ],
+  "13": [
+   -0.31046,
+   0.52047
+  ],
+  "14": [
+   -0.3146,
+   -0.20063
+  ],
+  "15": [
+   -0.33727,
+   -0.6749
+  ],
+  "16": [
+   -0.30997,
+   -1.05079
+  ],
+  "17": [
+   -0.64691,
+   0.73736
+  ],
+  "18": [
+   -0.60394,
+   0.17635
+  ],
+  "19": [
+   -0.60237,
+   -0.13845
+  ],
+  "20": [
+   -0.55378,
+   -0.46878
+  ]
+ }
+}
