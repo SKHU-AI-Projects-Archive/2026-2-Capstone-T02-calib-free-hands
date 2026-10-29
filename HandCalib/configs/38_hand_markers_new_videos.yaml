@@ -11,6 +11,9 @@ experiment:
 # replaced if the user gives a new calibration; the errors against it are recorded and the verdict uses it as in 35c.
 # Precheck first (the 35c rule: every distance needs a passing video, else the official run is not started).
 # Precheck 20261029T044105Z_precheck: IMG_7294 / 7293 (50 cm) passed; IMG_7292 / 7291 (60 cm) and IMG_7290 / 7289 (75 cm) had no hand box kept by the tracker (no reference frame), so by the rule above the official run would
+# not start. On 2026-10-29 the user asked to run the 35c experiment as it is on the new videos anyway. The official run therefore takes all six videos with no rule, threshold or value of this file changed (comment only); a video
+# without a reference frame is excluded by the 35c code, and with no included video at 60 and 75 cm the slope and its verdict are 판단 불가 by the rules of 35c; only the 50 cm pooled f and its error are informative then.
+# Precheck 20261029T044105Z_precheck: IMG_7294 / 7293 (50 cm) passed; IMG_7292 / 7291 (60 cm) and IMG_7290 / 7289 (75 cm) had no hand box kept by the tracker (no reference frame), so by the rule above the official run would
 # not start. On 2026-10-29 the user decided to run the official run on the two 50 cm videos only (--videos IMG_7294.MOV,IMG_7293.MOV). No rule, threshold or value of this file is changed by that decision (comment only); with no
 # included video at 60 and 75 cm, the slope and its verdict are 판단 불가 by the rules of 35c, and only the 50 cm pooled f and its error against the reference f are informative.
 
