@@ -1,0 +1,233 @@
+experiment: 42_free_shape3d_hand
+run: runs/42_free_shape3d_hand/20261029T085442Z
+code_commit: f1819c7
+git_dirty_at_run: false
+note: '실험 35c의 실제 손 마커 영상 6개(같은 추적 코드와 설정: MediaPipe 손 박스로 점 찾기와 이름 붙이기, 재획득 추적기)에
+  실험 41과 같은 호출(pb, idx = free_problem(trk, (W, H), ecfg, huber_rel, ids), estimate_run(pb,
+  ''free_shape3d'', grid, ecfg, sigma2))을 적용해 f를 구하고, 실험 35c의 fixed_template 결과와 비교한
+  실험이다. 판정은 실험 41과 같이 영상별 3차원 f의 거리-f 기울기(영상 단위 부트스트랩)로 하고, 규칙과 쓰는 점, 설정은 실행 전에 고정했다.
+  기준 f와의 비교는 summary.md에만 있다.'
+markers:
+  color: red
+  count: 21
+  hue_ranges:
+  - - 0
+    - 6
+  - - 174
+    - 179
+  s_min: 130
+  v_min: 90
+  area_min: 40
+  area_max: 3000
+  circularity_min: 0.6
+  region_margin: 0.3
+  used_ids:
+  - 5
+  - 6
+  - 9
+  - 10
+  - 13
+  - 14
+  - 17
+  - 18
+  area_min_frac: 0.0001208
+  naming_radius_frac: 0.08
+  max_detections: 21
+  min_markers_ratio: 0.75
+  tracker: reacquire
+  move_frac: 0.03
+  gap_cap: 5
+  ransac_frac: 0.03
+  min_inlier_ratio: 0.9
+free_shape3d:
+  z_rel: 0.2
+  alt_iters: 3
+  max_frames: 120
+verdict_rules:
+  slope_none_min: -0.3
+  slope_yes_max: -0.7
+  f_tol: 0.1
+videos:
+  IMG_7267.MOV:
+    distance_cm: 50.0
+    duration_s: 22.4
+    marker_tilt_valid_ratio: 0.9247
+    free_shape3d:
+      f_3d_px: 3072.0
+      f_planar_px: 3072.0
+      f_grid_px: 3072.0
+      at_grid_edge: true
+      at_bound: true
+      relief_rel: 0.02258
+      relief_per_joint:
+      - -0.01146
+      - 0.02615
+      - -0.01696
+      - 0.01608
+      - -0.00901
+      - -0.01877
+      - 0.04006
+      - -0.02609
+      cost_3d: 17.25934
+      cost_planar: 19.11836
+      ba3_rms_px: 4.1553
+      ba3_success: true
+      ba3_nfev: 66
+      n_frames_in_problem: 315
+      elapsed_s: 35
+  IMG_7266.MOV:
+    distance_cm: 50.0
+    duration_s: 22.93
+    marker_tilt_valid_ratio: 0.8667
+    free_shape3d:
+      f_3d_px: 3072.0
+      f_planar_px: 3031.7
+      f_grid_px: 3072.0
+      at_grid_edge: true
+      at_bound: true
+      relief_rel: 0.03338
+      relief_per_joint:
+      - 0.03566
+      - 0.02975
+      - -0.06423
+      - -0.02166
+      - -0.01938
+      - -0.01137
+      - 0.0125
+      - 0.03872
+      cost_3d: 22.10918
+      cost_planar: 25.96995
+      ba3_rms_px: 4.7056
+      ba3_success: true
+      ba3_nfev: 34
+      n_frames_in_problem: 305
+      elapsed_s: 23
+  IMG_7265.MOV:
+    distance_cm: 60.0
+    duration_s: 23.4
+    marker_tilt_valid_ratio: 0.8762
+    free_shape3d:
+      f_3d_px: 3072.0
+      f_planar_px: 2459.9
+      f_grid_px: 3072.0
+      at_grid_edge: true
+      at_bound: true
+      relief_rel: 0.06136
+      relief_per_joint:
+      - 0.04892
+      - 0.07691
+      - -0.11474
+      - -0.03199
+      - -0.04196
+      - -0.03407
+      - 0.04884
+      - 0.04808
+      cost_3d: 8.89032
+      cost_planar: 16.35514
+      ba3_rms_px: 3.0367
+      ba3_success: true
+      ba3_nfev: 24
+      n_frames_in_problem: 314
+      elapsed_s: 26
+  IMG_7264.MOV:
+    distance_cm: 60.0
+    duration_s: 22.13
+    marker_tilt_valid_ratio: 0.9583
+    free_shape3d:
+      f_3d_px: 3072.0
+      f_planar_px: 2473.2
+      f_grid_px: 3072.0
+      at_grid_edge: true
+      at_bound: true
+      relief_rel: 0.03384
+      relief_per_joint:
+      - 0.02919
+      - 0.03837
+      - -0.06751
+      - -0.02068
+      - -0.01827
+      - -0.01259
+      - 0.02156
+      - 0.02993
+      cost_3d: 12.44261
+      cost_planar: 15.29672
+      ba3_rms_px: 3.5473
+      ba3_success: true
+      ba3_nfev: 48
+      n_frames_in_problem: 321
+      elapsed_s: 36
+  IMG_7263.MOV:
+    distance_cm: 75.0
+    duration_s: 24.0
+    marker_tilt_valid_ratio: 0.9873
+    free_shape3d:
+      f_3d_px: 3072.0
+      f_planar_px: 2199.8
+      f_grid_px: 2635.6
+      at_grid_edge: false
+      at_bound: true
+      relief_rel: 0.03714
+      relief_per_joint:
+      - 0.03807
+      - 0.03483
+      - -0.07726
+      - -0.01516
+      - -0.02257
+      - -0.01267
+      - 0.02609
+      - 0.02865
+      cost_3d: 5.34603
+      cost_planar: 7.14798
+      ba3_rms_px: 2.3112
+      ba3_success: false
+      ba3_nfev: 100
+      n_frames_in_problem: 357
+      elapsed_s: 48
+  IMG_7262.MOV:
+    distance_cm: 75.0
+    duration_s: 22.73
+    marker_tilt_valid_ratio: 1.0
+    free_shape3d:
+      f_3d_px: 3072.0
+      f_planar_px: 2748.8
+      f_grid_px: 3072.0
+      at_grid_edge: true
+      at_bound: true
+      relief_rel: 0.02896
+      relief_per_joint:
+      - 0.03266
+      - 0.02306
+      - -0.06256
+      - -0.01209
+      - -0.01449
+      - -0.00613
+      - 0.01644
+      - 0.02311
+      cost_3d: 4.36138
+      cost_planar: 5.48256
+      ba3_rms_px: 2.0935
+      ba3_success: true
+      ba3_nfev: 35
+      n_frames_in_problem: 342
+      elapsed_s: 24
+by_method:
+  free_shape3d:
+    f_by_distance_px:
+      '50': 3072.0
+      '60': 3072.0
+      '75': 3072.0
+    slope: null
+    slope_interval_95: null
+  planar_pooled_curves:
+    pooled_f_px:
+      '50': 3072.0
+      '60': 3072.0
+      '75': 2819.2
+    slope: null
+    slope_interval_95: null
+verdict:
+  free_shape3d:
+    verdict: 판단 불가
+    reason: 기울기나 구간이 값 없음(격자 경계)
+  planar_pooled_curves:
+    verdict: 판단 불가
