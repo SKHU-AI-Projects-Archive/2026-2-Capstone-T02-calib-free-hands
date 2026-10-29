@@ -1,0 +1,5590 @@
+"""HandCalib hand-template focal length, estimation part (one module): everything the detector-swap (16), protocol (17, incl. the frame-filter diagnostic)
+and same-recording (18) experiments use, consolidated from the former packages hand_focal/ (14), detector_swap/ (16), protocol_rerun/ (17)
+and same_session/ (18). Each former module is a section below ("was HandCalib/..."); colliding names carry a prefix.
+
+The code that writes results and reports (json / csv / figures / markdown, and the provenance record: git state, versions) is in handfocal_report.py; `import handfocal` loads both modules
+into one namespace (handfocal.py), so run.py and the tests are unchanged. The overlay / reference-picture helpers (pr_overlay, mk_overlay, mk_draw_reference, mk_draw_pairing, mo_draw_reference) stay here:
+the per-video workers of their experiments call them while computing.
+Orchestration and the command line are in run.py; the detector workers (separate virtual environments) are in detector_worker.py.
+"""
+from __future__ import annotations
+
+import contextlib
+import copy
+import cv2
+import hashlib
+import json
+import math
+import numpy as np
+import os
+import re
+import shutil
+import subprocess
+import sys
+import tempfile
+import time
+from concurrent.futures import ProcessPoolExecutor
+from fractions import Fraction
+from pathlib import Path
+from scipy.optimize import minimize
+
+
+# ====================================================================================================
+# paths  (was HandCalib/hand_focal/paths.py)
+# ====================================================================================================
+
+PROJECT_ROOT = Path(__file__).resolve().parent         # HandCalib/
+WORKER = PROJECT_ROOT / "detector_worker.py"            # standalone detector workers (run by each detector's own venv)
+REPO_ROOT = PROJECT_ROOT.parent
+
+
+def resolve(p) -> Path:
+    q = Path(p).expanduser()
+    return q if q.is_absolute() else PROJECT_ROOT / q
+
+
+# ====================================================================================================
+# hashing  (was in the provenance section; used by anycalib_run and by the provenance code in handfocal_report.py)
+# ====================================================================================================
+
+def sha256_text(s: str) -> str:
+    return hashlib.sha256(s.encode()).hexdigest()
+
+
+def sha256_file(p) -> str:
+    h = hashlib.sha256()
+    with open(p, "rb") as fh:
+        for chunk in iter(lambda: fh.read(1 << 20), b""):
+            h.update(chunk)
+    return h.hexdigest()
+
+
+# ====================================================================================================
+# normalize  (was HandCalib/hand_focal/normalize.py)
+# Video probing and normalisation (ffmpeg / ffprobe). Only technical stream fields are kept: no location, no device tags.
+# ====================================================================================================
+
+SAFE_STREAM_KEYS = ("codec_name", "profile", "width", "height", "pix_fmt", "color_transfer", "color_primaries", "color_space",
+                    "r_frame_rate", "avg_frame_rate", "nb_frames", "duration", "bits_per_raw_sample")
+HDR_TRANSFERS = {"smpte2084", "arib-std-b67"}
+
+
+def tool_info() -> dict:
+    out = {}
+    for t in ("ffmpeg", "ffprobe"):
+        p = shutil.which(t)
+        out[t] = {"path": p, "version": subprocess.check_output([p, "-hide_banner", "-version"], text=True).splitlines()[0] if p else None}
+    filt = subprocess.check_output(["ffmpeg", "-hide_banner", "-filters"], text=True) if out["ffmpeg"]["path"] else ""
+    out["filters"] = {f: (f" {f} " in filt) for f in ("zscale", "tonemap", "colorspace")}
+    return out
+
+
+def probe(path: Path) -> dict:
+    """Technical fields of the first video stream (rotation from the display matrix); tags are never read."""
+    j = json.loads(subprocess.check_output(["ffprobe", "-v", "error", "-select_streams", "v:0", "-show_entries",
+                                            "stream=" + ",".join(SAFE_STREAM_KEYS), "-show_entries", "stream_side_data_list",
+                                            "-show_entries", "format=duration,size,format_name", "-of", "json", str(path)], text=True))
+    s = j["streams"][0]
+    rot = 0
+    for sd in s.get("side_data_list", []) or []:
+        if "rotation" in sd:
+            rot = int(sd["rotation"])
+    info = {k: s.get(k) for k in SAFE_STREAM_KEYS}
+    info["rotation_deg"] = rot
+    info["file_name"] = path.name
+    info["file_size"] = int(j["format"].get("size", 0))
+    info["container"] = j["format"].get("format_name")
+    info["duration_s"] = float(j["format"].get("duration") or s.get("duration") or 0)
+    info["fps"] = float(Fraction(s.get("avg_frame_rate") or s.get("r_frame_rate")))
+    pix = s.get("pix_fmt") or ""
+    info["bit_depth"] = int(s.get("bits_per_raw_sample") or (10 if "10" in pix else 8))
+    info["hdr"] = (s.get("color_transfer") in HDR_TRANSFERS) or info["bit_depth"] > 8
+    rotated = abs(rot) % 180 == 90
+    info["display_w"], info["display_h"] = (s["height"], s["width"]) if rotated else (s["width"], s["height"])
+    return info
+
+
+def target_dims(w: int, h: int, long_side: int) -> tuple[int, int]:
+    """Aspect kept, never upscaled, even sides."""
+    s = min(1.0, long_side / max(w, h))
+    tw, th = int(round(w * s / 2)) * 2, int(round(h * s / 2)) * 2
+    return max(tw, 2), max(th, 2)
+
+
+def build_command(src: Path, dst: Path, info: dict, cfg: dict, tools: dict) -> tuple[list, dict]:
+    n = cfg["normalize"]
+    tw, th = target_dims(info["display_w"], info["display_h"], int(n["long_side"]))
+    vf, path = [], {"autorotate": True, "rotation_applied_deg": info["rotation_deg"]}
+    if info["hdr"]:
+        if tools["filters"]["zscale"] and tools["filters"]["tonemap"] and "zscale_tonemap" in n["hdr_path"]:
+            vf += ["zscale=t=linear:npl=100", "format=gbrpf32le", "zscale=p=bt709", "tonemap=hable:desat=0", "zscale=t=bt709:m=bt709:r=tv"]
+            path["tonemap"] = "zscale+tonemap(hable)"
+        elif tools["filters"]["colorspace"] and "colorspace" in n["hdr_path"]:
+            vf += ["colorspace=all=bt709:iall=bt2020:fast=1"]
+            path["tonemap"] = "colorspace (no tone curve)"
+        else:
+            raise RuntimeError("HDR input but neither zscale+tonemap nor colorspace is available")
+    else:
+        path["tonemap"] = "none (8-bit SDR input)"
+    vf.append(f"scale={tw}:{th}:flags=bicubic")
+    fps_in = info["fps"]
+    if fps_in > float(n["max_fps"]) + 0.01:
+        vf.append(f"fps={n['max_fps']}")
+        path["fps"] = f"{fps_in:.3f} -> {n['max_fps']}"
+    else:
+        path["fps"] = f"{fps_in:.3f} (kept)"
+    vf.append("format=yuv444p" if n["codec"] == "ffv1" else "format=yuv420p")
+    cmd = ["ffmpeg", "-hide_banner", "-loglevel", "error", "-y", "-i", str(src), "-map", "0:v:0", "-an", "-sn", "-dn",
+           "-map_metadata", "-1", "-map_chapters", "-1", "-vf", ",".join(vf), "-c:v", n["codec"], "-colorspace", "bt709",
+           "-color_primaries", "bt709", "-color_trc", "bt709", str(dst)]
+    path.update({"filters": vf, "out_size": [tw, th], "codec": n["codec"]})
+    return cmd, path
+
+
+def normalize(src: Path, dst: Path, cfg: dict) -> dict:
+    tools = tool_info()
+    info = probe(src)
+    cmd, path = build_command(src, dst, info, cfg, tools)
+    subprocess.run(cmd, check=True)
+    out = probe(dst)
+    if [out["display_w"], out["display_h"]] != path["out_size"]:
+        raise RuntimeError(f"normalised size {out['display_w']}x{out['display_h']} != {path['out_size']}")
+    return {"input": info, "output": {k: out[k] for k in ("display_w", "display_h", "fps", "duration_s", "nb_frames", "pix_fmt", "color_transfer", "rotation_deg")},
+            "path": path, "command": cmd[:-1] + ["<out>"], "tools": tools}
+
+
+# ====================================================================================================
+# frames  (was HandCalib/hand_focal/frames.py)
+# Frame selection (detect_fps) from the normalised video into lossless PNG files with a frame / time / hash list.
+# ====================================================================================================
+
+def sha256(p: Path) -> str:
+    return hashlib.sha256(p.read_bytes()).hexdigest()
+
+
+def extract_frames(video: Path, out_dir: Path, fps: float, n_frames: int | None, detect_fps: float) -> list:
+    """Every k-th frame (k = round(fps / detect_fps), at least 1). Returns [{index, frame, time_s, png, sha256}]."""
+    out_dir.mkdir(parents=True, exist_ok=True)
+    k = max(1, int(round(fps / detect_fps)))
+    subprocess.run(["ffmpeg", "-hide_banner", "-loglevel", "error", "-y", "-i", str(video), "-vf", f"select=not(mod(n\\,{k}))",
+                    "-vsync", "0", "-start_number", "0", str(out_dir / "f_%06d.png")], check=True)
+    files = sorted(out_dir.glob("f_*.png"))
+    rows = []
+    for i, p in enumerate(files):
+        fr = i * k
+        rows.append({"index": i, "frame": fr, "time_s": fr / fps, "png": str(p), "sha256": sha256(p)})
+    return rows, k
+
+
+# ====================================================================================================
+# adapters  (was HandCalib/hand_focal/detectors/adapters.py)
+# Detector adapters. Both return the same dict: frame_index, offsets, boxes, box_conf, cls, kxy, kconf, info.
+# ====================================================================================================
+
+class DetectorError(RuntimeError):
+    pass
+
+
+def load_detections(npz: Path) -> dict:
+    z = np.load(npz, allow_pickle=False)
+    d = {k: z[k] for k in z.files if k != "info"}
+    d["info"] = json.loads(str(z["info"])) if "info" in z.files else {}
+    return d
+
+
+def cache_key(frames: list, dcfg: dict) -> str:
+    h = hashlib.sha256()
+    for r in frames:
+        h.update(f"{r['index']}:{r['sha256']};".encode())
+    h.update(json.dumps({k: dcfg.get(k) for k in ("weights", "conf", "iou", "imgsz")}, sort_keys=True).encode())
+    return h.hexdigest()[:16]
+
+
+def detector_wilor_yolo(frames: list, dcfg: dict, cache_dir: Path, log=print) -> dict:
+    """Run the worker in the configured (read-only) venv; cache by frame hashes + settings."""
+    cache_dir.mkdir(parents=True, exist_ok=True)
+    key = cache_key(frames, dcfg)
+    out = cache_dir / f"detections_{key}.npz"
+    if dcfg.get("cache", True) and out.exists():
+        log(f"  detection cache hit: {out.name}")
+        d = load_detections(out)
+    else:
+        lst = cache_dir / f"frames_{key}.tsv"
+        lst.write_text("".join(f"{r['index']}\t{r['png']}\t{r['sha256']}\n" for r in frames))
+        cmd = [dcfg["python"], str(WORKER), "wilor_yolo", "--weights", dcfg["weights"], "--list", str(lst), "--out", str(out),
+               "--conf", str(dcfg["conf"]), "--iou", str(dcfg["iou"]), "--device", str(dcfg["device"])]
+        if dcfg.get("imgsz"):
+            cmd += ["--imgsz", str(dcfg["imgsz"])]
+        env = dict(os.environ, PYTHONNOUSERSITE="1")
+        p = subprocess.run(cmd, env=env, capture_output=True, text=True)
+        if p.returncode != 0 or not out.exists():
+            raise DetectorError(f"YOLO worker failed (exit {p.returncode}): {p.stderr.strip()[-800:]}")
+        lst.unlink()
+        d = load_detections(out)
+    check_alignment(frames, d)
+    d["cache_file"] = str(out)
+    return d
+
+
+def detector_mock(frames: list, dcfg: dict, cache_dir: Path, log=print) -> dict:
+    d = load_detections(Path(dcfg["mock_npz"]))
+    if "sha256" not in d:
+        d["sha256"] = np.array([r["sha256"] for r in frames])
+    check_alignment(frames, d)
+    d["cache_file"] = str(dcfg["mock_npz"])
+    return d
+
+
+def check_alignment(frames: list, d: dict) -> None:
+    """The worker's frame numbers and PNG hashes must equal the frame list of the main code."""
+    idx = [int(x) for x in d["frame_index"]]
+    if idx != [r["index"] for r in frames]:
+        raise DetectorError("detector frame indices differ from the frame list")
+    if [str(x) for x in d["sha256"]] != [r["sha256"] for r in frames]:
+        raise DetectorError("detector PNG hashes differ from the frame list")
+
+
+def detector_run(frames, dcfg, cache_dir, log=print) -> dict:
+    if dcfg["name"] == "wilor_yolo":
+        return detector_wilor_yolo(frames, dcfg, cache_dir, log)
+    if dcfg["name"] == "mock":
+        return detector_mock(frames, dcfg, cache_dir, log)
+    raise DetectorError(f"unknown detector {dcfg['name']}")
+
+
+# ====================================================================================================
+# track  (was HandCalib/hand_focal/track.py)
+# Target-hand selection, IoU tracking and point masks.
+# ====================================================================================================
+
+def iou(a, b):
+    x0, y0 = max(a[0], b[0]), max(a[1], b[1])
+    x1, y1 = min(a[2], b[2]), min(a[3], b[3])
+    inter = max(0.0, x1 - x0) * max(0.0, y1 - y0)
+    ar = lambda r: max(0.0, r[2] - r[0]) * max(0.0, r[3] - r[1])   # noqa: E731
+    return inter / max(ar(a) + ar(b) - inter, 1e-9)
+
+
+def candidates(det: dict, i: int):
+    a, b = int(det["offsets"][i]), int(det["offsets"][i + 1])
+    return list(range(a, b))
+
+
+def track(det: dict, times: np.ndarray, size_wh, tcfg: dict, front_start_s: float = 0.0) -> dict:
+    """Target = the candidate with the largest box area x confidence in the first init_window_s of the front phase; then IoU tracking."""
+    n = len(times)
+    W, H = size_wh
+    init = [i for i in range(n) if front_start_s <= times[i] < front_start_s + tcfg["init_window_s"]]
+    best, best_i = None, None
+    for i in init:
+        for k in candidates(det, i):
+            b = det["boxes"][k]
+            s = (b[2] - b[0]) * (b[3] - b[1]) * det["box_conf"][k]
+            if best is None or s > best[0]:
+                best, best_i = (s, k), i
+    out = {"present": np.zeros(n, bool), "box": np.full((n, 4), np.nan), "cls": np.full(n, -1), "box_conf": np.zeros(n),
+           "kp": np.full((n, 21, 2), np.nan), "kconf": np.zeros((n, 21)), "mask": np.zeros((n, 21), bool), "n_candidates": np.zeros(n, int),
+           "init_frame": best_i}
+    for i in range(n):
+        out["n_candidates"][i] = len(candidates(det, i))
+    if best is None:
+        return out
+    ref = det["boxes"][best[1]].copy()
+    order = list(range(best_i, n)) + list(range(best_i - 1, -1, -1))     # forward from the init frame, then backward
+    last_fwd, last_bwd = ref.copy(), ref.copy()
+    for i in order:
+        refb = last_fwd if i >= best_i else last_bwd
+        cs = candidates(det, i)
+        if not cs:
+            continue
+        ious = [iou(refb, det["boxes"][k]) for k in cs]
+        j = int(np.argmax(ious))
+        if i == best_i:
+            k = best[1]
+        elif ious[j] >= tcfg["iou_min"]:
+            k = cs[j]
+        else:
+            continue
+        out["present"][i] = True
+        out["box"][i], out["cls"][i], out["box_conf"][i] = det["boxes"][k], det["cls"][k], det["box_conf"][k]
+        out["kp"][i], out["kconf"][i] = det["kxy"][k], det["kconf"][k]
+        if i >= best_i:
+            last_fwd = det["boxes"][k].copy()
+        else:
+            last_bwd = det["boxes"][k].copy()
+    kp = out["kp"]
+    inside = (kp[..., 0] >= 0) & (kp[..., 0] < W) & (kp[..., 1] >= 0) & (kp[..., 1] < H)
+    out["mask"] = out["present"][:, None] & (out["kconf"] >= tcfg["conf_min"]) & inside
+    if tcfg.get("smoothing", {}).get("enabled"):
+        out["kp"] = smooth(out["kp"], out["mask"], int(tcfg["smoothing"]["window"]))
+    return out
+
+
+def smooth(kp, mask, w):
+    """Optional centred moving average over visible points (off by default)."""
+    out = kp.copy()
+    h = w // 2
+    for i in range(len(kp)):
+        lo, hi = max(0, i - h), min(len(kp), i + h + 1)
+        for j in range(21):
+            m = mask[lo:hi, j]
+            if mask[i, j] and m.sum() > 1:
+                out[i, j] = kp[lo:hi, j][m].mean(0)
+    return out
+
+
+def box_long(box):
+    return np.maximum(box[..., 2] - box[..., 0], box[..., 3] - box[..., 1])
+
+
+def order_check(kp: np.ndarray, mask: np.ndarray) -> dict:
+    """OpenPose order on 2D: wrist->MCP distance (middle longest, pinky shortest) and the thumb base nearer the index MCP."""
+    ok = mask[:, [0, 1, 5, 9, 13, 17]].all(1)
+    if ok.sum() == 0:
+        return {"ok": None, "reason": "no frame with the needed points"}
+    P = kp[ok]
+    d = {n: float(np.median(np.linalg.norm(P[:, j] - P[:, 0], axis=-1))) for n, j in (("index", 5), ("middle", 9), ("ring", 13), ("pinky", 17))}
+    ci = float(np.median(np.linalg.norm(P[:, 1] - P[:, 5], axis=-1)))
+    cp = float(np.median(np.linalg.norm(P[:, 1] - P[:, 17], axis=-1)))
+    res = {"wrist_to_mcp_px": d, "middle_longest": d["middle"] == max(d.values()), "pinky_shortest": d["pinky"] == min(d.values()),
+           "thumb_base_nearer_index": ci < cp, "n_frames": int(ok.sum())}
+    res["ok"] = bool(res["middle_longest"] and res["pinky_shortest"] and res["thumb_base_nearer_index"])
+    return res
+
+
+# ====================================================================================================
+# template  (was HandCalib/hand_focal/template.py)
+# Frontal template (similarity Procrustes mean) and the weak-perspective 2D tilt indicator theta2d.
+# ====================================================================================================
+
+def similarity_align(src: np.ndarray, dst: np.ndarray):
+    """Least-squares similarity src -> dst (2D). Returns (s, R, t) with dst ~ s R src + t."""
+    mu_s, mu_d = src.mean(0), dst.mean(0)
+    a, b = src - mu_s, dst - mu_d
+    U, S, Vt = np.linalg.svd(b.T @ a)
+    D = np.diag([1, np.sign(np.linalg.det(U @ Vt))])
+    R = U @ D @ Vt
+    s = float((S * np.diag(D)).sum() / max((a ** 2).sum(), 1e-12))
+    return s, R, mu_d - s * R @ mu_s
+
+
+def template_build(front_pts: np.ndarray, iters: int = 4) -> dict:
+    """front_pts (N, J, 2) of frames with every joint visible -> template (J, 2), centred, in the window's pixel scale."""
+    X = front_pts.astype(float)
+    T = X[0] - X[0].mean(0)
+    for _ in range(iters):
+        aligned = []
+        for P in X:
+            s, R, t = similarity_align(P, T)
+            aligned.append((s * (R @ P.T)).T + t)
+        A = np.array(aligned)
+        T = A.mean(0)
+        T = T - T.mean(0)
+    # scale = mean pixel size of the window
+    sizes = [np.sqrt(((P - P.mean(0)) ** 2).sum(1).mean()) for P in X]
+    T = T * (np.mean(sizes) / np.sqrt((T ** 2).sum(1).mean()))
+    res = []
+    for P in X:                                     # residuals in each frame's own pixels
+        s, R, t = similarity_align(T, P)
+        res.append(np.linalg.norm((s * (R @ T.T)).T + t - P, axis=1))
+    res = np.array(res)
+    return {"template": T, "jitter_rms_px": float(np.sqrt((res ** 2).mean())), "n_frames": int(len(X))}
+
+
+def affine_tilt(T: np.ndarray, P: np.ndarray):
+    """Least-squares affine T -> P; theta2d = arccos(s2 / s1) of its linear part; axis = direction of the compressed image axis (deg, 0-180)."""
+    A = np.c_[T, np.ones(len(T))]
+    M, *_ = np.linalg.lstsq(A, P, rcond=None)
+    L = M[:2].T                                       # 2x2 linear part, P ~ L T + t
+    U, S, Vt = np.linalg.svd(L)
+    ratio = float(np.clip(S[1] / S[0], 0.0, 1.0)) if S[0] > 0 else 0.0
+    theta = float(np.degrees(np.arccos(ratio)))
+    axis = float(np.degrees(np.arctan2(U[1, 1], U[0, 1])) % 180.0)
+    return theta, axis
+
+
+def finger_extension(kp: np.ndarray) -> dict:
+    """MCP -> tip straight distance / sum of the three bone lengths, per finger (index .. pinky), on 2D points."""
+    out = {}
+    for name, ids in (("index", [5, 6, 7, 8]), ("middle", [9, 10, 11, 12]), ("ring", [13, 14, 15, 16]), ("pinky", [17, 18, 19, 20])):
+        P = kp[:, ids]
+        straight = np.linalg.norm(P[:, 3] - P[:, 0], axis=-1)
+        path = np.linalg.norm(np.diff(P, axis=1), axis=-1).sum(1)
+        out[name] = float(np.nanmedian(straight / np.maximum(path, 1e-9)))
+    out["min"] = float(min(out.values()))
+    out["mean"] = float(np.mean([out[k] for k in ("index", "middle", "ring", "pinky")]))
+    return out
+
+
+# ====================================================================================================
+# phases  (was HandCalib/hand_focal/phases.py)
+# Front window and tilt phase.
+# ====================================================================================================
+
+def front_window(times, present, kp, mask, box, pcfg) -> dict:
+    """Lowest-motion contiguous window of front_window_s inside [front_skip_s, front_phase_s) with detection rate >= the minimum."""
+    t = np.asarray(times)
+    cand = np.flatnonzero((t >= pcfg["front_skip_s"]) & (t < pcfg["front_phase_s"]))
+    bl = box_long(box)
+    speed = np.full(len(t), np.nan)
+    for i in range(1, len(t)):
+        if present[i] and present[i - 1]:
+            m = mask[i] & mask[i - 1]
+            if m.sum() >= 4:
+                speed[i] = float(np.median(np.linalg.norm(kp[i, m] - kp[i - 1, m], axis=-1)) / max(np.nanmean([bl[i], bl[i - 1]]), 1e-9))
+    best, warn = None, []
+    for s in cand:
+        idx = cand[(t[cand] >= t[s]) & (t[cand] < t[s] + pcfg["front_window_s"] - 1e-9)]
+        if t[s] + pcfg["front_window_s"] > pcfg["front_phase_s"] + 1e-9:
+            break
+        rate = float(present[idx].mean()) if len(idx) else 0.0
+        sp = float(np.nanmean(speed[idx])) if np.isfinite(speed[idx]).any() else np.inf
+        key = (rate < pcfg["front_min_detect_rate"], sp)
+        if best is None or key < best[0]:
+            best = (key, idx, rate, sp)
+    if best is None:
+        return {"idx": np.zeros(0, int), "detect_rate": 0.0, "speed_rel": float("nan"), "warnings": ["정면 구간에 창을 만들 프레임이 없습니다"]}
+    if best[2] < pcfg["front_min_detect_rate"]:
+        warn.append(f"정면 창의 검출률이 낮습니다({best[2]:.2f})")
+    return {"idx": best[1], "detect_rate": best[2], "speed_rel": best[3], "t0": float(t[best[1][0]]), "t1": float(t[best[1][-1]]), "warnings": warn}
+
+
+def auto_transition(times, theta, present, pcfg):
+    """First time at which theta2d stays >= auto_theta_deg for auto_sustain_s."""
+    t = np.asarray(times)
+    ok = present & np.isfinite(theta) & (theta >= pcfg["auto_theta_deg"])
+    for i in range(len(t)):
+        if not ok[i]:
+            continue
+        j = np.flatnonzero((t >= t[i]) & (t < t[i] + pcfg["auto_sustain_s"]))
+        if len(j) and ok[j].all():
+            return float(t[i])
+    return None
+
+
+def tilt_indices(times, present, t_start) -> np.ndarray:
+    t = np.asarray(times)
+    return np.flatnonzero((t >= t_start) & present)
+
+
+# ====================================================================================================
+# estimate  (was HandCalib/hand_focal/estimate.py)
+# f from a planar hand template: per-frame IPPE pose at every candidate f, robust mean reprojection cost.
+#
+# fixed_template: the frontal template is the true planar shape; f from a log grid refined by a parabola in log f.
+# joint_delta:    the frontal hand was really tilted by delta towards phi; the template is stretched by 1 / cos(delta) along phi
+#                 (first-order weak-perspective correction) and (f, delta, phi) is found on a grid and refined by Nelder-Mead, with a
+#                 soft prior (delta / delta_prior)^2 in units of the per-point noise variance.
+# Pinhole, principal point fixed, square pixels, no distortion.
+# ====================================================================================================
+
+class Problem:
+    def __init__(self, template: np.ndarray, frames: list, cx: float, cy: float, huber_px: np.ndarray, min_points: int = 4, weights: np.ndarray | None = None):
+        """template (J, 2); frames: list of (obs (J, 2), visible (J,)) ; huber_px: per frame Huber width; weights (J,): per-joint weight of the
+        reprojection cost (21's wrist_mode downweight); None = every joint counts the same (17's behaviour)."""
+        self.w = None if weights is None else np.asarray(weights, float)
+        self.T = np.asarray(template, float)
+        self.frames = [(np.asarray(o, float), np.asarray(v, bool)) for o, v in frames]
+        self.keep = [i for i, (o, v) in enumerate(self.frames) if v.sum() >= max(4, min_points)]
+        self.cx, self.cy = float(cx), float(cy)
+        self.huber = np.asarray(huber_px, float)
+        self.n_points = int(sum(self.frames[i][1].sum() for i in self.keep))
+
+    def subset(self, idx):
+        p = Problem.__new__(Problem)
+        p.T, p.frames, p.cx, p.cy, p.huber, p.w = self.T, self.frames, self.cx, self.cy, self.huber, self.w
+        p.keep = [i for i in idx if i in set(self.keep)]
+        p.n_points = int(sum(self.frames[i][1].sum() for i in p.keep))
+        return p
+
+
+def stretch(T: np.ndarray, delta_deg: float, phi_deg: float) -> np.ndarray:
+    u = np.array([np.cos(np.radians(phi_deg)), np.sin(np.radians(phi_deg))])
+    k = 1.0 / np.cos(np.radians(min(abs(delta_deg), 80.0))) - 1.0
+    return T + k * (T @ u)[:, None] * u[None, :]
+
+
+def _huber(r, d):
+    return np.where(r <= d, r * r, 2 * d * r - d * d)
+
+
+def frame_fit(T2: np.ndarray, obs: np.ndarray, vis: np.ndarray, K: np.ndarray):
+    """IPPE pose of the planar template on the visible points; the lower-error of the two solutions. Returns (residuals, R, t)."""
+    obj = np.c_[T2[vis], np.zeros(vis.sum())].astype(np.float64)
+    img = obs[vis].astype(np.float64)
+    n, rvecs, tvecs, errs = cv2.solvePnPGeneric(obj, img, K, None, flags=cv2.SOLVEPNP_IPPE)
+    k = int(np.argmin(np.asarray(errs).ravel())) if n > 1 else 0
+    R, _ = cv2.Rodrigues(rvecs[k])
+    t = tvecs[k].ravel()
+    X = obj @ R.T + t
+    proj = K[:2, :2] @ (X[:, :2] / X[:, 2:3]).T + K[:2, 2:3]
+    return np.linalg.norm(proj.T - img, axis=1), R, t
+
+
+def K_of(f, cx, cy):
+    return np.array([[f, 0, cx], [0, f, cy], [0, 0, 1.0]])
+
+
+def cost(pb: Problem, f: float, T2: np.ndarray | None = None, details: bool = False):
+    T2 = pb.T if T2 is None else T2
+    K = K_of(f, pb.cx, pb.cy)
+    per, out = [], []
+    for i in pb.keep:
+        o, v = pb.frames[i]
+        r, R, t = frame_fit(T2, o, v, K)
+        per.append(float(_huber(r, pb.huber[i]).mean()) if pb.w is None else float((pb.w[v] * _huber(r, pb.huber[i])).sum() / pb.w[v].sum()))
+        if details:
+            out.append({"frame": i, "res": r, "vis": v, "R": R, "t": t})
+    c = float(np.mean(per)) if per else float("inf")
+    return (c, out) if details else c
+
+
+def f_grid(cfg_e: dict, long_side: float) -> np.ndarray:
+    lo, hi = cfg_e["f_ratio_range"]
+    return np.geomspace(lo * long_side, hi * long_side, int(cfg_e["f_grid_n"]))
+
+
+def _parabola(lf: np.ndarray, c: np.ndarray, k: int) -> float:
+    if k == 0 or k == len(lf) - 1:
+        return float(lf[k])
+    x, y = lf[k - 1:k + 2], c[k - 1:k + 2]
+    A = np.vstack([x ** 2, x, np.ones(3)]).T
+    a, b, _ = np.linalg.solve(A, y)
+    return float(-b / (2 * a)) if a > 0 else float(lf[k])
+
+
+def fixed_template(pb: Problem, grid: np.ndarray) -> dict:
+    c = np.array([cost(pb, f) for f in grid])
+    k = int(np.argmin(c))
+    lf = _parabola(np.log(grid), c, k)
+    f = float(np.exp(np.clip(lf, np.log(grid[0]), np.log(grid[-1]))))
+    return {"f": f, "delta_deg": 0.0, "phi_deg": 0.0, "profile_f": grid.tolist(), "profile_cost": c.tolist(), "cost": cost(pb, f),
+            "at_grid_edge": bool(k in (0, len(grid) - 1))}
+
+
+def joint_delta(pb: Problem, grid: np.ndarray, jd: dict, sigma2: float, start=None) -> dict:
+    """(f, delta, phi): grid then Nelder-Mead on the total = N * mean cost / sigma^2 + (delta / delta_prior)^2."""
+    N = max(pb.n_points, 1)
+    dp = float(jd["delta_prior_deg"])
+
+    def total(lf, d, ph):
+        return N * cost(pb, float(np.exp(lf)), stretch(pb.T, d, ph)) / sigma2 + (d / dp) ** 2
+
+    phis = np.linspace(0, 180, int(jd["phi_n"]), endpoint=False)
+    prof = np.full(len(grid), np.inf)
+    best = (np.inf, None)
+    if start is None:
+        for d in jd["delta_grid_deg"]:
+            for ph in (phis if d > 0 else [0.0]):
+                T2 = stretch(pb.T, d, ph)
+                for k, f in enumerate(grid):
+                    v = N * cost(pb, f, T2) / sigma2 + (d / dp) ** 2
+                    prof[k] = min(prof[k], v)
+                    if v < best[0]:
+                        best = (v, (np.log(f), float(d), float(ph)))
+        x0 = best[1]
+    else:
+        x0 = start
+    lo, hi = np.log(grid[0]), np.log(grid[-1])
+    fun = lambda x: total(np.clip(x[0], lo, hi), abs(x[1]), x[2] % 180.0)   # noqa: E731
+    r = minimize(fun, np.array(x0, float), method="Nelder-Mead",
+                 options={"maxiter": int(jd["nm_max_iter"]), "xatol": 1e-4, "fatol": 1e-6, "initial_simplex": None})
+    lf, d, ph = float(np.clip(r.x[0], lo, hi)), abs(float(r.x[1])), float(r.x[2] % 180.0)
+    f = float(np.exp(lf))
+    return {"f": f, "delta_deg": d, "phi_deg": ph, "profile_f": grid.tolist(), "profile_cost": (prof * sigma2 / N).tolist() if start is None else None,
+            "cost": cost(pb, f, stretch(pb.T, d, ph)), "objective": float(r.fun), "nm_iters": int(r.nit), "at_grid_edge": bool(lf <= lo + 1e-6 or lf >= hi - 1e-6)}
+
+
+def estimate_run(pb: Problem, method: str, grid: np.ndarray, ecfg: dict, sigma2: float, start=None) -> dict:
+    if method == "fixed_template":
+        return fixed_template(pb, grid)
+    if method == "joint_delta":
+        return joint_delta(pb, grid, ecfg["joint_delta"], sigma2, start)
+    raise ValueError(method)
+
+
+def diagnostics(pb: Problem, sol: dict, box_long_med: float, joint_ids: list, tilt_ids=None) -> dict:
+    T2 = stretch(pb.T, sol["delta_deg"], sol["phi_deg"])
+    c0, det = cost(pb, sol["f"], T2, details=True)
+    res = np.concatenate([d["res"] for d in det]) if det else np.zeros(0)
+    per_joint = {}
+    J = len(joint_ids)
+    acc = [[] for _ in range(J)]
+    for d in det:
+        for pos, j in enumerate(np.flatnonzero(d["vis"])):
+            acc[j].append(d["res"][pos])
+    for j in range(J):
+        per_joint[int(joint_ids[j])] = float(np.sqrt(np.mean(np.square(acc[j])))) if acc[j] else float("nan")
+    sel = [d for d in det if tilt_ids is None or d["frame"] in set(tilt_ids)]
+    normals = np.array([d["R"][:, 2] for d in sel]) if sel else np.zeros((0, 3))
+    az = np.degrees(np.arctan2(normals[:, 1], normals[:, 0])) % 360 if len(normals) else np.zeros(0)
+    tilt = np.degrees(np.arccos(np.clip(np.abs(normals[:, 2]), 0, 1))) if len(normals) else np.zeros(0)
+    cp = cost(pb, sol["f"] * 1.15, T2)
+    cm = cost(pb, sol["f"] / 1.15, T2)
+    rms = float(np.sqrt(np.mean(res ** 2))) if len(res) else float("nan")
+    return {"reproj_rms_px": rms, "reproj_rms_rel": rms / box_long_med if box_long_med else float("nan"), "per_joint_rms_px": per_joint,
+            "sharpness": float(min(cp, cm) / max(c0, 1e-12)), "cost": c0, "cost_plus15": cp, "cost_minus15": cm,
+            "pnp_azimuth_deg": az.tolist(), "pnp_tilt_deg": tilt.tolist(), "azimuth_bins8": int(len(np.unique((az // 45).astype(int)))) if len(az) else 0,
+            "frames_used": [int(d["frame"]) for d in det], "frame_rms_px": [float(np.sqrt(np.mean(d["res"] ** 2))) for d in det]}
+
+
+# ====================================================================================================
+# uncertainty  (was HandCalib/hand_focal/uncertainty.py)
+# Heuristic uncertainty of the hand f: joint-set range, block bootstrap, consistency splits, estimator difference.
+#
+# f_rel_uncertainty = max(2 x bootstrap relative std, joint-set range / 2, consistency range / 2, estimator difference / 2).
+# This combination is a heuristic, not a calibrated interval.
+# ====================================================================================================
+
+def rel_range(values, ref):
+    v = [x for x in values if np.isfinite(x)]
+    return float((max(v) - min(v)) / ref) if len(v) >= 2 and ref else float("nan")
+
+
+def block_bootstrap(pb: Problem, front_ids, tilt_ids, method, grid, ecfg, sigma2, sol, n, block, seed, budget_s):
+    """Resample blocks of `block` consecutive tilt frames with replacement (front frames always kept)."""
+    rng = np.random.default_rng(seed)
+    tilt = list(tilt_ids)
+    blocks = [tilt[i:i + block] for i in range(0, len(tilt), block)] or [[]]
+    fs, t0, reduced = [], time.time(), False
+    start = (np.log(sol["f"]), sol["delta_deg"], sol["phi_deg"])
+    for b in range(n):
+        if b >= 2 and (time.time() - t0) / b * (b + 1) > budget_s:     # the next repetition would exceed the budget
+            reduced = True
+            break
+        pick = [blocks[i] for i in rng.integers(0, len(blocks), len(blocks))]
+        ids = list(front_ids) + [i for blk in pick for i in blk]
+        sub = pb.subset(ids)
+        r = estimate_run(sub, method, grid, ecfg, sigma2, start=start if method == "joint_delta" else None)
+        fs.append(r["f"])
+    fs = np.array(fs)
+    return {"f": fs.tolist(), "n_done": int(len(fs)), "n_requested": int(n), "reduced": reduced,
+            "rel_std": float(np.std(fs, ddof=1) / np.mean(fs)) if len(fs) > 1 else float("nan")}
+
+
+def consistency(pb, front_ids, tilt_ids, axis_deg, method, grid, ecfg, sigma2, sol):
+    tilt = list(tilt_ids)
+    h = len(tilt) // 2
+    start = (np.log(sol["f"]), sol["delta_deg"], sol["phi_deg"])
+    def f_of(ids):
+        if len(ids) < 4:
+            return float("nan")
+        return estimate_run(pb.subset(list(front_ids) + list(ids)), method, grid, ecfg, sigma2, start=start if method == "joint_delta" else None)["f"]
+    ax = np.asarray([axis_deg[i] for i in tilt])
+    horiz = [i for i, a in zip(tilt, ax) if (a < 45 or a >= 135)]
+    vert = [i for i, a in zip(tilt, ax) if 45 <= a < 135]
+    out = {"first_half": f_of(tilt[:h]), "second_half": f_of(tilt[h:]), "axis_horizontal": f_of(horiz), "axis_vertical": f_of(vert),
+           "n_horizontal": len(horiz), "n_vertical": len(vert)}
+    ref = sol["f"]
+    out["halves_range"] = rel_range([out["first_half"], out["second_half"]], ref)
+    out["axis_range"] = rel_range([out["axis_horizontal"], out["axis_vertical"]], ref)
+    out["range"] = float(np.nanmax([out["halves_range"], out["axis_range"]])) if np.isfinite([out["halves_range"], out["axis_range"]]).any() else float("nan")
+    return out
+
+
+def combine(boot_rel_std, jointset_range, consistency_range, method_diff) -> float:
+    parts = [2 * boot_rel_std, jointset_range / 2, consistency_range / 2, method_diff / 2]
+    parts = [p for p in parts if np.isfinite(p)]
+    return float(max(parts)) if parts else float("nan")
+
+
+# ====================================================================================================
+# verdict  (was HandCalib/hand_focal/verdict.py)
+# GOOD / ROUGH / REJECT for the hand f (thresholds from the yaml, fixed before the first run) and Korean re-shoot advice.
+# ====================================================================================================
+
+def _le(x, t):
+    return bool(np.isfinite(x) and x <= t)
+
+
+def _ge(x, t):
+    return bool(np.isfinite(x) and x >= t)
+
+
+def judge(m: dict, vcfg: dict) -> dict:
+    g, r = vcfg["good"], vcfg["rough"]
+    checks_good = {
+        "detect_rate": _ge(m["detect_rate"], g["detect_rate_min"]),
+        "front_frames": m["front_frames"] >= g["front_frames_min"],
+        "finger_extension": (not g["finger_extension_required"]) or bool(m["finger_extension_ok"]),
+        "theta_p90": _ge(m["theta_p90"], g["theta_p90_min_deg"]),
+        "axis_bins": m["axis_bins6"] >= g["axis_bins_min"],
+        "reproj_rms": _le(m["reproj_rms_rel"], g["reproj_rms_rel_max"]),
+        "jointset_range": _le(m["jointset_range"], g["jointset_range_max"]),
+        "bootstrap": _le(m["bootstrap_rel_std"], g["bootstrap_rel_std_max"]),
+        "consistency": _le(m["consistency_range"], g["consistency_range_max"]),
+        "delta": _le(abs(m["delta_deg"]), g["delta_abs_max_deg"]),
+        "sharpness": _ge(m["sharpness"], g["sharpness_min"]),
+    }
+    checks_rough = {
+        "detect_rate": _ge(m["detect_rate"], r["detect_rate_min"]),
+        "theta_p90": _ge(m["theta_p90"], r["theta_p90_min_deg"]),
+        "axis_bins": m["axis_bins6"] >= r["axis_bins_min"],
+        "reproj_rms": _le(m["reproj_rms_rel"], r["reproj_rms_rel_max"]),
+        "jointset_range": _le(m["jointset_range"], r["jointset_range_max"]),
+    }
+    if m["n_target_frames"] < vcfg["min_target_frames"]:
+        v = "REJECT"
+    elif all(checks_good.values()):
+        v = "GOOD"
+    elif all(checks_rough.values()):
+        v = "ROUGH"
+    else:
+        v = "REJECT"
+    return {"verdict": v, "good_checks": checks_good, "rough_checks": checks_rough, "failed_good": [k for k, ok in checks_good.items() if not ok],
+            "failed_rough": [k for k, ok in checks_rough.items() if not ok]}
+
+
+def advice(m: dict, j: dict) -> list:
+    a = []
+    f = set(j["failed_good"])
+    if "theta_p90" in f:
+        a.append(f"기울기가 부족합니다(p90 {m['theta_p90']:.0f}°). 손을 30~45°까지 크게 기울이세요")
+    if "axis_bins" in f:
+        dom = m.get("axis_dominant")
+        a.append("상하 기울기만 있고 좌우가 없습니다" if dom == "vertical_only" else "좌우 기울기만 있고 상하가 없습니다" if dom == "horizontal_only"
+                 else "기울기 방향이 일부에 몰려 있습니다. 상하좌우로 고르게 기울이세요")
+    if m["front_jitter_px"] == m["front_jitter_px"] and ("front_frames" in f or m["front_jitter_rel"] > 0.01):
+        a.append(f"정면 구간에서 손이 충분히 정지하지 않았습니다(지터 {m['front_jitter_px']:.1f} px). 손을 폰과 평행하게 1초 이상 멈추세요")
+    if "finger_extension" in f:
+        a.append("손가락이 펴지지 않았습니다")
+    if m.get("edge_frame_rate", 0) > 0.05:
+        a.append("손이 화면 가장자리에 걸렸습니다. 영상 중앙에서 시작하세요")
+    if np.isfinite(m.get("method_diff", np.nan)) and m["method_diff"] > 0.04:
+        a.append(f"정면 가정 민감도가 큽니다(두 방식 차이 {100 * m['method_diff']:.1f}%)")
+    return a
+
+
+SHOOTING_GUIDE = [
+    "정면 구간: 손바닥을 렌즈 쪽이 아니라 폰 화면과 평행하게 두고, 손을 영상 중앙에서 1초 이상 멈춥니다(처음 약 3초).",
+    "그 뒤 상하좌우로 30~45°까지 천천히 기울입니다(한 방향만이 아니라 네 방향 모두).",
+    "거리는 30~50 cm, 흐려지지 않게 천천히 움직이고 손가락은 쫙 편 상태를 유지합니다.",
+]
+
+
+# ====================================================================================================
+# synthetic  (was HandCalib/hand_focal/synthetic.py)
+# Synthetic study: a planar 17-point hand (wrist, 4 x MCP/PIP/DIP/tip; palm ~80 x 100 mm, phalanges 16-44 mm) seen by a pinhole
+# camera, analysed by the same analysis core as the real videos (thumb joints 1-4 are masked; front / tilt frames are given).
+#
+# Error = f_est / f_true - 1. This is the only place in experiment 14 where an error against a known f is computed.
+# ====================================================================================================
+
+# hand layout in mm (x right, y towards the fingertips = -y in the image when upright); index .. pinky
+_MCP = {"index": (-30.0, -92.0), "middle": (-9.0, -100.0), "ring": (12.0, -95.0), "pinky": (31.0, -84.0)}
+_BONES = {"index": (40.0, 24.0, 18.0), "middle": (44.0, 28.0, 19.0), "ring": (41.0, 27.0, 18.0), "pinky": (32.0, 20.0, 16.0)}
+_FAN = {"index": -6.0, "middle": -1.0, "ring": 4.0, "pinky": 10.0}
+_IDS = {"index": [5, 6, 7, 8], "middle": [9, 10, 11, 12], "ring": [13, 14, 15, 16], "pinky": [17, 18, 19, 20]}
+
+
+def synth_hand_points(arch_mm: float = 0.0) -> np.ndarray:
+    """(21, 3) hand-frame points (thumb rows NaN). z = transverse arch offset along the palm normal (MCP row raised in the middle)."""
+    P = np.full((21, 3), np.nan)
+    P[0] = (0.0, 0.0, 0.0)
+    for name, (x, y) in _MCP.items():
+        a = np.radians(_FAN[name])
+        d = np.array([np.sin(a), -np.cos(a)])
+        pts = [np.array([x, y])]
+        for L in _BONES[name]:
+            pts.append(pts[-1] + L * d)
+        z = -arch_mm * np.cos(np.pi * x / 80.0)           # towards the camera (negative z) at the middle of the MCP row
+        for j, q in zip(_IDS[name], pts):
+            P[j] = (q[0], q[1], z)
+    P[[5, 9, 13, 17], 2] = [-arch_mm * np.cos(np.pi * _MCP[k][0] / 80.0) for k in ("index", "middle", "ring", "pinky")]
+    return P
+
+
+def _rot(axis, ang):
+    axis = np.asarray(axis, float) / np.linalg.norm(axis)
+    K = np.array([[0, -axis[2], axis[1]], [axis[2], 0, -axis[0]], [-axis[1], axis[0], 0]])
+    return np.eye(3) + np.sin(ang) * K + (1 - np.cos(ang)) * K @ K
+
+
+def synth_pose(theta_deg, azim_deg, inplane_deg):
+    """Hand normal tilted by theta towards azimuth (image plane), after an in-plane rotation."""
+    a = np.radians(azim_deg)
+    Rt = _rot([-np.sin(a), np.cos(a), 0.0], np.radians(theta_deg)) if theta_deg else np.eye(3)
+    return Rt @ _rot([0, 0, 1.0], np.radians(inplane_deg))
+
+
+def synth_project(P, R, t, f, cx, cy):
+    X = P @ R.T + t
+    return np.c_[f * X[:, 0] / X[:, 2] + cx, f * X[:, 1] / X[:, 2] + cy]
+
+
+def synth_generate(cond: dict, scfg: dict, rng) -> dict:
+    f = float(scfg["f_px"])
+    W, H = scfg["image"]
+    cx, cy = W / 2.0, H / 2.0
+    D = float(scfg["distance_mm"])
+    P = synth_hand_points(cond.get("arch_mm", 0.0))
+    P[:, 1] += 95.0                                         # centre the hand (wrist .. tips ~ 190 mm) on the optical axis
+    vis_ids = [0] + list(range(5, 21))
+    nF, nT = int(cond.get("front_frames", scfg["front_frames"])), int(scfg["tilt_frames"])
+    phi = rng.uniform(0, 360)
+    g0 = rng.uniform(-10, 10)
+    c0 = np.array([rng.uniform(-30, 30), rng.uniform(-8, 8), D * rng.uniform(0.97, 1.05)])
+    poses = []
+    for _ in range(nF):
+        v = cond["delta_deg"] * np.array([np.cos(np.radians(phi)), np.sin(np.radians(phi))]) + rng.normal(0, 1.0, 2)
+        th, az = float(np.hypot(*v)), float(np.degrees(np.arctan2(v[1], v[0])))
+        poses.append((synth_pose(th, az, g0 + rng.uniform(-5, 5)), c0 + rng.normal(0, 2.0, 3), th))
+    lo, hi = cond["tilt_range_deg"]
+    for _ in range(nT):
+        th = rng.uniform(lo, hi)
+        poses.append((synth_pose(th, rng.uniform(0, 360), rng.uniform(-30, 30)),
+                      np.array([rng.uniform(-40, 40), rng.uniform(-10, 10), D * rng.uniform(0.95, 1.1)]), th))
+    n = len(poses)
+    kp = np.full((n, 21, 2), np.nan)
+    bias_dir = rng.normal(size=(21, 2))
+    bias_dir /= np.linalg.norm(bias_dir, axis=1, keepdims=True)
+    noise = cond["noise"]
+    for i, (R, t, th) in enumerate(poses):
+        q = synth_project(P[vis_ids], R, t, f, cx, cy)
+        bl = float(np.ptp(q, axis=0).max() * 1.1)
+        sig = noise["px"] if "px" in noise else noise["rel"] * bl
+        e = rng.normal(0, sig, q.shape)
+        if cond.get("heavy_tail"):
+            m = rng.random(len(q)) < 0.10
+            e[m] *= 3.0
+        q = q + e + cond.get("bias_rel", 0.0) * bl * (th / 45.0) * bias_dir[vis_ids]
+        kp[i, vis_ids] = q
+    mask = np.isfinite(kp).all(-1) & (kp[..., 0] >= 0) & (kp[..., 0] < W) & (kp[..., 1] >= 0) & (kp[..., 1] < H)
+    box = np.full((n, 4), np.nan)
+    for i in range(n):
+        q = kp[i][mask[i]]
+        lo2, hi2 = q.min(0), q.max(0)
+        pad = 0.05 * (hi2 - lo2).max()
+        box[i] = [lo2[0] - pad, lo2[1] - pad, hi2[0] + pad, hi2[1] + pad]
+    times = np.r_[np.arange(nF) / 15.0 + 0.5, 3.0 + np.arange(nT) / 15.0]
+    return {"kp": kp, "mask": mask, "present": np.ones(n, bool), "box": box, "cls": np.ones(n, int), "times": times,
+            "size": (W, H), "front_idx": np.arange(nF), "tilt_start": 3.0, "f_true": f, "theta_true": [p[2] for p in poses]}
+
+
+def expected_error(study: dict, jitter_rel: float, method: str) -> dict:
+    """Noise-only condition (base, noise_rel*, noise_px3) whose median front jitter (relative) is closest to the video's."""
+    cands = [k for k in study["summary"] if k == "base" or k.startswith("noise_")]
+    best = min(cands, key=lambda k: abs(np.log(max(study["summary"][k]["front_jitter_rel_median"], 1e-9)) - np.log(max(jitter_rel, 1e-9))))
+    s = study["summary"][best]
+    return {"condition": best, "front_jitter_rel_condition": s["front_jitter_rel_median"], "front_jitter_rel_video": jitter_rel,
+            "median_abs": s[method]["median_abs"], "p90_abs": s[method]["p90_abs"], "method": method,
+            "note": "합성 연구에서 정면 지터가 가장 가까운 잡음 조건의 오차(δ=0, 휨·편향 없음 가정). 이 영상의 오차가 아니다."}
+
+
+# ====================================================================================================
+# anycalib_ref  (was HandCalib/hand_focal/anycalib_ref.py)
+# Separate AnyCalib f on the same PNG frames (01's model_id / cam_id / predict path). Never an input to the hand method.
+#
+# predict() resizes / centre-crops internally and returns intrinsics already mapped back to the input image (reverse_scale_and_shift),
+# so f = (fx + fy) / 2 is in the normalised resolution of the PNGs. Offline: HF_HUB_OFFLINE / TRANSFORMERS_OFFLINE are set and
+# torch.hub downloads are blocked; the hub directory is listed before and after.
+# ====================================================================================================
+
+class DownloadBlocked(RuntimeError):
+    pass
+
+
+def hub_snapshot(hub_dir) -> dict:
+    root = resolve(hub_dir)
+    out = {}
+    if root.exists():
+        for p in root.rglob("*"):
+            if p.is_file():
+                out[str(p.relative_to(root))] = p.stat().st_size
+    return out
+
+
+@contextlib.contextmanager
+def offline(env: dict):
+    """Offline environment variables and a torch.hub download guard (raises instead of downloading)."""
+    import torch.hub
+    old = {k: os.environ.get(k) for k in env}
+    os.environ.update({k: str(v) for k, v in env.items()})
+    orig = torch.hub.download_url_to_file
+
+    def _blocked(url, *a, **k):
+        raise DownloadBlocked(f"download blocked: {url}")
+    torch.hub.download_url_to_file = _blocked
+    try:
+        yield
+    finally:
+        torch.hub.download_url_to_file = orig
+        for k, v in old.items():
+            if v is None:
+                os.environ.pop(k, None)
+            else:
+                os.environ[k] = v
+
+
+def available_models(acfg: dict) -> list:
+    hub = resolve(acfg["torch_hub_dir"]) / "anycalib"
+    ids = [acfg["model_id"]] + list(acfg.get("extra_models") or [])
+    return [(m, hub / f"{m}.pt") for m in ids if (hub / f"{m}.pt").exists() or m == acfg["model_id"]]
+
+
+def load_rgb(png):
+    import cv2
+    im = cv2.imread(str(png), cv2.IMREAD_COLOR)
+    if im is None:
+        raise RuntimeError(f"cannot read {png}")
+    return cv2.cvtColor(im, cv2.COLOR_BGR2RGB)
+
+
+def predict_frames(model_id: str, cam_id: str, images, device: str, batch: int = 8) -> np.ndarray:
+    """images: list of (H, W, 3) uint8 RGB arrays (same size). Returns (N, 4) fx, fy, cx, cy in the input resolution."""
+    import torch
+    from models.anycalib import AnyCalibAdapter        # 01's adapter (main, unchanged)
+    ad = AnyCalibAdapter(model_id=model_id, cam_id=cam_id, device=device).build()
+    out = []
+    for i in range(0, len(images), batch):
+        x = torch.from_numpy(np.stack(images[i:i + batch])).permute(0, 3, 1, 2).float() / 255.0
+        p = ad.predict(x)
+        intr = p["intrinsics"]
+        intr = torch.stack([torch.as_tensor(v) for v in intr]) if isinstance(intr, (list, tuple)) else torch.as_tensor(intr)
+        out.append(intr.reshape(-1, intr.shape[-1])[:, :4].detach().cpu().double().numpy())
+    del ad
+    if device.startswith("cuda"):
+        torch.cuda.empty_cache()
+    return np.concatenate(out, 0)
+
+
+def anycalib_summarize(f: np.ndarray, times: np.ndarray, t_split: float) -> dict:
+    f = np.asarray(f, float)
+    ok = np.isfinite(f)
+    g = f[ok]
+    if not len(g):
+        return {"n": 0}
+    q10, q25, q50, q75, q90 = np.percentile(g, [10, 25, 50, 75, 90])
+    t = np.asarray(times)[ok]
+    return {"n": int(len(g)), "median": float(q50), "iqr": [float(q25), float(q75)], "p10_p90": [float(q10), float(q90)],
+            "front_median": float(np.median(g[t < t_split])) if (t < t_split).any() else None,
+            "tilt_median": float(np.median(g[t >= t_split])) if (t >= t_split).any() else None,
+            "cv": float(np.std(g) / np.mean(g))}
+
+
+def anycalib_run(frames: list, acfg: dict, t_split: float, log=print) -> dict:
+    import sys
+    if str(PROJECT_ROOT) not in sys.path:
+        sys.path.insert(0, str(PROJECT_ROOT))
+    sel = frames[::max(1, int(acfg.get("stride", 1)))]
+    before = hub_snapshot(acfg["torch_hub_dir"])
+    images = [load_rgb(r["png"]) for r in sel]
+    times = np.array([r["time_s"] for r in sel])
+    res = {"frames": [int(r["index"]) for r in sel], "times": times.tolist(), "models": {}}
+    with offline(acfg["offline_env"]):
+        for m, wpath in available_models(acfg):
+            if not wpath.exists():
+                raise FileNotFoundError(f"AnyCalib weight missing: {wpath} (name {m}.pt, source github.com/javrtg/AnyCalib release v1.0.0)")
+            intr = predict_frames(m, acfg["cam_id"], images, acfg["device"])
+            f = (intr[:, 0] + intr[:, 1]) / 2
+            res["models"][m] = {"weight": str(wpath), "weight_sha256": sha256_file(wpath), "fx": intr[:, 0].tolist(), "fy": intr[:, 1].tolist(),
+                                "cx": intr[:, 2].tolist(), "cy": intr[:, 3].tolist(), "f": f.tolist(), "summary": anycalib_summarize(f, times, t_split)}
+            log(f"  AnyCalib {m}: 중앙값 f {res['models'][m]['summary']['median']:.1f} px ({len(f)}장)")
+    skipped = [m for m in (acfg.get("extra_models") or []) if m not in res["models"]]
+    after = hub_snapshot(acfg["torch_hub_dir"])
+    new = sorted(set(after) - set(before))
+    changed = sorted(k for k in before if k in after and after[k] != before[k])
+    res["hub_check"] = {"dir": str(resolve(acfg["torch_hub_dir"])), "n_before": len(before), "n_after": len(after), "new_files": new, "changed_files": changed}
+    res["skipped_extra_models"] = skipped
+    if new or changed:
+        raise RuntimeError(f"torch hub cache changed during AnyCalib: new {new}, changed {changed}")
+    return res
+
+
+# ====================================================================================================
+# analysis  (was HandCalib/hand_focal/analysis.py)
+# Analysis core shared by real videos and the synthetic study: tracked 2D keypoints -> template, theta2d, f (both estimators),
+# diagnostics, uncertainty and the verdict inputs. Uses 2D keypoints, their mask and the box only.
+# ====================================================================================================
+
+METHODS = ("fixed_template", "joint_delta")
+
+
+def principal_point(ecfg, W, H):
+    pp = ecfg.get("principal_point", "center")
+    return (W / 2.0, H / 2.0) if pp == "center" else (float(pp[0]), float(pp[1]))
+
+
+def undistort(kp, ecfg, W, H):
+    """Optional distortion [k1, k2, p1, p2] with the convention K_d = [[L, 0, cx], [0, L, cy]] (L = long side), applied once."""
+    d = ecfg.get("distortion")
+    if not d:
+        return kp
+    cx, cy = principal_point(ecfg, W, H)
+    L = float(max(W, H))
+    Kd = np.array([[L, 0, cx], [0, L, cy], [0, 0, 1.0]])
+    flat = kp.reshape(-1, 1, 2).astype(np.float64)
+    ok = np.isfinite(flat).all(-1).ravel()
+    out = flat.copy()
+    out[ok] = cv2.undistortPoints(flat[ok], Kd, np.asarray(d, float), P=Kd)
+    return out.reshape(kp.shape)
+
+
+def _theta(T, kp, mask, present, ids):
+    n = len(kp)
+    th, ax = np.full(n, np.nan), np.full(n, np.nan)
+    for i in range(n):
+        if not present[i]:
+            continue
+        v = mask[i, ids]
+        if v.sum() >= 6:
+            th[i], ax[i] = affine_tilt(T[v], kp[i, ids][v])
+    return th, ax
+
+
+def axis_coverage(theta, axis, ids, theta_min=10.0, min_count=2):
+    a = np.asarray([axis[i] for i in ids if np.isfinite(theta[i]) and theta[i] >= theta_min])
+    counts = np.bincount((a // 30).astype(int) % 6, minlength=6) if len(a) else np.zeros(6, int)
+    bins = int((counts >= min_count).sum())
+    horiz = counts[[0, 5]].sum()                 # compressed image axis near 0 / 180 deg: left-right tilt
+    vert = counts[[2, 3]].sum()                  # near 90 deg: up-down tilt
+    dom = None
+    if len(a) and vert > 0.85 * len(a):
+        dom = "vertical_only"
+    elif len(a) and horiz > 0.85 * len(a):
+        dom = "horizontal_only"
+    return {"counts": counts.tolist(), "bins": bins, "dominant": dom, "theta_min_deg": theta_min, "min_count": min_count}
+
+
+def analyze(kp, mask, present, box, cls, times, size_wh, cfg, front_idx=None, tilt_start=None, methods_full=("fixed_template",),
+            n_boot=None, seed=0, budget_s=None, log=None, wrist_weight=None) -> dict:
+    t_start_clock = time.time()
+    timings = {}
+    W, H = size_wh
+    J, ecfg, pcfg = cfg["joints"], cfg["estimate"], cfg["phases"]
+    est_ids = list(J["sets"][J["estimate_set"]])
+    kp = undistort(np.asarray(kp, float), ecfg, W, H)
+    mask, present = np.asarray(mask, bool), np.asarray(present, bool)
+    times = np.asarray(times, float)
+    n = len(times)
+    bl = box_long(np.asarray(box, float))
+    warnings = []
+
+    # ---- front window and template
+    if front_idx is None:
+        fw = front_window(times, present, kp, mask, box, pcfg)
+        warnings += fw["warnings"]
+    else:
+        fw = {"idx": np.asarray(front_idx, int), "detect_rate": float(present[front_idx].mean()), "speed_rel": float("nan"),
+              "t0": float(times[front_idx[0]]), "t1": float(times[front_idx[-1]]), "warnings": []}
+    fr_full = [int(i) for i in fw["idx"] if present[i] and mask[i, est_ids].all()]
+    base = {"warnings": warnings, "front_window": {k: (v.tolist() if isinstance(v, np.ndarray) else v) for k, v in fw.items()},
+            "front_frames": len(fr_full), "detect_rate": float(present.mean()) if n else 0.0, "n_frames": n}
+    if len(fr_full) < 3:
+        base["warnings"].append("모든 관절이 보이는 정면 프레임이 3장 미만이라 템플릿을 만들 수 없습니다")
+        base["failed"] = "no_template"
+        return base
+    tpl = template_build(kp[fr_full][:, est_ids], int(J["template_align_iters"]))
+    T = tpl["template"]
+    jitter_px = tpl["jitter_rms_px"]
+    jitter_rel = jitter_px / float(np.nanmedian(bl[fr_full]))
+    ext = finger_extension(kp[fr_full])
+    if ext["min"] < pcfg["finger_extension_min"]:
+        base["warnings"].append(f"정면 구간 손가락 펴짐 지표가 낮습니다(최소 {ext['min']:.3f} < {pcfg['finger_extension_min']})")
+
+    # ---- theta2d, phases
+    theta, axis = _theta(T, kp, mask, present, est_ids)
+    t_auto = auto_transition(times, theta, present, pcfg)
+    if tilt_start is None:
+        t_nom = float(pcfg["front_phase_s"])
+        if t_auto is not None and abs(t_auto - t_nom) > pcfg["auto_warn_diff_s"]:
+            base["warnings"].append(f"자동 전환 시각({t_auto:.2f} s)이 명목 {t_nom:.1f} s와 {pcfg['auto_warn_diff_s']} s 넘게 다릅니다")
+        tilt_start = t_auto if (pcfg["phase_mode"] == "auto" and t_auto is not None) else t_nom
+    tilt_all = tilt_indices(times, present, tilt_start)
+
+    # ---- estimation problem (front window frames with all joints + tilt frames)
+    cx, cy = principal_point(ecfg, W, H)
+    huber = ecfg["huber_rel"] * np.where(np.isfinite(bl), bl, 0.0)
+    used = sorted(set(fr_full) | set(int(i) for i in tilt_all))
+
+    def problem(set_ids):
+        pos = [est_ids.index(j) for j in set_ids]
+        frames = [(kp[i][set_ids], mask[i][set_ids]) for i in range(n)]
+        w = None if wrist_weight is None or wrist_weight == 1.0 else np.array([float(wrist_weight) if j == 0 else 1.0 for j in set_ids])
+        return Problem(T[pos], frames, cx, cy, huber, ecfg["min_points"], weights=w).subset(used)
+
+    pb = problem(est_ids)
+    tilt_ids = [i for i in pb.keep if i in set(int(x) for x in tilt_all)]
+    front_ids = [i for i in pb.keep if i in set(fr_full)]
+    grid = f_grid(ecfg, max(W, H))
+    sigma2 = max(jitter_px ** 2, 0.25)
+    t0 = time.time()
+    sols = {m: estimate_run(pb, m, grid, ecfg, sigma2) for m in METHODS}
+    timings["estimate_s"] = time.time() - t0
+    for m in METHODS:
+        if sols[m]["at_grid_edge"]:
+            edge_side = "상한" if sols[m]["f"] >= grid[-1] * (1 - 1e-6) else "하한"
+            warnings.append(f"{m}: 비용 최소가 f 격자 {edge_side}({sols[m]['f']:.0f} px)에 걸려 내부 최솟값이 없습니다. 이 값은 추정값이 아니라 격자 경계이며, "
+                            "부트스트랩·일관성 값도 경계에 고정되어 변동이 0으로 보일 수 있습니다")
+
+    # ---- per-frame bookkeeping
+    role = np.array(["none"] * n, dtype=object)
+    reason = np.array([""] * n, dtype=object)
+    keep = set(pb.keep)
+    for i in range(n):
+        if not present[i]:
+            reason[i] = "not_detected"
+        elif i in set(fr_full):
+            role[i] = "front"
+        elif i in set(int(x) for x in fw["idx"]):
+            reason[i] = "front_window_missing_joints"
+        elif times[i] < tilt_start:
+            reason[i] = "front_phase_outside_window"
+        elif i in keep:
+            role[i] = "tilt"
+        else:
+            reason[i] = "too_few_points"
+    edge = np.zeros(n, bool)
+    for i in np.flatnonzero(present):
+        b = box[i]
+        edge[i] = bool(b[0] <= 2 or b[1] <= 2 or b[2] >= W - 2 or b[3] >= H - 2)
+    cls_p = np.asarray(cls)[present]
+    lr = None
+    if len(cls_p):
+        vals, cnt = np.unique(cls_p, return_counts=True)
+        lr = {"majority_cls": int(vals[np.argmax(cnt)]), "consistency": float(cnt.max() / cnt.sum()), "counts": {int(v): int(c) for v, c in zip(vals, cnt)}}
+    th_tilt = theta[tilt_ids] if tilt_ids else np.zeros(0)
+    th_tilt = th_tilt[np.isfinite(th_tilt)]
+    cov = axis_coverage(theta, axis, tilt_ids)
+    out = dict(base)
+    out.update({
+        "template": T.tolist(), "template_frames": fr_full, "obs_front_example": kp[fr_full[len(fr_full) // 2]][est_ids].tolist(), "front_jitter_px": jitter_px, "front_jitter_rel": jitter_rel, "finger_extension": ext,
+        "finger_extension_ok": bool(ext["min"] >= pcfg["finger_extension_min"]),
+        "theta2d_deg": theta.tolist(), "axis2d_deg": axis.tolist(), "tilt_start_s": float(tilt_start), "auto_transition_s": t_auto,
+        "phase_mode": pcfg["phase_mode"] if front_idx is None else "given",
+        "theta_tilt": {"median": float(np.median(th_tilt)) if len(th_tilt) else float("nan"), "p90": float(np.percentile(th_tilt, 90)) if len(th_tilt) else float("nan"),
+                       "max": float(th_tilt.max()) if len(th_tilt) else float("nan")},
+        "axis_coverage": cov, "n_target_frames": len(pb.keep), "n_front_used": len(front_ids), "n_tilt_used": len(tilt_ids),
+        "role": role.tolist(), "reason": reason.tolist(), "edge_frame_rate": float(edge[present].mean()) if present.any() else 0.0,
+        "lr": lr, "hand_size_px": {"box_long_median": float(np.nanmedian(bl[present])) if present.any() else float("nan")},
+        "sigma2_px2": sigma2, "grid": grid.tolist(), "solutions": sols, "principal_point": [cx, cy],
+        "method_diff_rel": abs(sols["fixed_template"]["f"] - sols["joint_delta"]["f"]) / sols["fixed_template"]["f"],
+    })
+    # ---- full uncertainty, diagnostics and verdict per method
+    ucfg = cfg["uncertainty"]
+    nb = int(ucfg["n_bootstrap"] if n_boot is None else n_boot)
+    budget = float(ucfg["time_budget_s"] if budget_s is None else budget_s)
+    box_med = float(np.nanmedian(bl[pb.keep]))
+    out["per_method"] = {}
+    for m in methods_full:
+        t1 = time.time()
+        sol = sols[m]
+        start = (np.log(sol["f"]), sol["delta_deg"], sol["phi_deg"])
+        diag = diagnostics(pb, sol, box_med, est_ids, tilt_ids)
+        js = {}
+        for name in J["uncertainty_sets"]:
+            sub = problem(list(J["sets"][name]))
+            js[name] = estimate_run(sub, m, grid, ecfg, sigma2, start=start if m == "joint_delta" else None)["f"] if len(sub.keep) >= 3 else float("nan")
+        js_range = rel_range(list(js.values()), sol["f"])
+        boot = block_bootstrap(pb, front_ids, tilt_ids, m, grid, ecfg, sigma2, sol, nb, int(ucfg["block_frames"]), seed, budget)
+        cons = consistency(pb, front_ids, tilt_ids, axis, m, grid, ecfg, sigma2, sol)
+        comb = combine(boot["rel_std"], js_range, cons["range"], out["method_diff_rel"])
+        metrics = {"detect_rate": out["detect_rate"], "front_frames": out["front_frames"], "finger_extension_ok": out["finger_extension_ok"],
+                   "theta_p90": out["theta_tilt"]["p90"], "axis_bins6": cov["bins"], "axis_dominant": cov["dominant"], "reproj_rms_rel": diag["reproj_rms_rel"],
+                   "jointset_range": js_range, "bootstrap_rel_std": boot["rel_std"], "consistency_range": cons["range"], "delta_deg": sol["delta_deg"],
+                   "sharpness": diag["sharpness"], "n_target_frames": out["n_target_frames"], "front_jitter_px": jitter_px, "front_jitter_rel": jitter_rel,
+                   "edge_frame_rate": out["edge_frame_rate"], "method_diff": out["method_diff_rel"]}
+        j = judge(metrics, cfg["verdict"])
+        out["per_method"][m] = {"f": sol["f"], "diagnostics": diag, "jointsets": js, "jointset_range": js_range, "bootstrap": boot,
+                                "consistency": cons, "f_rel_uncertainty": comb, "metrics": metrics, "verdict": j, "advice": advice(metrics, j),
+                                "time_s": time.time() - t1}
+    timings["total_s"] = time.time() - t_start_clock
+    out["timings"] = timings
+    return out
+
+
+# ====================================================================================================
+# diagnostic  (was HandCalib/hand_focal/diagnostic.py)
+# Experiment 14 diagnostics (not pre-registered; never reported as f). Reads the official runs' detection cache and frame list.
+#
+# D1  cost profiles on frame subsets (theta2d <= 30 / 45 / 60 deg, boxes not touching the image edge) x joint sets
+# D2  per-frame contribution: slope of each frame's cost in log f, against theta2d, edge contact and frame RMS
+# D3  same-pose synthetic replay: per-frame PnP poses at an assumed f (0.7 / 1.0 / 1.3 x long side) -> planar template projected,
+#     real masks kept, front-jitter noise -> fixed_template profile
+# D4  per-joint residuals by theta2d bin (at the reference f = 1.0 x long side)
+#
+# Classification rule (fixed before the run):
+#   - D3 synthetic replays also end at the upper edge of the official grid for every assumed f  -> pose distribution (shooting)
+#   - D3 synthetic minima are interior and within 10 % of the assumed f for every assumed f, while the real data end at the edge
+#     -> detector / finger planarity
+#   - otherwise -> undetermined
+# ====================================================================================================
+
+def load_official(run_dir: Path, cfg: dict) -> dict:
+    """Detections (cached npz copy) + frame list from an official run; tracking and the analysis core are re-run unchanged."""
+    res = json.loads((run_dir / "results.json").read_text())
+    det = load_detections(run_dir / "detections.npz")
+    frames = res["frames"]["list"]
+    check_alignment(frames, det)
+    W, H = res["normalization"]["output"]["display_w"], res["normalization"]["output"]["display_h"]
+    times = np.array([r["time_s"] for r in frames])
+    tr = track(det, times, (W, H), cfg["tracking"], front_start_s=float(cfg["phases"]["front_skip_s"]))
+    a = analyze(tr["kp"], tr["mask"], tr["present"], tr["box"], tr["cls"], times, (W, H), cfg, methods_full=())
+    return {"res": res, "tr": tr, "a": a, "W": W, "H": H, "times": times}
+
+
+def frame_cost_matrix(T, kp, mask, ids_frames, set_pos, set_ids, grid, cx, cy, huber):
+    """C[i, k] = Huber mean cost of frame ids_frames[i] at grid[k] (mean over frames = the estimator's cost)."""
+    C = np.full((len(ids_frames), len(grid)), np.nan)
+    R = np.full((len(ids_frames), len(grid)), np.nan)
+    for k, f in enumerate(grid):
+        K = K_of(f, cx, cy)
+        for r, i in enumerate(ids_frames):
+            v = mask[i][set_ids]
+            if v.sum() < 4:
+                continue
+            res, _, _ = frame_fit(T[set_pos], kp[i][set_ids], v, K)
+            C[r, k] = float(_huber(res, huber[i]).mean())
+            R[r, k] = float(np.sqrt(np.mean(res ** 2)))
+    return C, R
+
+
+# ====================================================================================================
+# analysis16  (was HandCalib/detector_swap/analysis16.py)
+# Diagnostics on top of 14's per-detector run: cost profiles (official and extended grid) per joint set, and 2D differences
+# between detectors on the same frames and hand. Profile minima are diagnostics, never f values.
+# ====================================================================================================
+
+def swap_grids(pcfg, cfg16, L):
+    off = f_grid(pcfg["estimate"], L)
+    lo, hi = cfg16["profiles"]["extended_ratio_range"]
+    ext = np.geomspace(lo * L, hi * L, int(cfg16["profiles"]["extended_n"]))
+    return off, ext
+
+
+def swap_profile_stats(grid, c):
+    ok = np.isfinite(c)
+    if ok.sum() < 3:
+        return {"interior": None, "at": "none", "min_at_px": None, "sharpness": None}
+    k = int(np.nanargmin(c))
+    at = "interior" if 0 < k < len(c) - 1 else ("lower" if k == 0 else "upper")
+    lg = np.log(grid)
+    side = [np.interp(lg[k] + d, lg[ok], c[ok], left=np.nan, right=np.nan) for d in (np.log(1.15), -np.log(1.15))]
+    side = [s for s in side if np.isfinite(s)]
+    return {"interior": at == "interior", "at": at, "min_at_px": float(grid[k]), "sharpness": float(min(side) / c[k]) if side and c[k] > 0 else None}
+
+
+def swap_profiles(run_dir, pcfg, cfg16):
+    L0 = load_official(run_dir, pcfg)
+    a, tr, W, H = L0["a"], L0["tr"], L0["W"], L0["H"]
+    if "template" not in a:
+        return {"failed": a.get("failed")}, L0
+    L = float(max(W, H))
+    off, ext = swap_grids(pcfg, cfg16, L)
+    J = pcfg["joints"]
+    est_ids = list(J["sets"][J["estimate_set"]])
+    T = np.array(a["template"])
+    role = np.array(a["role"])
+    used = [i for i in range(len(role)) if role[i] in ("front", "tilt")]
+    cx, cy = a["principal_point"]
+    bl = box_long(tr["box"])
+    huber = pcfg["estimate"]["huber_rel"] * np.where(np.isfinite(bl), bl, 0.0)
+    out = {"official_grid": off.tolist(), "extended_grid": ext.tolist(), "n_used": len(used), "sets": {}}
+    for s in cfg16["profiles"]["joint_sets"]:
+        ids = list(J["sets"][s])
+        pos = [est_ids.index(j) for j in ids]
+        res = {}
+        for gname, g in (("official", off), ("extended", ext)):
+            C, _ = frame_cost_matrix(T, tr["kp"], tr["mask"], used, pos, ids, g, cx, cy, huber)
+            ok = np.isfinite(C).all(1)
+            prof = C[ok].mean(0) if ok.sum() else np.full(len(g), np.nan)
+            res[gname] = {"profile": prof.tolist(), "n_frames": int(ok.sum()), **swap_profile_stats(g, prof)}
+        out["sets"][s] = res
+    return out, L0
+
+
+def swap_diff2d(L0s: dict, pcfg, cfg16):
+    """Pairs of detectors: per joint 2D difference (B - A) on frames where both track the same hand (target-box IoU >= min).
+    Radial = component along the direction from A's hand centroid to A's joint (positive: B's point lies further out)."""
+    names = [n for n in L0s if L0s[n] is not None and "template" in L0s[n]["a"]]
+    bins = cfg16["diff2d"]["theta_bins_deg"]
+    est_ids = list(pcfg["joints"]["sets"][pcfg["joints"]["estimate_set"]])
+    out = {}
+    for i, A in enumerate(names):
+        for B in names[i + 1:]:
+            ta, tb = L0s[A]["tr"], L0s[B]["tr"]
+            th = np.array([np.nan if v is None else v for v in L0s[A]["a"]["theta2d_deg"]], float)
+            rows = {b: {"d": [], "rel": [], "rad": [], "per_joint": {j: [] for j in range(21)}, "frames": 0} for b in range(len(bins) - 1)}
+            n_pair = 0
+            pa, pb_, pm = [], [], []
+            for f in range(len(th)):
+                if not (ta["present"][f] and tb["present"][f]) or not np.isfinite(th[f]):
+                    continue
+                if iou(ta["box"][f], tb["box"][f]) < cfg16["diff2d"]["same_hand_iou_min"]:
+                    continue
+                m = ta["mask"][f] & tb["mask"][f]
+                if m.sum() < 4:
+                    continue
+                n_pair += 1
+                pa.append(ta["kp"][f])
+                pb_.append(tb["kp"][f])
+                pm.append(m)
+                b = int(np.clip(np.searchsorted(bins, th[f], side="right") - 1, 0, len(bins) - 2))
+                rows[b]["frames"] += 1
+                bl = float(box_long(ta["box"][f]))
+                ctr = ta["kp"][f][[j for j in est_ids if ta["mask"][f][j]]].mean(0)
+                for j in np.flatnonzero(m):
+                    d = tb["kp"][f][j] - ta["kp"][f][j]
+                    u = ta["kp"][f][j] - ctr
+                    nu = np.linalg.norm(u)
+                    rows[b]["d"].append(float(np.linalg.norm(d)))
+                    rows[b]["rel"].append(float(np.linalg.norm(d) / bl))
+                    rows[b]["rad"].append(float(d @ u / nu / bl) if nu > 1e-6 else np.nan)
+                    rows[b]["per_joint"][j].append(float(np.linalg.norm(d) / bl))
+            tab = []
+            for b in range(len(bins) - 1):
+                r = rows[b]
+                tab.append({"theta": [bins[b], bins[b + 1]], "frames": r["frames"], "n_points": len(r["d"]),
+                            "median_px": float(np.median(r["d"])) if r["d"] else None, "median_rel": float(np.median(r["rel"])) if r["rel"] else None,
+                            "p90_rel": float(np.percentile(r["rel"], 90)) if r["rel"] else None,
+                            "radial_median_rel": float(np.nanmedian(r["rad"])) if r["rad"] else None,
+                            "per_joint_median_rel": {j: (float(np.median(v)) if v else None) for j, v in r["per_joint"].items()}})
+            out[f"{A}|{B}"] = {"a": A, "b": B, "n_frames": n_pair, "by_theta": tab,
+                               "order_assignment": order_assignment(np.array(pa), np.array(pb_), np.array(pm)) if pa else None}
+    return out
+
+
+def order_assignment(kpa, kpb, mask):
+    """Median distance D[i, j] between point i of detector B and point j of detector A over shared frames; the point order of the two
+    detectors agrees when the optimal one-to-one assignment (Hungarian) of D is the identity."""
+    from scipy.optimize import linear_sum_assignment
+    D = np.full((21, 21), np.nan)
+    for i in range(21):
+        for j in range(21):
+            ok = mask[:, i] & mask[:, j]
+            if ok.any():
+                D[i, j] = float(np.median(np.linalg.norm(kpb[ok, i] - kpa[ok, j], axis=-1)))
+    Dc = np.where(np.isfinite(D), D, 1e9)
+    r, c = linear_sum_assignment(Dc)
+    perm = c[np.argsort(r)].tolist()
+    return {"identity": perm == list(range(21)), "assignment": perm, "row_argmin": [int(np.argmin(Dc[i])) for i in range(21)]}
+
+
+# ====================================================================================================
+# detect  (was HandCalib/detector_swap/detect.py)
+# Run every detector on the same PNG list and return 14-format detection npz files (cached by frame hashes + settings).
+# ====================================================================================================
+
+class SkipDetector(RuntimeError):
+    pass
+
+
+def frames_key(frames, settings: dict, name: str) -> str:
+    h = hashlib.sha256()
+    for r in frames:
+        h.update(f"{r['index']}:{r['sha256']};".encode())
+    h.update(json.dumps({"detector": name, **settings}, sort_keys=True, default=str).encode())
+    return h.hexdigest()[:16]
+
+
+def write_list(frames, path: Path):
+    path.write_text("".join(f"{r['index']}\t{r['png']}\t{r['sha256']}\n" for r in frames))
+
+
+def _run_worker(cmd, log):
+    env = dict(os.environ, PYTHONNOUSERSITE="1")
+    p = subprocess.run(cmd, env=env, capture_output=True, text=True)
+    if p.returncode != 0:
+        raise SkipDetector(f"worker failed (exit {p.returncode}): {p.stderr.strip()[-600:]}")
+
+
+def swap_wilor_yolo(frames, s, cache_dir: Path, cfg16, log):
+    dcfg = {"python": s["python"], "weights": s["weights"], "conf": s["conf"], "iou": s["iou"], "imgsz": s.get("imgsz"), "device": s["device"], "cache": True}
+    key = cache_key(frames, dcfg)
+    src14 = resolve(cfg16["reuse_14"]["detection_cache"]) / f"detections_{key}.npz"
+    dst = cache_dir / f"detections_{key}.npz"
+    reused = False
+    if not dst.exists() and src14.exists():
+        shutil.copy2(src14, dst)                     # 14's cache is only read; the copy lives in 16's cache
+        reused = True
+    d = detector_wilor_yolo(frames, dcfg, cache_dir, log)
+    return Path(d["cache_file"]), {"reused_14_cache": reused, "cache_key": key}
+
+
+def swap_mediapipe_hands(frames, s, cache_dir: Path, cfg16, log):
+    settings = {k: s[k] for k in ("weights", "num_hands", "min_hand_detection_confidence", "min_hand_presence_confidence", "box_margin", "remap")}
+    out = cache_dir / f"mediapipe_hands_{frames_key(frames, settings, 'mediapipe_hands')}.npz"
+    if not out.exists():
+        lst = cache_dir / (out.stem + ".tsv")
+        write_list(frames, lst)
+        cmd = [s["python"], str(WORKER), "mediapipe_hands", "--model", s["weights"], "--list", str(lst), "--out", str(out),
+               "--num-hands", str(s["num_hands"]), "--min-detection", str(s["min_hand_detection_confidence"]),
+               "--min-presence", str(s["min_hand_presence_confidence"]), "--box-margin", str(s["box_margin"])]
+        if s.get("remap"):
+            cmd += ["--remap", ",".join(map(str, s["remap"]))]
+        _run_worker(cmd, log)
+        lst.unlink()
+    return out, {}
+
+
+def swap_rtmpose_hand(frames, s, cache_dir: Path, cfg16, log, box_npz: Path):
+    settings = {k: s[k] for k in ("weights", "input_size", "box_source", "box_scale", "remap", "device")}
+    settings["boxes_sha256"] = hashlib.sha256(box_npz.read_bytes()).hexdigest()
+    out = cache_dir / f"rtmpose_hand_{frames_key(frames, settings, 'rtmpose_hand')}.npz"
+    if not out.exists():
+        z = np.load(box_npz)
+        bx = cache_dir / (out.stem + "_boxes.npz")
+        np.savez(bx, offsets=z["offsets"], boxes=z["boxes"], box_conf=z["box_conf"], cls=z["cls"])      # boxes only, no keypoints
+        lst = cache_dir / (out.stem + ".tsv")
+        write_list(frames, lst)
+        cmd = [s["python"], str(WORKER), "rtmpose_hand", "--onnx", s["weights"], "--list", str(lst), "--boxes", str(bx),
+               "--out", str(out), "--input-size", ",".join(map(str, s["input_size"])), "--box-scale", str(s["box_scale"]), "--device", s["device"]]
+        if s.get("remap"):
+            cmd += ["--remap", ",".join(map(str, s["remap"]))]
+        _run_worker(cmd, log)
+        lst.unlink()
+        bx.unlink()
+    return out, {"box_source": s["box_source"]}
+
+
+def swap_run_all(frames, cfg16, cache_dir: Path, log) -> dict:
+    cache_dir.mkdir(parents=True, exist_ok=True)
+    out = {}
+    order = list(cfg16["detectors"])
+    if "rtmpose_hand" in order:                      # the box source must run first
+        src = cfg16["detector_settings"]["rtmpose_hand"]["box_source"]
+        src = {"mediapipe": "mediapipe_hands"}.get(src, src)
+        order = [d for d in order if d == src] + [d for d in order if d != src]
+        if src not in order:
+            order.insert(0, src)
+    for name in order:
+        s = cfg16["detector_settings"][name]
+        try:
+            if name == "wilor_yolo":
+                p, extra = swap_wilor_yolo(frames, s, cache_dir, cfg16, log)
+            elif name == "mediapipe_hands":
+                p, extra = swap_mediapipe_hands(frames, s, cache_dir, cfg16, log)
+            elif name == "rtmpose_hand":
+                src = {"mediapipe": "mediapipe_hands"}.get(s["box_source"], s["box_source"])
+                if src not in out or "npz" not in out[src]:
+                    raise SkipDetector(f"box source {src} unavailable")
+                p, extra = swap_rtmpose_hand(frames, s, cache_dir, cfg16, log, out[src]["npz"])
+            else:
+                raise SkipDetector(f"unknown detector {name}")
+            d = load_detections(p)
+            check_alignment(frames, d)
+            out[name] = {"npz": p, **extra, "info": d["info"]}
+            log(f"  검출 {name}: 후보 {len(d['boxes'])}개 ({p.name})")
+        except (SkipDetector, DetectorError, FileNotFoundError) as e:
+            out[name] = {"skipped": str(e)}
+            log(f"  검출 {name}: 건너뜀 — {e}")
+    return {k: out[k] for k in order}
+
+
+# ====================================================================================================
+# conditions  (was HandCalib/protocol_rerun/conditions.py)
+# Shooting-condition metrics (14's indicators) from one detector's run, and the pass / fail check against the yaml thresholds.
+# ====================================================================================================
+
+def edge_flags(box, present, W, H, margin=2.0):
+    e = np.zeros(len(box), bool)
+    for i in np.flatnonzero(present):
+        b = box[i]
+        e[i] = bool(b[0] <= margin or b[1] <= margin or b[2] >= W - margin or b[3] >= H - margin)
+    return e
+
+
+def metrics_from_arrays(times, present, box, W, H, theta, role, auto_transition_s, front_jitter_rel, axis_bins, finger_ext_min) -> dict:
+    """All inputs are per-frame arrays of one tracked hand (box (n, 4); theta in degrees, NaN where not computed; role 'tilt' marks
+    the tilt phase) plus 14's scalar indicators. Returns the condition metrics (None where not computable)."""
+    present = np.asarray(present, bool)
+    box = np.asarray(box, float)
+    bl = box_long(box)
+    short = float(min(W, H))
+    edge = edge_flags(box, present, W, H)
+    th = np.asarray(theta, float)
+    tilt = (np.asarray(role) == "tilt") & np.isfinite(th)
+    return {"box_short_ratio": float(np.nanmedian(bl[present]) / short) if present.any() else None,
+            "edge_rate": float(edge[present].mean()) if present.any() else None,
+            "transition_s": auto_transition_s, "front_jitter_rel": front_jitter_rel,
+            "theta_p95_deg": float(np.percentile(th[tilt], 95)) if tilt.any() else None,
+            "theta_tilt_median_deg": float(np.median(th[tilt])) if tilt.any() else None,
+            "theta_max_deg": float(np.max(th[tilt])) if tilt.any() else None,
+            "axis_bins": axis_bins, "finger_extension_min": finger_ext_min,
+            "series": {"t": np.asarray(times, float).tolist(), "box_short_ratio": (bl / short).tolist(), "edge": edge.tolist(), "theta": th.tolist()}}
+
+
+def metrics_from_run(det_dir: Path, tracking_cfg: dict, front_skip_s: float) -> dict:
+    """Reads a 14-format run folder (results.json + detections.npz); re-tracks with 14's function (cheap, deterministic) for the
+    per-frame boxes. theta2d / roles / axis come from the run's own analysis."""
+    r = json.loads((det_dir / "results.json").read_text())
+    a = r.get("analysis", {})
+    if "theta2d_deg" not in a:
+        return {"failed": a.get("failed") or "no analysis"}
+    W, H = r["normalization"]["output"]["display_w"], r["normalization"]["output"]["display_h"]
+    frames = r["frames"]["list"]
+    times = np.array([x["time_s"] for x in frames])
+    det = load_detections(det_dir / "detections.npz")
+    tr = track(det, times, (W, H), tracking_cfg, front_start_s=front_skip_s)
+    th = np.array([np.nan if v is None else v for v in a["theta2d_deg"]], float)
+    ax = np.array([np.nan if v is None else v for v in a["axis2d_deg"]], float)
+    m = metrics_from_arrays(times, tr["present"], tr["box"], W, H, th, a["role"], a.get("auto_transition_s"), a.get("front_jitter_rel"),
+                            a["axis_coverage"]["bins"], a["finger_extension"]["min"])
+    m["series"]["axis"] = ax.tolist()
+    m["series"]["present"] = tr["present"].tolist()
+    return m
+
+
+def conditions_check(m: dict, c: dict) -> dict:
+    """Pass / fail per condition; a metric that cannot be computed fails. guide = every condition passes."""
+    if "failed" in m:
+        return {"guide": False, "items": {}, "reasons": [f"분석 실패: {m['failed']}"]}
+    lo, hi = c["theta_tilt_median_range_deg"]
+    def ok(x, f):
+        return x is not None and bool(f(x))
+    items = {
+        "box_short_ratio": ok(m["box_short_ratio"], lambda x: x <= c["box_short_ratio_max"]),
+        "edge_rate": ok(m["edge_rate"], lambda x: x <= c["edge_rate_max"]),
+        "transition": ok(m["transition_s"], lambda x: x >= c["transition_min_s"]),
+        "theta_p95": ok(m["theta_p95_deg"], lambda x: x <= c["theta_p95_max_deg"]),
+        "theta_tilt_median": ok(m["theta_tilt_median_deg"], lambda x: lo <= x <= hi),
+        "axis_bins": ok(m["axis_bins"], lambda x: x >= c["axis_bins_min"]),
+        "finger_extension": ok(m["finger_extension_min"], lambda x: x >= c["finger_extension_min"]),
+    }
+    msg = {"box_short_ratio": lambda: f"손 박스/짧은 변 {cond_f(m['box_short_ratio'], 2)} > {c['box_short_ratio_max']}",
+           "edge_rate": lambda: f"가장자리 접촉 {cond_p(m['edge_rate'])} > {100 * c['edge_rate_max']:.0f}%",
+           "transition": lambda: ("자동 전환 없음" if m["transition_s"] is None else f"자동 전환 {m['transition_s']:.2f} s < {c['transition_min_s']} s"),
+           "theta_p95": lambda: f"θ2d p95 {cond_f(m['theta_p95_deg'], 0)}° > {c['theta_p95_max_deg']:.0f}°",
+           "theta_tilt_median": lambda: f"기울기 구간 θ2d 중앙값 {cond_f(m['theta_tilt_median_deg'], 0)}°가 {lo:.0f}–{hi:.0f}° 밖",
+           "axis_bins": lambda: f"축 덮임 {m['axis_bins']}/6 < {c['axis_bins_min']}/6",
+           "finger_extension": lambda: f"손가락 펴짐 {cond_f(m['finger_extension_min'], 3)} < {c['finger_extension_min']}"}
+    return {"guide": all(items.values()), "items": items, "reasons": [msg[k]() for k, v in items.items() if not v]}
+
+
+def conditions_text(m: dict) -> str:
+    if "failed" in m:
+        return "분석 실패"
+    tr = "없음" if m["transition_s"] is None else f"{m['transition_s']:.1f}초"
+    return (f"박스 {cond_f(m['box_short_ratio'], 2)}, 가장자리 {cond_p(m['edge_rate'])}, 전환 {tr}, θ2d p95 {cond_f(m['theta_p95_deg'], 0)}°, "
+            f"기울기 중앙값 {cond_f(m['theta_tilt_median_deg'], 0)}°, 최대 {cond_f(m['theta_max_deg'], 0)}°, 덮임 {m['axis_bins']}/6, "
+            f"펴짐 {cond_f(m['finger_extension_min'], 3)}, 정면 지터 {cond_p(m['front_jitter_rel'], 2)}")
+
+
+def cond_f(x, d):
+    return "nan" if x is None or not np.isfinite(x) else f"{x:.{d}f}"
+
+
+def cond_p(x, d=0):
+    return "nan" if x is None or not np.isfinite(x) else f"{100 * x:.{d}f}%"
+
+
+# ====================================================================================================
+# ranking  (was HandCalib/protocol_rerun/ranking.py)
+# Internal detector quality ranking (not accuracy): category, then the yaml keys in order; exact ties share the mean position.
+# ====================================================================================================
+
+def rank_category(d: dict) -> str:
+    if "fixed_template" not in d:
+        return "FAILED"
+    if d["fixed_template"]["at_grid_edge"]:
+        return "EDGE"
+    return d["verdict"]
+
+
+def rank_key_values(d: dict) -> dict:
+    """The ranking inputs of one detector result (16's summary dict). Missing / not computable -> None."""
+    if "fixed_template" not in d:
+        return {"sharpness": None, "f_rel_uncertainty": None, "reproj_rms_rel": None, "detect_rate": None}
+    sh = d.get("profiles", {}).get("flat17", {}).get("official", {}).get("sharpness")
+    unc = None if d["fixed_template"]["at_grid_edge"] else d.get("f_rel_uncertainty")
+    return {"sharpness": sh, "f_rel_uncertainty": unc, "reproj_rms_rel": d.get("reproj_rms_rel"), "detect_rate": d.get("detect_rate")}
+
+
+def _rank_sort_key(cat, vals, rcfg):
+    k = [rcfg["category_order"].index(cat)]
+    for spec in rcfg["keys"]:
+        v = vals.get(spec["name"])
+        if v is None or not math.isfinite(v):
+            k.append(math.inf)                                   # worst
+        else:
+            k.append(-v if spec["better"] == "higher" else v)
+    return tuple(k)
+
+
+def rank(dets: dict, rcfg: dict) -> dict:
+    """dets: {detector: summary}. Returns {detector: {"rank", "category", "keys"}} with 1 = best; exact ties get the mean position."""
+    items = []
+    for name, d in dets.items():
+        cat = rank_category(d) if "skipped" not in d else "FAILED"
+        vals = rank_key_values(d) if "skipped" not in d else rank_key_values({})
+        items.append((name, cat, vals, _rank_sort_key(cat, vals, rcfg)))
+    items.sort(key=lambda x: x[3])
+    out = {}
+    i = 0
+    while i < len(items):
+        j = i
+        while j + 1 < len(items) and items[j + 1][3] == items[i][3]:
+            j += 1
+        r = (i + 1 + j + 1) / 2.0
+        for k in range(i, j + 1):
+            out[items[k][0]] = {"rank": r, "category": items[k][1], "keys": items[k][2], "verdict": dets[items[k][0]].get("verdict")}
+        i = j + 1
+    return out
+
+
+def rank_summary(per_video: dict, guide: dict) -> dict:
+    """per_video: {video: {detector: rank dict}}; guide: {video: bool}. Mean rank over guide-satisfying videos and category counts."""
+    names = sorted({d for v in per_video.values() for d in v})
+    out = {}
+    for n in names:
+        rs = [per_video[v][n]["rank"] for v in per_video if guide.get(v) and n in per_video[v]]
+        cats = [per_video[v][n]["category"] for v in per_video if n in per_video[v]]
+        verd = [per_video[v][n]["verdict"] for v in per_video if n in per_video[v]]
+        out[n] = {"mean_rank_guide": float(np.mean(rs)) if rs else None, "n_guide_videos": len(rs),
+                  "verdict_counts": {c: verd.count(c) for c in ("GOOD", "ROUGH", "REJECT")}, "n_edge": cats.count("EDGE"),
+                  "n_failed": cats.count("FAILED"), "category_counts": {c: cats.count(c) for c in ("GOOD", "ROUGH", "REJECT", "EDGE", "FAILED")}}
+    return out
+
+
+# ====================================================================================================
+# frame_filter  (was HandCalib/protocol_rerun/frame_filter.py)
+# Diagnostic frame filter for the 17 pipeline: drop tilt-phase frames with theta2d above a threshold or a box touching the border,
+# then re-run 14's analysis core unchanged (front window / template unaffected because only frames after the tilt start change).
+# ====================================================================================================
+
+def ff_keep_mask(times, present, theta, box, W, H, tilt_start, fcfg) -> np.ndarray:
+    """True for frames the analysis may use. Frames before tilt_start are untouched; tilt-phase frames must pass the filter."""
+    t = np.asarray(times, float)
+    th = np.asarray(theta, float)
+    keep = np.asarray(present, bool).copy()
+    tilt = t >= tilt_start
+    bad = tilt & ~(np.isfinite(th) & (th <= fcfg["theta_max_deg"]))
+    if fcfg.get("exclude_edge"):
+        bad |= tilt & edge_flags(box, present, W, H, fcfg.get("edge_margin_px", 2.0))
+    return keep & ~bad
+
+
+def ff_run_one(run_dir: Path, pcfg: dict, fcfg: dict, methods_full=("fixed_template",)) -> dict:
+    L0 = load_official(run_dir, pcfg)                          # 14 tracking + analysis (theta2d from the official template)
+    a0, tr, W, H, times = L0["a"], L0["tr"], L0["W"], L0["H"], L0["times"]
+    if "template" not in a0:
+        return {"failed": a0.get("failed")}
+    th = np.array([np.nan if v is None else v for v in a0["theta2d_deg"]], float)
+    keep = ff_keep_mask(times, tr["present"], th, tr["box"], W, H, a0["tilt_start_s"], fcfg)
+    a = analyze(tr["kp"], tr["mask"], keep, tr["box"], tr["cls"], times, (W, H), pcfg, methods_full=methods_full,
+                  seed=int(pcfg["experiment"]["seed"]))
+    if "per_method" not in a:
+        return {"failed": a.get("failed"), "n_kept_tilt": int((keep & (times >= a0["tilt_start_s"])).sum())}
+    same_template = np.allclose(np.array(a["template"]), np.array(a0["template"]))
+    out = {"same_template": bool(same_template), "tilt_start_s": a0["tilt_start_s"],
+           "n_tilt_before": int((tr["present"] & (times >= a0["tilt_start_s"])).sum()),
+           "n_tilt_kept": int((keep & (times >= a0["tilt_start_s"])).sum()), "solutions": {}, "per_method": {}}
+    for m in ("fixed_template", "joint_delta"):
+        s = a["solutions"][m]
+        out["solutions"][m] = {"f": s["f"], "at_grid_edge": s["at_grid_edge"], "delta_deg": s.get("delta_deg")}
+    for m, pm in a["per_method"].items():
+        met = dict(pm["metrics"])
+        if fcfg.get("verdict_detect_rate") == "original":
+            met["detect_rate"] = float(tr["present"].mean())
+        j = judge(met, pcfg["verdict"])
+        out["per_method"][m] = {"f": pm["f"], "verdict": j["verdict"], "failed_good": j["failed_good"], "failed_rough": j["failed_rough"],
+                                "f_rel_uncertainty": pm["f_rel_uncertainty"], "bootstrap_rel_std": pm["bootstrap"]["rel_std"],
+                                "consistency_range": pm["consistency"]["range"], "sharpness": pm["diagnostics"]["sharpness"],
+                                "reproj_rms_rel": pm["diagnostics"]["reproj_rms_rel"], "jointsets": pm["jointsets"], "metrics": met}
+    # profiles (official + extended grid) of the kept frames, flat17 and palm sets
+    L = float(max(W, H))
+    off = f_grid(pcfg["estimate"], L)
+    ext = np.geomspace(0.2 * L, 5.0 * L, 90)
+    est_ids = list(pcfg["joints"]["sets"][pcfg["joints"]["estimate_set"]])
+    T = np.array(a["template"])
+    used = [i for i, r in enumerate(a["role"]) if r in ("front", "tilt")]
+    bl = box_long(tr["box"])
+    huber = pcfg["estimate"]["huber_rel"] * np.where(np.isfinite(bl), bl, 0.0)
+    cx, cy = a["principal_point"]
+    prof = {}
+    for sname in ("palm4", "palm5", "palm_proximal9", "flat17"):
+        ids = list(pcfg["joints"]["sets"][sname])
+        pos = [est_ids.index(j) for j in ids]
+        r = {}
+        for gname, g in (("official", off), ("extended", ext)):
+            C, _ = frame_cost_matrix(T, tr["kp"], tr["mask"], used, pos, ids, g, cx, cy, huber)
+            ok = np.isfinite(C).all(1)
+            p = C[ok].mean(0) if ok.sum() else np.full(len(g), np.nan)
+            k = int(np.nanargmin(p)) if np.isfinite(p).any() else 0
+            r[gname] = {"grid": g.tolist(), "profile": p.tolist(), "min_at_px": float(g[k]),
+                        "at": "interior" if 0 < k < len(g) - 1 else ("lower" if k == 0 else "upper"), "n_frames": int(ok.sum())}
+        prof[sname] = r
+    out["profiles"] = prof
+    out["grid_px"] = [float(off[0]), float(off[-1])]
+    return out
+
+
+# ====================================================================================================
+# segment  (was HandCalib/same_session/segment.py)
+# Automatic hand / checkerboard segmentation of one recording.
+# ====================================================================================================
+
+def board_found(gray, inner, long_side):
+    """findChessboardCornersSB on a downscaled grey frame (either orientation of the inner-corner grid)."""
+    h, w = gray.shape
+    s = min(1.0, long_side / max(h, w))
+    g = cv2.resize(gray, (int(round(w * s)), int(round(h * s))), interpolation=cv2.INTER_AREA) if s < 1 else gray
+    for ps in (tuple(inner), tuple(inner[::-1])):
+        ok, _ = cv2.findChessboardCornersSB(g, ps, cv2.CALIB_CB_EXHAUSTIVE)
+        if ok:
+            return True
+    return False
+
+
+def segment_split(times, hand, board, gap_s):
+    """times (n,), hand / board (n,) bools at the scan rate. Hand segment: [0, first board - gap); board segment: [first board, last board].
+    Warnings when a board shows up inside the hand segment or a hand inside the board segment."""
+    t = np.asarray(times, float)
+    hand, board = np.asarray(hand, bool), np.asarray(board, bool)
+    if not board.any():
+        return {"hand": [float(t[0]), float(t[-1])], "board": None, "warnings": ["체커보드가 검출되지 않았습니다"]}
+    i0, i1 = int(np.flatnonzero(board)[0]), int(np.flatnonzero(board)[-1])
+    hand_end = float(t[i0] - gap_s)
+    seg = {"hand": [float(t[0]), hand_end], "board": [float(t[i0]), float(t[i1])], "warnings": []}
+    if hand_end <= t[0]:
+        seg["warnings"].append("손 구간이 없습니다(첫 체커보드 검출이 너무 이릅니다)")
+    in_hand = (t < hand_end)
+    if (board & in_hand).any():
+        seg["warnings"].append(f"손 구간에 체커보드 검출 {int((board & in_hand).sum())}장")
+    in_board = (t >= t[i0]) & (t <= t[i1])
+    if (hand & in_board).any():
+        seg["warnings"].append(f"체커보드 구간에 손 검출 {int((hand & in_board).sum())}장 (보드를 든 손일 수 있음)")
+    if not hand[in_hand].any():
+        seg["warnings"].append("손 구간에서 손이 검출되지 않았습니다")
+    seg["hand_detect_rate_in_hand"] = float(hand[in_hand].mean()) if in_hand.any() else None
+    seg["board_detect_rate_in_board"] = float(board[in_board].mean())
+    return seg
+
+
+# ====================================================================================================
+# cut  (was HandCalib/same_session/cut.py)
+# Exact frame cut of the normalised (lossless) video: frames with t0 <= t < t1, re-encoded losslessly, timestamps reset.
+# ====================================================================================================
+
+def cut_segment(src: Path, dst: Path, t0: float, t1: float, fps: float) -> dict:
+    f0 = int(round(t0 * fps))
+    f1 = int(round(t1 * fps))
+    subprocess.run(["ffmpeg", "-hide_banner", "-loglevel", "error", "-y", "-i", str(src), "-vf",
+                    f"select=between(n\\,{f0}\\,{f1 - 1}),setpts=N/FRAME_RATE/TB", "-vsync", "0", "-an", "-map_metadata", "-1",
+                    "-c:v", "ffv1", str(dst)], check=True)
+    return {"first_frame": f0, "end_frame": f1, "n_frames": f1 - f0, "t0": f0 / fps, "t1": f1 / fps}
+
+
+# ====================================================================================================
+# checkerboard  (was HandCalib/same_session/checkerboard.py)
+# Checkerboard reference f of one recording (rules of the experiment specification; video_calib's code was not available).
+#
+# Sampling: frames of the board segment at sample_fps -> corner detection (findChessboardCornersSB on a downscaled grey frame, then
+# cornerSubPix at full resolution) -> up to max_frames frames chosen by farthest-point sampling of a pose descriptor.
+# Models (cv2.calibrateCamera):
+#   A  fx, fy, cx, cy free; k1 k2 p1 p2 k3
+#   B  fx, fy, cx, cy free; k1 k2
+#   C  fx = fy, cx, cy free; k1 k2
+#   D  fx = fy, principal point fixed at the image centre (W / 2, H / 2); k1 k2
+#   E  fx = fy, centre principal point, no distortion (the hand method's and AnyCalib's assumptions)
+# f_reference = median fx of the reference models (A-D).
+# ====================================================================================================
+
+BOARD_CRIT = (cv2.TERM_CRITERIA_EPS + cv2.TERM_CRITERIA_MAX_ITER, 50, 1e-4)
+
+
+def board_detect(gray, inner, long_side, win):
+    """Returns (corners (N, 2) full-resolution pixels, pattern size) or (None, None)."""
+    h, w = gray.shape
+    s = min(1.0, long_side / max(h, w))
+    g = cv2.resize(gray, (int(round(w * s)), int(round(h * s))), interpolation=cv2.INTER_AREA) if s < 1 else gray
+    for ps in (tuple(inner), tuple(inner[::-1])):
+        ok, c = cv2.findChessboardCornersSB(g, ps, cv2.CALIB_CB_EXHAUSTIVE | cv2.CALIB_CB_ACCURACY)
+        if ok:
+            c = (c.reshape(-1, 2) / s).astype(np.float32).reshape(-1, 1, 2)
+            c = cv2.cornerSubPix(gray, c, (win, win), (-1, -1), BOARD_CRIT)
+            return c.reshape(-1, 2).astype(np.float64), ps
+    return None, None
+
+
+def board_object_points(ps, square):
+    nx, ny = ps
+    g = np.zeros((nx * ny, 3), np.float64)
+    g[:, :2] = np.mgrid[0:nx, 0:ny].T.reshape(-1, 2) * square
+    return g
+
+
+def _board_init_K(W, H):
+    f = float(max(W, H))
+    return np.array([[f, 0, W / 2.0], [0, f, H / 2.0], [0, 0, 1.0]])
+
+
+def board_pose_descriptor(corners, ps, square, W, H):
+    """Rough pose (K = long side, centre pp, no distortion): board normal (3), board centre in normalised image coordinates (2),
+    log apparent size (1)."""
+    obj = board_object_points(ps, square)
+    ok, rv, tv = cv2.solvePnP(obj, corners, _board_init_K(W, H), None, flags=cv2.SOLVEPNP_IPPE)
+    R, _ = cv2.Rodrigues(rv)
+    n = R[:, 2] * np.sign(R[2, 2] or 1.0)
+    c = corners.mean(0)
+    size = np.sqrt(cv2.contourArea(cv2.convexHull(corners.astype(np.float32))))
+    return np.r_[n, (c[0] - W / 2) / max(W, H) * 2, (c[1] - H / 2) / max(W, H) * 2, np.log(size / max(W, H))]
+
+
+def farthest_point(desc, k, start=0):
+    idx = [start]
+    d = np.linalg.norm(desc - desc[start], axis=1)
+    while len(idx) < min(k, len(desc)):
+        j = int(np.argmax(d))
+        idx.append(j)
+        d = np.minimum(d, np.linalg.norm(desc - desc[j], axis=1))
+    return sorted(idx)
+
+
+BOARD_FLAGS = {
+    "A": 0,
+    "B": cv2.CALIB_ZERO_TANGENT_DIST | cv2.CALIB_FIX_K3,
+    "C": cv2.CALIB_FIX_ASPECT_RATIO | cv2.CALIB_ZERO_TANGENT_DIST | cv2.CALIB_FIX_K3,
+    "D": cv2.CALIB_FIX_ASPECT_RATIO | cv2.CALIB_FIX_PRINCIPAL_POINT | cv2.CALIB_ZERO_TANGENT_DIST | cv2.CALIB_FIX_K3,
+    "E": cv2.CALIB_FIX_ASPECT_RATIO | cv2.CALIB_FIX_PRINCIPAL_POINT | cv2.CALIB_ZERO_TANGENT_DIST | cv2.CALIB_FIX_K1 | cv2.CALIB_FIX_K2 | cv2.CALIB_FIX_K3,
+}
+
+
+def board_calibrate(views, W, H, model):
+    """views: list of (obj (N, 3), img (N, 2)). Returns {fx, fy, cx, cy, dist, rms, rvecs, tvecs}."""
+    obj = [v[0].astype(np.float32) for v in views]
+    img = [v[1].astype(np.float32).reshape(-1, 1, 2) for v in views]
+    K0 = _board_init_K(W, H)
+    flags = BOARD_FLAGS[model] | cv2.CALIB_USE_INTRINSIC_GUESS
+    rms, K, dist, rv, tv = cv2.calibrateCamera(obj, img, (W, H), K0.copy(), np.zeros(5), flags=flags,
+                                               criteria=(cv2.TERM_CRITERIA_EPS + cv2.TERM_CRITERIA_MAX_ITER, 200, 1e-10))
+    return {"fx": float(K[0, 0]), "fy": float(K[1, 1]), "cx": float(K[0, 2]), "cy": float(K[1, 2]), "dist": np.ravel(dist)[:5].tolist(),
+            "rms": float(rms), "rvecs": rv, "tvecs": tv}
+
+
+def board_f_reference(views, W, H, ref_models):
+    fx = [board_calibrate(views, W, H, m)["fx"] for m in ref_models]
+    return float(np.median(fx))
+
+
+def board_analyse(frames, ccfg: dict, W: int, H: int, log=print) -> dict:
+    """frames: list of {index, time_s, gray (H, W) uint8}. Returns the full checkerboard result."""
+    inner, sq = ccfg["inner_corners"], float(ccfg["square_mm"])
+    det = []
+    for fr in frames:
+        c, ps = board_detect(fr["gray"], inner, ccfg["detect_long_side"], int(ccfg["subpix_window"]))
+        if c is not None:
+            det.append({"index": fr["index"], "time_s": fr["time_s"], "corners": c, "ps": ps})
+    out = {"n_sampled": len(frames), "n_detected": len(det)}
+    if len(det) < 5:
+        out.update({"verdict": "REJECT", "failed": "검출된 체커보드 프레임이 5장 미만"})
+        return out
+    desc = np.array([board_pose_descriptor(d["corners"], d["ps"], sq, W, H) for d in det])
+    start = int(np.argmin(np.arccos(np.clip(np.abs(desc[:, 2]), 0, 1))))      # most frontal frame first
+    sel = farthest_point(desc, int(ccfg["max_frames"]), start)
+    views = [(board_object_points(det[i]["ps"], sq), det[i]["corners"]) for i in sel]
+    times = np.array([det[i]["time_s"] for i in sel])
+    models = {}
+    for m in ccfg["models"]:
+        r = board_calibrate(views, W, H, m)
+        models[m] = {k: r[k] for k in ("fx", "fy", "cx", "cy", "dist", "rms")}
+        if m == "D":
+            rD = r
+    ref = [models[m]["fx"] for m in ccfg["reference_models"]]
+    f_ref = float(np.median(ref))
+    model_range = float((max(ref) - min(ref)) / f_ref)
+    # block bootstrap over the time-ordered selected frames
+    rng = np.random.default_rng(0)
+    order = np.argsort(times)
+    B = int(ccfg["bootstrap_block_frames"])
+    blocks = [order[i:i + B] for i in range(0, len(order), B)]
+    bs = []
+    for _ in range(int(ccfg["n_bootstrap"])):
+        pick = [blocks[j] for j in rng.integers(0, len(blocks), len(blocks))]
+        vv = [views[i] for blk in pick for i in blk]
+        bs.append(board_f_reference(vv, W, H, ccfg["reference_models"]))
+    bs = np.array(bs)
+    # time segments
+    segs = np.array_split(order, int(ccfg["time_segments"]))
+    seg_f = [board_f_reference([views[i] for i in s], W, H, ccfg["reference_models"]) if len(s) >= 4 else float("nan") for s in segs]
+    segf = [x for x in seg_f if np.isfinite(x)]
+    seg_range = float((max(segf) - min(segf)) / f_ref) if len(segf) >= 2 else float("nan")
+    # pose / coverage metrics from model D's extrinsics
+    tilts = []
+    normals = []
+    for rv in rD["rvecs"]:
+        R, _ = cv2.Rodrigues(rv)
+        n = R[:, 2]
+        normals.append(n / np.linalg.norm(n))
+        tilts.append(float(np.degrees(np.arccos(min(1.0, abs(n[2]) / np.linalg.norm(n))))))
+    tilts = np.array(tilts)
+    distinct = []
+    for n in normals:
+        if all(np.degrees(np.arccos(np.clip(abs(n @ m), 0, 1))) >= ccfg["distinct_pose_min_deg"] for m in distinct):
+            distinct.append(n)
+    gx, gy = ccfg["coverage_grid"]
+    cells = np.zeros((gy, gx), int)
+    for v in views:
+        p = v[1]
+        ix = np.clip((p[:, 0] / W * gx).astype(int), 0, gx - 1)
+        iy = np.clip((p[:, 1] / H * gy).astype(int), 0, gy - 1)
+        np.add.at(cells, (iy, ix), 1)
+    coverage = float((cells > 0).mean())
+    rms = float(np.median([models[m]["rms"] for m in ccfg["reference_models"]]))
+    met = {"tilt_p90_deg": float(np.percentile(tilts, 90)), "tilt_max_deg": float(tilts.max()), "distinct_poses": len(distinct),
+           "coverage": coverage, "model_range": model_range, "bootstrap_rel_std": float(np.std(bs, ddof=1) / np.mean(bs)),
+           "segment_range": seg_range, "rms_px": rms}
+    v = board_verdict(met, ccfg["verdict"])
+    out.update({"n_selected": len(sel), "selected_times": times.tolist(), "selected_indices": [int(det[i]["index"]) for i in sel],
+                "pattern_size": list(det[0]["ps"]), "models": models, "f_reference_px": f_ref, "f_model_E_px": models.get("E", {}).get("fx"),
+                "bootstrap_f": bs.tolist(), "segment_f": seg_f, "metrics": met, "tilts_deg": tilts.tolist(), "coverage_cells": cells.tolist(), **v,
+                "image_size": [W, H]})
+    return out
+
+
+def board_verdict(m, vc):
+    def ok(t):
+        return {"tilt_p90": m["tilt_p90_deg"] >= t["tilt_p90_min_deg"], "coverage": m["coverage"] >= t["coverage_min"],
+                "poses": m["distinct_poses"] >= t["poses_min"], "model_range": m["model_range"] <= t["model_range_max"],
+                "bootstrap": m["bootstrap_rel_std"] <= t["bootstrap_rel_std_max"],
+                "segment_range": bool(np.isfinite(m["segment_range"]) and m["segment_range"] <= t["segment_range_max"]),
+                "rms": m["rms_px"] <= t["rms_max_px"]}
+    g, r = ok(vc["good"]), ok(vc["rough"])
+    v = "GOOD" if all(g.values()) else ("ROUGH" if all(r.values()) else "REJECT")
+    return {"verdict": v, "failed_good": [k for k, x in g.items() if not x], "failed_rough": [k for k, x in r.items() if not x]}
+
+
+# ====================================================================================================
+# pseg  (experiment 20: front -> tilt transition detection; new section, 17's functions above are used unchanged)
+# The legacy rule (analyze's auto_transition: theta2d >= auto_theta_deg for auto_sustain_s) fires on keypoint noise because theta2d = arccos(s2 / s1)
+# is hypersensitive near 0 deg. linear_d uses d = 1 - s2 / s1 (= 1 - cos(theta2d)) against a per-video noise floor taken from the front window,
+# a median-smoothed copy of d (segmentation only) and a keypoint-motion condition. Optional, default-off: exclude large-tilt frames, exclude the wrist.
+# ====================================================================================================
+
+def affine_ratio(T: np.ndarray, P: np.ndarray) -> float:
+    """s2 / s1 of the linear part of the least-squares affine map template T -> observation P (rotation and uniform scale cancel in the ratio)."""
+    A = np.c_[T, np.ones(len(T))]
+    M, *_ = np.linalg.lstsq(A, P, rcond=None)
+    S = np.linalg.svd(M[:2].T, compute_uv=False)
+    return float(np.clip(S[1] / S[0], 0.0, 1.0)) if S[0] > 0 else 0.0
+
+
+def pseg_series(kp, mask, present, box, times, T, est_ids):
+    """Per-frame d = 1 - s2 / s1 and the keypoint speed v (1 / s): mean joint displacement between consecutive frames / hand-box long side / dt."""
+    t = np.asarray(times, float)
+    n = len(t)
+    d = np.full(n, np.nan)
+    v = np.full(n, np.nan)
+    bl = box_long(np.asarray(box, float))
+    for i in range(n):
+        if present[i]:
+            vis = mask[i][est_ids]
+            if vis.sum() >= 6:
+                d[i] = 1.0 - affine_ratio(T[vis], kp[i][est_ids][vis])
+        if i > 0 and present[i] and present[i - 1] and t[i] > t[i - 1]:
+            m = mask[i][est_ids] & mask[i - 1][est_ids]
+            if m.sum() >= 4:
+                disp = float(np.linalg.norm(kp[i][est_ids][m] - kp[i - 1][est_ids][m], axis=-1).mean())
+                v[i] = disp / max(float(np.nanmean([bl[i], bl[i - 1]])), 1e-9) / float(t[i] - t[i - 1])
+    return d, v
+
+
+def pseg_median_filter(times, x, window_s: float) -> np.ndarray:
+    """Centred running median over |t - t_i| <= window_s / 2 (NaN ignored). Used for the segmentation only."""
+    t = np.asarray(times, float)
+    x = np.asarray(x, float)
+    out = np.full(len(x), np.nan)
+    for i in range(len(x)):
+        w = x[np.abs(t - t[i]) <= window_s / 2 + 1e-9]
+        w = w[np.isfinite(w)]
+        if len(w):
+            out[i] = float(np.median(w))
+    return out
+
+
+def pseg_transition(times, present, kp, mask, box, T, est_ids, front_idx, p: dict) -> dict:
+    """First time after the front window at which the smoothed d stays above d_thr for sustain_s (and, with use_motion, the keypoint speed exceeds
+    v_thr within motion_window_s of that start). Returns t_transition (None if not found), d0, d_thr, v0, v_thr and the series."""
+    t = np.asarray(times, float)
+    d, v = pseg_series(kp, mask, present, box, t, T, est_ids)
+    fw = [int(i) for i in front_idx]
+    dw, vw = d[fw], v[fw]
+    if not np.isfinite(dw).any():
+        return {"t_transition": None, "failed": "정면 창에서 d를 계산할 수 없음"}
+    d0 = float(np.nanpercentile(dw, p["noise_percentile"]))
+    v0 = float(np.nanpercentile(vw, p["noise_percentile"])) if np.isfinite(vw).any() else float("nan")
+    d_thr = max(p["k_d"] * d0, 1.0 - math.cos(math.radians(p["theta_min_deg"])))
+    v_thr = p["k_v"] * v0
+    ds = pseg_median_filter(t, d, p["median_window_s"])
+    ok = np.isfinite(ds) & (ds > d_thr)
+    t_end = float(t[fw[-1]])
+    cand = np.flatnonzero(t > t_end)
+    skipped, found, motion_v = [], None, None
+    pos = 0
+    while pos < len(cand):
+        i = cand[pos]
+        if ok[i]:
+            j = np.flatnonzero((t >= t[i]) & (t < t[i] + p["sustain_s"]))
+            if len(j) and ok[j].all():
+                mot = True
+                if p["use_motion"]:
+                    w = np.flatnonzero(np.abs(t - t[i]) <= p["motion_window_s"] + 1e-9)
+                    vv = v[w][np.isfinite(v[w])]
+                    motion_v = float(vv.max()) if len(vv) else None
+                    mot = bool(motion_v is not None and np.isfinite(v_thr) and motion_v > v_thr)
+                if mot:
+                    found = float(t[i])
+                    break
+                skipped.append(float(t[i]))
+                while pos < len(cand) and ok[cand[pos]]:
+                    pos += 1
+                continue
+        pos += 1
+    return {"t_transition": found, "d0": d0, "d_thr": float(d_thr), "v0": v0, "v_thr": float(v_thr), "front_end_s": t_end,
+            "motion_v_at_start": motion_v, "skipped_no_motion_s": skipped, "series": {"t": t.tolist(), "d": d.tolist(), "d_smooth": ds.tolist(), "v": v.tolist()}}
+
+
+def pseg_wrist_cfg(pcfg: dict) -> dict:
+    """The pipeline settings with joint 0 (wrist) removed from every joint set (template and f estimation)."""
+    c = copy.deepcopy(pcfg)
+    for k, ids in c["joints"]["sets"].items():
+        c["joints"]["sets"][k] = [j for j in ids if j != 0]
+    return c
+
+
+def pseg_tilt_keep(times, present, theta, tilt_start, max_tilt_deg) -> np.ndarray:
+    """True for frames the f estimate may use: tilt-phase frames whose theta2d exceeds max_tilt_deg are dropped (frames without theta2d are left to the analysis)."""
+    t = np.asarray(times, float)
+    th = np.asarray(theta, float)
+    bad = (t >= tilt_start) & np.isfinite(th) & (th > max_tilt_deg)
+    return np.asarray(present, bool) & ~bad
+
+
+def pseg_f_summary(a: dict, present_orig, pcfg: dict, extra: dict | None = None) -> dict:
+    """Compact result of one analysis: f of both estimators (grid edge -> side), verdict (detection rate = the original tracker rate), sharpness."""
+    if "per_method" not in a:
+        return {"failed": a.get("failed", "분석 실패"), **(extra or {})}
+    pm = a["per_method"]["fixed_template"]
+    hi = a["grid"][-1]
+    sol = {m: {"f": a["solutions"][m]["f"], "at_grid_edge": a["solutions"][m]["at_grid_edge"],
+               "side": None if not a["solutions"][m]["at_grid_edge"] else ("상한" if a["solutions"][m]["f"] >= hi * (1 - 1e-6) else "하한")} for m in ("fixed_template", "joint_delta")}
+    met = dict(pm["metrics"])
+    met["detect_rate"] = float(np.asarray(present_orig, bool).mean())
+    j = judge(met, pcfg["verdict"])
+    return {"solutions": sol, "verdict": j["verdict"], "failed_good": j["failed_good"], "failed_rough": j["failed_rough"], "tilt_start_s": a["tilt_start_s"],
+            "n_front_used": a["n_front_used"], "n_tilt_used": a["n_tilt_used"], "f_rel_uncertainty": pm["f_rel_uncertainty"], "bootstrap_rel_std": pm["bootstrap"]["rel_std"],
+            "sharpness": pm["diagnostics"]["sharpness"], "reproj_rms_rel": pm["diagnostics"]["reproj_rms_rel"], "theta_tilt": a["theta_tilt"], **(extra or {})}
+
+
+def pseg_analyze(kp, mask, present, box, cls, times, size_wh, cfg: dict, c20: dict, ccfg: dict, seed: int | None = None, method: str = "linear_d") -> dict:
+    """One tracked hand: 17's analysis (unchanged call), both transition detectors, the shooting-guide check with each, and the optional variants."""
+    W, H = size_wh
+    seed = int(cfg["experiment"]["seed"]) if seed is None else seed
+    p = c20
+    est_ids = list(cfg["joints"]["sets"][cfg["joints"]["estimate_set"]])
+    cache = {}
+
+    def run(cfg_use, tilt_start, pres, key):
+        if key not in cache:
+            cache[key] = analyze(kp, mask, pres, box, cls, times, size_wh, cfg_use, tilt_start=tilt_start, methods_full=("fixed_template",), seed=seed)
+        return cache[key]
+    a0 = run(cfg, None, present, (False, None, False))
+    if "per_method" not in a0:
+        return {"failed": a0.get("failed", "분석 실패")}
+    theta = np.array([np.nan if x is None else x for x in a0["theta2d_deg"]], float)
+    t_legacy = a0.get("auto_transition_s")
+    lin = pseg_transition(times, present, kp, mask, box, np.array(a0["template"]), est_ids, a0["front_window"]["idx"], p)
+    t_lin = lin["t_transition"]
+    guides = {}
+    for name, tv in (("legacy_theta", t_legacy), ("linear_d", t_lin)):
+        m = metrics_from_arrays(times, present, box, W, H, theta, a0["role"], tv, a0.get("front_jitter_rel"), a0["axis_coverage"]["bins"], a0["finger_extension"]["min"])
+        g = conditions_check(m, ccfg)
+        guides[name] = {"transition_s": tv, "guide": g["guide"], "reasons": g["reasons"], "items": g["items"]}
+    lin_nm = lin                                              # diagnostic column: the same detector with the motion condition off
+    if p["use_motion"]:
+        lin_nm = pseg_transition(times, present, kp, mask, box, np.array(a0["template"]), est_ids, a0["front_window"]["idx"], {**p, "use_motion": False})
+    m_nm = metrics_from_arrays(times, present, box, W, H, theta, a0["role"], lin_nm["t_transition"], a0.get("front_jitter_rel"), a0["axis_coverage"]["bins"],
+                               a0["finger_extension"]["min"])
+    g_nm = conditions_check(m_nm, ccfg)
+    t_sel = t_lin if method == "linear_d" else t_legacy
+    out = {"default": pseg_f_summary(a0, present, cfg, {"front_window": [a0["front_window"].get("t0"), a0["front_window"].get("t1")],
+                                                       "auto_transition_s": t_legacy}),
+           "legacy_theta": {"t_transition": t_legacy, **guides["legacy_theta"]},
+           "linear_d": {k: lin.get(k) for k in ("t_transition", "d0", "d_thr", "v0", "v_thr", "front_end_s", "motion_v_at_start", "skipped_no_motion_s", "failed")} | guides["linear_d"],
+           "linear_d_no_motion": {"t_transition": lin_nm["t_transition"], "guide": g_nm["guide"], "reasons": g_nm["reasons"]},
+           "method": method, "t_selected": t_sel, "guide_selected": guides[method]["guide"], "variants": {},
+           "series": {**lin.get("series", {}), "theta": theta.tolist(), "front": [a0["front_window"].get("t0"), a0["front_window"].get("t1")]}}
+    for name, ov in (p.get("variants") or {}).items():
+        o = {"phase_mode": "nominal", "exclude_large_tilt": bool(p["exclude_large_tilt"]), "exclude_wrist": bool(p["exclude_wrist"]), **ov}
+        cfg_use = pseg_wrist_cfg(cfg) if o["exclude_wrist"] else cfg
+        ts = None
+        if o["phase_mode"] == "auto":
+            if t_sel is None:
+                out["variants"][name] = {"skipped": "전환 시각을 검출하지 못함", "options": o}
+                continue
+            ts = t_sel
+        base = run(cfg_use, ts, present, (o["exclude_wrist"], ts, False))
+        res, n_before, n_after = base, None, None
+        if o["exclude_large_tilt"] and "per_method" in base:
+            th = np.array([np.nan if x is None else x for x in base["theta2d_deg"]], float)
+            keep = pseg_tilt_keep(times, present, th, base["tilt_start_s"], p["max_tilt_deg"])
+            n_before = int((np.asarray(present, bool) & (np.asarray(times) >= base["tilt_start_s"])).sum())
+            n_after = int((keep & (np.asarray(times) >= base["tilt_start_s"])).sum())
+            res = run(cfg_use, ts, keep, (o["exclude_wrist"], ts, True))
+        out["variants"][name] = pseg_f_summary(res, present, cfg_use, {"options": o, "n_tilt_before": n_before, "n_tilt_after": n_after})
+    return out
+
+
+def pseg_job(args) -> dict:
+    """(video, detector) job for the process pool: load the 17 run's frame list and detections, analyse, compare with 17's own result."""
+    video, det, run_dir, pcfg, c20, ccfg, conf_min, method = args
+    os.environ.setdefault("OMP_NUM_THREADS", "1")
+    cv2.setNumThreads(1)
+    pc = copy.deepcopy(pcfg)
+    pc["tracking"]["conf_min"] = float(conf_min)
+    d = Path(run_dir) / det
+    res = json.loads((d / "results.json").read_text())
+    dets = load_detections(d / "detections.npz")
+    frames = res["frames"]["list"]
+    check_alignment(frames, dets)
+    W, H = res["normalization"]["output"]["display_w"], res["normalization"]["output"]["display_h"]
+    times = np.array([r["time_s"] for r in frames])
+    tr = track(dets, times, (W, H), pc["tracking"], front_start_s=float(pc["phases"]["front_skip_s"]))
+    out = pseg_analyze(tr["kp"], tr["mask"], tr["present"], tr["box"], tr["cls"], times, (W, H), pc, c20, ccfg, method=method)
+    out.update({"video": video, "detector": det, "size": [W, H], "n_frames": len(frames)})
+    if "default" in out and "solutions" in out["default"]:
+        s = out["default"]["solutions"]
+        a17 = res.get("analysis", {})
+        same = {"f_fixed_template": abs(s["fixed_template"]["f"] - res.get("f_hand_px", np.nan)) <= 1e-6 * max(1.0, abs(s["fixed_template"]["f"])),
+                "f_joint_delta": abs(s["joint_delta"]["f"] - res.get("f_joint_delta_px", np.nan)) <= 1e-6 * max(1.0, abs(s["joint_delta"]["f"])),
+                "verdict": out["default"]["verdict"] == res.get("verdict"),
+                "legacy_transition": (out["legacy_theta"]["t_transition"] is None and a17.get("auto_transition_s") is None) or
+                                     (out["legacy_theta"]["t_transition"] is not None and a17.get("auto_transition_s") is not None and
+                                      abs(out["legacy_theta"]["t_transition"] - a17["auto_transition_s"]) < 1e-9)}
+        out["same_as_17"] = {**same, "all": bool(all(same.values())), "f_17": res.get("f_hand_px"), "verdict_17": res.get("verdict")}
+    return out
+
+
+# ====================================================================================================
+# grev  (experiment 21: transition defaults, shooting-guide revision, wrist handling; new section, 17's and 20's functions above are used unchanged
+# except that Problem / cost / analyze got one optional argument each (weights / wrist_weight, default None = old behaviour))
+# - the front window of the noise floor can be searched in a narrower range (front_search_s) and d0 is capped (d0_cap_theta_deg);
+# - the guide's tilt rule can be 'frames_median' (enough frames with theta2d <= tilt_max_deg, and their median in range) instead of the p95 limit;
+# - wrist_mode keep | exclude | downweight changes the f estimate only (template, PnP cost, uncertainty); transition and guide use the default joint set.
+# ====================================================================================================
+
+def grev_front_window(times, present, kp, mask, box, pcfg, search_s) -> dict:
+    """front_window with its search range replaced by search_s = [lo, hi] (seconds); the window never reaches outside [lo, hi]."""
+    lo, hi = search_s
+    return front_window(times, present, kp, mask, box, {**pcfg, "front_skip_s": float(lo), "front_phase_s": float(hi)})
+
+
+def grev_transition(times, present, kp, mask, box, T, est_ids, front_idx, p: dict) -> dict:
+    """pseg_transition with the noise floor capped: d_thr = max(k_d * min(d0, d0_cap), 1 - cos theta_min), d0_cap = 1 - cos d0_cap_theta_deg.
+    No d0_cap_theta_deg in p = 20's rule unchanged. d0 itself is reported uncapped; d0_capped says whether the cap acted."""
+    cap_deg = p.get("d0_cap_theta_deg")
+    if cap_deg is None:
+        return {**pseg_transition(times, present, kp, mask, box, T, est_ids, front_idx, p), "d0_cap": None, "d0_capped": False, "warnings": []}
+    t = np.asarray(times, float)
+    d, _ = pseg_series(kp, mask, present, box, t, T, est_ids)
+    dw = d[[int(i) for i in front_idx]]
+    if not np.isfinite(dw).any():
+        return {**pseg_transition(times, present, kp, mask, box, T, est_ids, front_idx, p), "d0_cap": None, "d0_capped": False, "warnings": []}
+    d0 = float(np.nanpercentile(dw, p["noise_percentile"]))
+    cap = 1.0 - math.cos(math.radians(float(cap_deg)))
+    capped = bool(d0 > cap)
+    k_eff = float(p["k_d"]) * cap / d0 if capped else float(p["k_d"])           # k_eff * d0 = k_d * min(d0, cap)
+    res = pseg_transition(times, present, kp, mask, box, T, est_ids, front_idx, {**p, "k_d": k_eff})
+    floor = 1.0 - math.cos(math.radians(p["theta_min_deg"]))
+    if capped:
+        res["d_thr"] = float(max(float(p["k_d"]) * cap, floor))
+    warn = [f"정면 창에 기울임이 섞였을 수 있음: d0 {d0:.3f} > 상한 {cap:.3f} (θ {cap_deg:.0f}° 환산), 문턱에는 상한값을 씀"] if capped else []
+    return {**res, "d0_cap": cap, "d0_capped": capped, "warnings": warn}
+
+
+def grev_metrics(times, present, box, W, H, theta, role, t_transition, front_jitter_rel, axis_bins, finger_ext_min, tilt_max_deg: float = 45.0) -> dict:
+    """metrics_from_arrays plus the new tilt-rule inputs: tilt-phase frames with theta2d <= tilt_max_deg (count) and the median theta2d of those frames."""
+    m = metrics_from_arrays(times, present, box, W, H, theta, role, t_transition, front_jitter_rel, axis_bins, finger_ext_min)
+    th = np.asarray(theta, float)
+    tilt = (np.asarray(role) == "tilt") & np.isfinite(th)
+    sel = tilt & (th <= tilt_max_deg)
+    m.update({"tilt_frames": int(tilt.sum()), "tilt_frames_le_max": int(sel.sum()), "tilt_median_le_max_deg": float(np.median(th[sel])) if sel.any() else None})
+    return m
+
+
+def grev_conditions_check(m: dict, c: dict) -> dict:
+    """conditions_check with a selectable tilt rule. tilt_rule 'p95_max' (default, also when the key is missing) = 17's check unchanged; 'frames_median' replaces
+    the theta2d p95 item by: >= min_tilt_frames tilt-phase frames with theta2d <= tilt_max_deg, and the median theta2d of those frames inside the range."""
+    if c.get("tilt_rule", "p95_max") == "p95_max" or "failed" in m:
+        return conditions_check(m, c)
+    lo, hi = c["theta_tilt_median_range_deg"]
+    nmin, tmax = int(c["min_tilt_frames"]), float(c["tilt_max_deg"])
+
+    def ok(x, f):
+        return x is not None and bool(f(x))
+    items = {
+        "box_short_ratio": ok(m["box_short_ratio"], lambda x: x <= c["box_short_ratio_max"]),
+        "edge_rate": ok(m["edge_rate"], lambda x: x <= c["edge_rate_max"]),
+        "transition": ok(m["transition_s"], lambda x: x >= c["transition_min_s"]),
+        "tilt_frames": ok(m["tilt_frames_le_max"], lambda x: x >= nmin),
+        "theta_tilt_median": ok(m["tilt_median_le_max_deg"], lambda x: lo <= x <= hi),
+        "axis_bins": ok(m["axis_bins"], lambda x: x >= c["axis_bins_min"]),
+        "finger_extension": ok(m["finger_extension_min"], lambda x: x >= c["finger_extension_min"]),
+    }
+    msg = {"box_short_ratio": lambda: f"손 박스/짧은 변 {cond_f(m['box_short_ratio'], 2)} > {c['box_short_ratio_max']}",
+           "edge_rate": lambda: f"가장자리 접촉 {cond_p(m['edge_rate'])} > {100 * c['edge_rate_max']:.0f}%",
+           "transition": lambda: ("자동 전환 없음" if m["transition_s"] is None else f"자동 전환 {m['transition_s']:.2f} s < {c['transition_min_s']} s"),
+           "tilt_frames": lambda: f"기울기 구간 θ2d ≤ {tmax:.0f}° 프레임 {m['tilt_frames_le_max']}장 < {nmin}장",
+           "theta_tilt_median": lambda: f"θ2d ≤ {tmax:.0f}° 프레임의 θ2d 중앙값 {cond_f(m['tilt_median_le_max_deg'], 0)}°가 {lo:.0f}–{hi:.0f}° 밖",
+           "axis_bins": lambda: f"축 덮임 {m['axis_bins']}/6 < {c['axis_bins_min']}/6",
+           "finger_extension": lambda: f"손가락 펴짐 {cond_f(m['finger_extension_min'], 3)} < {c['finger_extension_min']}"}
+    return {"guide": all(items.values()), "items": items, "reasons": [msg[k]() for k, v in items.items() if not v]}
+
+
+def grev_template_extent(T: np.ndarray, box_long_front: float) -> dict:
+    """Spatial extent of the template points: length along their first principal axis (the hand's long axis) and width along the second, in px of the front
+    window and as % of the hand box's long side there."""
+    X = np.asarray(T, float) - np.asarray(T, float).mean(0)
+    _, _, Vt = np.linalg.svd(X, full_matrices=False)
+    proj = X @ Vt.T
+    long_px, width_px = float(np.ptp(proj[:, 0])), float(np.ptp(proj[:, 1]))
+    return {"n_points": int(len(X)), "long_px": long_px, "width_px": width_px, "long_pct_box": 100.0 * long_px / box_long_front, "width_pct_box": 100.0 * width_px / box_long_front}
+
+
+def _grev_project(T, obs, vis, f, cx, cy):
+    """IPPE fit of the planar template at focal f: reprojected points and the per-point residuals."""
+    K = K_of(f, cx, cy)
+    r, R, t = frame_fit(T, obs, vis, K)
+    X = np.c_[T[vis], np.zeros(int(vis.sum()))] @ R.T + t
+    return (K[:2, :2] @ (X[:, :2] / X[:, 2:3]).T + K[:2, 2:3]).T, r
+
+
+def grev_f_signal(a: dict, kp, mask, ids, f_ref: float, ratios=(0.8, 1.2)) -> dict:
+    """Per tilt frame: mean displacement of the reprojected points when the focal is set to ratios[0] * f_ref and ratios[1] * f_ref (pose refitted for each),
+    divided by the RMS residual of that frame at f_ref. Median over the tilt frames. Diagnostic of how much of the data can tell f apart from noise."""
+    T = np.array(a["template"], float)
+    cx, cy = a["principal_point"]
+    sig, res, rat = [], [], []
+    for i, rl in enumerate(a["role"]):
+        if rl != "tilt":
+            continue
+        obs, vis = np.asarray(kp[i])[ids], np.asarray(mask[i])[ids]
+        if vis.sum() < 4:
+            continue
+        pa, _ = _grev_project(T, obs, vis, f_ref * ratios[0], cx, cy)
+        pb, _ = _grev_project(T, obs, vis, f_ref * ratios[1], cx, cy)
+        _, r0 = _grev_project(T, obs, vis, f_ref, cx, cy)
+        s, r = float(np.linalg.norm(pa - pb, axis=1).mean()), float(np.sqrt((r0 ** 2).mean()))
+        sig.append(s), res.append(r), rat.append(s / max(r, 1e-9))
+    if not rat:
+        return {"n_frames": 0, "signal_px_median": None, "residual_px_median": None, "ratio_median": None}
+    return {"n_frames": len(rat), "signal_px_median": float(np.median(sig)), "residual_px_median": float(np.median(res)), "ratio_median": float(np.median(rat))}
+
+
+def grev_f_run(kp, mask, present, box, cls, times, size_wh, cfg: dict, c: dict, mode: str, a_keep: dict | None, seed: int) -> dict:
+    """f estimate (fixed_template and joint_delta, 17's verdict) for one wrist_mode, plus the template extent and the f signal. mode 'keep' = 17's analysis
+    (a_keep is reused); 'exclude' removes joint 0 from every joint set; 'downweight' multiplies the wrist's weight in the reprojection cost by wrist_weight.
+    exclude_large_tilt (phase_segmentation, default off) drops tilt-phase frames above max_tilt_deg from the estimate."""
+    fe, p = c.get("f_estimation") or {}, c["phase_segmentation"]
+    cfg_use = pseg_wrist_cfg(cfg) if mode == "exclude" else cfg
+    ww = float(fe.get("wrist_weight", 0.3)) if mode == "downweight" else None
+    ids = list(cfg_use["joints"]["sets"][cfg_use["joints"]["estimate_set"]])
+    base = a_keep if mode == "keep" and a_keep is not None else analyze(kp, mask, present, box, cls, times, size_wh, cfg_use, tilt_start=None,
+                                                                         methods_full=("fixed_template",), seed=seed, wrist_weight=ww)
+    res, n_before, n_after = base, None, None
+    if p.get("exclude_large_tilt") and "per_method" in base:
+        th = np.array([np.nan if x is None else x for x in base["theta2d_deg"]], float)
+        keep = pseg_tilt_keep(times, present, th, base["tilt_start_s"], p["max_tilt_deg"])
+        n_before = int((np.asarray(present, bool) & (np.asarray(times) >= base["tilt_start_s"])).sum())
+        n_after = int((keep & (np.asarray(times) >= base["tilt_start_s"])).sum())
+        res = analyze(kp, mask, keep, box, cls, times, size_wh, cfg_use, tilt_start=None, methods_full=("fixed_template",), seed=seed, wrist_weight=ww)
+    if "per_method" not in res:
+        return {"failed": res.get("failed", "분석 실패"), "mode": mode}
+    out = pseg_f_summary(res, present, cfg_use, {"mode": mode, "wrist_weight": ww, "n_tilt_before": n_before, "n_tilt_after": n_after, "joint_ids": ids,
+                                                 "jointset_range": res["per_method"]["fixed_template"]["jointset_range"]})
+    bl = box_long(np.asarray(box, float))
+    fidx = [int(i) for i in res["front_window"]["idx"]]
+    out["template_extent"] = grev_template_extent(np.array(res["template"]), float(np.nanmedian(bl[fidx])))
+    f_ref = c.get("reference_f_px")
+    out["f_signal"] = grev_f_signal(res, kp, mask, ids, float(f_ref)) if f_ref else None
+    return out
+
+
+def grev_analyze(kp, mask, present, box, cls, times, size_wh, cfg: dict, c: dict, seed: int | None = None) -> dict:
+    """One tracked hand. cfg = the pipeline settings, c = the experiment's settings (phase_segmentation, conditions, optional compare_20 / f_estimation).
+    Default analysis = 17's (unchanged call); legacy and configured transitions; 20's transition for comparison; the shooting guide with the configured and with
+    20's criteria; the f estimate for every wrist_mode in f_estimation.compare_wrist_modes."""
+    W, H = size_wh
+    seed = int(cfg["experiment"]["seed"]) if seed is None else seed
+    p, ccfg, fe = c["phase_segmentation"], c["conditions"], c.get("f_estimation") or {}
+    est_ids = list(cfg["joints"]["sets"][cfg["joints"]["estimate_set"]])
+    a0 = analyze(kp, mask, present, box, cls, times, size_wh, cfg, tilt_start=None, methods_full=("fixed_template",), seed=seed)
+    if "per_method" not in a0:
+        return {"failed": a0.get("failed", "분석 실패")}
+    theta = np.array([np.nan if x is None else x for x in a0["theta2d_deg"]], float)
+    T = np.array(a0["template"])
+    t_legacy = a0.get("auto_transition_s")
+    tmax = float(ccfg.get("tilt_max_deg", 45.0))
+
+    def guide_of(t_tr, cc, with_new=False):
+        if with_new:
+            m = grev_metrics(times, present, box, W, H, theta, a0["role"], t_tr, a0.get("front_jitter_rel"), a0["axis_coverage"]["bins"], a0["finger_extension"]["min"], tmax)
+        else:
+            m = metrics_from_arrays(times, present, box, W, H, theta, a0["role"], t_tr, a0.get("front_jitter_rel"), a0["axis_coverage"]["bins"], a0["finger_extension"]["min"])
+        g = grev_conditions_check(m, cc)
+        return {"transition_s": t_tr, "guide": g["guide"], "reasons": g["reasons"], "items": g["items"], "metrics": {k: v for k, v in m.items() if k != "series"}}
+
+    fw0 = a0["front_window"]
+    fw = fw0 if not p.get("front_search_s") else grev_front_window(times, present, kp, mask, box, cfg["phases"], p["front_search_s"])
+    if len(fw["idx"]) == 0:
+        return {"failed": "정면 창을 만들 수 없음"}
+    tr = grev_transition(times, present, kp, mask, box, T, est_ids, fw["idx"], p)
+    tr_nm = grev_transition(times, present, kp, mask, box, T, est_ids, fw["idx"], {**p, "use_motion": False}) if p["use_motion"] else tr
+    new_rule = ccfg.get("tilt_rule", "p95_max") != "p95_max"
+    out = {"default": pseg_f_summary(a0, present, cfg, {"front_window": [fw0.get("t0"), fw0.get("t1")], "auto_transition_s": t_legacy}),
+           "legacy_theta": {"t_transition": t_legacy, **guide_of(t_legacy, ccfg, new_rule)},
+           "transition": {**{k: tr.get(k) for k in ("t_transition", "d0", "d_thr", "v0", "v_thr", "front_end_s", "motion_v_at_start", "skipped_no_motion_s", "failed", "d0_cap",
+                                                    "d0_capped", "warnings")},
+                          "front_window": [fw.get("t0"), fw.get("t1")], "method": c.get("transition_method", "linear_d"),
+                          **guide_of(t_legacy if c.get("transition_method") == "legacy_theta" else tr.get("t_transition"), ccfg, new_rule)},
+           "transition_no_motion": {"t_transition": tr_nm.get("t_transition")},
+           "series": {**tr.get("series", {}), "theta": theta.tolist(), "front": [fw.get("t0"), fw.get("t1")]}}
+    if c.get("compare_20"):
+        c20 = c["compare_20"]
+        t20 = pseg_transition(times, present, kp, mask, box, T, est_ids, fw0["idx"], c20["phase_segmentation"])
+        t20nm = pseg_transition(times, present, kp, mask, box, T, est_ids, fw0["idx"], {**c20["phase_segmentation"], "use_motion": False}) if c20["phase_segmentation"]["use_motion"] else t20
+        out["transition_20"] = {**{k: t20.get(k) for k in ("t_transition", "d0", "d_thr", "v0", "v_thr", "skipped_no_motion_s", "failed")}, "front_window": [fw0.get("t0"), fw0.get("t1")],
+                                **guide_of(t20.get("t_transition"), c20["conditions"]), "t_no_motion": t20nm.get("t_transition")}
+    out["wrist"] = {}
+    modes = list(fe.get("compare_wrist_modes") or [fe.get("wrist_mode", "keep")])
+    for mode in modes:
+        out["wrist"][mode] = grev_f_run(kp, mask, present, box, cls, times, size_wh, cfg, c, mode, a0, seed)
+    return out
+
+
+def grev_job(args) -> dict:
+    """(video, detector) job for the process pool: the 17 run's frame list and detections, grev_analyze, and the check that the keep mode (and 20's transition) reproduce
+    17's (and 20's) recorded results."""
+    video, det, run_dir, pcfg, c, conf_min, ref20 = args
+    os.environ.setdefault("OMP_NUM_THREADS", "1")
+    cv2.setNumThreads(1)
+    pc = copy.deepcopy(pcfg)
+    pc["tracking"]["conf_min"] = float(conf_min)
+    d = Path(run_dir) / det
+    res = json.loads((d / "results.json").read_text())
+    dets = load_detections(d / "detections.npz")
+    frames = res["frames"]["list"]
+    check_alignment(frames, dets)
+    W, H = res["normalization"]["output"]["display_w"], res["normalization"]["output"]["display_h"]
+    times = np.array([r["time_s"] for r in frames])
+    tr = track(dets, times, (W, H), pc["tracking"], front_start_s=float(pc["phases"]["front_skip_s"]))
+    out = grev_analyze(tr["kp"], tr["mask"], tr["present"], tr["box"], tr["cls"], times, (W, H), pc, c)
+    out.update({"video": video, "detector": det, "size": [W, H], "n_frames": len(frames)})
+    if "default" in out and "solutions" in out["default"]:
+        s = out["default"]["solutions"]
+        same = {"f_fixed_template": abs(s["fixed_template"]["f"] - res.get("f_hand_px", np.nan)) <= 1e-6 * max(1.0, abs(s["fixed_template"]["f"])),
+                "f_joint_delta": abs(s["joint_delta"]["f"] - res.get("f_joint_delta_px", np.nan)) <= 1e-6 * max(1.0, abs(s["joint_delta"]["f"])),
+                "verdict": out["default"]["verdict"] == res.get("verdict")}
+        k = (out.get("wrist") or {}).get("keep")
+        if k and "solutions" in k:
+            same["keep_equals_default"] = bool(k["solutions"]["fixed_template"]["f"] == s["fixed_template"]["f"] and k["verdict"] == out["default"]["verdict"])
+        out["same_as_17"] = {**same, "all": bool(all(same.values())), "f_17": res.get("f_hand_px"), "verdict_17": res.get("verdict")}
+        if ref20 is not None:
+            t = out.get("transition_20") or {}
+            s20 = {"f_fixed_template": abs(s["fixed_template"]["f"] - ref20["default"]["solutions"]["fixed_template"]["f"]) <= 1e-9 * max(1.0, abs(s["fixed_template"]["f"])),
+                   "verdict": out["default"]["verdict"] == ref20["default"]["verdict"]}
+            if t:
+                a, b = t.get("t_transition"), ref20["linear_d"]["t_transition"]
+                s20["transition_linear_d"] = bool((a is None and b is None) or (a is not None and b is not None and abs(a - b) < 1e-9))
+                s20["d0"] = bool(t.get("d0") is not None and abs(t["d0"] - ref20["linear_d"]["d0"]) < 1e-12)
+            out["same_as_20"] = {**s20, "all": bool(all(s20.values()))}
+    return out
+
+
+def grev_adoption(jobs: list, ref_f: float, rules: dict, mode: str, base: str = "keep") -> dict:
+    """The fixed adoption rules of experiment 21 for one wrist_mode against `base`, over the (video, detector) pairs (f = fixed_template; a grid-edge f has no value).
+    err = |f / ref_f - 1|; no value counts as the worst possible error. A pair is improved when `mode` has a value and the base has none or a larger error, worsened
+    in the opposite case (equal or both without value: neither). Rules: 1 grid-edge count not larger; 2 improved pairs >= min_improved_pairs; 3 median error at least
+    median_rel_drop lower (and finite); 4 leaving out each video, improved > worsened and the median error lower; 5 no video where all its detectors get worse by
+    >= worse_pp percentage points (or lose their value)."""
+    def err(j, m):
+        w = (j.get("wrist") or {}).get(m)
+        if not w or "solutions" not in w or w["solutions"]["fixed_template"]["at_grid_edge"]:
+            return None
+        return abs(w["solutions"]["fixed_template"]["f"] / ref_f - 1.0)
+    pairs = [j for j in jobs if "failed" not in j and mode in (j.get("wrist") or {}) and base in (j.get("wrist") or {})]
+    eb, em = [err(j, base) for j in pairs], [err(j, mode) for j in pairs]
+    inf = float("inf")
+    val = lambda e: inf if e is None else e                                                             # noqa: E731
+    improved = lambda b, m_: m_ is not None and (b is None or m_ < b)                                   # noqa: E731
+    worsened = lambda b, m_: b is not None and (m_ is None or m_ > b)                                   # noqa: E731
+    idx = list(range(len(pairs)))
+
+    def stats(ix):
+        mb, mm = float(np.median([val(eb[i]) for i in ix])), float(np.median([val(em[i]) for i in ix]))
+        return {"n": len(ix), "improved": sum(improved(eb[i], em[i]) for i in ix), "worsened": sum(worsened(eb[i], em[i]) for i in ix), "median_base": mb, "median_mode": mm}
+    allp = stats(idx)
+    n_edge = lambda es: sum(e is None for e in es)                                                      # noqa: E731
+    r1 = n_edge(em) <= n_edge(eb)
+    r2 = allp["improved"] >= int(rules["min_improved_pairs"])
+    r3 = bool(np.isfinite(allp["median_mode"]) and allp["median_mode"] <= (1.0 - float(rules["median_rel_drop"])) * allp["median_base"])
+    videos = sorted({j["video"] for j in pairs})
+    loo = {}
+    for v in videos:
+        s = stats([i for i in idx if pairs[i]["video"] != v])
+        loo[v] = {**s, "direction_2": s["improved"] > s["worsened"], "direction_3": s["median_mode"] < s["median_base"]}
+    r4 = all(x["direction_2"] and x["direction_3"] for x in loo.values())
+    pp = float(rules["worse_pp"]) / 100.0
+    bad_videos = []
+    for v in videos:
+        ix = [i for i in idx if pairs[i]["video"] == v]
+        if ix and all(eb[i] is not None and (em[i] is None or em[i] - eb[i] >= pp) for i in ix):
+            bad_videos.append(v)
+    r5 = not bad_videos
+    return {"mode": mode, "base": base, "n_pairs": len(pairs), "edge_base": n_edge(eb), "edge_mode": n_edge(em), "all": allp, "leave_one_out": loo, "worse_videos": bad_videos,
+            "rules": {"1_edge_not_more": r1, "2_improved_pairs": r2, "3_median_drop": r3, "4_leave_one_out": r4, "5_no_video_all_worse": r5}, "candidate": bool(r1 and r2 and r3 and r4 and r5)}
+
+
+# ====================================================================================================
+# fresp  (experiment 22: does the candidate (mediapipe_hands + wrist_mode exclude) respond to f?; new section, earlier functions are used unchanged)
+# A1: the estimator is scale-equivariant (keypoints scaled about the image centre -> f scaled by the same factor).
+# A2: centre-cropped and enlarged frames (true f = s * f, principal point unchanged), detector re-run on them; AnyCalib re-run on them.
+# A3: the candidate on every video of the range, original frames, with the hand's box size in the front window.
+# B (distance / lens series) is prepared in the yaml only.
+# ====================================================================================================
+
+def fresp_target_videos(input_dir, vcfg: dict, used_in_21: list) -> list:
+    """Every IMG_<number> video file in input_dir with its inclusion: number inside number_range [lo, hi] (hi null = open) and not in exclude."""
+    lo, hi = vcfg["number_range"]
+    excl = {int(x) for x in (vcfg.get("exclude") or [])}
+    exts = {e.lower() for e in vcfg.get("extensions", [".mov"])}
+    rows = []
+    for p in sorted(Path(input_dir).expanduser().iterdir()):
+        m = re.fullmatch(r"IMG_(\d+)", p.stem)
+        if not m or p.suffix.lower() not in exts:
+            continue
+        n = int(m.group(1))
+        reason = None
+        if n in excl:
+            reason = (vcfg.get("exclude_reasons") or {}).get(n) or (vcfg.get("exclude_reasons") or {}).get(str(n)) or "제외 목록"
+        elif n < lo:
+            reason = f"번호 {lo} 미만 (촬영 기준이 다름)"
+        elif hi is not None and n > hi:
+            reason = f"번호 {hi} 초과"
+        rows.append({"video": p.name, "number": n, "included": reason is None, "reason": reason, "used_in_21": p.name in set(used_in_21)})
+    return rows
+
+
+def fresp_scale_track(kp, box, s: float, center) -> tuple:
+    """Keypoints and box scaled by s about `center` (x, y): the same picture enlarged about the principal point (A1). No re-detection."""
+    c = np.asarray(center, float)
+    kp2 = c + float(s) * (np.asarray(kp, float) - c)
+    b = np.asarray(box, float)
+    box2 = np.c_[c + float(s) * (b[:, :2] - c), c + float(s) * (b[:, 2:] - c)]
+    return kp2, box2
+
+
+def fresp_zoom_matrix(s: float, W: int, H: int) -> np.ndarray:
+    """Forward affine map x' = s (x - c) + c of pixel indices about the image centre c = ((W - 1) / 2, (H - 1) / 2), i.e. the optical axis (W / 2, H / 2) in the
+    continuous coordinates of the keypoints stays fixed. The crop is (W / s) x (H / s) around that centre, enlarged to W x H."""
+    cx, cy = (W - 1) / 2.0, (H - 1) / 2.0
+    return np.array([[s, 0.0, (1.0 - s) * cx], [0.0, s, (1.0 - s) * cy]], float)
+
+
+def fresp_zoom_image(img, s: float, interp: int):
+    h, w = img.shape[:2]
+    return cv2.warpAffine(img, fresp_zoom_matrix(s, w, h), (w, h), flags=interp, borderMode=cv2.BORDER_REPLICATE)
+
+
+def fresp_zoom_frames(frames: list, s: float, out_dir: Path, interp: int) -> list:
+    """The frame list with every PNG centre-cropped and enlarged by s (same index / frame / time_s; new PNG files and hashes)."""
+    out_dir.mkdir(parents=True, exist_ok=True)
+    rows = []
+    for r in frames:
+        img = cv2.imread(r["png"], cv2.IMREAD_COLOR)
+        p = out_dir / Path(r["png"]).name
+        cv2.imwrite(str(p), fresp_zoom_image(img, s, interp))
+        rows.append({**{k: r[k] for k in ("index", "frame", "time_s")}, "png": str(p), "sha256": sha256(p)})
+    return rows
+
+
+def fresp_edge_rate(box, present, W, H) -> float:
+    present = np.asarray(present, bool)
+    return float(edge_flags(box, present, W, H)[present].mean()) if present.any() else 0.0
+
+
+def fresp_f_pair(kp, mask, present, box, cls, times, size_wh, cfg: dict, modes, seed: int, ratio_range_scale: float = 1.0, front_idx=None, tilt_start=None) -> dict:
+    """f of both estimators for each wrist mode (no uncertainty, no bootstrap). ratio_range_scale multiplies the f grid's range (A1 diagnostic: grid scaled with the picture)."""
+    out = {}
+    for mode in modes:
+        c = pseg_wrist_cfg(cfg) if mode == "exclude" else copy.deepcopy(cfg)
+        if ratio_range_scale != 1.0:
+            c["estimate"]["f_ratio_range"] = [float(x) * ratio_range_scale for x in c["estimate"]["f_ratio_range"]]
+        a = analyze(kp, mask, present, box, cls, times, size_wh, c, front_idx=front_idx, tilt_start=tilt_start, methods_full=(), seed=seed)
+        if "solutions" not in a:
+            out[mode] = {"failed": a.get("failed", "분석 실패")}
+            continue
+        hi = a["grid"][-1]
+        out[mode] = {m: {"f": a["solutions"][m]["f"], "at_grid_edge": a["solutions"][m]["at_grid_edge"],
+                         "side": None if not a["solutions"][m]["at_grid_edge"] else ("상한" if a["solutions"][m]["f"] >= hi * (1 - 1e-6) else "하한")}
+                     for m in ("fixed_template", "joint_delta")}
+    return out
+
+
+def fresp_thermal_wait(hi: float = 70.0, lo: float = 65.0, poll_s: float = 15.0, log=print) -> float:
+    """GPU thermal guard before a GPU stage: while any visible GPU is >= hi deg C, wait until all are < lo. Returns the seconds waited."""
+    ids = [x for x in os.environ.get("CUDA_VISIBLE_DEVICES", "").split(",") if x.strip().isdigit()]
+
+    def temps():
+        q = subprocess.check_output(["nvidia-smi", "--query-gpu=index,temperature.gpu", "--format=csv,noheader,nounits"], text=True).strip().splitlines()
+        t = {x.split(",")[0].strip(): float(x.split(",")[1]) for x in q}
+        return [t[i] for i in (ids or list(t)) if i in t]
+    waited = 0.0
+    try:
+        if max(temps() or [0.0]) >= hi:
+            log(f"  GPU 온도 {max(temps()):.0f}°C ≥ {hi:.0f}°C: {lo:.0f}°C 미만이 될 때까지 대기")
+            while max(temps() or [0.0]) >= lo:
+                time.sleep(poll_s)
+                waited += poll_s
+    except (OSError, subprocess.CalledProcessError, ValueError):
+        pass
+    return waited
+
+
+@contextlib.contextmanager
+def fresp_gpu_lock(path):
+    """Serialise the GPU stage (AnyCalib) of parallel video jobs with an exclusive file lock."""
+    import fcntl
+    with open(path, "w") as fh:
+        fcntl.flock(fh, fcntl.LOCK_EX)
+        try:
+            yield
+        finally:
+            fcntl.flock(fh, fcntl.LOCK_UN)
+
+
+def fresp_zoom_excluded(s: float, edge_rate: float, edge_rate_max: float) -> bool:
+    """A zoom above 1 is dropped when more of its detected frames touch the border than edge_rate_max; the 1.0 control is never dropped."""
+    return bool(float(s) > 1.0 and edge_rate > edge_rate_max)
+
+
+def fresp_ratio_status(f_s: dict | None, f_1: dict | None, s: float, tol: float) -> dict:
+    """Ratio f(s) / f(1.0) of one estimator (dicts {f, at_grid_edge}); within = |ratio / s - 1| <= tol. A grid-edge value has no ratio."""
+    if f_s is None or f_1 is None or f_s.get("at_grid_edge") or f_1.get("at_grid_edge") or not f_1.get("f"):
+        return {"ratio": None, "within": None}
+    r = f_s["f"] / f_1["f"]
+    return {"ratio": float(r), "within": bool(abs(r / s - 1.0) <= tol), "rel_to_s": float(r / s - 1.0)}
+
+
+def fresp_prepare(args) -> dict:
+    """Stage 1, one video: normalise, extract the frames (the 17 pipeline's) and write the centre-cropped / enlarged copies for every zoom factor into frames_root.
+    args = (video, input_dir, pcfg, c, frames_root). The frame images stay in frames_root until the run ends (then they are deleted)."""
+    video, input_dir, pcfg, c, frames_root = args
+    os.environ.setdefault("OMP_NUM_THREADS", "1")
+    cv2.setNumThreads(1)
+    root = Path(frames_root) / Path(video).stem
+    tmp = Path(tempfile.mkdtemp(prefix="hf22n_", dir=frames_root))
+    try:
+        norm = normalize(Path(input_dir).expanduser() / video, tmp / "n.mkv", pcfg)
+        W, H = norm["output"]["display_w"], norm["output"]["display_h"]
+        frames, _ = extract_frames(tmp / "n.mkv", root / "orig", norm["output"]["fps"], None, pcfg["frames"]["detect_fps"])
+        out = {"video": video, "size": [W, H], "frames": frames, "zoom": {}}
+        a2c = c.get("a2") or {}
+        if a2c.get("enabled"):
+            interp = getattr(cv2, a2c.get("interpolation", "INTER_CUBIC"))
+            for z in a2c["zoom_factors"]:
+                out["zoom"][str(z)] = fresp_zoom_frames(frames, float(z), root / f"z_{z}", interp)
+        return out
+    finally:
+        shutil.rmtree(tmp, ignore_errors=True)
+
+
+def fresp_detect_many(tasks: list, dset: dict, cache_dir, n_workers: int = 1, log=print) -> dict:
+    """Stage 2: mediapipe (CPU) on several frame lists with swap_mediapipe_hands unchanged (same model, mode, confidence thresholds, input resolution; cache by frame
+    hashes + settings). tasks = [(key, frames)]. n_workers = 1: one list after the other (the old behaviour); > 1: that many lists at the same time, each worker process
+    runs its list whole and in the list's own frame order, so the saved keypoints do not depend on which list finishes first. Lists with identical frames (the 1.0 control
+    and the original) are detected once. Returns {key: npz path}."""
+    from concurrent.futures import ThreadPoolExecutor
+    cache_dir = Path(cache_dir)
+    cache_dir.mkdir(parents=True, exist_ok=True)
+    uniq = {}
+    for key, frames in tasks:
+        uniq.setdefault(tuple(r["sha256"] for r in frames), frames)
+
+    def one(item):
+        sig, frames = item
+        npz, _ = swap_mediapipe_hands(frames, dset, cache_dir, None, log)
+        return sig, npz
+    items = list(uniq.items())
+    if int(n_workers) <= 1:
+        done = dict(one(it) for it in items)
+    else:
+        with ThreadPoolExecutor(max_workers=int(n_workers)) as ex:
+            done = dict(ex.map(one, items))
+    return {key: done[tuple(r["sha256"] for r in frames)] for key, frames in tasks}
+
+
+def fresp_job(args) -> dict:
+    """Stage 3, one video: the original candidate analysis (keep and exclude; 17 detections when a 17 run exists, else the stage-2 detection), A1 and A2 from the stage-2
+    detections of the enlarged frames, AnyCalib on them. args = (video, prep, src_dir | None, npz_orig | None, npz_zoom {zoom: path}, pcfg, c, lock_dir, ref21 | None,
+    used_in_21, gpu_id | None). gpu_id (a physical GPU index, one fresh process per video) selects the GPU of this video's AnyCalib runs; None keeps the inherited device."""
+    video, prep, src_dir, npz_orig, npz_zoom, pcfg, c, lock_dir, ref21, used_in_21, gpu_id = args
+    if gpu_id is not None:
+        os.environ["CUDA_VISIBLE_DEVICES"] = str(gpu_id)
+    os.environ.setdefault("OMP_NUM_THREADS", "1")
+    cv2.setNumThreads(1)
+    cand = c["candidate"]
+    det_name = cand["detector"]
+    dset = c["detector_settings"][det_name]
+    pc = copy.deepcopy(pcfg)
+    pc["tracking"]["conf_min"] = float(dset["conf_min"])
+    W, H = prep["size"]
+    frames = prep["frames"]
+    times = np.array([r["time_s"] for r in frames])
+    res = {"video": video, "detector": det_name, "used_in_21": bool(used_in_21), "size": [W, H], "n_frames": len(frames), "a2": {}, "a1": {}}
+    if src_dir is not None:
+        r17 = json.loads((Path(src_dir) / det_name / "results.json").read_text())
+        if [(x["index"], x["sha256"]) for x in frames] != [(x["index"], x["sha256"]) for x in r17["frames"]["list"]]:
+            raise RuntimeError(f"{video}: re-created frames differ from the 17 run's frame list")
+        dets = load_detections(Path(src_dir) / det_name / "detections.npz")
+        res["detections"] = "17 run"
+    else:
+        dets = load_detections(Path(npz_orig))
+        res["detections"] = "new mediapipe run on the normalised frames"
+    check_alignment(frames, dets)
+    tr = track(dets, times, (W, H), pc["tracking"], front_start_s=float(pc["phases"]["front_skip_s"]))
+    seed = int(pc["experiment"]["seed"])
+    a3 = bool((c.get("a3") or {}).get("enabled"))
+    a_keep = analyze(tr["kp"], tr["mask"], tr["present"], tr["box"], tr["cls"], times, (W, H), pc, tilt_start=None, methods_full=("fixed_template",) if a3 else (), seed=seed)
+    if "solutions" not in a_keep:
+        res["failed"] = a_keep.get("failed", "분석 실패")
+        return res
+    cj = {k: c[k] for k in ("phase_segmentation", "f_estimation") if k in c}
+    res["original"] = {}
+    for mode in (c["f_estimation"]["compare_wrist_modes"] if a3 else []):
+        res["original"][mode] = grev_f_run(tr["kp"], tr["mask"], tr["present"], tr["box"], tr["cls"], times, (W, H), pc, cj, mode, a_keep, seed)
+    fidx = [int(i) for i in a_keep["front_window"]["idx"]]
+    bl = box_long(tr["box"])
+    res["hand_box_short_ratio_front"] = float(np.nanmedian(bl[fidx]) / min(W, H))
+    res["edge_rate"] = fresp_edge_rate(tr["box"], tr["present"], W, H)
+    res["detect_rate"] = float(tr["present"].mean())
+    res["frames_table"] = {"index": [int(r["index"]) for r in frames], "time_s": times.tolist(), "present": tr["present"].tolist(),
+                           "box_short_ratio": (bl / min(W, H)).tolist(), "theta2d_deg": a_keep["theta2d_deg"], "role": a_keep["role"]}
+    if ref21 is not None:
+        s21 = {}
+        for mode in ("keep", "exclude"):
+            a, b = res["original"].get(mode), (ref21.get("wrist") or {}).get(mode)
+            if a and b and "solutions" in a and "solutions" in b:
+                s21[mode] = bool(a["solutions"]["fixed_template"]["f"] == b["solutions"]["fixed_template"]["f"] and a["verdict"] == b["verdict"])
+        res["same_as_21"] = {**s21, "all": bool(s21 and all(s21.values()))}
+    modes = list(c["f_estimation"]["compare_wrist_modes"])
+    # ---- A1: keypoints and boxes scaled about the image centre, no re-detection
+    a1c = c.get("a1") or {}
+    if a1c.get("enabled"):
+        base = fresp_f_pair(tr["kp"], tr["mask"], tr["present"], tr["box"], tr["cls"], times, (W, H), pc, modes, seed)
+        for s in a1c["scales"]:
+            kp2, box2 = fresp_scale_track(tr["kp"], tr["box"], s, (W / 2.0, H / 2.0))
+            f2 = fresp_f_pair(kp2, tr["mask"], tr["present"], box2, tr["cls"], times, (W, H), pc, modes, seed)
+            g2 = fresp_f_pair(kp2, tr["mask"], tr["present"], box2, tr["cls"], times, (W, H), pc, modes, seed, ratio_range_scale=float(s))
+            res["a1"][str(s)] = {}
+            for mode in modes:
+                row = {}
+                for m in ("fixed_template", "joint_delta"):
+                    b0, b1, b2 = base[mode].get(m), f2[mode].get(m), g2[mode].get(m)
+                    ok = b0 and b1 and b2 and not (b0["at_grid_edge"] or b1["at_grid_edge"])
+                    row[m] = {"f_1": b0["f"] if b0 else None, "f_s": b1["f"] if b1 else None, "ratio": (b1["f"] / b0["f"]) if ok else None,
+                              "ratio_err": (b1["f"] / b0["f"] / s - 1.0) if ok else None,
+                              "grid_scaled_ratio_err": (b2["f"] / b0["f"] / s - 1.0) if (ok and not b2["at_grid_edge"]) else None}
+                res["a1"][str(s)][mode] = row
+    # ---- A2: detections of the enlarged frames (stage 2), the candidate analysis on them, AnyCalib on them
+    a2c = c.get("a2") or {}
+    if a2c.get("enabled"):
+        acfg = copy.deepcopy(pc["anycalib"])
+        for s in a2c["zoom_factors"]:
+            zfr = prep["zoom"][str(s)]
+            zd = load_detections(Path(npz_zoom[str(s)]))
+            check_alignment(zfr, zd)
+            ztr = track(zd, times, (W, H), pc["tracking"], front_start_s=float(pc["phases"]["front_skip_s"]))
+            er = fresp_edge_rate(ztr["box"], ztr["present"], W, H)
+            e = {"zoom": float(s), "edge_rate": er, "detect_rate": float(ztr["present"].mean())}
+            if fresp_zoom_excluded(float(s), er, float(a2c["edge_rate_max"])):
+                e["excluded"] = f"가장자리 접촉 프레임 {100 * er:.1f}% > {100 * float(a2c['edge_rate_max']):.0f}%"
+                res["a2"][str(s)] = e
+                continue
+            e["hand"] = fresp_f_pair(ztr["kp"], ztr["mask"], ztr["present"], ztr["box"], ztr["cls"], times, (W, H), pc, modes, seed)
+            if a2c.get("anycalib", True) and pc["anycalib"]["enabled"]:
+                with fresp_gpu_lock(Path(lock_dir) / f"gpu_{'' if gpu_id is None else gpu_id}.lock"):
+                    e["thermal_wait_s"] = fresp_thermal_wait(float(a2c.get("gpu_pause_c", 70)), float(a2c.get("gpu_resume_c", 65)))
+                    ac = anycalib_run(zfr, acfg, float(pc["phases"]["front_phase_s"]), lambda m="": None)
+                e["anycalib"] = {m: {"median": v["summary"].get("median"), "n": v["summary"].get("n"), "iqr": v["summary"].get("iqr")} for m, v in ac["models"].items()}
+            res["a2"][str(s)] = e
+    return res
+
+
+def fresp_lens_judgment(jobs: list, meta: dict, rules: dict, candidate_mode: str, modes: list) -> dict:
+    """B, lens series. 1x estimate = median f (fixed_template, grid-edge values left out) of the 1x videos (every included video that is not a numerator-lens video of the
+    metadata); estimated ratio = the numerator-lens video's f / the 1x estimate; reference ratio = its reference f / reference_f_1x_px; within +-ratio_rel_tolerance of
+    the reference ratio = "f 변화에 반응함". The verdict applies to the candidate's wrist mode only; the other modes are computed and marked as not judged."""
+    r = rules["lens_series"]
+    tol = float(r["ratio_rel_tolerance"])
+    ok = {j["video"]: j for j in jobs if "failed" not in j}
+    lens_vids = [v for v, m in meta.items() if m.get("group") == "lens_series" and m.get("lens") == r["numerator_lens"] and v in ok]
+    one_x = [v for v in ok if v not in lens_vids]
+    out = {"numerator_videos": lens_vids, "one_x_videos": one_x, "tolerance": tol, "by_video": {}}
+    for v in lens_vids:
+        ref_ratio = float(meta[v]["reference_f_px"]) / float(r["reference_f_1x_px"])
+        lo, hi = ref_ratio * (1.0 - tol), ref_ratio * (1.0 + tol)
+        by_mode = {}
+        for mode in modes:
+            fs = [ok[x]["original"][mode]["solutions"]["fixed_template"] for x in one_x if mode in (ok[x].get("original") or {}) and "solutions" in ok[x]["original"][mode]]
+            vals = [x["f"] for x in fs if not x["at_grid_edge"]]
+            est1 = float(np.median(vals)) if vals else None
+            sol = ((ok[v].get("original") or {}).get(mode) or {}).get("solutions", {}).get("fixed_template")
+            f7 = None if sol is None or sol["at_grid_edge"] else sol["f"]
+            ratio = None if est1 is None or f7 is None else f7 / est1
+            within = None if ratio is None else bool(lo <= ratio <= hi)
+            why = None if ratio is not None else ("1배 추정값 없음" if est1 is None else f"{v} f 값 없음 ({sol['side']})" if sol else f"{v} 분석 없음")
+            by_mode[mode] = {"judged": mode == candidate_mode, "f_numerator_px": f7, "f_1x_median_px": est1, "n_1x_values": len(vals), "n_1x_videos": len(fs), "ratio": ratio,
+                             "reference_ratio": ref_ratio, "range": [lo, hi], "within": within, "unavailable": why,
+                             "verdict": None if mode != candidate_mode else ("판정 불가" if within is None else ("f 변화에 반응함" if within else "f 변화에 반응하지 않음"))}
+        out["by_video"][v] = by_mode
+    return out
+
+
+# ====================================================================================================
+# ferr  (experiment 23: why do the per-video errors differ?; new section, diagnostics only - earlier functions are used unchanged)
+# Video-level factors (front window, motion, hand size / position, hand-shape change, detection / estimation), frame-level preferred f from every tilt frame's own cost
+# curve, and f re-estimated on subsets fixed in the yaml. New detections are never made; the cached mediapipe (and, for comparison, wilor_yolo / rtmpose) detections are read.
+# ====================================================================================================
+
+FERR_FINGERS = {"index": 5, "middle": 9, "ring": 13, "pinky": 17}          # MCP joint of every finger (the PIP / DIP / tip joints follow)
+
+
+def ferr_long_axis(T: np.ndarray, ids=None) -> np.ndarray:
+    """Unit direction of the hand's long axis in template coordinates: mean of the fingertips (8, 12, 16, 20) minus mean of the MCP joints (5, 9, 13, 17) when the joint set
+    has them, else the template's first principal axis."""
+    T = np.asarray(T, float)
+    pos = {j: k for k, j in enumerate(ids)} if ids is not None else {}
+    if all(j in pos for j in (5, 9, 13, 17, 8, 12, 16, 20)):
+        v = T[[pos[j] for j in (8, 12, 16, 20)]].mean(0) - T[[pos[j] for j in (5, 9, 13, 17)]].mean(0)
+        return v / np.linalg.norm(v)
+    return np.linalg.svd(T - T.mean(0), full_matrices=False)[2][0]
+
+
+def ferr_affine(T: np.ndarray, P: np.ndarray) -> tuple:
+    """Least-squares affine T -> P (P ~ T @ M + t). Returns M (2, 2), t (2,)."""
+    A = np.c_[T, np.ones(len(T))]
+    X, *_ = np.linalg.lstsq(A, P, rcond=None)
+    return X[:2], X[2]
+
+
+def ferr_tilt_class(T: np.ndarray, P: np.ndarray, theta_deg: float, cfg: dict, ids=None) -> dict:
+    """Tilt kind of one frame. The affine T -> P compresses one template direction v (right singular vector of the smaller singular value); the tilt (rotation) axis is
+    perpendicular to v. angle = angle between the rotation axis and the hand's long axis (fingertips minus MCP joints, see ferr_long_axis) = 90 deg - angle(v, long axis). angle < roll_max_deg: roll (rotation about the long
+    axis, 굴림); angle > pitch_min_deg: pitch (rotation about the width axis, 숙임); otherwise mixed (혼합). Frames with theta2d below class_min_theta_deg are not classified."""
+    M, _ = ferr_affine(T, P)
+    _, _, Vt = np.linalg.svd(M.T)
+    v = Vt[1]
+    c = float(np.degrees(np.arccos(np.clip(abs(float(v @ ferr_long_axis(T, ids))), 0.0, 1.0))))
+    ang = 90.0 - c
+    if not np.isfinite(theta_deg) or theta_deg < cfg["class_min_theta_deg"]:
+        kind = "미분류"
+    elif ang < cfg["roll_max_deg"]:
+        kind = "굴림"
+    elif ang > cfg["pitch_min_deg"]:
+        kind = "숙임"
+    else:
+        kind = "혼합"
+    return {"axis_angle_deg": ang, "kind": kind}
+
+
+def _ferr_bones(ids):
+    pos = {j: k for k, j in enumerate(ids)}
+    out = []
+    for a in FERR_FINGERS.values():
+        for j in (a, a + 1, a + 2):
+            if j in pos and j + 1 in pos:
+                out.append((pos[j], pos[j + 1]))
+    for a, b in ((5, 9), (9, 13), (13, 17)):
+        if a in pos and b in pos:
+            out.append((pos[a], pos[b]))
+    return out
+
+
+def _ferr_angle(u, v) -> float:
+    c = float(u @ v / max(np.linalg.norm(u) * np.linalg.norm(v), 1e-12))
+    return float(np.degrees(np.arccos(np.clip(c, -1.0, 1.0))))
+
+
+def ferr_shape(T: np.ndarray, ids, P: np.ndarray, wrist_xy=None) -> dict:
+    """Hand-shape indicators of one frame after the best-fit planar tilt (affine template -> frame, fitted on the MCP row and the middle and ring fingers so the index / pinky
+    joints that the spread measures cannot be absorbed by the fit) is undone: points Q = (P - t) M^-1 are in the template's coordinates.
+    bone_ratio: median over finger segments and MCP-row links of |length in Q / template length - 1| (fraction). spread_deg: angle between the index (MCP -> tip) and the pinky
+    direction in Q. wrist_deg: angle between wrist -> middle MCP and the perpendicular of the MCP row in Q (0 = straight; needs the wrist point). Returns NaN where not computable."""
+    pos = {j: k for k, j in enumerate(ids)}
+    core = [pos[j] for j in (5, 9, 13, 17, 10, 11, 12, 14, 15, 16) if j in pos]            # fit on the MCP row, middle and ring fingers: the index / pinky joints are measured, not fitted
+    M, t = ferr_affine(T[core], P[core]) if len(core) >= 6 else ferr_affine(T, P)
+    Minv = np.linalg.inv(M)
+    Q = (P - t) @ Minv
+    out = {"bone_ratio": float("nan"), "spread_deg": float("nan"), "wrist_deg": float("nan")}
+    r = [abs(np.linalg.norm(Q[a] - Q[b]) / max(np.linalg.norm(T[a] - T[b]), 1e-9) - 1.0) for a, b in _ferr_bones(ids)]
+    if r:
+        out["bone_ratio"] = float(np.median(r))
+    if all(j in pos for j in (5, 8, 17, 20)):
+        out["spread_deg"] = _ferr_angle(Q[pos[8]] - Q[pos[5]], Q[pos[20]] - Q[pos[17]])
+    if wrist_xy is not None and np.isfinite(wrist_xy).all() and all(j in pos for j in (5, 9, 17)):
+        w = (np.asarray(wrist_xy, float) - t) @ Minv
+        row = Q[pos[17]] - Q[pos[5]]
+        perp = np.array([-row[1], row[0]])
+        ang = _ferr_angle(Q[pos[9]] - w, perp)
+        out["wrist_deg"] = float(min(ang, 180.0 - ang))
+    return out
+
+
+def ferr_overlap(kp_frame, mask_frame, box_long: float) -> float:
+    """Smallest distance between the PIP / DIP / tip joints of neighbouring fingers (index-middle, middle-ring, ring-pinky), as a fraction of the hand box's long side."""
+    names = list(FERR_FINGERS.values())
+    best = float("nan")
+    for a, b in zip(names[:-1], names[1:]):
+        for j in (a + 1, a + 2, a + 3):
+            for k in (b + 1, b + 2, b + 3):
+                if mask_frame[j] and mask_frame[k]:
+                    d = float(np.linalg.norm(kp_frame[j] - kp_frame[k]) / max(box_long, 1e-9))
+                    best = d if not np.isfinite(best) else min(best, d)
+    return best
+
+
+def ferr_problem(a: dict, kp, mask, box, cfg_use: dict, size_wh) -> tuple:
+    """The estimation problem analyze() solved (same template, frames, Huber widths, the front + tilt frames it used), rebuilt from its result. Returns (Problem, ids)."""
+    W, H = size_wh
+    ecfg, J = cfg_use["estimate"], cfg_use["joints"]
+    ids = list(J["sets"][J["estimate_set"]])
+    kp = undistort(np.asarray(kp, float), ecfg, W, H)
+    bl = box_long(np.asarray(box, float))
+    n = len(bl)
+    huber = ecfg["huber_rel"] * np.where(np.isfinite(bl), bl, 0.0)
+    cx, cy = principal_point(ecfg, W, H)
+    frames = [(kp[i][ids], np.asarray(mask)[i][ids]) for i in range(n)]
+    used = [i for i, r in enumerate(a["role"]) if r in ("front", "tilt")]
+    return Problem(np.array(a["template"]), frames, cx, cy, huber, ecfg["min_points"]).subset(used), ids
+
+
+def ferr_frame_curves(pb: Problem, grid: np.ndarray) -> np.ndarray:
+    """(n_frames of pb.keep, len(grid)): every frame's own cost curve (cost of that frame alone at every f of the grid), rows in pb.keep order."""
+    return np.array([[cost(pb.subset([i]), float(f)) for f in grid] for i in pb.keep])
+
+
+def ferr_preferred(curve: np.ndarray, grid: np.ndarray, pb_i: Problem) -> dict:
+    """Preferred f of one frame (grid minimum, refined by the parabola in log f like fixed_template; at_edge when the minimum is on the grid border) and the sharpness
+    min(cost(1.15 f), cost(f / 1.15)) / cost(f)."""
+    k = int(np.argmin(curve))
+    lf = _parabola(np.log(grid), curve, k)
+    f = float(np.exp(np.clip(lf, np.log(grid[0]), np.log(grid[-1]))))
+    c0 = cost(pb_i, f)
+    return {"f_pref": f, "at_edge": bool(k in (0, len(grid) - 1)), "sharpness": float(min(cost(pb_i, f * 1.15), cost(pb_i, f / 1.15)) / max(c0, 1e-12))}
+
+
+def ferr_subset_ft(pb: Problem, front_ids, tilt_ids, grid: np.ndarray) -> dict:
+    """fixed_template on the front-window frames plus the given tilt frames only (all tilt frames given = the full estimate)."""
+    sub = pb.subset(sorted(set(front_ids) | set(tilt_ids)))
+    sol = fixed_template(sub, grid)
+    hi = grid[-1]
+    return {"f": sol["f"], "at_grid_edge": sol["at_grid_edge"], "side": None if not sol["at_grid_edge"] else ("상한" if sol["f"] >= hi * (1 - 1e-6) else "하한"),
+            "n_tilt": len([i for i in sub.keep if i in set(tilt_ids)])}
+
+
+def ferr_bin_table(values, f_pref, at_edge, edges=None, labels=None) -> list:
+    """Preferred f per feature bin: rows {label, n, n_edge, median_f (frames not on the grid border), n_with_f}. edges: increasing bin borders (len = bins + 1); labels:
+    category labels instead of edges (values are then the labels)."""
+    v = list(values)
+    f = np.asarray(f_pref, float)
+    e = np.asarray(at_edge, bool)
+    rows = []
+    cats = labels if labels is not None else [(edges[k], edges[k + 1]) for k in range(len(edges) - 1)]
+    for cat in cats:
+        if labels is not None:
+            m = np.array([x == cat for x in v])
+            name = str(cat)
+        else:
+            x = np.asarray(v, float)
+            m = np.isfinite(x) & (x >= cat[0]) & (x < cat[1])
+            name = f"{cat[0]:.3g}–{cat[1]:.3g}"
+        ok = m & ~e
+        rows.append({"label": name, "n": int(m.sum()), "n_edge": int((m & e).sum()), "n_with_f": int(ok.sum()), "median_f": float(np.median(f[ok])) if ok.any() else None})
+    return rows
+
+
+def ferr_cached_npz(frames: list, dset: dict, cache_dir) -> Path:
+    """Path of the cached mediapipe detection of this frame list (same key as swap_mediapipe_hands). Raises when it is not cached: experiment 23 never detects."""
+    settings = {k: dset[k] for k in ("weights", "num_hands", "min_hand_detection_confidence", "min_hand_presence_confidence", "box_margin", "remap")}
+    out = Path(cache_dir) / f"mediapipe_hands_{frames_key(frames, settings, 'mediapipe_hands')}.npz"
+    if not out.exists():
+        raise FileNotFoundError(f"cached detection missing: {out}")
+    return out
+
+
+def ferr_video(args) -> dict:
+    """One video: the candidate (mediapipe_hands, wrist_mode exclude, fixed_template) analysis from cached detections, the video-level factors, the frame-level table
+    (preferred f of every tilt frame, features, pull) and the subset estimates. args = (video, src_dir | None, input_dir, pcfg, c, cache_dir, tmp_root, ref22 | None, ref_f)."""
+    video, src_dir, input_dir, pcfg, c, cache_dir, tmp_root, ref22, ref_f = args
+    os.environ.setdefault("OMP_NUM_THREADS", "1")
+    cv2.setNumThreads(1)
+    fc = c["factors"]
+    cand = c["candidate"]
+    dset = c["detector_settings"][cand["detector"]]
+    pc = copy.deepcopy(pcfg)
+    pc["tracking"]["conf_min"] = float(dset["conf_min"])
+    res = {"video": video, "detector": cand["detector"]}
+    tmp = None
+    try:
+        if src_dir is not None:
+            r17 = json.loads((Path(src_dir) / cand["detector"] / "results.json").read_text())
+            times = np.array([x["time_s"] for x in r17["frames"]["list"]])
+            W, H = r17["normalization"]["output"]["display_w"], r17["normalization"]["output"]["display_h"]
+            dets = load_detections(Path(src_dir) / cand["detector"] / "detections.npz")
+            res["detections"] = "17 run"
+        else:
+            tmp = Path(tempfile.mkdtemp(prefix="hf23_", dir=tmp_root))
+            prep = fresp_prepare((video, input_dir, pcfg, {k: v for k, v in c.items() if k != "a2"}, str(tmp)))
+            frames = prep["frames"]
+            times = np.array([r["time_s"] for r in frames])
+            W, H = prep["size"]
+            dets = load_detections(ferr_cached_npz(frames, dset, cache_dir))
+            check_alignment(frames, dets)
+            res["detections"] = "22 run cache (found by the frame hashes)"
+        tr = track(dets, times, (W, H), pc["tracking"], front_start_s=float(pc["phases"]["front_skip_s"]))
+        seed = int(pc["experiment"]["seed"])
+        cfg_ex = pseg_wrist_cfg(pc) if cand["wrist_mode"] == "exclude" else pc
+        kp, mask, present, box = tr["kp"], tr["mask"], tr["present"], tr["box"]
+        a = analyze(kp, mask, present, box, tr["cls"], times, (W, H), cfg_ex, tilt_start=None, methods_full=("fixed_template",), seed=seed)
+        if "per_method" not in a:
+            res["failed"] = a.get("failed", "분석 실패")
+            return res
+        sol, pm = a["solutions"]["fixed_template"], a["per_method"]["fixed_template"]
+        f_est = float(sol["f"])
+        hi = a["grid"][-1]
+        res["ft"] = {"f": f_est, "at_grid_edge": bool(sol["at_grid_edge"]), "side": None if not sol["at_grid_edge"] else ("상한" if f_est >= hi * (1 - 1e-6) else "하한"), "verdict": pm["verdict"]["verdict"]}
+        if ref22 is not None:
+            s22 = ref22["original"][cand["wrist_mode"]]["solutions"]["fixed_template"]
+            res["same_as_22"] = bool(s22["f"] == f_est and ref22["original"][cand["wrist_mode"]]["verdict"] == pm["verdict"]["verdict"])
+        pb, ids = ferr_problem(a, kp, mask, box, cfg_ex, (W, H))
+        T = np.array(a["template"])
+        grid = np.array(a["grid"])
+        bl = box_long(box)
+        short = float(min(W, H))
+        half_diag = float(np.hypot(W, H) / 2.0)
+        res["cost_check"] = {"model_cost": float(sol["cost"]), "rebuilt_cost": float(cost(pb, f_est))}
+        # ---- frame-level curves
+        keep = list(pb.keep)
+        curves = ferr_frame_curves(pb, grid)
+        prof = np.array(sol["profile_cost"])
+        res["curve_mean_check"] = {"max_rel_diff": float(np.max(np.abs(curves.mean(0) - prof) / np.maximum(np.abs(prof), 1e-12))), "n_frames": len(keep)}
+        role = a["role"]
+        tilt_ids = [i for i in keep if role[i] == "tilt"]
+        front_ids = [i for i in keep if role[i] == "front"]
+        theta = np.array([np.nan if x is None else x for x in a["theta2d_deg"]], float)
+        axis = np.array([np.nan if x is None else x for x in a["axis2d_deg"]], float)
+        d_series, v_series = pseg_series(kp, mask, present, box, times, T, ids)
+        rms = dict(zip(pm["diagnostics"]["frames_used"], pm["diagnostics"]["frame_rms_px"]))
+
+        def shape_of(i):
+            vis = mask[i][ids]
+            P = kp[i][ids]
+            if vis.sum() < len(ids):
+                return {"bone_ratio": float("nan"), "spread_deg": float("nan"), "wrist_deg": float("nan")}
+            return ferr_shape(T, ids, P, kp[i][0] if mask[i][0] else None)
+        front_shape = [shape_of(i) for i in front_ids]
+        ref_spread = float(np.nanmedian([s["spread_deg"] for s in front_shape])) if front_shape else float("nan")
+        ref_wrist = float(np.nanmedian([s["wrist_deg"] for s in front_shape])) if front_shape else float("nan")
+        res["front_shape"] = {"bone_ratio": float(np.nanmedian([s["bone_ratio"] for s in front_shape])) if front_shape else None, "spread_deg": ref_spread, "wrist_deg": ref_wrist}
+        rows = []
+        pos_in_keep = {i: k for k, i in enumerate(keep)}
+        for i in tilt_ids:
+            sh = shape_of(i)
+            cl = ferr_tilt_class(T, kp[i][ids], theta[i], fc, ids)
+            pr = ferr_preferred(curves[pos_in_keep[i]], grid, pb.subset([i]))
+            cx_, cy_ = (box[i][0] + box[i][2]) / 2.0, (box[i][1] + box[i][3]) / 2.0
+            d_ref = cost(pb.subset([i]), float(ref_f)) - cost(pb.subset([i]), f_est)
+            rows.append({"index": int(i), "time_s": float(times[i]), "theta2d_deg": float(theta[i]), "kind": cl["kind"], "axis_angle_deg": cl["axis_angle_deg"], "direction_deg": float(axis[i]),
+                         "resid_rel_pct": float(100.0 * rms[i] / bl[i]) if i in rms and bl[i] > 0 else float("nan"), "bone_ratio_pct": 100.0 * sh["bone_ratio"],
+                         "spread_change_deg": abs(sh["spread_deg"] - ref_spread), "wrist_change_deg": abs(sh["wrist_deg"] - ref_wrist),
+                         "overlap_rel": ferr_overlap(kp[i], mask[i], bl[i]), "speed": float(v_series[i]), "center_offset_pct": float(100.0 * np.hypot(cx_ - W / 2.0, cy_ - H / 2.0) / half_diag),
+                         "f_pref": pr["f_pref"], "pref_at_edge": pr["at_edge"], "sharpness": pr["sharpness"], "pull": float(d_ref)})
+        res["frames"] = rows
+        res["pull_front_total"] = float(sum(cost(pb.subset([i]), float(ref_f)) - cost(pb.subset([i]), f_est) for i in front_ids))
+        res["n_front_frames"] = len(front_ids)
+        # ---- video-level factors
+        th_t = np.array([r["theta2d_deg"] for r in rows])
+        kinds = [r["kind"] for r in rows]
+        classified = [k for k in kinds if k != "미분류"]
+        fw = [int(i) for i in a["front_window"]["idx"]]
+        dfw = d_series[fw]
+        jd = a["solutions"]["joint_delta"]
+        nm = lambda key: float(np.nanmedian([r[key] for r in rows])) if rows else None      # noqa: E731
+        dev = {}
+        for other in (c.get("compare_detectors") or []):
+            p_ = Path(src_dir) / other / "detections.npz" if src_dir is not None else None
+            if p_ is None or not p_.exists():
+                dev[other] = None
+                continue
+            tc = dict(pc["tracking"], conf_min=float(c["detector_settings"][other]["conf_min"]))
+            to = track(load_detections(p_), times, (W, H), tc, front_start_s=float(pc["phases"]["front_skip_s"]))
+            ds = []
+            for i in tilt_ids:
+                m_ = mask[i][ids] & to["mask"][i][ids]
+                if present[i] and to["present"][i] and m_.sum() >= 4:
+                    ds.append(float(np.linalg.norm(kp[i][ids][m_] - to["kp"][i][ids][m_], axis=-1).mean() / bl[i] * 100.0))
+            dev[other] = {"median_pct": float(np.median(ds)) if ds else None, "n_frames": len(ds)}
+        sig = grev_f_signal(a, kp, mask, ids, f_est)
+        res["factors"] = {
+            "jd_delta_deg": float(jd["delta_deg"]), "jd_phi_deg": float(jd["phi_deg"]), "d0": float(np.nanpercentile(dfw, 95)) if np.isfinite(dfw).any() else None,
+            "front_jitter_rel_pct": 100.0 * float(a["front_jitter_rel"]), "finger_ext_min": float(a["finger_extension"]["min"]), "finger_ext_mean": float(a["finger_extension"]["mean"]),
+            "n_tilt_frames": int(a["n_tilt_used"]), "theta_median_deg": float(np.median(th_t)) if len(th_t) else None, "theta_p90_deg": float(np.percentile(th_t, 90)) if len(th_t) else None,
+            "theta_over_45_frac": float((th_t > 45.0).mean()) if len(th_t) else None,
+            "frac_pitch": float(np.mean([k == "숙임" for k in classified])) if classified else None, "frac_roll": float(np.mean([k == "굴림" for k in classified])) if classified else None,
+            "frac_mixed": float(np.mean([k == "혼합" for k in classified])) if classified else None, "frac_unclassified": float(np.mean([k == "미분류" for k in kinds])) if kinds else None,
+            "axis_bins": int(a["axis_coverage"]["bins"]), "hand_box_short_ratio_front": float(np.nanmedian(bl[fw]) / short), "center_offset_pct": nm("center_offset_pct"),
+            "edge_rate": float(a["edge_frame_rate"]), "bone_ratio_pct": nm("bone_ratio_pct"), "spread_change_deg": nm("spread_change_deg"), "wrist_change_deg": nm("wrist_change_deg"),
+            "reproj_rms_rel_pct": 100.0 * float(pm["diagnostics"]["reproj_rms_rel"]), "detector_diff_pct": dev, "sharpness": float(pm["diagnostics"]["sharpness"]),
+            "bootstrap_rel_std": None if pm["bootstrap"]["rel_std"] is None or not np.isfinite(pm["bootstrap"]["rel_std"]) else float(pm["bootstrap"]["rel_std"]),
+            "f_rel_uncertainty": None if pm["f_rel_uncertainty"] is None or not np.isfinite(pm["f_rel_uncertainty"]) else float(pm["f_rel_uncertainty"]),
+            "f_signal_ratio": sig["ratio_median"], "overlap_rel": nm("overlap_rel"), "speed": nm("speed")}
+        # ---- subsets fixed in the yaml
+        sub = {}
+        nmin = int(fc["min_subset_frames"])
+        resid = np.array([r["resid_rel_pct"] for r in rows])
+        shp = np.array([r["bone_ratio_pct"] for r in rows])
+        for s in c["subsets"]:
+            kind = s["kind"]
+            if kind == "pitch":
+                sel = [r["index"] for r in rows if r["kind"] == "숙임"]
+            elif kind == "roll":
+                sel = [r["index"] for r in rows if r["kind"] == "굴림"]
+            elif kind == "theta_range":
+                lo, hi_ = s["range"]
+                sel = [r["index"] for r in rows if lo <= r["theta2d_deg"] <= hi_]
+            elif kind == "residual_low_half":
+                sel = [rows[k]["index"] for k in np.argsort(resid, kind="stable")[:len(rows) // 2 + len(rows) % 2]] if rows else []
+            elif kind == "shape_low_half":
+                sel = [rows[k]["index"] for k in np.argsort(shp, kind="stable")[:len(rows) // 2 + len(rows) % 2]] if rows else []
+            else:
+                raise ValueError(kind)
+            if len(sel) < nmin:
+                sub[s["name"]] = {"skipped": f"기울기 프레임 {len(sel)}장 < {nmin}장", "n_tilt": len(sel)}
+            else:
+                sub[s["name"]] = ferr_subset_ft(pb, front_ids, sel, grid)
+        res["subsets"] = sub
+        res["subset_all"] = ferr_subset_ft(pb, front_ids, tilt_ids, grid)                  # control: every tilt frame = the full estimate
+        return res
+    finally:
+        if tmp is not None:
+            shutil.rmtree(tmp, ignore_errors=True)
+
+
+# ====================================================================================================
+# long  (experiment 25: the candidate on long new videos; new section, earlier functions are used unchanged)
+# Candidate = mediapipe_hands + wrist_mode exclude + fixed_template (22). New videos only enter after b (the common bias of the baseline videos) is fixed.
+# Pooled estimate: the per-video fixed_template cost curves (every video with its own template, same f grid) are summed and minimised like fixed_template.
+# H1 noise falls with more data, H2 a common bias exists, H3 b transfers to the new videos, H4 dropping small-tilt frames helps (rules and thresholds in the yaml).
+# ====================================================================================================
+
+def long_find_new_videos(input_dir, after_number: int, extensions=(".mov", ".mp4", ".m4v", ".mkv", ".avi")) -> list:
+    """Hand videos IMG_<number> in input_dir with a number above after_number: [{video, number, duration_s, width, height}] (technical stream fields only)."""
+    rows = []
+    for p in sorted(Path(input_dir).expanduser().iterdir()):
+        m = re.fullmatch(r"IMG_(\d+)", p.stem)
+        if m and p.suffix.lower() in set(extensions) and int(m.group(1)) > int(after_number):
+            i = probe(p)
+            rows.append({"video": p.name, "number": int(m.group(1)), "duration_s": float(i["duration_s"]), "width": int(i["display_w"]), "height": int(i["display_h"])})
+    return rows
+
+
+def long_pooled_curve(curves) -> np.ndarray:
+    """Sum of the per-video fixed_template cost curves (rows = videos, columns = the common f grid)."""
+    return np.asarray(curves, float).sum(axis=0)
+
+
+def long_curve_min(curve, grid) -> dict:
+    """f of a cost curve like fixed_template: grid minimum refined by the parabola in log f, clipped to the grid; at_grid_edge when the minimum is on the border."""
+    grid = np.asarray(grid, float)
+    c = np.asarray(curve, float)
+    k = int(np.argmin(c))
+    f = float(np.exp(np.clip(_parabola(np.log(grid), c, k), np.log(grid[0]), np.log(grid[-1]))))
+    return {"f": f, "at_grid_edge": bool(k in (0, len(grid) - 1)), "side": None if k not in (0, len(grid) - 1) else ("상한" if k == len(grid) - 1 else "하한")}
+
+
+def long_pooled_estimate(curves, grid) -> dict:
+    return long_curve_min(long_pooled_curve(curves), grid)
+
+
+def long_pooled_bootstrap(curves, grid, n: int, seed: int) -> dict:
+    """Video-level bootstrap of the pooled estimate: videos are drawn with replacement n times (fixed seed). Returns the pooled f of every draw, the number of draws on the grid edge."""
+    curves = np.asarray(curves, float)
+    rng = np.random.default_rng(int(seed))
+    fs, edge = [], 0
+    for _ in range(int(n)):
+        pick = rng.integers(0, len(curves), len(curves))
+        r = long_pooled_estimate(curves[pick], grid)
+        fs.append(r["f"])
+        edge += int(r["at_grid_edge"])
+    return {"f": fs, "n_edge": edge, "n": int(n), "seed": int(seed)}
+
+
+def long_log_ci(fs, ref: float, level: float = 0.95) -> tuple:
+    """Percentile interval of log(f / ref) over bootstrap draws."""
+    x = np.log(np.asarray(fs, float) / float(ref))
+    a = (1.0 - level) / 2.0
+    return float(np.quantile(x, a)), float(np.quantile(x, 1.0 - a))
+
+
+def long_boot_log_std(fs) -> float:
+    """Standard deviation of log f over the block-bootstrap estimates of one video (NaN with fewer than 2)."""
+    x = np.log(np.asarray(fs, float))
+    return float(np.std(x, ddof=1)) if len(x) > 1 else float("nan")
+
+
+def long_theta_keep(theta, tilt_ids, theta_min_deg: float) -> list:
+    """Tilt frames whose theta2d is at least theta_min_deg (frames without theta2d are dropped)."""
+    th = np.asarray(theta, float)
+    return [int(i) for i in tilt_ids if np.isfinite(th[i]) and th[i] >= float(theta_min_deg)]
+
+
+def long_h1(new_stds, base_stds, ratio: float) -> dict:
+    """H1: the median per-video bootstrap log SD of the new videos <= ratio * the baseline median -> supported."""
+    ns = [x for x in new_stds if np.isfinite(x)]
+    bs = [x for x in base_stds if np.isfinite(x)]
+    if not ns or not bs:
+        return {"verdict": "판단 불가", "new_median": None, "base_median": None, "ratio_used": ratio}
+    nm, bm = float(np.median(ns)), float(np.median(bs))
+    return {"verdict": "지지" if nm <= ratio * bm else "근거 없음", "new_median": nm, "base_median": bm, "ratio_used": ratio, "ratio_observed": nm / bm}
+
+
+def long_h2(ci: tuple, n_new: int, min_videos: int) -> dict:
+    """H2: the 95% interval of log(f_pooled / ref) excludes 0 -> common bias; fewer than min_videos new videos -> not judged (values only)."""
+    lo, hi = ci
+    if n_new < min_videos:
+        return {"verdict": "판단 불가", "reason": f"새 영상 {n_new}개 < {min_videos}개", "ci": [lo, hi]}
+    return {"verdict": "공통 편향 있음" if (lo > 0 or hi < 0) else "확인 안 됨", "ci": [lo, hi], "sign": None if not (lo > 0 or hi < 0) else ("+" if lo > 0 else "−")}
+
+
+def long_h3(f_new, ref: float, b: float, n_new: int, min_videos: int, fraction: float) -> dict:
+    """H3: with the correction f / exp(b), the median |error| falls and at least `fraction` of the new videos have a smaller |error| -> effective."""
+    f = np.asarray(f_new, float)
+    before = np.abs(f / ref - 1.0)
+    after = np.abs(f / np.exp(b) / ref - 1.0)
+    frac = float(np.mean(after < before)) if len(f) else float("nan")
+    mb, ma = float(np.median(before)) if len(f) else float("nan"), float(np.median(after)) if len(f) else float("nan")
+    out = {"median_abs_before": mb, "median_abs_after": ma, "fraction_reduced": frac, "n": int(len(f)), "b": float(b)}
+    if n_new < min_videos:
+        return {**out, "verdict": "판단 불가", "reason": f"새 영상 {n_new}개 < {min_videos}개"}
+    return {**out, "verdict": "보정 효과 있음" if (ma < mb and frac >= fraction - 1e-9) else "보정 효과 없음"}
+
+
+def long_h4(f_orig, f_h4, ref: float, gain: float, fraction: float) -> dict:
+    """H4: over the videos with a theta2d >= limit estimate, the median |error| is at least `gain` smaller than the original FT's and at least `fraction` of them improve."""
+    fo, fh = np.asarray(f_orig, float), np.asarray(f_h4, float)
+    if not len(fo):
+        return {"verdict": "판단 불가", "n": 0}
+    eo, eh = np.abs(fo / ref - 1.0), np.abs(fh / ref - 1.0)
+    mo, mh, frac = float(np.median(eo)), float(np.median(eh)), float(np.mean(eh < eo))
+    return {"verdict": "개선" if (mo - mh >= gain - 1e-12 and frac >= fraction - 1e-9) else "근거 없음", "median_abs_orig": mo, "median_abs_h4": mh, "fraction_improved": frac, "n": int(len(fo))}
+
+
+def long_calibration(f, sigma_log, ref: float, b: float = 0.0) -> dict:
+    """Share of videos whose |log(f / ref) - b| lies within 1 and 2 bootstrap log SDs."""
+    e = np.abs(np.log(np.asarray(f, float) / ref) - b)
+    s = np.asarray(sigma_log, float)
+    ok = np.isfinite(s) & (s > 0)
+    return {"within_1sigma": float(np.mean(e[ok] <= s[ok])) if ok.any() else None, "within_2sigma": float(np.mean(e[ok] <= 2 * s[ok])) if ok.any() else None, "n": int(ok.sum())}
+
+
+def long_video(args) -> dict:
+    """One video of experiment 25: the candidate (exclude, fixed_template) from mediapipe detections with its cost curve, bootstrap, motion statistics and the theta2d >= limit variant (H4);
+    for new videos also the exclusion check, 21's guide and transition, and the comparison estimates (keep, joint_delta, AnyCalib). Baseline videos are read from their 17 runs.
+    args = (video, kind 'baseline' | 'new', src_dir | None, prep | None, npz | None, pcfg, c, lock_dir, gpu_id | None)."""
+    video, kind, src_dir, prep, npz, pcfg, c, lock_dir, gpu_id = args
+    if gpu_id is not None:
+        os.environ["CUDA_VISIBLE_DEVICES"] = str(gpu_id)
+    os.environ.setdefault("OMP_NUM_THREADS", "1")
+    cv2.setNumThreads(1)
+    cand, hy, ex = c["candidate"], c["hypotheses"], c["exclusion"]
+    dset = c["detector_settings"][cand["detector"]]
+    pc = copy.deepcopy(pcfg)
+    pc["tracking"]["conf_min"] = float(dset["conf_min"])
+    if kind == "baseline":
+        r17 = json.loads((Path(src_dir) / cand["detector"] / "results.json").read_text())
+        times = np.array([x["time_s"] for x in r17["frames"]["list"]])
+        W, H = r17["normalization"]["output"]["display_w"], r17["normalization"]["output"]["display_h"]
+        dets = load_detections(Path(src_dir) / cand["detector"] / "detections.npz")
+        frames = None
+    else:
+        frames = prep["frames"]
+        times = np.array([r["time_s"] for r in frames])
+        W, H = prep["size"]
+        dets = load_detections(Path(npz))
+        check_alignment(frames, dets)
+    tr = track(dets, times, (W, H), pc["tracking"], front_start_s=float(pc["phases"]["front_skip_s"]))
+    kp, mask, present, box = tr["kp"], tr["mask"], tr["present"], tr["box"]
+    res = {"video": video, "kind": kind, "n_frames": int(len(times)), "duration_s": float(times[-1] - times[0]) if len(times) else 0.0, "size": [W, H]}
+    fw = front_window(times, present, kp, mask, box, pc["phases"])
+    res["detect_rate"] = float(present.mean())
+    res["edge_rate"] = fresp_edge_rate(box, present, W, H)
+    res["front_window"] = [fw.get("t0"), fw.get("t1")]
+    reasons = []
+    if len(fw["idx"]) == 0 or fw["detect_rate"] < float(pc["phases"]["front_min_detect_rate"]):
+        reasons.append("유효한 정면 창(1초)이 없음")
+    if res["edge_rate"] > float(ex["edge_rate_max"]):
+        reasons.append(f"가장자리 접촉 프레임 {100 * res['edge_rate']:.1f}% > {100 * float(ex['edge_rate_max']):.0f}%")
+    if 1.0 - res["detect_rate"] > float(ex["detect_fail_max"]):
+        reasons.append(f"손 검출 실패 프레임 {100 * (1.0 - res['detect_rate']):.1f}% > {100 * float(ex['detect_fail_max']):.0f}%")
+    res["excluded"] = reasons
+    if kind == "new" and reasons:
+        return res
+    seed = int(pc["experiment"]["seed"])
+    cfg_ex = pseg_wrist_cfg(pc) if cand["wrist_mode"] == "exclude" else pc
+    a = analyze(kp, mask, present, box, tr["cls"], times, (W, H), cfg_ex, tilt_start=None, methods_full=("fixed_template",), seed=seed)
+    if "per_method" not in a:
+        res["failed"] = a.get("failed", "분석 실패")
+        return res
+    sol, jd, pm = a["solutions"]["fixed_template"], a["solutions"]["joint_delta"], a["per_method"]["fixed_template"]
+    grid = np.array(a["grid"])
+    hi = grid[-1]
+    side = lambda s: None if not s["at_grid_edge"] else ("상한" if s["f"] >= hi * (1 - 1e-6) else "하한")      # noqa: E731
+    bf = pm["bootstrap"]["f"]
+    res["ft"] = {"f": float(sol["f"]), "at_grid_edge": bool(sol["at_grid_edge"]), "side": side(sol), "verdict": pm["verdict"]["verdict"], "sharpness": float(pm["diagnostics"]["sharpness"]),
+                 "f_rel_uncertainty": float(pm["f_rel_uncertainty"]) if np.isfinite(pm["f_rel_uncertainty"]) else None, "boot_rel_std": float(pm["bootstrap"]["rel_std"]) if np.isfinite(pm["bootstrap"]["rel_std"]) else None,
+                 "boot_log_std": long_boot_log_std(bf), "boot_f": [float(x) for x in bf], "n_boot": int(pm["bootstrap"]["n_done"])}
+    res["jd"] = {"f": float(jd["f"]), "at_grid_edge": bool(jd["at_grid_edge"]), "side": side(jd)}
+    res["curve"] = {"grid": grid.tolist(), "cost": [float(x) for x in sol["profile_cost"]]}
+    theta = np.array([np.nan if x is None else x for x in a["theta2d_deg"]], float)
+    role = a["role"]
+    pb, ids = ferr_problem(a, kp, mask, box, cfg_ex, (W, H))
+    front_ids = [i for i in pb.keep if role[i] == "front"]
+    tilt_ids = [i for i in pb.keep if role[i] == "tilt"]
+    th = theta[tilt_ids]
+    res["motion"] = {"tilt_start_s": float(a["tilt_start_s"]), "tilt_last_s": float(times[tilt_ids].max()) if tilt_ids else None, "n_tilt_frames": len(tilt_ids),
+                     "tilt_duration_s": float(times[tilt_ids].max() - a["tilt_start_s"]) if tilt_ids else 0.0, "theta_median_deg": float(np.nanmedian(th)) if len(th) else None,
+                     "theta_p90_deg": float(np.nanpercentile(th, 90)) if len(th) else None, "theta_over_45_frac": float(np.nanmean(th > 45.0)) if len(th) else None,
+                     "theta_max_deg": float(np.nanmax(th)) if len(th) else None, "theta_tilt": [round(float(x), 1) for x in th if np.isfinite(x)]}
+    sel = long_theta_keep(theta, tilt_ids, float(hy["h4_theta_min_deg"]))
+    if len(sel) >= int(hy["h4_min_frames"]):
+        s4 = ferr_subset_ft(pb, front_ids, sel, grid)
+        res["h4"] = {"theta_min_deg": float(hy["h4_theta_min_deg"]), "n_tilt": len(sel), "f": s4["f"], "at_grid_edge": s4["at_grid_edge"], "side": s4["side"]}
+    else:
+        res["h4"] = {"theta_min_deg": float(hy["h4_theta_min_deg"]), "n_tilt": len(sel), "skipped": f"기울기 프레임 {len(sel)}장 < {int(hy['h4_min_frames'])}장"}
+    if kind == "baseline":
+        return res
+    # ---- new videos: per-frame table, 21's guide and transition, comparison estimates
+    keepset = set(sel)
+    res["frames"] = [{"index": int(i), "time_s": float(times[i]), "theta2d_deg": float(theta[i]), "in_h4_subset": bool(i in keepset)} for i in tilt_ids]
+    if c.get("compare_estimates"):
+        c21 = {"phase_segmentation": c["guide"]["phase_segmentation"], "conditions": c["guide"]["conditions"], "f_estimation": {"compare_wrist_modes": ["keep"]}, "transition_method": "linear_d"}
+        g = grev_analyze(kp, mask, present, box, tr["cls"], times, (W, H), pc, c21, seed)
+        if "transition" in g:
+            tr21 = g["transition"]
+            res["guide"] = {"t_transition": tr21.get("t_transition"), "guide": bool(tr21["guide"]), "reasons": tr21["reasons"], "items": {k: bool(v) for k, v in tr21["items"].items()},
+                            "d0": tr21.get("d0"), "d_thr": tr21.get("d_thr"), "d0_capped": tr21.get("d0_capped"), "front_window": tr21.get("front_window")}
+            kw = g["wrist"]["keep"]
+            res["keep"] = {"ft": kw["solutions"]["fixed_template"], "jd": kw["solutions"]["joint_delta"], "verdict": kw["verdict"]} if "solutions" in kw else {"failed": kw.get("failed")}
+        else:
+            res["guide"] = {"failed": g.get("failed")}
+        acfg = copy.deepcopy(pc["anycalib"])
+        if pc["anycalib"]["enabled"] and frames is not None:
+            with fresp_gpu_lock(Path(lock_dir) / f"gpu_{'' if gpu_id is None else gpu_id}.lock"):
+                fresp_thermal_wait(float(c["anycalib_guard"]["gpu_pause_c"]), float(c["anycalib_guard"]["gpu_resume_c"]))
+                ac = anycalib_run(frames, acfg, float(pc["phases"]["front_phase_s"]), lambda m="": None)
+            res["anycalib"] = {m: {"median": v["summary"].get("median"), "n": v["summary"].get("n")} for m, v in ac["models"].items()}
+    return res
+
+
+# ====================================================================================================
+# gen  (experiment 26: new judgment rule v2, generalisation groups, hand-trajectory effect of the f error; new section, earlier functions are used unchanged)
+# Videos carry group (G1 other person, G2 other phone, G3 other lens, G4 gloves, G5 calibration + work), person_id, phone, lens, glove and ref_f. Candidate = 22 / 25's.
+# Rating v2 (per video): from the tilt length, the largest theta2d and the bootstrap log SD, not from the sharpness. Verification of v2 and the group verdicts: see gen_verify / gen_group_verdict.
+# Trajectory: from the 2D hand centre and the hand size ratio, X = (u - cx) L / l, Y = (v - cy) L / l, Z = f L / l; changing f only scales Z.
+# ====================================================================================================
+
+GEN_GROUPS = ("G1", "G2", "G3", "G4", "G5")
+GEN_REQUIRED = ("file", "group", "person_id", "phone", "lens", "glove", "ref_f")
+
+
+def gen_check_videos(entries) -> list:
+    """Validates the videos list of the yaml (every entry needs file, group, person_id, phone, lens, glove, ref_f). Stops (SystemExit) with the reason otherwise."""
+    if not entries:
+        raise SystemExit("videos is empty: give the video entries in the yaml (file, group, person_id, phone, lens, glove, ref_f)")
+    for i, e in enumerate(entries):
+        miss = [k for k in GEN_REQUIRED if e.get(k) is None]
+        if miss:
+            raise SystemExit(f"videos[{i}] ({e.get('file')}): missing {miss}")
+        if e["group"] not in GEN_GROUPS:
+            raise SystemExit(f"videos[{i}] ({e['file']}): group must be one of {GEN_GROUPS}")
+        if float(e["ref_f"]) <= 0:
+            raise SystemExit(f"videos[{i}] ({e['file']}): ref_f must be positive")
+    return list(entries)
+
+
+def gen_rating(tilt_s, theta_max_deg, boot_log_std, v2: dict) -> str:
+    """Rating v2 of one video. '사용 가능': tilt >= tilt_min_s, largest theta2d >= theta_max_min_deg and bootstrap log SD <= usable_log_std_max.
+    '참고': both shooting conditions hold and the log SD is <= reference_log_std_max. Otherwise '사용 불가'."""
+    if tilt_s is None or theta_max_deg is None or boot_log_std is None or not np.isfinite(boot_log_std):
+        return "사용 불가"
+    shoot = bool(tilt_s >= float(v2["tilt_min_s"]) and theta_max_deg >= float(v2["theta_max_min_deg"]))
+    if shoot and boot_log_std <= float(v2["usable_log_std_max"]):
+        return "사용 가능"
+    if shoot and boot_log_std <= float(v2["reference_log_std_max"]):
+        return "참고"
+    return "사용 불가"
+
+
+def gen_verify(rows: list, ver: dict) -> dict:
+    """Verification of rating v2 on videos (rows: dict with rating, f, ref_f, sigma): among the usable videos the share with |log(f / ref_f)| <= within_sigma * sigma must be >= within_share_min and
+    their median |error| <= median_abs_err_max. Fewer than min_usable usable videos: not judged."""
+    use = [r for r in rows if r["rating"] == "사용 가능" and r.get("f") is not None]
+    out = {"n_usable": len(use), "n_videos": len(rows)}
+    if use:
+        e = np.array([abs(r["f"] / r["ref_f"] - 1.0) for r in use])
+        w = np.array([abs(np.log(r["f"] / r["ref_f"])) <= float(ver["within_sigma"]) * r["sigma"] for r in use])
+        out.update({"within_share": float(w.mean()), "median_abs_err": float(np.median(e))})
+    if len(use) < int(ver["min_usable"]):
+        return {**out, "verdict": "판단 불가", "reason": f"사용 가능 영상 {len(use)}개 < {int(ver['min_usable'])}개"}
+    ok = out["within_share"] >= float(ver["within_share_min"]) and out["median_abs_err"] <= float(ver["median_abs_err_max"])
+    return {**out, "verdict": "판정 v2 검증됨" if ok else "검증 안 됨"}
+
+
+def gen_group_verdict(curves, grid, f_videos, ref_f: float, gcfg: dict, n_excluded: int = 0, n_total: int | None = None) -> dict:
+    """Generalisation verdict of one group. curves = the group's per-video fixed_template cost curves; f_videos = their f (None = no value). Pooled f (curves summed) and a
+    video-level bootstrap interval; pass: pooled f within +-pooled_tol of ref_f and at least video_fraction of the videos within +-video_tol; fewer than min_videos videos: not judged."""
+    n = len(curves)
+    out = {"n_videos": n, "n_excluded": int(n_excluded), "n_total": int(n_total if n_total is not None else n + n_excluded), "ref_f": float(ref_f)}
+    if n == 0:
+        return {**out, "verdict": "영상 없음"}
+    est = long_pooled_estimate(curves, grid)
+    b = long_pooled_bootstrap(curves, grid, int(gcfg["bootstrap_n"]), int(gcfg["bootstrap_seed"]))
+    inside = [f is not None and abs(f / ref_f - 1.0) <= float(gcfg["video_tol"]) for f in f_videos]
+    out.update({"pooled_f": est["f"], "at_grid_edge": est["at_grid_edge"], "side": est["side"], "interval_95": [float(np.quantile(b["f"], 0.025)), float(np.quantile(b["f"], 0.975))],
+                "pooled_within_tol": bool(not est["at_grid_edge"] and abs(est["f"] / ref_f - 1.0) <= float(gcfg["pooled_tol"])), "video_share_within_tol": float(np.mean(inside))})
+    if n < int(gcfg["min_videos"]):
+        return {**out, "verdict": "판단 불가", "reason": f"영상 {n}개 < {int(gcfg['min_videos'])}개"}
+    return {**out, "verdict": "통과" if (out["pooled_within_tol"] and out["video_share_within_tol"] >= float(gcfg["video_fraction"]) - 1e-9) else "실패"}
+
+
+def gen_trajectory(u, v, ell, f: float, L_mm: float, W: float, H: float) -> np.ndarray:
+    """Camera coordinates (mm), shape (n, 3): X = (u - cx) L / l, Y = (v - cy) L / l, Z = f L / l (pinhole, principal point at the image centre, l = apparent hand length in px).
+    f enters only through Z."""
+    u, v, ell = np.asarray(u, float), np.asarray(v, float), np.asarray(ell, float)
+    return np.c_[(u - W / 2.0) * L_mm / ell, (v - H / 2.0) * L_mm / ell, f * L_mm / ell]
+
+
+def gen_smooth_traj(times, P: np.ndarray, window_s: float) -> np.ndarray:
+    """0.3 s centred running median of every coordinate (analysis only)."""
+    return np.c_[[pseg_median_filter(times, P[:, k], window_s) for k in range(P.shape[1])]].T
+
+
+def gen_step_vectors(times, P: np.ndarray, step_s: float, max_gap_s: float) -> tuple:
+    """Movement vectors between points step_s apart on a regular time grid: (grid index pairs' start times, vectors (m, 3)). A grid point is used when a valid frame lies within max_gap_s."""
+    t = np.asarray(times, float)
+    ok = np.isfinite(P).all(axis=1)
+    t, P = t[ok], P[ok]
+    if len(t) < 2:
+        return np.zeros(0), np.zeros((0, 3))
+    grid = np.arange(t[0], t[-1] + 1e-9, step_s)
+    keep = np.array([np.abs(t - g).min() <= max_gap_s for g in grid])
+    Q = np.c_[[np.interp(grid, t, P[:, k]) for k in range(3)]].T
+    idx = [i for i in range(len(grid) - 1) if keep[i] and keep[i + 1]]
+    return grid[idx], np.array([Q[i + 1] - Q[i] for i in idx]).reshape(-1, 3)
+
+
+def gen_step_metrics(times, P_ref: np.ndarray, P_cmp: np.ndarray, tcfg: dict) -> dict:
+    """Errors of a comparison trajectory against the reference trajectory on step_s movement vectors: magnitude error (%), direction error (deg), depth-movement error (mm) with
+    their median and 90th percentile, and the median share of the depth component in the reference movement. Steps with a reference movement below min_step_mm are not used."""
+    _, dr = gen_step_vectors(times, P_ref, float(tcfg["step_s"]), float(tcfg["max_gap_s"]))
+    _, dc = gen_step_vectors(times, P_cmp, float(tcfg["step_s"]), float(tcfg["max_gap_s"]))
+    n = min(len(dr), len(dc))
+    dr, dc = dr[:n], dc[:n]
+    nr, nc = np.linalg.norm(dr, axis=1), np.linalg.norm(dc, axis=1)
+    use = nr >= float(tcfg["min_step_mm"])
+    out = {"n_steps": int(use.sum())}
+    if not use.any():
+        return {**out, "magnitude_err_median_pct": None, "magnitude_err_p90_pct": None, "direction_err_median_deg": None, "direction_err_p90_deg": None, "depth_err_median_mm": None, "depth_err_p90_mm": None,
+               "depth_share_median": None}
+    mag = 100.0 * np.abs(nc[use] / nr[use] - 1.0)
+    cos = np.clip((dr[use] * dc[use]).sum(1) / np.maximum(nr[use] * nc[use], 1e-12), -1.0, 1.0)
+    ang = np.degrees(np.arccos(cos))
+    dep = np.abs(dc[use, 2] - dr[use, 2])
+    share = np.abs(dr[use, 2]) / nr[use]
+    return {**out, "magnitude_err_median_pct": float(np.median(mag)), "magnitude_err_p90_pct": float(np.percentile(mag, 90)), "direction_err_median_deg": float(np.median(ang)),
+            "direction_err_p90_deg": float(np.percentile(ang, 90)), "depth_err_median_mm": float(np.median(dep)), "depth_err_p90_mm": float(np.percentile(dep, 90)), "depth_share_median": float(np.median(share))}
+
+
+def gen_present_until(times, present, calib_end_s) -> np.ndarray:
+    """Frames the f estimate may use: detected frames up to calib_end_s (None = all). Later frames never enter the estimate (G5: they are the work segment)."""
+    p = np.asarray(present, bool)
+    return p if calib_end_s is None else (p & (np.asarray(times, float) <= float(calib_end_s)))
+
+
+def gen_s1(T: np.ndarray, P: np.ndarray) -> float:
+    """Larger singular value of the linear part of the least-squares affine map template T -> frame points P (the in-plane scale that tilt does not shrink)."""
+    A = np.c_[T, np.ones(len(T))]
+    M, *_ = np.linalg.lstsq(A, P, rcond=None)
+    return float(np.linalg.svd(M[:2].T, compute_uv=False)[0])
+
+
+def gen_guide(kp, mask, present, box, cls, times, size_wh, pcfg: dict, c: dict, seed: int) -> dict:
+    """21's transition (linear_d) and shooting guide with the guide settings of this experiment (guide v2: hand box <= 0.65), the same steps as grev_analyze without the f estimates."""
+    W, H = size_wh
+    p, ccfg = c["guide"]["phase_segmentation"], c["guide"]["conditions"]
+    est_ids = list(pcfg["joints"]["sets"][pcfg["joints"]["estimate_set"]])
+    a0 = analyze(kp, mask, present, box, cls, times, size_wh, pcfg, tilt_start=None, methods_full=(), seed=seed)
+    if "solutions" not in a0:
+        return {"failed": a0.get("failed", "분석 실패")}
+    theta = np.array([np.nan if x is None else x for x in a0["theta2d_deg"]], float)
+    fw0 = a0["front_window"]
+    fw = fw0 if not p.get("front_search_s") else grev_front_window(times, present, kp, mask, box, pcfg["phases"], p["front_search_s"])
+    if len(fw["idx"]) == 0:
+        return {"failed": "정면 창을 만들 수 없음"}
+    tr_ = grev_transition(times, present, kp, mask, box, np.array(a0["template"]), est_ids, fw["idx"], p)
+    m = grev_metrics(times, present, box, W, H, theta, a0["role"], tr_.get("t_transition"), a0.get("front_jitter_rel"), a0["axis_coverage"]["bins"], a0["finger_extension"]["min"],
+                     float(ccfg.get("tilt_max_deg", 45.0)))
+    g = grev_conditions_check(m, ccfg)
+    return {"t_transition": tr_.get("t_transition"), "guide": bool(g["guide"]), "reasons": g["reasons"], "items": {k: bool(v) for k, v in g["items"].items()},
+            "box_short_ratio": m.get("box_short_ratio"), "d0": tr_.get("d0"), "d_thr": tr_.get("d_thr")}
+
+
+def gen_video(args) -> dict:
+    """One video of experiment 26 -> f (candidate), bootstrap, motion statistics, guide v2 and the inputs of the trajectory analysis. args = (entry, prep, npz, pcfg, c, seed_unused).
+    entry = the yaml video entry; G5 estimates f only from the frames up to calib_end_s and uses the later frames for the trajectory."""
+    entry, prep, npz, pcfg, c = args[:5]
+    os.environ.setdefault("OMP_NUM_THREADS", "1")
+    cv2.setNumThreads(1)
+    cand, ex, tcfg = c["candidate"], c["exclusion"], c["trajectory"]
+    dset = c["detector_settings"][cand["detector"]]
+    pc = copy.deepcopy(pcfg)
+    pc["tracking"]["conf_min"] = float(dset["conf_min"])
+    frames = prep["frames"]
+    times = np.array([r["time_s"] for r in frames])
+    W, H = prep["size"]
+    dets = load_detections(Path(npz))
+    check_alignment(frames, dets)
+    tr = track(dets, times, (W, H), pc["tracking"], front_start_s=float(pc["phases"]["front_skip_s"]))
+    kp, mask, present, box = tr["kp"], tr["mask"], tr["present"], tr["box"]
+    calib_end = None
+    if entry["group"] == "G5":
+        calib_end = float(entry.get("calib_end_s") or c.get("calib_end_default_s", 25.0))
+    pres = gen_present_until(times, present, calib_end)
+    cal = np.ones(len(times), bool) if calib_end is None else (times <= calib_end)
+    res = {"video": entry["file"], "group": entry["group"], "person_id": entry["person_id"], "phone": entry["phone"], "lens": entry["lens"], "glove": bool(entry["glove"]), "ref_f": float(entry["ref_f"]),
+           "calib_end_s": calib_end, "n_frames": int(len(times)), "duration_s": float(times[-1] - times[0]) if len(times) else 0.0, "size": [W, H],
+           "detect_rate": float(present[cal].mean()), "edge_rate": fresp_edge_rate(box[cal], present[cal], W, H)}
+    fw = front_window(times, pres, kp, mask, box, pc["phases"])
+    res["front_window"] = [fw.get("t0"), fw.get("t1")]
+    reasons = []
+    if len(fw["idx"]) == 0 or fw["detect_rate"] < float(pc["phases"]["front_min_detect_rate"]):
+        reasons.append("유효한 정면 창(1초)이 없음")
+    if res["edge_rate"] > float(ex["edge_rate_max"]):
+        reasons.append(f"가장자리 접촉 프레임 {100 * res['edge_rate']:.1f}% > {100 * float(ex['edge_rate_max']):.0f}%")
+    if 1.0 - res["detect_rate"] > float(ex["detect_fail_max"]):
+        reasons.append(f"손 검출 실패 프레임 {100 * (1.0 - res['detect_rate']):.1f}% > {100 * float(ex['detect_fail_max']):.0f}%")
+    res["excluded"] = reasons
+    if reasons:
+        return res
+    seed = int(pc["experiment"]["seed"])
+    cfg_ex = pseg_wrist_cfg(pc) if cand["wrist_mode"] == "exclude" else pc
+    a = analyze(kp, mask, pres, box, tr["cls"], times, (W, H), cfg_ex, tilt_start=None, methods_full=("fixed_template",), seed=seed)
+    if "per_method" not in a:
+        res["failed"] = a.get("failed", "분석 실패")
+        return res
+    sol, pm = a["solutions"]["fixed_template"], a["per_method"]["fixed_template"]
+    grid = np.array(a["grid"])
+    hi = grid[-1]
+    bf = pm["bootstrap"]["f"]
+    res["ft"] = {"f": float(sol["f"]), "at_grid_edge": bool(sol["at_grid_edge"]), "side": None if not sol["at_grid_edge"] else ("상한" if sol["f"] >= hi * (1 - 1e-6) else "하한"),
+                 "verdict": pm["verdict"]["verdict"], "sharpness": float(pm["diagnostics"]["sharpness"]), "boot_log_std": long_boot_log_std(bf),
+                 "boot_rel_std": float(pm["bootstrap"]["rel_std"]) if np.isfinite(pm["bootstrap"]["rel_std"]) else None, "n_boot": int(pm["bootstrap"]["n_done"])}
+    res["curve"] = {"grid": grid.tolist(), "cost": [float(x) for x in sol["profile_cost"]]}
+    theta = np.array([np.nan if x is None else x for x in a["theta2d_deg"]], float)
+    role = a["role"]
+    tilt = [i for i, r in enumerate(role) if r == "tilt"]
+    th = theta[tilt]
+    bl = box_long(box)
+    fidx = [int(i) for i in a["front_window"]["idx"]]
+    res["motion"] = {"tilt_start_s": float(a["tilt_start_s"]), "n_tilt_frames": len(tilt), "tilt_duration_s": float(times[tilt].max() - a["tilt_start_s"]) if tilt else 0.0,
+                     "theta_median_deg": float(np.nanmedian(th)) if len(th) else None, "theta_p90_deg": float(np.nanpercentile(th, 90)) if len(th) else None,
+                     "theta_max_deg": float(np.nanmax(th)) if len(th) else None, "theta_over_45_frac": float(np.nanmean(th > 45.0)) if len(th) else None}
+    res["hand_box_short_ratio_front"] = float(np.nanmedian(bl[fidx]) / min(W, H))
+    res["guide"] = gen_guide(kp, mask, pres, box, tr["cls"], times, (W, H), pc, c, seed)
+    # ---- trajectory inputs: hand centre (wrist + 4 MCP), size ratio against the front window, hand length l = l_front * s1 / s1_front
+    ids = list(cfg_ex["joints"]["sets"][cfg_ex["joints"]["estimate_set"]])
+    T = np.array(a["template"])
+    front_frames = [int(i) for i in a["template_frames"]]
+    s1_front = float(np.median([gen_s1(T, kp[i][ids]) for i in front_frames]))
+    lf = [float(np.linalg.norm(kp[i][12] - kp[i][0])) for i in front_frames if mask[i][0] and mask[i][12]]
+    ell_front = float(np.median(lf)) if lf else float("nan")
+    target = [i for i in range(len(times)) if present[i] and times[i] > calib_end] if calib_end is not None else tilt
+    rows, centre = [], [0, 5, 9, 13, 17]
+    for i in target:
+        vis = mask[i][ids]
+        if not (present[i] and vis.sum() >= 6 and mask[i][centre].all()):
+            continue
+        u, v = kp[i][centre].mean(0)
+        s1 = gen_s1(T[vis], kp[i][ids][vis])
+        rows.append({"index": int(i), "time_s": float(times[i]), "u": float(u), "v": float(v), "size_ratio": float(s1 / s1_front), "theta2d_deg": None if not np.isfinite(theta[i]) else float(theta[i])})
+    res["traj"] = {"rows": rows, "ell_front_px": ell_front, "s1_front": s1_front, "segment": "work (after calib_end_s)" if calib_end is not None else "tilt phase"}
+    return res
+
+
+def gen_existing_rows(cfg: dict) -> list:
+    """Existing videos for the descriptive comparison (never a verification): tilt length, largest theta2d, bootstrap log SD, f and its reference f, from the stored results of 22 / 23 / 25."""
+    ex = cfg["existing"]
+    rows = []
+    base = json.loads(resolve(ex["baseline_json"]).read_text())["videos"]
+    for j in base:
+        rows.append({"video": j["video"], "source": "22 (1x)", "ref_f": float(ex["ref_f_1x"]), "f": j["ft"]["f"], "at_grid_edge": j["ft"]["at_grid_edge"], "sigma": j["ft"]["boot_log_std"],
+                     "tilt_s": j["motion"]["tilt_duration_s"], "theta_max": j["motion"]["theta_max_deg"]})
+    for j in json.loads(resolve(ex["results_25"]).read_text())["new"]:
+        rows.append({"video": j["video"], "source": "25 (1x)", "ref_f": float(ex["ref_f_1x"]), "f": j["ft"]["f"], "at_grid_edge": j["ft"]["at_grid_edge"], "sigma": j["ft"]["boot_log_std"],
+                     "tilt_s": j["motion"]["tilt_duration_s"], "theta_max": j["motion"]["theta_max_deg"]})
+    j23 = {j["video"]: j for j in json.loads(resolve(ex["results_23"]).read_text())["jobs"]}.get(ex["lens_video"])
+    j22 = {j["video"]: j for j in json.loads(resolve(ex["results_22"]).read_text())["jobs"]}.get(ex["lens_video"])
+    if j23 and j22:
+        s = j22["original"][ex["lens_mode"]]["solutions"]["fixed_template"]
+        th = [r["theta2d_deg"] for r in j23["frames"]]
+        tt = [r["time_s"] for r in j23["frames"]]
+        rows.append({"video": ex["lens_video"], "source": "22 (0.5x)", "ref_f": float(ex["ref_f_lens"]), "f": s["f"], "at_grid_edge": s["at_grid_edge"], "sigma": j23["factors"]["bootstrap_rel_std"],
+                     "tilt_s": float(max(tt) - 3.0) if tt else 0.0, "theta_max": float(max(th)) if th else None, "sigma_is_rel_std": True, "size": j22.get("size"),
+                     "n_frames": j22.get("n_frames"), "duration_s": None if not j22.get("n_frames") else j22["n_frames"] / 15.0})
+    return rows
+
+
+# ====================================================================================================
+# ext  (experiment 27: main-camera 1x extension, G6 distance and G7 left hand; new section, earlier functions are used unchanged)
+# Videos carry group (G6 distance 50 / 60 / 75 cm, right hand; G7 left hand), distance_cm, hand and ref_f. Candidate and per-video processing are 26's (gen_video).
+# G6 verdict: pooled f per distance (cost curves summed, video-level bootstrap interval), all within +-pooled_tol of ref_f and max / min <= ratio_max. G7: 26's group verdict.
+# ====================================================================================================
+
+EXT_GROUPS = ("G6", "G7")
+EXT_REQUIRED = ("file", "group", "distance_cm", "hand", "ref_f")
+
+
+def ext_check_videos(entries) -> list:
+    """Validates the videos list of the yaml (every entry needs file, group G6 / G7, distance_cm, hand left / right, ref_f). Stops (SystemExit) with the reason otherwise."""
+    if not entries:
+        raise SystemExit("videos is empty: give the video entries in the yaml (file, group, distance_cm, hand, ref_f)")
+    for i, e in enumerate(entries):
+        miss = [k for k in EXT_REQUIRED if e.get(k) is None]
+        if miss:
+            raise SystemExit(f"videos[{i}] ({e.get('file')}): missing {miss}")
+        if e["group"] not in EXT_GROUPS:
+            raise SystemExit(f"videos[{i}] ({e['file']}): group must be one of {EXT_GROUPS}")
+        if e["hand"] not in ("left", "right"):
+            raise SystemExit(f"videos[{i}] ({e['file']}): hand must be left or right")
+        if float(e["distance_cm"]) <= 0 or float(e["ref_f"]) <= 0:
+            raise SystemExit(f"videos[{i}] ({e['file']}): distance_cm and ref_f must be positive")
+    return list(entries)
+
+
+def ext_video(args) -> dict:
+    """One video of experiment 27: 26's gen_video unchanged (the session block of the yaml supplies phone / lens / glove / person_id), plus distance_cm and hand.
+    args = (entry, prep, npz, pcfg, c); c needs candidate, exclusion, detector_settings, guide (trajectory is not used)."""
+    entry, prep, npz, pcfg, c = args[:5]
+    ses = c.get("session") or {}
+    e2 = {"person_id": ses.get("person_id"), "phone": ses.get("phone", "main"), "lens": ses.get("lens", "1x"), "glove": bool(ses.get("glove", False)), **entry}
+    res = gen_video((e2, prep, npz, pcfg, {**c, "trajectory": c.get("trajectory") or {}}))
+    res.update({"distance_cm": float(entry["distance_cm"]), "hand": entry["hand"]})
+    if "ft" in res:
+        cand = c["candidate"]
+        pc = copy.deepcopy(pcfg)
+        pc["tracking"]["conf_min"] = float(c["detector_settings"][cand["detector"]]["conf_min"])
+        times = np.array([r["time_s"] for r in prep["frames"]])
+        W, H = prep["size"]
+        tr = track(load_detections(Path(npz)), times, (W, H), pc["tracking"], front_start_s=float(pc["phases"]["front_skip_s"]))
+        cfg_ex = pseg_wrist_cfg(pc) if cand["wrist_mode"] == "exclude" else pc
+        a = analyze(tr["kp"], tr["mask"], tr["present"], tr["box"], tr["cls"], times, (W, H), cfg_ex, tilt_start=None, methods_full=(), seed=int(pc["experiment"]["seed"]))
+        res["dynamics"] = ext_motion(tr["kp"], tr["mask"], tr["present"], tr["box"], times, a, cfg_ex, (W, H))
+    return res
+
+
+def ext_motion(kp, mask, present, box, times, a: dict, cfg_use: dict, size_wh) -> dict:
+    """Motion indicators of the tilt-phase frames of one video, defined as in experiment 23 (ferr_video): tilt axis coverage (analyze's 30-degree sectors with >= min_count frames),
+    keypoint speed (pseg_series, hand-box lengths per second), bone-length ratio change (percent) and finger-spread change (degrees against the front window's median) of ferr_shape.
+    Median and 90th percentile of every per-frame series. a = analyze() result of the candidate (the template and roles it used)."""
+    pb, ids = ferr_problem(a, kp, mask, box, cfg_use, size_wh)
+    T = np.array(a["template"])
+    keep = list(pb.keep)
+    role = a["role"]
+    tilt_ids = [i for i in keep if role[i] == "tilt"]
+    front_ids = [i for i in keep if role[i] == "front"]
+    _, v_series = pseg_series(kp, mask, present, box, times, T, ids)
+
+    def shape_of(i):
+        if mask[i][ids].sum() < len(ids):
+            return {"bone_ratio": float("nan"), "spread_deg": float("nan")}
+        return ferr_shape(T, ids, kp[i][ids], kp[i][0] if mask[i][0] else None)
+    ref_spread = float(np.nanmedian([shape_of(i)["spread_deg"] for i in front_ids])) if front_ids else float("nan")
+    sh = [shape_of(i) for i in tilt_ids]
+    series = {"speed": np.array([v_series[i] for i in tilt_ids], float), "bone_ratio_pct": np.array([100.0 * s["bone_ratio"] for s in sh], float),
+              "spread_change_deg": np.array([abs(s["spread_deg"] - ref_spread) for s in sh], float)}
+    cov = a["axis_coverage"]
+    out = {"n_tilt_frames": len(tilt_ids), "axis_bins": int(cov["bins"]), "axis_counts": [int(x) for x in cov["counts"]], "axis_dominant": cov["dominant"]}
+    for k, x in series.items():
+        x = x[np.isfinite(x)]
+        out[k] = {"median": float(np.median(x)) if len(x) else None, "p90": float(np.percentile(x, 90)) if len(x) else None, "n": int(len(x))}
+    return out
+
+
+def ext_rounds(entries) -> dict:
+    """Shooting round of every G6 video: the n-th video (in file order) at its distance is round n. {file: n}."""
+    seen, out = {}, {}
+    for e in sorted((e for e in entries if e["group"] == "G6"), key=lambda e: e["file"]):
+        d = float(e["distance_cm"])
+        seen[d] = seen.get(d, 0) + 1
+        out[e["file"]] = seen[d]
+    return out
+
+
+def ext_ranks(x) -> np.ndarray:
+    """Ranks (0-based, ties share their mean rank)."""
+    x = np.asarray(x, float)
+    order = np.argsort(x, kind="stable")
+    r = np.empty(len(x))
+    r[order] = np.arange(len(x))
+    for v in np.unique(x):
+        m = x == v
+        r[m] = r[m].mean()
+    return r
+
+
+def ext_spearman(x, y):
+    """Spearman rank correlation, None with fewer than 3 points or a constant input."""
+    x, y = np.asarray(x, float), np.asarray(y, float)
+    if len(x) < 3:
+        return None
+    rx, ry = ext_ranks(x), ext_ranks(y)
+    if rx.std() == 0 or ry.std() == 0:
+        return None
+    return float(np.corrcoef(rx, ry)[0, 1])
+
+
+def ext_loglog_slope(d, f):
+    """Slope of log f on log distance (least squares), None with fewer than 2 distinct distances."""
+    d, f = np.asarray(d, float), np.asarray(f, float)
+    if len(d) < 2 or len(np.unique(d)) < 2:
+        return None
+    return float(np.polyfit(np.log(d), np.log(f), 1)[0])
+
+
+def ext_pooled(curves, grid, gcfg: dict) -> dict:
+    """Pooled estimate of a set of cost curves with the video-level bootstrap interval (empty set: n_videos 0 only)."""
+    out = {"n_videos": len(curves)}
+    if not len(curves):
+        return out
+    est = long_pooled_estimate(curves, grid)
+    b = long_pooled_bootstrap(curves, grid, int(gcfg["bootstrap_n"]), int(gcfg["bootstrap_seed"]))
+    return {**out, "pooled_f": est["f"], "at_grid_edge": est["at_grid_edge"], "side": est["side"], "interval_95": [float(np.quantile(b["f"], 0.025)), float(np.quantile(b["f"], 0.975))]}
+
+
+def ext_distance_verdict(by_distance: dict, grid, ref_f: float, dcfg: dict) -> dict:
+    """G6 verdict. by_distance = {distance_cm: {"curves": [fixed_template cost curves of the included videos], "n_total": videos of that distance}}.
+    pass: the pooled f of every distance within +-pooled_tol of ref_f and max / min of the pooled f <= ratio_max; fail otherwise; not judged when a distance has fewer than
+    min_videos_per_distance included videos; no videos: 영상 없음."""
+    out = {"ref_f": float(ref_f), "distances": {}}
+    if not by_distance:
+        return {**out, "verdict": "영상 없음"}
+    for d in sorted(by_distance):
+        x = by_distance[d]
+        row = ext_pooled(x["curves"], grid, dcfg)
+        row.update({"n_total": int(x["n_total"]), "n_excluded": int(x["n_total"]) - len(x["curves"])})
+        if "pooled_f" in row:
+            row["pooled_within_tol"] = bool(not row["at_grid_edge"] and abs(row["pooled_f"] / ref_f - 1.0) <= float(dcfg["pooled_tol"]))
+        out["distances"][d] = row
+    short = {d: r["n_videos"] for d, r in out["distances"].items() if r["n_videos"] < int(dcfg["min_videos_per_distance"])}
+    if short:
+        return {**out, "verdict": "판단 불가", "reason": ", ".join(f"{d:g} cm 영상 {n}개" for d, n in short.items()) + f" < {int(dcfg['min_videos_per_distance'])}개"}
+    fs = [r["pooled_f"] for r in out["distances"].values() if not r["at_grid_edge"]]
+    out["max_over_min"] = float(max(fs) / min(fs)) if len(fs) == len(out["distances"]) else None
+    ok = all(r["pooled_within_tol"] for r in out["distances"].values()) and out["max_over_min"] is not None and out["max_over_min"] <= float(dcfg["ratio_max"]) + 1e-9
+    return {**out, "verdict": "통과" if ok else "실패"}
+
+
+def ext_distance_records(results: list, entries: list, grid, dcfg: dict) -> dict:
+    """Record-only quantities of G6 (no verdict): slope of log f on log distance and Spearman rank correlation (video f and pooled f per distance), f by shooting round (pooled over the
+    round's videos and the single f values)."""
+    g6 = [r for r in results if r["group"] == "G6" and "ft" in r and not r["ft"]["at_grid_edge"]]
+    rounds = ext_rounds(entries)
+    d_all, f_all = [r["distance_cm"] for r in g6], [r["ft"]["f"] for r in g6]
+    out = {"n_points": len(g6), "slope_video": ext_loglog_slope(d_all, f_all), "spearman_video": ext_spearman(d_all, f_all), "rounds": {}}
+    pooled = {}
+    for d in sorted({r["distance_cm"] for r in g6}):
+        c = [r["curve"]["cost"] for r in g6 if r["distance_cm"] == d]
+        est = long_pooled_estimate(c, grid)
+        if not est["at_grid_edge"]:
+            pooled[d] = est["f"]
+    out["pooled_by_distance"] = pooled
+    out["slope_pooled"] = ext_loglog_slope(list(pooled), list(pooled.values()))
+    out["spearman_pooled"] = ext_spearman(list(pooled), list(pooled.values()))
+    for k in sorted(set(rounds.values())):
+        rv = [r for r in results if r["group"] == "G6" and rounds.get(r["video"]) == k and "ft" in r]
+        est = long_pooled_estimate([r["curve"]["cost"] for r in rv], grid) if rv else None
+        out["rounds"][k] = {"videos": [r["video"] for r in rv], "n_videos": len(rv), "pooled_f": None if est is None or est["at_grid_edge"] else est["f"],
+                            "f_videos": [None if r["ft"]["at_grid_edge"] else r["ft"]["f"] for r in rv]}
+    return out
+
+
+def ext_hand_compare(results: list, grid, gcfg: dict, right_distance_cm: float) -> dict:
+    """G7 left-hand videos beside the G6 right-hand videos of the same distance (record only): pooled f with interval, the single f values and the ratio of the pooled f (left / right)."""
+    left = [r for r in results if r["group"] == "G7" and "ft" in r]
+    right = [r for r in results if r["group"] == "G6" and "ft" in r and abs(r["distance_cm"] - float(right_distance_cm)) < 1e-9]
+    out = {}
+    for name, rs in (("left", left), ("right", right)):
+        d = ext_pooled([r["curve"]["cost"] for r in rs], grid, gcfg)
+        d["videos"] = [r["video"] for r in rs]
+        d["f_videos"] = [None if r["ft"]["at_grid_edge"] else r["ft"]["f"] for r in rs]
+        out[name] = d
+    a, b = out["left"], out["right"]
+    out["ratio_left_over_right"] = float(a["pooled_f"] / b["pooled_f"]) if "pooled_f" in a and "pooled_f" in b and not a["at_grid_edge"] and not b["at_grid_edge"] else None
+    return out
+
+
+# ====================================================================================================
+# wide  (experiment 29: 0.5x lens at about 60 cm, is the f estimate "always read as about 62 cm"?; new section, earlier functions are used unchanged)
+# 27 found f x distance ~ constant (1x: about 105,000 px cm = ref_f x 62.5 cm). Hypothesis: the method reads every hand at about 62.5 cm, i.e. f_est = ref_f x 62.5 / distance.
+# Verdict on the pooled f of the videos (cost curves summed): within +-support_tol of predicted_f = support, >= refute_high x predicted_f or <= refute_low x predicted_f = refuted, else open.
+# ====================================================================================================
+
+WIDE_REQUIRED = ("file", "group", "lens", "distance_cm", "hand", "ref_f")
+
+
+def wide_check_videos(entries) -> list:
+    """Validates the videos list of the yaml (every entry needs file, group, lens, distance_cm, hand left / right, ref_f). Stops (SystemExit) with the reason otherwise."""
+    if not entries:
+        raise SystemExit("videos is empty: give the video entries in the yaml (file, group, lens, distance_cm, hand, ref_f)")
+    for i, e in enumerate(entries):
+        miss = [k for k in WIDE_REQUIRED if e.get(k) is None]
+        if miss:
+            raise SystemExit(f"videos[{i}] ({e.get('file')}): missing {miss}")
+        if e["hand"] not in ("left", "right"):
+            raise SystemExit(f"videos[{i}] ({e['file']}): hand must be left or right")
+        if float(e["distance_cm"]) <= 0 or float(e["ref_f"]) <= 0:
+            raise SystemExit(f"videos[{i}] ({e['file']}): distance_cm and ref_f must be positive")
+    return list(entries)
+
+
+def wide_video(args) -> dict:
+    """One video of experiment 29: 26's gen_video unchanged (the session block of the yaml supplies phone / glove / person_id, the entry its lens), plus distance_cm, hand, the principal point
+    and the front-window keypoint jitter (percent of the hand box). args = (entry, prep, npz, pcfg, c); c needs candidate, exclusion, detector_settings, guide."""
+    entry, prep, npz, pcfg, c = args[:5]
+    ses = c.get("session") or {}
+    e2 = {"person_id": ses.get("person_id"), "phone": ses.get("phone", "main"), "lens": ses.get("lens", "1x"), "glove": bool(ses.get("glove", False)), **entry}
+    res = gen_video((e2, prep, npz, pcfg, {**c, "trajectory": c.get("trajectory") or {}}))
+    res.update({"distance_cm": float(entry["distance_cm"]), "hand": entry["hand"]})
+    if "ft" in res:
+        cand = c["candidate"]
+        pc = copy.deepcopy(pcfg)
+        pc["tracking"]["conf_min"] = float(c["detector_settings"][cand["detector"]]["conf_min"])
+        times = np.array([r["time_s"] for r in prep["frames"]])
+        W, H = prep["size"]
+        tr = track(load_detections(Path(npz)), times, (W, H), pc["tracking"], front_start_s=float(pc["phases"]["front_skip_s"]))
+        cfg_ex = pseg_wrist_cfg(pc) if cand["wrist_mode"] == "exclude" else pc
+        a = analyze(tr["kp"], tr["mask"], tr["present"], tr["box"], tr["cls"], times, (W, H), cfg_ex, tilt_start=None, methods_full=(), seed=int(pc["experiment"]["seed"]))
+        res["front_jitter_pct"] = 100.0 * float(a["front_jitter_rel"])
+        res["principal_point"] = [float(x) for x in a["principal_point"]]
+    return res
+
+
+def wide_implied_distance(f, distance_cm, ref_f):
+    """Distance (cm) the estimate reads: distance x f / ref_f (None without a value). 62.5 for every f of the hypothesis."""
+    return None if f is None or not np.isfinite(f) else float(distance_cm) * float(f) / float(ref_f)
+
+
+def wide_hypothesis_verdict(pooled: dict, hcfg: dict) -> dict:
+    """Verdict of the hypothesis from the pooled estimate (ext_pooled's dict plus n_excluded): fewer than min_videos videos: 판단 불가; pooled f within +-support_tol of predicted_f: 가설 지지;
+    >= refute_high x predicted_f or <= refute_low x predicted_f: 가설 반박 (a value on the f grid edge is the clipped edge value and falls in the refuting range); otherwise 판단 보류."""
+    p = float(hcfg["predicted_f"])
+    lo, hi = p * (1.0 - float(hcfg["support_tol"])), p * (1.0 + float(hcfg["support_tol"]))
+    up, low = p * float(hcfg["refute_high"]), p * float(hcfg["refute_low"])
+    out = {"predicted_f": p, "support_range": [lo, hi], "refute_above": up, "refute_below": low, "n_videos": int(pooled.get("n_videos", 0)), "n_excluded": int(pooled.get("n_excluded", 0))}
+    if out["n_videos"] < int(hcfg["min_videos"]):
+        return {**out, "verdict": "판단 불가", "reason": f"영상 {out['n_videos']}개 < {int(hcfg['min_videos'])}개"}
+    f = float(pooled["pooled_f"])
+    out.update({"pooled_f": f, "at_grid_edge": bool(pooled["at_grid_edge"]), "side": pooled.get("side"), "interval_95": pooled["interval_95"]})
+    if lo - 1e-9 <= f <= hi + 1e-9:
+        return {**out, "verdict": "가설 지지"}
+    if f >= up - 1e-9 or f <= low + 1e-9:
+        return {**out, "verdict": "가설 반박"}
+    return {**out, "verdict": "판단 보류"}
+
+
+# ====================================================================================================
+# jset  (experiment 30: uncertainty joint sets that fit the wrist-excluded candidate; new section, earlier functions are used unchanged)
+# With wrist_mode exclude, pseg_wrist_cfg() removes joint 0 from every set, so 17's uncertainty set palm5 (wrist + 4 MCP) shrinks to the 4 nearly collinear MCP points and its f sits on the grid edge.
+# The jointset_range check of the verdict (max - min of the f of the uncertainty sets / f) then fails for every video. Here the uncertainty sets come from the yaml (jointset.sets / uncertainty_sets).
+# ====================================================================================================
+
+JSET_SETTINGS_KEYS = ("weights", "num_hands", "min_hand_detection_confidence", "min_hand_presence_confidence", "box_margin", "remap")
+
+
+def jset_find_detection(frames: list, dset: dict, search_dirs, src17=None, detector: str = "mediapipe_hands") -> dict:
+    """Detections of a frame list. src17 (a 17 run's video folder): that run's detections.npz when its frame list (index, sha256) equals the frames (22's rule). Otherwise the content-keyed cache
+    (frames_key of the frames and the detector settings) in the detection_cache folders matching search_dirs (glob patterns relative to HandCalib/). Raises FileNotFoundError when neither exists."""
+    if src17 is not None:
+        r17 = json.loads((resolve(src17) / detector / "results.json").read_text())
+        if [(x["index"], x["sha256"]) for x in frames] != [(x["index"], x["sha256"]) for x in r17["frames"]["list"]]:
+            raise RuntimeError(f"the frames differ from the 17 run's frame list: {src17}")
+        return {"npz": resolve(src17) / detector / "detections.npz", "source": f"17 run {src17}"}
+    settings = {k: dset[k] for k in JSET_SETTINGS_KEYS}
+    name = f"mediapipe_hands_{frames_key(frames, settings, detector)}.npz"
+    for pat in search_dirs:
+        for d in sorted(PROJECT_ROOT.glob(pat)):
+            if (d / name).exists():
+                return {"npz": d / name, "source": f"cache {d.relative_to(PROJECT_ROOT)}/{name}"}
+    raise FileNotFoundError(f"no cached detection {name}")
+
+
+def jset_config(pcfg: dict, jcfg: dict, wrist_mode: str) -> dict:
+    """The pipeline settings with the yaml's extra joint sets and uncertainty sets (jcfg = {sets, uncertainty_sets}); joint 0 removed from every set for wrist_mode exclude."""
+    c = copy.deepcopy(pcfg)
+    c["joints"]["sets"].update({k: list(v) for k, v in jcfg["sets"].items()})
+    c["joints"]["uncertainty_sets"] = list(jcfg["uncertainty_sets"])
+    return pseg_wrist_cfg(c) if wrist_mode == "exclude" else c
+
+
+def jset_range(fs: dict, f_ref: float) -> float:
+    """Range of the f of the uncertainty sets relative to f_ref (uncertainty.rel_range of the finite values)."""
+    return rel_range(list(fs.values()), f_ref)
+
+
+def jset_edge_sets(fs: dict, grid) -> list:
+    """Names of the sets whose f sits on the f grid edge (no interior minimum)."""
+    g = np.asarray(grid, float)
+    return [k for k, f in fs.items() if np.isfinite(f) and (f <= g[0] * (1 + 1e-6) or f >= g[-1] * (1 - 1e-6))]
+
+
+def jset_video(args) -> dict:
+    """One video of experiment 30: the candidate analysis (fixed_template, wrist_mode of the candidate) with the new uncertainty sets, the old sets' f beside it, the verdict with the new and with the old
+    jointset_range, and every diagnostic the verdict and the later calibration use. args = (entry, prep, npz, pcfg, c); c needs candidate, detector_settings, jointset."""
+    entry, prep, npz, pcfg, c = args[:5]
+    os.environ.setdefault("OMP_NUM_THREADS", "1")
+    cv2.setNumThreads(1)
+    cand = c["candidate"]
+    dset = c["detector_settings"][cand["detector"]]
+    pc = copy.deepcopy(pcfg)
+    pc["tracking"]["conf_min"] = float(dset["conf_min"])
+    frames = prep["frames"]
+    times = np.array([r["time_s"] for r in frames])
+    W, H = prep["size"]
+    dets = load_detections(Path(npz))
+    check_alignment(frames, dets)
+    tr = track(dets, times, (W, H), pc["tracking"], front_start_s=float(pc["phases"]["front_skip_s"]))
+    kp, mask, present, box = tr["kp"], tr["mask"], tr["present"], tr["box"]
+    seed = int(pc["experiment"]["seed"])
+    cfg_new = jset_config(pc, c["jointset"], cand["wrist_mode"])
+    cfg_old = pseg_wrist_cfg(pc) if cand["wrist_mode"] == "exclude" else pc
+    res = {"video": entry["file"], "lens": entry.get("lens"), "ref_f": float(entry["ref_f"]), "size": [W, H], "n_frames": int(len(times)), "duration_s": float(times[-1] - times[0]) if len(times) else 0.0}
+    a = analyze(kp, mask, present, box, tr["cls"], times, (W, H), cfg_new, tilt_start=None, methods_full=("fixed_template",), seed=seed)
+    if "per_method" not in a:
+        res["failed"] = a.get("failed", "분석 실패")
+        return res
+    sol, pm = a["solutions"]["fixed_template"], a["per_method"]["fixed_template"]
+    grid = np.array(a["grid"])
+    m, j = pm["metrics"], pm["verdict"]
+    # the old sets' f: the same analysis with the old uncertainty sets (2 bootstrap repetitions, only the joint-set f is read)
+    a_old = analyze(kp, mask, present, box, tr["cls"], times, (W, H), cfg_old, tilt_start=None, methods_full=("fixed_template",), seed=seed, n_boot=2)
+    js_old = a_old["per_method"]["fixed_template"]["jointsets"]
+    js_new = pm["jointsets"]
+    vcfg = pc["verdict"]
+    j_old = judge({**m, "jointset_range": jset_range(js_old, sol["f"])}, vcfg)
+    res.update({"f": float(sol["f"]), "at_grid_edge": bool(sol["at_grid_edge"]), "f_same_as_old_sets": bool(sol["f"] == a_old["solutions"]["fixed_template"]["f"]),
+                "metrics": {k: (None if v is None or (isinstance(v, float) and not np.isfinite(v)) else v) for k, v in m.items()},
+                "boot_log_std": float(np.std(np.log(pm["bootstrap"]["f"]), ddof=1)) if len(pm["bootstrap"]["f"]) > 1 else None,
+                "consistency": pm["consistency"], "theta_median": a["theta_tilt"]["median"], "theta_max": a["theta_tilt"]["max"], "tilt_duration_s": None,
+                "jointsets_new": {k: float(v) for k, v in js_new.items()}, "jointset_range_new": float(pm["jointset_range"]), "jointset_edge_new": jset_edge_sets(js_new, grid),
+                "jointsets_old": {k: float(v) for k, v in js_old.items()}, "jointset_range_old": float(jset_range(js_old, sol["f"])), "jointset_edge_old": jset_edge_sets(js_old, grid),
+                "verdict_new": j["verdict"], "failed_rough_new": j["failed_rough"], "failed_good_new": j["failed_good"],
+                "verdict_old_sets": j_old["verdict"], "failed_rough_old_sets": j_old["failed_rough"], "failed_good_old_sets": j_old["failed_good"], "grid": [float(grid[0]), float(grid[-1])]})
+    tilt = [i for i, r in enumerate(a["role"]) if r == "tilt"]
+    res["tilt_duration_s"] = float(times[tilt].max() - a["tilt_start_s"]) if tilt else 0.0
+    res["front_jitter_rel"] = float(a["front_jitter_rel"])
+    bl = box_long(box)
+    fidx = [int(i) for i in a["front_window"]["idx"]]
+    res["hand_box_short_ratio_front"] = float(np.nanmedian(bl[fidx]) / min(W, H)) if fidx else None
+    return res
+
+
+# ====================================================================================================
+# cal  (experiment 31: do the verdict's diagnostics predict the real f error? calibration protocol; new section, earlier functions are used unchanged)
+# Population: the videos of experiment 30 (candidate f and every diagnostic stored), error e = |f / ref_f - 1|, accurate = e <= accurate_tol. Calibration uses the 1x videos only (the 0.5x videos are held out).
+# A diagnostic is informative when its Spearman correlation with e has the expected sign, |rho| >= rho_min and its video-level bootstrap interval excludes 0; it is useful when a threshold classifier
+# chosen by leave-one-out (balanced accuracy on the training videos) reaches loo_ba_min on the held-out video. No useful diagnostic: the verdict cannot be calibrated.
+# ====================================================================================================
+
+def cal_rows(videos: list, cfg: dict) -> list:
+    """Rows of the calibration table from experiment 30's per-video results: error, accurate flag, exclusion (edge rate / detect rate as in 26 / 27) and every predictor (None when missing)."""
+    ex = cfg["exclusion"]
+    rows = []
+    for v in videos:
+        if "f" not in v:
+            continue
+        m = v["metrics"]
+        row = {"video": v["video"], "lens": v["lens"], "ref_f": float(v["ref_f"]), "f": float(v["f"]), "at_grid_edge": bool(v["at_grid_edge"]),
+               "error": abs(v["f"] / v["ref_f"] - 1.0), "signed_error": v["f"] / v["ref_f"] - 1.0,
+               "excluded": bool((m.get("edge_frame_rate") or 0.0) > float(ex["edge_rate_max"]) or 1.0 - (m.get("detect_rate") or 0.0) > float(ex["detect_fail_max"])),
+               "boot_log_std": v.get("boot_log_std"), "theta_max": v.get("theta_max"), "tilt_duration_s": v.get("tilt_duration_s"), "verdict_new": v["verdict_new"]}
+        row["accurate"] = bool(row["error"] <= float(cfg["accurate_tol"]))
+        for k in cfg["predictors"]:
+            row[k] = cal_predictor_value(v, k)
+        rows.append(row)
+    return rows
+
+
+def cal_predictor_value(v: dict, name: str):
+    m = v["metrics"]
+    top = {"boot_log_std": v.get("boot_log_std"), "tilt_duration_s": v.get("tilt_duration_s"), "front_jitter_rel": v.get("front_jitter_rel"), "hand_box_short_ratio_front": v.get("hand_box_short_ratio_front"),
+           "jointset_range_new": v.get("jointset_range_new"), "consistency_range": m.get("consistency_range"), "theta_max": v.get("theta_max")}
+    x = top[name] if name in top else m.get(name)
+    return None if x is None or (isinstance(x, float) and not np.isfinite(x)) else float(x)
+
+
+def cal_spearman_ci(x, y, n: int, seed: int, level: float = 0.95) -> dict:
+    """Spearman correlation of x and y and a video-level bootstrap percentile interval (pairs drawn with replacement n times, fixed seed; draws with a constant input are skipped)."""
+    x, y = np.asarray(x, float), np.asarray(y, float)
+    rho = ext_spearman(x, y)
+    rng = np.random.default_rng(int(seed))
+    rs = []
+    for _ in range(int(n)):
+        k = rng.integers(0, len(x), len(x))
+        r = ext_spearman(x[k], y[k])
+        if r is not None:
+            rs.append(r)
+    lo, hi = ((1 - level) / 2, 1 - (1 - level) / 2)
+    return {"rho": rho, "ci": None if len(rs) < 10 else [float(np.quantile(rs, lo)), float(np.quantile(rs, hi))], "n": int(len(x)), "n_boot_used": int(len(rs))}
+
+
+def cal_balanced_accuracy(pred, truth) -> dict:
+    """Balanced accuracy of boolean predictions of 'accurate' against the truth (mean of sensitivity and specificity; None when a class is empty)."""
+    pred, truth = np.asarray(pred, bool), np.asarray(truth, bool)
+    tp, fn = int((pred & truth).sum()), int((~pred & truth).sum())
+    tn, fp = int((~pred & ~truth).sum()), int((pred & ~truth).sum())
+    sens = tp / (tp + fn) if tp + fn else None
+    spec = tn / (tn + fp) if tn + fp else None
+    ba = None if sens is None or spec is None else 0.5 * (sens + spec)
+    return {"balanced_accuracy": ba, "sensitivity": sens, "specificity": spec, "tp": tp, "fn": fn, "tn": tn, "fp": fp}
+
+
+def cal_best_threshold(x, truth, good_below: bool) -> dict:
+    """Threshold on x (candidates: midpoints of adjacent sorted values) that maximises the balanced accuracy of 'accurate = x below (good_below) / above the threshold' on the training data;
+    ties go to the lower threshold. Returns {threshold, balanced_accuracy}."""
+    x, truth = np.asarray(x, float), np.asarray(truth, bool)
+    u = np.unique(x)
+    cands = (u[:-1] + u[1:]) / 2.0 if len(u) > 1 else u
+    best = None
+    for th in cands:
+        pred = (x <= th) if good_below else (x >= th)
+        ba = cal_balanced_accuracy(pred, truth)["balanced_accuracy"]
+        if ba is not None and (best is None or ba > best["balanced_accuracy"] + 1e-12):
+            best = {"threshold": float(th), "balanced_accuracy": float(ba)}
+    return best or {"threshold": None, "balanced_accuracy": None}
+
+
+def cal_loo(x, truth, good_below: bool) -> dict:
+    """Leave-one-out: the threshold is chosen on all other videos, the held-out video is classified with it. Returns the balanced accuracy of the held-out predictions and the thresholds used."""
+    x, truth = np.asarray(x, float), np.asarray(truth, bool)
+    pred, ths = [], []
+    for i in range(len(x)):
+        keep = np.arange(len(x)) != i
+        b = cal_best_threshold(x[keep], truth[keep], good_below)
+        ths.append(b["threshold"])
+        pred.append(False if b["threshold"] is None else bool(x[i] <= b["threshold"] if good_below else x[i] >= b["threshold"]))
+    return {**cal_balanced_accuracy(pred, truth), "thresholds": ths}
+
+
+def cal_analyse(rows: list, cfg: dict) -> dict:
+    """The protocol on the calibration rows (lens == calibration_lens, not excluded, f not on the grid edge): per predictor rho with interval, informative flag, full-data threshold and leave-one-out balanced accuracy;
+    the existing classifiers (rating v2 usable, verdict ROUGH or better) as baselines; the held-out lens only described. Decision: calibratable when a predictor is informative and its LOO balanced accuracy >= loo_ba_min."""
+    use = [r for r in rows if r["lens"] == cfg["calibration_lens"] and not r["excluded"] and not r["at_grid_edge"]]
+    held = [r for r in rows if r["lens"] != cfg["calibration_lens"] and not r["excluded"] and not r["at_grid_edge"]]
+    out = {"n_calibration": len(use), "n_held_out": len(held), "n_accurate": int(sum(r["accurate"] for r in use)), "predictors": {}, "baselines": {}}
+    truth = [r["accurate"] for r in use]
+    for name, spec in cfg["predictors"].items():
+        pts = [(r[name], r["error"], r["accurate"]) for r in use if r[name] is not None]
+        if len(pts) < 5 or len({p[0] for p in pts}) < 3:
+            out["predictors"][name] = {"skipped": "값이 5개 미만이거나 거의 같다", "n": len(pts)}
+            continue
+        x, e, tr = [p[0] for p in pts], [p[1] for p in pts], [p[2] for p in pts]
+        sp = cal_spearman_ci(x, e, int(cfg["bootstrap_n"]), int(cfg["bootstrap_seed"]))
+        sign = int(spec["expected_sign"])
+        informative = bool(sp["rho"] is not None and sp["ci"] is not None and abs(sp["rho"]) >= float(cfg["rho_min"]) and (sign == 0 or np.sign(sp["rho"]) == sign)
+                           and (sp["ci"][0] > 0 or sp["ci"][1] < 0))
+        good_below = bool(sign >= 0)
+        if sign == 0 and sp["rho"] is not None:
+            good_below = bool(sp["rho"] > 0)
+        full = cal_best_threshold(x, tr, good_below)
+        loo = cal_loo(x, tr, good_below)
+        out["predictors"][name] = {**sp, "expected_sign": sign, "informative": informative, "good_below": good_below, "full_data_threshold": full["threshold"], "full_data_balanced_accuracy": full["balanced_accuracy"],
+                                   "loo": {k: loo[k] for k in ("balanced_accuracy", "sensitivity", "specificity")},
+                                   "useful": bool(informative and loo["balanced_accuracy"] is not None and loo["balanced_accuracy"] >= float(cfg["loo_ba_min"]))}
+    v2 = cfg["rating_v2"]
+    usable = [hf_rating_usable(r, v2) for r in use]
+    out["baselines"]["rating_v2_usable"] = cal_balanced_accuracy(usable, truth)
+    out["baselines"]["verdict_rough_or_better"] = cal_balanced_accuracy([r["verdict_new"] in ("GOOD", "ROUGH") for r in use], truth)
+    out["baselines"]["always_accurate"] = cal_balanced_accuracy([True] * len(use), truth)
+    useful = [k for k, d in out["predictors"].items() if d.get("useful")]
+    out["useful_predictors"] = useful
+    out["decision"] = "보정 가능" if useful else "보정 불가"
+    out["proposal"] = {k: {"accurate_if": "below" if out["predictors"][k]["good_below"] else "above", "threshold": out["predictors"][k]["full_data_threshold"]} for k in useful}
+    if held and useful:
+        out["held_out_check"] = {k: cal_balanced_accuracy([(r[k] <= out["predictors"][k]["full_data_threshold"]) if out["predictors"][k]["good_below"] else (r[k] >= out["predictors"][k]["full_data_threshold"])
+                                                           for r in held if r[k] is not None], [r["accurate"] for r in held if r[k] is not None]) for k in useful}
+    return out
+
+
+def hf_rating_usable(r: dict, v2: dict) -> bool:
+    """True when rating v2 (gen_rating) is '사용 가능' for the row's tilt length, largest theta2d and bootstrap log SD."""
+    return gen_rating(r.get("tilt_duration_s"), r.get("theta_max"), r.get("boot_log_std"), v2) == "사용 가능"
+
+
+# ====================================================================================================
+# pr  (experiment 34: printed hand, is the f-versus-distance slope still there when the hand cannot change shape?; new section, earlier functions are used unchanged)
+# A life-size hand picture on a flat board is a perfectly planar, rigid hand. Its videos go through the candidate (26's gen_video unchanged), with extras: the keep-mode f, the reprojection RMS of the front window
+# and of the tilt phase (percent of the hand box), the hand-shape change indicators of experiment 23 (ext_motion), and the share of frames with more than one detected hand (the printed hand is the one the
+# tracker follows: largest box area x confidence in the front phase, then IoU continuity).
+# Verdict on the slope of log f against log distance (pooled f per distance, video-level bootstrap within each distance): 반비례 없음 / 반비례 있음 / 판단 보류 / 판단 불가.
+# ====================================================================================================
+
+def pr_multi_hand_share(n_candidates) -> dict:
+    """Share of the frames with at least one detected hand that have two or more (tracked-hand selection is IoU continuity, see track)."""
+    n = np.asarray(n_candidates)
+    some = n > 0
+    return {"frames_with_hand": int(some.sum()), "frames_with_two_or_more": int((n >= 2).sum()), "share": float((n >= 2).sum() / max(some.sum(), 1))}
+
+
+def pr_phase_rms(a: dict, box) -> dict:
+    """Reprojection RMS of the front window and of the tilt phase, percent of the median hand box long side of those frames (from the diagnostics of a fixed_template analysis)."""
+    diag = a["per_method"]["fixed_template"]["diagnostics"]
+    used, rms = list(diag["frames_used"]), np.array(diag["frame_rms_px"], float)
+    role = a["role"]
+    bl = box_long(np.asarray(box, float))
+    out = {}
+    for name in ("front", "tilt"):
+        k = [j for j, i in enumerate(used) if role[i] == name]
+        out[name] = float(100.0 * np.sqrt(np.mean(rms[k] ** 2)) / np.nanmedian(bl[[used[j] for j in k]])) if k else None
+    return out
+
+
+def pr_overlay(frames: list, dets: dict, tr: dict, path, max_side: int = 960, fps: float = 15.0) -> None:
+    """Keypoint overlay video of a run (tracked hand: green points, wrist red, box blue; other detected hands: yellow). Written only into the run folder."""
+    path = Path(path)
+    path.parent.mkdir(parents=True, exist_ok=True)
+    vw = None
+    for i, r in enumerate(frames):
+        img = cv2.imread(r["png"], cv2.IMREAD_COLOR)
+        h, w = img.shape[:2]
+        for k in candidates(dets, i):
+            for x, y in dets["kxy"][k]:
+                cv2.circle(img, (int(round(x)), int(round(y))), 4, (0, 255, 255), -1)
+        if tr["present"][i]:
+            for j, (x, y) in enumerate(tr["kp"][i]):
+                cv2.circle(img, (int(round(x)), int(round(y))), 6, (0, 0, 255) if j == 0 else (0, 255, 0), -1)
+            b = tr["box"][i]
+            cv2.rectangle(img, (int(b[0]), int(b[1])), (int(b[2]), int(b[3])), (255, 0, 0), 2)
+        s = float(max_side) / max(h, w)
+        img = cv2.resize(img, (int(w * s), int(h * s)))
+        cv2.putText(img, f"t {r['time_s']:.1f}s  hands {len(candidates(dets, i))}", (10, 28), cv2.FONT_HERSHEY_SIMPLEX, 0.8, (255, 255, 255), 2)
+        if vw is None:
+            vw = cv2.VideoWriter(str(path), cv2.VideoWriter_fourcc(*"mp4v"), fps, (img.shape[1], img.shape[0]))
+        vw.write(img)
+    if vw is not None:
+        vw.release()
+
+
+def pr_video(args) -> dict:
+    """One video of experiment 34 (printed hand, or a real-hand video of 27 for the comparison): 26's gen_video unchanged, plus distance_cm and kind, the multi-hand share, the keep-mode f and cost curve,
+    the phase RMS and the hand-shape change indicators. args = (entry, prep, npz, pcfg, c); c needs candidate, exclusion, detector_settings, guide; c['overlay_dir'] (optional) gets the overlay video."""
+    entry, prep, npz, pcfg, c = args[:5]
+    os.environ.setdefault("OMP_NUM_THREADS", "1")
+    cv2.setNumThreads(1)
+    ses = c.get("session") or {}
+    e2 = {"person_id": ses.get("person_id"), "phone": ses.get("phone", "main"), "lens": ses.get("lens", "1x"), "glove": bool(ses.get("glove", False)), "group": "G9", "ref_f": 1680.0, **entry}
+    res = gen_video((e2, prep, npz, pcfg, {**c, "trajectory": {}}))
+    res.update({"distance_cm": float(entry["distance_cm"]), "kind": entry.get("kind", "printed")})
+    cand = c["candidate"]
+    dset = c["detector_settings"][cand["detector"]]
+    pc = copy.deepcopy(pcfg)
+    pc["tracking"]["conf_min"] = float(dset["conf_min"])
+    frames = prep["frames"]
+    times = np.array([r["time_s"] for r in frames])
+    W, H = prep["size"]
+    dets = load_detections(Path(npz))
+    tr = track(dets, times, (W, H), pc["tracking"], front_start_s=float(pc["phases"]["front_skip_s"]))
+    res["multi_hand"] = pr_multi_hand_share(tr["n_candidates"])
+    if c.get("overlay_dir"):
+        pr_overlay(frames, dets, tr, Path(c["overlay_dir"]) / f"overlay_{Path(entry['file']).stem}.mp4")
+    if "ft" not in res:
+        return res
+    seed = int(pc["experiment"]["seed"])
+    cfg_ex = pseg_wrist_cfg(pc) if cand["wrist_mode"] == "exclude" else pc
+    kp, mask, present, box = tr["kp"], tr["mask"], tr["present"], tr["box"]
+    a2 = analyze(kp, mask, present, box, tr["cls"], times, (W, H), cfg_ex, tilt_start=None, methods_full=("fixed_template",), seed=seed, n_boot=2)
+    res["phase_rms_pct"] = pr_phase_rms(a2, box)
+    res["dynamics"] = ext_motion(kp, mask, present, box, times, a2, cfg_ex, (W, H))
+    a_keep = analyze(kp, mask, present, box, tr["cls"], times, (W, H), pc, tilt_start=None, methods_full=(), seed=seed)
+    sk = a_keep["solutions"]["fixed_template"]
+    res["keep"] = {"f": float(sk["f"]), "at_grid_edge": bool(sk["at_grid_edge"]), "curve": [float(x) for x in sk["profile_cost"]]}
+    res["box_long_median_px"] = float(np.nanmedian(box_long(box)[present]))
+    return res
+
+
+def pr_slope(curves_by_distance: dict, grid, n: int, seed: int) -> dict:
+    """Slope of log f against log distance from the pooled f of every distance (cost curves of the included videos summed) and its video-level bootstrap interval: the videos of each distance are drawn
+    with replacement n times (fixed seed), the pooled f and the slope recomputed; draws with a pooled f on the grid edge are skipped. curves_by_distance = {distance_cm: [cost curves]}."""
+    ds = sorted(curves_by_distance)
+    est = {d: long_pooled_estimate(curves_by_distance[d], grid) for d in ds}
+    out = {"distances": ds, "pooled_f": {d: est[d]["f"] for d in ds}, "pooled_edge": {d: est[d]["at_grid_edge"] for d in ds}}
+    out["slope"] = None if any(est[d]["at_grid_edge"] for d in ds) else ext_loglog_slope(ds, [est[d]["f"] for d in ds])
+    rng = np.random.default_rng(int(seed))
+    sl, skipped = [], 0
+    for _ in range(int(n)):
+        fs = []
+        for d in ds:
+            cs = np.asarray(curves_by_distance[d], float)
+            e = long_pooled_estimate(cs[rng.integers(0, len(cs), len(cs))], grid)
+            fs.append(None if e["at_grid_edge"] else e["f"])
+        s_ = None if any(f is None for f in fs) else ext_loglog_slope(ds, fs)
+        if s_ is None:
+            skipped += 1
+            continue
+        sl.append(s_)
+    out["interval_95"] = None if len(sl) < 10 else [float(np.quantile(sl, 0.025)), float(np.quantile(sl, 0.975))]
+    out["n_boot_used"], out["n_boot_skipped"] = int(len(sl)), int(skipped)
+    return out
+
+
+def pr_verdict(slope: dict, ref_by_distance: dict, vcfg: dict, n_videos: dict | None = None) -> dict:
+    """Verdict from the slope result of pr_slope: 반비례 없음 when the whole interval lies above slope_none_min and every pooled f is within f_tol of the reference f of its distance; 반비례 있음 when the
+    whole interval lies below slope_yes_max; otherwise 판단 보류; 판단 불가 when a distance has no included video or the slope has no value / interval."""
+    out = {"slope": slope.get("slope"), "interval_95": slope.get("interval_95")}
+    if n_videos is not None and any(int(n) < 1 for n in n_videos.values()):
+        return {**out, "verdict": "판단 불가", "reason": "영상이 없는 거리가 있음"}
+    if slope.get("slope") is None or slope.get("interval_95") is None:
+        return {**out, "verdict": "판단 불가", "reason": "기울기나 구간이 값 없음(격자 경계)"}
+    lo, hi = slope["interval_95"]
+    within = {d: bool(abs(slope["pooled_f"][d] / float(ref_by_distance[d]) - 1.0) <= float(vcfg["f_tol"])) for d in slope["distances"]}
+    out["within_f_tol"] = within
+    if lo > float(vcfg["slope_none_min"]) and all(within.values()):
+        return {**out, "verdict": "반비례 없음"}
+    if hi < float(vcfg["slope_yes_max"]):
+        return {**out, "verdict": "반비례 있음"}
+    return {**out, "verdict": "판단 보류"}
+
+
+# ====================================================================================================
+# mk  (experiment 35: hand markers, does the f-versus-distance slope survive when the points are measured by image processing instead of a learned model?; new section, earlier functions are used unchanged)
+# Small colour dots stuck on the palm side of the real hand. They are found by colour (HSV), connected components, area and roundness, weighted centres; named once on the sharpest front-window frame by the nearest
+# MediaPipe joints (naming only), followed with Hungarian matching and a homography check, and fed to the unchanged fixed_template analysis in place of the joints. MediaPipe is analysed beside it (pr_video).
+# Image coordinates are continuous (a pixel centre is index + 0.5), like MediaPipe's normalised coordinates times the frame size, so the principal point (W / 2, H / 2) means the same for both.
+# ====================================================================================================
+
+def mk_region(box, margin: float, W: int, H: int) -> tuple:
+    """The hand box enlarged by margin (0.30 = 30 % wider and taller about its centre), clipped to the frame, as integer pixel limits (x0, y0, x1, y1). Only a search area, never a coordinate."""
+    b = np.asarray(box, float)
+    cx, cy = (b[0] + b[2]) / 2.0, (b[1] + b[3]) / 2.0
+    hw, hh = (b[2] - b[0]) / 2.0 * (1.0 + margin), (b[3] - b[1]) / 2.0 * (1.0 + margin)
+    return (int(max(0, np.floor(cx - hw))), int(max(0, np.floor(cy - hh))), int(min(W, np.ceil(cx + hw))), int(min(H, np.ceil(cy + hh))))
+
+
+def mk_color_mask(hsv: np.ndarray, mcfg: dict) -> np.ndarray:
+    """Pixels of the marker colour: hue inside one of mcfg['hue_ranges'] (OpenCV 0-179, ranges may wrap), saturation >= s_min and value >= v_min; a 3 x 3 opening removes single pixels."""
+    h = hsv[..., 0].astype(int)
+    m = np.zeros(h.shape, bool)
+    for lo, hi in mcfg["hue_ranges"]:
+        m |= (h >= int(lo)) & (h <= int(hi))
+    m &= (hsv[..., 1] >= int(mcfg["s_min"])) & (hsv[..., 2] >= int(mcfg["v_min"]))
+    return cv2.morphologyEx(m.astype(np.uint8), cv2.MORPH_OPEN, np.ones((3, 3), np.uint8))
+
+
+def mk_blobs(bgr: np.ndarray, region: tuple, mcfg: dict, area_min_px: float | None = None) -> dict:
+    """Marker centres in a region of a BGR frame. Components with area in [area_min, area_max] and roundness 4 pi A / P^2 >= circularity_min are kept; the centre of a component is its
+    saturation-weighted centroid (continuous image coordinates). area_min_px replaces area_min when given (the share-of-box lower limit of the subset run).
+    Returns {xy (m, 2), area (m,), circularity (m,)}."""
+    x0, y0, x1, y1 = region
+    crop = bgr[y0:y1, x0:x1]
+    hsv = cv2.cvtColor(crop, cv2.COLOR_BGR2HSV)
+    mask = mk_color_mask(hsv, mcfg)
+    cnts, _ = cv2.findContours(mask, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_NONE)
+    xy, areas, circs = [], [], []
+    for c in cnts:
+        a, p = cv2.contourArea(c), cv2.arcLength(c, True)
+        if p <= 0 or not ((float(mcfg["area_min"]) if area_min_px is None else float(area_min_px)) <= a <= float(mcfg["area_max"])):
+            continue
+        circ = 4.0 * np.pi * a / (p * p)
+        if circ < float(mcfg["circularity_min"]):
+            continue
+        bx, by, bw, bh = cv2.boundingRect(c)
+        roi = np.zeros((bh, bw), np.uint8)
+        cv2.drawContours(roi, [c - np.array([bx, by])], -1, 1, -1)
+        w = hsv[by:by + bh, bx:bx + bw, 1].astype(float) * roi
+        yy, xx = np.mgrid[by:by + bh, bx:bx + bw]
+        s = w.sum()
+        if s <= 0:
+            continue
+        xy.append([(w * (xx + 0.5)).sum() / s + x0, (w * (yy + 0.5)).sum() / s + y0])
+        areas.append(a)
+        circs.append(circ)
+    return {"xy": np.array(xy, float).reshape(-1, 2), "area": np.array(areas, float), "circularity": np.array(circs, float)}
+
+
+def mk_assign_names(marker_xy: np.ndarray, joints_xy: np.ndarray) -> np.ndarray:
+    """Name every marker with the MediaPipe joint (0-20) nearest to it, one joint per marker (Hungarian assignment on the distances). Used once, on the reference frame; never for a coordinate."""
+    from scipy.optimize import linear_sum_assignment
+    d = np.linalg.norm(marker_xy[:, None, :] - joints_xy[None, :, :], axis=-1)
+    r, c = linear_sum_assignment(d)
+    names = np.full(len(marker_xy), -1, int)
+    names[r] = c
+    return names
+
+
+def mk_homography(src: np.ndarray, dst: np.ndarray, thr_px: float | None = None):
+    """Homography src -> dst (RANSAC with thr_px, or least squares when None). Returns (H, inlier mask) or (None, None)."""
+    if len(src) < 4:
+        return None, None
+    if thr_px is None:
+        H, _ = cv2.findHomography(src.astype(np.float64), dst.astype(np.float64), 0)
+        return H, np.ones(len(src), bool)
+    H, m = cv2.findHomography(src.astype(np.float64), dst.astype(np.float64), cv2.RANSAC, float(thr_px))
+    return H, None if m is None else m.ravel().astype(bool)
+
+
+def mk_track(dets_xy: list, ref_index: int, ref_xy: np.ndarray, box_long_px: np.ndarray, mcfg: dict, used: list | None = None) -> dict:
+    """Follow the reference markers through the frames (forward and backward from ref_index). dets_xy[i] = detected centres (k, 2) or None. A frame is dropped when it has more detections than markers or fewer
+    than min_markers_ratio x markers, when fewer than that ratio of the markers can be matched, or when the homography reference -> frame (RANSAC) keeps fewer than min_inlier_ratio of them
+    (a swapped pair breaks it). Matching: Hungarian on the distances to the last accepted frame; a pair moving more than move_frac x hand box x min(gap, gap_cap) frames is cut.
+    used = indices of the reference markers that count for the share (None: all, the first behaviour): then the ratio is taken of those markers, the others are followed but never required; the homography uses every
+    matched marker. mcfg['max_detections'] (default: the number of reference markers) is the most detections a frame may have.
+    Returns {xy (n, m, 2) NaN where missing, ok (n,) bool, reason (n,) str}."""
+    from scipy.optimize import linear_sum_assignment
+    n, m = len(dets_xy), len(ref_xy)
+    xy = np.full((n, m, 2), np.nan)
+    ok = np.zeros(n, bool)
+    reason = np.array([""] * n, dtype=object)
+    xy[ref_index], ok[ref_index] = ref_xy, True
+    used = list(range(m)) if used is None else [int(j) for j in used]
+    need = int(np.ceil(float(mcfg["min_markers_ratio"]) * len(used) - 1e-9))
+    max_det = int(mcfg.get("max_detections", m))
+    for order in (range(ref_index + 1, n), range(ref_index - 1, -1, -1)):
+        last, last_i = ref_xy.copy(), ref_index
+        for i in order:
+            d = dets_xy[i]
+            if d is None:
+                reason[i] = "no_hand_box"
+                continue
+            if len(d) > max_det:
+                reason[i] = "too_many_markers"
+                continue
+            if len(d) < need:
+                reason[i] = "too_few_markers"
+                continue
+            lim = float(mcfg["move_frac"]) * float(box_long_px[i]) * min(abs(i - last_i), int(mcfg["gap_cap"]))
+            cost = np.linalg.norm(last[:, None, :] - d[None, :, :], axis=-1)
+            r, c = linear_sum_assignment(cost)
+            good = cost[r, c] <= lim
+            r, c = r[good], c[good]
+            if np.isin(r, used).sum() < need:
+                reason[i] = "match_failed"
+                continue
+            cur = np.full((m, 2), np.nan)
+            cur[r] = d[c]
+            thr = float(mcfg["ransac_frac"]) * float(box_long_px[i])
+            H, inl = mk_homography(ref_xy[r], cur[r], thr)
+            if H is None or inl is None or inl.sum() < float(mcfg["min_inlier_ratio"]) * len(r) or np.isin(r[inl], used).sum() < need:
+                reason[i] = "homography_failed"
+                continue
+            keep = r[inl]
+            cur2 = np.full((m, 2), np.nan)
+            cur2[keep] = cur[keep]
+            xy[i], ok[i] = cur2, True
+            last, last_i = np.where(np.isnan(cur2), last, cur2), i
+    return {"xy": xy, "ok": ok, "reason": reason}
+
+
+def mk_homography_check(ref_xy: np.ndarray, cur_xy: np.ndarray, thr_px: float, min_inlier_ratio: float, need: int) -> dict:
+    """Label check of one frame: the homography reference -> current (RANSAC, threshold thr_px) of the given marker pairs must keep at least min_inlier_ratio of them and at least `need`;
+    a swapped pair of labels breaks it. Returns {ok, H, inliers (bool per pair)}."""
+    H, inl = mk_homography(ref_xy, cur_xy, thr_px)
+    if H is None or inl is None:
+        return {"ok": False, "H": None, "inliers": np.zeros(len(ref_xy), bool)}
+    return {"ok": bool(inl.sum() >= float(min_inlier_ratio) * len(ref_xy) and inl.sum() >= need), "H": H, "inliers": inl}
+
+
+def mk_track_reacquire(dets_xy: list, ref_index: int, ref_xy: np.ndarray, box_long_px: np.ndarray, mcfg: dict, used: list) -> dict:
+    """Follow the reference markers through the frames (forward and backward from ref_index), with re-acquisition. A detection is matched to a marker when it lies within the movement limit of the marker's last
+    accepted position OR of its predicted position (the reference position moved by the homography of the last accepted frame); the limit is move_frac x hand box x min(frames since the last accepted frame, gap_cap),
+    the same around both. Hungarian assignment on the smaller of the two distances. A frame is kept when at least min_markers_ratio of the used markers are matched and their homography reference -> frame
+    (RANSAC, ransac_frac x hand box, used markers only) keeps at least min_inlier_ratio of them; detections without a marker are ignored (their number per frame is returned), non-used markers are followed only.
+    Returns {xy (n, m, 2) NaN where missing, ok (n,), reason (n,), ignored (n,) int (-1 where the frame was not kept), pred (n, m, 2) the predicted positions used for a kept frame (NaN elsewhere),
+    ignored_xy (list of the ignored detections of every kept frame)}."""
+    from scipy.optimize import linear_sum_assignment
+    n, m = len(dets_xy), len(ref_xy)
+    xy = np.full((n, m, 2), np.nan)
+    pred_all = np.full((n, m, 2), np.nan)
+    ignored_xy = [np.zeros((0, 2))] * n
+    ok = np.zeros(n, bool)
+    reason = np.array([""] * n, dtype=object)
+    ignored = np.full(n, -1, int)
+    xy[ref_index], ok[ref_index], ignored[ref_index] = ref_xy, True, max(len(dets_xy[ref_index]) - m, 0)
+    used = [int(j) for j in used]
+    need = int(np.ceil(float(mcfg["min_markers_ratio"]) * len(used) - 1e-9))
+    big = 1e9
+    for order in (range(ref_index + 1, n), range(ref_index - 1, -1, -1)):
+        last, last_i, H_last = ref_xy.copy(), ref_index, np.eye(3)
+        for i in order:
+            d = dets_xy[i]
+            if d is None:
+                reason[i] = "no_hand_box"
+                continue
+            if len(d) < need:
+                reason[i] = "too_few_markers"
+                continue
+            lim = float(mcfg["move_frac"]) * float(box_long_px[i]) * min(abs(i - last_i), int(mcfg["gap_cap"]))
+            pred = cv2.perspectiveTransform(ref_xy.reshape(-1, 1, 2).astype(np.float64), H_last).reshape(-1, 2)
+            c_prev = np.linalg.norm(last[:, None, :] - d[None, :, :], axis=-1)
+            c_pred = np.linalg.norm(pred[:, None, :] - d[None, :, :], axis=-1)
+            cost = np.minimum(np.where(c_prev <= lim, c_prev, big), np.where(c_pred <= lim, c_pred, big))
+            r, c = linear_sum_assignment(cost)
+            good = cost[r, c] < big
+            r, c = r[good], c[good]
+            ru = r[np.isin(r, used)]
+            if len(ru) < need:
+                reason[i] = "match_failed"
+                continue
+            cu = c[np.isin(r, used)]
+            chk = mk_homography_check(ref_xy[ru], d[cu], float(mcfg["ransac_frac"]) * float(box_long_px[i]), float(mcfg["min_inlier_ratio"]), need)
+            if not chk["ok"]:
+                reason[i] = "homography_failed"
+                continue
+            cur = np.full((m, 2), np.nan)
+            cur[r] = d[c]
+            drop = ru[~chk["inliers"]]
+            cur[drop] = np.nan
+            taken = np.zeros(len(d), bool)
+            taken[c[~np.isin(r, drop)]] = True
+            xy[i], ok[i], ignored[i] = cur, True, int(len(d) - np.isfinite(cur[:, 0]).sum())
+            pred_all[i], ignored_xy[i] = pred, d[~taken]
+            last, last_i, H_last = np.where(np.isnan(cur), last, cur), i, chk["H"]
+    return {"xy": xy, "ok": ok, "reason": reason, "ignored": ignored, "pred": pred_all, "ignored_xy": ignored_xy}
+
+
+def mk_normalise(P: np.ndarray, scale: float):
+    """Similarity T (3 x 3) that moves the centroid of P to 0 and divides by scale."""
+    c = P.mean(0)
+    return np.array([[1.0 / scale, 0, -c[0] / scale], [0, 1.0 / scale, -c[1] / scale], [0, 0, 1.0]])
+
+
+def mk_perspective(src: np.ndarray, dst: np.ndarray, scale: float):
+    """Perspective components (h31, h32) of the homography src -> dst after both point sets are normalised (centroid 0, divided by scale) and h33 set to 1; (nan, nan) when it cannot be fitted."""
+    H, _ = mk_homography(src, dst)
+    if H is None:
+        return np.array([np.nan, np.nan])
+    Hn = mk_normalise(dst, scale) @ H @ np.linalg.inv(mk_normalise(src, scale))
+    if abs(Hn[2, 2]) < 1e-12:
+        return np.array([np.nan, np.nan])
+    Hn = Hn / Hn[2, 2]
+    return np.array([Hn[2, 0], Hn[2, 1]])
+
+
+def mk_perspective_k(p_mp: np.ndarray, p_mk: np.ndarray) -> dict:
+    """Regression slope k (through the origin) of the perspective components of the MediaPipe joints on those of the markers over the frames: 1 = MediaPipe follows the perspective, 0 = it does not.
+    p_mp, p_mk (n, 2); frames with a nan are skipped. Also the correlation of the two."""
+    ok = np.isfinite(p_mp).all(1) & np.isfinite(p_mk).all(1)
+    a, b = p_mp[ok], p_mk[ok]
+    den = float((b * b).sum())
+    return {"k": float((a * b).sum() / den) if den > 0 else None, "corr": float(np.corrcoef(a.ravel(), b.ravel())[0, 1]) if ok.sum() > 2 and a.std() > 0 and b.std() > 0 else None, "n": int(ok.sum())}
+
+
+def mk_planar_gap(ref_markers: np.ndarray, cur_markers: np.ndarray, ref_joints: np.ndarray, cur_joints: np.ndarray, box_long_px: float) -> float:
+    """Mean distance (percent of the hand box) between the current MediaPipe joints and where a planar hand would put them: the reference joints moved by the homography reference -> current markers."""
+    H, _ = mk_homography(ref_markers, cur_markers)
+    if H is None:
+        return float("nan")
+    pred = cv2.perspectiveTransform(ref_joints.reshape(-1, 1, 2).astype(np.float64), H).reshape(-1, 2)
+    return float(100.0 * np.linalg.norm(pred - cur_joints, axis=1).mean() / box_long_px)
+
+
+def mk_sharpness(bgr: np.ndarray, region: tuple) -> float:
+    x0, y0, x1, y1 = region
+    return float(cv2.Laplacian(cv2.cvtColor(bgr[y0:y1, x0:x1], cv2.COLOR_BGR2GRAY), cv2.CV_64F).var())
+
+
+def mk_process(prep: dict, npz, pcfg: dict, c: dict) -> dict:
+    """Markers of one video from the stored MediaPipe detection (hand box and reference naming only): per-frame blobs, reference frame (sharpest front-window frame, see below), names, tracking with the
+    homography check. Returns the marker arrays in the 21-joint layout (kp (n, 21, 2), mask, present), the MediaPipe track and the frame statistics, or {'failed': reason}.
+    Default (no markers.used_ids): every one of markers.count markers must be found in the reference frame and in every kept frame. Subset mode (markers.used_ids): the lower area limit is markers.area_min_frac
+    x the MediaPipe box area, the reference frame must show every used marker (nearest MediaPipe joint within markers.naming_radius_frac x box), the tracked markers beyond the used ones are only followed, and a
+    frame is kept when at least min_markers_ratio of the used markers are matched; the share of kept frames in the tilt phase and the detection rate of every marker are reported."""
+    mcfg = c["markers"]
+    used_ids = mcfg.get("used_ids")
+    dset = c["detector_settings"][c["candidate"]["detector"]]
+    pc = copy.deepcopy(pcfg)
+    pc["tracking"]["conf_min"] = float(dset["conf_min"])
+    frames = prep["frames"]
+    times = np.array([r["time_s"] for r in frames])
+    W, H = prep["size"]
+    dets = load_detections(Path(npz))
+    check_alignment(frames, dets)
+    tr = track(dets, times, (W, H), pc["tracking"], front_start_s=float(pc["phases"]["front_skip_s"]))
+    n, m_cfg = len(times), int(mcfg["count"])
+    bl = box_long(tr["box"])
+    det, regions = [None] * n, [None] * n
+    for i in range(n):
+        if tr["present"][i]:
+            regions[i] = mk_region(tr["box"][i], float(mcfg["region_margin"]), W, H)
+            amin = None if "area_min_frac" not in mcfg else float(mcfg["area_min_frac"]) * float((tr["box"][i][2] - tr["box"][i][0]) * (tr["box"][i][3] - tr["box"][i][1]))
+            det[i] = mk_blobs(cv2.imread(frames[i]["png"], cv2.IMREAD_COLOR), regions[i], mcfg, amin)["xy"]
+    seen = [i for i in range(n) if det[i] is not None]
+    out = {"n_frames": n, "size": [W, H], "times": times, "tr": tr, "det": det, "regions": regions, "box_long": bl, "count": m_cfg,
+           "all_found_ratio": float(np.mean([len(det[i]) == m_cfg for i in seen])) if seen else 0.0, "hand_frames": len(seen),
+           "n_detected_median": float(np.median([len(det[i]) for i in seen])) if seen else 0.0}
+    fw = front_window(times, tr["present"], tr["kp"], tr["mask"], tr["box"], pc["phases"])
+    sharp, ref, names, used_idx = [], None, None, None
+    if used_ids is None:
+        cands = [int(i) for i in fw["idx"] if det[i] is not None and len(det[i]) == m_cfg]
+        if cands:
+            sharp = [mk_sharpness(cv2.imread(frames[i]["png"], cv2.IMREAD_COLOR), regions[i]) for i in cands]
+            ref = cands[int(np.argmax(sharp))]
+            names = mk_assign_names(det[ref], tr["kp"][ref])
+    else:
+        uid = [int(x) for x in used_ids]
+        cands, cnames = [], {}
+        for i in (int(j) for j in fw["idx"]):
+            if det[i] is None or not (len(uid) <= len(det[i]) <= 21):
+                continue
+            nm = mk_assign_names(det[i], tr["kp"][i])
+            dist = np.linalg.norm(det[i] - tr["kp"][i][nm], axis=1)
+            if all(any(nm[j] == u and dist[j] <= float(mcfg["naming_radius_frac"]) * bl[i] for j in range(len(nm))) for u in uid):
+                cands.append(i)
+                cnames[i] = nm
+        if cands:
+            sharp = [mk_sharpness(cv2.imread(frames[i]["png"], cv2.IMREAD_COLOR), regions[i]) for i in cands]
+            ref = cands[int(np.argmax(sharp))]
+            names = cnames[ref]
+            used_idx = [j for j, x in enumerate(names) if int(x) in uid]
+    if ref is None:
+        return {**out, "failed": "정면 창에 기준 프레임이 없음" + ("" if used_ids is None else " (사용 표시가 모두 보이는 프레임)")}
+    m = len(det[ref])
+    out["count"] = m if used_ids is not None else m_cfg
+    track_fn = mk_track_reacquire if mcfg.get("tracker") == "reacquire" else mk_track
+    trk = track_fn(det, ref, det[ref], bl, mcfg, used_idx)
+    kp = np.full((n, 21, 2), np.nan)
+    for j in range(m):
+        kp[:, names[j]] = trk["xy"][:, j]
+    mask = np.isfinite(kp[..., 0]) & trk["ok"][:, None]
+    win = [i for i in range(n) if 0.5 <= times[i] < 1.5]
+    tilt_hand = np.array([det[i] is not None and times[i] >= float(pc["phases"]["front_phase_s"]) for i in range(n)])
+    reasons = {}
+    for r in trk["reason"]:
+        if r:
+            reasons[r] = reasons.get(r, 0) + 1
+    loose = track_fn(det, ref, det[ref], bl, {**mcfg, "min_markers_ratio": 0.3}, used_idx)
+    seen_loose = loose["ok"] & tilt_hand
+    per = {int(names[j]): float(np.isfinite(loose["xy"][seen_loose, j, 0]).sum() / max(tilt_hand.sum(), 1)) for j in range(m)}
+    out.update({"ref_index": ref, "ref_time_s": float(times[ref]), "ref_sharpness": float(max(sharp)), "names": names, "used_idx": used_idx, "track": trk, "kp": kp, "mask": mask, "present": trk["ok"].copy(),
+                "valid_ratio": float(trk["ok"].sum() / max(len(seen), 1)), "tilt_valid_ratio": float((trk["ok"] & tilt_hand).sum() / max(tilt_hand.sum(), 1)), "tilt_hand_frames": int(tilt_hand.sum()),
+                "reasons": reasons, "ignored_median": None if "ignored" not in trk or not trk["ok"].any() else float(np.median(trk["ignored"][trk["ok"]])),
+                "ignored_share": None if "ignored" not in trk or not trk["ok"].any() else float(np.mean(trk["ignored"][trk["ok"]] > 0)), "window_success": int(trk["ok"][win].sum()), "window_frames": len(win), "front_window": [fw.get("t0"), fw.get("t1")], "per_marker_rate": per})
+    return out
+
+
+def mk_draw_reference(prep: dict, proc: dict, path) -> None:
+    """One picture: the reference frame (sharpest front-window frame with every marker found) with the numbered marker centres and their MediaPipe joint names (hand crop, run folder only)."""
+    i = proc["ref_index"]
+    img = cv2.imread(prep["frames"][i]["png"], cv2.IMREAD_COLOR)
+    for j, (x, y) in enumerate(proc["det"][i]):
+        cv2.circle(img, (int(round(x - 0.5)), int(round(y - 0.5))), 7, (255, 200, 0), 2)
+        cv2.putText(img, f"{proc['names'][j]}", (int(x) + 8, int(y) - 8), cv2.FONT_HERSHEY_SIMPLEX, 0.9, (255, 255, 0), 2)
+    for x, y in proc["tr"]["kp"][i]:
+        cv2.circle(img, (int(round(x)), int(round(y))), 3, (0, 255, 0), -1)
+    x0, y0, x1, y1 = proc["regions"][i]
+    crop = img[y0:y1, x0:x1]
+    Path(path).parent.mkdir(parents=True, exist_ok=True)
+    cv2.imwrite(str(path), crop)
+
+
+def mk_precheck_video(args) -> dict:
+    """Pre-check of one video: marker statistics and the reference-frame picture; no analysis. args = (entry, prep, npz, pcfg, c); c['out_dir'] gets the picture. In subset mode the pass rule is
+    precheck.min_tilt_valid_ratio (share of the tilt-phase hand frames that are kept) and a reference frame showing every used marker; otherwise precheck.min_all_found_ratio."""
+    entry, prep, npz, pcfg, c = args[:5]
+    proc = mk_process(prep, npz, pcfg, c)
+    res = {"video": entry["file"], "distance_cm": float(entry["distance_cm"]), "size": proc["size"], "n_frames": proc["n_frames"], "hand_frames": proc["hand_frames"], "all_found_ratio": proc["all_found_ratio"],
+           "n_detected_median": proc["n_detected_median"], "count": proc["count"]}
+    subset = c["markers"].get("used_ids") is not None
+    if "failed" in proc:
+        return {**res, "failed": proc["failed"], "passes": False}
+    res.update({k: proc[k] for k in ("ref_index", "ref_time_s", "ref_sharpness", "valid_ratio", "tilt_valid_ratio", "reasons", "window_success", "window_frames", "front_window", "per_marker_rate", "ignored_median", "ignored_share")})
+    res["names"] = [int(x) for x in proc["names"]]
+    res["passes"] = bool(proc["tilt_valid_ratio"] >= float(c["precheck"]["min_tilt_valid_ratio"])) if subset else bool(proc["all_found_ratio"] >= float(c["precheck"]["min_all_found_ratio"]))
+    if c.get("out_dir"):
+        mk_draw_reference(prep, proc, Path(c["out_dir"]) / f"reference_{Path(entry['file']).stem}.png")
+    return res
+
+
+def mk_overlay(frames: list, proc: dict, path, max_side: int = 960, fps: float = 15.0) -> None:
+    """Overlay video of a marker run: tracked markers (cyan, numbered with their joint name), MediaPipe joints (green, wrist red). Written only into the run folder."""
+    path = Path(path)
+    path.parent.mkdir(parents=True, exist_ok=True)
+    vw = None
+    for i, r in enumerate(frames):
+        img = cv2.imread(r["png"], cv2.IMREAD_COLOR)
+        h, w = img.shape[:2]
+        if proc["tr"]["present"][i]:
+            for j, (x, y) in enumerate(proc["tr"]["kp"][i]):
+                cv2.circle(img, (int(round(x)), int(round(y))), 4, (0, 0, 255) if j == 0 else (0, 255, 0), -1)
+        if proc["present"][i]:
+            for j in range(proc["count"]):
+                x, y = proc["track"]["xy"][i, j]
+                if np.isfinite(x):
+                    cv2.circle(img, (int(round(x - 0.5)), int(round(y - 0.5))), 8, (255, 200, 0), 2)
+                    cv2.putText(img, f"{proc['names'][j]}", (int(x) + 9, int(y) - 9), cv2.FONT_HERSHEY_SIMPLEX, 0.6, (255, 255, 0), 2)
+        s = float(max_side) / max(h, w)
+        img = cv2.resize(img, (int(w * s), int(h * s)))
+        cv2.putText(img, f"t {r['time_s']:.1f}s  markers {'ok' if proc['present'][i] else proc['track']['reason'][i] or '-'}", (10, 28), cv2.FONT_HERSHEY_SIMPLEX, 0.8, (255, 255, 255), 2)
+        if vw is None:
+            vw = cv2.VideoWriter(str(path), cv2.VideoWriter_fourcc(*"mp4v"), fps, (img.shape[1], img.shape[0]))
+        vw.write(img)
+    if vw is not None:
+        vw.release()
+
+
+def mk_mediapipe_subset(prep: dict, npz, pcfg: dict, c: dict) -> dict:
+    """MediaPipe joints markers.used_ids through the unchanged fixed_template analysis (the same joints the markers stand for; MediaPipe's own frames, the exclusion rules of 27). Same fields as the marker result."""
+    cand = c["candidate"]
+    dset = c["detector_settings"][cand["detector"]]
+    pc = copy.deepcopy(pcfg)
+    pc["tracking"]["conf_min"] = float(dset["conf_min"])
+    times = np.array([r["time_s"] for r in prep["frames"]])
+    W, H = prep["size"]
+    tr = track(load_detections(Path(npz)), times, (W, H), pc["tracking"], front_start_s=float(pc["phases"]["front_skip_s"]))
+    ex = c["exclusion"]
+    edge = fresp_edge_rate(tr["box"][tr["present"]], np.ones(int(tr["present"].sum()), bool), W, H) if tr["present"].any() else 1.0
+    fail = 1.0 - float(tr["present"].mean())
+    reasons = ([f"가장자리 접촉 프레임 {100 * edge:.1f}% > {100 * float(ex['edge_rate_max']):.0f}%"] if edge > float(ex["edge_rate_max"]) else []) + \
+              ([f"손 검출 실패 프레임 {100 * fail:.1f}% > {100 * float(ex['detect_fail_max']):.0f}%"] if fail > float(ex["detect_fail_max"]) else [])
+    out = {"excluded": reasons, "edge_rate": float(edge)}
+    if reasons:
+        return out
+    cfg_s = copy.deepcopy(pc)
+    cfg_s["joints"]["sets"]["mp_subset"] = sorted(int(x) for x in c["markers"]["used_ids"])
+    cfg_s["joints"]["estimate_set"] = "mp_subset"
+    cfg_s["joints"]["uncertainty_sets"] = ["mp_subset"]
+    a = analyze(tr["kp"], tr["mask"], tr["present"], tr["box"], tr["cls"], times, (W, H), cfg_s, tilt_start=None, methods_full=("fixed_template",), seed=int(pc["experiment"]["seed"]))
+    if "per_method" not in a:
+        return {**out, "failed": a.get("failed", "분석 실패")}
+    sol, pm = a["solutions"]["fixed_template"], a["per_method"]["fixed_template"]
+    grid = np.array(a["grid"])
+    tilt = [i for i, r in enumerate(a["role"]) if r == "tilt"]
+    out.update({"f": float(sol["f"]), "at_grid_edge": bool(sol["at_grid_edge"]), "side": None if not sol["at_grid_edge"] else ("상한" if sol["f"] >= grid[-1] * (1 - 1e-6) else "하한"),
+                "sharpness": float(pm["diagnostics"]["sharpness"]), "boot_log_std": long_boot_log_std(pm["bootstrap"]["f"]), "curve": {"grid": grid.tolist(), "cost": [float(x) for x in sol["profile_cost"]]},
+                "n_used_frames": int(a["n_target_frames"]), "theta_median": a["theta_tilt"]["median"], "theta_max": a["theta_tilt"]["max"], "theta_p90": a["theta_tilt"]["p90"],
+                "tilt_duration_s": float(times[tilt].max() - a["tilt_start_s"]) if tilt else 0.0, "phase_rms_pct": pr_phase_rms(a, tr["box"])})
+    return out
+
+
+def mk_video(args) -> dict:
+    """One video of experiment 35: the marker points in place of the joints through the unchanged analysis (fixed_template, front window, nominal tilt phase, block bootstrap), MediaPipe beside it (pr_video: the
+    16-point candidate; in subset mode also the same joints as the markers, mk_mediapipe_subset), and the diagnostics of the planar-hand check (perspective components, planar gap).
+    args = (entry, prep, npz, pcfg, c); c needs candidate, exclusion, detector_settings, guide, markers (and marker_exclusion in subset mode)."""
+    entry, prep, npz, pcfg, c = args[:5]
+    os.environ.setdefault("OMP_NUM_THREADS", "1")
+    cv2.setNumThreads(1)
+    cand = c["candidate"]
+    dset = c["detector_settings"][cand["detector"]]
+    pc = copy.deepcopy(pcfg)
+    pc["tracking"]["conf_min"] = float(dset["conf_min"])
+    subset = c["markers"].get("used_ids") is not None
+    proc = mk_process(prep, npz, pcfg, c)
+    W, H = proc["size"]
+    res = {"video": entry["file"], "distance_cm": float(entry["distance_cm"]), "size": [W, H], "n_frames": proc["n_frames"], "duration_s": float(proc["times"][-1] - proc["times"][0]),
+           "marker_stats": {k: proc.get(k) for k in ("all_found_ratio", "valid_ratio", "tilt_valid_ratio", "n_detected_median", "hand_frames", "window_success", "window_frames", "ref_time_s", "reasons", "front_window", "per_marker_rate", "ignored_median", "ignored_share")}}
+    cc = {k: v for k, v in c.items() if k not in ("overlay_dir", "markers")}
+    res["mediapipe"] = pr_video((entry, prep, npz, pcfg, cc))
+    if subset:
+        res["mediapipe8"] = mk_mediapipe_subset(prep, npz, pcfg, c)
+    if "failed" in proc:
+        res["marker"] = {"failed": proc["failed"]}
+        return res
+    tr, times, n = proc["tr"], proc["times"], proc["n_frames"]
+    if c.get("overlay_dir"):
+        mk_overlay(prep["frames"], proc, Path(c["overlay_dir"]) / f"overlay_{Path(entry['file']).stem}.mp4")
+    ex = c["exclusion"]
+    edge = fresp_edge_rate(tr["box"][proc["present"]], np.ones(int(proc["present"].sum()), bool), W, H) if proc["present"].any() else 1.0
+    reasons = []
+    if subset:
+        lim = float(c["marker_exclusion"]["min_tilt_valid_ratio"])
+        if proc["tilt_valid_ratio"] < lim:
+            reasons.append(f"기울기 구간 유효 프레임 {100 * proc['tilt_valid_ratio']:.1f}% < {100 * lim:.0f}%")
+    elif 1.0 - proc["valid_ratio"] > float(ex["detect_fail_max"]):
+        reasons.append(f"표시 유효 프레임 {100 * proc['valid_ratio']:.1f}% < {100 * (1 - float(ex['detect_fail_max'])):.0f}%")
+    if edge > float(ex["edge_rate_max"]):
+        reasons.append(f"가장자리 접촉 프레임 {100 * edge:.1f}% > {100 * float(ex['edge_rate_max']):.0f}%")
+    mk = {"excluded": reasons, "edge_rate": float(edge), "valid_ratio": proc["valid_ratio"], "names": [int(x) for x in proc["names"]]}
+    res["marker"] = mk
+    if reasons:
+        return res
+    cfg_mk = copy.deepcopy(pc)
+    names = sorted(int(x) for x in c["markers"]["used_ids"]) if subset else sorted({int(x) for x in proc["names"]})
+    cfg_mk["joints"]["sets"]["markers"] = names
+    cfg_mk["joints"]["estimate_set"] = "markers"
+    cfg_mk["joints"]["uncertainty_sets"] = ["markers"]
+    seed = int(pc["experiment"]["seed"])
+    a = analyze(proc["kp"], proc["mask"], proc["present"], tr["box"], tr["cls"], times, (W, H), cfg_mk, tilt_start=None, methods_full=("fixed_template",), seed=seed)
+    if "per_method" not in a:
+        mk["failed"] = a.get("failed", "분석 실패")
+        return res
+    sol, pm = a["solutions"]["fixed_template"], a["per_method"]["fixed_template"]
+    grid = np.array(a["grid"])
+    tilt = [i for i, r in enumerate(a["role"]) if r == "tilt"]
+    mk.update({"f": float(sol["f"]), "at_grid_edge": bool(sol["at_grid_edge"]), "side": None if not sol["at_grid_edge"] else ("상한" if sol["f"] >= grid[-1] * (1 - 1e-6) else "하한"),
+               "sharpness": float(pm["diagnostics"]["sharpness"]), "boot_log_std": long_boot_log_std(pm["bootstrap"]["f"]), "curve": {"grid": grid.tolist(), "cost": [float(x) for x in sol["profile_cost"]]},
+               "n_used_frames": int(a["n_target_frames"]), "theta_median": a["theta_tilt"]["median"], "theta_max": a["theta_tilt"]["max"], "theta_p90": a["theta_tilt"]["p90"],
+               "tilt_duration_s": float(times[tilt].max() - a["tilt_start_s"]) if tilt else 0.0, "phase_rms_pct": pr_phase_rms(a, tr["box"]), "box_long_median_px": float(np.nanmedian(proc["box_long"][proc["present"]]))})
+    # reference run (not a verdict input): the frames in which a blob without a marker lay within 2 % of the hand box of a tracked used marker are left out
+    trk, used_idx = proc["track"], proc["used_idx"]
+    if used_idx is not None and "ignored_xy" in trk:
+        near = np.zeros(n, bool)
+        for i in np.flatnonzero(proc["present"]):
+            ig = trk["ignored_xy"][i]
+            xy = trk["xy"][i][used_idx]
+            xy = xy[np.isfinite(xy[:, 0])]
+            if len(ig) and len(xy) and np.linalg.norm(ig[:, None, :] - xy[None, :, :], axis=-1).min() <= 0.02 * float(proc["box_long"][i]):
+                near[i] = True
+        pres2 = proc["present"] & ~near
+        nf = {"n_dropped_frames": int(near.sum())}
+        a2 = analyze(proc["kp"], proc["mask"] & pres2[:, None], pres2, tr["box"], tr["cls"], times, (W, H), cfg_mk, tilt_start=None, methods_full=("fixed_template",), seed=seed)
+        if "per_method" in a2:
+            s2, pm2 = a2["solutions"]["fixed_template"], a2["per_method"]["fixed_template"]
+            tilt2 = [i for i, r in enumerate(a2["role"]) if r == "tilt"]
+            nf.update({"f": float(s2["f"]), "at_grid_edge": bool(s2["at_grid_edge"]), "side": None if not s2["at_grid_edge"] else ("상한" if s2["f"] >= grid[-1] * (1 - 1e-6) else "하한"),
+                       "sharpness": float(pm2["diagnostics"]["sharpness"]), "boot_log_std": long_boot_log_std(pm2["bootstrap"]["f"]), "curve": {"grid": grid.tolist(), "cost": [float(x) for x in s2["profile_cost"]]},
+                       "n_used_frames": int(a2["n_target_frames"]), "theta_median": a2["theta_tilt"]["median"], "theta_max": a2["theta_tilt"]["max"], "theta_p90": a2["theta_tilt"]["p90"],
+                       "tilt_duration_s": float(times[tilt2].max() - a2["tilt_start_s"]) if tilt2 else 0.0, "phase_rms_pct": pr_phase_rms(a2, tr["box"])})
+        else:
+            nf["failed"] = a2.get("failed", "분석 실패")
+        res["marker_nearfree"] = nf
+    # planar-hand check: markers define the homography reference -> frame; MediaPipe joints 5-20 against it
+    r0 = proc["ref_index"]
+    ids = list(range(5, 21))
+    ref_mk = proc["track"]["xy"][r0]
+    ref_j = tr["kp"][r0][ids]
+    scale = float(proc["box_long"][r0])
+    theta = np.array([np.nan if x is None else x for x in a["theta2d_deg"]], float)
+    rows = []
+    for i in range(n):
+        if not proc["present"][i] or not tr["mask"][i][ids].all() or not tr["mask"][r0][ids].all():
+            continue
+        okm = np.isfinite(proc["track"]["xy"][i][:, 0]) & np.isfinite(ref_mk[:, 0])
+        if okm.sum() < 6:
+            continue
+        p_mk = mk_perspective(ref_mk[okm], proc["track"]["xy"][i][okm], scale)
+        p_mp = mk_perspective(ref_j, tr["kp"][i][ids], scale)
+        gap = mk_planar_gap(ref_mk[okm], proc["track"]["xy"][i][okm], ref_j, tr["kp"][i][ids], float(proc["box_long"][i]))
+        rows.append({"index": int(i), "time_s": float(times[i]), "theta2d_deg": None if not np.isfinite(theta[i]) else float(theta[i]), "gap_pct": gap, "p_mk": [float(x) for x in p_mk], "p_mp": [float(x) for x in p_mp]})
+    pmk = np.array([r["p_mk"] for r in rows]).reshape(-1, 2)
+    pmp = np.array([r["p_mp"] for r in rows]).reshape(-1, 2)
+    res["diag"] = {"frames": rows, "k": mk_perspective_k(pmp, pmk), "gap_median_pct": float(np.nanmedian([r["gap_pct"] for r in rows])) if rows else None}
+    return res
+
+
+def mk_pairing_stats(proc: dict) -> dict:
+    """Pairing quality of a marker run: the distance (px) of the tracked used markers from their predicted positions, for the kept frames with and without ignored blobs (median, 95th percentile, number of
+    marker positions), and the share of the frames with ignored blobs in which an ignored blob lay within 2 % of the hand box of a tracked used marker (a risk of a wrong pairing)."""
+    trk, used, bl = proc["track"], proc["used_idx"], proc["box_long"]
+    d_with, d_without, near, n_with = [], [], 0, 0
+    for i in np.flatnonzero(trk["ok"]):
+        pr, xy = trk["pred"][i][used], trk["xy"][i][used]
+        m = np.isfinite(xy[:, 0]) & np.isfinite(pr[:, 0])
+        if not m.any():
+            continue
+        d = np.linalg.norm(xy[m] - pr[m], axis=1)
+        if trk["ignored"][i] > 0:
+            d_with.extend(d.tolist())
+            n_with += 1
+            ig = trk["ignored_xy"][i]
+            if len(ig) and (np.linalg.norm(ig[:, None, :] - xy[m][None, :, :], axis=-1).min() <= 0.02 * bl[i]):
+                near += 1
+        else:
+            d_without.extend(d.tolist())
+    stat = lambda v: {"n_points": int(len(v)), "median_px": float(np.median(v)) if len(v) else None, "p95_px": float(np.percentile(v, 95)) if len(v) else None}      # noqa: E731
+    return {"with_ignored": {**stat(d_with), "frames": int(n_with)}, "without_ignored": {**stat(d_without), "frames": int(np.sum(trk["ok"] & (trk["ignored"] == 0)))},
+            "near_2pct_frames": int(near), "near_2pct_share": float(near / n_with) if n_with else None}
+
+
+def mk_draw_pairing(prep: dict, proc: dict, path, seed: int = 42, n_panels: int = 10) -> int:
+    """One picture of the pairing: 10 random (fixed seed) kept frames that have ignored blobs, each cropped to the hand: the 8 used markers (green, numbered), the ignored blobs (orange crosses), the predicted
+    positions of the used markers (cyan rings). Returns the number of panels. Run folder only."""
+    trk, used = proc["track"], proc["used_idx"]
+    cand = [i for i in np.flatnonzero(trk["ok"]) if trk["ignored"][i] > 0 and np.isfinite(trk["pred"][i][used][:, 0]).any()]
+    if not cand:
+        return 0
+    pick = sorted(np.random.default_rng(int(seed)).choice(cand, size=min(n_panels, len(cand)), replace=False).tolist())
+    panels = []
+    for i in pick:
+        img = cv2.imread(prep["frames"][i]["png"], cv2.IMREAD_COLOR)
+        x0, y0, x1, y1 = proc["regions"][i]
+        for x, y in trk["ignored_xy"][i]:
+            cv2.drawMarker(img, (int(round(x - 0.5)), int(round(y - 0.5))), (0, 140, 255), cv2.MARKER_TILTED_CROSS, 22, 3)
+        for j in used:
+            px, py = trk["pred"][i][j]
+            if np.isfinite(px):
+                cv2.circle(img, (int(round(px - 0.5)), int(round(py - 0.5))), 13, (255, 255, 0), 2)
+        for j in used:
+            x, y = trk["xy"][i][j]
+            if np.isfinite(x):
+                cv2.circle(img, (int(round(x - 0.5)), int(round(y - 0.5))), 5, (0, 255, 0), -1)
+                cv2.putText(img, f"{proc['names'][j]}", (int(x) + 8, int(y) - 8), cv2.FONT_HERSHEY_SIMPLEX, 0.9, (0, 255, 0), 2)
+        crop = img[y0:y1, x0:x1]
+        s = 420.0 / max(crop.shape[:2])
+        crop = cv2.resize(crop, (int(crop.shape[1] * s), int(crop.shape[0] * s)))
+        cv2.putText(crop, f"t {prep['frames'][i]['time_s']:.1f}s ignored {int(trk['ignored'][i])}", (6, 22), cv2.FONT_HERSHEY_SIMPLEX, 0.6, (255, 255, 255), 2)
+        panels.append(crop)
+    h = max(p.shape[0] for p in panels)
+    w = max(p.shape[1] for p in panels)
+    canvas = np.zeros((2 * h, 5 * w, 3), np.uint8)
+    for k, pn in enumerate(panels):
+        r, c = divmod(k, 5)
+        canvas[r * h:r * h + pn.shape[0], c * w:c * w + pn.shape[1]] = pn
+    Path(path).parent.mkdir(parents=True, exist_ok=True)
+    cv2.imwrite(str(path), canvas)
+    return len(panels)
+
+
+def mk_pairing_video(args) -> dict:
+    """Pairing-quality check of one video (no analysis, no f): statistics and the 10-panel picture. args = (entry, prep, npz, pcfg, c); c['out_dir'] gets the picture."""
+    entry, prep, npz, pcfg, c = args[:5]
+    proc = mk_process(prep, npz, pcfg, c)
+    res = {"video": entry["file"], "distance_cm": float(entry["distance_cm"]), "n_frames": proc["n_frames"], "hand_frames": proc["hand_frames"]}
+    if "failed" in proc:
+        return {**res, "failed": proc["failed"]}
+    st = mk_pairing_stats(proc)
+    res.update({"kept_frames": int(proc["track"]["ok"].sum()), **st})
+    if c.get("out_dir"):
+        res["panels"] = mk_draw_pairing(prep, proc, Path(c["out_dir"]) / f"pairing_{Path(entry['file']).stem}.png")
+    return res
+
+
+# ====================================================================================================
+# mo  (experiment 39: markers only, no hand detector; new section, earlier functions are used unchanged)
+# Experiment 35 needed the MediaPipe hand box (search area, length scale, marker naming) and its joints; here the markers carry all of it. Dots are found in the whole frame (local redness of the Lab a* channel),
+# named once on a front-window frame by a stored layout of the markers (a similarity fit with outlier-robust voting, no detector), followed with 35's re-acquisition tracker (mk_track_reacquire, unchanged) with the
+# length scale taken from the marker cloud (bounding box + box_margin on every side, the rule of the MediaPipe worker applied to the markers), and fed to the unchanged analysis (analyze, fixed_template).
+# ====================================================================================================
+def mo_blobs(bgr: np.ndarray, mcfg: dict) -> dict:
+    """Marker centres in a whole BGR frame. Local redness = Lab a* minus its median over a ksize x ksize window; pixels with local redness >= contrast_min form components (no opening: an even kernel shifts the centres); those with area in
+    [area_min, area_max] and roundness 4 pi A / P^2 >= circularity_min are kept, the centre is the redness-weighted centroid (continuous image coordinates, pixel centre = index + 0.5).
+    Returns {xy (m, 2), area (m,), circularity (m,)}."""
+    a = cv2.cvtColor(bgr, cv2.COLOR_BGR2LAB)[..., 1]
+    con = a.astype(np.float32) - cv2.medianBlur(a, int(mcfg["median_ksize"])).astype(np.float32)
+    mask = (con >= float(mcfg["contrast_min"])).astype(np.uint8)
+    cnts, _ = cv2.findContours(mask, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_NONE)
+    xy, areas, circs = [], [], []
+    for c in cnts:
+        ar, p = cv2.contourArea(c), cv2.arcLength(c, True)
+        if p <= 0 or not (float(mcfg["area_min"]) <= ar <= float(mcfg["area_max"])):
+            continue
+        circ = 4.0 * np.pi * ar / (p * p)
+        if circ < float(mcfg["circularity_min"]):
+            continue
+        bx, by, bw, bh = cv2.boundingRect(c)
+        roi = np.zeros((bh, bw), np.uint8)
+        cv2.drawContours(roi, [c - np.array([bx, by])], -1, 1, -1)
+        w = np.clip(con[by:by + bh, bx:bx + bw], 0, None) * roi
+        yy, xx = np.mgrid[by:by + bh, bx:bx + bw]
+        s = w.sum()
+        if s <= 0:
+            continue
+        xy.append([(w * (xx + 0.5)).sum() / s, (w * (yy + 0.5)).sum() / s])
+        areas.append(ar)
+        circs.append(circ)
+    return {"xy": np.array(xy, float).reshape(-1, 2), "area": np.array(areas, float), "circularity": np.array(circs, float)}
+
+
+def mo_load_layout(path) -> tuple:
+    """Stored marker layout (json, joint numbers 0-20 -> normalised point, centroid 0, RMS radius 1): returns (ids (k,), points (k, 2))."""
+    d = json.loads(Path(path).read_text())["points"]
+    ids = sorted(int(k) for k in d)
+    return np.array(ids, int), np.array([d[str(i)] for i in ids], float)
+
+
+def mo_name(det: np.ndarray, ids: np.ndarray, T: np.ndarray, ncfg: dict) -> dict:
+    """Name the detected markers with the stored layout. A similarity (scale s, rotation within rot_max_deg, translation) maps the layout to the image; it is voted for by every pair of detections against every
+    far-apart pair of layout points (scale in [scale_min_px, scale_max_px] px per layout unit), and scored by the number of layout points with a detection within tol_frac x s. The best one is refined (Hungarian
+    assignment inside the tolerance, least-squares similarity on the pairs, again). Returns {names (m,) int, -1 for a detection without a layout point, n_named, scale_px, rms_px (fit residual of the named)} or None."""
+    from scipy.optimize import linear_sum_assignment
+    D = len(det)
+    if D < int(ncfg["min_detections"]):
+        return None
+    zd, zt = det[:, 0] + 1j * det[:, 1], T[:, 0] + 1j * T[:, 1]
+    ii, jj = np.triu_indices(len(T), 1)
+    far = np.abs(zt[jj] - zt[ii]) >= float(ncfg["pair_min"])
+    ii, jj = ii[far], jj[far]
+    a, b = np.where(~np.eye(D, dtype=bool))
+    z = (zd[b] - zd[a])[:, None] / (zt[jj] - zt[ii])[None, :]
+    ok = (np.abs(z) >= float(ncfg["scale_min_px"])) & (np.abs(z) <= float(ncfg["scale_max_px"])) & (np.abs(np.angle(z)) <= np.deg2rad(float(ncfg["rot_max_deg"])))
+    qs, ps = np.nonzero(ok)
+    best, best_cnt = None, 0
+    for s0 in range(0, len(qs), 1500):
+        q, p = qs[s0:s0 + 1500], ps[s0:s0 + 1500]
+        zc = z[q, p]
+        tr = zd[a[q]] - zc * zt[ii[p]]
+        M = zc[:, None] * zt[None, :] + tr[:, None]
+        mn = np.abs(M[:, :, None] - zd[None, None, :]).min(2)
+        cnt = (mn <= float(ncfg["tol_frac"]) * np.abs(zc)[:, None]).sum(1)
+        k = int(np.argmax(cnt))
+        if cnt[k] > best_cnt:
+            best_cnt, best = int(cnt[k]), (zc[k], tr[k])
+    if best is None or best_cnt < int(ncfg["min_named"]):
+        return None
+    zc, tr = best
+    names, pairs = np.full(D, -1, int), None
+    for _ in range(2):
+        M = zc * zt + tr
+        cost = np.abs(M[:, None] - zd[None, :])
+        r, c = linear_sum_assignment(cost)
+        g = cost[r, c] <= float(ncfg["tol_frac"]) * abs(zc)
+        r, c = r[g], c[g]
+        if len(r) < int(ncfg["min_named"]):
+            return None
+        A = np.stack([zt[r], np.ones(len(r))], 1)
+        sol = np.linalg.lstsq(A, zd[c], rcond=None)[0]
+        zc, tr = sol[0], sol[1]
+        pairs = (r, c)
+    names[pairs[1]] = ids[pairs[0]]
+    rms = float(np.sqrt(np.mean(np.abs(zc * zt[pairs[0]] + tr - zd[pairs[1]]) ** 2)))
+    return {"names": names, "n_named": int(len(pairs[0])), "scale_px": float(abs(zc)), "rms_px": rms}
+
+
+def mo_box_of(P: np.ndarray, margin: float) -> np.ndarray:
+    """Box (x0, y0, x1, y1) of the points enlarged by margin x its size on every side: the rule the MediaPipe worker applies to the landmarks."""
+    lo, hi = np.nanmin(P, 0), np.nanmax(P, 0)
+    pad = float(margin) * (hi - lo)
+    return np.array([lo[0] - pad[0], lo[1] - pad[1], hi[0] + pad[0], hi[1] + pad[1]])
+
+
+def mo_process(prep: dict, pcfg: dict, c: dict) -> dict:
+    """Markers of one video without a hand detector. Dots in every frame (mo_blobs, whole frame); reference frame = the sharpest frame of the nominal front window (front_skip_s .. + front_window_s) in which the
+    layout names every used marker; tracking from it with mk_track_reacquire (unchanged; used markers count, the others are followed) where the length scale is the long side of the box of the reference markers;
+    kp / mask / present in the 21-joint layout (names = joint numbers) and the frame box (the reference box moved by the homography reference -> frame). The tilt phase is every frame from front_phase_s.
+    Returns the marker arrays and statistics, or {'failed': reason} plus what was computed."""
+    mcfg, ncfg = c["markers"], c["naming"]
+    frames = prep["frames"]
+    times = np.array([r["time_s"] for r in frames])
+    W, H = prep["size"]
+    n = len(times)
+    uid = [int(x) for x in mcfg["used_ids"]]
+    ids, T = mo_load_layout(resolve(c["layout"]))
+    imgs_dets = [mo_blobs(cv2.imread(r["png"], cv2.IMREAD_COLOR), mcfg)["xy"] for r in frames]
+    out = {"n_frames": n, "size": [W, H], "times": times, "det": imgs_dets, "n_detected_median": float(np.median([len(d) for d in imgs_dets])) if n else 0.0}
+    ph = pcfg["phases"]
+    t0, t1 = float(ph["front_skip_s"]), float(ph["front_skip_s"]) + float(ph["front_window_s"])
+    win = [i for i in range(n) if t0 <= times[i] < t1]
+    cands, named = [], {}
+    for i in win:
+        r = mo_name(imgs_dets[i], ids, T, ncfg)
+        if r is not None and all(u in set(int(x) for x in r["names"]) for u in uid):
+            cands.append(i)
+            named[i] = r
+    out["window_frames"], out["window_named"] = len(win), len(cands)
+    if not cands:
+        return {**out, "failed": "정면 창에 기준 프레임이 없음 (사용 표시가 모두 이름 붙는 프레임)"}
+    def sharp(i):
+        sel = named[i]["names"] >= 0
+        x0, y0, x1, y1 = (int(max(0, v)) for v in mo_box_of(imgs_dets[i][sel], 0.3))
+        return mk_sharpness(cv2.imread(frames[i]["png"], cv2.IMREAD_COLOR), (x0, y0, min(W, x1), min(H, y1)))
+    sh = [sharp(i) for i in cands]
+    ref = cands[int(np.argmax(sh))]
+    sel = named[ref]["names"] >= 0
+    ref_xy, ref_names = imgs_dets[ref][sel], named[ref]["names"][sel]
+    used_idx = [j for j, k in enumerate(ref_names) if int(k) in uid]
+    box_ref = mo_box_of(ref_xy, float(mcfg["box_margin"]))
+    L = float(max(box_ref[2] - box_ref[0], box_ref[3] - box_ref[1]))
+    bl = np.full(n, L)
+    trk = mk_track_reacquire(imgs_dets, ref, ref_xy, bl, mcfg, used_idx)
+    m = len(ref_xy)
+    kp = np.full((n, 21, 2), np.nan)
+    for j in range(m):
+        kp[:, int(ref_names[j])] = trk["xy"][:, j]
+    mask = np.isfinite(kp[..., 0]) & trk["ok"][:, None]
+    corners = np.array([[box_ref[0], box_ref[1]], [box_ref[2], box_ref[1]], [box_ref[2], box_ref[3]], [box_ref[0], box_ref[3]]], np.float64).reshape(-1, 1, 2)
+    box = np.full((n, 4), np.nan)
+    for i in np.flatnonzero(trk["ok"]):
+        g = np.isfinite(trk["xy"][i][:, 0])
+        Hm, _ = mk_homography(ref_xy[g], trk["xy"][i][g], None)
+        if Hm is not None:
+            q = cv2.perspectiveTransform(corners, Hm).reshape(-1, 2)
+            box[i] = [q[:, 0].min(), q[:, 1].min(), q[:, 0].max(), q[:, 1].max()]
+    present = trk["ok"] & np.isfinite(box[:, 0])
+    tilt = times >= float(ph["front_phase_s"])
+    reasons = {}
+    for r in trk["reason"]:
+        if r:
+            reasons[r] = reasons.get(r, 0) + 1
+    loose = mk_track_reacquire(imgs_dets, ref, ref_xy, bl, {**mcfg, "min_markers_ratio": 0.3}, used_idx)
+    seen = loose["ok"] & tilt
+    per = {int(ref_names[j]): float(np.isfinite(loose["xy"][seen, j, 0]).sum() / max(tilt.sum(), 1)) for j in range(m)}
+    wnd = [i for i in range(n) if 0.5 <= times[i] < 1.5]
+    out.update({"ref_index": ref, "ref_time_s": float(times[ref]), "ref_sharpness": float(max(sh)), "names": ref_names, "used_idx": used_idx, "ref_xy": ref_xy, "naming": {k: named[ref][k] for k in ("n_named", "scale_px", "rms_px")},
+                "track": trk, "kp": kp, "mask": mask, "present": present, "box": box, "box_long": bl, "box_ref": box_ref, "valid_ratio": float(present.sum() / max(n, 1)),
+                "tilt_valid_ratio": float((present & tilt).sum() / max(tilt.sum(), 1)), "tilt_frames": int(tilt.sum()), "reasons": reasons, "window_success": int(present[wnd].sum()), "window_frames_50_150": len(wnd),
+                "per_marker_rate": per, "ignored_median": None if not trk["ok"].any() else float(np.median(trk["ignored"][trk["ok"]])),
+                "ignored_share": None if not trk["ok"].any() else float(np.mean(trk["ignored"][trk["ok"]] > 0))})
+    return out
+
+
+def mo_draw_reference(prep: dict, proc: dict, path) -> None:
+    """One picture: the reference frame with the detected markers (cyan, the joint number the layout gave) and the ignored detections (orange x), cropped to the marker box."""
+    i = proc["ref_index"]
+    img = cv2.imread(prep["frames"][i]["png"], cv2.IMREAD_COLOR)
+    named = set()
+    for (x, y), k in zip(proc["ref_xy"], proc["names"]):
+        cv2.circle(img, (int(round(x - 0.5)), int(round(y - 0.5))), 9, (255, 200, 0), 2)
+        cv2.putText(img, f"{int(k)}", (int(x) + 10, int(y) - 10), cv2.FONT_HERSHEY_SIMPLEX, 0.9, (255, 255, 0), 2)
+        named.add((round(float(x), 3), round(float(y), 3)))
+    for x, y in proc["det"][i]:
+        if (round(float(x), 3), round(float(y), 3)) not in named:
+            cv2.drawMarker(img, (int(round(x - 0.5)), int(round(y - 0.5))), (0, 140, 255), cv2.MARKER_TILTED_CROSS, 18, 2)
+    x0, y0, x1, y1 = (int(v) for v in mo_box_of(proc["ref_xy"], 0.3))
+    Path(path).parent.mkdir(parents=True, exist_ok=True)
+    cv2.imwrite(str(path), img[max(0, y0):max(1, y1), max(0, x0):max(1, x1)])
+
+
+def mo_precheck_video(args) -> dict:
+    """Pre-check of one video (no analysis): reference frame, share of kept tilt-phase frames, per-marker rates, picture. args = (entry, prep, pcfg, c); c['out_dir'] gets the reference picture.
+    Passes when a reference frame exists and the share of kept frames among all frames from front_phase_s is at least precheck.min_tilt_valid_ratio."""
+    entry, prep, pcfg, c = args[:4]
+    proc = mo_process(prep, pcfg, c)
+    res = {"video": entry["file"], "distance_cm": float(entry["distance_cm"]), "size": proc["size"], "n_frames": proc["n_frames"], "n_detected_median": proc["n_detected_median"],
+           "window_frames": proc["window_frames"], "window_named": proc["window_named"]}
+    if "failed" in proc:
+        return {**res, "failed": proc["failed"], "passes": False}
+    res.update({k: proc[k] for k in ("ref_index", "ref_time_s", "ref_sharpness", "valid_ratio", "tilt_valid_ratio", "tilt_frames", "reasons", "window_success", "window_frames_50_150", "per_marker_rate", "naming", "ignored_median", "ignored_share")})
+    res["names"] = [int(x) for x in proc["names"]]
+    res["passes"] = bool(proc["tilt_valid_ratio"] >= float(c["precheck"]["min_tilt_valid_ratio"]))
+    if c.get("out_dir"):
+        mo_draw_reference(prep, proc, Path(c["out_dir"]) / f"reference_{Path(entry['file']).stem}.png")
+    return res
+
+
+def mo_video(args) -> dict:
+    """One video of experiment 39: the marker points through the unchanged analysis (analyze, fixed_template, nominal front window and tilt phase, block bootstrap); no hand detector, no MediaPipe comparison.
+    args = (entry, prep, pcfg, c); c needs exclusion, markers, naming, layout, marker_exclusion. Returns {video, distance_cm, ..., marker: {f, ...} | {excluded / failed}}."""
+    entry, prep, pcfg, c = args[:4]
+    os.environ.setdefault("OMP_NUM_THREADS", "1")
+    cv2.setNumThreads(1)
+    proc = mo_process(prep, pcfg, c)
+    W, H = proc["size"]
+    res = {"video": entry["file"], "distance_cm": float(entry["distance_cm"]), "size": [W, H], "n_frames": proc["n_frames"], "duration_s": float(proc["times"][-1] - proc["times"][0]),
+           "marker_stats": {k: proc.get(k) for k in ("valid_ratio", "tilt_valid_ratio", "n_detected_median", "window_success", "window_frames_50_150", "ref_time_s", "reasons", "per_marker_rate", "naming", "ignored_median", "ignored_share")}}
+    if "failed" in proc:
+        res["marker"] = {"failed": proc["failed"]}
+        return res
+    times, n = proc["times"], proc["n_frames"]
+    reasons = []
+    lim = float(c["marker_exclusion"]["min_tilt_valid_ratio"])
+    if proc["tilt_valid_ratio"] < lim:
+        reasons.append(f"기울기 구간 유효 프레임 {100 * proc['tilt_valid_ratio']:.1f}% < {100 * lim:.0f}%")
+    edge = fresp_edge_rate(proc["box"][proc["present"]], np.ones(int(proc["present"].sum()), bool), W, H) if proc["present"].any() else 1.0
+    if edge > float(c["exclusion"]["edge_rate_max"]):
+        reasons.append(f"가장자리 접촉 프레임 {100 * edge:.1f}% > {100 * float(c['exclusion']['edge_rate_max']):.0f}%")
+    mk = {"excluded": reasons, "edge_rate": float(edge), "valid_ratio": proc["valid_ratio"], "names": [int(x) for x in proc["names"]]}
+    res["marker"] = mk
+    if reasons:
+        return res
+    cfg_mk = copy.deepcopy(pcfg)
+    cfg_mk["joints"]["sets"]["markers"] = sorted(int(x) for x in c["markers"]["used_ids"])
+    cfg_mk["joints"]["estimate_set"] = "markers"
+    cfg_mk["joints"]["uncertainty_sets"] = ["markers"]
+    a = analyze(proc["kp"], proc["mask"], proc["present"], proc["box"], np.zeros(n, int), times, (W, H), cfg_mk, tilt_start=None, methods_full=("fixed_template",), seed=int(pcfg["experiment"]["seed"]))
+    if "per_method" not in a:
+        mk["failed"] = a.get("failed", "분석 실패")
+        return res
+    sol, pm = a["solutions"]["fixed_template"], a["per_method"]["fixed_template"]
+    grid = np.array(a["grid"])
+    tilt = [i for i, r in enumerate(a["role"]) if r == "tilt"]
+    mk.update({"f": float(sol["f"]), "at_grid_edge": bool(sol["at_grid_edge"]), "side": None if not sol["at_grid_edge"] else ("상한" if sol["f"] >= grid[-1] * (1 - 1e-6) else "하한"),
+               "sharpness": float(pm["diagnostics"]["sharpness"]), "boot_log_std": long_boot_log_std(pm["bootstrap"]["f"]), "curve": {"grid": grid.tolist(), "cost": [float(x) for x in sol["profile_cost"]]},
+               "n_used_frames": int(a["n_target_frames"]), "theta_median": a["theta_tilt"]["median"], "theta_max": a["theta_tilt"]["max"], "theta_p90": a["theta_tilt"]["p90"],
+               "tilt_duration_s": float(times[tilt].max() - a["tilt_start_s"]) if tilt else 0.0, "phase_rms_pct": pr_phase_rms(a, proc["box"]), "box_long_median_px": float(np.nanmedian(proc["box_long"][proc["present"]]))})
+    return res
+
+
+# ====================================================================================================
+# ft  (experiment 40: free template, the supervisor's code, on the marker tracks of 39; new section, earlier functions are used unchanged)
+# procrustes_init .. free_problem are the supervisor's functions (second version of 2026-10-29: Levenberg-Marquardt with a Schur complement over the frame poses instead of scipy least_squares, and a coarse f grid of 8 points in free_template)
+# with the corrections that stop them from running at all (nothing of the method is changed): np.c -> np.c_ (backproject), the call _backproject -> backproject (alt_template), rodrigues -> _rodrigues (ba_refine), np.r -> np.r_ (ba_refine,
+# _lm_schur), the definition lm_schur -> _lm_schur (the supervisor's calls use that name), Problem.new(Problem) -> Problem.__new__(Problem) (_restrict). The supervisor's estimate_run (an existing function, so not redefined) is
+# ft_estimate_run: the same dispatch with the free_template branch added. Experiments 40 / 41 / 42 ran with the first version (scipy least_squares, the full 60-point grid): their commits keep it. free_template now returns its 8-point grid in
+# profile_f, and ft_video / s3_video / h3_video report that grid and its cost curve (the callers used the full grid before).
+# ====================================================================================================
+
+
+def procrustes_init(pb, iters=6):
+    J = pb.T.shape[0]
+    frames = [pb.frames[i] for i in pb.keep]
+    ref = max(range(len(frames)), key=lambda k: frames[k][1].sum())
+    o, v = frames[ref]
+    T = np.where(v[:, None], o, np.nan)
+    T = T - np.nanmean(T, 0)
+    for _ in range(iters):
+        acc = np.zeros((J, 2))
+        cnt = np.zeros(J)
+        for o, v in frames:
+            m = v & np.isfinite(T).all(1)
+            if m.sum() < 3:
+                continue
+            s, R, t = similarity_align(o[m], T[m])
+            acc[v] += (s * (R @ o[v].T)).T + t
+            cnt[v] += 1
+        new = np.where(cnt[:, None] > 0, acc / np.maximum(cnt, 1)[:, None], np.nan)
+        new = new - np.nanmean(new, 0)
+        T = new
+    sizes = [np.sqrt(((o[v] - o[v].mean(0)) ** 2).sum(1).mean()) for o, v in frames]
+    T = T * (np.mean(sizes) / np.sqrt(np.nansum(T ** 2, 1)[np.isfinite(T).all(1)].mean()))
+    return T
+
+
+def backproject(obs, R, t, K):
+    H = K @ np.c_[R[:, 0], R[:, 1], t]
+    p = np.c_[obs, np.ones(len(obs))] @ np.linalg.inv(H).T
+    return p[:, :2] / p[:, 2:3]
+
+
+def _gauge(T, T0):
+    T = T - T.mean(0)
+    T = T * (np.sqrt((T0 ** 2).sum(1).mean()) / np.sqrt((T ** 2).sum(1).mean()))
+    _, R, _ = similarity_align(T, T0)
+    return (R @ T.T).T
+
+
+def alt_template(pb, f, T0, iters=5):
+    K = K_of(f, pb.cx, pb.cy)
+    T = T0.copy()
+    for _ in range(iters):
+        acc = [[] for _ in range(len(T))]
+        for i in pb.keep:
+            o, v = pb.frames[i]
+            _, R, t = frame_fit(T, o, v, K)
+            q = backproject(o[v], R, t, K)
+            for j, p in zip(np.flatnonzero(v), q):
+                acc[j].append(p)
+        new = np.array([np.median(np.array(a), axis=0) if a else T[j] for j, a in enumerate(acc)])
+        T = _gauge(new, T0)
+    return T
+
+
+def _rodrigues(rv):
+    th = np.linalg.norm(rv, axis=1)
+    k = rv / np.maximum(th, 1e-12)[:, None]
+    c, s = np.cos(th), np.sin(th)
+    kx, ky, kz = k[:, 0], k[:, 1], k[:, 2]
+    Kx = np.zeros((len(rv), 3, 3))
+    Kx[:, 0, 1], Kx[:, 0, 2] = -kz, ky
+    Kx[:, 1, 0], Kx[:, 1, 2] = kz, -kx
+    Kx[:, 2, 0], Kx[:, 2, 1] = -ky, kx
+    kk = k[:, :, None] * k[:, None, :]
+    return c[:, None, None] * np.eye(3) + (1 - c)[:, None, None] * kk + s[:, None, None] * Kx
+
+
+def _anchors(T, frames):
+    vis = np.sum([v for o, v in frames], axis=0)
+    good = np.flatnonzero(vis >= 0.9 * vis.max())
+    d = np.linalg.norm(T[good][:, None] - T[good][None], axis=-1)
+    a, b = np.unravel_index(np.argmax(d), d.shape)
+    return int(good[a]), int(good[b])
+
+
+def _lm_schur(resid, x0, G, N, fi, gl_groups, lf_bounds, hp, max_iter=60, tol=1e-8):
+    M = len(fi)
+    fr2 = np.r_[fi, fi]
+    order = np.argsort(fr2, kind="stable")
+    fs = fr2[order]
+    starts = np.r_[0, np.flatnonzero(np.diff(fs)) + 1]
+    present = fs[starts]
+    pose_cols = [G + 6 * fr2 + d for d in range(6)]
+    i6 = np.arange(6)
+
+    def robust(r):
+        e = np.hypot(r[:M], r[M:2 * M])
+        w = np.where(e <= hp, 1.0, hp / np.maximum(e, 1e-12))
+        rho = np.where(e <= hp, e * e, 2 * hp * e - hp * hp)
+        return w, float(rho.sum() + (r[2 * M:] ** 2).sum())
+
+    def seg(A):
+        out = np.zeros((N,) + A.shape[1:])
+        out[present] = np.add.reduceat(A[order], starts, axis=0)
+        return out
+
+    def jacs(x, nr):
+        Jg = np.zeros((nr, G))
+        Jp = np.zeros((2 * M, 6))
+        h = 1e-6 * np.maximum(1.0, np.abs(x))
+        for cols, m in gl_groups:
+            xp, xm = x.copy(), x.copy()
+            xp[cols] += h[cols]
+            xm[cols] -= h[cols]
+            dr = resid(xp) - resid(xm)
+            ok = np.flatnonzero(m >= 0)
+            Jg[ok, m[ok]] = dr[ok] / (2 * h[m[ok]])
+        for d in range(6):
+            cols = G + 6 * np.arange(N) + d
+            xp, xm = x.copy(), x.copy()
+            xp[cols] += h[cols]
+            xm[cols] -= h[cols]
+            Jp[:, d] = (resid(xp) - resid(xm))[:2 * M] / (2 * h[pose_cols[d]])
+        return Jg, Jp
+
+    x = x0.copy()
+    r = resid(x)
+    w, c = robust(r)
+    lam, it, success = 1e-3, 0, False
+    for it in range(1, max_iter + 1):
+        nr = len(r)
+        Jg, Jp = jacs(x, nr)
+        rw = np.r_[w, w, np.ones(nr - 2 * M)]
+        Jgw = Jg * rw[:, None]
+        U = Jg.T @ Jgw
+        bg = -Jgw.T @ r
+        Jpw = Jp * rw[:2 * M, None]
+        V = seg(Jpw[:, :, None] * Jp[:, None, :])
+        Wm = seg(Jgw[:2 * M, :, None] * Jp[:, None, :])
+        bp = seg(-Jpw * r[:2 * M, None])
+        improved = False
+        for _ in range(12):
+            Ud = U + lam * np.diag(np.diag(U) + 1e-9)
+            Vd = V.copy()
+            Vd[:, i6, i6] += lam * (V[:, i6, i6] + 1e-9)
+            Vi = np.linalg.inv(Vd)
+            WVi = Wm @ Vi
+            S = Ud - np.einsum("ngk,nhk->gh", WVi, Wm)
+            dg = np.linalg.solve(S, bg - np.einsum("ngk,nk->g", WVi, bp))
+            dp = np.einsum("nij,nj->ni", Vi, bp - np.einsum("ngk,g->nk", Wm, dg))
+            xn = x + np.r_[dg, dp.ravel()]
+            xn[0] = np.clip(xn[0], lf_bounds[0], lf_bounds[1])
+            rn = resid(xn)
+            wn, cn = robust(rn)
+            if np.isfinite(cn) and cn < c:
+                improved = True
+                break
+            lam *= 4
+        if not improved:
+            success = True
+            break
+        rel = (c - cn) / max(c, 1e-12)
+        x, r, w, c = xn, rn, wn, cn
+        lam = max(lam / 3, 1e-12)
+        if rel < tol:
+            success = True
+            break
+    return x, r, it, success
+
+
+def ba_refine(pb, f0, T0, f_bounds, huber_px=None, max_iter=60):
+    J = T0.shape[0]
+    frames = [pb.frames[i] for i in pb.keep]
+    N = len(frames)
+    K0 = K_of(f0, pb.cx, pb.cy)
+    poses = np.zeros((N, 6))
+    for n, (o, v) in enumerate(frames):
+        _, R, t = frame_fit(T0, o, v, K0)
+        poses[n, :3] = cv2.Rodrigues(R)[0].ravel()
+        poses[n, 3:] = t
+    fi = np.concatenate([np.full(v.sum(), n) for n, (o, v) in enumerate(frames)])
+    ji = np.concatenate([np.flatnonzero(v) for o, v in frames])
+    uv = np.concatenate([o[v] for o, v in frames])
+    sw = np.ones(len(ji)) if pb.w is None else np.sqrt(pb.w[ji])
+    a, b = _anchors(T0, frames)
+    free = np.array([j for j in range(J) if j not in (a, b)])
+    col = np.full(J, -1)
+    col[free] = np.arange(len(free))
+    nT = 2 * len(free)
+    G = 1 + nT
+    M = len(ji)
+
+    def unpack(x):
+        T = T0.copy()
+        T[free] = x[1:1 + nT].reshape(-1, 2)
+        return np.exp(x[0]), T, x[1 + nT:].reshape(N, 6)
+
+    def resid(x):
+        f, T, P = unpack(x)
+        R = _rodrigues(P[:, :3])
+        X = np.einsum("nab,nb->na", R[fi][:, :, :2], T[ji]) + P[fi, 3:]
+        u = f * X[:, 0] / X[:, 2] + pb.cx - uv[:, 0]
+        w = f * X[:, 1] / X[:, 2] + pb.cy - uv[:, 1]
+        return np.r_[sw * u, sw * w]
+
+    groups = [(np.array([0]), np.zeros(2 * M, int))]
+    for d in range(2):
+        cols = 1 + 2 * np.arange(len(free)) + d
+        cj = np.where(col[ji] >= 0, cols[np.maximum(col[ji], 0)], -1)
+        groups.append((cols, np.r_[cj, cj]))
+    x0 = np.r_[np.log(f0), T0[free].ravel(), poses.ravel()]
+    lb = (np.log(f_bounds[0]), np.log(f_bounds[1]))
+    x0[0] = np.clip(x0[0], *lb)
+    hp = float(np.median(pb.huber[pb.keep])) if huber_px is None else float(huber_px)
+    x, r, it, ok = _lm_schur(resid, x0, G, N, fi, groups, lb, hp, max_iter)
+    f, T, _ = unpack(x)
+    return {"f": float(f), "template": T, "success": bool(ok), "nfev": int(it),
+            "rms_px": float(np.sqrt(np.mean(r[:2 * M] ** 2)))}
+
+
+def _restrict(pb, min_frames=3, max_frames=120):
+    keep = list(pb.keep)
+    if max_frames and len(keep) > max_frames:
+        keep = [keep[k] for k in np.unique(np.linspace(0, len(keep) - 1, max_frames).round().astype(int))]
+    cnt = np.sum([pb.frames[i][1] for i in keep], axis=0)
+    ids = np.flatnonzero(cnt >= min_frames)
+    q = Problem.__new__(Problem)
+    q.T = pb.T[ids]
+    q.frames = [(o[ids], v[ids]) for o, v in pb.frames]
+    q.keep = [i for i in keep if q.frames[i][1].sum() >= 4]
+    q.cx, q.cy, q.huber = pb.cx, pb.cy, pb.huber
+    q.w = None if pb.w is None else pb.w[ids]
+    q.n_points = int(sum(q.frames[i][1].sum() for i in q.keep))
+    return q, ids
+
+
+def free_template(pb, grid, alt_iters=3, refine=True, max_frames=120, coarse_n=8):
+    if len(grid) > coarse_n:
+        grid = grid[np.unique(np.linspace(0, len(grid) - 1, coarse_n).round().astype(int))]
+    if not pb.keep:
+        raise ValueError("no usable frames")
+    pb, ids = _restrict(pb, max_frames=max_frames)
+    if len(ids) < 4 or not pb.keep:
+        raise ValueError("fewer than 4 usable joints")
+    T0 = procrustes_init(pb)
+    c, Ts = [], []
+    for f in grid:
+        T = alt_template(pb, f, T0, alt_iters)
+        c.append(cost(pb, f, T))
+        Ts.append(T)
+    c = np.array(c)
+    k = int(np.argmin(c))
+    lf = _parabola(np.log(grid), c, k)
+    f_grid_best = float(np.exp(np.clip(lf, np.log(grid[0]), np.log(grid[-1]))))
+    out = {"f_grid": f_grid_best, "profile_f": grid.tolist(), "profile_cost": c.tolist(), "delta_deg": 0.0, "phi_deg": 0.0,
+           "at_grid_edge": bool(k in (0, len(grid) - 1)), "template": Ts[k], "joint_ids": ids.tolist()}
+    if refine:
+        ba = ba_refine(pb, f_grid_best, Ts[k], (grid[0], grid[-1]))
+        out.update({"f": ba["f"], "template": ba["template"], "ba": {kk: vv for kk, vv in ba.items() if kk != "template"}})
+    else:
+        out["f"] = f_grid_best
+    out["cost"] = cost(pb, out["f"], out["template"])
+    return out
+
+
+def free_problem(trk, size_wh, ecfg, huber_rel, ids=None, weights=None):
+    W, H = size_wh
+    cx, cy = principal_point(ecfg, W, H)
+    kp = undistort(trk["kp"], ecfg, W, H)
+    J = kp.shape[1]
+    sel = np.ones(J, bool) if ids is None else np.isin(np.arange(J), ids)
+    idx = np.flatnonzero(trk["present"])
+    frames = [(kp[i], trk["mask"][i] & sel & np.isfinite(kp[i]).all(1)) for i in idx]
+    hub = float(huber_rel) * box_long(trk["box"][idx])
+    return Problem(np.zeros((J, 2)), frames, cx, cy, hub, weights=weights), idx
+
+
+def ft_estimate_run(pb, method, grid, ecfg, sigma2, start=None):
+    """The supervisor's estimate_run: estimate_run (unchanged, above) plus the free_template branch."""
+    if method == "free_template":
+        return free_template(pb, grid)
+    return estimate_run(pb, method, grid, ecfg, sigma2, start)
+
+
+def ft_sharpness(grid, cost_curve, f: float, ratio: float = 1.15) -> float:
+    """min(cost(ratio f), cost(f / ratio)) / cost(f) on the cost curve (log-f interpolation; NaN outside the grid)."""
+    lg, c = np.log(np.asarray(grid, float)), np.asarray(cost_curve, float)
+    lf = np.log(f)
+    if lf + np.log(ratio) > lg[-1] or lf - np.log(ratio) < lg[0]:
+        return float("nan")
+    return float(min(np.interp(lf + np.log(ratio), lg, c), np.interp(lf - np.log(ratio), lg, c)) / max(np.interp(lf, lg, c), 1e-12))
+
+
+def ft_video(args) -> dict:
+    """One video of experiment 40: marker tracks of 39 (mo_process, unchanged) through the supervisor's call free_problem -> estimate_run('free_template'). args = (entry, prep, pcfg, c); c = the 39 keys plus
+    free_template {alt_iters, refine, max_frames}. Same exclusion rules as mo_video. Returns {video, distance_cm, ..., marker: {f, f_grid, curve, ...} | {excluded / failed}}."""
+    entry, prep, pcfg, c = args[:4]
+    os.environ.setdefault("OMP_NUM_THREADS", "1")
+    cv2.setNumThreads(1)
+    proc = mo_process(prep, pcfg, c)
+    W, H = proc["size"]
+    res = {"video": entry["file"], "distance_cm": float(entry["distance_cm"]), "size": [W, H], "n_frames": proc["n_frames"], "duration_s": float(proc["times"][-1] - proc["times"][0]),
+           "marker_stats": {k: proc.get(k) for k in ("valid_ratio", "tilt_valid_ratio", "n_detected_median", "window_success", "window_frames_50_150", "ref_time_s", "reasons", "per_marker_rate", "naming")}}
+    if "failed" in proc:
+        res["marker"] = {"failed": proc["failed"]}
+        return res
+    reasons = []
+    lim = float(c["marker_exclusion"]["min_tilt_valid_ratio"])
+    if proc["tilt_valid_ratio"] < lim:
+        reasons.append(f"기울기 구간 유효 프레임 {100 * proc['tilt_valid_ratio']:.1f}% < {100 * lim:.0f}%")
+    edge = fresp_edge_rate(proc["box"][proc["present"]], np.ones(int(proc["present"].sum()), bool), W, H) if proc["present"].any() else 1.0
+    if edge > float(c["exclusion"]["edge_rate_max"]):
+        reasons.append(f"가장자리 접촉 프레임 {100 * edge:.1f}% > {100 * float(c['exclusion']['edge_rate_max']):.0f}%")
+    mk = {"excluded": reasons, "edge_rate": float(edge), "valid_ratio": proc["valid_ratio"]}
+    res["marker"] = mk
+    if reasons:
+        return res
+    ecfg = pcfg["estimate"]
+    grid = f_grid(ecfg, max(W, H))
+    ids = sorted(int(x) for x in c["markers"]["used_ids"])
+    trk = {"kp": proc["kp"], "mask": proc["mask"], "present": proc["present"], "box": proc["box"]}
+    t0 = time.time()
+    try:
+        pb, idx = free_problem(trk, (W, H), ecfg, float(ecfg["huber_rel"]), ids=ids)
+        ft = c["free_template"]
+        r = free_template(pb, grid, int(ft["alt_iters"]), bool(ft["refine"]), int(ft["max_frames"]))
+    except Exception as e:                                            # a failure is a result, not a crash of the run
+        mk["failed"] = f"{type(e).__name__}: {e}"
+        return res
+    ba = r.get("ba", {})
+    mk.update({"f": float(r["f"]), "f_grid": float(r["f_grid"]), "at_grid_edge": bool(r["at_grid_edge"]), "ba_at_bound": bool(r["f"] <= grid[0] * (1 + 1e-6) or r["f"] >= grid[-1] * (1 - 1e-6)),
+               "curve": {"grid": [float(x) for x in r["profile_f"]], "cost": [float(x) for x in r["profile_cost"]]}, "sharpness": ft_sharpness(r["profile_f"], r["profile_cost"], r["f_grid"]),
+               "cost_at_f": float(r["cost"]), "ba_success": ba.get("success"), "ba_nfev": ba.get("nfev"), "ba_rms_px": ba.get("rms_px"), "n_frames_in_problem": int(len(pb.keep)), "n_points": int(pb.n_points),
+               "joint_ids": [int(x) for x in r["joint_ids"]], "elapsed_s": float(time.time() - t0), "box_long_median_px": float(np.nanmedian(proc["box_long"][proc["present"]]))})
+    return res
+
+
+# ====================================================================================================
+# s3  (experiment 41: the supervisor's free_shape3d, a free template with a small out-of-plane relief, on the marker tracks of 39 / 40; new section, earlier functions are used unchanged)
+# _anchors3, _relief, ba3_refine, free_shape3d are the supervisor's functions (second version of 2026-10-29: ba3_refine uses the Levenberg-Marquardt / Schur solver _lm_schur of the ft section instead of scipy least_squares; _anchors3, _relief, free_shape3d as before). The supervisor's estimate_run (an existing function, so not redefined) is
+# s3_estimate_run: the same four-branch dispatch. s3_slope is the slope of log f on log distance from the per-video 3-D f (the 3-D bundle adjustment has no cost curve over f, so it cannot be pooled like the grid curves);
+# s3_video is ft_video with the call free_problem -> estimate_run('free_shape3d').
+# ====================================================================================================
+
+def _anchors3(T, frames):
+    a, b = _anchors(T, frames)
+    vis = np.sum([v for o, v in frames], axis=0)
+    good = [j for j in np.flatnonzero(vis >= 0.9 * vis.max()) if j not in (a, b)]
+    if not good:
+        good = [j for j in range(len(T)) if j not in (a, b)]
+    u = (T[b] - T[a]) / np.linalg.norm(T[b] - T[a])
+    d = [abs(u[0] * (T[j] - T[a])[1] - u[1] * (T[j] - T[a])[0]) for j in good]
+    return a, b, int(good[int(np.argmax(d))])
+
+
+def _relief(S, rms0):
+    c = S - S.mean(0)
+    n = np.linalg.svd(c)[2][-1]
+    d = c @ n
+    return d, float(np.sqrt(np.mean(d ** 2)) / rms0)
+
+
+def ba3_refine(pb, f0, T2, f_bounds, z_rel=0.2, huber_px=None, max_iter=60):
+    J = T2.shape[0]
+    frames = [pb.frames[i] for i in pb.keep]
+    N = len(frames)
+    K0 = K_of(f0, pb.cx, pb.cy)
+    poses = np.zeros((N, 6))
+    for n, (o, v) in enumerate(frames):
+        _, R, t = frame_fit(T2, o, v, K0)
+        poses[n, :3] = cv2.Rodrigues(R)[0].ravel()
+        poses[n, 3:] = t
+    fi = np.concatenate([np.full(v.sum(), n) for n, (o, v) in enumerate(frames)])
+    ji = np.concatenate([np.flatnonzero(v) for o, v in frames])
+    uv = np.concatenate([o[v] for o, v in frames])
+    sw = np.ones(len(ji)) if pb.w is None else np.sqrt(pb.w[ji])
+    a, b, c = _anchors3(T2, frames)
+    S0 = np.c_[T2, np.zeros(J)]
+    fixed = np.zeros((J, 3), bool)
+    fixed[a], fixed[b], fixed[c, 2] = True, True, True
+    fidx = np.flatnonzero(~fixed.ravel())
+    nS = len(fidx)
+    col_of = np.full(3 * J, -1)
+    col_of[fidx] = 1 + np.arange(nS)
+    rms0 = float(np.sqrt((T2 ** 2).sum(1).mean()))
+    hp = float(np.median(pb.huber[pb.keep])) if huber_px is None else float(huber_px)
+    zs = None if z_rel is None else float(z_rel) * rms0
+    M = len(ji)
+    nr = 2 * M + (J if zs else 0)
+
+    def unpack(x):
+        S = S0.ravel().copy()
+        S[fidx] = x[1:1 + nS]
+        return np.exp(x[0]), S.reshape(J, 3), x[1 + nS:].reshape(N, 6)
+
+    def proj(x):
+        f, S, Pz = unpack(x)
+        R = _rodrigues(Pz[:, :3])
+        X = np.einsum("nab,nb->na", R[fi], S[ji]) + Pz[fi, 3:]
+        u = f * X[:, 0] / X[:, 2] + pb.cx - uv[:, 0]
+        w = f * X[:, 1] / X[:, 2] + pb.cy - uv[:, 1]
+        return u, w, S
+
+    def resid(x):
+        u, w, S = proj(x)
+        r = [sw * u, sw * w]
+        if zs:
+            r.append(hp * S[:, 2] / zs)
+        return np.concatenate(r)
+
+    G = 1 + nS
+    groups = [(np.array([0]), np.zeros(nr, int))]
+    for d in range(3):
+        cols = col_of[3 * np.arange(J) + d]
+        m = np.full(nr, -1)
+        m[:M] = cols[ji]
+        m[M:2 * M] = cols[ji]
+        if zs and d == 2:
+            m[2 * M:] = cols
+        groups.append((cols[cols >= 0], m))
+    x0 = np.r_[np.log(f0), S0.ravel()[fidx], poses.ravel()]
+    lb = (np.log(f_bounds[0]), np.log(f_bounds[1]))
+    x0[0] = np.clip(x0[0], *lb)
+    xs, rr, it, okk = _lm_schur(resid, x0, G, N, fi, groups, lb, hp, max_iter)
+    f, S, Pz = unpack(xs)
+    u, w, _ = proj(xs)
+    e = np.hypot(u, w)
+    keep = np.array(pb.keep)
+    hb = pb.huber[keep][fi]
+    lossv = np.where(e <= hb, e * e, 2 * hb * e - hb * hb)
+    if pb.w is not None:
+        num = np.bincount(fi, pb.w[ji] * lossv, N)
+        den = np.bincount(fi, pb.w[ji], N)
+    else:
+        num = np.bincount(fi, lossv, N)
+        den = np.bincount(fi, None, N)
+    rel_d, rel = _relief(S, rms0)
+    return {"f": float(f), "shape": S, "poses": Pz, "success": bool(okk), "nfev": int(it),
+            "rms_px": float(np.sqrt(np.mean(e ** 2))), "cost": float(np.mean(num / np.maximum(den, 1e-12))),
+            "relief_rel": rel, "relief_per_joint": rel_d / rms0, "anchors": (a, b, c),
+            "at_bound": bool(xs[0] <= lb[0] + 1e-6 or xs[0] >= lb[1] - 1e-6)}
+
+
+def free_shape3d(pb, grid, z_rel=0.2, alt_iters=3, max_frames=120, planar=None):
+    A = free_template(pb, grid, alt_iters=alt_iters, max_frames=max_frames) if planar is None else planar
+    pr, ids = _restrict(pb, max_frames=max_frames)
+    if list(ids) != list(A["joint_ids"]):
+        raise ValueError("planar result was computed on different joints")
+    B = ba3_refine(pr, A["f"], A["template"], (grid[0], grid[-1]), z_rel=z_rel)
+    return {"f": B["f"], "f_planar": A["f"], "shape": B["shape"], "joint_ids": A["joint_ids"], "relief_rel": B["relief_rel"],
+            "relief_per_joint": B["relief_per_joint"].tolist(), "cost": B["cost"], "cost_planar": A["cost"],
+            "profile_f": A["profile_f"], "profile_cost": A["profile_cost"], "at_grid_edge": A["at_grid_edge"], "at_bound": B["at_bound"],
+            "delta_deg": 0.0, "phi_deg": 0.0, "ba": {k: B[k] for k in ("success", "nfev", "rms_px", "anchors")}}
+
+
+def s3_estimate_run(pb, method, grid, ecfg, sigma2, start=None):
+    """The supervisor's estimate_run with the free_template and free_shape3d branches (as received); the existing estimate_run is not changed."""
+    if method == "fixed_template":
+        return fixed_template(pb, grid)
+    if method == "joint_delta":
+        return joint_delta(pb, grid, ecfg["joint_delta"], sigma2, start)
+    if method == "free_template":
+        return free_template(pb, grid)
+    if method == "free_shape3d":
+        fc = ecfg.get("free_template", {})
+        return free_shape3d(pb, grid, z_rel=fc.get("z_rel", 0.2), alt_iters=int(fc.get("alt_iters", 3)), max_frames=int(fc.get("max_frames", 120)))
+    raise ValueError(method)
+
+
+def s3_slope(f_by_distance: dict, edge_by_distance: dict, n: int, seed: int) -> dict:
+    """Slope of log f on log distance from the per-video 3-D f: the f of a distance is the geometric mean of its videos' f; the 95 % interval is the video-level bootstrap (the videos of every distance drawn with
+    replacement n times, fixed seed). A video whose f sits on a bound of the f range gives no slope and no interval (the same rule as a pooled f on the grid edge in pr_slope). Same keys as pr_slope's result."""
+    ds = sorted(f_by_distance)
+    gm = lambda v: float(np.exp(np.mean(np.log(np.asarray(v, float)))))      # noqa: E731
+    out = {"distances": ds, "pooled_f": {d: gm(f_by_distance[d]) for d in ds}, "pooled_edge": {d: bool(any(edge_by_distance[d])) for d in ds}}
+    if any(out["pooled_edge"].values()):
+        return {**out, "slope": None, "interval_95": None, "n_boot_used": 0, "n_boot_skipped": int(n)}
+    out["slope"] = ext_loglog_slope(ds, [out["pooled_f"][d] for d in ds])
+    rng = np.random.default_rng(int(seed))
+    sl = []
+    for _ in range(int(n)):
+        fs = [gm(np.asarray(f_by_distance[d], float)[rng.integers(0, len(f_by_distance[d]), len(f_by_distance[d]))]) for d in ds]
+        sl.append(ext_loglog_slope(ds, fs))
+    sl = [s_ for s_ in sl if s_ is not None]
+    out["interval_95"] = None if len(sl) < 10 else [float(np.quantile(sl, 0.025)), float(np.quantile(sl, 0.975))]
+    out["n_boot_used"], out["n_boot_skipped"] = int(len(sl)), int(n) - int(len(sl))
+    return out
+
+
+def s3_video(args) -> dict:
+    """One video of experiment 41: marker tracks of 39 (mo_process, unchanged) through the supervisor's call free_problem -> s3_estimate_run('free_shape3d'). args = (entry, prep, pcfg, c); c = the 39 keys plus
+    free_shape3d {z_rel, alt_iters, max_frames}. Same exclusion rules as ft_video. Returns {video, distance_cm, ..., marker: {f, f_planar, relief_rel, ...} | {excluded / failed}}."""
+    entry, prep, pcfg, c = args[:4]
+    os.environ.setdefault("OMP_NUM_THREADS", "1")
+    cv2.setNumThreads(1)
+    proc = mo_process(prep, pcfg, c)
+    W, H = proc["size"]
+    res = {"video": entry["file"], "distance_cm": float(entry["distance_cm"]), "size": [W, H], "n_frames": proc["n_frames"], "duration_s": float(proc["times"][-1] - proc["times"][0]),
+           "marker_stats": {k: proc.get(k) for k in ("valid_ratio", "tilt_valid_ratio", "n_detected_median", "window_success", "window_frames_50_150", "ref_time_s", "reasons", "per_marker_rate", "naming")}}
+    if "failed" in proc:
+        res["marker"] = {"failed": proc["failed"]}
+        return res
+    reasons = []
+    lim = float(c["marker_exclusion"]["min_tilt_valid_ratio"])
+    if proc["tilt_valid_ratio"] < lim:
+        reasons.append(f"기울기 구간 유효 프레임 {100 * proc['tilt_valid_ratio']:.1f}% < {100 * lim:.0f}%")
+    edge = fresp_edge_rate(proc["box"][proc["present"]], np.ones(int(proc["present"].sum()), bool), W, H) if proc["present"].any() else 1.0
+    if edge > float(c["exclusion"]["edge_rate_max"]):
+        reasons.append(f"가장자리 접촉 프레임 {100 * edge:.1f}% > {100 * float(c['exclusion']['edge_rate_max']):.0f}%")
+    mk = {"excluded": reasons, "edge_rate": float(edge), "valid_ratio": proc["valid_ratio"]}
+    res["marker"] = mk
+    if reasons:
+        return res
+    ecfg = pcfg["estimate"]
+    grid = f_grid(ecfg, max(W, H))
+    ids = sorted(int(x) for x in c["markers"]["used_ids"])
+    trk = {"kp": proc["kp"], "mask": proc["mask"], "present": proc["present"], "box": proc["box"]}
+    t0 = time.time()
+    try:
+        pb, idx = free_problem(trk, (W, H), ecfg, float(ecfg["huber_rel"]), ids=ids)
+        r = s3_estimate_run(pb, "free_shape3d", grid, {**ecfg, "free_template": c["free_shape3d"]}, 1.0)
+    except Exception as e:                                            # a failure is a result, not a crash of the run
+        mk["failed"] = f"{type(e).__name__}: {e}"
+        return res
+    pg = np.asarray(r["profile_f"], float)                                  # the (coarse) grid the supervisor's free_template used
+    k = int(np.argmin(r["profile_cost"]))
+    f_grid_min = float(np.exp(np.clip(_parabola(np.log(pg), np.asarray(r["profile_cost"]), k), np.log(pg[0]), np.log(pg[-1]))))
+    mk.update({"f": float(r["f"]), "f_planar": float(r["f_planar"]), "f_grid": f_grid_min, "at_grid_edge": bool(r["at_grid_edge"]), "at_bound": bool(r["at_bound"]),
+               "relief_rel": float(r["relief_rel"]), "relief_per_joint": [float(x) for x in r["relief_per_joint"]], "cost": float(r["cost"]), "cost_planar": float(r["cost_planar"]),
+               "curve": {"grid": pg.tolist(), "cost": [float(x) for x in r["profile_cost"]]}, "sharpness": ft_sharpness(pg, r["profile_cost"], f_grid_min),
+               "ba3_success": r["ba"]["success"], "ba3_nfev": r["ba"]["nfev"], "ba3_rms_px": r["ba"]["rms_px"], "anchors": [int(x) for x in r["ba"]["anchors"]], "n_frames_in_problem": int(len(pb.keep)),
+               "n_points": int(pb.n_points), "joint_ids": [int(x) for x in r["joint_ids"]], "elapsed_s": float(time.time() - t0), "box_long_median_px": float(np.nanmedian(proc["box_long"][proc["present"]]))})
+    return res
+
+
+# ====================================================================================================
+# h3  (experiment 42: free_shape3d of 41 on the real-hand marker videos of 35c; new section, earlier functions are used unchanged)
+# The marker tracks are 35c's (mk_process: MediaPipe hand box for the search region, naming and length scale; re-acquisition tracker; same settings and exclusion rules as mk_video in subset mode), fed through the
+# supervisor's call free_problem -> s3_estimate_run('free_shape3d') of 41 instead of the fixed_template analysis.
+# ====================================================================================================
+
+def h3_video(args) -> dict:
+    """One video of experiment 42. args = (entry, prep, npz, pcfg, c); c = the 35c keys (candidate, exclusion, detector_settings, guide, markers, marker_exclusion) plus free_shape3d {z_rel, alt_iters, max_frames}.
+    Returns {video, distance_cm, ..., marker: {f, f_planar, relief_rel, ...} | {excluded / failed}} (the marker dict of s3_video)."""
+    entry, prep, npz, pcfg, c = args[:5]
+    os.environ.setdefault("OMP_NUM_THREADS", "1")
+    cv2.setNumThreads(1)
+    proc = mk_process(prep, npz, pcfg, c)
+    W, H = proc["size"]
+    res = {"video": entry["file"], "distance_cm": float(entry["distance_cm"]), "size": [W, H], "n_frames": proc["n_frames"], "duration_s": float(proc["times"][-1] - proc["times"][0]),
+           "marker_stats": {k: proc.get(k) for k in ("all_found_ratio", "valid_ratio", "tilt_valid_ratio", "n_detected_median", "hand_frames", "window_success", "window_frames", "ref_time_s", "reasons", "front_window", "per_marker_rate", "ignored_median", "ignored_share")}}
+    if "failed" in proc:
+        res["marker"] = {"failed": proc["failed"]}
+        return res
+    tr = proc["tr"]
+    reasons = []
+    lim = float(c["marker_exclusion"]["min_tilt_valid_ratio"])
+    if proc["tilt_valid_ratio"] < lim:
+        reasons.append(f"기울기 구간 유효 프레임 {100 * proc['tilt_valid_ratio']:.1f}% < {100 * lim:.0f}%")
+    edge = fresp_edge_rate(tr["box"][proc["present"]], np.ones(int(proc["present"].sum()), bool), W, H) if proc["present"].any() else 1.0
+    if edge > float(c["exclusion"]["edge_rate_max"]):
+        reasons.append(f"가장자리 접촉 프레임 {100 * edge:.1f}% > {100 * float(c['exclusion']['edge_rate_max']):.0f}%")
+    mk = {"excluded": reasons, "edge_rate": float(edge), "valid_ratio": proc["valid_ratio"], "names": [int(x) for x in proc["names"]]}
+    res["marker"] = mk
+    if reasons:
+        return res
+    ecfg = pcfg["estimate"]
+    grid = f_grid(ecfg, max(W, H))
+    ids = sorted(int(x) for x in c["markers"]["used_ids"])
+    trk = {"kp": proc["kp"], "mask": proc["mask"], "present": proc["present"], "box": tr["box"]}
+    t0 = time.time()
+    try:
+        pb, idx = free_problem(trk, (W, H), ecfg, float(ecfg["huber_rel"]), ids=ids)
+        r = s3_estimate_run(pb, "free_shape3d", grid, {**ecfg, "free_template": c["free_shape3d"]}, 1.0)
+    except Exception as e:                                            # a failure is a result, not a crash of the run
+        mk["failed"] = f"{type(e).__name__}: {e}"
+        return res
+    pg = np.asarray(r["profile_f"], float)                                  # the (coarse) grid the supervisor's free_template used
+    k = int(np.argmin(r["profile_cost"]))
+    f_grid_min = float(np.exp(np.clip(_parabola(np.log(pg), np.asarray(r["profile_cost"]), k), np.log(pg[0]), np.log(pg[-1]))))
+    mk.update({"f": float(r["f"]), "f_planar": float(r["f_planar"]), "f_grid": f_grid_min, "at_grid_edge": bool(r["at_grid_edge"]), "at_bound": bool(r["at_bound"]),
+               "relief_rel": float(r["relief_rel"]), "relief_per_joint": [float(x) for x in r["relief_per_joint"]], "cost": float(r["cost"]), "cost_planar": float(r["cost_planar"]),
+               "curve": {"grid": pg.tolist(), "cost": [float(x) for x in r["profile_cost"]]}, "sharpness": ft_sharpness(pg, r["profile_cost"], f_grid_min),
+               "ba3_success": r["ba"]["success"], "ba3_nfev": r["ba"]["nfev"], "ba3_rms_px": r["ba"]["rms_px"], "anchors": [int(x) for x in r["ba"]["anchors"]], "n_frames_in_problem": int(len(pb.keep)),
+               "n_points": int(pb.n_points), "joint_ids": [int(x) for x in r["joint_ids"]], "elapsed_s": float(time.time() - t0), "box_long_median_px": float(np.nanmedian(proc["box_long"][proc["present"]]))})
+    return res

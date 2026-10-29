@@ -3813,7 +3813,7 @@ class H3Video(unittest.TestCase):
         from unittest import mock
         pcfg = copy.deepcopy(CFG42["pipeline"])
         pcfg["estimate"]["f_grid_n"] = 6
-        with mock.patch.object(hf, "mk_process", return_value=proc):
+        with mock.patch.object(hf._estimate, "mk_process", return_value=proc):
             return hf.h3_video(({"file": "x.MOV", "distance_cm": 50}, None, None, pcfg, c))
 
     def test_tracks_go_through_the_supervisors_call_and_the_35c_exclusion_rules_apply(self):
