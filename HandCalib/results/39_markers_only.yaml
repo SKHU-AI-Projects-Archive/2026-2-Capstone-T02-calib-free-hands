@@ -1,0 +1,269 @@
+experiment: 39_markers_only
+run: runs/39_markers_only/20261029T054858Z
+code_commit: df5b788
+git_dirty_at_run: false
+note: 손 검출기(MediaPipe) 없이 손바닥에 붙인 표시 점만으로 f를 추정해, 거리를 바꿔 찍은 영상에서 f가 거리에 반비례하는지 본 실험이다.
+  실험 35의 계산(fixed_template, 정면 창, 기울기 구간, 부트스트랩)과 판정 규칙을 그대로 쓰고, 표시 검출, 이름 붙이기, 길이
+  기준만 손 박스 대신 표시 점에서 얻는다. 쓰는 점, 검출 설정, 판정 규칙은 실행 전에 고정했고 바꾸지 않았다. 기준 f와의 비교는 summary.md에만
+  있다.
+markers:
+  color: red
+  count: 21
+  used_ids:
+  - 5
+  - 6
+  - 9
+  - 10
+  - 13
+  - 14
+  - 17
+  - 18
+  contrast_min: 30
+  median_ksize: 31
+  area_min: 20
+  area_max: 3000
+  circularity_min: 0.3
+  box_margin: 0.1
+  min_markers_ratio: 0.75
+  tracker: reacquire
+  move_frac: 0.03
+  gap_cap: 5
+  ransac_frac: 0.03
+  min_inlier_ratio: 0.9
+naming:
+  min_detections: 8
+  pair_min: 0.8
+  scale_min_px: 40
+  scale_max_px: 400
+  rot_max_deg: 30
+  tol_frac: 0.08
+  min_named: 12
+verdict_rules:
+  slope_none_min: -0.3
+  slope_yes_max: -0.7
+  f_tol: 0.1
+videos:
+  IMG_7294.MOV:
+    distance_cm: 50.0
+    duration_s: 23.2
+    marker_valid_ratio: 0.9857
+    marker_tilt_valid_ratio: 0.9836
+    marker_detection_rate_by_joint:
+      '0': 0.993
+      '1': 0.987
+      '2': 0.98
+      '17': 0.984
+      '13': 0.987
+      '5': 0.993
+      '9': 0.993
+      '4': 0.987
+      '18': 0.987
+      '19': 0.974
+      '14': 0.977
+      '6': 0.98
+      '10': 0.984
+      '20': 0.974
+      '15': 0.977
+      '7': 0.977
+      '11': 0.98
+      '16': 0.984
+      '8': 0.984
+      '12': 0.977
+    markers:
+      f_px: 1677.0
+      sharpness: 1.13964
+      boot_log_std: 0.04238
+      n_used_frames: 314
+      theta_median_deg: 28.6
+      theta_max_deg: 40.9
+      reproj_rms_front_pct: 0.0076
+      reproj_rms_tilt_pct: 0.0809
+  IMG_7293.MOV:
+    distance_cm: 50.0
+    duration_s: 26.27
+    marker_valid_ratio: 0.9899
+    marker_tilt_valid_ratio: 0.9886
+    marker_detection_rate_by_joint:
+      '0': 0.994
+      '1': 0.997
+      '2': 0.971
+      '17': 0.994
+      '13': 0.989
+      '5': 0.989
+      '9': 0.994
+      '4': 0.98
+      '18': 0.977
+      '19': 0.98
+      '14': 0.983
+      '6': 0.974
+      '10': 0.98
+      '20': 0.974
+      '15': 0.983
+      '7': 0.98
+      '11': 0.977
+      '16': 0.983
+      '8': 0.98
+      '12': 0.971
+    markers:
+      f_px: 1708.0
+      sharpness: 1.52457
+      boot_log_std: 0.0166
+      n_used_frames: 361
+      theta_median_deg: 29.4
+      theta_max_deg: 35.4
+      reproj_rms_front_pct: 0.0111
+      reproj_rms_tilt_pct: 0.0418
+  IMG_7292.MOV:
+    distance_cm: 60.0
+    duration_s: 23.33
+    marker_valid_ratio: 0.9943
+    marker_tilt_valid_ratio: 0.9935
+    marker_detection_rate_by_joint:
+      '0': 0.997
+      '1': 0.99
+      '2': 0.961
+      '17': 0.997
+      '13': 0.997
+      '5': 0.997
+      '9': 0.993
+      '4': 0.987
+      '18': 0.997
+      '19': 0.997
+      '14': 0.997
+      '6': 0.984
+      '10': 0.993
+      '20': 0.993
+      '15': 0.993
+      '7': 0.974
+      '11': 0.987
+      '16': 0.993
+      '8': 0.98
+      '12': 0.98
+    markers:
+      f_px: 1635.6
+      sharpness: 1.88116
+      boot_log_std: 0.01192
+      n_used_frames: 319
+      theta_median_deg: 29.4
+      theta_max_deg: 36.2
+      reproj_rms_front_pct: 0.0116
+      reproj_rms_tilt_pct: 0.0274
+  IMG_7291.MOV:
+    distance_cm: 60.0
+    duration_s: 23.47
+    marker_valid_ratio: 1.0
+    marker_tilt_valid_ratio: 1.0
+    marker_detection_rate_by_joint:
+      '0': 1.0
+      '1': 1.0
+      '2': 0.99
+      '17': 1.0
+      '13': 1.0
+      '5': 1.0
+      '9': 1.0
+      '4': 0.994
+      '18': 0.997
+      '19': 1.0
+      '14': 1.0
+      '6': 1.0
+      '10': 1.0
+      '20': 0.994
+      '15': 0.994
+      '7': 0.997
+      '11': 0.994
+      '16': 0.99
+      '8': 0.99
+      '12': 0.99
+    markers:
+      f_px: 1688.1
+      sharpness: 2.13507
+      boot_log_std: 0.01488
+      n_used_frames: 323
+      theta_median_deg: 32.1
+      theta_max_deg: 38.3
+      reproj_rms_front_pct: 0.0076
+      reproj_rms_tilt_pct: 0.0254
+  IMG_7290.MOV:
+    distance_cm: 75.0
+    duration_s: 24.13
+    marker_valid_ratio: 0.989
+    marker_tilt_valid_ratio: 0.9874
+    marker_detection_rate_by_joint:
+      '0': 0.994
+      '1': 0.994
+      '2': 0.987
+      '17': 0.987
+      '13': 0.994
+      '5': 0.987
+      '9': 0.991
+      '4': 0.981
+      '18': 0.991
+      '19': 0.984
+      '14': 0.991
+      '6': 0.987
+      '10': 0.984
+      '20': 0.981
+      '15': 0.984
+      '7': 0.984
+      '11': 0.984
+      '16': 0.984
+      '8': 0.981
+      '12': 0.984
+    markers:
+      f_px: 1664.5
+      sharpness: 1.35352
+      boot_log_std: 0.02181
+      n_used_frames: 329
+      theta_median_deg: 29.3
+      theta_max_deg: 35.7
+      reproj_rms_front_pct: 0.013
+      reproj_rms_tilt_pct: 0.0324
+  IMG_7289.MOV:
+    distance_cm: 75.0
+    duration_s: 23.6
+    marker_valid_ratio: 0.9915
+    marker_tilt_valid_ratio: 0.9903
+    marker_detection_rate_by_joint:
+      '0': 0.994
+      '1': 0.99
+      '2': 0.965
+      '17': 0.987
+      '13': 0.99
+      '5': 0.987
+      '9': 0.99
+      '4': 0.977
+      '18': 0.987
+      '19': 0.987
+      '14': 0.99
+      '6': 0.981
+      '10': 0.984
+      '20': 0.984
+      '15': 0.977
+      '7': 0.984
+      '11': 0.984
+      '16': 0.984
+      '8': 0.99
+      '12': 0.977
+    markers:
+      f_px: 1661.4
+      sharpness: 1.25652
+      boot_log_std: 0.03137
+      n_used_frames: 322
+      theta_median_deg: 29.8
+      theta_max_deg: 37.5
+      reproj_rms_front_pct: 0.0133
+      reproj_rms_tilt_pct: 0.0386
+by_method:
+  markers:
+    pooled_f_px:
+      '50': 1693.2
+      '60': 1663.6
+      '75': 1662.9
+    slope: -0.0429
+    slope_interval_95:
+    - -0.066
+    - -0.0172
+verdict:
+  markers:
+    verdict: 반비례 없음
+    reason: null
