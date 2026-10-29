@@ -5328,3 +5328,276 @@ def mo_video(args) -> dict:
                "n_used_frames": int(a["n_target_frames"]), "theta_median": a["theta_tilt"]["median"], "theta_max": a["theta_tilt"]["max"], "theta_p90": a["theta_tilt"]["p90"],
                "tilt_duration_s": float(times[tilt].max() - a["tilt_start_s"]) if tilt else 0.0, "phase_rms_pct": pr_phase_rms(a, proc["box"]), "box_long_median_px": float(np.nanmedian(proc["box_long"][proc["present"]]))})
     return res
+
+
+# ====================================================================================================
+# ft  (experiment 40: free template, the supervisor's code, on the marker tracks of 39; new section, earlier functions are used unchanged)
+# procrustes_init .. free_problem are the supervisor's functions as received, with six corrections that stop them from running at all (nothing of the method is changed): the import of least_squares (the supervisor's file has it at its top), np.c -> np.c_ (backproject), the call
+# _backproject -> backproject (alt_template), rodrigues -> _rodrigues (ba_refine), np.r -> np.r_ (ba_refine, four places), Problem.new(Problem) -> Problem.__new__(Problem) (_restrict). The supervisor's estimate_run
+# (an existing function, so not redefined) is ft_estimate_run: the same dispatch with the free_template branch added.
+# ====================================================================================================
+from scipy.optimize import least_squares  # noqa: E402  (the supervisor's file imports it at the top)
+
+
+def procrustes_init(pb, iters=6):
+    J = pb.T.shape[0]
+    frames = [pb.frames[i] for i in pb.keep]
+    ref = max(range(len(frames)), key=lambda k: frames[k][1].sum())
+    o, v = frames[ref]
+    T = np.where(v[:, None], o, np.nan)
+    T = T - np.nanmean(T, 0)
+    for _ in range(iters):
+        acc = np.zeros((J, 2))
+        cnt = np.zeros(J)
+        for o, v in frames:
+            m = v & np.isfinite(T).all(1)
+            if m.sum() < 3:
+                continue
+            s, R, t = similarity_align(o[m], T[m])
+            acc[v] += (s * (R @ o[v].T)).T + t
+            cnt[v] += 1
+        new = np.where(cnt[:, None] > 0, acc / np.maximum(cnt, 1)[:, None], np.nan)
+        new = new - np.nanmean(new, 0)
+        T = new
+    sizes = [np.sqrt(((o[v] - o[v].mean(0)) ** 2).sum(1).mean()) for o, v in frames]
+    T = T * (np.mean(sizes) / np.sqrt(np.nansum(T ** 2, 1)[np.isfinite(T).all(1)].mean()))
+    return T
+
+
+def backproject(obs, R, t, K):
+    H = K @ np.c_[R[:, 0], R[:, 1], t]
+    p = np.c_[obs, np.ones(len(obs))] @ np.linalg.inv(H).T
+    return p[:, :2] / p[:, 2:3]
+
+
+def _gauge(T, T0):
+    T = T - T.mean(0)
+    T = T * (np.sqrt((T0 ** 2).sum(1).mean()) / np.sqrt((T ** 2).sum(1).mean()))
+    _, R, _ = similarity_align(T, T0)
+    return (R @ T.T).T
+
+
+def alt_template(pb, f, T0, iters=5):
+    K = K_of(f, pb.cx, pb.cy)
+    T = T0.copy()
+    for _ in range(iters):
+        acc = [[] for _ in range(len(T))]
+        for i in pb.keep:
+            o, v = pb.frames[i]
+            _, R, t = frame_fit(T, o, v, K)
+            q = backproject(o[v], R, t, K)
+            for j, p in zip(np.flatnonzero(v), q):
+                acc[j].append(p)
+        new = np.array([np.median(np.array(a), axis=0) if a else T[j] for j, a in enumerate(acc)])
+        T = _gauge(new, T0)
+    return T
+
+
+def _rodrigues(rv):
+    th = np.linalg.norm(rv, axis=1)
+    k = rv / np.maximum(th, 1e-12)[:, None]
+    c, s = np.cos(th), np.sin(th)
+    kx, ky, kz = k[:, 0], k[:, 1], k[:, 2]
+    Kx = np.zeros((len(rv), 3, 3))
+    Kx[:, 0, 1], Kx[:, 0, 2] = -kz, ky
+    Kx[:, 1, 0], Kx[:, 1, 2] = kz, -kx
+    Kx[:, 2, 0], Kx[:, 2, 1] = -ky, kx
+    kk = k[:, :, None] * k[:, None, :]
+    return c[:, None, None] * np.eye(3) + (1 - c)[:, None, None] * kk + s[:, None, None] * Kx
+
+
+def _anchors(T, frames):
+    vis = np.sum([v for o, v in frames], axis=0)
+    good = np.flatnonzero(vis >= 0.9 * vis.max())
+    d = np.linalg.norm(T[good][:, None] - T[good][None], axis=-1)
+    a, b = np.unravel_index(np.argmax(d), d.shape)
+    return int(good[a]), int(good[b])
+
+
+def ba_refine(pb, f0, T0, f_bounds, huber_px=None, max_nfev=100):
+    J = T0.shape[0]
+    frames = [pb.frames[i] for i in pb.keep]
+    N = len(frames)
+    K0 = K_of(f0, pb.cx, pb.cy)
+    poses = np.zeros((N, 6))
+    for n, (o, v) in enumerate(frames):
+        _, R, t = frame_fit(T0, o, v, K0)
+        poses[n, :3] = cv2.Rodrigues(R)[0].ravel()
+        poses[n, 3:] = t
+    fi = np.concatenate([np.full(v.sum(), n) for n, (o, v) in enumerate(frames)])
+    ji = np.concatenate([np.flatnonzero(v) for o, v in frames])
+    uv = np.concatenate([o[v] for o, v in frames])
+    sw = np.ones(len(ji)) if pb.w is None else np.sqrt(pb.w[ji])
+    a, b = _anchors(T0, frames)
+    free = np.array([j for j in range(J) if j not in (a, b)])
+    col = np.full(J, -1)
+    col[free] = np.arange(len(free))
+    nT = 2 * len(free)
+
+    def unpack(x):
+        T = T0.copy()
+        T[free] = x[1:1 + nT].reshape(-1, 2)
+        return np.exp(x[0]), T, x[1 + nT:].reshape(N, 6)
+
+    def resid(x):
+        f, T, P = unpack(x)
+        R = _rodrigues(P[:, :3])
+        X = np.einsum("nab,nb->na", R[fi][:, :, :2], T[ji]) + P[fi, 3:]
+        u = f * X[:, 0] / X[:, 2] + pb.cx - uv[:, 0]
+        w = f * X[:, 1] / X[:, 2] + pb.cy - uv[:, 1]
+        return np.r_[sw * u, sw * w]
+
+    M = len(ji)
+    rows = np.r_[np.arange(M), np.arange(M)]
+    fr = col[ji] >= 0
+    tr_rows = np.r_[np.flatnonzero(fr), np.flatnonzero(fr) + M]
+    tr_j = np.r_[col[ji[fr]], col[ji[fr]]]
+    P = 1 + nT + 6 * N
+
+    def jac(x):
+        Jm = np.zeros((2 * M, P))
+        h = 1e-6 * np.maximum(1.0, np.abs(x))
+        groups = [(np.array([0]), np.zeros(2 * M, int))]
+        for d in range(2):
+            cols = 1 + 2 * np.arange(len(free)) + d
+            m = np.full(2 * M, -1)
+            m[tr_rows] = cols[tr_j]
+            groups.append((cols, m))
+        for d in range(6):
+            cols = 1 + nT + 6 * np.arange(N) + d
+            groups.append((cols, cols[np.r_[fi, fi]]))
+        for cols, m in groups:
+            xp, xm = x.copy(), x.copy()
+            xp[cols] += h[cols]
+            xm[cols] -= h[cols]
+            dr = resid(xp) - resid(xm)
+            ok = m >= 0
+            Jm[np.flatnonzero(ok), m[ok]] = dr[ok] / (2 * h[m[ok]])
+        return Jm
+
+    x0 = np.r_[np.log(f0), T0[free].ravel(), poses.ravel()]
+    lo = np.full_like(x0, -np.inf)
+    hi = np.full_like(x0, np.inf)
+    lo[0], hi[0] = np.log(f_bounds[0]), np.log(f_bounds[1])
+    x0[0] = np.clip(x0[0], lo[0] + 1e-9, hi[0] - 1e-9)
+    hp = float(np.median(pb.huber[pb.keep])) if huber_px is None else float(huber_px)
+    r = least_squares(resid, x0, jac=jac, bounds=(lo, hi), method="trf", tr_solver="exact", loss="huber", f_scale=hp,
+                      x_scale="jac", max_nfev=max_nfev)
+    f, T, _ = unpack(r.x)
+    return {"f": float(f), "template": T, "success": bool(r.success), "nfev": int(r.nfev),
+            "rms_px": float(np.sqrt(np.mean(r.fun ** 2)))}
+
+
+def _restrict(pb, min_frames=3, max_frames=120):
+    keep = list(pb.keep)
+    if max_frames and len(keep) > max_frames:
+        keep = [keep[k] for k in np.unique(np.linspace(0, len(keep) - 1, max_frames).round().astype(int))]
+    cnt = np.sum([pb.frames[i][1] for i in keep], axis=0)
+    ids = np.flatnonzero(cnt >= min_frames)
+    q = Problem.__new__(Problem)
+    q.T = pb.T[ids]
+    q.frames = [(o[ids], v[ids]) for o, v in pb.frames]
+    q.keep = [i for i in keep if q.frames[i][1].sum() >= 4]
+    q.cx, q.cy, q.huber = pb.cx, pb.cy, pb.huber
+    q.w = None if pb.w is None else pb.w[ids]
+    q.n_points = int(sum(q.frames[i][1].sum() for i in q.keep))
+    return q, ids
+
+
+def free_template(pb, grid, alt_iters=3, refine=True, max_frames=120):
+    if not pb.keep:
+        raise ValueError("no usable frames")
+    pb, ids = _restrict(pb, max_frames=max_frames)
+    if len(ids) < 4 or not pb.keep:
+        raise ValueError("fewer than 4 usable joints")
+    T0 = procrustes_init(pb)
+    c, Ts = [], []
+    for f in grid:
+        T = alt_template(pb, f, T0, alt_iters)
+        c.append(cost(pb, f, T))
+        Ts.append(T)
+    c = np.array(c)
+    k = int(np.argmin(c))
+    lf = _parabola(np.log(grid), c, k)
+    f_grid_best = float(np.exp(np.clip(lf, np.log(grid[0]), np.log(grid[-1]))))
+    out = {"f_grid": f_grid_best, "profile_f": grid.tolist(), "profile_cost": c.tolist(), "delta_deg": 0.0, "phi_deg": 0.0,
+           "at_grid_edge": bool(k in (0, len(grid) - 1)), "template": Ts[k], "joint_ids": ids.tolist()}
+    if refine:
+        ba = ba_refine(pb, f_grid_best, Ts[k], (grid[0], grid[-1]))
+        out.update({"f": ba["f"], "template": ba["template"], "ba": {kk: vv for kk, vv in ba.items() if kk != "template"}})
+    else:
+        out["f"] = f_grid_best
+    out["cost"] = cost(pb, out["f"], out["template"])
+    return out
+
+
+def free_problem(trk, size_wh, ecfg, huber_rel, ids=None, weights=None):
+    W, H = size_wh
+    cx, cy = principal_point(ecfg, W, H)
+    kp = undistort(trk["kp"], ecfg, W, H)
+    J = kp.shape[1]
+    sel = np.ones(J, bool) if ids is None else np.isin(np.arange(J), ids)
+    idx = np.flatnonzero(trk["present"])
+    frames = [(kp[i], trk["mask"][i] & sel & np.isfinite(kp[i]).all(1)) for i in idx]
+    hub = float(huber_rel) * box_long(trk["box"][idx])
+    return Problem(np.zeros((J, 2)), frames, cx, cy, hub, weights=weights), idx
+
+
+def ft_estimate_run(pb, method, grid, ecfg, sigma2, start=None):
+    """The supervisor's estimate_run: estimate_run (unchanged, above) plus the free_template branch."""
+    if method == "free_template":
+        return free_template(pb, grid)
+    return estimate_run(pb, method, grid, ecfg, sigma2, start)
+
+
+def ft_sharpness(grid, cost_curve, f: float, ratio: float = 1.15) -> float:
+    """min(cost(ratio f), cost(f / ratio)) / cost(f) on the cost curve (log-f interpolation; NaN outside the grid)."""
+    lg, c = np.log(np.asarray(grid, float)), np.asarray(cost_curve, float)
+    lf = np.log(f)
+    if lf + np.log(ratio) > lg[-1] or lf - np.log(ratio) < lg[0]:
+        return float("nan")
+    return float(min(np.interp(lf + np.log(ratio), lg, c), np.interp(lf - np.log(ratio), lg, c)) / max(np.interp(lf, lg, c), 1e-12))
+
+
+def ft_video(args) -> dict:
+    """One video of experiment 40: marker tracks of 39 (mo_process, unchanged) through the supervisor's call free_problem -> estimate_run('free_template'). args = (entry, prep, pcfg, c); c = the 39 keys plus
+    free_template {alt_iters, refine, max_frames}. Same exclusion rules as mo_video. Returns {video, distance_cm, ..., marker: {f, f_grid, curve, ...} | {excluded / failed}}."""
+    entry, prep, pcfg, c = args[:4]
+    os.environ.setdefault("OMP_NUM_THREADS", "1")
+    cv2.setNumThreads(1)
+    proc = mo_process(prep, pcfg, c)
+    W, H = proc["size"]
+    res = {"video": entry["file"], "distance_cm": float(entry["distance_cm"]), "size": [W, H], "n_frames": proc["n_frames"], "duration_s": float(proc["times"][-1] - proc["times"][0]),
+           "marker_stats": {k: proc.get(k) for k in ("valid_ratio", "tilt_valid_ratio", "n_detected_median", "window_success", "window_frames_50_150", "ref_time_s", "reasons", "per_marker_rate", "naming")}}
+    if "failed" in proc:
+        res["marker"] = {"failed": proc["failed"]}
+        return res
+    reasons = []
+    lim = float(c["marker_exclusion"]["min_tilt_valid_ratio"])
+    if proc["tilt_valid_ratio"] < lim:
+        reasons.append(f"기울기 구간 유효 프레임 {100 * proc['tilt_valid_ratio']:.1f}% < {100 * lim:.0f}%")
+    edge = fresp_edge_rate(proc["box"][proc["present"]], np.ones(int(proc["present"].sum()), bool), W, H) if proc["present"].any() else 1.0
+    if edge > float(c["exclusion"]["edge_rate_max"]):
+        reasons.append(f"가장자리 접촉 프레임 {100 * edge:.1f}% > {100 * float(c['exclusion']['edge_rate_max']):.0f}%")
+    mk = {"excluded": reasons, "edge_rate": float(edge), "valid_ratio": proc["valid_ratio"]}
+    res["marker"] = mk
+    if reasons:
+        return res
+    ecfg = pcfg["estimate"]
+    grid = f_grid(ecfg, max(W, H))
+    ids = sorted(int(x) for x in c["markers"]["used_ids"])
+    trk = {"kp": proc["kp"], "mask": proc["mask"], "present": proc["present"], "box": proc["box"]}
+    t0 = time.time()
+    try:
+        pb, idx = free_problem(trk, (W, H), ecfg, float(ecfg["huber_rel"]), ids=ids)
+        ft = c["free_template"]
+        r = free_template(pb, grid, int(ft["alt_iters"]), bool(ft["refine"]), int(ft["max_frames"]))
+    except Exception as e:                                            # a failure is a result, not a crash of the run
+        mk["failed"] = f"{type(e).__name__}: {e}"
+        return res
+    ba = r.get("ba", {})
+    mk.update({"f": float(r["f"]), "f_grid": float(r["f_grid"]), "at_grid_edge": bool(r["at_grid_edge"]), "ba_at_bound": bool(r["f"] <= grid[0] * (1 + 1e-6) or r["f"] >= grid[-1] * (1 - 1e-6)),
+               "curve": {"grid": grid.tolist(), "cost": [float(x) for x in r["profile_cost"]]}, "sharpness": ft_sharpness(grid, r["profile_cost"], r["f_grid"]),
+               "cost_at_f": float(r["cost"]), "ba_success": ba.get("success"), "ba_nfev": ba.get("nfev"), "ba_rms_px": ba.get("rms_px"), "n_frames_in_problem": int(len(pb.keep)), "n_points": int(pb.n_points),
+               "joint_ids": [int(x) for x in r["joint_ids"]], "elapsed_s": float(time.time() - t0), "box_long_median_px": float(np.nanmedian(proc["box_long"][proc["present"]]))})
+    return res

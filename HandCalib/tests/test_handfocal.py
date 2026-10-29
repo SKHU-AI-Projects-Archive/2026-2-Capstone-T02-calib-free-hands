@@ -3482,5 +3482,160 @@ class MoReports(unittest.TestCase):
                     self.assertEqual(line.count("|"), line.strip().count("|"), line)
 
 
+# ---- experiment 40: the supervisor's free template on the marker tracks ---------------------------------
+CFG40 = yaml.safe_load((ROOT / "configs/40_free_template.yaml").read_text())
+
+
+def ft_planar_problem(f=1000.0, n_frames=14, seed=0):
+    """Planar 8-point template seen by a pinhole camera at 1920 x 1080 in a tilt sequence; returns (Problem, K)."""
+    rng = np.random.default_rng(seed)
+    T = np.array([[-60, -40], [-20, -45], [20, -42], [60, -38], [-58, 10], [-18, 12], [22, 9], [62, 14]], float)
+    K = hf.K_of(f, 960.0, 540.0)
+    frames = []
+    for i in range(n_frames):
+        a = np.deg2rad(5 + 40 * i / max(n_frames - 1, 1))
+        R = cv2.Rodrigues(np.array([a, 0.2 * a, 0.0]))[0]
+        X = np.c_[T, np.zeros(len(T))] @ R.T + np.array([10.0, 5.0, 600.0])
+        uv = (K @ X.T).T
+        uv = uv[:, :2] / uv[:, 2:3] + rng.normal(0, 0.1, (len(T), 2))
+        frames.append((uv, np.ones(len(T), bool)))
+    return hf.Problem(np.zeros((len(T), 2)), frames, 960.0, 540.0, np.full(n_frames, 4.0)), K, T
+
+
+class FtParts(unittest.TestCase):
+    def test_backproject_returns_the_template_coordinates(self):
+        pb, K, T = ft_planar_problem()
+        o, v = pb.frames[5]
+        _, R, t = hf.frame_fit(T, o, v, K)
+        back = hf.backproject(o, R, t, K)
+        self.assertLess(np.abs(back - T).max(), 1.0)
+
+    def test_rodrigues_matches_opencv(self):
+        rv = np.array([[0.3, -0.2, 0.5], [0.0, 0.0, 0.0], [1.2, 0.1, -0.4]])
+        R = hf._rodrigues(rv)
+        for r, m in zip(rv, R):
+            self.assertTrue(np.allclose(m, cv2.Rodrigues(r)[0], atol=1e-7))
+
+    def test_restrict_drops_rare_joints_and_subsamples_frames(self):
+        pb, _, _ = ft_planar_problem(n_frames=14)
+        o, v = pb.frames[0]
+        pb.frames = [(o2, v2.copy()) for o2, v2 in pb.frames]
+        for i in range(14):
+            pb.frames[i][1][7] = i < 2                                                                       # joint 7 is seen in 2 frames only
+        pb.keep = list(range(14))
+        q, ids = hf._restrict(pb, min_frames=3, max_frames=8)
+        self.assertNotIn(7, ids.tolist())
+        self.assertEqual(len(q.T), 7)
+        self.assertLessEqual(len(q.keep), 8)
+
+    def test_free_problem_selects_the_ids_and_the_present_frames(self):
+        n = 6
+        kp = np.random.default_rng(0).uniform(100, 800, (n, 21, 2))
+        mask = np.ones((n, 21), bool)
+        present = np.array([1, 1, 0, 1, 1, 1], bool)
+        box = np.tile([100.0, 100.0, 700.0, 500.0], (n, 1))
+        pb, idx = hf.free_problem({"kp": kp, "mask": mask, "present": present, "box": box}, (1920, 1080), CFG40["pipeline"]["estimate"], 0.02, ids=[5, 6, 9, 10])
+        self.assertEqual(idx.tolist(), [0, 1, 3, 4, 5])
+        self.assertEqual(len(pb.frames), 5)
+        self.assertEqual(int(pb.frames[0][1].sum()), 4)
+        self.assertTrue(np.allclose(pb.huber, 0.02 * 600.0))
+
+    def test_estimate_run_ft_routes_and_rejects_unknown_methods(self):
+        with self.assertRaises(ValueError):
+            hf.ft_estimate_run(None, "nonsense", None, CFG40["pipeline"]["estimate"], 1.0)
+
+    def test_sharpness_on_a_parabola_cost(self):
+        grid = np.geomspace(500, 3000, 60)
+        c = (np.log(grid) - np.log(1500.0)) ** 2 + 0.05
+        s = hf.ft_sharpness(grid, c, 1500.0)
+        self.assertGreater(s, 1.0)
+        self.assertTrue(np.isnan(hf.ft_sharpness(grid, c, 520.0)))                                           # a neighbour outside the grid
+
+
+class FtTemplate(unittest.TestCase):
+    def test_free_template_runs_on_a_planar_problem_and_returns_the_documented_fields(self):
+        pb, _, _ = ft_planar_problem(f=1000.0, n_frames=14)
+        grid = np.geomspace(500.0, 2000.0, 7)
+        r = hf.ft_estimate_run(pb, "free_template", grid, CFG40["pipeline"]["estimate"], 1.0)
+        for k in ("f", "f_grid", "profile_f", "profile_cost", "at_grid_edge", "template", "joint_ids", "ba", "cost"):
+            self.assertIn(k, r)
+        self.assertEqual(len(r["profile_cost"]), 7)
+        self.assertTrue(np.isfinite(r["f"]) and grid[0] <= r["f"] <= grid[-1])
+        self.assertTrue(r["ba"]["success"] or r["ba"]["nfev"] > 0)
+        self.assertEqual(r["template"].shape, (8, 2))
+
+    def test_refine_false_gives_the_grid_value(self):
+        pb, _, _ = ft_planar_problem()
+        grid = np.geomspace(500.0, 2000.0, 7)
+        r = hf.free_template(pb, grid, alt_iters=1, refine=False, max_frames=10)
+        self.assertEqual(r["f"], r["f_grid"])
+        self.assertNotIn("ba", r)
+
+    def test_no_usable_frames_raises(self):
+        pb, _, _ = ft_planar_problem()
+        pb.keep = []
+        with self.assertRaises(ValueError):
+            hf.free_template(pb, np.geomspace(500.0, 2000.0, 5))
+
+
+class FtVideo(unittest.TestCase):
+    def test_video_through_the_marker_tracks_returns_f_and_curves_and_a_failure_is_a_result(self):
+        with tempfile.TemporaryDirectory() as d:
+            prep = mo_synth_video(d, seconds=6.0, fps=6.0)
+            pcfg = copy.deepcopy(CFG40["pipeline"])
+            pcfg["estimate"]["f_grid_n"] = 6
+            c = {k: CFG40[k] for k in ("exclusion", "markers", "marker_exclusion", "precheck", "naming", "layout", "free_template")} if "precheck" in CFG40 else {k: CFG40[k] for k in ("exclusion", "markers", "marker_exclusion", "naming", "layout", "free_template")}
+            c["free_template"] = {"alt_iters": 1, "refine": True, "max_frames": 8}
+            res = hf.ft_video(({"file": "synth.MOV", "distance_cm": 50}, prep, pcfg, c))
+            x = res["marker"]
+            self.assertIn("f", x, x)
+            self.assertEqual(len(x["curve"]["grid"]), 6)
+            self.assertEqual(sorted(x["joint_ids"]), [5, 6, 9, 10, 13, 14, 17, 18])
+            c2 = copy.deepcopy(c)
+            c2["free_template"] = {"alt_iters": 1, "refine": True, "max_frames": 8}
+            c2["markers"]["used_ids"] = [5, 6, 9, 10, 13, 14, 17, 99]                                          # a joint the layout does not have
+            res2 = hf.ft_video(({"file": "synth.MOV", "distance_cm": 50}, prep, pcfg, c2))
+            self.assertIn("failed", res2["marker"])                                                          # no reference frame names marker 99: a result, not a crash
+            self.assertNotIn("f", res2["marker"])
+
+
+class FtReports(unittest.TestCase):
+    def test_summary_report_and_yaml_keep_the_reference_in_summary_only(self):
+        ref = {float(d): float(f) for d, f in CFG40["ref_f_by_distance"].items()}
+        grid = np.geomspace(0.35 * 1920, 1.6 * 1920, 60)
+        cost = ((np.log(grid) - np.log(1700.0)) ** 2 + 0.01).tolist()
+        results = []
+        for f, d in (("IMG_7294.MOV", 50), ("IMG_7293.MOV", 50), ("IMG_7292.MOV", 60), ("IMG_7291.MOV", 60), ("IMG_7290.MOV", 75), ("IMG_7289.MOV", 75)):
+            results.append({"video": f, "distance_cm": float(d), "size": [1920, 1080], "n_frames": 300, "duration_s": 20.0, "marker_stats": {"tilt_valid_ratio": 0.98},
+                            "marker": {"f": 1710.0, "f_grid": 1700.0, "at_grid_edge": False, "ba_at_bound": False, "curve": {"grid": grid.tolist(), "cost": cost}, "sharpness": 1.4, "cost_at_f": 0.01, "ba_success": True,
+                                       "ba_nfev": 20, "ba_rms_px": 0.2, "n_frames_in_problem": 120, "n_points": 900, "joint_ids": [5], "elapsed_s": 600.0}})
+        cur = {d: [r["marker"]["curve"]["cost"] for r in results if r["distance_cm"] == d] for d in (50.0, 60.0, 75.0)}
+        sl = hf.pr_slope(cur, grid, 50, 42)
+        per = {d: {**hf.ext_pooled(cur[d], grid, {"bootstrap_n": 50, "bootstrap_seed": 42}), "n_total": 2} for d in cur}
+        ana = {"markers": {"slope": sl, "per_distance": per, "verdict": hf.pr_verdict(sl, ref, CFG40["verdict"], {50.0: 2, 60.0: 2, 75.0: 2})}}
+        prior = {"video": {r["video"]: 1690.0 for r in results}, "pooled": {50.0: 1693.2, 60.0: 1663.6, 75.0: 1662.9}}
+        with tempfile.TemporaryDirectory() as d:
+            d = Path(d)
+            (d / "figures").mkdir()
+            run.ft_figures(d / "figures", results, ana, ref, prior)
+            run.ft_report(d / "report.md", results, CFG40)
+            run.ft_summary(d / "summary.md", results, ana, ref, CFG40, prior)
+            (d / "results.json").write_text(json.dumps(hf.jsonable({"videos": results, "analysis": ana}), ensure_ascii=False))
+            (d / "metadata.json").write_text(json.dumps({"git": {"commit": "abcdef1234", "git_dirty": False}}))
+            cfg = copy.deepcopy(CFG40)
+            cfg["output"]["results_yaml"] = str(d / "r.yaml")
+            y = Path(run.ft_results_yaml(d, cfg)).read_text()
+            self.assertTrue((d / "figures/f_vs_distance_loglog.png").exists() and (d / "figures/cost_curves.png").exists())
+            summ = (d / "summary.md").read_text()
+            self.assertIn("판정 (free_template", summ)
+            self.assertIn("1660.6", summ)
+            for name, text in (("report", (d / "report.md").read_text()), ("yaml", y)):
+                for val in ("1660.6", "1653.7", "1644.9", "1680"):
+                    self.assertNotIn(val, text, name)
+            for line in summ.splitlines():
+                if line.startswith("|") and "---" not in line:
+                    self.assertEqual(line.count("|"), line.strip().count("|"), line)
+
+
 if __name__ == "__main__":
     unittest.main()

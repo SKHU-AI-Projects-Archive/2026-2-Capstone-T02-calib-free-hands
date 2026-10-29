@@ -5748,7 +5748,228 @@ def mo_results_yaml(run_dir: Path, cfg: dict):
     return p
 
 
-COMMANDS = {"protocol": protocol_main, "frame-filter": ff_main, "same-session": session_main, "overlay": overlay_main, "phase-segmentation": pseg_main, "guide-revision": grev_main, "f-response": fresp_main, "error-factors": ferr_main, "long-video-check": long_main, "generalization": gen_main, "main-camera-extension": ext_main, "wide-60cm": wide_main, "jointset-sets": jset_main, "verdict-calibration": cal_main, "printed-hand": pr_main, "hand-markers": mk_main, "markers-only": mo_main}
+# ====================================================================================================
+# ft  (experiment 40: the supervisor's free template on the marker tracks of 39; the question of 39 (f versus distance) and the comparison with 39's fixed template)
+#     python HandCalib/run.py free-template --config HandCalib/configs/40_free_template.yaml [--videos A.MOV,B.MOV] [--out DIR]
+#     python HandCalib/run.py free-template --config ... results-yaml --run runs/40_free_template/<UTC>
+# ====================================================================================================
+FT_NOTE = ("실험 39의 점 추적 결과(같은 코드와 설정)를 교수님이 보내주신 free_template(템플릿을 f마다 다시 추정하고 번들 조정으로 다듬는 방식)에 넣어 f를 구하고, 실험 39의 fixed_template 값과 비교한 실험이다. "
+           "호출은 pb, idx = free_problem(trk, (W, H), ecfg, huber_rel, ids) 와 estimate_run(pb, 'free_template', grid, ecfg, sigma2) 이고, 실험 39와 같은 사용 표시 8개, 판정 규칙을 쓴다. "
+           "쓰는 점, 설정, 판정 규칙은 실행 전에 고정했고 바꾸지 않았다. 기준 f와의 비교는 summary.md에만 있다.")
+
+
+def ft_prior(cfg: dict) -> dict:
+    """Per-video f and pooled f of experiment 39 (read only): {'video': {video: f}, 'pooled': {distance: f}}."""
+    q = hf.resolve((cfg.get("compare") or {}).get("39", "x"))
+    if not q.exists():
+        return {"video": {}, "pooled": {}}
+    r = json.loads(q.read_text())
+    sl = (r.get("analysis", {}).get("markers", {}).get("slope") or {}).get("pooled_f") or {}
+    return {"video": {v["video"]: v["marker"]["f"] for v in r["videos"] if "f" in v["marker"]}, "pooled": {float(d): f for d, f in sl.items() if f}}
+
+
+def ft_figures(out: Path, results: list, ana: dict, ref: dict, prior: dict):
+    plt = _plt()
+    ds = sorted(ref)
+    fig, ax = plt.subplots(figsize=(6.4, 4.8))
+    ax.plot(ds, [ref[d] for d in ds], "s-", color="#555", label="체커보드 (같은 날 거리 실험)")
+    if prior["pooled"]:
+        ax.plot(sorted(prior["pooled"]), [prior["pooled"][d] for d in sorted(prior["pooled"])], "o-", color="#2a6fbb", label="실험 39 (fixed_template)")
+    sl = ana.get("markers", {}).get("slope")
+    if sl:
+        pf = sl["pooled_f"]
+        ax.plot(sorted(pf), [pf[d] for d in sorted(pf)], "o--", color="#c47a00", label="free_template (격자 비용 곡선 합동)")
+    for r in results:
+        if "f" in r["marker"]:
+            ax.plot([r["distance_cm"]], [r["marker"]["f"]], "x", color="#c47a00", alpha=0.7)
+    ax.set_xscale("log")
+    ax.set_yscale("log")
+    ax.set_xticks(ds)
+    ax.set_xticklabels([f"{d:g}" for d in ds])
+    ax.set_xlabel("손-카메라 거리 (cm)")
+    ax.set_ylabel("f (px)")
+    ax.legend(fontsize=7)
+    ax.grid(alpha=0.3, which="both")
+    fig.tight_layout()
+    fig.savefig(out / "f_vs_distance_loglog.png", dpi=110)
+    plt.close(fig)
+    inc = [r for r in results if "f" in r["marker"]]
+    if inc:
+        fig, ax = plt.subplots(figsize=(6.4, 4.4))
+        for r, col in zip(inc, ("#2a6fbb", "#5aa0e0", "#c47a00", "#e0a540", "#3a9a4a", "#7fcf8a")):
+            c = r["marker"]["curve"]
+            cost = np.array(c["cost"])
+            ax.plot(c["grid"], cost / cost.min(), color=col, label=f"{r['video'][4:8]} ({r['distance_cm']:g} cm)")
+        ax.set_xscale("log")
+        ax.set_yscale("log")
+        ax.set_xlabel("f (px)")
+        ax.set_ylabel("비용 / 최솟값 (free_template)")
+        ax.legend(fontsize=7)
+        ax.grid(alpha=0.3, which="both")
+        fig.tight_layout()
+        fig.savefig(out / "cost_curves.png", dpi=110)
+        plt.close(fig)
+
+
+def ft_report(path: Path, results: list, cfg: dict):
+    ft = cfg["free_template"]
+    L = ["# 실험 40: free_template (점 전용 추적 위에서)", "", FT_NOTE, "", f"추정에 쓰는 점 {[int(x) for x in cfg['markers']['used_ids']]}, free_template(alt_iters {ft['alt_iters']}, refine {ft['refine']}, max_frames {ft['max_frames']}), f 격자 {cfg['pipeline']['estimate']['f_grid_n']}점.", "",
+         "## 1. 영상별 값", "", "| 영상 | 거리(cm) | 포함 | f 번들 조정 (px) | f 격자 최솟값 (px) | 격자 가장자리 | 번들 조정이 격자 한계에 붙음 | 날카로움 | 번들 조정 RMS (px) | 사용 프레임 | 걸린 시간(초) |", "|---|---|---|---|---|---|---|---|---|---|---|"]
+    for r in results:
+        x = r["marker"]
+        if "f" in x:
+            L.append(f"| {r['video']} | {r['distance_cm']:g} | 포함 | {x['f']:.1f} | {x['f_grid']:.1f} | {'예' if x['at_grid_edge'] else '아니오'} | {'예' if x['ba_at_bound'] else '아니오'} | {long_fmt(x['sharpness'], 4)} | {long_fmt(x['ba_rms_px'], 3)} | {x['n_frames_in_problem']} | {x['elapsed_s']:.0f} |")
+        else:
+            L.append(f"| {r['video']} | {r['distance_cm']:g} | 제외: {'; '.join(x.get('excluded') or []) or x.get('failed') or '제외'} | - | - | - | - | - | - | - | - |")
+    L += ["", "![비용 곡선](figures/cost_curves.png)", "", "## 한계", "",
+          "- 영상은 태블릿 화면에 띄운 평면 손 그림이고 거리마다 2개씩이다. 판정은 이 세션·이 카메라에 대한 것이다.",
+          "- free_template은 템플릿 점 좌표를 같은 프레임들로 다시 추정하므로 f와 템플릿이 서로 일부 바뀔 수 있다.",
+          "- 교수님 코드는 그대로 실행되지 않아 여섯 곳을 고쳐서 썼다(방법은 그대로): least_squares import, np.c -> np.c_, _backproject -> backproject, rodrigues -> _rodrigues, np.r -> np.r_, Problem.new -> Problem.__new__.", ""]
+    path.write_text("\n".join(L) + "\n")
+
+
+def ft_summary(path: Path, results: list, ana: dict, ref: dict, cfg: dict, prior: dict):
+    pct = lambda x: "-" if x is None else f"{100 * x:+.1f}%"      # noqa: E731
+    vcfg = cfg["verdict"]
+    v = ana["markers"]["verdict"]
+    s_ = f"- **판정 (free_template, 격자 비용 곡선 합동 f 기준): {v['verdict']}**"
+    if v.get("slope") is not None and v.get("interval_95"):
+        s_ += f" — 기울기 {v['slope']:+.3f}, 95% 구간 {v['interval_95'][0]:+.3f} ~ {v['interval_95'][1]:+.3f}"
+        if v.get("within_f_tol"):
+            s_ += "; 합동 f가 기준 f의 ±10% 안: " + ", ".join(f"{d:g} cm {'예' if w else '아니오'}" for d, w in v["within_f_tol"].items())
+    elif v.get("reason"):
+        s_ += f" — {v['reason']}"
+    sl = ana["markers"].get("slope")
+    L = ["# 실험 40 summary", "", f"**{FT_NOTE}**", "", "## 판정", "", s_,
+         f"- 판정 규칙(실행 전 고정, 실험 39와 같음): 반비례 없음 = 기울기 구간 전체가 {vcfg['slope_none_min']:g}보다 위이고 세 거리의 합동 f가 모두 기준 f의 ±{100 * float(vcfg['f_tol']):.0f}% 안; 반비례 있음 = 구간 전체가 {vcfg['slope_yes_max']:g}보다 아래; 그 외 판단 보류; 거리에 영상이 없으면, 또는 합동 f가 격자 가장자리면 판단 불가.",
+         "- 영상은 태블릿 화면의 평면 손 그림이라 이 판정을 \"원인은 손 자체\" 같은 해석에 쓰지 않는다.", "",
+         "## 1. 거리별 합동 f: free_template과 실험 39 (fixed_template)", "", "| 거리(cm) | 영상 | free_template 합동 f (px) | 95% 구간 (px) | 실험 39 합동 f (px) | 같은 거리 기준 f | free_template 기준 f 대비 | 실험 39 기준 f 대비 |", "|---|---|---|---|---|---|---|---|"]
+    for d, p in (ana["markers"].get("per_distance") or {}).items():
+        pf, p39 = p.get("pooled_f"), prior["pooled"].get(float(d))
+        L.append(f"| {float(d):g} | {p['n_videos']} / {p['n_total']} | {format(pf, '.1f') if pf else '-'}{' (격자 가장자리)' if p.get('at_grid_edge') else ''} | {'-' if 'interval_95' not in p else format(p['interval_95'][0], '.0f') + '–' + format(p['interval_95'][1], '.0f')} | "
+                 f"{format(p39, '.1f') if p39 else '-'} | {ref[float(d)]:.1f} | {pct(None if not pf else pf / ref[float(d)] - 1.0)} | {pct(None if not p39 else p39 / ref[float(d)] - 1.0)} |")
+    L += ["", "| 대상 | 기울기 | 95% 구간 |", "|---|---|---|", f"| free_template | {long_fmt(sl['slope'] if sl else None, 3)} | {'-' if not sl or sl['interval_95'] is None else format(sl['interval_95'][0], '+.3f') + ' ~ ' + format(sl['interval_95'][1], '+.3f')} |"]
+    p39 = prior["pooled"]
+    if len(p39) >= 2:
+        L.append(f"| 실험 39 (fixed_template) | {long_fmt(hf.ext_loglog_slope(sorted(p39), [p39[d] for d in sorted(p39)]), 3)} | - |")
+    L += [f"| 체커보드 | {long_fmt(hf.ext_loglog_slope(sorted(ref), [ref[d] for d in sorted(ref)]), 3)} | - |", "", "![거리 대 f](figures/f_vs_distance_loglog.png)", "",
+          "## 2. 영상별 f: free_template과 실험 39", "", "| 영상 | 거리(cm) | free_template f 번들 조정 (px) | f 격자 최솟값 (px) | 실험 39 f (px) | free ÷ 실험 39 (번들 조정) | 기준 f 대비 (번들 조정) | 기준 f 대비 (실험 39) | 1680 대비 (번들 조정) | 격자 가장자리 | 번들 조정이 격자 한계에 붙음 | 날카로움 |", "|---|---|---|---|---|---|---|---|---|---|---|---|"]
+    for r in results:
+        d, x = r["distance_cm"], r["marker"]
+        f39 = prior["video"].get(r["video"])
+        if "f" in x:
+            L.append(f"| {r['video']} | {d:g} | {x['f']:.1f} | {x['f_grid']:.1f} | {format(f39, '.1f') if f39 else '-'} | {'-' if not f39 else format(x['f'] / f39, '.3f')} | {pct(x['f'] / ref[d] - 1.0)} | {pct(None if not f39 else f39 / ref[d] - 1.0)} | {pct(x['f'] / 1680.0 - 1.0)} | "
+                     f"{'예' if x['at_grid_edge'] else '아니오'} | {'예' if x['ba_at_bound'] else '아니오'} | {long_fmt(x['sharpness'], 4)} |")
+        else:
+            L.append(f"| {r['video']} | {d:g} | 제외: {'; '.join(x.get('excluded') or []) or x.get('failed') or '제외'} | - | {format(f39, '.1f') if f39 else '-'} | - | - | - | - | - | - | - |")
+    L += ["", "![비용 곡선](figures/cost_curves.png)", "", "## 한계", "", "- 영상은 거리마다 2개씩이라 기울기 구간이 거칠고, 판정은 이 세션·이 카메라에 대한 것이다.",
+          "- 기준 f는 실험 35c 때 체커보드 거리 실험의 값(사용자 제공)이며 이번 영상 세션에서 새로 재지 않았다.",
+          "- free_template은 템플릿을 f마다 다시 추정하므로 f와 템플릿이 서로 일부 바뀔 수 있다. 실행 전 합성 예비 확인(점이 정확히 평면이고 참 f를 아는 영상 2개, 이 결과와 무관한 개발용 확인)에서 참 f 850 px는 번들 조정 1536 px(격자 상한)로, 참 f 1100 px는 격자 최솟값이 가장자리에 붙고 번들 조정 1123 px로 나왔다.",
+          "- 교수님 코드는 그대로 실행되지 않아 여섯 곳을 고쳐서 썼다(방법은 그대로).", ""]
+    path.write_text("\n".join(L) + "\n")
+
+
+def ft_main(argv=None):
+    ap = argparse.ArgumentParser()
+    ap.add_argument("--config", default=str(hf.PROJECT_ROOT / "configs/40_free_template.yaml"))
+    sub = ap.add_subparsers(dest="cmd")
+    ry = sub.add_parser("results-yaml")
+    ry.add_argument("--run", required=True)
+    ap.add_argument("--videos", default=None, help="comma list of file names narrowing the entries")
+    ap.add_argument("--out", default=None)
+    a = ap.parse_args(argv)
+    text = Path(a.config).read_text()
+    cfg = yaml.safe_load(text)
+    if a.cmd == "results-yaml":
+        print(ft_results_yaml(hf.resolve(a.run), cfg))
+        return None
+    entries = list(cfg["videos"])
+    if a.videos:
+        entries = [e for e in entries if e["file"] in a.videos.split(",")]
+    missing = [e["file"] for e in entries if not (Path(cfg["input_dir"]).expanduser() / e["file"]).exists()]
+    if missing:
+        raise SystemExit(f"영상이 없습니다: {missing}")
+    run_root = Path(a.out).expanduser() if a.out else hf.resolve(cfg["output"]["root"]) / utc_stamp()
+    run_root.mkdir(parents=True)
+    (run_root / "figures").mkdir()
+    log = Log(run_root / "log.txt")
+    log(f"40 free_template 공식 실행: 영상 {len(entries)}개, 추정에 쓰는 점 {cfg['markers']['used_ids']} → {run_root}")
+    t0 = time.time()
+    tmp_root = run_root / "_frames"
+    tmp_root.mkdir()
+    for k in ("OMP_NUM_THREADS", "OPENBLAS_NUM_THREADS", "MKL_NUM_THREADS"):
+        os.environ[k] = "1"
+    import multiprocessing as mp
+    from concurrent.futures import ProcessPoolExecutor
+    c = {k: cfg[k] for k in ("exclusion", "markers", "marker_exclusion", "precheck", "naming", "layout", "free_template")}
+    try:
+        with ProcessPoolExecutor(max_workers=int(cfg["workers"]), mp_context=mp.get_context("spawn")) as ex:
+            preps = list(ex.map(hf.fresp_prepare, [(e["file"], cfg["input_dir"], cfg["pipeline"], {}, str(tmp_root)) for e in entries]))
+            results = list(ex.map(hf.ft_video, [(e, p, cfg["pipeline"], c) for e, p in zip(entries, preps)]))
+    finally:
+        shutil.rmtree(tmp_root, ignore_errors=True)
+    ref = {float(d): float(f) for d, f in cfg["ref_f_by_distance"].items()}
+    prior = ft_prior(cfg)
+    for r in results:
+        x = r["marker"]
+        log(f"  {r['video']} ({r['distance_cm']:g} cm): " + (f"free_template f {x['f']:.1f} px (격자 최솟값 {x['f_grid']:.1f}{', 격자 가장자리' if x['at_grid_edge'] else ''}{', 번들 조정이 격자 한계에 붙음' if x['ba_at_bound'] else ''}), {x['elapsed_s']:.0f} s" if "f" in x else "제외")
+            + (f" [제외: {'; '.join(x['excluded'])}]" if x.get("excluded") else "") + (f" [{x['failed']}]" if x.get("failed") else ""))
+    grid = next((np.array(r["marker"]["curve"]["grid"]) for r in results if "f" in r["marker"]), None)
+    bn, bs = int(cfg["bootstrap"]["n"]), int(cfg["bootstrap"]["seed"])
+    inc = [(r["distance_cm"], r["marker"]["curve"]["cost"]) for r in results if "f" in r["marker"]]
+    ds = sorted({d for d, _ in inc})
+    ana = {}
+    if not ds or grid is None:
+        ana["markers"] = {"verdict": {"verdict": "판단 불가", "reason": "분석된 영상이 없음"}}
+    else:
+        cur = {d: [cc for dd, cc in inc if dd == d] for d in ds}
+        sl = hf.pr_slope(cur, grid, bn, bs)
+        per = {d: {**hf.ext_pooled(cur[d], grid, {"bootstrap_n": bn, "bootstrap_seed": bs}), "n_total": sum(1 for r in results if r["distance_cm"] == d)} for d in ds}
+        nv = {d: len(cur.get(d, [])) for d in ref}
+        ana["markers"] = {"slope": sl, "per_distance": per, "verdict": hf.pr_verdict(sl, ref, cfg["verdict"], nv)}
+        log(f"  free_template: {ana['markers']['verdict']['verdict']}" + (f" (기울기 {sl['slope']:+.3f}, 구간 {sl['interval_95'][0]:+.3f} ~ {sl['interval_95'][1]:+.3f})" if sl["slope"] is not None and sl["interval_95"] else ""))
+    ft_figures(run_root / "figures", results, ana, ref, prior)
+    ft_report(run_root / "report.md", results, cfg)
+    ft_summary(run_root / "summary.md", results, ana, ref, cfg, prior)
+    (run_root / "results.json").write_text(json.dumps(hf.jsonable({"videos": results, "analysis": ana}), ensure_ascii=False, indent=1))
+    meta = hf.provenance_build(text, a.config, {"code_40": cfg["code_40"], "videos": [e["file"] for e in entries], "elapsed_s": time.time() - t0})
+    (run_root / "metadata.json").write_text(json.dumps(hf.jsonable(meta), ensure_ascii=False, indent=1))
+    log(f"완료 {time.time() - t0:.0f} s → {run_root}")
+    log.close()
+    return run_root, results, ana
+
+
+def ft_results_yaml(run_dir: Path, cfg: dict):
+    """Values and verdicts only (no reference f, no comparison); written to output.results_yaml."""
+    r = json.loads((run_dir / "results.json").read_text())
+    m = json.loads((run_dir / "metadata.json").read_text())
+    try:
+        run_name = str(run_dir.resolve().relative_to(hf.PROJECT_ROOT))
+    except ValueError:
+        run_name = str(run_dir)
+    rd = lambda x, n=4: None if x is None or (isinstance(x, float) and not np.isfinite(x)) else round(x, n)      # noqa: E731
+    out = {"experiment": "40_free_template", "run": run_name, "code_commit": m["git"]["commit"][:7], "git_dirty_at_run": m["git"]["git_dirty"], "note": FT_NOTE, "markers": cfg["markers"], "free_template": cfg["free_template"],
+           "verdict_rules": cfg["verdict"], "videos": {}}
+    for v in r["videos"]:
+        x = v["marker"]
+        e = {"distance_cm": v["distance_cm"], "duration_s": rd(v["duration_s"], 2), "marker_tilt_valid_ratio": rd(v["marker_stats"].get("tilt_valid_ratio"))}
+        if "f" in x:
+            e["free_template"] = {"f_ba_px": round(x["f"], 1), "f_grid_px": round(x["f_grid"], 1), "at_grid_edge": x["at_grid_edge"], "ba_at_bound": x["ba_at_bound"], "sharpness": rd(x["sharpness"], 5), "ba_rms_px": rd(x["ba_rms_px"], 4),
+                                  "ba_success": x["ba_success"], "n_frames_in_problem": x["n_frames_in_problem"], "elapsed_s": round(x["elapsed_s"])}
+        else:
+            e["free_template"] = {"excluded": x.get("excluded") or x.get("failed") or "제외"}
+        out["videos"][v["video"]] = e
+    a = r["analysis"]["markers"]
+    if "slope" in a:
+        out["by_method"] = {"free_template": {"pooled_f_px": {f"{float(d):g}": rd(f, 1) for d, f in a["slope"]["pooled_f"].items()}, "slope": rd(a["slope"]["slope"]),
+                                              "slope_interval_95": None if a["slope"]["interval_95"] is None else [round(q, 4) for q in a["slope"]["interval_95"]]}}
+    out["verdict"] = {"free_template": {"verdict": a["verdict"]["verdict"], "reason": a["verdict"].get("reason")}}
+    p = hf.resolve(cfg["output"]["results_yaml"])
+    p.write_text(yaml.safe_dump(hf.jsonable(out), allow_unicode=True, sort_keys=False))
+    return p
+
+
+COMMANDS = {"protocol": protocol_main, "frame-filter": ff_main, "same-session": session_main, "overlay": overlay_main, "phase-segmentation": pseg_main, "guide-revision": grev_main, "f-response": fresp_main, "error-factors": ferr_main, "long-video-check": long_main, "generalization": gen_main, "main-camera-extension": ext_main, "wide-60cm": wide_main, "jointset-sets": jset_main, "verdict-calibration": cal_main, "printed-hand": pr_main, "hand-markers": mk_main, "markers-only": mo_main, "free-template": ft_main}
 
 
 def main(argv=None):
