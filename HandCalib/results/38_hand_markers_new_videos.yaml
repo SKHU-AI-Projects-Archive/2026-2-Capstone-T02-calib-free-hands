@@ -1,0 +1,292 @@
+experiment: 35_hand_markers
+run: runs/38_hand_markers_new_videos/20261029T050318Z
+code_commit: 23fe76f
+git_dirty_at_run: false
+note: 실제 손의 손바닥 면에 붙인 표시 점을 학습 모델 대신 영상 처리로 측정해 같은 fixed_template 계산에 넣으면, 손 모양 변화와
+  비평면성이 그대로인 실제 손에서도 거리 반비례가 사라지는지 본 실험이다. 쓰는 점, 표시 검출 설정, 판정 규칙은 실행 전에 고정했고 바꾸지 않았다.
+  기준 f와의 비교는 summary.md에만 있다.
+candidate:
+  detector: mediapipe_hands
+  wrist_mode: exclude
+  estimator: fixed_template
+  front_window: 17's (phase_mode nominal, tilt phase from 3.0 s)
+markers:
+  color: red
+  count: 21
+  hue_ranges:
+  - - 0
+    - 6
+  - - 174
+    - 179
+  s_min: 130
+  v_min: 90
+  area_min: 40
+  area_max: 3000
+  circularity_min: 0.6
+  region_margin: 0.3
+  used_ids:
+  - 5
+  - 6
+  - 9
+  - 10
+  - 13
+  - 14
+  - 17
+  - 18
+  area_min_frac: 0.0001208
+  naming_radius_frac: 0.08
+  max_detections: 21
+  min_markers_ratio: 0.75
+  tracker: reacquire
+  move_frac: 0.03
+  gap_cap: 5
+  ransac_frac: 0.03
+  min_inlier_ratio: 0.9
+verdict_rules:
+  slope_none_min: -0.3
+  slope_yes_max: -0.7
+  f_tol: 0.1
+videos:
+  IMG_7294.MOV:
+    distance_cm: 50.0
+    duration_s: 23.2
+    marker_all_found_ratio: 0.3555
+    marker_valid_ratio: 0.9855
+    marker_tilt_valid_ratio: 0.9834
+    marker_detection_rate_by_joint:
+      '0': 0.99
+      '1': 0.983
+      '2': 0.967
+      '17': 0.987
+      '13': 0.99
+      '5': 0.987
+      '9': 0.993
+      '4': 0.977
+      '18': 0.983
+      '19': 0.963
+      '14': 0.98
+      '6': 0.973
+      '10': 0.977
+      '20': 0.957
+      '15': 0.977
+      '7': 0.967
+      '11': 0.96
+      '16': 0.977
+    markers:
+      f_px: 1664.7
+      sharpness: 1.15482
+      boot_log_std: 0.03773
+      n_used_frames: 310
+      theta_median_deg: 28.5
+      theta_max_deg: 41.1
+      reproj_rms_front_pct: 0.0252
+      reproj_rms_tilt_pct: 0.0781
+    mediapipe8:
+      f_px: 2073.0
+      sharpness: 1.00278
+      boot_log_std: 0.13407
+      n_used_frames: 316
+      theta_median_deg: 25.1
+      theta_max_deg: 43.2
+      reproj_rms_front_pct: 0.137
+      reproj_rms_tilt_pct: 0.4224
+    mediapipe16:
+      f_px: 2196.1
+      sharpness: 1.00344
+      boot_log_std: 0.04204
+      n_used_frames: 301
+      theta_median_deg: 27.4
+      theta_max_deg: 56.9
+      reproj_rms_front_pct: 0.2328
+      reproj_rms_tilt_pct: 0.6953
+    markers_nearfree:
+      f_px: 1664.7
+      sharpness: 1.15482
+      boot_log_std: 0.03773
+      n_used_frames: 310
+      theta_median_deg: 28.5
+      theta_max_deg: 41.1
+      reproj_rms_front_pct: 0.0252
+      reproj_rms_tilt_pct: 0.0781
+    perspective_k: 0.6149
+    planar_gap_median_pct: 0.8639
+  IMG_7293.MOV:
+    distance_cm: 50.0
+    duration_s: 26.27
+    marker_all_found_ratio: 0.3523
+    marker_valid_ratio: 0.9922
+    marker_tilt_valid_ratio: 0.9912
+    marker_detection_rate_by_joint:
+      '0': 0.994
+      '1': 0.997
+      '2': 0.977
+      '17': 0.994
+      '13': 1.0
+      '5': 0.994
+      '9': 1.0
+      '4': 0.959
+      '18': 0.977
+      '19': 0.974
+      '14': 0.982
+      '6': 0.971
+      '10': 0.974
+      '20': 0.968
+      '15': 0.982
+      '7': 0.971
+      '11': 0.974
+      '16': 0.965
+      '8': 0.974
+      '12': 0.944
+    markers:
+      f_px: 1690.7
+      sharpness: 1.56763
+      boot_log_std: 0.0184
+      n_used_frames: 352
+      theta_median_deg: 29.4
+      theta_max_deg: 35.5
+      reproj_rms_front_pct: 0.0225
+      reproj_rms_tilt_pct: 0.0408
+    mediapipe8:
+      f_px: 2348.3
+      sharpness: 1.0057
+      boot_log_std: 0.07501
+      n_used_frames: 356
+      theta_median_deg: 24.1
+      theta_max_deg: 38.3
+      reproj_rms_front_pct: 0.0941
+      reproj_rms_tilt_pct: 0.3026
+    mediapipe16:
+      f_px: 2825.4
+      sharpness: 1.00474
+      boot_log_std: 0.06942
+      n_used_frames: 341
+      theta_median_deg: 26.5
+      theta_max_deg: 44.6
+      reproj_rms_front_pct: 0.1665
+      reproj_rms_tilt_pct: 0.4706
+    markers_nearfree:
+      f_px: 1690.7
+      sharpness: 1.56763
+      boot_log_std: 0.0184
+      n_used_frames: 352
+      theta_median_deg: 29.4
+      theta_max_deg: 35.5
+      reproj_rms_front_pct: 0.0225
+      reproj_rms_tilt_pct: 0.0408
+    perspective_k: 0.7604
+    planar_gap_median_pct: 0.6991
+  IMG_7292.MOV:
+    distance_cm: 60.0
+    duration_s: 23.33
+    marker_all_found_ratio: 0.0
+    marker_valid_ratio: null
+    marker_tilt_valid_ratio: null
+    marker_detection_rate_by_joint: {}
+    markers:
+      excluded: 정면 창에 기준 프레임이 없음 (사용 표시가 모두 보이는 프레임)
+    mediapipe8:
+      excluded:
+      - 가장자리 접촉 프레임 100.0% > 5%
+      - 손 검출 실패 프레임 100.0% > 20%
+    mediapipe16:
+      excluded:
+      - 가장자리 접촉 프레임 100.0% > 5%
+      - 손 검출 실패 프레임 100.0% > 20%
+    markers_nearfree:
+      excluded: 정면 창에 기준 프레임이 없음 (사용 표시가 모두 보이는 프레임)
+  IMG_7291.MOV:
+    distance_cm: 60.0
+    duration_s: 23.47
+    marker_all_found_ratio: 0.0
+    marker_valid_ratio: null
+    marker_tilt_valid_ratio: null
+    marker_detection_rate_by_joint: {}
+    markers:
+      excluded: 정면 창에 기준 프레임이 없음 (사용 표시가 모두 보이는 프레임)
+    mediapipe8:
+      excluded:
+      - 가장자리 접촉 프레임 100.0% > 5%
+      - 손 검출 실패 프레임 100.0% > 20%
+    mediapipe16:
+      excluded:
+      - 가장자리 접촉 프레임 100.0% > 5%
+      - 손 검출 실패 프레임 100.0% > 20%
+    markers_nearfree:
+      excluded: 정면 창에 기준 프레임이 없음 (사용 표시가 모두 보이는 프레임)
+  IMG_7290.MOV:
+    distance_cm: 75.0
+    duration_s: 24.13
+    marker_all_found_ratio: 0.0
+    marker_valid_ratio: null
+    marker_tilt_valid_ratio: null
+    marker_detection_rate_by_joint: {}
+    markers:
+      excluded: 정면 창에 기준 프레임이 없음 (사용 표시가 모두 보이는 프레임)
+    mediapipe8:
+      excluded:
+      - 가장자리 접촉 프레임 100.0% > 5%
+      - 손 검출 실패 프레임 100.0% > 20%
+    mediapipe16:
+      excluded:
+      - 가장자리 접촉 프레임 100.0% > 5%
+      - 손 검출 실패 프레임 100.0% > 20%
+    markers_nearfree:
+      excluded: 정면 창에 기준 프레임이 없음 (사용 표시가 모두 보이는 프레임)
+  IMG_7289.MOV:
+    distance_cm: 75.0
+    duration_s: 23.6
+    marker_all_found_ratio: 0.0
+    marker_valid_ratio: null
+    marker_tilt_valid_ratio: null
+    marker_detection_rate_by_joint: {}
+    markers:
+      excluded: 정면 창에 기준 프레임이 없음 (사용 표시가 모두 보이는 프레임)
+    mediapipe8:
+      excluded:
+      - 가장자리 접촉 프레임 100.0% > 5%
+      - 손 검출 실패 프레임 100.0% > 20%
+    mediapipe16:
+      excluded:
+      - 가장자리 접촉 프레임 100.0% > 5%
+      - 손 검출 실패 프레임 100.0% > 20%
+    markers_nearfree:
+      excluded: 정면 창에 기준 프레임이 없음 (사용 표시가 모두 보이는 프레임)
+by_method:
+  markers:
+    pooled_f_px:
+      '50': 1677.6
+    slope: null
+    slope_interval_95: null
+  mediapipe8:
+    pooled_f_px:
+      '50': 2222.4
+    slope: null
+    slope_interval_95: null
+  mediapipe16:
+    pooled_f_px:
+      '50': 2509.2
+    slope: null
+    slope_interval_95: null
+  markers_nearfree:
+    pooled_f_px:
+      '50': 1677.6
+    slope: null
+    slope_interval_95: null
+verdict:
+  markers:
+    verdict: 판단 불가
+    reason: 영상이 없는 거리가 있음
+  mediapipe8:
+    verdict: 판단 불가
+    reason: 영상이 없는 거리가 있음
+  mediapipe16:
+    verdict: 판단 불가
+    reason: 영상이 없는 거리가 있음
+  markers_nearfree:
+    verdict: 판단 불가
+    reason: 영상이 없는 거리가 있음
+main_comparison: mediapipe8
+interpretation: 해석 보류
+perspective_k:
+  all: 0.6923
+  '50': 0.6923
