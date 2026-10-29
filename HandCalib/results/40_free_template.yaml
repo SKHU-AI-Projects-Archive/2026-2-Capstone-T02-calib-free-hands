@@ -1,0 +1,140 @@
+experiment: 40_free_template
+run: runs/40_free_template/20261029T063028Z
+code_commit: c9e8f91
+git_dirty_at_run: false
+note: 실험 39의 점 추적 결과(같은 코드와 설정)를 교수님이 보내주신 free_template(템플릿을 f마다 다시 추정하고 번들 조정으로
+  다듬는 방식)에 넣어 f를 구하고, 실험 39의 fixed_template 값과 비교한 실험이다. 호출은 pb, idx = free_problem(trk,
+  (W, H), ecfg, huber_rel, ids) 와 estimate_run(pb, 'free_template', grid, ecfg, sigma2)
+  이고, 실험 39와 같은 사용 표시 8개, 판정 규칙을 쓴다. 쓰는 점, 설정, 판정 규칙은 실행 전에 고정했고 바꾸지 않았다. 기준 f와의 비교는
+  summary.md에만 있다.
+markers:
+  color: red
+  count: 21
+  used_ids:
+  - 5
+  - 6
+  - 9
+  - 10
+  - 13
+  - 14
+  - 17
+  - 18
+  contrast_min: 30
+  median_ksize: 31
+  area_min: 20
+  area_max: 3000
+  circularity_min: 0.3
+  box_margin: 0.1
+  min_markers_ratio: 0.75
+  tracker: reacquire
+  move_frac: 0.03
+  gap_cap: 5
+  ransac_frac: 0.03
+  min_inlier_ratio: 0.9
+free_template:
+  alt_iters: 3
+  refine: true
+  max_frames: 120
+verdict_rules:
+  slope_none_min: -0.3
+  slope_yes_max: -0.7
+  f_tol: 0.1
+videos:
+  IMG_7294.MOV:
+    distance_cm: 50.0
+    duration_s: 23.2
+    marker_tilt_valid_ratio: 0.9836
+    free_template:
+      f_ba_px: 1678.3
+      f_grid_px: 1667.6
+      at_grid_edge: false
+      ba_at_bound: false
+      sharpness: 1.87368
+      ba_rms_px: 0.0649
+      ba_success: true
+      n_frames_in_problem: 344
+      elapsed_s: 7
+  IMG_7293.MOV:
+    distance_cm: 50.0
+    duration_s: 26.27
+    marker_tilt_valid_ratio: 0.9886
+    free_template:
+      f_ba_px: 1672.0
+      f_grid_px: 1755.6
+      at_grid_edge: false
+      ba_at_bound: false
+      sharpness: 1.42113
+      ba_rms_px: 0.072
+      ba_success: true
+      n_frames_in_problem: 391
+      elapsed_s: 9
+  IMG_7292.MOV:
+    distance_cm: 60.0
+    duration_s: 23.33
+    marker_tilt_valid_ratio: 0.9935
+    free_template:
+      f_ba_px: 1656.7
+      f_grid_px: 1633.4
+      at_grid_edge: false
+      ba_at_bound: false
+      sharpness: 1.48585
+      ba_rms_px: 0.0853
+      ba_success: true
+      n_frames_in_problem: 349
+      elapsed_s: 8
+  IMG_7291.MOV:
+    distance_cm: 60.0
+    duration_s: 23.47
+    marker_tilt_valid_ratio: 1.0
+    free_template:
+      f_ba_px: 1651.1
+      f_grid_px: 1642.0
+      at_grid_edge: false
+      ba_at_bound: false
+      sharpness: 1.45052
+      ba_rms_px: 0.066
+      ba_success: true
+      n_frames_in_problem: 353
+      elapsed_s: 10
+  IMG_7290.MOV:
+    distance_cm: 75.0
+    duration_s: 24.13
+    marker_tilt_valid_ratio: 0.9874
+    free_template:
+      f_ba_px: 1638.5
+      f_grid_px: 1682.3
+      at_grid_edge: false
+      ba_at_bound: false
+      sharpness: 1.23725
+      ba_rms_px: 0.0608
+      ba_success: true
+      n_frames_in_problem: 359
+      elapsed_s: 12
+  IMG_7289.MOV:
+    distance_cm: 75.0
+    duration_s: 23.6
+    marker_tilt_valid_ratio: 0.9903
+    free_template:
+      f_ba_px: 1620.6
+      f_grid_px: 1691.4
+      at_grid_edge: false
+      ba_at_bound: false
+      sharpness: 1.30878
+      ba_rms_px: 0.0623
+      ba_success: true
+      n_frames_in_problem: 352
+      elapsed_s: 10
+by_method:
+  free_template:
+    pooled_f_px:
+      '50': 1725.4
+      '60': 1638.2
+      '75': 1686.7
+    slope: -0.0491
+    slope_interval_95:
+    - -0.0969
+    - 0.0389
+verdict:
+  free_template:
+    verdict: 반비례 없음
+    reason: null
