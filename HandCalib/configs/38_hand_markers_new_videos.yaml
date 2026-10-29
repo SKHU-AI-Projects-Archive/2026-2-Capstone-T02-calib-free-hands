@@ -10,6 +10,9 @@ experiment:
 # transfer one to one; the numbers and the verdict rules are used as written. The user has not stated the reference f of this session: ref_f_by_distance below is the 35c value of the same camera and lens (main, 1x), to be
 # replaced if the user gives a new calibration; the errors against it are recorded and the verdict uses it as in 35c.
 # Precheck first (the 35c rule: every distance needs a passing video, else the official run is not started).
+# Precheck 20261029T044105Z_precheck: IMG_7294 / 7293 (50 cm) passed; IMG_7292 / 7291 (60 cm) and IMG_7290 / 7289 (75 cm) had no hand box kept by the tracker (no reference frame), so by the rule above the official run would
+# not start. On 2026-10-29 the user decided to run the official run on the two 50 cm videos only (--videos IMG_7294.MOV,IMG_7293.MOV). No rule, threshold or value of this file is changed by that decision (comment only); with no
+# included video at 60 and 75 cm, the slope and its verdict are 판단 불가 by the rules of 35c, and only the 50 cm pooled f and its error against the reference f are informative.
 
 # 35c: third configuration of experiment 35 (35_hand_markers.yaml and 35b_hand_markers_subset.yaml stay as they are). The 35b precheck stopped: no 75 cm video passed (15.8 % / 16.2 % of the tilt frames kept); the
 # frames were dropped by the homography label check over all matched markers (RANSAC threshold 3 % of the hand box) and the tracker never re-acquired. No f had been computed.
