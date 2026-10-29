@@ -5753,6 +5753,7 @@ def mo_results_yaml(run_dir: Path, cfg: dict):
 #     python HandCalib/run.py free-template --config HandCalib/configs/40_free_template.yaml [--videos A.MOV,B.MOV] [--out DIR]
 #     python HandCalib/run.py free-template --config ... results-yaml --run runs/40_free_template/<UTC>
 # ====================================================================================================
+FT_KEYS = ("exclusion", "markers", "marker_exclusion", "naming", "layout", "free_template")      # the config sections ft_video needs
 FT_NOTE = ("실험 39의 점 추적 결과(같은 코드와 설정)를 교수님이 보내주신 free_template(템플릿을 f마다 다시 추정하고 번들 조정으로 다듬는 방식)에 넣어 f를 구하고, 실험 39의 fixed_template 값과 비교한 실험이다. "
            "호출은 pb, idx = free_problem(trk, (W, H), ecfg, huber_rel, ids) 와 estimate_run(pb, 'free_template', grid, ecfg, sigma2) 이고, 실험 39와 같은 사용 표시 8개, 판정 규칙을 쓴다. "
            "쓰는 점, 설정, 판정 규칙은 실행 전에 고정했고 바꾸지 않았다. 기준 f와의 비교는 summary.md에만 있다.")
@@ -5901,7 +5902,7 @@ def ft_main(argv=None):
         os.environ[k] = "1"
     import multiprocessing as mp
     from concurrent.futures import ProcessPoolExecutor
-    c = {k: cfg[k] for k in ("exclusion", "markers", "marker_exclusion", "precheck", "naming", "layout", "free_template")}
+    c = {k: cfg[k] for k in FT_KEYS}
     try:
         with ProcessPoolExecutor(max_workers=int(cfg["workers"]), mp_context=mp.get_context("spawn")) as ex:
             preps = list(ex.map(hf.fresp_prepare, [(e["file"], cfg["input_dir"], cfg["pipeline"], {}, str(tmp_root)) for e in entries]))

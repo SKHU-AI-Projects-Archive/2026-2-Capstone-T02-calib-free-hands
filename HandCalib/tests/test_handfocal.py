@@ -3584,7 +3584,7 @@ class FtVideo(unittest.TestCase):
             prep = mo_synth_video(d, seconds=6.0, fps=6.0)
             pcfg = copy.deepcopy(CFG40["pipeline"])
             pcfg["estimate"]["f_grid_n"] = 6
-            c = {k: CFG40[k] for k in ("exclusion", "markers", "marker_exclusion", "precheck", "naming", "layout", "free_template")} if "precheck" in CFG40 else {k: CFG40[k] for k in ("exclusion", "markers", "marker_exclusion", "naming", "layout", "free_template")}
+            c = {k: CFG40[k] for k in run.FT_KEYS}
             c["free_template"] = {"alt_iters": 1, "refine": True, "max_frames": 8}
             res = hf.ft_video(({"file": "synth.MOV", "distance_cm": 50}, prep, pcfg, c))
             x = res["marker"]
@@ -3597,6 +3597,13 @@ class FtVideo(unittest.TestCase):
             res2 = hf.ft_video(({"file": "synth.MOV", "distance_cm": 50}, prep, pcfg, c2))
             self.assertIn("failed", res2["marker"])                                                          # no reference frame names marker 99: a result, not a crash
             self.assertNotIn("f", res2["marker"])
+
+
+class FtConfig(unittest.TestCase):
+    def test_the_config_has_every_section_the_run_command_reads(self):
+        for k in run.FT_KEYS + ("videos", "input_dir", "ref_f_by_distance", "pipeline", "verdict", "bootstrap", "rating_v2", "workers", "output", "code_40", "compare"):
+            self.assertIn(k, CFG40, k)
+        self.assertEqual(CFG40["free_template"]["alt_iters"], 3)
 
 
 class FtReports(unittest.TestCase):
