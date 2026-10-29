@@ -3791,5 +3791,101 @@ class S3Reports(unittest.TestCase):
                     self.assertEqual(line.count("|"), line.strip().count("|"), line)
 
 
+
+# ---- experiment 42: free_shape3d on the real-hand marker videos of 35c -------------------------------------
+CFG42 = yaml.safe_load((ROOT / "configs/42_free_shape3d_hand.yaml").read_text())
+
+
+def h3_fake_proc(n=24, tilt_ratio=0.95, f=1700.0):
+    """What mk_process returns, built from a planar 8-marker problem (joints 5, 6, 9, 10, 13, 14, 17, 18) at 1920 x 1080."""
+    pb, _, _ = ft_planar_problem(f=f, n_frames=n)
+    ids = [5, 6, 9, 10, 13, 14, 17, 18]
+    kp = np.full((n, 21, 2), np.nan)
+    for i, (o, v) in enumerate(pb.frames):
+        kp[i, ids] = o
+    box = np.tile([760.0, 340.0, 1160.0, 740.0], (n, 1))
+    return {"size": [1920, 1080], "n_frames": n, "times": np.linspace(0, 20, n), "tilt_valid_ratio": tilt_ratio, "valid_ratio": 1.0, "present": np.ones(n, bool), "tr": {"box": box}, "kp": kp,
+            "mask": np.isfinite(kp[..., 0]), "box_long": np.full(n, 400.0), "names": ids}
+
+
+class H3Video(unittest.TestCase):
+    def run_h3(self, proc, c):
+        from unittest import mock
+        pcfg = copy.deepcopy(CFG42["pipeline"])
+        pcfg["estimate"]["f_grid_n"] = 6
+        with mock.patch.object(hf, "mk_process", return_value=proc):
+            return hf.h3_video(({"file": "x.MOV", "distance_cm": 50}, None, None, pcfg, c))
+
+    def test_tracks_go_through_the_supervisors_call_and_the_35c_exclusion_rules_apply(self):
+        c = {k: CFG42[k] for k in run.H3_KEYS}
+        c["free_shape3d"] = {"z_rel": 0.2, "alt_iters": 1, "max_frames": 12}
+        x = self.run_h3(h3_fake_proc(), c)["marker"]
+        self.assertIn("f", x, x)
+        self.assertEqual(sorted(x["joint_ids"]), [5, 6, 9, 10, 13, 14, 17, 18])
+        for k in ("f_planar", "relief_rel", "at_bound", "curve", "anchors"):
+            self.assertIn(k, x)
+        low = self.run_h3(h3_fake_proc(tilt_ratio=0.5), c)["marker"]                                         # 35c's tilt-phase rule: excluded, not computed
+        self.assertTrue(low["excluded"] and "f" not in low)
+        edge = h3_fake_proc()
+        edge["tr"]["box"] = np.tile([0.0, 340.0, 400.0, 740.0], (edge["n_frames"], 1))                       # the hand box touches the frame edge
+        self.assertTrue(self.run_h3(edge, c)["marker"]["excluded"])
+        bad = h3_fake_proc()
+        bad["mask"][:] = False                                                                               # nothing visible: a result (failed), not a crash
+        self.assertIn("failed", self.run_h3(bad, c)["marker"])
+        self.assertIn("failed", self.run_h3({"size": [1920, 1080], "n_frames": 3, "times": np.arange(3.0), "failed": "정면 창에 기준 프레임이 없음"}, c)["marker"])
+
+
+class H3Config(unittest.TestCase):
+    def test_the_config_has_every_section_the_run_command_reads_and_35c_settings_are_unchanged(self):
+        for k in run.H3_KEYS + ("videos", "input_dir", "ref_f_by_distance", "pipeline", "verdict", "bootstrap", "workers", "n_workers", "output", "code_42", "compare"):
+            self.assertIn(k, CFG42, k)
+        for k in ("markers", "marker_exclusion", "exclusion", "candidate", "detector_settings", "verdict", "bootstrap", "ref_f_by_distance", "videos"):
+            self.assertEqual(CFG42[k], CFG35[k], k)
+        self.assertEqual(CFG42["pipeline"]["estimate"], CFG35["pipeline"]["estimate"])
+        self.assertEqual(CFG42["free_shape3d"], CFG41["free_shape3d"])
+
+
+class H3Reports(unittest.TestCase):
+    def test_summary_report_and_yaml_keep_the_reference_in_summary_only(self):
+        ref = {float(d): float(f) for d, f in CFG42["ref_f_by_distance"].items()}
+        grid = np.geomspace(0.35 * 1920, 1.6 * 1920, 60)
+        cost = ((np.log(grid) - np.log(1700.0)) ** 2 + 0.01).tolist()
+        results = []
+        for f, d in (("IMG_7267.MOV", 50), ("IMG_7266.MOV", 50), ("IMG_7265.MOV", 60), ("IMG_7264.MOV", 60), ("IMG_7263.MOV", 75), ("IMG_7262.MOV", 75)):
+            results.append({"video": f, "distance_cm": float(d), "size": [1920, 1080], "n_frames": 300, "duration_s": 20.0, "marker_stats": {"tilt_valid_ratio": 0.98},
+                            "marker": {"f": 1705.0, "f_planar": 1710.0, "f_grid": 1700.0, "at_grid_edge": False, "at_bound": False, "relief_rel": 0.01, "relief_per_joint": [0.01] * 8, "cost": 0.01, "cost_planar": 0.011,
+                                       "curve": {"grid": grid.tolist(), "cost": cost}, "sharpness": 1.4, "ba3_success": True, "ba3_nfev": 20, "ba3_rms_px": 0.2, "anchors": [0, 1, 2], "n_frames_in_problem": 120,
+                                       "n_points": 900, "joint_ids": [5, 6, 9, 10, 13, 14, 17, 18], "elapsed_s": 60.0}})
+        fb = {d: [r["marker"]["f"] for r in results if r["distance_cm"] == d] for d in (50.0, 60.0, 75.0)}
+        sl = hf.s3_slope(fb, {d: [False, False] for d in fb}, 50, 42)
+        cur = {d: [r["marker"]["curve"]["cost"] for r in results if r["distance_cm"] == d] for d in fb}
+        psl = hf.pr_slope(cur, grid, 50, 42)
+        nv = {50.0: 2, 60.0: 2, 75.0: 2}
+        ana = {"shape3d": {"slope": sl, "verdict": hf.pr_verdict(sl, ref, CFG42["verdict"], nv)}, "planar": {"slope": psl, "verdict": hf.pr_verdict(psl, ref, CFG42["verdict"], nv)}}
+        prior = {"markers": {"video": {r["video"]: 3072.0 for r in results}, "pooled": {50.0: 3072.0, 60.0: 2647.8, 75.0: 2658.1}}, "mediapipe8": {"video": {}, "pooled": {}}}
+        with tempfile.TemporaryDirectory() as d:
+            d = Path(d)
+            (d / "figures").mkdir()
+            run.h3_figures(d / "figures", results, ana, ref, prior)
+            run.h3_report(d / "report.md", results, CFG42)
+            run.h3_summary(d / "summary.md", results, ana, ref, CFG42, prior)
+            (d / "results.json").write_text(json.dumps(hf.jsonable({"videos": results, "analysis": ana}), ensure_ascii=False))
+            (d / "metadata.json").write_text(json.dumps({"git": {"commit": "abcdef1234", "git_dirty": False}}))
+            cfg = copy.deepcopy(CFG42)
+            cfg["output"]["results_yaml"] = str(d / "r.yaml")
+            y = Path(run.h3_results_yaml(d, cfg)).read_text()
+            self.assertTrue((d / "figures/f_vs_distance_loglog.png").exists() and (d / "figures/relief_per_joint.png").exists())
+            summ = (d / "summary.md").read_text()
+            self.assertIn("판정 (free_shape3d", summ)
+            self.assertIn("1660.6", summ)
+            for name, text in (("report", (d / "report.md").read_text()), ("yaml", y)):
+                for val in ("1660.6", "1653.7", "1644.9", "1680"):
+                    self.assertNotIn(val, text, name)
+            for line in summ.splitlines():
+                if line.startswith("|") and "---" not in line:
+                    self.assertEqual(line.count("|"), line.strip().count("|"), line)
+            self.assertEqual(run.h3_prior({"compare": {"35c": str(d / "none.json")}}), {"markers": {"video": {}, "pooled": {}}, "mediapipe8": {"video": {}, "pooled": {}}})
+
+
 if __name__ == "__main__":
     unittest.main()
