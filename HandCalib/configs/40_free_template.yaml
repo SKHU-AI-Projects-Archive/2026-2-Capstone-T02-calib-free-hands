@@ -257,7 +257,7 @@ free_template:
   max_frames: 120
 code_40:
   branch: exp/40-free-template
-  commit: 5e3b1c3
+  commit: fbc4bcb
   modules:
   - HandCalib/handfocal.py
   - HandCalib/run.py
