@@ -1,8 +1,30 @@
-from .result import CanonicalResult, save_result
-from .worker import JobState, JobUpdate, ProcessingJob
-from .qt_worker import JobThread
-from .provenance import runtime_metadata, sha256_file
-from .service import process_and_save
-from .metrics import FrameHandMetrics, MetricDefinition, MetricStatus, compare_results, metric_registry
+from __future__ import annotations
 
-__all__ = ["CanonicalResult", "save_result", "JobState", "JobUpdate", "ProcessingJob", "JobThread", "sha256_file", "runtime_metadata", "process_and_save", "FrameHandMetrics", "MetricDefinition", "MetricStatus", "compare_results", "metric_registry"]
+from importlib import import_module
+
+_EXPORTS = {
+    "CanonicalResult": ".result",
+    "save_result": ".result",
+    "JobState": ".worker",
+    "JobUpdate": ".worker",
+    "ProcessingJob": ".worker",
+    "JobThread": ".qt_worker",
+    "runtime_metadata": ".provenance",
+    "sha256_file": ".provenance",
+    "process_and_save": ".service",
+    "FrameHandMetrics": ".metrics",
+    "MetricDefinition": ".metrics",
+    "MetricStatus": ".metrics",
+    "compare_results": ".metrics",
+    "metric_registry": ".metrics",
+}
+__all__ = list(_EXPORTS)
+
+
+def __getattr__(name: str) -> object:
+    module_name = _EXPORTS.get(name)
+    if module_name is None:
+        raise AttributeError(f"module {__name__!r} has no attribute {name!r}")
+    value = getattr(import_module(module_name, __name__), name)
+    globals()[name] = value
+    return value

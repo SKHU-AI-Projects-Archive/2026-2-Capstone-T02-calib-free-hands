@@ -18,7 +18,7 @@ from calibfreehands.media.probe import probe_media
 from .topology import HAND_CONNECTIONS, RAW_TO_VIEW
 from calibfreehands.pipeline.result_bundle import ResultBundle
 from calibfreehands.pipeline.metrics import compare_results, metric_registry
-from calibfreehands.export.tabular import JOINT_NAMES
+from calibfreehands.joint_schema import JOINT_NAMES
 from .viewer import _GLResultView, _OverlayCanvas, load_bundle_result, load_npz_result
 
 METRIC_FIELDS = ("source_identity", "reference_result_id", "candidate_result_id", "candidate_name", "metric_id",

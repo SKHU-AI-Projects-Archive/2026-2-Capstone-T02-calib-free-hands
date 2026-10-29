@@ -4,10 +4,12 @@ import csv
 import json
 import math
 from pathlib import Path
+from typing import TYPE_CHECKING
 
-from calibfreehands.pipeline.result import CanonicalResult
+from calibfreehands.joint_schema import JOINT_NAMES
 
-JOINT_NAMES = tuple(["wrist"] + [f"joint_{i}" for i in range(1, 21)])
+if TYPE_CHECKING:
+    from calibfreehands.pipeline.result import CanonicalResult
 
 
 def _rows(result: CanonicalResult):

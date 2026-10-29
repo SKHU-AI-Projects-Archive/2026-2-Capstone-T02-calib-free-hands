@@ -123,4 +123,8 @@ result reopening pass.
 - [x] C-2A translation availability, topology-gated MPVPE, PA-MPJPE/PA-MPVPE similarity alignment, and raw-array immutability tests
 - [x] C-2A protocol registry keeps unverified WiLoR benchmark and temporal metrics pending
 - [ ] C-2A saved `.cfh` smoke test (no `.cfh` result bundle is present in the repository)
+- [x] Startup hotfix fresh-process `import calibfreehands.app.main` regression test
+- [x] Original startup ImportError reproduced before fix; root cause: `JOINT_NAMES` cross-import during eager package initialization
+- [x] Export path, pipeline result, and visualization topology imports stay lightweight in a fresh process
+- [x] Offscreen MainWindow construction smoke test (`MAINWINDOW_OK`)
 - [x] Final full diff review
