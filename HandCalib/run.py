@@ -5467,7 +5467,288 @@ def mk_results_yaml(run_dir: Path, cfg: dict):
 # command line
 # ====================================================================================================
 
-COMMANDS = {"protocol": protocol_main, "frame-filter": ff_main, "same-session": session_main, "overlay": overlay_main, "phase-segmentation": pseg_main, "guide-revision": grev_main, "f-response": fresp_main, "error-factors": ferr_main, "long-video-check": long_main, "generalization": gen_main, "main-camera-extension": ext_main, "wide-60cm": wide_main, "jointset-sets": jset_main, "verdict-calibration": cal_main, "printed-hand": pr_main, "hand-markers": mk_main}
+# ====================================================================================================
+# mo  (experiment 39: markers only, no hand detector; the f-versus-distance question of 35 asked of the markers alone)
+#     python HandCalib/run.py markers-only --config HandCalib/configs/39_markers_only.yaml [--videos A.MOV,B.MOV] [--out DIR] precheck
+#     python HandCalib/run.py markers-only --config ... [--videos ...] [--out DIR]
+#     python HandCalib/run.py markers-only --config ... results-yaml --run runs/39_markers_only/<UTC>
+# ====================================================================================================
+MO_NOTE = ("손 검출기(MediaPipe) 없이 손바닥에 붙인 표시 점만으로 f를 추정해, 거리를 바꿔 찍은 영상에서 f가 거리에 반비례하는지 본 실험이다. 실험 35의 계산(fixed_template, 정면 창, 기울기 구간, 부트스트랩)과 판정 규칙을 그대로 쓰고, "
+           "표시 검출, 이름 붙이기, 길이 기준만 손 박스 대신 표시 점에서 얻는다. 쓰는 점, 검출 설정, 판정 규칙은 실행 전에 고정했고 바꾸지 않았다. 기준 f와의 비교는 summary.md에만 있다.")
+
+
+def mo_context_pooled(cfg: dict) -> dict:
+    """Pooled f of earlier marker runs for the comparison table of summary.md (read only): {label: {distance: f}}."""
+    out = {}
+    for label, p in (cfg.get("compare") or {}).items():
+        q = hf.resolve(p)
+        if q.exists():
+            sl = (json.loads(q.read_text()).get("analysis", {}).get("markers", {}).get("slope") or {}).get("pooled_f") or {}
+            out[label] = {float(d): f for d, f in sl.items() if f}
+    return out
+
+
+def mo_precheck_report(path: Path, results: list, infos: list, ok_by_d: dict, proceed: bool, cfg: dict):
+    pc, mc = cfg["precheck"], cfg["markers"]
+    used = [int(x) for x in mc["used_ids"]]
+    L = ["# 실험 39 사전 확인 (점 전용)", "",
+         f"표시: {mc['color']}, {mc['count']}개, 추정에 쓰는 점 {used}. 통과 규칙: 정면 창(0.5~1.5초)에 사용 표시가 모두 이름 붙는 프레임이 있고, 기울기 구간(3초 이후) 전체 프레임 중 사용 표시 {len(used)}개의 "
+         f"{100 * float(mc['min_markers_ratio']):.0f}% 이상이 잡힌 프레임의 비율 ≥ {100 * float(pc['min_tilt_valid_ratio']):.0f}%; 거리마다 통과한 영상이 1개 이상이어야 공식 실행.", "",
+         "| 영상 | 거리(cm) | 길이(초) | 저장 해상도 | 회전 | 처리 후 해상도 | 프레임당 검출 표시 수(중앙값) | 이름 붙은 정면 창 프레임 | 기울기 구간 유효 프레임 | 0.5~1.5초 성공 프레임 | 기준 프레임 시각(초) | 통과 | 버려진 이유 |",
+         "|---|---|---|---|---|---|---|---|---|---|---|---|---|"]
+    for r, i in zip(results, infos):
+        L.append(f"| {r['video']} | {r['distance_cm']:g} | {i['duration_s']:.1f} | {i['width']}x{i['height']} | {i['rotation_deg']}° | {r['size'][0]}x{r['size'][1]} | {r['n_detected_median']:.0f} | {r['window_named']} / {r['window_frames']} | "
+                 f"{'-' if 'tilt_valid_ratio' not in r else format(100 * r['tilt_valid_ratio'], '.1f') + '%'} | {'-' if 'window_success' not in r else str(r['window_success']) + ' / ' + str(r['window_frames_50_150'])} | {long_fmt(r.get('ref_time_s'), 1)} | "
+                 f"{'통과' if r.get('passes') else '탈락'} | {r.get('failed') or ', '.join(f'{k} {v}' for k, v in (r.get('reasons') or {}).items()) or '-'} |")
+    L += ["", "거리별 통과 영상: " + ", ".join(f"{d:g} cm {v or '없음'}" for d, v in ok_by_d.items()) + f" → 공식 실행 {'진행 가능' if proceed else '하지 않음'}.", "",
+          "## 기준 프레임의 이름 붙이기 (저장된 점 배치에 맞춘 결과)", "", "| 영상 | 이름 붙은 점 | 배율 (px / 배치 단위) | 맞춤 잔차 RMS (px) | 무시한 검출 수 중앙값 | 무시한 검출이 있는 프레임 |", "|---|---|---|---|---|---|"]
+    for r in results:
+        nm = r.get("naming") or {}
+        L.append(f"| {r['video']} | {nm.get('n_named', '-')} | {long_fmt(nm.get('scale_px'), 1)} | {long_fmt(nm.get('rms_px'), 2)} | {long_fmt(r.get('ignored_median'), 1)} | "
+                 f"{'-' if r.get('ignored_share') is None else format(100 * r['ignored_share'], '.0f') + '%'} |")
+    L += ["", "## 표시 번호별 검출률 (기울기 구간 전체 프레임 기준, 관절 번호 = 표시 이름)", "", "표시를 추적한 비율이다(최소 표시 비율을 0.3으로 낮춘 추적, 호모그래피 검사는 켬). * = 추정에 쓰는 점.", ""]
+    vids = [r for r in results if r.get("per_marker_rate")]
+    if vids:
+        L += ["| 표시 번호 | " + " | ".join(r["video"][4:8] for r in vids) + " |", "|---|" + "---|" * len(vids)]
+        for j in range(21):
+            L.append(f"| {j}{'*' if j in used else ''} | " + " | ".join(("-" if j not in r["per_marker_rate"] else f"{100 * r['per_marker_rate'][j]:.0f}%") for r in vids) + " |")
+    L += ["", "정면 기준 프레임 그림: figures/reference_IMG_xxxx.png (청록 원 = 검출한 표시와 배치가 준 번호, 주황 x = 이름 없이 무시한 검출).", ""]
+    path.write_text("\n".join(L) + "\n")
+
+
+def mo_figures(out: Path, results: list, ana: dict, ref: dict):
+    plt = _plt()
+    ds = sorted(ref)
+    fig, ax = plt.subplots(figsize=(6.4, 4.8))
+    ax.plot(ds, [ref[d] for d in ds], "s-", color="#555", label="체커보드 (같은 날 거리 실험)")
+    sl = ana.get("markers", {}).get("slope")
+    anchor = (60.0, ref.get(60.0, 1650.0))
+    if sl:
+        pf = sl["pooled_f"]
+        ax.plot(sorted(pf), [pf[d] for d in sorted(pf)], "o-", color="#2a6fbb", label="표시 점 (점 전용)")
+        anchor = (60.0, pf[60.0]) if 60.0 in pf else anchor
+    xs = np.array([min(ds) * 0.9, max(ds) * 1.1])
+    ax.plot(xs, anchor[1] * (xs / anchor[0]) ** 0.0, ":", color="#bbb", label="기울기 0")
+    ax.plot(xs, anchor[1] * (xs / anchor[0]) ** -1.0, "--", color="#bbb", label="기울기 -1")
+    ax.set_xscale("log")
+    ax.set_yscale("log")
+    ax.set_xticks(ds)
+    ax.set_xticklabels([f"{d:g}" for d in ds])
+    ax.set_xlabel("손-카메라 거리 (cm)")
+    ax.set_ylabel("합동 f (px)")
+    ax.legend(fontsize=7)
+    ax.grid(alpha=0.3, which="both")
+    fig.tight_layout()
+    fig.savefig(out / "f_vs_distance_loglog.png", dpi=110)
+    plt.close(fig)
+    inc = [r for r in results if "f" in r["marker"]]
+    if inc:
+        fig, ax = plt.subplots(figsize=(6.4, 4.4))
+        for r, col in zip(inc, ("#2a6fbb", "#5aa0e0", "#c47a00", "#e0a540", "#3a9a4a", "#7fcf8a")):
+            c = r["marker"]["curve"]
+            cost = np.array(c["cost"])
+            ax.plot(c["grid"], cost / cost.min(), color=col, label=f"{r['video'][4:8]} ({r['distance_cm']:g} cm)")
+        ax.set_xscale("log")
+        ax.set_yscale("log")
+        ax.set_xlabel("f (px)")
+        ax.set_ylabel("비용 / 최솟값")
+        ax.legend(fontsize=7)
+        ax.grid(alpha=0.3, which="both")
+        fig.tight_layout()
+        fig.savefig(out / "cost_curves.png", dpi=110)
+        plt.close(fig)
+
+
+def mo_report(path: Path, results: list, cfg: dict):
+    mc = cfg["markers"]
+    L = ["# 실험 39: 점 전용 (손 검출기 없음)", "", MO_NOTE, "", f"표시: {mc['color']} {mc['count']}개, 추정에 쓰는 점 {[int(x) for x in mc['used_ids']]}. 표시 검출: Lab a* 채널의 국소 붉기(중앙값 {mc['median_ksize']} px 창 대비) ≥ {mc['contrast_min']:g}, 면적 {mc['area_min']:g}~{mc['area_max']:g} px.", "",
+         "## 1. 영상별 표시 통계", "", "| 영상 | 거리(cm) | 기울기 구간 유효 프레임 | 0.5~1.5초 성공 프레임 | 포함 | 이유 |", "|---|---|---|---|---|---|"]
+    for r in results:
+        st, mkr = r["marker_stats"], r["marker"]
+        L.append(f"| {r['video']} | {r['distance_cm']:g} | {long_fmt(None if st.get('tilt_valid_ratio') is None else 100 * st['tilt_valid_ratio'], 1)}% | {st.get('window_success')} / {st.get('window_frames_50_150')} | {'포함' if 'f' in mkr else '제외'} | {'; '.join(mkr.get('excluded') or []) or mkr.get('failed') or '-'} |")
+    L += ["", "## 2. 영상별 값", "", "| 영상 | 거리(cm) | 사용 프레임 | θ2d 중앙값 / 최댓값(°) | f (px) | 날카로움 | 부트스트랩 로그 SD | 재투영 RMS 정면 / 기울기 (박스 대비 %) |", "|---|---|---|---|---|---|---|---|"]
+    for r in results:
+        x = r["marker"]
+        if "f" in x:
+            L.append(f"| {r['video']} | {r['distance_cm']:g} | {x['n_used_frames']} | {long_fmt(x['theta_median'], 1)} / {long_fmt(x['theta_max'], 1)} | {'값 없음' if x['at_grid_edge'] else format(x['f'], '.1f')} | {x['sharpness']:.4f} | "
+                     f"{long_fmt(x['boot_log_std'], 4)} | {long_fmt(x['phase_rms_pct']['front'], 3)} / {long_fmt(x['phase_rms_pct']['tilt'], 3)} |")
+        else:
+            L.append(f"| {r['video']} | {r['distance_cm']:g} | 제외: {'; '.join(x.get('excluded') or []) or x.get('failed') or '제외'} | - | - | - | - | - |")
+    L += ["", "![비용 곡선](figures/cost_curves.png)", "", "## 한계", "",
+          "- 영상은 거리마다 2개씩이라 기울기 구간이 거칠고, 판정은 이 세션·이 카메라에 대한 것이다.",
+          "- 영상은 태블릿 화면에 띄운 평면 손 그림이다. 손의 3차원 구조(손바닥 곡면, 손가락 굽힘)가 없어서 \"원인은 손 자체\" 같은 해석에는 쓰지 않는다.",
+          "- 표시 검출 기준(국소 붉기 문턱, 면적)과 이름 붙이기 설정은 이 영상들의 첫 프레임을 보고 정했고, 점 배치 템플릿은 같은 세션의 50 cm 영상 두 개의 기준 프레임에서 만들었다.", ""]
+    path.write_text("\n".join(L) + "\n")
+
+
+def mo_summary(path: Path, results: list, ana: dict, ref: dict, cfg: dict):
+    pct = lambda x: "-" if x is None else f"{100 * x:+.1f}%"      # noqa: E731
+    vcfg = cfg["verdict"]
+    v = ana["markers"]["verdict"]
+    s_ = f"- **판정 (점 전용): {v['verdict']}**"
+    if v.get("slope") is not None and v.get("interval_95"):
+        s_ += f" — 기울기 {v['slope']:+.3f}, 95% 구간 {v['interval_95'][0]:+.3f} ~ {v['interval_95'][1]:+.3f}"
+        if v.get("within_f_tol"):
+            s_ += "; 합동 f가 기준 f의 ±10% 안: " + ", ".join(f"{d:g} cm {'예' if w else '아니오'}" for d, w in v["within_f_tol"].items())
+    elif v.get("reason"):
+        s_ += f" — {v['reason']}"
+    L = ["# 실험 39 summary", "", f"**{MO_NOTE}**", "", "## 판정", "", s_,
+         f"- 판정 규칙(실행 전 고정, 실험 35와 같음): 반비례 없음 = 기울기 구간 전체가 {vcfg['slope_none_min']:g}보다 위이고 세 거리의 합동 f가 모두 기준 f의 ±{100 * float(vcfg['f_tol']):.0f}% 안; 반비례 있음 = 구간 전체가 {vcfg['slope_yes_max']:g}보다 아래; 그 외 판단 보류; 거리에 영상이 없으면 판단 불가.",
+         "- 영상은 태블릿 화면의 평면 손 그림이라 이 판정을 \"원인은 손 자체\" 같은 해석에 쓰지 않는다.", "",
+         "## 1. 거리별 합동 f와 기준 f", "", "| 거리(cm) | 영상 | 합동 f (px) | 95% 구간 (px) | 같은 거리 기준 f | 기준 f 대비 | 1680 대비 |", "|---|---|---|---|---|---|---|"]
+    for d, p in (ana["markers"].get("per_distance") or {}).items():
+        pf = p.get("pooled_f")
+        L.append(f"| {float(d):g} | {p['n_videos']} / {p['n_total']} | {format(pf, '.1f') if pf else '-'} | {'-' if 'interval_95' not in p else format(p['interval_95'][0], '.0f') + '–' + format(p['interval_95'][1], '.0f')} | {ref[float(d)]:.1f} | "
+                 f"{pct(None if not pf else pf / ref[float(d)] - 1.0)} | {pct(None if not pf else pf / 1680.0 - 1.0)} |")
+    sl = ana["markers"].get("slope")
+    L += ["", "| 대상 | 기울기 | 95% 구간 |", "|---|---|---|", f"| 표시 점 (점 전용) | {long_fmt(sl['slope'] if sl else None, 3)} | {'-' if not sl or sl['interval_95'] is None else format(sl['interval_95'][0], '+.3f') + ' ~ ' + format(sl['interval_95'][1], '+.3f')} |",
+          f"| 체커보드 | {long_fmt(ana['checkerboard_slope'], 3)} | - |"]
+    ctx = mo_context_pooled(cfg)
+    names = {"35c": "실험 35c 표시 점 (실제 손, 손 박스 사용)", "38": "실험 38 표시 점 (태블릿 손 그림, 손 박스 사용)"}
+    L += ["", "거리별 비교 (합동 f, px):", "", "| 거리(cm) | 표시 점 (점 전용) | " + " | ".join(names.get(k, k) for k in ctx) + " | 체커보드 |", "|---|---|" + "---|" * (len(ctx) + 1)]
+    for d in sorted(ref):
+        mine = (sl or {}).get("pooled_f", {}).get(d)
+        L.append(f"| {d:g} | {format(mine, '.1f') if mine else '-'} | " + " | ".join((format(c[d], '.1f') if d in c else '-') for c in ctx.values()) + f" | {ref[d]:.1f} |" if ctx else f"| {d:g} | {format(mine, '.1f') if mine else '-'} | {ref[d]:.1f} |")
+    L += ["", "![거리 대 합동 f](figures/f_vs_distance_loglog.png)", "", "## 2. 재투영 RMS와 날카로움 (기록용)", "", "| 거리(cm) | 영상 | 재투영 RMS 정면 (%) | 재투영 RMS 기울기 (%) | 날카로움 | 부트스트랩 로그 SD |", "|---|---|---|---|---|---|"]
+    med = lambda v_: float(np.median(v_)) if len(v_) else None      # noqa: E731
+    for d in sorted(ref):
+        xs_ = [r["marker"] for r in results if r["distance_cm"] == d and "f" in r["marker"]]
+        if xs_:
+            L.append(f"| {d:g} | {len(xs_)} | {long_fmt(med([x['phase_rms_pct']['front'] for x in xs_]), 3)} | {long_fmt(med([x['phase_rms_pct']['tilt'] for x in xs_]), 3)} | {long_fmt(med([x['sharpness'] for x in xs_]), 4)} | {long_fmt(med([x['boot_log_std'] for x in xs_]), 4)} |")
+    L += ["", "![비용 곡선](figures/cost_curves.png)", "", "## 3. 영상별 f와 오차", "", "| 영상 | 거리(cm) | f (px) | 같은 거리 기준 f 대비 | 1680 대비 | 로그 SD | 사용 프레임 | θ2d 최댓값(°) |", "|---|---|---|---|---|---|---|---|"]
+    for r in results:
+        d, x = r["distance_cm"], r["marker"]
+        if "f" in x:
+            L.append(f"| {r['video']} | {d:g} | {format(x['f'], '.1f')} | {pct(x['f'] / ref[d] - 1.0)} | {pct(x['f'] / 1680.0 - 1.0)} | {long_fmt(x['boot_log_std'], 4)} | {x['n_used_frames']} | {long_fmt(x['theta_max'], 1)} |")
+        else:
+            L.append(f"| {r['video']} | {d:g} | 제외: {'; '.join(x.get('excluded') or []) or x.get('failed') or '제외'} | - | - | - | - | - |")
+    L += ["", "## 한계", "", "- 영상은 거리마다 2개씩이라 기울기 구간이 거칠고, 판정은 이 세션·이 카메라에 대한 것이다.",
+          "- 기준 f는 실험 35c 때 체커보드 거리 실험의 값(사용자 제공)이며 이번 영상 세션에서 새로 재지 않았다.",
+          "- 표시 검출 기준과 이름 붙이기 설정은 이 영상들의 첫 프레임을 보고 정했고(예비 확인), 점 배치 템플릿은 같은 세션의 50 cm 영상 두 개에서 만들었다.", ""]
+    path.write_text("\n".join(L) + "\n")
+
+
+def mo_main(argv=None):
+    ap = argparse.ArgumentParser()
+    ap.add_argument("--config", default=str(hf.PROJECT_ROOT / "configs/39_markers_only.yaml"))
+    sub = ap.add_subparsers(dest="cmd")
+    sub.add_parser("precheck")
+    ry = sub.add_parser("results-yaml")
+    ry.add_argument("--run", required=True)
+    ap.add_argument("--videos", default=None, help="comma list of file names narrowing the entries")
+    ap.add_argument("--out", default=None)
+    a = ap.parse_args(argv)
+    text = Path(a.config).read_text()
+    cfg = yaml.safe_load(text)
+    if a.cmd == "results-yaml":
+        print(mo_results_yaml(hf.resolve(a.run), cfg))
+        return None
+    pre = a.cmd == "precheck"
+    entries = list(cfg["videos"])
+    if a.videos:
+        entries = [e for e in entries if e["file"] in a.videos.split(",")]
+    missing = [e["file"] for e in entries if not (Path(cfg["input_dir"]).expanduser() / e["file"]).exists()]
+    if missing:
+        raise SystemExit(f"영상이 없습니다: {missing}")
+    run_root = Path(a.out).expanduser() if a.out else hf.resolve(cfg["output"]["root"]) / (utc_stamp() + ("_precheck" if pre else ""))
+    run_root.mkdir(parents=True)
+    (run_root / "figures").mkdir()
+    log = Log(run_root / "log.txt")
+    mc = cfg["markers"]
+    log(f"39 점 전용 {'사전 확인' if pre else '공식 실행'}: 영상 {len(entries)}개, 표시 {mc['color']} {mc['count']}개, 추정에 쓰는 점 {mc['used_ids']} → {run_root}")
+    t0 = time.time()
+    tmp_root = run_root / "_frames"
+    tmp_root.mkdir()
+    for k in ("OMP_NUM_THREADS", "OPENBLAS_NUM_THREADS", "MKL_NUM_THREADS"):
+        os.environ[k] = "1"
+    import multiprocessing as mp
+    from concurrent.futures import ProcessPoolExecutor
+    infos = [hf.probe(Path(cfg["input_dir"]).expanduser() / e["file"]) for e in entries]
+    c = {k: cfg[k] for k in ("exclusion", "markers", "marker_exclusion", "precheck", "naming", "layout")}
+    if pre:
+        c["out_dir"] = str(run_root / "figures")
+    try:
+        with ProcessPoolExecutor(max_workers=int(cfg["workers"]), mp_context=mp.get_context("spawn")) as ex:
+            preps = list(ex.map(hf.fresp_prepare, [(e["file"], cfg["input_dir"], cfg["pipeline"], {}, str(tmp_root)) for e in entries]))
+            results = list(ex.map(hf.mo_precheck_video if pre else hf.mo_video, [(e, p, cfg["pipeline"], c) for e, p in zip(entries, preps)]))
+    finally:
+        shutil.rmtree(tmp_root, ignore_errors=True)
+    ref = {float(d): float(f) for d, f in cfg["ref_f_by_distance"].items()}
+    if pre:
+        ok_by_d = {d: [r["video"] for r in results if r["distance_cm"] == d and r.get("passes")] for d in sorted(ref)}
+        proceed = all(len(v_) >= 1 for v_ in ok_by_d.values())
+        mo_precheck_report(run_root / "precheck.md", results, infos, ok_by_d, proceed, cfg)
+        (run_root / "precheck.json").write_text(json.dumps(hf.jsonable({"videos": results, "passing_by_distance": ok_by_d, "official_run_ok": proceed}), ensure_ascii=False, indent=1))
+        for r in results:
+            log(f"  {r['video']} ({r['distance_cm']:g} cm): " + ("기준 프레임 없음" if "tilt_valid_ratio" not in r else f"기울기 구간 유효 {100 * r['tilt_valid_ratio']:.1f}%, 0.5~1.5초 성공 {r['window_success']}/{r['window_frames_50_150']}") + f" → {'통과' if r.get('passes') else '탈락'}")
+        log(f"  거리별 통과 영상: {ok_by_d} → 공식 실행 {'진행 가능' if proceed else '하지 않음 (보고하고 멈춤)'}")
+        log(f"완료 {time.time() - t0:.0f} s → {run_root}")
+        log.close()
+        return run_root, results, proceed
+    v2 = cfg["rating_v2"]
+    for r in results:
+        mkr = r["marker"]
+        if "f" in mkr:
+            mkr["rating"] = hf.gen_rating(mkr["tilt_duration_s"], mkr["theta_max"], mkr["boot_log_std"], v2)
+        log(f"  {r['video']} ({r['distance_cm']:g} cm): " + (f"표시 f {mkr['f']:.1f} px" if "f" in mkr else "표시 제외") + (f" [제외: {'; '.join(mkr['excluded'])}]" if mkr.get("excluded") else "") + (f" [{mkr['failed']}]" if mkr.get("failed") else ""))
+    grid = next((np.array(r["marker"]["curve"]["grid"]) for r in results if "f" in r["marker"]), None)
+    bn, bs = int(cfg["bootstrap"]["n"]), int(cfg["bootstrap"]["seed"])
+    inc = [(r["distance_cm"], r["marker"]["curve"]["cost"]) for r in results if "f" in r["marker"]]
+    ds = sorted({d for d, _ in inc})
+    ana = {}
+    if not ds or grid is None:
+        ana["markers"] = {"verdict": {"verdict": "판단 불가", "reason": "분석된 영상이 없음"}}
+    else:
+        cur = {d: [cc for dd, cc in inc if dd == d] for d in ds}
+        sl = hf.pr_slope(cur, grid, bn, bs)
+        per = {d: {**hf.ext_pooled(cur[d], grid, {"bootstrap_n": bn, "bootstrap_seed": bs}), "n_total": sum(1 for r in results if r["distance_cm"] == d)} for d in ds}
+        nv = {d: len(cur.get(d, [])) for d in ref}
+        ana["markers"] = {"slope": sl, "per_distance": per, "verdict": hf.pr_verdict(sl, ref, cfg["verdict"], nv)}
+        log(f"  markers: {ana['markers']['verdict']['verdict']}" + (f" (기울기 {sl['slope']:+.3f}, 구간 {sl['interval_95'][0]:+.3f} ~ {sl['interval_95'][1]:+.3f})" if sl["slope"] is not None and sl["interval_95"] else ""))
+    ana["checkerboard_slope"] = hf.ext_loglog_slope(sorted(ref), [ref[d] for d in sorted(ref)])
+    mo_figures(run_root / "figures", results, ana, ref)
+    mo_report(run_root / "report.md", results, cfg)
+    mo_summary(run_root / "summary.md", results, ana, ref, cfg)
+    (run_root / "results.json").write_text(json.dumps(hf.jsonable({"videos": results, "analysis": ana}), ensure_ascii=False, indent=1))
+    meta = hf.provenance_build(text, a.config, {"code_39": cfg["code_39"], "videos": [e["file"] for e in entries], "elapsed_s": time.time() - t0})
+    (run_root / "metadata.json").write_text(json.dumps(hf.jsonable(meta), ensure_ascii=False, indent=1))
+    log(f"완료 {time.time() - t0:.0f} s → {run_root}")
+    log.close()
+    return run_root, results, ana
+
+
+def mo_results_yaml(run_dir: Path, cfg: dict):
+    """Values and verdicts only (no reference f, no comparison); written to output.results_yaml."""
+    r = json.loads((run_dir / "results.json").read_text())
+    m = json.loads((run_dir / "metadata.json").read_text())
+    try:
+        run_name = str(run_dir.resolve().relative_to(hf.PROJECT_ROOT))
+    except ValueError:
+        run_name = str(run_dir)
+    rd = lambda x, n=4: None if x is None or (isinstance(x, float) and not np.isfinite(x)) else round(x, n)      # noqa: E731
+    out = {"experiment": "39_markers_only", "run": run_name, "code_commit": m["git"]["commit"][:7], "git_dirty_at_run": m["git"]["git_dirty"], "note": MO_NOTE, "markers": cfg["markers"], "naming": cfg["naming"],
+           "verdict_rules": cfg["verdict"], "videos": {}}
+    for v in r["videos"]:
+        x = v["marker"]
+        e = {"distance_cm": v["distance_cm"], "duration_s": rd(v["duration_s"], 2), "marker_valid_ratio": rd(v["marker_stats"].get("valid_ratio")), "marker_tilt_valid_ratio": rd(v["marker_stats"].get("tilt_valid_ratio")),
+             "marker_detection_rate_by_joint": {str(k): rd(q, 3) for k, q in (v["marker_stats"].get("per_marker_rate") or {}).items()}}
+        if "f" in x:
+            e["markers"] = {"f_px": None if x["at_grid_edge"] else round(x["f"], 1), "sharpness": rd(x["sharpness"], 5), "boot_log_std": rd(x["boot_log_std"], 5), "n_used_frames": x["n_used_frames"],
+                            "theta_median_deg": rd(x["theta_median"], 1), "theta_max_deg": rd(x["theta_max"], 1), "reproj_rms_front_pct": rd(x["phase_rms_pct"]["front"], 4), "reproj_rms_tilt_pct": rd(x["phase_rms_pct"]["tilt"], 4)}
+        else:
+            e["markers"] = {"excluded": x.get("excluded") or x.get("failed") or "제외"}
+        out["videos"][v["video"]] = e
+    a = r["analysis"]["markers"]
+    if "slope" in a:
+        out["by_method"] = {"markers": {"pooled_f_px": {f"{float(d):g}": rd(f, 1) for d, f in a["slope"]["pooled_f"].items()}, "slope": rd(a["slope"]["slope"]),
+                                        "slope_interval_95": None if a["slope"]["interval_95"] is None else [round(q, 4) for q in a["slope"]["interval_95"]]}}
+    out["verdict"] = {"markers": {"verdict": a["verdict"]["verdict"], "reason": a["verdict"].get("reason")}}
+    p = hf.resolve(cfg["output"]["results_yaml"])
+    p.write_text(yaml.safe_dump(hf.jsonable(out), allow_unicode=True, sort_keys=False))
+    return p
+
+
+COMMANDS = {"protocol": protocol_main, "frame-filter": ff_main, "same-session": session_main, "overlay": overlay_main, "phase-segmentation": pseg_main, "guide-revision": grev_main, "f-response": fresp_main, "error-factors": ferr_main, "long-video-check": long_main, "generalization": gen_main, "main-camera-extension": ext_main, "wide-60cm": wide_main, "jointset-sets": jset_main, "verdict-calibration": cal_main, "printed-hand": pr_main, "hand-markers": mk_main, "markers-only": mo_main}
 
 
 def main(argv=None):

@@ -3290,5 +3290,197 @@ class MkEndToEnd(unittest.TestCase):
                     self.assertEqual(line.count("|"), line.strip().count("|"), line)
 
 
+# ---- experiment 39: markers only (no hand detector) ----------------------------------------------------
+CFG39 = yaml.safe_load((ROOT / "configs/39_markers_only.yaml").read_text())
+MO_IDS, MO_T = hf.mo_load_layout(ROOT / CFG39["layout"])
+
+
+def mo_render(img_wh, pts_px, radius=4.0, extra=(), bg=(185, 160, 200)):
+    """Synthetic frame: pinkish background, red dots at sub-pixel positions, optional extra (x, y, radius) red discs."""
+    W, H = img_wh
+    img = np.full((H, W, 3), bg, np.uint8)
+    img = cv2.GaussianBlur(img, (3, 3), 0)
+    for x, y in pts_px:
+        cv2.circle(img, (int(round(x * 16)), int(round(y * 16))), int(round(radius * 16)), (40, 40, 215), -1, cv2.LINE_AA, 4)
+    for x, y, r in extra:
+        cv2.circle(img, (int(x), int(y)), int(r), (40, 40, 215), -1, cv2.LINE_AA)
+    return cv2.GaussianBlur(img, (3, 3), 0.6)
+
+
+class MoBlobs(unittest.TestCase):
+    def test_dots_found_with_subpixel_centres_and_big_red_object_ignored(self):
+        rng = np.random.default_rng(0)
+        pts = rng.uniform([100, 80], [700, 400], (12, 2))
+        img = mo_render((800, 480), pts, extra=[(760, 440, 40)])
+        r = hf.mo_blobs(img, CFG39["markers"])
+        self.assertEqual(len(r["xy"]), 12)                                                              # the 40 px disc (area ~5000) is over area_max
+        d = np.linalg.norm(r["xy"][:, None, :] - (pts + 0.5)[None, :, :], axis=-1)
+        self.assertLess(d.min(1).max(), 0.6)                                                            # continuous coordinates: pixel centre = index + 0.5
+
+    def test_tiny_dots_of_75_cm_size_are_found(self):
+        pts = np.array([[200.0, 200.0], [300.5, 240.2], [400.3, 180.7]])
+        r = hf.mo_blobs(mo_render((640, 400), pts, radius=3.0), CFG39["markers"])                         # radius 3 px: area about 27 px (the 75 cm dots measured 40-300 px at contrast 30)
+        self.assertEqual(len(r["xy"]), 3)
+
+    def test_no_dots_in_a_plain_frame(self):
+        self.assertEqual(len(hf.mo_blobs(mo_render((640, 400), []), CFG39["markers"])["xy"]), 0)
+
+    def test_box_rule_is_the_worker_rule(self):
+        b = hf.mo_box_of(np.array([[10.0, 20.0], [110.0, 220.0]]), 0.1)
+        self.assertTrue(np.allclose(b, [0.0, 0.0, 120.0, 240.0]))
+
+
+class MoNaming(unittest.TestCase):
+    def placed(self, s=150.0, rot_deg=10.0, t=(900.0, 500.0)):
+        z = (MO_T[:, 0] + 1j * MO_T[:, 1]) * s * np.exp(1j * np.deg2rad(rot_deg)) + (t[0] + 1j * t[1])
+        return np.stack([z.real, z.imag], 1)
+
+    def test_names_are_recovered_with_rotation_missing_points_and_distractors(self):
+        rng = np.random.default_rng(1)
+        P = self.placed()
+        keep = np.ones(len(P), bool)
+        keep[[3, 11]] = False
+        det = np.vstack([P[keep] + rng.normal(0, 0.3, (keep.sum(), 2)), [[300.0, 900.0], [1500.0, 100.0], [1700.0, 950.0]]])
+        order = rng.permutation(len(det))
+        det = det[order]
+        res = hf.mo_name(det, MO_IDS, MO_T, CFG39["naming"])
+        self.assertIsNotNone(res)
+        truth = np.concatenate([MO_IDS[keep], [-1, -1, -1]])[order]
+        self.assertTrue(np.array_equal(res["names"], truth))
+        self.assertAlmostEqual(res["scale_px"], 150.0, delta=2.0)
+        self.assertLess(res["rms_px"], 1.0)
+
+    def test_scale_outside_the_range_or_too_few_detections_give_none(self):
+        self.assertIsNone(hf.mo_name(self.placed(s=600.0), MO_IDS, MO_T, CFG39["naming"]))
+        self.assertIsNone(hf.mo_name(self.placed()[:6], MO_IDS, MO_T, CFG39["naming"]))
+
+    def test_rotation_beyond_the_limit_is_not_named(self):
+        self.assertIsNone(hf.mo_name(self.placed(rot_deg=70.0), MO_IDS, MO_T, CFG39["naming"]))
+
+
+def mo_synth_video(d, f_px=850.0, dist_mm=500.0, size=(960, 540), seconds=10.0, fps=15.0, tilt_deg=40.0, pen=True, seed=0):
+    """Frames of the planar marker layout (physical RMS radius 50 mm) seen by a pinhole camera: fronto-parallel until 3 s, then a tilt about the horizontal axis ramping to tilt_deg; a red pen and 3 distractor dots."""
+    rng = np.random.default_rng(seed)
+    W, H = size
+    P = np.concatenate([MO_T * 50.0, np.zeros((len(MO_T), 1))], 1)
+    frames = []
+    for i in range(int(seconds * fps)):
+        t = i / fps
+        a = np.deg2rad(0.0 if t < 3.0 else tilt_deg * min((t - 3.0) / 5.0, 1.0))
+        R = np.array([[1, 0, 0], [0, np.cos(a), -np.sin(a)], [0, np.sin(a), np.cos(a)]])
+        X = P @ R.T + np.array([0.0, 0.0, dist_mm])
+        uv = f_px * X[:, :2] / X[:, 2:3] + np.array([W / 2.0, H / 2.0])
+        extra = [(60, 480, 22)] if pen else []
+        distract = np.array([[80.0, 60.0], [880.0, 70.0], [900.0, 500.0]]) if pen else np.zeros((0, 2))
+        img = mo_render(size, np.vstack([uv + rng.normal(0, 0.05, uv.shape), distract]), radius=3.4, extra=extra)
+        path = Path(d) / f"f{i:04d}.png"
+        cv2.imwrite(str(path), img)
+        frames.append({"png": str(path), "time_s": t})
+    return {"frames": frames, "size": size}
+
+
+class MoProcess(unittest.TestCase):
+    @classmethod
+    def setUpClass(cls):
+        cls.tmp = tempfile.mkdtemp()
+        cls.prep = mo_synth_video(cls.tmp)
+        cls.c = {k: CFG39[k] for k in ("exclusion", "markers", "marker_exclusion", "precheck", "naming", "layout")}
+        cls.proc = hf.mo_process(cls.prep, CFG39["pipeline"], cls.c)
+
+    @classmethod
+    def tearDownClass(cls):
+        shutil.rmtree(cls.tmp, ignore_errors=True)
+
+    def test_reference_frame_names_every_used_marker_and_the_distractors_are_ignored(self):
+        p = self.proc
+        self.assertNotIn("failed", p)
+        self.assertTrue(0.5 <= p["ref_time_s"] < 1.5)
+        self.assertEqual(sorted(int(x) for x in p["names"]), [int(x) for x in MO_IDS])                      # 20 layout markers, no distractor named
+        self.assertGreaterEqual(p["tilt_valid_ratio"], 0.95)
+        self.assertGreaterEqual(p["ignored_median"], 3.0)                                                   # pen end and the three corner dots are detections without a marker
+
+    def test_kp_mask_and_box_follow_the_markers(self):
+        p = self.proc
+        i = int(np.flatnonzero(p["present"])[-1])
+        self.assertTrue(p["mask"][i][[5, 6, 9, 10, 13, 14, 17, 18]].all())
+        self.assertFalse(p["mask"][i][3])                                                                   # marker 3 is not in the layout
+        b = p["box"][i]
+        pts = p["kp"][i][p["mask"][i]]
+        self.assertTrue(b[0] < pts[:, 0].min() and b[1] < pts[:, 1].min() and b[2] > pts[:, 0].max() and b[3] > pts[:, 1].max())
+
+    def test_precheck_passes_and_draws_the_reference_picture(self):
+        with tempfile.TemporaryDirectory() as d:
+            r = hf.mo_precheck_video(({"file": "synth.MOV", "distance_cm": 50}, self.prep, CFG39["pipeline"], {**self.c, "out_dir": d}))
+            self.assertTrue(r["passes"])
+            self.assertTrue((Path(d) / "reference_synth.png").exists())
+
+    def test_f_is_recovered_by_the_unchanged_analysis(self):
+        res = hf.mo_video(({"file": "synth.MOV", "distance_cm": 50}, self.prep, CFG39["pipeline"], self.c))
+        self.assertIn("f", res["marker"], res["marker"])
+        self.assertLess(abs(res["marker"]["f"] / 850.0 - 1.0), 0.05)
+
+    def test_a_video_without_markers_fails_with_a_reason_and_no_crash(self):
+        with tempfile.TemporaryDirectory() as d:
+            frames = []
+            for i in range(30):
+                pth = Path(d) / f"g{i}.png"
+                cv2.imwrite(str(pth), mo_render((480, 270), []))
+                frames.append({"png": str(pth), "time_s": i / 15.0})
+            res = hf.mo_video(({"file": "empty.MOV", "distance_cm": 50}, {"frames": frames, "size": (480, 270)}, CFG39["pipeline"], self.c))
+            self.assertIn("failed", res["marker"])
+            self.assertFalse(res["marker"].get("f"))
+
+    def test_a_dropped_marker_run_is_excluded_by_the_valid_share(self):
+        c = copy.deepcopy(self.c)
+        c["marker_exclusion"]["min_tilt_valid_ratio"] = 1.01
+        res = hf.mo_video(({"file": "synth.MOV", "distance_cm": 50}, self.prep, CFG39["pipeline"], c))
+        self.assertTrue(res["marker"]["excluded"])
+
+
+class MoReports(unittest.TestCase):
+    def fake_results(self):
+        grid = np.geomspace(0.35 * 1920, 1.6 * 1920, 60)
+        cost = ((np.log(grid) - np.log(1700.0)) ** 2 + 0.01).tolist()
+        out = []
+        for f, d in (("IMG_7294.MOV", 50), ("IMG_7293.MOV", 50), ("IMG_7292.MOV", 60), ("IMG_7291.MOV", 60), ("IMG_7290.MOV", 75), ("IMG_7289.MOV", 75)):
+            out.append({"video": f, "distance_cm": float(d), "size": [1920, 1080], "n_frames": 300, "duration_s": 20.0,
+                        "marker_stats": {"valid_ratio": 0.99, "tilt_valid_ratio": 0.98, "window_success": 15, "window_frames_50_150": 15, "per_marker_rate": {5: 0.99}},
+                        "marker": {"f": 1700.0, "at_grid_edge": False, "sharpness": 1.5, "boot_log_std": 0.02, "curve": {"grid": grid.tolist(), "cost": cost}, "n_used_frames": 200, "theta_median": 30.0, "theta_max": 45.0,
+                                   "theta_p90": 44.0, "tilt_duration_s": 20.0, "phase_rms_pct": {"front": 0.02, "tilt": 0.06}, "box_long_median_px": 500.0}})
+        return out
+
+    def test_summary_report_and_yaml_keep_the_reference_in_summary_only(self):
+        ref = {float(d): float(f) for d, f in CFG39["ref_f_by_distance"].items()}
+        results = self.fake_results()
+        cur = {d: [r["marker"]["curve"]["cost"] for r in results if r["distance_cm"] == d] for d in (50.0, 60.0, 75.0)}
+        grid = np.array(results[0]["marker"]["curve"]["grid"])
+        sl = hf.pr_slope(cur, grid, 50, 42)
+        per = {d: {**hf.ext_pooled(cur[d], grid, {"bootstrap_n": 50, "bootstrap_seed": 42}), "n_total": 2} for d in cur}
+        ana = {"markers": {"slope": sl, "per_distance": per, "verdict": hf.pr_verdict(sl, ref, CFG39["verdict"], {50.0: 2, 60.0: 2, 75.0: 2})}, "checkerboard_slope": hf.ext_loglog_slope(sorted(ref), [ref[d] for d in sorted(ref)])}
+        with tempfile.TemporaryDirectory() as d:
+            d = Path(d)
+            (d / "figures").mkdir()
+            run.mo_figures(d / "figures", results, ana, ref)
+            run.mo_report(d / "report.md", results, CFG39)
+            run.mo_summary(d / "summary.md", results, ana, ref, CFG39)
+            (d / "results.json").write_text(json.dumps(hf.jsonable({"videos": results, "analysis": ana}), ensure_ascii=False))
+            (d / "metadata.json").write_text(json.dumps({"git": {"commit": "abcdef1234", "git_dirty": False}}))
+            cfg = copy.deepcopy(CFG39)
+            cfg["output"]["results_yaml"] = str(d / "r.yaml")
+            y = Path(run.mo_results_yaml(d, cfg)).read_text()
+            self.assertTrue((d / "figures/f_vs_distance_loglog.png").exists() and (d / "figures/cost_curves.png").exists())
+            self.assertEqual(ana["markers"]["verdict"]["verdict"], "반비례 없음")
+            summ = (d / "summary.md").read_text()
+            self.assertIn("판정 (점 전용): 반비례 없음", summ)
+            self.assertIn("1660.6", summ)
+            for name, text in (("report", (d / "report.md").read_text()), ("yaml", y)):
+                for val in ("1660.6", "1653.7", "1644.9"):
+                    self.assertNotIn(val, text, name)
+                self.assertNotIn("1680", text, name)
+            for line in summ.splitlines():
+                if line.startswith("|") and "---" not in line:
+                    self.assertEqual(line.count("|"), line.strip().count("|"), line)
+
+
 if __name__ == "__main__":
     unittest.main()

@@ -5083,3 +5083,248 @@ def mk_pairing_video(args) -> dict:
     if c.get("out_dir"):
         res["panels"] = mk_draw_pairing(prep, proc, Path(c["out_dir"]) / f"pairing_{Path(entry['file']).stem}.png")
     return res
+
+
+# ====================================================================================================
+# mo  (experiment 39: markers only, no hand detector; new section, earlier functions are used unchanged)
+# Experiment 35 needed the MediaPipe hand box (search area, length scale, marker naming) and its joints; here the markers carry all of it. Dots are found in the whole frame (local redness of the Lab a* channel),
+# named once on a front-window frame by a stored layout of the markers (a similarity fit with outlier-robust voting, no detector), followed with 35's re-acquisition tracker (mk_track_reacquire, unchanged) with the
+# length scale taken from the marker cloud (bounding box + box_margin on every side, the rule of the MediaPipe worker applied to the markers), and fed to the unchanged analysis (analyze, fixed_template).
+# ====================================================================================================
+def mo_blobs(bgr: np.ndarray, mcfg: dict) -> dict:
+    """Marker centres in a whole BGR frame. Local redness = Lab a* minus its median over a ksize x ksize window; pixels with local redness >= contrast_min form components (no opening: an even kernel shifts the centres); those with area in
+    [area_min, area_max] and roundness 4 pi A / P^2 >= circularity_min are kept, the centre is the redness-weighted centroid (continuous image coordinates, pixel centre = index + 0.5).
+    Returns {xy (m, 2), area (m,), circularity (m,)}."""
+    a = cv2.cvtColor(bgr, cv2.COLOR_BGR2LAB)[..., 1]
+    con = a.astype(np.float32) - cv2.medianBlur(a, int(mcfg["median_ksize"])).astype(np.float32)
+    mask = (con >= float(mcfg["contrast_min"])).astype(np.uint8)
+    cnts, _ = cv2.findContours(mask, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_NONE)
+    xy, areas, circs = [], [], []
+    for c in cnts:
+        ar, p = cv2.contourArea(c), cv2.arcLength(c, True)
+        if p <= 0 or not (float(mcfg["area_min"]) <= ar <= float(mcfg["area_max"])):
+            continue
+        circ = 4.0 * np.pi * ar / (p * p)
+        if circ < float(mcfg["circularity_min"]):
+            continue
+        bx, by, bw, bh = cv2.boundingRect(c)
+        roi = np.zeros((bh, bw), np.uint8)
+        cv2.drawContours(roi, [c - np.array([bx, by])], -1, 1, -1)
+        w = np.clip(con[by:by + bh, bx:bx + bw], 0, None) * roi
+        yy, xx = np.mgrid[by:by + bh, bx:bx + bw]
+        s = w.sum()
+        if s <= 0:
+            continue
+        xy.append([(w * (xx + 0.5)).sum() / s, (w * (yy + 0.5)).sum() / s])
+        areas.append(ar)
+        circs.append(circ)
+    return {"xy": np.array(xy, float).reshape(-1, 2), "area": np.array(areas, float), "circularity": np.array(circs, float)}
+
+
+def mo_load_layout(path) -> tuple:
+    """Stored marker layout (json, joint numbers 0-20 -> normalised point, centroid 0, RMS radius 1): returns (ids (k,), points (k, 2))."""
+    d = json.loads(Path(path).read_text())["points"]
+    ids = sorted(int(k) for k in d)
+    return np.array(ids, int), np.array([d[str(i)] for i in ids], float)
+
+
+def mo_name(det: np.ndarray, ids: np.ndarray, T: np.ndarray, ncfg: dict) -> dict:
+    """Name the detected markers with the stored layout. A similarity (scale s, rotation within rot_max_deg, translation) maps the layout to the image; it is voted for by every pair of detections against every
+    far-apart pair of layout points (scale in [scale_min_px, scale_max_px] px per layout unit), and scored by the number of layout points with a detection within tol_frac x s. The best one is refined (Hungarian
+    assignment inside the tolerance, least-squares similarity on the pairs, again). Returns {names (m,) int, -1 for a detection without a layout point, n_named, scale_px, rms_px (fit residual of the named)} or None."""
+    from scipy.optimize import linear_sum_assignment
+    D = len(det)
+    if D < int(ncfg["min_detections"]):
+        return None
+    zd, zt = det[:, 0] + 1j * det[:, 1], T[:, 0] + 1j * T[:, 1]
+    ii, jj = np.triu_indices(len(T), 1)
+    far = np.abs(zt[jj] - zt[ii]) >= float(ncfg["pair_min"])
+    ii, jj = ii[far], jj[far]
+    a, b = np.where(~np.eye(D, dtype=bool))
+    z = (zd[b] - zd[a])[:, None] / (zt[jj] - zt[ii])[None, :]
+    ok = (np.abs(z) >= float(ncfg["scale_min_px"])) & (np.abs(z) <= float(ncfg["scale_max_px"])) & (np.abs(np.angle(z)) <= np.deg2rad(float(ncfg["rot_max_deg"])))
+    qs, ps = np.nonzero(ok)
+    best, best_cnt = None, 0
+    for s0 in range(0, len(qs), 1500):
+        q, p = qs[s0:s0 + 1500], ps[s0:s0 + 1500]
+        zc = z[q, p]
+        tr = zd[a[q]] - zc * zt[ii[p]]
+        M = zc[:, None] * zt[None, :] + tr[:, None]
+        mn = np.abs(M[:, :, None] - zd[None, None, :]).min(2)
+        cnt = (mn <= float(ncfg["tol_frac"]) * np.abs(zc)[:, None]).sum(1)
+        k = int(np.argmax(cnt))
+        if cnt[k] > best_cnt:
+            best_cnt, best = int(cnt[k]), (zc[k], tr[k])
+    if best is None or best_cnt < int(ncfg["min_named"]):
+        return None
+    zc, tr = best
+    names, pairs = np.full(D, -1, int), None
+    for _ in range(2):
+        M = zc * zt + tr
+        cost = np.abs(M[:, None] - zd[None, :])
+        r, c = linear_sum_assignment(cost)
+        g = cost[r, c] <= float(ncfg["tol_frac"]) * abs(zc)
+        r, c = r[g], c[g]
+        if len(r) < int(ncfg["min_named"]):
+            return None
+        A = np.stack([zt[r], np.ones(len(r))], 1)
+        sol = np.linalg.lstsq(A, zd[c], rcond=None)[0]
+        zc, tr = sol[0], sol[1]
+        pairs = (r, c)
+    names[pairs[1]] = ids[pairs[0]]
+    rms = float(np.sqrt(np.mean(np.abs(zc * zt[pairs[0]] + tr - zd[pairs[1]]) ** 2)))
+    return {"names": names, "n_named": int(len(pairs[0])), "scale_px": float(abs(zc)), "rms_px": rms}
+
+
+def mo_box_of(P: np.ndarray, margin: float) -> np.ndarray:
+    """Box (x0, y0, x1, y1) of the points enlarged by margin x its size on every side: the rule the MediaPipe worker applies to the landmarks."""
+    lo, hi = np.nanmin(P, 0), np.nanmax(P, 0)
+    pad = float(margin) * (hi - lo)
+    return np.array([lo[0] - pad[0], lo[1] - pad[1], hi[0] + pad[0], hi[1] + pad[1]])
+
+
+def mo_process(prep: dict, pcfg: dict, c: dict) -> dict:
+    """Markers of one video without a hand detector. Dots in every frame (mo_blobs, whole frame); reference frame = the sharpest frame of the nominal front window (front_skip_s .. + front_window_s) in which the
+    layout names every used marker; tracking from it with mk_track_reacquire (unchanged; used markers count, the others are followed) where the length scale is the long side of the box of the reference markers;
+    kp / mask / present in the 21-joint layout (names = joint numbers) and the frame box (the reference box moved by the homography reference -> frame). The tilt phase is every frame from front_phase_s.
+    Returns the marker arrays and statistics, or {'failed': reason} plus what was computed."""
+    mcfg, ncfg = c["markers"], c["naming"]
+    frames = prep["frames"]
+    times = np.array([r["time_s"] for r in frames])
+    W, H = prep["size"]
+    n = len(times)
+    uid = [int(x) for x in mcfg["used_ids"]]
+    ids, T = mo_load_layout(resolve(c["layout"]))
+    imgs_dets = [mo_blobs(cv2.imread(r["png"], cv2.IMREAD_COLOR), mcfg)["xy"] for r in frames]
+    out = {"n_frames": n, "size": [W, H], "times": times, "det": imgs_dets, "n_detected_median": float(np.median([len(d) for d in imgs_dets])) if n else 0.0}
+    ph = pcfg["phases"]
+    t0, t1 = float(ph["front_skip_s"]), float(ph["front_skip_s"]) + float(ph["front_window_s"])
+    win = [i for i in range(n) if t0 <= times[i] < t1]
+    cands, named = [], {}
+    for i in win:
+        r = mo_name(imgs_dets[i], ids, T, ncfg)
+        if r is not None and all(u in set(int(x) for x in r["names"]) for u in uid):
+            cands.append(i)
+            named[i] = r
+    out["window_frames"], out["window_named"] = len(win), len(cands)
+    if not cands:
+        return {**out, "failed": "정면 창에 기준 프레임이 없음 (사용 표시가 모두 이름 붙는 프레임)"}
+    def sharp(i):
+        sel = named[i]["names"] >= 0
+        x0, y0, x1, y1 = (int(max(0, v)) for v in mo_box_of(imgs_dets[i][sel], 0.3))
+        return mk_sharpness(cv2.imread(frames[i]["png"], cv2.IMREAD_COLOR), (x0, y0, min(W, x1), min(H, y1)))
+    sh = [sharp(i) for i in cands]
+    ref = cands[int(np.argmax(sh))]
+    sel = named[ref]["names"] >= 0
+    ref_xy, ref_names = imgs_dets[ref][sel], named[ref]["names"][sel]
+    used_idx = [j for j, k in enumerate(ref_names) if int(k) in uid]
+    box_ref = mo_box_of(ref_xy, float(mcfg["box_margin"]))
+    L = float(max(box_ref[2] - box_ref[0], box_ref[3] - box_ref[1]))
+    bl = np.full(n, L)
+    trk = mk_track_reacquire(imgs_dets, ref, ref_xy, bl, mcfg, used_idx)
+    m = len(ref_xy)
+    kp = np.full((n, 21, 2), np.nan)
+    for j in range(m):
+        kp[:, int(ref_names[j])] = trk["xy"][:, j]
+    mask = np.isfinite(kp[..., 0]) & trk["ok"][:, None]
+    corners = np.array([[box_ref[0], box_ref[1]], [box_ref[2], box_ref[1]], [box_ref[2], box_ref[3]], [box_ref[0], box_ref[3]]], np.float64).reshape(-1, 1, 2)
+    box = np.full((n, 4), np.nan)
+    for i in np.flatnonzero(trk["ok"]):
+        g = np.isfinite(trk["xy"][i][:, 0])
+        Hm, _ = mk_homography(ref_xy[g], trk["xy"][i][g], None)
+        if Hm is not None:
+            q = cv2.perspectiveTransform(corners, Hm).reshape(-1, 2)
+            box[i] = [q[:, 0].min(), q[:, 1].min(), q[:, 0].max(), q[:, 1].max()]
+    present = trk["ok"] & np.isfinite(box[:, 0])
+    tilt = times >= float(ph["front_phase_s"])
+    reasons = {}
+    for r in trk["reason"]:
+        if r:
+            reasons[r] = reasons.get(r, 0) + 1
+    loose = mk_track_reacquire(imgs_dets, ref, ref_xy, bl, {**mcfg, "min_markers_ratio": 0.3}, used_idx)
+    seen = loose["ok"] & tilt
+    per = {int(ref_names[j]): float(np.isfinite(loose["xy"][seen, j, 0]).sum() / max(tilt.sum(), 1)) for j in range(m)}
+    wnd = [i for i in range(n) if 0.5 <= times[i] < 1.5]
+    out.update({"ref_index": ref, "ref_time_s": float(times[ref]), "ref_sharpness": float(max(sh)), "names": ref_names, "used_idx": used_idx, "ref_xy": ref_xy, "naming": {k: named[ref][k] for k in ("n_named", "scale_px", "rms_px")},
+                "track": trk, "kp": kp, "mask": mask, "present": present, "box": box, "box_long": bl, "box_ref": box_ref, "valid_ratio": float(present.sum() / max(n, 1)),
+                "tilt_valid_ratio": float((present & tilt).sum() / max(tilt.sum(), 1)), "tilt_frames": int(tilt.sum()), "reasons": reasons, "window_success": int(present[wnd].sum()), "window_frames_50_150": len(wnd),
+                "per_marker_rate": per, "ignored_median": None if not trk["ok"].any() else float(np.median(trk["ignored"][trk["ok"]])),
+                "ignored_share": None if not trk["ok"].any() else float(np.mean(trk["ignored"][trk["ok"]] > 0))})
+    return out
+
+
+def mo_draw_reference(prep: dict, proc: dict, path) -> None:
+    """One picture: the reference frame with the detected markers (cyan, the joint number the layout gave) and the ignored detections (orange x), cropped to the marker box."""
+    i = proc["ref_index"]
+    img = cv2.imread(prep["frames"][i]["png"], cv2.IMREAD_COLOR)
+    named = set()
+    for (x, y), k in zip(proc["ref_xy"], proc["names"]):
+        cv2.circle(img, (int(round(x - 0.5)), int(round(y - 0.5))), 9, (255, 200, 0), 2)
+        cv2.putText(img, f"{int(k)}", (int(x) + 10, int(y) - 10), cv2.FONT_HERSHEY_SIMPLEX, 0.9, (255, 255, 0), 2)
+        named.add((round(float(x), 3), round(float(y), 3)))
+    for x, y in proc["det"][i]:
+        if (round(float(x), 3), round(float(y), 3)) not in named:
+            cv2.drawMarker(img, (int(round(x - 0.5)), int(round(y - 0.5))), (0, 140, 255), cv2.MARKER_TILTED_CROSS, 18, 2)
+    x0, y0, x1, y1 = (int(v) for v in mo_box_of(proc["ref_xy"], 0.3))
+    Path(path).parent.mkdir(parents=True, exist_ok=True)
+    cv2.imwrite(str(path), img[max(0, y0):max(1, y1), max(0, x0):max(1, x1)])
+
+
+def mo_precheck_video(args) -> dict:
+    """Pre-check of one video (no analysis): reference frame, share of kept tilt-phase frames, per-marker rates, picture. args = (entry, prep, pcfg, c); c['out_dir'] gets the reference picture.
+    Passes when a reference frame exists and the share of kept frames among all frames from front_phase_s is at least precheck.min_tilt_valid_ratio."""
+    entry, prep, pcfg, c = args[:4]
+    proc = mo_process(prep, pcfg, c)
+    res = {"video": entry["file"], "distance_cm": float(entry["distance_cm"]), "size": proc["size"], "n_frames": proc["n_frames"], "n_detected_median": proc["n_detected_median"],
+           "window_frames": proc["window_frames"], "window_named": proc["window_named"]}
+    if "failed" in proc:
+        return {**res, "failed": proc["failed"], "passes": False}
+    res.update({k: proc[k] for k in ("ref_index", "ref_time_s", "ref_sharpness", "valid_ratio", "tilt_valid_ratio", "tilt_frames", "reasons", "window_success", "window_frames_50_150", "per_marker_rate", "naming", "ignored_median", "ignored_share")})
+    res["names"] = [int(x) for x in proc["names"]]
+    res["passes"] = bool(proc["tilt_valid_ratio"] >= float(c["precheck"]["min_tilt_valid_ratio"]))
+    if c.get("out_dir"):
+        mo_draw_reference(prep, proc, Path(c["out_dir"]) / f"reference_{Path(entry['file']).stem}.png")
+    return res
+
+
+def mo_video(args) -> dict:
+    """One video of experiment 39: the marker points through the unchanged analysis (analyze, fixed_template, nominal front window and tilt phase, block bootstrap); no hand detector, no MediaPipe comparison.
+    args = (entry, prep, pcfg, c); c needs exclusion, markers, naming, layout, marker_exclusion. Returns {video, distance_cm, ..., marker: {f, ...} | {excluded / failed}}."""
+    entry, prep, pcfg, c = args[:4]
+    os.environ.setdefault("OMP_NUM_THREADS", "1")
+    cv2.setNumThreads(1)
+    proc = mo_process(prep, pcfg, c)
+    W, H = proc["size"]
+    res = {"video": entry["file"], "distance_cm": float(entry["distance_cm"]), "size": [W, H], "n_frames": proc["n_frames"], "duration_s": float(proc["times"][-1] - proc["times"][0]),
+           "marker_stats": {k: proc.get(k) for k in ("valid_ratio", "tilt_valid_ratio", "n_detected_median", "window_success", "window_frames_50_150", "ref_time_s", "reasons", "per_marker_rate", "naming", "ignored_median", "ignored_share")}}
+    if "failed" in proc:
+        res["marker"] = {"failed": proc["failed"]}
+        return res
+    times, n = proc["times"], proc["n_frames"]
+    reasons = []
+    lim = float(c["marker_exclusion"]["min_tilt_valid_ratio"])
+    if proc["tilt_valid_ratio"] < lim:
+        reasons.append(f"기울기 구간 유효 프레임 {100 * proc['tilt_valid_ratio']:.1f}% < {100 * lim:.0f}%")
+    edge = fresp_edge_rate(proc["box"][proc["present"]], np.ones(int(proc["present"].sum()), bool), W, H) if proc["present"].any() else 1.0
+    if edge > float(c["exclusion"]["edge_rate_max"]):
+        reasons.append(f"가장자리 접촉 프레임 {100 * edge:.1f}% > {100 * float(c['exclusion']['edge_rate_max']):.0f}%")
+    mk = {"excluded": reasons, "edge_rate": float(edge), "valid_ratio": proc["valid_ratio"], "names": [int(x) for x in proc["names"]]}
+    res["marker"] = mk
+    if reasons:
+        return res
+    cfg_mk = copy.deepcopy(pcfg)
+    cfg_mk["joints"]["sets"]["markers"] = sorted(int(x) for x in c["markers"]["used_ids"])
+    cfg_mk["joints"]["estimate_set"] = "markers"
+    cfg_mk["joints"]["uncertainty_sets"] = ["markers"]
+    a = analyze(proc["kp"], proc["mask"], proc["present"], proc["box"], np.zeros(n, int), times, (W, H), cfg_mk, tilt_start=None, methods_full=("fixed_template",), seed=int(pcfg["experiment"]["seed"]))
+    if "per_method" not in a:
+        mk["failed"] = a.get("failed", "분석 실패")
+        return res
+    sol, pm = a["solutions"]["fixed_template"], a["per_method"]["fixed_template"]
+    grid = np.array(a["grid"])
+    tilt = [i for i, r in enumerate(a["role"]) if r == "tilt"]
+    mk.update({"f": float(sol["f"]), "at_grid_edge": bool(sol["at_grid_edge"]), "side": None if not sol["at_grid_edge"] else ("상한" if sol["f"] >= grid[-1] * (1 - 1e-6) else "하한"),
+               "sharpness": float(pm["diagnostics"]["sharpness"]), "boot_log_std": long_boot_log_std(pm["bootstrap"]["f"]), "curve": {"grid": grid.tolist(), "cost": [float(x) for x in sol["profile_cost"]]},
+               "n_used_frames": int(a["n_target_frames"]), "theta_median": a["theta_tilt"]["median"], "theta_max": a["theta_tilt"]["max"], "theta_p90": a["theta_tilt"]["p90"],
+               "tilt_duration_s": float(times[tilt].max() - a["tilt_start_s"]) if tilt else 0.0, "phase_rms_pct": pr_phase_rms(a, proc["box"]), "box_long_median_px": float(np.nanmedian(proc["box_long"][proc["present"]]))})
+    return res
