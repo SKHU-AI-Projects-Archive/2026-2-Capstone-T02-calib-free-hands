@@ -5332,11 +5332,12 @@ def mo_video(args) -> dict:
 
 # ====================================================================================================
 # ft  (experiment 40: free template, the supervisor's code, on the marker tracks of 39; new section, earlier functions are used unchanged)
-# procrustes_init .. free_problem are the supervisor's functions as received, with six corrections that stop them from running at all (nothing of the method is changed): the import of least_squares (the supervisor's file has it at its top), np.c -> np.c_ (backproject), the call
-# _backproject -> backproject (alt_template), rodrigues -> _rodrigues (ba_refine), np.r -> np.r_ (ba_refine, four places), Problem.new(Problem) -> Problem.__new__(Problem) (_restrict). The supervisor's estimate_run
-# (an existing function, so not redefined) is ft_estimate_run: the same dispatch with the free_template branch added.
+# procrustes_init .. free_problem are the supervisor's functions (second version of 2026-10-29: Levenberg-Marquardt with a Schur complement over the frame poses instead of scipy least_squares, and a coarse f grid of 8 points in free_template)
+# with the corrections that stop them from running at all (nothing of the method is changed): np.c -> np.c_ (backproject), the call _backproject -> backproject (alt_template), rodrigues -> _rodrigues (ba_refine), np.r -> np.r_ (ba_refine,
+# _lm_schur), the definition lm_schur -> _lm_schur (the supervisor's calls use that name), Problem.new(Problem) -> Problem.__new__(Problem) (_restrict). The supervisor's estimate_run (an existing function, so not redefined) is
+# ft_estimate_run: the same dispatch with the free_template branch added. Experiments 40 / 41 / 42 ran with the first version (scipy least_squares, the full 60-point grid): their commits keep it. free_template now returns its 8-point grid in
+# profile_f, and ft_video / s3_video / h3_video report that grid and its cost curve (the callers used the full grid before).
 # ====================================================================================================
-from scipy.optimize import least_squares  # noqa: E402  (the supervisor's file imports it at the top)
 
 
 def procrustes_init(pb, iters=6):
@@ -5414,7 +5415,92 @@ def _anchors(T, frames):
     return int(good[a]), int(good[b])
 
 
-def ba_refine(pb, f0, T0, f_bounds, huber_px=None, max_nfev=100):
+def _lm_schur(resid, x0, G, N, fi, gl_groups, lf_bounds, hp, max_iter=60, tol=1e-8):
+    M = len(fi)
+    fr2 = np.r_[fi, fi]
+    order = np.argsort(fr2, kind="stable")
+    fs = fr2[order]
+    starts = np.r_[0, np.flatnonzero(np.diff(fs)) + 1]
+    present = fs[starts]
+    pose_cols = [G + 6 * fr2 + d for d in range(6)]
+    i6 = np.arange(6)
+
+    def robust(r):
+        e = np.hypot(r[:M], r[M:2 * M])
+        w = np.where(e <= hp, 1.0, hp / np.maximum(e, 1e-12))
+        rho = np.where(e <= hp, e * e, 2 * hp * e - hp * hp)
+        return w, float(rho.sum() + (r[2 * M:] ** 2).sum())
+
+    def seg(A):
+        out = np.zeros((N,) + A.shape[1:])
+        out[present] = np.add.reduceat(A[order], starts, axis=0)
+        return out
+
+    def jacs(x, nr):
+        Jg = np.zeros((nr, G))
+        Jp = np.zeros((2 * M, 6))
+        h = 1e-6 * np.maximum(1.0, np.abs(x))
+        for cols, m in gl_groups:
+            xp, xm = x.copy(), x.copy()
+            xp[cols] += h[cols]
+            xm[cols] -= h[cols]
+            dr = resid(xp) - resid(xm)
+            ok = np.flatnonzero(m >= 0)
+            Jg[ok, m[ok]] = dr[ok] / (2 * h[m[ok]])
+        for d in range(6):
+            cols = G + 6 * np.arange(N) + d
+            xp, xm = x.copy(), x.copy()
+            xp[cols] += h[cols]
+            xm[cols] -= h[cols]
+            Jp[:, d] = (resid(xp) - resid(xm))[:2 * M] / (2 * h[pose_cols[d]])
+        return Jg, Jp
+
+    x = x0.copy()
+    r = resid(x)
+    w, c = robust(r)
+    lam, it, success = 1e-3, 0, False
+    for it in range(1, max_iter + 1):
+        nr = len(r)
+        Jg, Jp = jacs(x, nr)
+        rw = np.r_[w, w, np.ones(nr - 2 * M)]
+        Jgw = Jg * rw[:, None]
+        U = Jg.T @ Jgw
+        bg = -Jgw.T @ r
+        Jpw = Jp * rw[:2 * M, None]
+        V = seg(Jpw[:, :, None] * Jp[:, None, :])
+        Wm = seg(Jgw[:2 * M, :, None] * Jp[:, None, :])
+        bp = seg(-Jpw * r[:2 * M, None])
+        improved = False
+        for _ in range(12):
+            Ud = U + lam * np.diag(np.diag(U) + 1e-9)
+            Vd = V.copy()
+            Vd[:, i6, i6] += lam * (V[:, i6, i6] + 1e-9)
+            Vi = np.linalg.inv(Vd)
+            WVi = Wm @ Vi
+            S = Ud - np.einsum("ngk,nhk->gh", WVi, Wm)
+            dg = np.linalg.solve(S, bg - np.einsum("ngk,nk->g", WVi, bp))
+            dp = np.einsum("nij,nj->ni", Vi, bp - np.einsum("ngk,g->nk", Wm, dg))
+            xn = x + np.r_[dg, dp.ravel()]
+            xn[0] = np.clip(xn[0], lf_bounds[0], lf_bounds[1])
+            rn = resid(xn)
+            wn, cn = robust(rn)
+            if np.isfinite(cn) and cn < c:
+                improved = True
+                break
+            lam *= 4
+        if not improved:
+            success = True
+            break
+        rel = (c - cn) / max(c, 1e-12)
+        x, r, w, c = xn, rn, wn, cn
+        lam = max(lam / 3, 1e-12)
+        if rel < tol:
+            success = True
+            break
+    return x, r, it, success
+
+
+def ba_refine(pb, f0, T0, f_bounds, huber_px=None, max_iter=60):
     J = T0.shape[0]
     frames = [pb.frames[i] for i in pb.keep]
     N = len(frames)
@@ -5433,6 +5519,8 @@ def ba_refine(pb, f0, T0, f_bounds, huber_px=None, max_nfev=100):
     col = np.full(J, -1)
     col[free] = np.arange(len(free))
     nT = 2 * len(free)
+    G = 1 + nT
+    M = len(ji)
 
     def unpack(x):
         T = T0.copy()
@@ -5447,45 +5535,19 @@ def ba_refine(pb, f0, T0, f_bounds, huber_px=None, max_nfev=100):
         w = f * X[:, 1] / X[:, 2] + pb.cy - uv[:, 1]
         return np.r_[sw * u, sw * w]
 
-    M = len(ji)
-    rows = np.r_[np.arange(M), np.arange(M)]
-    fr = col[ji] >= 0
-    tr_rows = np.r_[np.flatnonzero(fr), np.flatnonzero(fr) + M]
-    tr_j = np.r_[col[ji[fr]], col[ji[fr]]]
-    P = 1 + nT + 6 * N
-
-    def jac(x):
-        Jm = np.zeros((2 * M, P))
-        h = 1e-6 * np.maximum(1.0, np.abs(x))
-        groups = [(np.array([0]), np.zeros(2 * M, int))]
-        for d in range(2):
-            cols = 1 + 2 * np.arange(len(free)) + d
-            m = np.full(2 * M, -1)
-            m[tr_rows] = cols[tr_j]
-            groups.append((cols, m))
-        for d in range(6):
-            cols = 1 + nT + 6 * np.arange(N) + d
-            groups.append((cols, cols[np.r_[fi, fi]]))
-        for cols, m in groups:
-            xp, xm = x.copy(), x.copy()
-            xp[cols] += h[cols]
-            xm[cols] -= h[cols]
-            dr = resid(xp) - resid(xm)
-            ok = m >= 0
-            Jm[np.flatnonzero(ok), m[ok]] = dr[ok] / (2 * h[m[ok]])
-        return Jm
-
+    groups = [(np.array([0]), np.zeros(2 * M, int))]
+    for d in range(2):
+        cols = 1 + 2 * np.arange(len(free)) + d
+        cj = np.where(col[ji] >= 0, cols[np.maximum(col[ji], 0)], -1)
+        groups.append((cols, np.r_[cj, cj]))
     x0 = np.r_[np.log(f0), T0[free].ravel(), poses.ravel()]
-    lo = np.full_like(x0, -np.inf)
-    hi = np.full_like(x0, np.inf)
-    lo[0], hi[0] = np.log(f_bounds[0]), np.log(f_bounds[1])
-    x0[0] = np.clip(x0[0], lo[0] + 1e-9, hi[0] - 1e-9)
+    lb = (np.log(f_bounds[0]), np.log(f_bounds[1]))
+    x0[0] = np.clip(x0[0], *lb)
     hp = float(np.median(pb.huber[pb.keep])) if huber_px is None else float(huber_px)
-    r = least_squares(resid, x0, jac=jac, bounds=(lo, hi), method="trf", tr_solver="exact", loss="huber", f_scale=hp,
-                      x_scale="jac", max_nfev=max_nfev)
-    f, T, _ = unpack(r.x)
-    return {"f": float(f), "template": T, "success": bool(r.success), "nfev": int(r.nfev),
-            "rms_px": float(np.sqrt(np.mean(r.fun ** 2)))}
+    x, r, it, ok = _lm_schur(resid, x0, G, N, fi, groups, lb, hp, max_iter)
+    f, T, _ = unpack(x)
+    return {"f": float(f), "template": T, "success": bool(ok), "nfev": int(it),
+            "rms_px": float(np.sqrt(np.mean(r[:2 * M] ** 2)))}
 
 
 def _restrict(pb, min_frames=3, max_frames=120):
@@ -5504,7 +5566,9 @@ def _restrict(pb, min_frames=3, max_frames=120):
     return q, ids
 
 
-def free_template(pb, grid, alt_iters=3, refine=True, max_frames=120):
+def free_template(pb, grid, alt_iters=3, refine=True, max_frames=120, coarse_n=8):
+    if len(grid) > coarse_n:
+        grid = grid[np.unique(np.linspace(0, len(grid) - 1, coarse_n).round().astype(int))]
     if not pb.keep:
         raise ValueError("no usable frames")
     pb, ids = _restrict(pb, max_frames=max_frames)
@@ -5597,7 +5661,7 @@ def ft_video(args) -> dict:
         return res
     ba = r.get("ba", {})
     mk.update({"f": float(r["f"]), "f_grid": float(r["f_grid"]), "at_grid_edge": bool(r["at_grid_edge"]), "ba_at_bound": bool(r["f"] <= grid[0] * (1 + 1e-6) or r["f"] >= grid[-1] * (1 - 1e-6)),
-               "curve": {"grid": grid.tolist(), "cost": [float(x) for x in r["profile_cost"]]}, "sharpness": ft_sharpness(grid, r["profile_cost"], r["f_grid"]),
+               "curve": {"grid": [float(x) for x in r["profile_f"]], "cost": [float(x) for x in r["profile_cost"]]}, "sharpness": ft_sharpness(r["profile_f"], r["profile_cost"], r["f_grid"]),
                "cost_at_f": float(r["cost"]), "ba_success": ba.get("success"), "ba_nfev": ba.get("nfev"), "ba_rms_px": ba.get("rms_px"), "n_frames_in_problem": int(len(pb.keep)), "n_points": int(pb.n_points),
                "joint_ids": [int(x) for x in r["joint_ids"]], "elapsed_s": float(time.time() - t0), "box_long_median_px": float(np.nanmedian(proc["box_long"][proc["present"]]))})
     return res
@@ -5605,7 +5669,7 @@ def ft_video(args) -> dict:
 
 # ====================================================================================================
 # s3  (experiment 41: the supervisor's free_shape3d, a free template with a small out-of-plane relief, on the marker tracks of 39 / 40; new section, earlier functions are used unchanged)
-# _anchors3, _relief, ba3_refine, free_shape3d are the supervisor's functions exactly as received (2026-10-29), nothing corrected. The supervisor's estimate_run (an existing function, so not redefined) is
+# _anchors3, _relief, ba3_refine, free_shape3d are the supervisor's functions (second version of 2026-10-29: ba3_refine uses the Levenberg-Marquardt / Schur solver _lm_schur of the ft section instead of scipy least_squares; _anchors3, _relief, free_shape3d as before). The supervisor's estimate_run (an existing function, so not redefined) is
 # s3_estimate_run: the same four-branch dispatch. s3_slope is the slope of log f on log distance from the per-video 3-D f (the 3-D bundle adjustment has no cost curve over f, so it cannot be pooled like the grid curves);
 # s3_video is ft_video with the call free_problem -> estimate_run('free_shape3d').
 # ====================================================================================================
@@ -5628,7 +5692,7 @@ def _relief(S, rms0):
     return d, float(np.sqrt(np.mean(d ** 2)) / rms0)
 
 
-def ba3_refine(pb, f0, T2, f_bounds, z_rel=0.2, huber_px=None, max_nfev=100):
+def ba3_refine(pb, f0, T2, f_bounds, z_rel=0.2, huber_px=None, max_iter=60):
     J = T2.shape[0]
     frames = [pb.frames[i] for i in pb.keep]
     N = len(frames)
@@ -5655,7 +5719,6 @@ def ba3_refine(pb, f0, T2, f_bounds, z_rel=0.2, huber_px=None, max_nfev=100):
     zs = None if z_rel is None else float(z_rel) * rms0
     M = len(ji)
     nr = 2 * M + (J if zs else 0)
-    P = 1 + nS + 6 * N
 
     def unpack(x):
         S = S0.ravel().copy()
@@ -5677,6 +5740,7 @@ def ba3_refine(pb, f0, T2, f_bounds, z_rel=0.2, huber_px=None, max_nfev=100):
             r.append(hp * S[:, 2] / zs)
         return np.concatenate(r)
 
+    G = 1 + nS
     groups = [(np.array([0]), np.zeros(nr, int))]
     for d in range(3):
         cols = col_of[3 * np.arange(J) + d]
@@ -5686,34 +5750,12 @@ def ba3_refine(pb, f0, T2, f_bounds, z_rel=0.2, huber_px=None, max_nfev=100):
         if zs and d == 2:
             m[2 * M:] = cols
         groups.append((cols[cols >= 0], m))
-    for d in range(6):
-        cols = 1 + nS + 6 * np.arange(N) + d
-        m = np.full(nr, -1)
-        m[:M] = cols[fi]
-        m[M:2 * M] = cols[fi]
-        groups.append((cols, m))
-
-    def jac(x):
-        Jm = np.zeros((nr, P))
-        h = 1e-6 * np.maximum(1.0, np.abs(x))
-        for cols, m in groups:
-            xp, xm = x.copy(), x.copy()
-            xp[cols] += h[cols]
-            xm[cols] -= h[cols]
-            dr = resid(xp) - resid(xm)
-            ok = m >= 0
-            Jm[np.flatnonzero(ok), m[ok]] = dr[ok] / (2 * h[m[ok]])
-        return Jm
-
     x0 = np.r_[np.log(f0), S0.ravel()[fidx], poses.ravel()]
-    lo = np.full_like(x0, -np.inf)
-    hi = np.full_like(x0, np.inf)
-    lo[0], hi[0] = np.log(f_bounds[0]), np.log(f_bounds[1])
-    x0[0] = np.clip(x0[0], lo[0] + 1e-9, hi[0] - 1e-9)
-    r = least_squares(resid, x0, jac=jac, bounds=(lo, hi), method="trf", tr_solver="exact", loss="huber", f_scale=hp,
-                      x_scale="jac", max_nfev=max_nfev)
-    f, S, Pz = unpack(r.x)
-    u, w, _ = proj(r.x)
+    lb = (np.log(f_bounds[0]), np.log(f_bounds[1]))
+    x0[0] = np.clip(x0[0], *lb)
+    xs, rr, it, okk = _lm_schur(resid, x0, G, N, fi, groups, lb, hp, max_iter)
+    f, S, Pz = unpack(xs)
+    u, w, _ = proj(xs)
     e = np.hypot(u, w)
     keep = np.array(pb.keep)
     hb = pb.huber[keep][fi]
@@ -5725,10 +5767,10 @@ def ba3_refine(pb, f0, T2, f_bounds, z_rel=0.2, huber_px=None, max_nfev=100):
         num = np.bincount(fi, lossv, N)
         den = np.bincount(fi, None, N)
     rel_d, rel = _relief(S, rms0)
-    return {"f": float(f), "shape": S, "poses": Pz, "success": bool(r.success), "nfev": int(r.nfev),
+    return {"f": float(f), "shape": S, "poses": Pz, "success": bool(okk), "nfev": int(it),
             "rms_px": float(np.sqrt(np.mean(e ** 2))), "cost": float(np.mean(num / np.maximum(den, 1e-12))),
             "relief_rel": rel, "relief_per_joint": rel_d / rms0, "anchors": (a, b, c),
-            "at_bound": bool(r.x[0] <= lo[0] + 1e-6 or r.x[0] >= hi[0] - 1e-6)}
+            "at_bound": bool(xs[0] <= lb[0] + 1e-6 or xs[0] >= lb[1] - 1e-6)}
 
 
 def free_shape3d(pb, grid, z_rel=0.2, alt_iters=3, max_frames=120, planar=None):
@@ -5812,11 +5854,12 @@ def s3_video(args) -> dict:
     except Exception as e:                                            # a failure is a result, not a crash of the run
         mk["failed"] = f"{type(e).__name__}: {e}"
         return res
+    pg = np.asarray(r["profile_f"], float)                                  # the (coarse) grid the supervisor's free_template used
     k = int(np.argmin(r["profile_cost"]))
-    f_grid_min = float(np.exp(np.clip(_parabola(np.log(grid), np.asarray(r["profile_cost"]), k), np.log(grid[0]), np.log(grid[-1]))))
+    f_grid_min = float(np.exp(np.clip(_parabola(np.log(pg), np.asarray(r["profile_cost"]), k), np.log(pg[0]), np.log(pg[-1]))))
     mk.update({"f": float(r["f"]), "f_planar": float(r["f_planar"]), "f_grid": f_grid_min, "at_grid_edge": bool(r["at_grid_edge"]), "at_bound": bool(r["at_bound"]),
                "relief_rel": float(r["relief_rel"]), "relief_per_joint": [float(x) for x in r["relief_per_joint"]], "cost": float(r["cost"]), "cost_planar": float(r["cost_planar"]),
-               "curve": {"grid": grid.tolist(), "cost": [float(x) for x in r["profile_cost"]]}, "sharpness": ft_sharpness(grid, r["profile_cost"], f_grid_min),
+               "curve": {"grid": pg.tolist(), "cost": [float(x) for x in r["profile_cost"]]}, "sharpness": ft_sharpness(pg, r["profile_cost"], f_grid_min),
                "ba3_success": r["ba"]["success"], "ba3_nfev": r["ba"]["nfev"], "ba3_rms_px": r["ba"]["rms_px"], "anchors": [int(x) for x in r["ba"]["anchors"]], "n_frames_in_problem": int(len(pb.keep)),
                "n_points": int(pb.n_points), "joint_ids": [int(x) for x in r["joint_ids"]], "elapsed_s": float(time.time() - t0), "box_long_median_px": float(np.nanmedian(proc["box_long"][proc["present"]]))})
     return res
@@ -5864,11 +5907,12 @@ def h3_video(args) -> dict:
     except Exception as e:                                            # a failure is a result, not a crash of the run
         mk["failed"] = f"{type(e).__name__}: {e}"
         return res
+    pg = np.asarray(r["profile_f"], float)                                  # the (coarse) grid the supervisor's free_template used
     k = int(np.argmin(r["profile_cost"]))
-    f_grid_min = float(np.exp(np.clip(_parabola(np.log(grid), np.asarray(r["profile_cost"]), k), np.log(grid[0]), np.log(grid[-1]))))
+    f_grid_min = float(np.exp(np.clip(_parabola(np.log(pg), np.asarray(r["profile_cost"]), k), np.log(pg[0]), np.log(pg[-1]))))
     mk.update({"f": float(r["f"]), "f_planar": float(r["f_planar"]), "f_grid": f_grid_min, "at_grid_edge": bool(r["at_grid_edge"]), "at_bound": bool(r["at_bound"]),
                "relief_rel": float(r["relief_rel"]), "relief_per_joint": [float(x) for x in r["relief_per_joint"]], "cost": float(r["cost"]), "cost_planar": float(r["cost_planar"]),
-               "curve": {"grid": grid.tolist(), "cost": [float(x) for x in r["profile_cost"]]}, "sharpness": ft_sharpness(grid, r["profile_cost"], f_grid_min),
+               "curve": {"grid": pg.tolist(), "cost": [float(x) for x in r["profile_cost"]]}, "sharpness": ft_sharpness(pg, r["profile_cost"], f_grid_min),
                "ba3_success": r["ba"]["success"], "ba3_nfev": r["ba"]["nfev"], "ba3_rms_px": r["ba"]["rms_px"], "anchors": [int(x) for x in r["ba"]["anchors"]], "n_frames_in_problem": int(len(pb.keep)),
                "n_points": int(pb.n_points), "joint_ids": [int(x) for x in r["joint_ids"]], "elapsed_s": float(time.time() - t0), "box_long_median_px": float(np.nanmedian(proc["box_long"][proc["present"]]))})
     return res
