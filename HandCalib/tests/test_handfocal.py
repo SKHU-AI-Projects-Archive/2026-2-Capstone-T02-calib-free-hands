@@ -3644,5 +3644,152 @@ class FtReports(unittest.TestCase):
                     self.assertEqual(line.count("|"), line.strip().count("|"), line)
 
 
+
+# ---- experiment 41: the supervisor's free_shape3d on the marker tracks ------------------------------------
+CFG41 = yaml.safe_load((ROOT / "configs/41_free_shape3d.yaml").read_text())
+
+
+def s3_relief_problem(f=1000.0, n_frames=20, relief=8.0, seed=0):
+    """The planar 8-point template of ft_planar_problem with a small out-of-plane relief on the points; returns (Problem, K)."""
+    rng = np.random.default_rng(seed)
+    T = np.array([[-60, -40], [-20, -45], [20, -42], [60, -38], [-58, 10], [-18, 12], [22, 9], [62, 14]], float)
+    K = hf.K_of(f, 960.0, 540.0)
+    z = relief * np.array([0, 0, 1, -1, 1, 0, -1, 1.0])
+    frames = []
+    for i in range(n_frames):
+        a = np.deg2rad(5 + 40 * i / max(n_frames - 1, 1))
+        R = cv2.Rodrigues(np.array([a, 0.2 * a, 0.0]))[0]
+        X = np.c_[T, z] @ R.T + np.array([10.0, 5.0, 600.0])
+        uv = (K @ X.T).T
+        uv = uv[:, :2] / uv[:, 2:3] + rng.normal(0, 0.05, (len(T), 2))
+        frames.append((uv, np.ones(len(T), bool)))
+    return hf.Problem(np.zeros((len(T), 2)), frames, 960.0, 540.0, np.full(n_frames, 4.0))
+
+
+class S3Parts(unittest.TestCase):
+    def test_free_shape3d_returns_the_documented_fields_and_f_stays_in_range(self):
+        pb = s3_relief_problem()
+        grid = np.geomspace(500.0, 2000.0, 7)
+        r = hf.s3_estimate_run(pb, "free_shape3d", grid, {"free_template": {"z_rel": 0.2, "alt_iters": 1, "max_frames": 12}}, 1.0)
+        for k in ("f", "f_planar", "shape", "joint_ids", "relief_rel", "relief_per_joint", "cost", "cost_planar", "profile_f", "profile_cost", "at_grid_edge", "at_bound", "ba"):
+            self.assertIn(k, r)
+        self.assertEqual(r["shape"].shape, (8, 3))
+        self.assertTrue(grid[0] <= r["f"] <= grid[-1] and np.isfinite(r["relief_rel"]))
+        self.assertEqual(len(r["relief_per_joint"]), 8)
+        self.assertEqual(len(r["ba"]["anchors"]), 3)
+
+    def test_the_three_anchors_are_distinct_and_the_planar_result_can_be_passed_in(self):
+        pb = s3_relief_problem()
+        grid = np.geomspace(500.0, 2000.0, 7)
+        A = hf.free_template(pb, grid, alt_iters=1, max_frames=12)
+        r = hf.free_shape3d(pb, grid, alt_iters=1, max_frames=12, planar=A)
+        self.assertEqual(r["f_planar"], A["f"])
+        self.assertEqual(len(set(r["ba"]["anchors"])), 3)
+        with self.assertRaises(ValueError):
+            hf.free_shape3d(pb, grid, max_frames=12, planar={**A, "joint_ids": [0, 1, 2]})
+
+    def test_dispatch_routes_and_rejects_unknown_methods(self):
+        with self.assertRaises(ValueError):
+            hf.s3_estimate_run(None, "nonsense", None, {}, 1.0)
+        pb = s3_relief_problem()
+        grid = np.geomspace(500.0, 2000.0, 7)
+        self.assertIn("f_grid", hf.s3_estimate_run(pb, "free_template", grid, {}, 1.0))
+        self.assertIn("profile_cost", hf.s3_estimate_run(pb, "fixed_template", grid, {}, 1.0))
+
+    def test_planar_points_give_a_relief_near_zero(self):
+        pb = s3_relief_problem(relief=0.0)
+        grid = np.geomspace(500.0, 2000.0, 7)
+        r = hf.free_shape3d(pb, grid, alt_iters=1, max_frames=12)
+        self.assertLess(r["relief_rel"], 0.05)
+
+    def test_slope_of_the_per_video_f(self):
+        fb = {50.0: [1700.0, 1690.0], 60.0: [1680.0, 1670.0], 75.0: [1660.0, 1650.0]}
+        sl = hf.s3_slope(fb, {d: [False, False] for d in fb}, 200, 42)
+        self.assertAlmostEqual(sl["pooled_f"][50.0], float(np.sqrt(1700.0 * 1690.0)), places=6)
+        self.assertLess(sl["slope"], 0.0)
+        self.assertGreater(sl["slope"], -0.2)
+        self.assertEqual(len(sl["interval_95"]), 2)
+        self.assertEqual(sl, hf.s3_slope(fb, {d: [False, False] for d in fb}, 200, 42))                      # fixed seed
+        edge = hf.s3_slope(fb, {50.0: [False, True], 60.0: [False, False], 75.0: [False, False]}, 200, 42)
+        self.assertIsNone(edge["slope"])
+        self.assertIsNone(edge["interval_95"])
+        v = hf.pr_verdict(sl, {50.0: 1660.6, 60.0: 1653.7, 75.0: 1644.9}, CFG41["verdict"], {50.0: 2, 60.0: 2, 75.0: 2})
+        self.assertEqual(v["verdict"], "반비례 없음")
+        self.assertEqual(hf.pr_verdict(edge, {50.0: 1660.6, 60.0: 1653.7, 75.0: 1644.9}, CFG41["verdict"], {50.0: 2, 60.0: 2, 75.0: 2})["verdict"], "판단 불가")
+
+
+class S3Video(unittest.TestCase):
+    def test_video_through_the_marker_tracks_returns_both_f_and_a_failure_is_a_result(self):
+        with tempfile.TemporaryDirectory() as d:
+            prep = mo_synth_video(d, seconds=6.0, fps=6.0)
+            pcfg = copy.deepcopy(CFG41["pipeline"])
+            pcfg["estimate"]["f_grid_n"] = 6
+            c = {k: CFG41[k] for k in run.S3_KEYS}
+            c["free_shape3d"] = {"z_rel": 0.2, "alt_iters": 1, "max_frames": 8}
+            x = hf.s3_video(({"file": "synth.MOV", "distance_cm": 50}, prep, pcfg, c))["marker"]
+            self.assertIn("f", x, x)
+            for k in ("f_planar", "relief_rel", "at_bound", "curve", "anchors", "ba3_nfev"):
+                self.assertIn(k, x)
+            self.assertEqual(len(x["curve"]["grid"]), 6)
+            c2 = copy.deepcopy(c)
+            c2["markers"]["used_ids"] = [5, 6, 9, 10, 13, 14, 17, 99]
+            res2 = hf.s3_video(({"file": "synth.MOV", "distance_cm": 50}, prep, pcfg, c2))
+            self.assertIn("failed", res2["marker"])
+            self.assertNotIn("f", res2["marker"])
+
+
+class S3Config(unittest.TestCase):
+    def test_the_config_has_every_section_the_run_command_reads(self):
+        for k in run.S3_KEYS + ("videos", "input_dir", "ref_f_by_distance", "pipeline", "verdict", "bootstrap", "workers", "output", "code_41", "compare"):
+            self.assertIn(k, CFG41, k)
+        self.assertEqual((CFG41["free_shape3d"]["z_rel"], CFG41["free_shape3d"]["alt_iters"], CFG41["free_shape3d"]["max_frames"]), (0.2, 3, 120))
+        self.assertEqual(CFG41["markers"], CFG40["markers"])
+        self.assertEqual(CFG41["naming"], CFG40["naming"])
+        self.assertEqual(CFG41["pipeline"]["estimate"], CFG40["pipeline"]["estimate"])
+        self.assertEqual(CFG41["verdict"], CFG40["verdict"])
+
+
+class S3Reports(unittest.TestCase):
+    def test_summary_report_and_yaml_keep_the_reference_in_summary_only(self):
+        ref = {float(d): float(f) for d, f in CFG41["ref_f_by_distance"].items()}
+        grid = np.geomspace(0.35 * 1920, 1.6 * 1920, 60)
+        cost = ((np.log(grid) - np.log(1700.0)) ** 2 + 0.01).tolist()
+        results = []
+        for f, d in (("IMG_7294.MOV", 50), ("IMG_7293.MOV", 50), ("IMG_7292.MOV", 60), ("IMG_7291.MOV", 60), ("IMG_7290.MOV", 75), ("IMG_7289.MOV", 75)):
+            results.append({"video": f, "distance_cm": float(d), "size": [1920, 1080], "n_frames": 300, "duration_s": 20.0, "marker_stats": {"tilt_valid_ratio": 0.98},
+                            "marker": {"f": 1705.0, "f_planar": 1710.0, "f_grid": 1700.0, "at_grid_edge": False, "at_bound": False, "relief_rel": 0.01, "relief_per_joint": [0.01] * 8, "cost": 0.01, "cost_planar": 0.011,
+                                       "curve": {"grid": grid.tolist(), "cost": cost}, "sharpness": 1.4, "ba3_success": True, "ba3_nfev": 20, "ba3_rms_px": 0.2, "anchors": [0, 1, 2], "n_frames_in_problem": 120,
+                                       "n_points": 900, "joint_ids": [5, 6, 9, 10, 13, 14, 17, 18], "elapsed_s": 60.0}})
+        fb = {d: [r["marker"]["f"] for r in results if r["distance_cm"] == d] for d in (50.0, 60.0, 75.0)}
+        sl = hf.s3_slope(fb, {d: [False, False] for d in fb}, 50, 42)
+        cur = {d: [r["marker"]["curve"]["cost"] for r in results if r["distance_cm"] == d] for d in fb}
+        psl = hf.pr_slope(cur, grid, 50, 42)
+        nv = {50.0: 2, 60.0: 2, 75.0: 2}
+        ana = {"shape3d": {"slope": sl, "verdict": hf.pr_verdict(sl, ref, CFG41["verdict"], nv)}, "planar": {"slope": psl, "verdict": hf.pr_verdict(psl, ref, CFG41["verdict"], nv)}}
+        prior = {"39": {"video": {r["video"]: 1690.0 for r in results}, "pooled": {50.0: 1693.2, 60.0: 1663.6, 75.0: 1662.9}},
+                 "40": {"video": {r["video"]: 1710.0 for r in results}, "pooled": {50.0: 1725.4, 60.0: 1638.2, 75.0: 1686.7}}}
+        with tempfile.TemporaryDirectory() as d:
+            d = Path(d)
+            (d / "figures").mkdir()
+            run.s3_figures(d / "figures", results, ana, ref, prior)
+            run.s3_report(d / "report.md", results, CFG41)
+            run.s3_summary(d / "summary.md", results, ana, ref, CFG41, prior)
+            (d / "results.json").write_text(json.dumps(hf.jsonable({"videos": results, "analysis": ana}), ensure_ascii=False))
+            (d / "metadata.json").write_text(json.dumps({"git": {"commit": "abcdef1234", "git_dirty": False}}))
+            cfg = copy.deepcopy(CFG41)
+            cfg["output"]["results_yaml"] = str(d / "r.yaml")
+            y = Path(run.s3_results_yaml(d, cfg)).read_text()
+            self.assertTrue((d / "figures/f_vs_distance_loglog.png").exists() and (d / "figures/relief_per_joint.png").exists())
+            summ = (d / "summary.md").read_text()
+            self.assertIn("판정 (free_shape3d", summ)
+            self.assertIn("1660.6", summ)
+            for name, text in (("report", (d / "report.md").read_text()), ("yaml", y)):
+                for val in ("1660.6", "1653.7", "1644.9", "1680"):
+                    self.assertNotIn(val, text, name)
+            for line in summ.splitlines():
+                if line.startswith("|") and "---" not in line:
+                    self.assertEqual(line.count("|"), line.strip().count("|"), line)
+
+
 if __name__ == "__main__":
     unittest.main()

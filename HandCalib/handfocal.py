@@ -5601,3 +5601,222 @@ def ft_video(args) -> dict:
                "cost_at_f": float(r["cost"]), "ba_success": ba.get("success"), "ba_nfev": ba.get("nfev"), "ba_rms_px": ba.get("rms_px"), "n_frames_in_problem": int(len(pb.keep)), "n_points": int(pb.n_points),
                "joint_ids": [int(x) for x in r["joint_ids"]], "elapsed_s": float(time.time() - t0), "box_long_median_px": float(np.nanmedian(proc["box_long"][proc["present"]]))})
     return res
+
+
+# ====================================================================================================
+# s3  (experiment 41: the supervisor's free_shape3d, a free template with a small out-of-plane relief, on the marker tracks of 39 / 40; new section, earlier functions are used unchanged)
+# _anchors3, _relief, ba3_refine, free_shape3d are the supervisor's functions exactly as received (2026-10-29), nothing corrected. The supervisor's estimate_run (an existing function, so not redefined) is
+# s3_estimate_run: the same four-branch dispatch. s3_slope is the slope of log f on log distance from the per-video 3-D f (the 3-D bundle adjustment has no cost curve over f, so it cannot be pooled like the grid curves);
+# s3_video is ft_video with the call free_problem -> estimate_run('free_shape3d').
+# ====================================================================================================
+
+def _anchors3(T, frames):
+    a, b = _anchors(T, frames)
+    vis = np.sum([v for o, v in frames], axis=0)
+    good = [j for j in np.flatnonzero(vis >= 0.9 * vis.max()) if j not in (a, b)]
+    if not good:
+        good = [j for j in range(len(T)) if j not in (a, b)]
+    u = (T[b] - T[a]) / np.linalg.norm(T[b] - T[a])
+    d = [abs(u[0] * (T[j] - T[a])[1] - u[1] * (T[j] - T[a])[0]) for j in good]
+    return a, b, int(good[int(np.argmax(d))])
+
+
+def _relief(S, rms0):
+    c = S - S.mean(0)
+    n = np.linalg.svd(c)[2][-1]
+    d = c @ n
+    return d, float(np.sqrt(np.mean(d ** 2)) / rms0)
+
+
+def ba3_refine(pb, f0, T2, f_bounds, z_rel=0.2, huber_px=None, max_nfev=100):
+    J = T2.shape[0]
+    frames = [pb.frames[i] for i in pb.keep]
+    N = len(frames)
+    K0 = K_of(f0, pb.cx, pb.cy)
+    poses = np.zeros((N, 6))
+    for n, (o, v) in enumerate(frames):
+        _, R, t = frame_fit(T2, o, v, K0)
+        poses[n, :3] = cv2.Rodrigues(R)[0].ravel()
+        poses[n, 3:] = t
+    fi = np.concatenate([np.full(v.sum(), n) for n, (o, v) in enumerate(frames)])
+    ji = np.concatenate([np.flatnonzero(v) for o, v in frames])
+    uv = np.concatenate([o[v] for o, v in frames])
+    sw = np.ones(len(ji)) if pb.w is None else np.sqrt(pb.w[ji])
+    a, b, c = _anchors3(T2, frames)
+    S0 = np.c_[T2, np.zeros(J)]
+    fixed = np.zeros((J, 3), bool)
+    fixed[a], fixed[b], fixed[c, 2] = True, True, True
+    fidx = np.flatnonzero(~fixed.ravel())
+    nS = len(fidx)
+    col_of = np.full(3 * J, -1)
+    col_of[fidx] = 1 + np.arange(nS)
+    rms0 = float(np.sqrt((T2 ** 2).sum(1).mean()))
+    hp = float(np.median(pb.huber[pb.keep])) if huber_px is None else float(huber_px)
+    zs = None if z_rel is None else float(z_rel) * rms0
+    M = len(ji)
+    nr = 2 * M + (J if zs else 0)
+    P = 1 + nS + 6 * N
+
+    def unpack(x):
+        S = S0.ravel().copy()
+        S[fidx] = x[1:1 + nS]
+        return np.exp(x[0]), S.reshape(J, 3), x[1 + nS:].reshape(N, 6)
+
+    def proj(x):
+        f, S, Pz = unpack(x)
+        R = _rodrigues(Pz[:, :3])
+        X = np.einsum("nab,nb->na", R[fi], S[ji]) + Pz[fi, 3:]
+        u = f * X[:, 0] / X[:, 2] + pb.cx - uv[:, 0]
+        w = f * X[:, 1] / X[:, 2] + pb.cy - uv[:, 1]
+        return u, w, S
+
+    def resid(x):
+        u, w, S = proj(x)
+        r = [sw * u, sw * w]
+        if zs:
+            r.append(hp * S[:, 2] / zs)
+        return np.concatenate(r)
+
+    groups = [(np.array([0]), np.zeros(nr, int))]
+    for d in range(3):
+        cols = col_of[3 * np.arange(J) + d]
+        m = np.full(nr, -1)
+        m[:M] = cols[ji]
+        m[M:2 * M] = cols[ji]
+        if zs and d == 2:
+            m[2 * M:] = cols
+        groups.append((cols[cols >= 0], m))
+    for d in range(6):
+        cols = 1 + nS + 6 * np.arange(N) + d
+        m = np.full(nr, -1)
+        m[:M] = cols[fi]
+        m[M:2 * M] = cols[fi]
+        groups.append((cols, m))
+
+    def jac(x):
+        Jm = np.zeros((nr, P))
+        h = 1e-6 * np.maximum(1.0, np.abs(x))
+        for cols, m in groups:
+            xp, xm = x.copy(), x.copy()
+            xp[cols] += h[cols]
+            xm[cols] -= h[cols]
+            dr = resid(xp) - resid(xm)
+            ok = m >= 0
+            Jm[np.flatnonzero(ok), m[ok]] = dr[ok] / (2 * h[m[ok]])
+        return Jm
+
+    x0 = np.r_[np.log(f0), S0.ravel()[fidx], poses.ravel()]
+    lo = np.full_like(x0, -np.inf)
+    hi = np.full_like(x0, np.inf)
+    lo[0], hi[0] = np.log(f_bounds[0]), np.log(f_bounds[1])
+    x0[0] = np.clip(x0[0], lo[0] + 1e-9, hi[0] - 1e-9)
+    r = least_squares(resid, x0, jac=jac, bounds=(lo, hi), method="trf", tr_solver="exact", loss="huber", f_scale=hp,
+                      x_scale="jac", max_nfev=max_nfev)
+    f, S, Pz = unpack(r.x)
+    u, w, _ = proj(r.x)
+    e = np.hypot(u, w)
+    keep = np.array(pb.keep)
+    hb = pb.huber[keep][fi]
+    lossv = np.where(e <= hb, e * e, 2 * hb * e - hb * hb)
+    if pb.w is not None:
+        num = np.bincount(fi, pb.w[ji] * lossv, N)
+        den = np.bincount(fi, pb.w[ji], N)
+    else:
+        num = np.bincount(fi, lossv, N)
+        den = np.bincount(fi, None, N)
+    rel_d, rel = _relief(S, rms0)
+    return {"f": float(f), "shape": S, "poses": Pz, "success": bool(r.success), "nfev": int(r.nfev),
+            "rms_px": float(np.sqrt(np.mean(e ** 2))), "cost": float(np.mean(num / np.maximum(den, 1e-12))),
+            "relief_rel": rel, "relief_per_joint": rel_d / rms0, "anchors": (a, b, c),
+            "at_bound": bool(r.x[0] <= lo[0] + 1e-6 or r.x[0] >= hi[0] - 1e-6)}
+
+
+def free_shape3d(pb, grid, z_rel=0.2, alt_iters=3, max_frames=120, planar=None):
+    A = free_template(pb, grid, alt_iters=alt_iters, max_frames=max_frames) if planar is None else planar
+    pr, ids = _restrict(pb, max_frames=max_frames)
+    if list(ids) != list(A["joint_ids"]):
+        raise ValueError("planar result was computed on different joints")
+    B = ba3_refine(pr, A["f"], A["template"], (grid[0], grid[-1]), z_rel=z_rel)
+    return {"f": B["f"], "f_planar": A["f"], "shape": B["shape"], "joint_ids": A["joint_ids"], "relief_rel": B["relief_rel"],
+            "relief_per_joint": B["relief_per_joint"].tolist(), "cost": B["cost"], "cost_planar": A["cost"],
+            "profile_f": A["profile_f"], "profile_cost": A["profile_cost"], "at_grid_edge": A["at_grid_edge"], "at_bound": B["at_bound"],
+            "delta_deg": 0.0, "phi_deg": 0.0, "ba": {k: B[k] for k in ("success", "nfev", "rms_px", "anchors")}}
+
+
+def s3_estimate_run(pb, method, grid, ecfg, sigma2, start=None):
+    """The supervisor's estimate_run with the free_template and free_shape3d branches (as received); the existing estimate_run is not changed."""
+    if method == "fixed_template":
+        return fixed_template(pb, grid)
+    if method == "joint_delta":
+        return joint_delta(pb, grid, ecfg["joint_delta"], sigma2, start)
+    if method == "free_template":
+        return free_template(pb, grid)
+    if method == "free_shape3d":
+        fc = ecfg.get("free_template", {})
+        return free_shape3d(pb, grid, z_rel=fc.get("z_rel", 0.2), alt_iters=int(fc.get("alt_iters", 3)), max_frames=int(fc.get("max_frames", 120)))
+    raise ValueError(method)
+
+
+def s3_slope(f_by_distance: dict, edge_by_distance: dict, n: int, seed: int) -> dict:
+    """Slope of log f on log distance from the per-video 3-D f: the f of a distance is the geometric mean of its videos' f; the 95 % interval is the video-level bootstrap (the videos of every distance drawn with
+    replacement n times, fixed seed). A video whose f sits on a bound of the f range gives no slope and no interval (the same rule as a pooled f on the grid edge in pr_slope). Same keys as pr_slope's result."""
+    ds = sorted(f_by_distance)
+    gm = lambda v: float(np.exp(np.mean(np.log(np.asarray(v, float)))))      # noqa: E731
+    out = {"distances": ds, "pooled_f": {d: gm(f_by_distance[d]) for d in ds}, "pooled_edge": {d: bool(any(edge_by_distance[d])) for d in ds}}
+    if any(out["pooled_edge"].values()):
+        return {**out, "slope": None, "interval_95": None, "n_boot_used": 0, "n_boot_skipped": int(n)}
+    out["slope"] = ext_loglog_slope(ds, [out["pooled_f"][d] for d in ds])
+    rng = np.random.default_rng(int(seed))
+    sl = []
+    for _ in range(int(n)):
+        fs = [gm(np.asarray(f_by_distance[d], float)[rng.integers(0, len(f_by_distance[d]), len(f_by_distance[d]))]) for d in ds]
+        sl.append(ext_loglog_slope(ds, fs))
+    sl = [s_ for s_ in sl if s_ is not None]
+    out["interval_95"] = None if len(sl) < 10 else [float(np.quantile(sl, 0.025)), float(np.quantile(sl, 0.975))]
+    out["n_boot_used"], out["n_boot_skipped"] = int(len(sl)), int(n) - int(len(sl))
+    return out
+
+
+def s3_video(args) -> dict:
+    """One video of experiment 41: marker tracks of 39 (mo_process, unchanged) through the supervisor's call free_problem -> s3_estimate_run('free_shape3d'). args = (entry, prep, pcfg, c); c = the 39 keys plus
+    free_shape3d {z_rel, alt_iters, max_frames}. Same exclusion rules as ft_video. Returns {video, distance_cm, ..., marker: {f, f_planar, relief_rel, ...} | {excluded / failed}}."""
+    entry, prep, pcfg, c = args[:4]
+    os.environ.setdefault("OMP_NUM_THREADS", "1")
+    cv2.setNumThreads(1)
+    proc = mo_process(prep, pcfg, c)
+    W, H = proc["size"]
+    res = {"video": entry["file"], "distance_cm": float(entry["distance_cm"]), "size": [W, H], "n_frames": proc["n_frames"], "duration_s": float(proc["times"][-1] - proc["times"][0]),
+           "marker_stats": {k: proc.get(k) for k in ("valid_ratio", "tilt_valid_ratio", "n_detected_median", "window_success", "window_frames_50_150", "ref_time_s", "reasons", "per_marker_rate", "naming")}}
+    if "failed" in proc:
+        res["marker"] = {"failed": proc["failed"]}
+        return res
+    reasons = []
+    lim = float(c["marker_exclusion"]["min_tilt_valid_ratio"])
+    if proc["tilt_valid_ratio"] < lim:
+        reasons.append(f"기울기 구간 유효 프레임 {100 * proc['tilt_valid_ratio']:.1f}% < {100 * lim:.0f}%")
+    edge = fresp_edge_rate(proc["box"][proc["present"]], np.ones(int(proc["present"].sum()), bool), W, H) if proc["present"].any() else 1.0
+    if edge > float(c["exclusion"]["edge_rate_max"]):
+        reasons.append(f"가장자리 접촉 프레임 {100 * edge:.1f}% > {100 * float(c['exclusion']['edge_rate_max']):.0f}%")
+    mk = {"excluded": reasons, "edge_rate": float(edge), "valid_ratio": proc["valid_ratio"]}
+    res["marker"] = mk
+    if reasons:
+        return res
+    ecfg = pcfg["estimate"]
+    grid = f_grid(ecfg, max(W, H))
+    ids = sorted(int(x) for x in c["markers"]["used_ids"])
+    trk = {"kp": proc["kp"], "mask": proc["mask"], "present": proc["present"], "box": proc["box"]}
+    t0 = time.time()
+    try:
+        pb, idx = free_problem(trk, (W, H), ecfg, float(ecfg["huber_rel"]), ids=ids)
+        r = s3_estimate_run(pb, "free_shape3d", grid, {**ecfg, "free_template": c["free_shape3d"]}, 1.0)
+    except Exception as e:                                            # a failure is a result, not a crash of the run
+        mk["failed"] = f"{type(e).__name__}: {e}"
+        return res
+    k = int(np.argmin(r["profile_cost"]))
+    f_grid_min = float(np.exp(np.clip(_parabola(np.log(grid), np.asarray(r["profile_cost"]), k), np.log(grid[0]), np.log(grid[-1]))))
+    mk.update({"f": float(r["f"]), "f_planar": float(r["f_planar"]), "f_grid": f_grid_min, "at_grid_edge": bool(r["at_grid_edge"]), "at_bound": bool(r["at_bound"]),
+               "relief_rel": float(r["relief_rel"]), "relief_per_joint": [float(x) for x in r["relief_per_joint"]], "cost": float(r["cost"]), "cost_planar": float(r["cost_planar"]),
+               "curve": {"grid": grid.tolist(), "cost": [float(x) for x in r["profile_cost"]]}, "sharpness": ft_sharpness(grid, r["profile_cost"], f_grid_min),
+               "ba3_success": r["ba"]["success"], "ba3_nfev": r["ba"]["nfev"], "ba3_rms_px": r["ba"]["rms_px"], "anchors": [int(x) for x in r["ba"]["anchors"]], "n_frames_in_problem": int(len(pb.keep)),
+               "n_points": int(pb.n_points), "joint_ids": [int(x) for x in r["joint_ids"]], "elapsed_s": float(time.time() - t0), "box_long_median_px": float(np.nanmedian(proc["box_long"][proc["present"]]))})
+    return res
