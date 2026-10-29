@@ -7,8 +7,8 @@ origin/main에 있던 기존 파일은 **하나도 수정하지 않았다.** 추
 
 | 파일 | 내용 |
 |---|---|
-| `HandCalib/handfocal_estimate.py` | 초점 거리 추정 쪽 코드 전체. 영상 규격 변환, 프레임 추출, 검출 결과 읽기, 손 추적, 정면 템플릿, 기울기(θ2d), PnP 기반 f 추정(fixed_template, joint_delta, free_template, free_shape3d), 불확실도, 판정, AnyCalib 참조값, 17의 촬영 조건 점검·검출기 순위·프레임 거르기, 18의 구간 분할·체커보드 보정, 이후 실험(20~42)의 분석 함수 |
-| `HandCalib/handfocal_report.py` | 결과 출력·보고서 쪽 코드. 결과 json·csv·그림·보고서(report.md) 작성과 출처 기록(git 상태, 설정 해시, 라이브러리 버전) |
+| `HandCalib/handfocal_estimate.py` | 초점 거리 추정 알고리즘만(약 800줄, 다른 파일을 import하지 않는다). 손 추적(track), 정면 템플릿, 기울기(θ2d), f 추정 문제와 비용(Problem, cost, frame_fit), f 선택(fixed_template, joint_delta), 교수님의 free_template·free_shape3d |
+| `HandCalib/handfocal_report.py` | 추정 알고리즘 밖의 나머지 전부. 영상 규격 변환, 프레임 추출, 검출 결과 읽기, 불확실도, 판정, AnyCalib 참조값, 17·18과 이후 실험(20~42)의 분석 함수, 결과 json·csv·그림·보고서(report.md) 작성, 출처 기록(git 상태, 설정 해시, 라이브러리 버전) |
 | `HandCalib/handfocal.py` | 위 두 파일을 한 이름공간으로 불러오는 얇은 파일. `import handfocal as hf`는 이전과 같은 이름을 모두 제공해 run.py와 테스트는 그대로다 |
 | `HandCalib/run.py` | 실행 스크립트(한 파일). 하위 명령 `protocol`, `frame-filter`, `same-session`, `overlay` |
 | `HandCalib/detector_worker.py` | 2D 손 검출기 워커 3종(wilor_yolo, mediapipe_hands, rtmpose_hand). 검출기마다 다른 가상환경에서 별도 프로세스로 실행되므로 분석 코드와 분리했다 |
