@@ -1,0 +1,476 @@
+experiment: 45_free_shape3d_27
+run: runs/45_free_shape3d_27/20261029T102021Z
+code_commit: bf8b742
+git_dirty_at_run: false
+note: 실험 27의 실제 손 영상(MediaPipe 관절 16점, 손목 제외, 오른손 거리 영상 G6와 왼손 영상 G7)에 교수님의 free_shape3d를
+  실험 41과 같은 호출(pb, idx = free_problem(trk, (W, H), ecfg, huber_rel, ids), estimate_run(pb,
+  'free_shape3d', grid, ecfg, sigma2))로 적용해 f를 구하고, 실험 27의 fixed_template 값과 비교한 실험이다.
+  프린트 손(실험 34)과 태블릿 화면 영상은 쓰지 않았다. 판정은 실험 41과 같은 규칙(영상별 3차원 f의 거리-f 기울기, 영상 단위 부트스트랩)을
+  G6에 적용하고, 규칙과 쓰는 점, 설정은 실행 전에 고정했다. 기준 f와의 비교는 summary.md에만 있다.
+candidate:
+  detector: mediapipe_hands
+  wrist_mode: exclude
+  estimator: fixed_template
+  front_window: 17's (phase_mode nominal, tilt phase from 3.0 s)
+free_shape3d:
+  z_rel: 0.2
+  alt_iters: 3
+  max_frames: 120
+verdict_rules:
+  slope_none_min: -0.3
+  slope_yes_max: -0.7
+  f_tol: 0.1
+videos:
+  IMG_7216.MOV:
+    group: G6
+    distance_cm: 50.0
+    hand: right
+    duration_s: 24.2
+    detect_rate: 1.0
+    edge_rate: 0.0632
+    free_shape3d:
+      excluded:
+      - 가장자리 접촉 프레임 6.3% > 5%
+  IMG_7217.MOV:
+    group: G6
+    distance_cm: 60.0
+    hand: right
+    duration_s: 24.87
+    detect_rate: 1.0
+    edge_rate: 0.0
+    free_shape3d:
+      f_3d_px: 1207.0
+      f_planar_px: 1269.3
+      f_grid_px: 1983.0
+      at_grid_edge: false
+      at_bound: false
+      relief_rel: 0.02483
+      relief_per_joint:
+      - 0.03283
+      - -0.024
+      - -0.04255
+      - -0.0345
+      - 0.02683
+      - 0.00242
+      - -0.00521
+      - 0.03921
+      - 0.0131
+      - 0.00768
+      - 0.01191
+      - 0.03607
+      - -0.02118
+      - -0.01926
+      - -0.02049
+      - -0.00285
+      cost_3d: 8.45216
+      cost_planar: 11.03721
+      ba3_rms_px: 2.9073
+      ba3_success: true
+      ba3_nfev: 9
+      n_frames_in_problem: 374
+      elapsed_s: 1
+  IMG_7218.MOV:
+    group: G6
+    distance_cm: 75.0
+    hand: right
+    duration_s: 24.87
+    detect_rate: 1.0
+    edge_rate: 0.0
+    free_shape3d:
+      f_3d_px: 1263.2
+      f_planar_px: 1268.6
+      f_grid_px: 1749.3
+      at_grid_edge: false
+      at_bound: false
+      relief_rel: 0.02661
+      relief_per_joint:
+      - 0.03
+      - -0.02133
+      - -0.04368
+      - -0.02225
+      - 0.02624
+      - -0.00955
+      - -0.00812
+      - 0.05386
+      - 0.01996
+      - -0.01297
+      - 0.001
+      - 0.03876
+      - 0.00355
+      - -0.034
+      - -0.024
+      - 0.00254
+      cost_3d: 5.64655
+      cost_planar: 7.26319
+      ba3_rms_px: 2.3766
+      ba3_success: true
+      ba3_nfev: 23
+      n_frames_in_problem: 374
+      elapsed_s: 2
+  IMG_7219.MOV:
+    group: G6
+    distance_cm: 50.0
+    hand: right
+    duration_s: 23.6
+    detect_rate: 1.0
+    edge_rate: 0.0
+    free_shape3d:
+      f_3d_px: 1649.6
+      f_planar_px: 1670.6
+      f_grid_px: 2064.4
+      at_grid_edge: false
+      at_bound: false
+      relief_rel: 0.02992
+      relief_per_joint:
+      - 0.02905
+      - -0.02921
+      - -0.05248
+      - -0.04566
+      - 0.02636
+      - 0.0174
+      - 0.01428
+      - 0.05765
+      - 0.01739
+      - 0.00033
+      - 0.01106
+      - 0.03081
+      - -0.0035
+      - -0.03027
+      - -0.02492
+      - -0.01828
+      cost_3d: 14.45684
+      cost_planar: 19.93797
+      ba3_rms_px: 3.8028
+      ba3_success: true
+      ba3_nfev: 12
+      n_frames_in_problem: 355
+      elapsed_s: 1
+  IMG_7220.MOV:
+    group: G6
+    distance_cm: 60.0
+    hand: right
+    duration_s: 21.4
+    detect_rate: 1.0
+    edge_rate: 0.0
+    free_shape3d:
+      f_3d_px: 1708.0
+      f_planar_px: 1857.0
+      f_grid_px: 2496.3
+      at_grid_edge: false
+      at_bound: false
+      relief_rel: 0.02413
+      relief_per_joint:
+      - 0.02315
+      - -0.01788
+      - -0.04285
+      - -0.0302
+      - 0.02738
+      - 0.00477
+      - -0.00538
+      - 0.0462
+      - 0.02281
+      - -0.0015
+      - 0.00552
+      - 0.02492
+      - -0.013
+      - -0.035
+      - -0.01364
+      - 0.0047
+      cost_3d: 6.54645
+      cost_planar: 8.29
+      ba3_rms_px: 2.5586
+      ba3_success: true
+      ba3_nfev: 21
+      n_frames_in_problem: 322
+      elapsed_s: 2
+  IMG_7221.MOV:
+    group: G6
+    distance_cm: 75.0
+    hand: right
+    duration_s: 24.0
+    detect_rate: 1.0
+    edge_rate: 0.0
+    free_shape3d:
+      f_3d_px: 1096.1
+      f_planar_px: 1162.4
+      f_grid_px: 1484.4
+      at_grid_edge: false
+      at_bound: false
+      relief_rel: 0.03349
+      relief_per_joint:
+      - 0.04345
+      - -0.02931
+      - -0.05923
+      - -0.04919
+      - 0.03989
+      - 0.00299
+      - 0.006
+      - 0.06127
+      - 0.01652
+      - -0.01004
+      - 0.00518
+      - 0.03873
+      - -0.02091
+      - -0.03346
+      - -0.01924
+      - 0.00735
+      cost_3d: 6.3165
+      cost_planar: 8.76975
+      ba3_rms_px: 2.5141
+      ba3_success: true
+      ba3_nfev: 18
+      n_frames_in_problem: 361
+      elapsed_s: 1
+  IMG_7222.MOV:
+    group: G6
+    distance_cm: 50.0
+    hand: right
+    duration_s: 23.4
+    detect_rate: 1.0
+    edge_rate: 0.0
+    free_shape3d:
+      f_3d_px: 1701.5
+      f_planar_px: 1672.6
+      f_grid_px: 2377.9
+      at_grid_edge: false
+      at_bound: false
+      relief_rel: 0.0156
+      relief_per_joint:
+      - 0.02056
+      - -0.02373
+      - -0.02438
+      - -0.00034
+      - 0.01826
+      - -0.00481
+      - -0.01193
+      - 0.03531
+      - 0.01009
+      - -0.01099
+      - -0.00188
+      - 0.01167
+      - -0.00306
+      - -0.01318
+      - -0.00402
+      - 0.00242
+      cost_3d: 10.27605
+      cost_planar: 11.79619
+      ba3_rms_px: 3.2056
+      ba3_success: true
+      ba3_nfev: 11
+      n_frames_in_problem: 352
+      elapsed_s: 1
+  IMG_7223.MOV:
+    group: G6
+    distance_cm: 60.0
+    hand: right
+    duration_s: 22.13
+    detect_rate: 1.0
+    edge_rate: 0.0
+    free_shape3d:
+      f_3d_px: 1560.2
+      f_planar_px: 1571.3
+      f_grid_px: 1767.3
+      at_grid_edge: false
+      at_bound: false
+      relief_rel: 0.02479
+      relief_per_joint:
+      - 0.01575
+      - -0.03146
+      - -0.03846
+      - -0.00777
+      - 0.02429
+      - -0.00311
+      - 0.00272
+      - 0.0586
+      - 0.02889
+      - -0.01279
+      - -0.00651
+      - 0.01712
+      - 0.013
+      - -0.03039
+      - -0.02323
+      - -0.00665
+      cost_3d: 6.23863
+      cost_planar: 8.21703
+      ba3_rms_px: 2.4977
+      ba3_success: true
+      ba3_nfev: 14
+      n_frames_in_problem: 333
+      elapsed_s: 1
+  IMG_7224.MOV:
+    group: G6
+    distance_cm: 75.0
+    hand: right
+    duration_s: 23.47
+    detect_rate: 1.0
+    edge_rate: 0.0
+    free_shape3d:
+      f_3d_px: 1148.0
+      f_planar_px: 1276.8
+      f_grid_px: 1526.7
+      at_grid_edge: false
+      at_bound: false
+      relief_rel: 0.03482
+      relief_per_joint:
+      - 0.04622
+      - -0.03692
+      - -0.0658
+      - -0.04952
+      - 0.0356
+      - 0.01293
+      - 0.01237
+      - 0.06416
+      - 0.01494
+      - -0.001
+      - 0.01215
+      - 0.0349
+      - -0.021
+      - -0.03058
+      - -0.019
+      - -0.00946
+      cost_3d: 4.69976
+      cost_planar: 6.47031
+      ba3_rms_px: 2.1679
+      ba3_success: true
+      ba3_nfev: 11
+      n_frames_in_problem: 353
+      elapsed_s: 1
+  IMG_7225.MOV:
+    group: G7
+    distance_cm: 60.0
+    hand: left
+    duration_s: 21.47
+    detect_rate: 1.0
+    edge_rate: 0.0
+    free_shape3d:
+      f_3d_px: 2035.4
+      f_planar_px: 1611.3
+      f_grid_px: 2386.8
+      at_grid_edge: false
+      at_bound: false
+      relief_rel: 0.02827
+      relief_per_joint:
+      - -0.01104
+      - 0.01208
+      - -8.0e-05
+      - -0.03913
+      - 0.00111
+      - 0.03774
+      - 0.01592
+      - -0.05728
+      - -0.00455
+      - 0.04062
+      - 0.04766
+      - 0.01999
+      - -0.03694
+      - -0.00292
+      - -0.00688
+      - -0.0163
+      cost_3d: 9.98454
+      cost_planar: 13.45062
+      ba3_rms_px: 3.2036
+      ba3_success: true
+      ba3_nfev: 19
+      n_frames_in_problem: 323
+      elapsed_s: 2
+  IMG_7226.MOV:
+    group: G7
+    distance_cm: 60.0
+    hand: left
+    duration_s: 21.47
+    detect_rate: 1.0
+    edge_rate: 0.0
+    free_shape3d:
+      f_3d_px: 1506.6
+      f_planar_px: 1345.3
+      f_grid_px: 1801.6
+      at_grid_edge: false
+      at_bound: false
+      relief_rel: 0.02299
+      relief_per_joint:
+      - 0.00069
+      - 0.01257
+      - 0.00157
+      - -0.02739
+      - -0.01346
+      - 0.02817
+      - 0.01747
+      - -0.04816
+      - -0.01877
+      - 0.02429
+      - 0.03698
+      - 0.01641
+      - -0.02185
+      - 0.01774
+      - -0.00233
+      - -0.02394
+      cost_3d: 5.87409
+      cost_planar: 7.85531
+      ba3_rms_px: 2.4237
+      ba3_success: true
+      ba3_nfev: 10
+      n_frames_in_problem: 323
+      elapsed_s: 1
+  IMG_7227.MOV:
+    group: G7
+    distance_cm: 60.0
+    hand: left
+    duration_s: 22.4
+    detect_rate: 1.0
+    edge_rate: 0.0
+    free_shape3d:
+      f_3d_px: 1406.0
+      f_planar_px: 1315.0
+      f_grid_px: 1610.9
+      at_grid_edge: false
+      at_bound: false
+      relief_rel: 0.02136
+      relief_per_joint:
+      - -0.00019
+      - -0.01589
+      - -0.01283
+      - -0.00065
+      - 0.01858
+      - -0.01593
+      - 0.00152
+      - 0.06055
+      - 0.02431
+      - -0.01448
+      - -0.0258
+      - -0.00731
+      - 0.02086
+      - -0.02252
+      - -0.01214
+      - 0.00191
+      cost_3d: 4.75275
+      cost_planar: 6.31495
+      ba3_rms_px: 2.1801
+      ba3_success: true
+      ba3_nfev: 38
+      n_frames_in_problem: 337
+      elapsed_s: 2
+by_method:
+  free_shape3d_G6:
+    f_by_distance_px:
+      '50': 1675.3
+      '60': 1476.1
+      '75': 1167.1
+    slope: -0.8975
+    slope_interval_95:
+    - -1.0596
+    - -0.7054
+  planar_pooled_curves_G6:
+    pooled_f_px:
+      '50': 2160.4
+      '60': 2051.2
+      '75': 1586.5
+    slope: -0.7759
+    slope_interval_95:
+    - -1.1546
+    - -0.503
+verdict:
+  free_shape3d_G6:
+    verdict: 반비례 있음
+    reason: null
+  planar_pooled_curves_G6:
+    verdict: 판단 보류
