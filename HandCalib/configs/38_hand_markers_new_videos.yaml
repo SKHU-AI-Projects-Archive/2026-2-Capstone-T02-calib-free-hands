@@ -130,7 +130,8 @@ guide:
     axis_bins_min: 5
     finger_extension_min: 0.9
 
-code_38: {branch: exp/35-hand-markers, commit: 843bda0, modules: [HandCalib/handfocal.py, HandCalib/run.py], note: no new code; same commit as 35c}
+# the key keeps the name code_34 because the unchanged 35c code reads cfg['code_34'] for the metadata (the runs 20261029T044418Z and 20261029T044556Z stopped there, with results but no metadata: not official)
+code_34: {branch: exp/35-hand-markers, commit: 843bda0, modules: [HandCalib/handfocal.py, HandCalib/run.py], note: no new code; same commit as 35c}
 n_workers: 16
 workers: 6
 output:
