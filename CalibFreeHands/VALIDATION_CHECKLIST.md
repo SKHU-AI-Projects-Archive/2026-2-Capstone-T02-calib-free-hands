@@ -1,5 +1,13 @@
 # Validation checklist
 
+## Milestone C-2B
+
+- [x] Full pytest suite: 177 passed; includes runtime Reference/checkerboard/fallback selection, N-result adaptive source grid, current-frame metric cache, missing-hand N/A, data-unavailable gating, and selected-Reference export.
+- [x] Offscreen dashboard tests cover per-joint values, confidence opacity/value/bar/color controls, optional error vectors, display-color raw-array immutability, and detached frame synchronization.
+- [x] `compileall` for `src` and `tests`; `git diff --check`.
+- [x] Offscreen captures generated for Overlay + 2, Split + 2, Split + 5 and layout structure inspected.
+- [ ] HUMAN VISUAL REVIEW REQUIRED in the normal Windows GUI; offscreen captures have tofu text and a blank OpenGL viewport in this environment.
+
 - [x] Branch is `CalibFreeHands`
 - [x] Folder discovery is non-recursive
 - [x] Focal sampling/aggregation unit tests pass
@@ -74,6 +82,7 @@
 - [x] Official WiLoR checkpoint and detector downloaded outside protected source tree
 - [x] Official model asset setup script with network access
 - [ ] Interactive viewer/manual validation
+- [ ] C-2B normal Windows visual review: Overlay + 2 results, Split + 2, Split + 5
 - [ ] P1-B new original WiLoR run confirming MANO parameter persistence in a fresh real result
 - [x] Actual AnyCalib + WiLoR/MANO smoke on first 3 frames of existing `4_assemble.mp4`; single and two-configuration outputs validated without network downloads
 - [ ] `git diff` final review
@@ -128,3 +137,11 @@ result reopening pass.
 - [x] Export path, pipeline result, and visualization topology imports stay lightweight in a fresh process
 - [x] Offscreen MainWindow construction smoke test (`MAINWINDOW_OK`)
 - [x] Final full diff review
+
+## C-2B UI / Presentation Fix Pass
+
+- [x] Targeted Comparison Viewer and focal-row regression tests: 14 passed
+- [x] Full pytest suite: 179 passed
+- [x] Startup import, compileall, and `git diff --check`
+- [x] Offscreen 1920x1080 captures created and inspected for Overlay + 3, Split + 3, and Split + 5
+- [ ] HUMAN VISUAL REVIEW REQUIRED in the normal Windows GUI. Offscreen rendering shows missing glyphs and blank/black OpenGL viewports, so it cannot confirm final visual quality.

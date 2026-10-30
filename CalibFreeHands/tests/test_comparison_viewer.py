@@ -99,7 +99,8 @@ def test_overlay_colors_visibility_confidence_and_linked_camera(tmp_path, qapp):
     missing = viewer.overlay_view.confidence_alpha(0, 1, confidence=np.nan)
     assert missing == pytest.approx(viewer.overlay_view.missing_confidence_alpha)
     base_color = np.asarray(viewer.overlay_view.joints[0].color)
-    np.testing.assert_allclose(base_color[:3], viewer.configuration_colors[0])
+    from calibfreehands.visualization.comparison import _hand_variant
+    np.testing.assert_allclose(base_color[:3], _hand_variant(viewer.configuration_colors[0], 0))
     assert base_color[3] == pytest.approx(alpha_low)
     checks = [box for box in viewer.findChildren(QCheckBox) if box.text().startswith("Method")]
     checks[1].setChecked(False)
@@ -196,6 +197,7 @@ def test_comparison_viewer_accepts_same_source_bundles_and_keeps_existing_modes(
     assert viewer.mode == "overlay"
     assert viewer.export_csv_button.isEnabled()
     viewer.set_mode("split")
+    assert viewer.split_source_overlay in viewer.split_widget.findChildren(type(viewer.split_source_overlay))
     viewer.slider.setValue(1)
     assert viewer.slider.value() == 1
     assert all(item.result.keypoints_3d[1, 0, 0, 0] == index for index, item in enumerate(viewer.loaded_results, 1))
@@ -210,3 +212,145 @@ def test_comparison_viewer_rejects_different_source_hashes(tmp_path):
     ]
     with pytest.raises(ValueError, match="different source media"):
         ComparisonViewer(bundles)
+
+
+def test_dashboard_reference_metrics_source_grid_and_native_visibility(tmp_path, qapp):
+    from PySide6.QtWidgets import QCheckBox, QComboBox
+    from calibfreehands.visualization.comparison import ComparisonViewer
+    viewer = ComparisonViewer(_session(tmp_path, 5))
+    assert isinstance(viewer.reference_selector, QComboBox)
+    assert viewer.reference_selector.currentData() == "cfg-0"
+    assert viewer.split_source_overlay in viewer.split_widget.findChildren(type(viewer.split_source_overlay))
+    assert len(viewer.split_views) == 5
+    assert viewer.split_columns == 3 and viewer.split_rows == 2
+    assert not hasattr(viewer, "metric_table")
+    candidate = viewer.split_panels[1]
+    assert "Wrist Error" in candidate.metric_rows[("cfg-1", "wrist_error", "left")].text()
+    assert viewer.overlay_panel.reference_badges["cfg-0"].text() == "REFERENCE"
+    assert ("cfg-1", "joint_error_median", "left") not in viewer.overlay_panel.metric_rows
+    viewer.metric_checks["joint_error_median"].setChecked(True)
+    assert ("cfg-1", "joint_error_median", "left") in viewer.overlay_panel.metric_rows
+    viewer.metric_checks["joint_error_median"].setChecked(False)
+    assert ("cfg-1", "joint_error_median", "left") not in viewer.overlay_panel.metric_rows
+    viewer.reference_selector.setCurrentIndex(1)
+    assert viewer.reference_selector.currentData() == "cfg-1"
+    viewer.slider.setValue(2)
+    assert viewer.status.text().startswith("Frame 3")
+    assert viewer.split_panels[1].reference_badges["cfg-1"].text() == "REFERENCE"
+    assert all(box.styleSheet() == "" for box in viewer.visibility_checks)
+    assert all(viewer.color_buttons)
+    viewer.close()
+
+
+def test_dashboard_metric_selection_error_vectors_and_confidence_are_runtime_only(tmp_path, qapp, monkeypatch):
+    import calibfreehands.visualization.comparison as comparison
+    from calibfreehands.visualization.comparison import ComparisonViewer
+    viewer = ComparisonViewer(_session(tmp_path, 2))
+    monkeypatch.setattr(comparison, "compare_results", lambda *args: pytest.fail("metrics recomputed during frame change"))
+    assert viewer.selected_metric_ids == {"wrist_error", "mpjpe", "wrist_depth_error"}
+    viewer.metric_checks["mpvpe"].setChecked(True)
+    assert "mpvpe" in viewer.selected_metric_ids
+    viewer.metric_checks["per_joint_error"].setChecked(True)
+    panel = viewer.split_panels[1]
+    assert ("cfg-1", "per_joint_error", "left") in panel.details_buttons
+    panel.details_buttons[("cfg-1", "per_joint_error", "left")].click()
+    from PySide6.QtWidgets import QTableWidget
+    tables = viewer.findChildren(QTableWidget)
+    assert tables and tables[-1].rowCount() == 21
+    assert tables[-1].columnCount() == 3
+    assert float(tables[-1].item(0, 1).text()) == pytest.approx(np.sqrt(2) * 1000, abs=0.01)
+    viewer.slider.setValue(1)
+    assert viewer.status.text().startswith("Frame 2")
+    viewer.confidence_numeric_checkbox.setChecked(True)
+    viewer.confidence_bar_checkbox.setChecked(True)
+    assert "0.50" in panel.confidence_rows["cfg-1", "left"].text()
+    viewer.confidence_opacity_checkbox.setChecked(False)
+    assert viewer.overlay_view.confidence_alpha(0, 0) < 1
+    assert not viewer.overlay_view.confidence_opacity_enabled
+    viewer.confidence_color_mode.setCurrentIndex(1)
+    assert viewer.overlay_view.confidence_color_mode == "confidence"
+    viewer.confidence_opacity_checkbox.setChecked(True)
+    assert viewer.confidence_numeric_checkbox and viewer.confidence_bar_checkbox
+    assert viewer.confidence_color_mode.currentData() in ("configuration", "confidence")
+    assert viewer.error_vectors_checkbox
+    assert viewer.error_candidate_selector.count() == 1
+    before = [loaded.result.keypoints_3d.copy() for loaded in viewer.loaded_results]
+    viewer._apply_configuration_color(1, (0.1, 0.2, 0.3))
+    for loaded, array in zip(viewer.loaded_results, before):
+        np.testing.assert_array_equal(loaded.result.keypoints_3d, array)
+    viewer.error_vectors_checkbox.setChecked(True)
+    assert any(item.visible() for item in viewer.overlay_view.error_items)
+    viewer.close()
+
+
+def test_dashboard_checkerboard_default_metric_export_reference_and_detach_sync(tmp_path, qapp):
+    from calibfreehands.visualization.comparison import ComparisonViewer, export_metrics_json
+    path = _session(tmp_path, 3)
+    manifest = json.loads(path.read_text(encoding="utf-8"))
+    manifest["configurations"][2]["calibration_model_id"] = "checkerboard_reference"
+    manifest["reference_configuration_id"] = "cfg-1"
+    path.write_text(json.dumps(manifest), encoding="utf-8")
+    viewer = ComparisonViewer(path)
+    assert viewer.reference_id == "cfg-2"
+    export_metrics_json(path, tmp_path / "selected.json", viewer.reference_id)
+    rows = json.loads((tmp_path / "selected.json").read_text(encoding="utf-8"))
+    assert rows and {row["reference_result_id"] for row in rows} == {"cfg-2"}
+    viewer.detach_all()
+    window, source, detached_views = viewer._detached_windows[0]
+    viewer.slider.setValue(2)
+    assert source.frame == 2 and all(view.frame == 2 for view in detached_views)
+    window.close()
+    viewer.close()
+
+
+def test_dashboard_missing_hand_is_na_and_fallback_is_visible(tmp_path, qapp):
+    from calibfreehands.visualization.comparison import ComparisonViewer
+    path = _session(tmp_path, 2)
+    manifest = json.loads(path.read_text(encoding="utf-8"))
+    manifest["reference_configuration_id"] = "removed-result"
+    npz_path = tmp_path / manifest["final_results"]["cfg-1"]["path"]
+    with np.load(npz_path) as archive:
+        arrays = {key: archive[key].copy() for key in archive.files}
+    arrays["detected"][0, 0] = False
+    arrays["keypoints_2d"][0, 0] = np.nan
+    arrays["keypoints_3d"][0, 0] = np.nan
+    np.savez_compressed(npz_path, **arrays)
+    path.write_text(json.dumps(manifest), encoding="utf-8")
+    viewer = ComparisonViewer(path)
+    assert viewer.reference_id == "cfg-0"
+    assert "fallback" in viewer.reference_label.text()
+    assert viewer.split_panels[1].metric_rows[("cfg-1", "wrist_error", "left")].text().endswith("N/A")
+    assert not viewer.metric_checks["mpvpe"].isEnabled()
+    viewer.close()
+
+
+def test_comparison_dashboard_uses_viewport_overlays_and_compact_menus(tmp_path, qapp):
+    from PySide6.QtWidgets import QSizePolicy
+    from calibfreehands.visualization.comparison import ComparisonViewer
+    viewer = ComparisonViewer(_session(tmp_path, 5))
+    assert not hasattr(viewer, "metric_table")
+    assert len(viewer.split_panels) == 5
+    assert viewer.split_panels[1].minimumWidth() >= 320
+    assert viewer.split_panels[1].minimumHeight() >= 240
+    assert viewer.mode_selector.count() == 2
+    assert viewer.results_menu_button.text().startswith("Results")
+    assert viewer.confidence_menu_button.text().startswith("Confidence")
+    assert len(viewer.visibility_checks) == 5
+    assert all(check.parentWidget() is not viewer for check in viewer.visibility_checks)
+    for button in viewer.view_buttons + viewer.playback_buttons:
+        assert button.sizePolicy().horizontalPolicy() != QSizePolicy.Policy.Expanding
+    assert not viewer.metric_checks["f@5"].isEnabled()
+    assert "pending" in viewer.metric_checks["f@5"].toolTip().lower()
+    viewer.close()
+
+
+def test_mainwindow_checkerboard_focal_has_no_duplicate_row_label(tmp_path, monkeypatch, qapp):
+    from PySide6.QtWidgets import QLabel
+    from test_queue_workflow import make_window
+    _, window, _ = make_window(tmp_path, monkeypatch)
+    row = window.configuration_rows[0]
+    row.calibration.setCurrentIndex(row.calibration.findData("checkerboard_reference"))
+    assert window.rows_layout.itemAtPosition(0, 3).widget().text() == "Reference Focal"
+    assert not any(label.text() == "Reference Focal" for label in row.reference_focal_container.findChildren(QLabel))
+    assert row.reference_focal_container.layout().itemAt(0).widget() is row.reference_focal
+    window.close()

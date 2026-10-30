@@ -92,9 +92,6 @@ class ConfigurationRow:
         focal_layout = QHBoxLayout(self.reference_focal_container)
         focal_layout.setContentsMargins(0, 0, 0, 0)
         focal_layout.setSpacing(4)
-        self.reference_focal_label = QLabel("Reference Focal")
-        self.reference_focal_label.setBuddy(self.reference_focal)
-        focal_layout.addWidget(self.reference_focal_label)
         focal_layout.addWidget(self.reference_focal)
         self.remove = QPushButton("Remove")
         self.widgets = (self.name, self.calibration, self.reconstruction,

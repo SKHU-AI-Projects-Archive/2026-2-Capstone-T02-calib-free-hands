@@ -60,6 +60,10 @@
 - [x] Original WiLoR raw-pose path preserving source focal and relative MANO geometry before focal application
 - [x] Comparison viewer Overlay/Split modes with per-configuration visibility, stable colors, and shared frame control
 - [x] Linked split cameras, confidence alpha, reference metrics, and CSV/JSON metric export
+- [x] C-2B runtime Reference selection and cached current-frame metric dashboard
+- [x] C-2B source-retaining adaptive Split grid, native visibility checkboxes, configurable swatches, and left/right hue variants
+- [x] C-2B confidence opacity/value/bar/color controls, single-candidate error vectors, and Detach All frame/camera synchronization
+- [x] C-2B current-Reference CSV/JSON export and per-joint detail table
 - [x] Comparison viewer session opening without inference rerun; source frames decoded once and shared
 - [x] Milestone B bundle format: atomic ZIP-compatible `.cfh` with canonical `result.npz` and validated `metadata.json`
 - [x] Safe result filenames, SHA256 source identity, model/checkpoint/MANO provenance, and file-scoped collision handling
@@ -76,3 +80,5 @@
 - [x] C-2A Qt-independent metric registry and canonical frame/hand alignment
 - [x] C-2A per-joint, wrist, raw camera-space, depth, translation, relative wrist, MPVPE, and Procrustes metrics
 - [x] C-2A explicit protocol-pending states for unreproduced WiLoR benchmark/temporal metrics
+- [x] C-2B viewport-first presentation: compact controls, selected metric overlays, Reference badge, on-demand 21-joint details, and no permanent metric table
+- [x] C-2B duplicate Checkerboard Reference Focal row label removed while retaining the header and value control

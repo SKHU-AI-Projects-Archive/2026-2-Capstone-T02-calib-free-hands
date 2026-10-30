@@ -1070,6 +1070,8 @@ Confidence             = alpha
 
 Left/right variants must be distinguishable but related.
 
+The currently saved confidence scalar is `[frame, hand]`. C-2B may show it as geometry opacity, a numeric value, or a compact bar, and may switch color mapping between configuration identity and confidence. These are visualization controls only; confidence is never expanded into per-joint values and never enters metric calculations.
+
 ---
 
 # 36. User-selectable colors
@@ -1488,6 +1490,7 @@ C-2B is complete only when:
 26. C-2A correctness precedes C-2B dashboard expansion.
 27. New Calibration models belong to D.
 
+
 ---
 
 # 52. Change control
@@ -1506,3 +1509,13 @@ Every implementation agent must:
 10. avoid inference in Viewer-only interactions;
 11. preserve backward compatibility where practical;
 12. update this specification with any explicitly approved frozen-decision change.
+
+## C-2B UI Fix Pass presentation contract
+
+- Comparison Viewer prioritizes the source and 3D viewports; it does not show a permanent metric table.
+- Selected frame-level metrics appear in a compact, internally scrollable overlay grouped by result. The selected Reference is marked `REFERENCE` and does not show self-comparison metrics.
+- Per-Joint Error opens its 21-joint Left/Right detail table on demand. Error vectors remain an independent visualization.
+- View, Results, Reference, Metrics, Confidence, and color controls stay compact; result swatches remain separate from visibility controls.
+- Split mode retains the source panel and lays out visible result panels in an adaptive grid. The Comparison Viewer minimum size is 1280×720; 1920×1080 is the visual review target.
+- Checkerboard's Reference Focal column header remains the label; its row contains the value control without a duplicate label.
+- This pass changes presentation only. Metric definitions, result arrays, and inference behavior remain unchanged.

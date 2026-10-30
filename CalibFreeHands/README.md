@@ -68,7 +68,7 @@ The packaged `src/calibfreehands/app/model_config.json` lists the built-in model
 
 Each processing run can contain explicitly added comparison configurations. Rows may reuse the same calibration or reconstruction model; the pipeline runs each unique calibration and raw pose model once, then applies the selected focal before packaging one canonical `.cfh` file per configuration. Internal `session.json`, calibration metadata, reusable raw-pose NPZ files, per-configuration NPZ/run JSON, and previews are created only in a temporary workspace. Raw pose geometry is retained before focal correction; camera translation depth is rescaled as `tz_new = tz_source * f_target / f_source`, while x/y translation is unchanged. Checkerboard Reference accepts a focal length in pixels for comparison and includes that specified focal in its result filename; it does not represent ground-truth 3D.
 
-The comparison viewer switches between Overlay and Split without rerunning inference. It synchronizes frame/timestamp and split-view cameras, shares one decoded source-media frame list, and colors each configuration consistently; alpha represents the stored frame/hand confidence scalar, with a neutral fallback for missing values. If a selected Reference configuration is recorded, per-frame and per-hand camera-space joint/depth/translation differences can be exported to CSV or JSON. These are reference differences, not ground-truth errors. Historical `session.json` and canonical `results.npz` remain loadable through their development APIs. Separate-window viewing remains planned for Milestone C.
+The comparison viewer supports multiple same-source results in Overlay or an adaptive Split grid that retains the source media. Reference, metric selection, per-frame Left/Right metric values, confidence display, configuration colors, mesh opacity, and optional single-candidate error vectors are runtime controls over loaded arrays; they do not rerun inference or change saved results. Detach All opens a synchronized view over the same arrays. CSV and JSON metric exports use the currently selected Reference. These are reference differences, not ground-truth errors. Protocol-pending metrics stay unavailable until their evaluation protocol is verified.
 
 To prepare the publicly downloadable original WiLoR checkpoint and detector in the repository's expected external `WiLoR/pretrained_models/` directory:
 
@@ -77,3 +77,7 @@ To prepare the publicly downloadable original WiLoR checkpoint and detector in t
 ```
 
 This script does not download MANO assets and does not modify the protected source directories. MANO requires the user's own official account/license action.
+
+## CalibFreeHands desktop application
+
+The desktop app lives in `CalibFreeHands/` and includes a saved-result Comparison Viewer. Its comparison layout prioritizes source media and 3D viewports, with selected metrics shown in viewport overlays and per-joint details opened on demand. See `CalibFreeHands/UX_RESULT_SPEC.md` for the result-viewer contract.
