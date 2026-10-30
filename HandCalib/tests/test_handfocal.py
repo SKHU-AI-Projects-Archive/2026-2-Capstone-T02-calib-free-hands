@@ -4290,5 +4290,53 @@ class MMReports(unittest.TestCase):
         self.assertTrue({"IMG_7220.MOV", "IMG_7192.MOV"} <= set(files))
 
 
+# ---- experiment 48: experiment 47's models on the videos of 46 -------------------------------------------------
+CFG48 = yaml.safe_load((ROOT / "configs/48_mmpose_hand_46_videos.yaml").read_text())
+
+
+class MM2Reports(unittest.TestCase):
+    def test_the_config_keeps_47s_detector_settings_and_lists_46s_videos(self):
+        for k in ("detectors", "detector_settings", "candidate", "exclusion", "guide", "hand_box_source", "bootstrap", "thermal"):
+            self.assertEqual(CFG48[k], CFG47[k], k)
+        C46 = yaml.safe_load((ROOT / "configs/46_free_shape3d_new.yaml").read_text())
+        self.assertEqual([(e["file"], e["distance_cm"]) for e in CFG48["stage2_videos"]], [(e["file"], e["distance_cm"]) for e in C46["videos"]])
+        self.assertTrue(set(CFG48["verify"]["videos"]) <= {e["file"] for e in C46["videos"]})
+        self.assertEqual(CFG48["ref_f"], 1553)
+        self.assertIn("code_48", CFG48)
+
+    def test_summary_report_and_yaml_keep_the_reference_in_summary_only(self):
+        names = list(hf.MM_DETECTORS)
+        grid = np.geomspace(0.35 * 1920, 1.6 * 1920, 60)
+        mk = lambda f: {"ft": {"f": f, "at_grid_edge": False, "sharpness": 1.01, "verdict": "REJECT"}, "excluded": [], "curve": {"grid": grid.tolist(), "cost": ((np.log(grid) - np.log(f)) ** 2).tolist()}}   # noqa: E731
+        stage2 = [{"video": e["file"], "source": "46", "distance_cm": e["distance_cm"], "lens": "1x", "detectors": {n: mk(1400.0 + 10 * k - e["distance_cm"]) for k, n in enumerate(["mediapipe_hands"] + names)}}
+                  for e in CFG48["stage2_videos"]]
+        stage2[2]["detectors"]["mmhand_scnet"] = {"excluded": ["가장자리 접촉 프레임 9.1% > 5%"]}
+        existing = {"videos": {s["video"]: 1100.0 for s in stage2}, "slope": {"distances": [50.0, 60.0, 75.0], "pooled_f": {"50.0": 1106.5, "60.0": 982.4, "75.0": 1034.3}, "slope": None, "interval_95": None}}
+        slopes = run.mm2_stage2_slopes(stage2, ["mediapipe_hands"] + names, CFG48)
+        self.assertEqual(slopes["mmhand_scnet"]["n_videos"][50.0], 3)
+        env = {"info": {n: {"config_sha256": "c" * 64, "test_pipeline": ["LoadImage"], "input_size": [256, 256], "test_cfg": {"flip_test": True}, "remap": None, "names_ok": True} for n in names}, "versions": {}}
+        checks = {n: {"IMG_7298.MOV": {"frames": [0], "n_boxes": 1, "max_abs_px": 0.0, "max_abs_conf": 0.0}} for n in names}
+        with tempfile.TemporaryDirectory() as d:
+            d = Path(d)
+            run.mm2_report(d / "report.md", CFG48, env, checks, {}, {n: {"identity": True, "n_boxes": 1} for n in names}, {}, [], {"official": True, "order": True, "stage2": "실행함"})
+            run.mm2_summary(d / "summary.md", CFG48, stage2, names, existing, slopes)
+            (d / "results.json").write_text(json.dumps(hf.jsonable({"verification": {"checks": checks, "order": {}, "agreement": {}, "failure": {}, "verified": {"official": True, "order": True}, "env": env},
+                                                                    "stage2": stage2, "slopes": slopes}), ensure_ascii=False))
+            (d / "metadata.json").write_text(json.dumps({"git": {"commit": "abcdef1234", "git_dirty": False}}))
+            cfg = copy.deepcopy(CFG48)
+            cfg["output"]["results_yaml"] = str(d / "r.yaml")
+            y = Path(run.mm2_results_yaml(d, cfg)).read_text()
+            summ, rep = (d / "summary.md").read_text(), (d / "report.md").read_text()
+            self.assertTrue(rep.startswith("# 실험 48:"))
+            self.assertIn("1553", summ)
+            self.assertIn("1106.5", summ)
+            for name, text in (("report", rep), ("yaml", y)):
+                self.assertNotIn("1553", text, name)
+            for name, text in (("report", rep), ("summary", summ), ("yaml", y)):
+                for tag in LOCATION_TAGS:
+                    self.assertNotIn(tag, text.lower(), (name, tag))
+            self.assertIn("distance", yaml.safe_load(y))
+
+
 if __name__ == "__main__":
     unittest.main()
