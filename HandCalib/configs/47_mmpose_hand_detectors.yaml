@@ -1,0 +1,176 @@
+# 47: the five MMPose 2-D hand models trained on COCO-WholeBody-Hand (the top five of the public benchmark under one training set) added as detectors (user request 2026-10-30).
+# Environment (installed for this experiment only): /home/juson/venvs/det_mmpose_hand (torch 2.1.2+cu121, mmcv 2.1.0, mmengine 0.10.7, mmpose 1.3.2, mmdet 3.2.0 only because mmpose.apis imports it, setuptools 80.9.0 for mmengine's pkg_resources).
+# Checkpoints from the MMPose model zoo metafiles (URL and SHA256 below and in /home/juson/models/mmpose_hand/sha256.txt); configs = the files of the installed mmpose 1.3.2 (SHA256 equal to GitHub v1.3.2).
+# Hand boxes: hand_box_source (mediapipe | wilor_yolo) read from the existing detection caches in box_caches (never detected anew); a frame without a box is a detection failure for all five.
+# Box -> model input = the config's test pipeline (GetBBoxCenterScale padding 1.25, TopdownAffine 256 x 256, flip test) through the batched wrapper (detector_worker.py mmpose_hand); TF32 off
+# (with TF32 the batched result moved a heatmap maximum by one cell against inference_topdown in the dev check; with TF32 off the two agree within 1e-4 px). conf_min 0.3 for the five (as rtmpose_hand).
+# Verification (report.md): official inference_topdown vs wrapper on verify.official_check_frames frames of each verify video (tol_px), point order (names and Hungarian assignment against mediapipe),
+# agreement with mediapipe (% of the box), failure rates, overlays (runs folder, not committed). Stage 2 (run_stage2) only after a passed verification: gen_video (26's candidate: wrist_mode exclude,
+# fixed_template; 27's exclusion and pipeline) per detector on 25's 1x, 27's G6 and 29's 0.5x videos; no verdict. Reference f (ref_f) only in summary.md. Nothing of earlier experiments is changed.
+# Code: branch exp/47-mmpose-hand from exp/46-free-shape3d-new-videos b4ca3e9; code commit in code_47 (set after the code commit, before the run).
+experiment: {name: 47_mmpose_hand_detectors, seed: 42}
+detectors: [mmhand_hrnetv2_dark, mmhand_hrnetv2, mmhand_rtmpose_m, mmhand_hourglass, mmhand_scnet]
+hand_box_source: mediapipe
+box_caches: [/home/juson/project/2026-2-Capstone-T02-calib-free-hands/HandCalib/runs/27_main_camera_extension/20261026T044322Z/detection_cache, /home/juson/project/2026-2-Capstone-T02-calib-free-hands/HandCalib/runs/25_long_video_check/20261022T042710Z/detection_cache,
+  /home/juson/project/2026-2-Capstone-T02-calib-free-hands/HandCalib/runs/29_wide_60cm/20261026T053915Z/detection_cache]
+gpu_ids: [0, 1, 2, 3]
+jobs_per_gpu: 2
+thermal: {pause_c: 70, resume_c: 65}
+verify:
+  videos: [IMG_7220.MOV, IMG_7192.MOV]
+  official_check_frames: 10
+  overlay_frames: 4
+  tol_px: 0.1
+run_stage2: true
+stage2_videos:
+- {file: IMG_7190.MOV, source: '25', lens: 1x}
+- {file: IMG_7191.MOV, source: '25', lens: 1x}
+- {file: IMG_7192.MOV, source: '25', lens: 1x}
+- {file: IMG_7193.MOV, source: '25', lens: 1x}
+- {file: IMG_7194.MOV, source: '25', lens: 1x}
+- {file: IMG_7195.MOV, source: '25', lens: 1x}
+- {file: IMG_7216.MOV, source: '27', group: G6, distance_cm: 50, lens: 1x}
+- {file: IMG_7217.MOV, source: '27', group: G6, distance_cm: 60, lens: 1x}
+- {file: IMG_7218.MOV, source: '27', group: G6, distance_cm: 75, lens: 1x}
+- {file: IMG_7219.MOV, source: '27', group: G6, distance_cm: 50, lens: 1x}
+- {file: IMG_7220.MOV, source: '27', group: G6, distance_cm: 60, lens: 1x}
+- {file: IMG_7221.MOV, source: '27', group: G6, distance_cm: 75, lens: 1x}
+- {file: IMG_7222.MOV, source: '27', group: G6, distance_cm: 50, lens: 1x}
+- {file: IMG_7223.MOV, source: '27', group: G6, distance_cm: 60, lens: 1x}
+- {file: IMG_7224.MOV, source: '27', group: G6, distance_cm: 75, lens: 1x}
+- {file: IMG_7231.MOV, source: '29', distance_cm: 60, lens: 0.5x}
+- {file: IMG_7232.MOV, source: '29', distance_cm: 60, lens: 0.5x}
+- {file: IMG_7233.MOV, source: '29', distance_cm: 60, lens: 0.5x}
+existing_results: {'25': /home/juson/project/2026-2-Capstone-T02-calib-free-hands/HandCalib/runs/25_long_video_check/20261022T042710Z/results.json, '27': /home/juson/project/2026-2-Capstone-T02-calib-free-hands/HandCalib/runs/27_main_camera_extension/20261026T044322Z/results.json,
+  '29': /home/juson/project/2026-2-Capstone-T02-calib-free-hands/HandCalib/runs/29_wide_60cm/20261026T053915Z/results.json}
+ref_f:
+  lens_1x: 1680
+  by_distance_27: {50: 1660.6, 60: 1653.7, 75: 1644.9}
+  lens_0.5x: 880
+bootstrap: {n: 1000, seed: 42}
+existing_rtmpose_hand: {checkpoint: 'rtmpose-m_simcc-hand5_pt-aic-coco_210e-256x256-74fb594_20230320 (ONNX, /home/juson/models/rtmpose)', note: Hand5(손 데이터셋 다섯 개를 합친 학습 데이터)로 학습한 RTMPose-m이며 COCO-WholeBody-Hand만으로
+    학습한 이번 mmhand_rtmpose_m과 다른 체크포인트이다.}
+input_dir: /home/juson/data/hand_focal_videos
+candidate: {detector: mediapipe_hands, wrist_mode: exclude, estimator: fixed_template, front_window: '17''s (phase_mode nominal, tilt phase from 3.0 s)'}
+exclusion: {edge_rate_max: 0.05, detect_fail_max: 0.2}
+guide:
+  phase_segmentation:
+    noise_percentile: 95
+    k_d: 3.0
+    theta_min_deg: 15.0
+    median_window_s: 0.3
+    sustain_s: 0.5
+    front_search_s: [0.5, 2.5]
+    d0_cap_theta_deg: 20.0
+    use_motion: false
+    k_v: 3.0
+    motion_window_s: 0.3
+    exclude_large_tilt: false
+    max_tilt_deg: 45.0
+  conditions:
+    reference_detector: wilor_yolo
+    box_short_ratio_max: 0.65
+    edge_rate_max: 0.05
+    transition_min_s: 2.5
+    tilt_rule: frames_median
+    tilt_max_deg: 45.0
+    min_tilt_frames: 30
+    theta_tilt_median_range_deg: [20.0, 40.0]
+    axis_bins_min: 5
+    finger_extension_min: 0.9
+detector_settings:
+  mediapipe_hands: {model: MediaPipe Hand Landmarker (hand_landmarker.task float16/1), weights: /home/juson/models/mediapipe/hand_landmarker.task, python: /home/juson/venvs/det_mediapipe/bin/python, device: cpu,
+    num_hands: 2, min_hand_detection_confidence: 0.5, min_hand_presence_confidence: 0.5, box_margin: 0.1, conf_min: 0.5, remap: null}
+  wilor_yolo: {model: 'WiLoR hand detector (YOLO pose, detector.pt)', weights: /home/juson/models/wilor_original/detector.pt, python: /home/juson/project/MonoDETR/.venv/bin/python, device: '0', conf: 0.3,
+    iou: 0.3, imgsz: null, conf_min: 0.5, remap: null, license: WiLoR repository license (not re-checked here), training_labels: 확인 불가}
+  mmhand_hrnetv2_dark: {model: HRNetv2-w18 + DARK, epe: 4.37, python: /home/juson/venvs/det_mmpose_hand/bin/python, config: /home/juson/venvs/det_mmpose_hand/lib/python3.11/site-packages/mmpose/.mim/configs/hand_2d_keypoint/topdown_heatmap/coco_wholebody_hand/td-hm_hrnetv2-w18_dark-8xb32-210e_coco-wholebody-hand-256x256.py,
+    checkpoint: /home/juson/models/mmpose_hand/hrnetv2_w18_coco_wholebody_hand_256x256_dark-a9228c9c_20210908.pth, checkpoint_sha256: a9228c9ca2adf68a0c72f1b21ae62633b421a5f49311d9dc1fbb06143e5164f1, checkpoint_url: 'https://download.openmmlab.com/mmpose/hand/dark/hrnetv2_w18_coco_wholebody_hand_256x256_dark-a9228c9c_20210908.pth',
+    box_source: mediapipe, batch_size: 32, tf32: false, device: 'cuda:0', conf_min: 0.3}
+  mmhand_hrnetv2: {model: HRNetv2-w18, epe: 4.39, python: /home/juson/venvs/det_mmpose_hand/bin/python, config: /home/juson/venvs/det_mmpose_hand/lib/python3.11/site-packages/mmpose/.mim/configs/hand_2d_keypoint/topdown_heatmap/coco_wholebody_hand/td-hm_hrnetv2-w18_8xb32-210e_coco-wholebody-hand-256x256.py,
+    checkpoint: /home/juson/models/mmpose_hand/hrnetv2_w18_coco_wholebody_hand_256x256-1c028db7_20210908.pth, checkpoint_sha256: 1c028db7823ddf1c5f14d0174801d97e1149478a9ce1504b8219fc27c00e066f, checkpoint_url: 'https://download.openmmlab.com/mmpose/hand/hrnetv2/hrnetv2_w18_coco_wholebody_hand_256x256-1c028db7_20210908.pth',
+    box_source: mediapipe, batch_size: 32, tf32: false, device: 'cuda:0', conf_min: 0.3}
+  mmhand_rtmpose_m: {model: RTMPose-m (SimCC), epe: 4.51, python: /home/juson/venvs/det_mmpose_hand/bin/python, config: /home/juson/venvs/det_mmpose_hand/lib/python3.11/site-packages/mmpose/.mim/configs/hand_2d_keypoint/rtmpose/coco_wholebody_hand/rtmpose-m_8xb32-210e_coco-wholebody-hand-256x256.py,
+    checkpoint: /home/juson/models/mmpose_hand/rtmpose-m_simcc-coco-wholebody-hand_pt-aic-coco_210e-256x256-99477206_20230228.pth, checkpoint_sha256: 26b87183517457d78a1266fb5ed1127207b51a9a9c9ec6c431ec35b7a3f0ce73,
+    checkpoint_url: 'https://download.openmmlab.com/mmpose/v1/projects/rtmposev1/rtmpose-m_simcc-coco-wholebody-hand_pt-aic-coco_210e-256x256-99477206_20230228.pth', box_source: mediapipe, batch_size: 32,
+    tf32: false, device: 'cuda:0', conf_min: 0.3}
+  mmhand_hourglass: {model: Hourglass52, epe: 4.54, python: /home/juson/venvs/det_mmpose_hand/bin/python, config: /home/juson/venvs/det_mmpose_hand/lib/python3.11/site-packages/mmpose/.mim/configs/hand_2d_keypoint/topdown_heatmap/coco_wholebody_hand/td-hm_hourglass52_8xb32-210e_coco-wholebody-hand-256x256.py,
+    checkpoint: /home/juson/models/mmpose_hand/hourglass52_coco_wholebody_hand_256x256-7b05c6db_20210909.pth, checkpoint_sha256: 7b05c6dbedcb1bd19e4fd5274d2d2a31e38afe7e047cb42b12dcad71865fcf1a, checkpoint_url: 'https://download.openmmlab.com/mmpose/hand/hourglass/hourglass52_coco_wholebody_hand_256x256-7b05c6db_20210909.pth',
+    box_source: mediapipe, batch_size: 32, tf32: false, device: 'cuda:0', conf_min: 0.3}
+  mmhand_scnet: {model: SCNet-50, epe: 4.55, python: /home/juson/venvs/det_mmpose_hand/bin/python, config: /home/juson/venvs/det_mmpose_hand/lib/python3.11/site-packages/mmpose/.mim/configs/hand_2d_keypoint/topdown_heatmap/coco_wholebody_hand/td-hm_scnet50_8xb32-210e_coco-wholebody-hand-256x256.py,
+    checkpoint: /home/juson/models/mmpose_hand/scnet50_coco_wholebody_hand_256x256-e73414c7_20210909.pth, checkpoint_sha256: e73414c75ac63e6a05f910b2fa76a4e5a5d38b474799e975513e0efff337b7fe, checkpoint_url: 'https://download.openmmlab.com/mmpose/hand/scnet/scnet50_coco_wholebody_hand_256x256-e73414c7_20210909.pth',
+    box_source: mediapipe, batch_size: 32, tf32: false, device: 'cuda:0', conf_min: 0.3}
+workers: 9
+stage2_workers: 24                   # stage 2: (video, detector) jobs at the same time (64 logical CPUs, keep <= half)
+output: {root: runs/47_mmpose_hand_detectors, results_yaml: results/47_mmpose_hand_detectors.yaml}
+code_47:
+  branch: exp/47-mmpose-hand
+  base_commit: b4ca3e9
+  commit: 6409117
+  modules: [HandCalib/detector_worker.py, HandCalib/handfocal_report.py, HandCalib/run.py]
+pipeline:
+  experiment: {name: 47_mmpose_hand_detectors, seed: 42}
+  input_dir: /home/juson/data/hand_focal_videos
+  video_extensions: [.mov, .mp4, .m4v, .mkv, .avi]
+  min_duration_s: 5.0
+  normalize:
+    long_side: 1920
+    max_fps: 60
+    sdr_target: bt709
+    hdr_path: [zscale_tonemap, colorspace]
+    codec: ffv1
+  frames: {detect_fps: 15, tmp_dir: null}
+  detector:
+    name: mock
+    mock_npz: null
+    classes: {0: left, 1: right}
+    cache: true
+  tracking:
+    init_window_s: 1.0
+    iou_min: 0.3
+    conf_min: 0.5
+    smoothing: {enabled: false, window: 3}
+  phases: {phase_mode: nominal, front_phase_s: 3.0, front_skip_s: 0.5, front_window_s: 1.0, front_min_detect_rate: 0.9, finger_extension_min: 0.9, auto_theta_deg: 10.0, auto_sustain_s: 0.5, auto_warn_diff_s: 1.0}
+  joints:
+    sets:
+      palm4: [0, 5, 9, 13]
+      palm5: [0, 5, 9, 13, 17]
+      palm_proximal9: [0, 5, 6, 9, 10, 13, 14, 17, 18]
+      flat17: [0, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20]
+    estimate_set: flat17
+    uncertainty_sets: [palm5, palm_proximal9, flat17]
+    template_align_iters: 4
+  estimate:
+    estimator: fixed_template
+    synthetic_study_result: null
+    principal_point: center
+    distortion: null
+    f_grid_n: 60
+    f_ratio_range: [0.35, 1.6]
+    huber_rel: 0.02
+    min_points: 4
+    joint_delta:
+      delta_grid_deg: [0, 4, 8, 12, 16, 20]
+      phi_n: 6
+      delta_prior_deg: 8.0
+      prior_weight: auto
+      nm_max_iter: 300
+  anycalib:
+    enabled: true
+    model_id: anycalib_pinhole
+    cam_id: pinhole
+    stride: 1
+    device: cuda:0
+    extra_models: [anycalib_gen]
+    offline_env: {HF_HUB_OFFLINE: '1', TRANSFORMERS_OFFLINE: '1'}
+    torch_hub_dir: ~/.cache/torch/hub
+  uncertainty: {n_bootstrap: 30, block_frames: 10, time_budget_s: 600}
+  verdict:
+    good: {detect_rate_min: 0.9, front_frames_min: 15, finger_extension_required: true, theta_p90_min_deg: 25.0, axis_bins_min: 5, reproj_rms_rel_max: 0.01, jointset_range_max: 0.04, bootstrap_rel_std_max: 0.03,
+      consistency_range_max: 0.06, delta_abs_max_deg: 12.0, sharpness_min: 1.3}
+    rough: {detect_rate_min: 0.7, theta_p90_min_deg: 12.0, axis_bins_min: 3, reproj_rms_rel_max: 0.025, jointset_range_max: 0.12}
+    min_target_frames: 20
+  target_sizes:
+  - [1920, 1080]
+  - [1280, 720]
+  - [3840, 2160]
+  output: {root: runs/26_generalization, results_yaml: results/26_generalization.yaml}
