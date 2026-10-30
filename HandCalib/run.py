@@ -8026,7 +8026,203 @@ def mm3_main(argv=None):
     return run_root, verified
 
 
-COMMANDS = {"protocol": protocol_main, "frame-filter": ff_main, "same-session": session_main, "overlay": overlay_main, "phase-segmentation": pseg_main, "guide-revision": grev_main, "f-response": fresp_main, "error-factors": ferr_main, "long-video-check": long_main, "generalization": gen_main, "main-camera-extension": ext_main, "wide-60cm": wide_main, "jointset-sets": jset_main, "verdict-calibration": cal_main, "printed-hand": pr_main, "hand-markers": mk_main, "markers-only": mo_main, "free-template": ft_main, "free-shape3d": s3_main, "free-shape3d-hand": h3_main, "free-shape3d-27": e3_main, "free-shape3d-new": e4_main, "mmpose-hand": mm_main, "mmpose-hand-46": mm2_main, "free-shape3d-new2": e5_main, "mmpose-hand-src": mm3_main}
+# ====================================================================================================
+# fs  (experiment 51: free_shape3d (e3_video of 45, unchanged) on the joints of every detector of 48 / 50: mediapipe from the box-source cache, the five MMPose models from the
+#      detection caches of the 48 and 50 runs (never detected anew); 46's settings, verdict rule and reference f)
+#     python HandCalib/run.py free-shape3d-detectors --config HandCalib/configs/51_free_shape3d_mmpose.yaml [--out DIR]
+#     python HandCalib/run.py free-shape3d-detectors --config ... results-yaml --run runs/51_free_shape3d_mmpose/<UTC>
+# ====================================================================================================
+FS_NOTE = ("실험 48·50에서 구한 검출기별 관절(mediapipe와 MMPose 손 모델 5종)에 교수님의 free_shape3d를 실험 46·49와 같은 호출·설정(손목 제외 16점, z_rel 0.2, alt_iters 3, max_frames 120, 같은 제외 규칙)으로 "
+           "적용해 f를 구한 실험이다. 관절은 기존 검출 캐시에서 읽었고 새로 검출하지 않았다. 판정 규칙은 실험 46과 같다(영상별 3차원 f의 거리-f 기울기, 영상 단위 부트스트랩). 기준 f와의 비교는 summary.md에만 있다.")
+
+
+def fs_mm_cache(frames, s: dict, box_npz: Path, name: str, cache_dir: Path) -> Path:
+    """The cache file swap_mmpose_hand wrote for these frames, settings and boxes (same key); only read."""
+    settings = {k: s[k] for k in ("config", "checkpoint", "checkpoint_sha256", "box_source", "batch_size")}
+    settings["tf32"] = bool(s.get("tf32", False))
+    settings["boxes_sha256"] = hashlib.sha256(Path(box_npz).read_bytes()).hexdigest()
+    p = Path(cache_dir) / f"{name}_{hf.frames_key(frames, settings, name)}.npz"
+    if not p.exists():
+        raise hf.SkipDetector(f"{name} 캐시가 없음 ({p.name}); 새로 검출하지 않음")
+    return p
+
+
+def fs_analyze(results: list, cfg: dict) -> dict:
+    """Per set and detector: 46's verdict calculation (s3_slope on the per-video 3-D f, pr_verdict)."""
+    ref = {float(d): float(cfg["ref_f"]) for d in (50, 60, 75)}
+    bn, bs = int(cfg["bootstrap"]["n"]), int(cfg["bootstrap"]["seed"])
+    out = {}
+    for st in cfg["sets"]:
+        for det in cfg["detectors"]:
+            inc = [r for r in results if r["set"] == st["name"] and r["detector"] == det and "est" in r]
+            ds = sorted({r["distance_cm"] for r in inc})
+            if not ds:
+                out.setdefault(st["name"], {})[det] = {"verdict": {"verdict": "판단 불가", "reason": "분석된 영상이 없음"}}
+                continue
+            fb = {d: [r["est"]["f"] for r in inc if r["distance_cm"] == d] for d in ds}
+            eb = {d: [r["est"]["at_bound"] or r["est"]["at_grid_edge"] for r in inc if r["distance_cm"] == d] for d in ds}
+            sl = hf.s3_slope(fb, eb, bn, bs)
+            nv = {d: len(fb.get(d, [])) for d in ref}
+            out.setdefault(st["name"], {})[det] = {"slope": sl, "verdict": hf.pr_verdict(sl, ref, cfg["verdict"], nv)}
+    return out
+
+
+def fs_report(path: Path, results: list, cfg: dict, sources: dict):
+    fs = cfg["free_shape3d"]
+    L = ["# 실험 51: free_shape3d를 검출기별 관절에 적용 (실험 48·50의 캐시)", "", FS_NOTE, "", f"free_shape3d(z_rel {fs['z_rel']}, alt_iters {fs['alt_iters']}, max_frames {fs['max_frames']}), 검출기별 conf_min: "
+         + ", ".join(f"{d} {cfg['detector_settings'][d]['conf_min']}" for d in cfg["detectors"]) + ".", "", "## 1. 관절 출처", "", "| 영상 묶음 | 설정 | 검출 캐시 폴더 |", "|---|---|---|"]
+    for st in cfg["sets"]:
+        L.append(f"| {st['name']} | {st['config']} | {', '.join(sources.get(st['name'], []))} |")
+    L += ["", "## 2. 영상별 값", "", "| 영상 묶음 | 검출기 | 영상 | 거리(cm) | 포함 | f 3차원 (px) | f 평면 (px) | 상대 깊이 변위 | f 한계에 붙음 | 평면 격자 최솟값이 가장자리 |", "|---|---|---|---|---|---|---|---|---|---|"]
+    for r in results:
+        x = r.get("est")
+        if x:
+            L.append(f"| {r['set']} | {r['detector']} | {r['video']} | {r['distance_cm']:g} | 포함 | {x['f']:.1f} | {x['f_planar']:.1f} | {x['relief_rel']:.4f} | {'예' if x['at_bound'] else '아니오'} | {'예' if x['at_grid_edge'] else '아니오'} |")
+        else:
+            L.append(f"| {r['set']} | {r['detector']} | {r['video']} | {r['distance_cm']:g} | 제외: {'; '.join(r.get('excluded') or []) or r.get('failed') or '제외'} | - | - | - | - | - |")
+    path.write_text("\n".join(L) + "\n")
+
+
+def fs_summary(path: Path, results: list, ana: dict, cfg: dict, prior: dict):
+    ref = float(cfg["ref_f"])
+    pct = lambda x: f"{100 * x:+.1f}%"      # noqa: E731
+    fe = lambda f: f"{f:.1f} ({pct(f / ref - 1.0)})"      # noqa: E731
+    L = ["# 실험 51 summary", "", f"**{FS_NOTE}**", "", f"- 기준 f: {ref:g} px (모든 거리, 사용자 제공). 표의 값 = 초점 거리 px (기준 f 대비 오차). 거리별 f = 그 거리 영상별 3차원 f의 기하평균(실험 46·49와 같은 계산).", ""]
+    for k, st in enumerate(cfg["sets"], 1):
+        L += [f"## {k}. {st['name']}", "", "| 검출기 | 50 cm | 60 cm | 75 cm | 기울기 (95% 구간) | 판정 | 영상별 중앙 절대 오차 |", "|---|---|---|---|---|---|---|"]
+        for det in cfg["detectors"]:
+            a = ana[st["name"]][det]
+            sl, v = a.get("slope"), a["verdict"]
+            cells = []
+            for d in (50.0, 60.0, 75.0):
+                n_in = sum(1 for r in results if r["set"] == st["name"] and r["detector"] == det and r["distance_cm"] == d and "est" in r)
+                cells.append("-" if not sl or d not in sl["pooled_f"] else fe(sl["pooled_f"][d]) + (" 한계" if sl["pooled_edge"][d] else "") + f", 영상 {n_in}")
+            lg = [abs(np.log(r["est"]["f"] / ref)) for r in results if r["set"] == st["name"] and r["detector"] == det and "est" in r]
+            slope = "-" if not sl or sl["slope"] is None else f"{sl['slope']:+.3f}" + ("" if not sl["interval_95"] else f" ({sl['interval_95'][0]:+.3f} ~ {sl['interval_95'][1]:+.3f})")
+            L.append(f"| {det} | " + " | ".join(cells) + f" | {slope} | {v['verdict']} | {'-' if not lg else format(100 * (np.exp(np.median(lg)) - 1.0), '.1f') + '%'} |")
+        pv = prior.get(st["name"]) or {}
+        if pv:
+            same = [r for r in results if r["set"] == st["name"] and r["detector"] == "mediapipe_hands" and "est" in r]
+            dmax = max((abs(r["est"]["f"] - pv[r["video"]]) for r in same if r["video"] in pv), default=None)
+            L += ["", f"- mediapipe_hands 재현 확인: {st['prior_label']}의 영상별 3차원 f와의 최대 차이 {'-' if dmax is None else format(dmax, '.4f')} px."]
+        L += ["", "| 영상 | 거리(cm) | " + " | ".join(cfg["detectors"]) + " |", "|---|---|" + "---|" * len(cfg["detectors"])]
+        vids = [r for r in results if r["set"] == st["name"] and r["detector"] == cfg["detectors"][0]]
+        for rv in vids:
+            cells = []
+            for det in cfg["detectors"]:
+                r = next(x for x in results if x["set"] == st["name"] and x["detector"] == det and x["video"] == rv["video"])
+                cells.append(fe(r["est"]["f"]) + (" 한계" if r["est"]["at_bound"] else "") if "est" in r else "제외: " + ("; ".join(r.get("excluded") or []) or r.get("failed") or "-"))
+            L.append(f"| {rv['video']} | {rv['distance_cm']:g} | " + " | ".join(cells) + " |")
+        L.append("")
+    L += ["## 한계", "", "- 거리마다 영상이 4개 이하라 기울기 구간이 거칠다. 판정은 이 세션·이 카메라에 대한 것이다.",
+          "- 기준 f는 사용자가 이 영상들에 대해 준 값이며 이 코드로 새로 재지 않았다.",
+          "- MMPose 모델은 conf_min 0.3(실험 47 설정), mediapipe는 0.5(실험 46 설정)로 관절을 고른다.", ""]
+    path.write_text("\n".join(L) + "\n")
+
+
+def fs_main(argv=None):
+    ap = argparse.ArgumentParser()
+    ap.add_argument("--config", default=str(hf.PROJECT_ROOT / "configs/51_free_shape3d_mmpose.yaml"))
+    sub = ap.add_subparsers(dest="cmd")
+    ry = sub.add_parser("results-yaml")
+    ry.add_argument("--run", required=True)
+    ap.add_argument("--out", default=None)
+    a = ap.parse_args(argv)
+    text = Path(a.config).read_text()
+    cfg = yaml.safe_load(text)
+    if a.cmd == "results-yaml":
+        print(fs_results_yaml(hf.resolve(a.run), cfg))
+        return None
+    sets = [(st, yaml.safe_load(hf.resolve(st["config"]).read_text())) for st in cfg["sets"]]
+    run_root = Path(a.out).expanduser() if a.out else hf.resolve(cfg["output"]["root"]) / utc_stamp()
+    run_root.mkdir(parents=True)
+    log = Log(run_root / "log.txt")
+    log(f"51 free_shape3d 검출기별 공식 실행: 영상 묶음 {len(sets)}개, 검출기 {len(cfg['detectors'])}개 → {run_root}")
+    t0 = time.time()
+    tmp_root = run_root / "_frames"
+    tmp_root.mkdir()
+    for k in ("OMP_NUM_THREADS", "OPENBLAS_NUM_THREADS", "MKL_NUM_THREADS"):
+        os.environ[k] = "1"
+    import multiprocessing as mp
+    from concurrent.futures import ProcessPoolExecutor
+    sources = {}
+    try:
+        items = [(st, sc, e) for st, sc in sets for e in sc["stage2_videos"]]
+        with ProcessPoolExecutor(max_workers=int(cfg["workers"]), mp_context=mp.get_context("spawn")) as ex:
+            preps = list(ex.map(hf.fresp_prepare, [(e["file"], sc["input_dir"], sc["pipeline"], {}, str(tmp_root)) for st, sc, e in items]))
+        log(f"  프레임 준비 {time.time() - t0:.0f} s")
+        jobs, meta = [], []
+        for (st, sc, e), prep in zip(items, preps):
+            box = hf.mm_box_cache(prep["frames"], sc)
+            hf.check_alignment(prep["frames"], hf.load_detections(box))
+            sources.setdefault(st["name"], [str(Path(d)) for d in sc["box_caches"]] + [str(hf.resolve(st["detection_cache"]))])
+            entry = {"file": e["file"], "group": "G", "distance_cm": e["distance_cm"], "hand": "unrecorded"}
+            for det in cfg["detectors"]:
+                if det == "mediapipe_hands":
+                    npz = box
+                else:
+                    s = dict(sc["detector_settings"][det])
+                    s["box_source"] = sc["hand_box_source"]
+                    npz = fs_mm_cache(prep["frames"], s, box, det, hf.resolve(st["detection_cache"]))
+                c = {"candidate": {**cfg["candidate"], "detector": det}, "exclusion": cfg["exclusion"], "detector_settings": cfg["detector_settings"], "free_shape3d": cfg["free_shape3d"]}
+                jobs.append((entry, prep, str(npz), cfg["pipeline"], c))
+                meta.append((st["name"], det))
+        t1 = time.time()
+        with ProcessPoolExecutor(max_workers=int(cfg["fs_workers"]), mp_context=mp.get_context("spawn")) as ex:
+            res = list(ex.map(hf.e3_video, jobs))
+        log(f"  free_shape3d {len(jobs)}개 작업: {time.time() - t1:.0f} s")
+    finally:
+        shutil.rmtree(tmp_root, ignore_errors=True)
+    results = []
+    for (sname, det), r in zip(meta, res):
+        r = {k: v for k, v in r.items() if k not in ("group", "hand")}
+        results.append({"set": sname, "detector": det, **r})
+    ana = fs_analyze(results, cfg)
+    prior = {}
+    for st in cfg["sets"]:
+        q = hf.resolve(st["prior_results"])
+        if q.exists():
+            prior[st["name"]] = {v["video"]: float(v["est"]["f"]) for v in json.loads(q.read_text())["videos"] if isinstance(v.get("est"), dict)}
+    for st in cfg["sets"]:
+        for det in cfg["detectors"]:
+            v = ana[st["name"]][det]["verdict"]
+            log(f"  {st['name']} {det}: {v['verdict']}" + (f" (기울기 {v['slope']:+.3f})" if v.get("slope") is not None else ""))
+    fs_report(run_root / "report.md", results, cfg, sources)
+    fs_summary(run_root / "summary.md", results, ana, cfg, prior)
+    (run_root / "results.json").write_text(json.dumps(hf.jsonable({"videos": results, "analysis": ana}), ensure_ascii=False, indent=1))
+    meta_ = hf.provenance_build(text, a.config, {**{k: v for k, v in cfg.items() if k.startswith("code_")}, "elapsed_s": time.time() - t0})
+    (run_root / "metadata.json").write_text(json.dumps(hf.jsonable(meta_), ensure_ascii=False, indent=1))
+    log(f"완료 {time.time() - t0:.0f} s → {run_root}")
+    log.close()
+    return run_root, results, ana
+
+
+def fs_results_yaml(run_dir: Path, cfg: dict):
+    """Values and verdicts only (no reference f); written to output.results_yaml."""
+    r = json.loads((run_dir / "results.json").read_text())
+    m = json.loads((run_dir / "metadata.json").read_text())
+    try:
+        run_name = str(run_dir.resolve().relative_to(hf.PROJECT_ROOT))
+    except ValueError:
+        run_name = str(run_dir)
+    rd = lambda x, n=4: None if x is None or (isinstance(x, float) and not np.isfinite(x)) else round(x, n)      # noqa: E731
+    out = {"experiment": cfg["experiment"]["name"], "run": run_name, "code_commit": m["git"]["commit"][:7], "git_dirty_at_run": m["git"]["git_dirty"], "note": FS_NOTE,
+           "free_shape3d": cfg["free_shape3d"], "verdict_rules": cfg["verdict"], "sets": {}}
+    for st in cfg["sets"]:
+        o = out["sets"][st["name"]] = {}
+        for det in cfg["detectors"]:
+            a = r["analysis"][st["name"]][det]
+            sl = a.get("slope") or {}
+            o[det] = {"f_by_distance_px": {f"{float(d):g}": rd(f, 1) for d, f in (sl.get("pooled_f") or {}).items()}, "slope": rd(sl.get("slope")),
+                      "slope_interval_95": None if not sl.get("interval_95") else [round(q, 4) for q in sl["interval_95"]], "verdict": a["verdict"]["verdict"],
+                      "videos": {v["video"]: (round(v["est"]["f"], 1) if "est" in v else {"excluded": v.get("excluded") or v.get("failed")}) for v in r["videos"] if v["set"] == st["name"] and v["detector"] == det}}
+    p = hf.resolve(cfg["output"]["results_yaml"])
+    p.write_text(yaml.safe_dump(hf.jsonable(out), allow_unicode=True, sort_keys=False))
+    return p
+
+
+
+COMMANDS = {"protocol": protocol_main, "frame-filter": ff_main, "same-session": session_main, "overlay": overlay_main, "phase-segmentation": pseg_main, "guide-revision": grev_main, "f-response": fresp_main, "error-factors": ferr_main, "long-video-check": long_main, "generalization": gen_main, "main-camera-extension": ext_main, "wide-60cm": wide_main, "jointset-sets": jset_main, "verdict-calibration": cal_main, "printed-hand": pr_main, "hand-markers": mk_main, "markers-only": mo_main, "free-template": ft_main, "free-shape3d": s3_main, "free-shape3d-hand": h3_main, "free-shape3d-27": e3_main, "free-shape3d-new": e4_main, "mmpose-hand": mm_main, "mmpose-hand-46": mm2_main, "free-shape3d-new2": e5_main, "mmpose-hand-src": mm3_main, "free-shape3d-detectors": fs_main}
 
 
 def main(argv=None):

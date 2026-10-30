@@ -4436,5 +4436,46 @@ class MM3Reports(unittest.TestCase):
             self.assertNotIn("1553", rep + y)
 
 
+# ---- experiment 51: free_shape3d on the joints of every detector of 48 / 50 ---------------------------------------
+CFG51 = yaml.safe_load((ROOT / "configs/51_free_shape3d_mmpose.yaml").read_text())
+
+
+class FSReports(unittest.TestCase):
+    def test_config_uses_46s_settings_and_47s_detectors(self):
+        for k in ("candidate", "exclusion", "free_shape3d", "verdict", "bootstrap"):
+            self.assertEqual(CFG51[k], CFG46[k], k)
+        self.assertEqual(CFG51["detectors"], ["mediapipe_hands"] + CFG47["detectors"])
+        self.assertEqual(CFG51["detector_settings"]["mediapipe_hands"], CFG46["detector_settings"]["mediapipe_hands"])
+        for n in CFG47["detectors"]:
+            self.assertEqual(CFG51["detector_settings"][n], CFG47["detector_settings"][n])
+        self.assertEqual([s["config"] for s in CFG51["sets"]], ["configs/48_mmpose_hand_46_videos.yaml", "configs/50_mmpose_hand_7312.yaml"])
+
+    def test_summary_has_f_with_error_and_report_and_yaml_have_no_reference(self):
+        est = lambda f: {"f": f, "f_planar": f, "relief_rel": 0.02, "at_bound": False, "at_grid_edge": False}   # noqa: E731
+        results = []
+        for st in CFG51["sets"]:
+            for det in CFG51["detectors"]:
+                for k, d in enumerate((50.0, 50.0, 60.0, 60.0, 75.0, 75.0)):
+                    results.append({"set": st["name"], "detector": det, "video": f"V{k}.MOV", "distance_cm": d, "excluded": [], "est": est(1500.0 + 10 * k)})
+        results[0] = {**results[0], "excluded": ["가장자리 접촉 프레임 9.1% > 5%"]}
+        results[0].pop("est")
+        ana = run.fs_analyze(results, CFG51)
+        self.assertIn(ana["실험 46 영상"]["mmhand_scnet"]["verdict"]["verdict"], ("반비례 없음", "반비례 있음", "판단 보류", "판단 불가"))
+        with tempfile.TemporaryDirectory() as d:
+            d = Path(d)
+            run.fs_report(d / "report.md", results, CFG51, {})
+            run.fs_summary(d / "summary.md", results, ana, CFG51, {"실험 46 영상": {"V1.MOV": 1510.0}})
+            (d / "results.json").write_text(json.dumps(hf.jsonable({"videos": results, "analysis": ana}), ensure_ascii=False))
+            (d / "metadata.json").write_text(json.dumps({"git": {"commit": "abcdef1234", "git_dirty": False}}))
+            cfg = copy.deepcopy(CFG51)
+            cfg["output"]["results_yaml"] = str(d / "r.yaml")
+            y = Path(run.fs_results_yaml(d, cfg)).read_text()
+            summ, rep = (d / "summary.md").read_text(), (d / "report.md").read_text()
+            self.assertIn("1510.0 (-2.8%)", summ)
+            self.assertIn("최대 차이 0.0000 px", summ)
+            self.assertNotIn("1553", rep + y)
+            self.assertIn("1553", summ)
+
+
 if __name__ == "__main__":
     unittest.main()
