@@ -4399,5 +4399,42 @@ class E5Reports(unittest.TestCase):
             self.assertEqual(run.e5_prior({"compare": {"45": str(d / "p45.json")}}), {50.0: 1675.3, 60.0: 1476.1})
 
 
+# ---- experiment 50: experiment 48 on the videos of 49 ---------------------------------------------------------
+CFG50 = yaml.safe_load((ROOT / "configs/50_mmpose_hand_7312.yaml").read_text())
+
+
+class MM3Reports(unittest.TestCase):
+    def test_the_config_keeps_48s_settings_and_names_the_source_experiment_in_every_output(self):
+        for k in ("detectors", "detector_settings", "candidate", "exclusion", "guide", "hand_box_source", "bootstrap", "thermal", "ref_f"):
+            self.assertEqual(CFG50[k], CFG48[k], k)
+        self.assertEqual([(e["file"], e["distance_cm"]) for e in CFG50["stage2_videos"]], [(e["file"], e["distance_cm"]) for e in CFG49["videos"]])
+        names = list(hf.MM_DETECTORS)
+        grid = np.geomspace(0.35 * 1920, 1.6 * 1920, 60)
+        mk = lambda f: {"ft": {"f": f, "at_grid_edge": False, "sharpness": 1.01}, "excluded": [], "curve": {"grid": grid.tolist(), "cost": ((np.log(grid) - np.log(f)) ** 2).tolist()}}   # noqa: E731
+        stage2 = [{"video": e["file"], "source": "49", "distance_cm": e["distance_cm"], "lens": "1x", "detectors": {n: mk(1400.0 + 10 * k) for k, n in enumerate(["mediapipe_hands"] + names)}} for e in CFG50["stage2_videos"]]
+        with tempfile.TemporaryDirectory() as d:
+            d = Path(d)
+            (d / "r49.json").write_text(json.dumps({"videos": [{"video": s["video"], "est": {"f": 1200.0}} for s in stage2], "analysis": {"shape3d": {"slope": None}}}))
+            cfg = copy.deepcopy(CFG50)
+            cfg["existing_results"] = {"49": str(d / "r49.json")}
+            cfg["output"]["results_yaml"] = str(d / "r.yaml")
+            existing = run.mm3_existing(cfg)
+            self.assertEqual(len(existing["videos"]), 12)
+            slopes = run.mm2_stage2_slopes(stage2, ["mediapipe_hands"] + names, cfg)
+            env = {"info": {n: {"remap": None, "names_ok": True} for n in names}, "versions": {}}
+            run.mm3_report(d / "report.md", cfg, env, {}, {}, {}, {}, [], {"official": True, "order": True, "stage2": "실행함"})
+            run.mm3_summary(d / "summary.md", cfg, stage2, names, existing, slopes)
+            (d / "results.json").write_text(json.dumps(hf.jsonable({"verification": {"checks": {}, "order": {}, "agreement": {}, "failure": {}, "verified": {}, "env": env}, "stage2": stage2, "slopes": slopes}), ensure_ascii=False))
+            (d / "metadata.json").write_text(json.dumps({"git": {"commit": "abcdef1234", "git_dirty": False}}))
+            y = Path(run.mm3_results_yaml(d, cfg)).read_text()
+            summ, rep = (d / "summary.md").read_text(), (d / "report.md").read_text()
+            self.assertTrue(summ.startswith("# 실험 50 summary") and rep.startswith("# 실험 50:"))
+            for text in (summ, rep, y):
+                self.assertNotIn("실험 46", text)
+            self.assertIn("실험 49 free_shape3d", summ)
+            self.assertIn("1200.0", summ)
+            self.assertNotIn("1553", rep + y)
+
+
 if __name__ == "__main__":
     unittest.main()

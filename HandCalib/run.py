@@ -7837,7 +7837,196 @@ def e5_results_yaml(run_dir: Path, cfg: dict):
     return p
 
 
-COMMANDS = {"protocol": protocol_main, "frame-filter": ff_main, "same-session": session_main, "overlay": overlay_main, "phase-segmentation": pseg_main, "guide-revision": grev_main, "f-response": fresp_main, "error-factors": ferr_main, "long-video-check": long_main, "generalization": gen_main, "main-camera-extension": ext_main, "wide-60cm": wide_main, "jointset-sets": jset_main, "verdict-calibration": cal_main, "printed-hand": pr_main, "hand-markers": mk_main, "markers-only": mo_main, "free-template": ft_main, "free-shape3d": s3_main, "free-shape3d-hand": h3_main, "free-shape3d-27": e3_main, "free-shape3d-new": e4_main, "mmpose-hand": mm_main, "mmpose-hand-46": mm2_main, "free-shape3d-new2": e5_main}
+# ====================================================================================================
+# mm3  (experiment 50: experiment 48 repeated on the videos of experiment 49 (boxes from 49's mediapipe cache). The mm2 functions write "실험 46" for the source experiment;
+#       mm3_* call them unchanged and put the source experiment of the config (source_experiment) in its place; mm3_main = mm2_main with these swapped in)
+#     python HandCalib/run.py mmpose-hand-src --config HandCalib/configs/50_mmpose_hand_7312.yaml [--videos A.MOV,B.MOV] [--out DIR]
+#     python HandCalib/run.py mmpose-hand-src --config ... results-yaml --run runs/50_mmpose_hand_7312/<UTC>
+# ====================================================================================================
+def mm3_src(path: Path, cfg: dict):
+    path.write_text(path.read_text().replace("실험 46", f"실험 {cfg['source_experiment']}"))
+
+
+def mm3_existing(cfg: dict) -> dict:
+    return mm2_existing({**cfg, "existing_results": {"46": cfg["existing_results"][str(cfg["source_experiment"])]}})
+
+
+def mm3_report(path: Path, cfg: dict, *a):
+    mm2_report(path, cfg, *a)
+    mm3_src(path, cfg)
+
+
+def mm3_summary(path: Path, cfg: dict, *a):
+    mm2_summary(path, cfg, *a)
+    mm3_src(path, cfg)
+
+
+def mm3_results_yaml(run_dir: Path, cfg: dict):
+    p = mm2_results_yaml(run_dir, cfg)
+    mm3_src(p, cfg)
+    return p
+
+
+def mm3_main(argv=None):
+    ap = argparse.ArgumentParser()
+    ap.add_argument("--config", default=str(hf.PROJECT_ROOT / "configs/50_mmpose_hand_7312.yaml"))
+    sub = ap.add_subparsers(dest="cmd")
+    ry = sub.add_parser("results-yaml")
+    ry.add_argument("--run", required=True)
+    ap.add_argument("--videos", default=None, help="comma list of file names narrowing the videos")
+    ap.add_argument("--out", default=None)
+    a = ap.parse_args(argv)
+    text = Path(a.config).read_text()
+    cfg = yaml.safe_load(text)
+    if a.cmd == "results-yaml":
+        print(mm3_results_yaml(hf.resolve(a.run), cfg))
+        return None
+    names = [d for d in cfg["detectors"] if d in hf.MM_DETECTORS]
+    s2 = list(cfg["stage2_videos"]) if cfg.get("run_stage2") else []
+    vids = list(dict.fromkeys(list(cfg["verify"]["videos"]) + [e["file"] for e in s2]))
+    if a.videos:
+        vids = [v for v in vids if v in a.videos.split(",")]
+        s2 = [e for e in s2 if e["file"] in vids]
+    missing = [v for v in vids if not (Path(cfg["input_dir"]).expanduser() / v).exists()]
+    if missing:
+        raise SystemExit(f"영상이 없습니다: {missing}")
+    for n in names:                                                    # the checkpoints must be the recorded files
+        s = cfg["detector_settings"][n]
+        got = hf.sha256_file(Path(s["checkpoint"]).expanduser())
+        if got != s["checkpoint_sha256"]:
+            raise SystemExit(f"{n}: 체크포인트 SHA256이 다릅니다 ({got})")
+    run_root = Path(a.out).expanduser() if a.out else hf.resolve(cfg["output"]["root"]) / utc_stamp()
+    run_root.mkdir(parents=True)
+    log = Log(run_root / "log.txt")
+    log(f"{cfg['experiment']['name']} MMPose 손 검출기 공식 실행: 검출기 {len(names)}개, 영상 {len(vids)}개 (검증 {len(cfg['verify']['videos'])}, 2단계 {len(s2)}) → {run_root}")
+    t0 = time.time()
+    tmp_root = run_root / "_frames"
+    tmp_root.mkdir()
+    cache_dir = run_root / "detection_cache"
+    cache_dir.mkdir()
+    for k in ("OMP_NUM_THREADS", "OPENBLAS_NUM_THREADS", "MKL_NUM_THREADS"):
+        os.environ[k] = "1"
+    import multiprocessing as mp
+    from concurrent.futures import ProcessPoolExecutor
+    try:
+        with ProcessPoolExecutor(max_workers=int(cfg["workers"]), mp_context=mp.get_context("spawn")) as ex:
+            preps = dict(zip(vids, ex.map(hf.fresp_prepare, [(v, cfg["input_dir"], cfg["pipeline"], {}, str(tmp_root)) for v in vids])))
+        log(f"  프레임 준비 {time.time() - t0:.0f} s")
+        boxes = {}
+        for v in vids:
+            try:
+                boxes[v] = hf.mm_box_cache(preps[v]["frames"], cfg)
+                hf.check_alignment(preps[v]["frames"], hf.load_detections(boxes[v]))
+            except (hf.SkipDetector, hf.DetectorError) as e:
+                log(f"  {v}: 손 박스 없음 — {e}")
+        # ---- official-inference check (verification videos) and detection (every video), on the GPUs
+        jobs, keys = [], []
+        for n in names:
+            for v in cfg["verify"]["videos"]:
+                if v in boxes:
+                    jobs.append(lambda g, n=n, v=v: hf.mm_official_check(preps[v]["frames"], mm_det_settings(cfg, n, g), boxes[v], tmp_root / f"check_{n}_{Path(v).stem}", int(cfg["verify"]["official_check_frames"]), log))
+                    keys.append(("check", n, v))
+        for n in names:
+            for v in vids:
+                if v in boxes:
+                    jobs.append(lambda g, n=n, v=v: hf.swap_mmpose_hand(preps[v]["frames"], mm_det_settings(cfg, n, g), cache_dir, log, boxes[v], n)[0])
+                    keys.append(("det", n, v))
+        t1 = time.time()
+        res = mm_gpu_jobs(jobs, cfg, log)
+        log(f"  공식 일치 확인과 검출 {len(jobs)}개 작업: {time.time() - t1:.0f} s")
+        checks, npz = {}, {}
+        for (kind, n, v), r in zip(keys, res):
+            if isinstance(r, Exception):
+                log(f"  {kind} {n} {v}: 실패 — {r}")
+            if kind == "check":
+                checks.setdefault(n, {})[v] = str(r) if isinstance(r, Exception) else r
+            else:
+                npz.setdefault(n, {})[v] = None if isinstance(r, Exception) else r
+        # ---- verification: order, agreement, failure rates, overlays
+        env = {"info": {}, "versions": {}}
+        agree, fail, overlays = {}, {}, []
+        pooled = {n: ([], []) for n in names}
+        for v in vids:
+            if v not in boxes:
+                continue
+            ref = hf.load_detections(boxes[v])
+            nf = len(preps[v]["frames"])
+            fr = {"n_frames": nf, "no_box_frac": float(np.mean(np.diff(ref["offsets"]) == 0)), "low_conf": {}}
+            dets = {"mediapipe_hands": ref}
+            for n in names:
+                p = (npz.get(n) or {}).get(v)
+                if p is None:
+                    continue
+                d = hf.load_detections(p)
+                hf.check_alignment(preps[v]["frames"], d)
+                dets[n] = d
+                i = dict(d["info"])
+                i["names_ok"] = [i["keypoint_names"][k] for k in (i.get("remap") or range(21))] == list(MM_HAND_NAMES)
+                env["info"].setdefault(n, i)
+                env["versions"] = {k: i[k] for k in ("mmpose", "mmcv", "mmengine", "torch", "torch_cuda", "python") if k in i}
+                ag = hf.mm_agreement(ref, d, float(cfg["detector_settings"][n]["conf_min"]))
+                fr["low_conf"][n] = ag["low_conf_frac"]
+                agree.setdefault(n, {})[v] = {k: ag[k] for k in ("n_boxes", "median_pct", "p90_pct", "per_joint_median_pct", "low_conf_frac")}
+                if v in cfg["verify"]["videos"] and len(d["kxy"]):
+                    pooled[n][0].append(ref["kxy"])
+                    pooled[n][1].append(d["kxy"])
+            fail[v] = fr
+            if v in cfg["verify"]["videos"]:
+                overlays += hf.mm_overlay(preps[v]["frames"], dets, run_root / "overlay", v, int(cfg["verify"]["overlay_frames"]), {k: float(cfg["detector_settings"][k]["conf_min"]) for k in dets})
+        order = {}
+        for n in names:
+            if pooled[n][0]:
+                ra, rb = np.concatenate(pooled[n][0]), np.concatenate(pooled[n][1])
+                order[n] = {**hf.order_assignment(ra, rb, np.ones((len(ra), 21), bool)), "n_boxes": int(len(ra))}
+        tol = float(cfg["verify"]["tol_px"])
+        ok_off = all(isinstance(c, dict) and c.get("max_abs_px") is not None and c["max_abs_px"] <= tol for n in names for c in (checks.get(n) or {"-": None}).values())
+        ok_order = all((order.get(n) or {}).get("identity") and (env["info"].get(n) or {}).get("names_ok") and (env["info"].get(n) or {}).get("remap") is None for n in names)
+        verified = {"official": bool(ok_off), "order": bool(ok_order)}
+        log(f"  검증: 공식 일치 {'통과' if ok_off else '실패'}, 관절 순서 {'통과' if ok_order else '실패'}")
+        stage2 = []
+        if not cfg.get("run_stage2"):
+            verified["stage2"] = "꺼짐 (run_stage2: false)"
+        elif not (ok_off and ok_order):
+            verified["stage2"] = "검증 실패로 실행하지 않음"
+        else:
+            c = {k: cfg[k] for k in MM_KEYS}
+            src_name = hf.MM_BOX_SOURCES[cfg["hand_box_source"]]
+            args, owner = [], []                                       # one job per (video, detector); the results are merged per video
+            for e in s2:
+                by = {src_name: boxes.get(e["file"])} if src_name == "mediapipe_hands" else {}
+                by.update({n: (npz.get(n) or {}).get(e["file"]) for n in names})
+                for n, p in by.items():
+                    args.append((e, preps[e["file"]], {n: p}, cfg["pipeline"], c))
+                    owner.append(e["file"])
+            t2 = time.time()
+            with ProcessPoolExecutor(max_workers=int(cfg["stage2_workers"]), mp_context=mp.get_context("spawn")) as ex:
+                parts = list(ex.map(hf.mm_video, args))
+            merged = {}
+            for v, r in zip(owner, parts):
+                merged.setdefault(v, {**r, "detectors": {}})["detectors"].update(r["detectors"])
+            stage2 = [merged[e["file"]] for e in s2]
+            verified["stage2"] = f"실행함 (영상 {len(stage2)}개, {time.time() - t2:.0f} s)"
+            log(f"  2단계 FT: {verified['stage2']}")
+    finally:
+        shutil.rmtree(tmp_root, ignore_errors=True)
+    existing = mm3_existing(cfg)
+    dets_all = ([hf.MM_BOX_SOURCES[cfg["hand_box_source"]]] if cfg["hand_box_source"] == "mediapipe" else []) + names
+    slopes = mm2_stage2_slopes(stage2, dets_all, cfg) if stage2 else {}
+    for r in stage2:
+        log(f"  {r['video']}: " + ", ".join(f"{n} " + (f"{x['ft']['f']:.0f}" if "ft" in x and not x.get("excluded") else "제외") for n, x in r["detectors"].items()))
+    mm3_report(run_root / "report.md", cfg, env, checks, agree, order, fail, overlays, verified)
+    if stage2:
+        mm3_summary(run_root / "summary.md", cfg, stage2, names, existing, slopes)
+    (run_root / "results.json").write_text(json.dumps(hf.jsonable({"verification": {"checks": checks, "order": order, "agreement": agree, "failure": fail, "verified": verified, "env": env},
+                                                                    "stage2": stage2, "slopes": slopes}), ensure_ascii=False, indent=1))
+    meta = hf.provenance_build(text, a.config, {**{k: v for k, v in cfg.items() if k.startswith("code_")}, "videos": vids, "elapsed_s": time.time() - t0})
+    (run_root / "metadata.json").write_text(json.dumps(hf.jsonable(meta), ensure_ascii=False, indent=1))
+    log(f"완료 {time.time() - t0:.0f} s → {run_root}")
+    log.close()
+    return run_root, verified
+
+
+COMMANDS = {"protocol": protocol_main, "frame-filter": ff_main, "same-session": session_main, "overlay": overlay_main, "phase-segmentation": pseg_main, "guide-revision": grev_main, "f-response": fresp_main, "error-factors": ferr_main, "long-video-check": long_main, "generalization": gen_main, "main-camera-extension": ext_main, "wide-60cm": wide_main, "jointset-sets": jset_main, "verdict-calibration": cal_main, "printed-hand": pr_main, "hand-markers": mk_main, "markers-only": mo_main, "free-template": ft_main, "free-shape3d": s3_main, "free-shape3d-hand": h3_main, "free-shape3d-27": e3_main, "free-shape3d-new": e4_main, "mmpose-hand": mm_main, "mmpose-hand-46": mm2_main, "free-shape3d-new2": e5_main, "mmpose-hand-src": mm3_main}
 
 
 def main(argv=None):
