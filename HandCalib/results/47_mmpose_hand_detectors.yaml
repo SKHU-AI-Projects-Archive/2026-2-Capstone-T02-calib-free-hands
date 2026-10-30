@@ -1,0 +1,470 @@
+experiment: 47_mmpose_hand_detectors
+run: runs/47_mmpose_hand_detectors/20261030T051532Z
+code_commit: 362db2d
+git_dirty_at_run: false
+note: 'MMPose의 COCO-WholeBody-Hand 학습 손 2D 모델 5종(HRNetv2-w18+DARK, HRNetv2-w18, RTMPose-m,
+  Hourglass52, SCNet-50)을 검출기로 추가하고, 기존 검출 캐시의 손 박스에서 관절을 구해 기존 FT 코드(후보 설정: 손목 제외,
+  fixed_template)로 f를 기록한 실험이다. 판정은 하지 않는다. 기준 f와의 비교는 summary.md에만 있다.'
+detectors:
+  mmhand_hrnetv2_dark:
+    checkpoint: hrnetv2_w18_coco_wholebody_hand_256x256_dark-a9228c9c_20210908.pth
+    checkpoint_sha256: a9228c9ca2adf68a0c72f1b21ae62633b421a5f49311d9dc1fbb06143e5164f1
+  mmhand_hrnetv2:
+    checkpoint: hrnetv2_w18_coco_wholebody_hand_256x256-1c028db7_20210908.pth
+    checkpoint_sha256: 1c028db7823ddf1c5f14d0174801d97e1149478a9ce1504b8219fc27c00e066f
+  mmhand_rtmpose_m:
+    checkpoint: rtmpose-m_simcc-coco-wholebody-hand_pt-aic-coco_210e-256x256-99477206_20230228.pth
+    checkpoint_sha256: 26b87183517457d78a1266fb5ed1127207b51a9a9c9ec6c431ec35b7a3f0ce73
+  mmhand_hourglass:
+    checkpoint: hourglass52_coco_wholebody_hand_256x256-7b05c6db_20210909.pth
+    checkpoint_sha256: 7b05c6dbedcb1bd19e4fd5274d2d2a31e38afe7e047cb42b12dcad71865fcf1a
+  mmhand_scnet:
+    checkpoint: scnet50_coco_wholebody_hand_256x256-e73414c7_20210909.pth
+    checkpoint_sha256: e73414c75ac63e6a05f910b2fa76a4e5a5d38b474799e975513e0efff337b7fe
+hand_box_source: mediapipe
+verified:
+  official: true
+  order: true
+  stage2: 실행함 (영상 18개, 867 s)
+official_check_max_px:
+  mmhand_hrnetv2_dark:
+    IMG_7220.MOV: 0.0001220703125
+    IMG_7192.MOV: 0.0001220703125
+  mmhand_hrnetv2:
+    IMG_7220.MOV: 0.0
+    IMG_7192.MOV: 0.0
+  mmhand_rtmpose_m:
+    IMG_7220.MOV: 0.0
+    IMG_7192.MOV: 0.0
+  mmhand_hourglass:
+    IMG_7220.MOV: 0.0
+    IMG_7192.MOV: 0.0
+  mmhand_scnet:
+    IMG_7220.MOV: 0.0
+    IMG_7192.MOV: 0.0
+order_identity:
+  mmhand_hrnetv2_dark: true
+  mmhand_hrnetv2: true
+  mmhand_rtmpose_m: true
+  mmhand_hourglass: true
+  mmhand_scnet: true
+agreement_vs_mediapipe_median_pct:
+  mmhand_hrnetv2_dark:
+    IMG_7220.MOV: 2.093
+    IMG_7192.MOV: 2.182
+    IMG_7190.MOV: 2.504
+    IMG_7191.MOV: 2.252
+    IMG_7193.MOV: 2.274
+    IMG_7194.MOV: 2.25
+    IMG_7195.MOV: 2.245
+    IMG_7216.MOV: 2.008
+    IMG_7217.MOV: 2.179
+    IMG_7218.MOV: 1.928
+    IMG_7219.MOV: 2.057
+    IMG_7221.MOV: 1.963
+    IMG_7222.MOV: 1.992
+    IMG_7223.MOV: 2.218
+    IMG_7224.MOV: 1.935
+    IMG_7231.MOV: 2.319
+    IMG_7232.MOV: 2.508
+    IMG_7233.MOV: 2.36
+  mmhand_hrnetv2:
+    IMG_7220.MOV: 1.936
+    IMG_7192.MOV: 2.069
+    IMG_7190.MOV: 2.403
+    IMG_7191.MOV: 2.081
+    IMG_7193.MOV: 2.172
+    IMG_7194.MOV: 2.158
+    IMG_7195.MOV: 2.2
+    IMG_7216.MOV: 1.95
+    IMG_7217.MOV: 2.131
+    IMG_7218.MOV: 1.906
+    IMG_7219.MOV: 2.024
+    IMG_7221.MOV: 1.933
+    IMG_7222.MOV: 2.018
+    IMG_7223.MOV: 2.093
+    IMG_7224.MOV: 1.883
+    IMG_7231.MOV: 2.243
+    IMG_7232.MOV: 2.452
+    IMG_7233.MOV: 2.208
+  mmhand_rtmpose_m:
+    IMG_7220.MOV: 1.896
+    IMG_7192.MOV: 2.174
+    IMG_7190.MOV: 2.707
+    IMG_7191.MOV: 2.012
+    IMG_7193.MOV: 2.336
+    IMG_7194.MOV: 2.139
+    IMG_7195.MOV: 2.185
+    IMG_7216.MOV: 2.006
+    IMG_7217.MOV: 1.887
+    IMG_7218.MOV: 1.725
+    IMG_7219.MOV: 1.841
+    IMG_7221.MOV: 1.729
+    IMG_7222.MOV: 1.834
+    IMG_7223.MOV: 1.772
+    IMG_7224.MOV: 1.542
+    IMG_7231.MOV: 2.305
+    IMG_7232.MOV: 2.511
+    IMG_7233.MOV: 2.16
+  mmhand_hourglass:
+    IMG_7220.MOV: 2.286
+    IMG_7192.MOV: 2.035
+    IMG_7190.MOV: 2.406
+    IMG_7191.MOV: 2.114
+    IMG_7193.MOV: 2.155
+    IMG_7194.MOV: 2.128
+    IMG_7195.MOV: 2.107
+    IMG_7216.MOV: 2.152
+    IMG_7217.MOV: 2.236
+    IMG_7218.MOV: 1.901
+    IMG_7219.MOV: 2.246
+    IMG_7221.MOV: 2.061
+    IMG_7222.MOV: 2.145
+    IMG_7223.MOV: 2.13
+    IMG_7224.MOV: 1.906
+    IMG_7231.MOV: 2.32
+    IMG_7232.MOV: 2.444
+    IMG_7233.MOV: 2.391
+  mmhand_scnet:
+    IMG_7220.MOV: 1.902
+    IMG_7192.MOV: 2.061
+    IMG_7190.MOV: 2.559
+    IMG_7191.MOV: 1.964
+    IMG_7193.MOV: 2.176
+    IMG_7194.MOV: 2.073
+    IMG_7195.MOV: 2.042
+    IMG_7216.MOV: 2.018
+    IMG_7217.MOV: 2.11
+    IMG_7218.MOV: 1.818
+    IMG_7219.MOV: 1.975
+    IMG_7221.MOV: 1.785
+    IMG_7222.MOV: 1.89
+    IMG_7223.MOV: 1.887
+    IMG_7224.MOV: 1.769
+    IMG_7231.MOV: 2.381
+    IMG_7232.MOV: 2.711
+    IMG_7233.MOV: 2.359
+stage2_f_px:
+  IMG_7190.MOV:
+    mediapipe_hands: 1568.8
+    mmhand_hrnetv2_dark: 1283.9
+    mmhand_hrnetv2: 1500.9
+    mmhand_rtmpose_m: 1401.7
+    mmhand_hourglass: 1141.4
+    mmhand_scnet: 1287.7
+  IMG_7191.MOV:
+    mediapipe_hands: 2390.8
+    mmhand_hrnetv2_dark: 1405.6
+    mmhand_hrnetv2: 1475.2
+    mmhand_rtmpose_m: 1541.7
+    mmhand_hourglass: 1284.8
+    mmhand_scnet: 1901.2
+  IMG_7192.MOV:
+    mediapipe_hands: 1742.2
+    mmhand_hrnetv2_dark: 1328.7
+    mmhand_hrnetv2: 1141.7
+    mmhand_rtmpose_m: 1593.4
+    mmhand_hourglass: 1540.4
+    mmhand_scnet: 1810.9
+  IMG_7193.MOV:
+    mediapipe_hands: 1534.4
+    mmhand_hrnetv2_dark: 1411.0
+    mmhand_hrnetv2: 1327.1
+    mmhand_rtmpose_m: 1805.9
+    mmhand_hourglass: 1397.1
+    mmhand_scnet: 2040.6
+  IMG_7194.MOV:
+    mediapipe_hands: 1875.1
+    mmhand_hrnetv2_dark: 1456.2
+    mmhand_hrnetv2: 1279.1
+    mmhand_rtmpose_m: 1629.2
+    mmhand_hourglass: 1616.4
+    mmhand_scnet: 1855.0
+  IMG_7195.MOV:
+    mediapipe_hands: 1663.9
+    mmhand_hrnetv2_dark: 1117.3
+    mmhand_hrnetv2: 1008.8
+    mmhand_rtmpose_m: 1398.6
+    mmhand_hourglass: 1434.3
+    mmhand_scnet: 1962.9
+  IMG_7216.MOV:
+    mediapipe_hands:
+      excluded:
+      - 가장자리 접촉 프레임 6.3% > 5%
+    mmhand_hrnetv2_dark:
+      excluded:
+      - 가장자리 접촉 프레임 6.3% > 5%
+    mmhand_hrnetv2:
+      excluded:
+      - 가장자리 접촉 프레임 6.3% > 5%
+    mmhand_rtmpose_m:
+      excluded:
+      - 가장자리 접촉 프레임 6.3% > 5%
+    mmhand_hourglass:
+      excluded:
+      - 가장자리 접촉 프레임 6.3% > 5%
+    mmhand_scnet:
+      excluded:
+      - 가장자리 접촉 프레임 6.3% > 5%
+  IMG_7217.MOV:
+    mediapipe_hands: 1527.3
+    mmhand_hrnetv2_dark: 1172.5
+    mmhand_hrnetv2: 1273.6
+    mmhand_rtmpose_m: 1458.8
+    mmhand_hourglass: 1387.8
+    mmhand_scnet: 1440.2
+  IMG_7218.MOV:
+    mediapipe_hands: 1399.1
+    mmhand_hrnetv2_dark: 1424.8
+    mmhand_hrnetv2: 1296.5
+    mmhand_rtmpose_m: 1518.1
+    mmhand_hourglass: 1114.0
+    mmhand_scnet: 1724.8
+  IMG_7219.MOV:
+    mediapipe_hands: 1993.9
+    mmhand_hrnetv2_dark: 1765.1
+    mmhand_hrnetv2: 1968.8
+    mmhand_rtmpose_m: 1870.0
+    mmhand_hourglass: 1542.6
+    mmhand_scnet: 2306.4
+  IMG_7220.MOV:
+    mediapipe_hands: 2122.1
+    mmhand_hrnetv2_dark: 1708.5
+    mmhand_hrnetv2: 1626.5
+    mmhand_rtmpose_m: 2108.5
+    mmhand_hourglass: 1512.7
+    mmhand_scnet: 1652.7
+  IMG_7221.MOV:
+    mediapipe_hands: 1298.0
+    mmhand_hrnetv2_dark: 1518.5
+    mmhand_hrnetv2: 1673.5
+    mmhand_rtmpose_m: 1622.9
+    mmhand_hourglass: 1388.6
+    mmhand_scnet: 1837.9
+  IMG_7222.MOV:
+    mediapipe_hands: 2230.6
+    mmhand_hrnetv2_dark: 1792.4
+    mmhand_hrnetv2: 2089.7
+    mmhand_rtmpose_m: 2012.4
+    mmhand_hourglass: 1636.0
+    mmhand_scnet: 1782.4
+  IMG_7223.MOV:
+    mediapipe_hands: 1866.2
+    mmhand_hrnetv2_dark: 1129.9
+    mmhand_hrnetv2: 1429.2
+    mmhand_rtmpose_m: 1251.3
+    mmhand_hourglass: 1532.1
+    mmhand_scnet: 1819.7
+  IMG_7224.MOV:
+    mediapipe_hands: 1554.4
+    mmhand_hrnetv2_dark: 1836.7
+    mmhand_hrnetv2: 1692.7
+    mmhand_rtmpose_m: 1579.5
+    mmhand_hourglass: 953.3
+    mmhand_scnet: 1817.0
+  IMG_7231.MOV:
+    mediapipe_hands: 1112.7
+    mmhand_hrnetv2_dark: 1060.0
+    mmhand_hrnetv2: 1032.4
+    mmhand_rtmpose_m: 1223.6
+    mmhand_hourglass: 972.4
+    mmhand_scnet: 1017.0
+  IMG_7232.MOV:
+    mediapipe_hands: 1016.9
+    mmhand_hrnetv2_dark: 1066.4
+    mmhand_hrnetv2: 982.1
+    mmhand_rtmpose_m: 672.0
+    mmhand_hourglass: 773.9
+    mmhand_scnet: 820.5
+  IMG_7233.MOV:
+    mediapipe_hands: 1143.3
+    mmhand_hrnetv2_dark: 1648.1
+    mmhand_hrnetv2: 1313.2
+    mmhand_rtmpose_m: 1462.7
+    mmhand_hourglass: 1285.7
+    mmhand_scnet: 1399.6
+stage2_sharpness:
+  IMG_7190.MOV:
+    mediapipe_hands: 1.006
+    mmhand_hrnetv2_dark: 1.0036
+    mmhand_hrnetv2: 1.0017
+    mmhand_rtmpose_m: 1.0027
+    mmhand_hourglass: 1.0014
+    mmhand_scnet: 1.002
+  IMG_7191.MOV:
+    mediapipe_hands: 1.0026
+    mmhand_hrnetv2_dark: 1.0026
+    mmhand_hrnetv2: 1.0017
+    mmhand_rtmpose_m: 1.0026
+    mmhand_hourglass: 1.0019
+    mmhand_scnet: 1.002
+  IMG_7192.MOV:
+    mediapipe_hands: 1.0039
+    mmhand_hrnetv2_dark: 1.0028
+    mmhand_hrnetv2: 1.0024
+    mmhand_rtmpose_m: 1.0024
+    mmhand_hourglass: 1.0015
+    mmhand_scnet: 1.0013
+  IMG_7193.MOV:
+    mediapipe_hands: 1.0047
+    mmhand_hrnetv2_dark: 1.0029
+    mmhand_hrnetv2: 1.002
+    mmhand_rtmpose_m: 1.0022
+    mmhand_hourglass: 1.0014
+    mmhand_scnet: 1.0013
+  IMG_7194.MOV:
+    mediapipe_hands: 1.0029
+    mmhand_hrnetv2_dark: 1.0021
+    mmhand_hrnetv2: 1.0017
+    mmhand_rtmpose_m: 1.0018
+    mmhand_hourglass: 1.0014
+    mmhand_scnet: 1.0011
+  IMG_7195.MOV:
+    mediapipe_hands: 1.0047
+    mmhand_hrnetv2_dark: 1.0043
+    mmhand_hrnetv2: 1.0027
+    mmhand_rtmpose_m: 1.0026
+    mmhand_hourglass: 1.002
+    mmhand_scnet: 1.0012
+  IMG_7216.MOV: {}
+  IMG_7217.MOV:
+    mediapipe_hands: 1.0081
+    mmhand_hrnetv2_dark: 1.0061
+    mmhand_hrnetv2: 1.0031
+    mmhand_rtmpose_m: 1.004
+    mmhand_hourglass: 1.0028
+    mmhand_scnet: 1.0036
+  IMG_7218.MOV:
+    mediapipe_hands: 1.0053
+    mmhand_hrnetv2_dark: 1.0033
+    mmhand_hrnetv2: 1.002
+    mmhand_rtmpose_m: 1.0021
+    mmhand_hourglass: 1.0027
+    mmhand_scnet: 1.0011
+  IMG_7219.MOV:
+    mediapipe_hands: 1.0078
+    mmhand_hrnetv2_dark: 1.0041
+    mmhand_hrnetv2: 1.0025
+    mmhand_rtmpose_m: 1.0033
+    mmhand_hourglass: 1.002
+    mmhand_scnet: 1.0014
+  IMG_7220.MOV:
+    mediapipe_hands: 1.0051
+    mmhand_hrnetv2_dark: 1.0026
+    mmhand_hrnetv2: 1.0026
+    mmhand_rtmpose_m: 1.0024
+    mmhand_hourglass: 1.0021
+    mmhand_scnet: 1.0031
+  IMG_7221.MOV:
+    mediapipe_hands: 1.005
+    mmhand_hrnetv2_dark: 1.0021
+    mmhand_hrnetv2: 1.0011
+    mmhand_rtmpose_m: 1.0022
+    mmhand_hourglass: 1.0017
+    mmhand_scnet: 1.0011
+  IMG_7222.MOV:
+    mediapipe_hands: 1.0052
+    mmhand_hrnetv2_dark: 1.0046
+    mmhand_hrnetv2: 1.0022
+    mmhand_rtmpose_m: 1.0031
+    mmhand_hourglass: 1.0025
+    mmhand_scnet: 1.0024
+  IMG_7223.MOV:
+    mediapipe_hands: 1.0056
+    mmhand_hrnetv2_dark: 1.0052
+    mmhand_hrnetv2: 1.002
+    mmhand_rtmpose_m: 1.0042
+    mmhand_hourglass: 1.0021
+    mmhand_scnet: 1.0016
+  IMG_7224.MOV:
+    mediapipe_hands: 1.0036
+    mmhand_hrnetv2_dark: 1.0013
+    mmhand_hrnetv2: 1.0009
+    mmhand_rtmpose_m: 1.0018
+    mmhand_hourglass: 1.0018
+    mmhand_scnet: 1.0009
+  IMG_7231.MOV:
+    mediapipe_hands: 1.0048
+    mmhand_hrnetv2_dark: 1.0023
+    mmhand_hrnetv2: 1.0019
+    mmhand_rtmpose_m: 1.0018
+    mmhand_hourglass: 1.0018
+    mmhand_scnet: 1.0015
+  IMG_7232.MOV:
+    mediapipe_hands: 1.0046
+    mmhand_hrnetv2_dark: 1.0018
+    mmhand_hrnetv2: 1.0016
+    mmhand_rtmpose_m: 1.0033
+    mmhand_hourglass: 1.0026
+    mmhand_scnet: 1.0018
+  IMG_7233.MOV:
+    mediapipe_hands: 1.0053
+    mmhand_hrnetv2_dark: 1.0014
+    mmhand_hrnetv2: 1.0014
+    mmhand_rtmpose_m: 1.0018
+    mmhand_hourglass: 1.0014
+    mmhand_scnet: 1.0013
+distance_27:
+  mediapipe_hands:
+    pooled_f_px:
+      '50': 2092.4
+      '60': 1766.8
+      '75': 1398.4
+    slope: -0.9958
+    slope_interval_95:
+    - -1.2747
+    - -0.7095
+  mmhand_hrnetv2_dark:
+    pooled_f_px:
+      '50': 1777.2
+      '60': 1294.2
+      '75': 1543.9
+    slope: -0.3053
+    slope_interval_95:
+    - -0.5038
+    - 0.1337
+  mmhand_hrnetv2:
+    pooled_f_px:
+      '50': 2017.6
+      '60': 1425.6
+      '75': 1502.1
+    slope: -0.6922
+    slope_interval_95:
+    - -1.0516
+    - -0.3435
+  mmhand_rtmpose_m:
+    pooled_f_px:
+      '50': 1939.6
+      '60': 1582.2
+      '75': 1575.5
+    slope: -0.4945
+    slope_interval_95:
+    - -0.6496
+    - -0.3479
+  mmhand_hourglass:
+    pooled_f_px:
+      '50': 1607.5
+      '60': 1464.3
+      '75': 1177.4
+    slope: -0.7756
+    slope_interval_95:
+    - -1.3074
+    - -0.3983
+  mmhand_scnet:
+    pooled_f_px:
+      '50': 2032.0
+      '60': 1580.0
+      '75': 1789.8
+    slope: -0.281
+    slope_interval_95:
+    - -0.6407
+    - 0.0892
+  실험 27 공식 (mediapipe_hands):
+    pooled_f_px:
+      '50': 2092.4
+      '60': 1766.8
+      '75': 1398.4
+    slope: -0.9958
+    slope_interval_95:
+    - -1.2747
+    - -0.7095
