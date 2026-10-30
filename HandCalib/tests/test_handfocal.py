@@ -4003,5 +4003,67 @@ class E3Reports(unittest.TestCase):
             self.assertEqual(run.e3_prior({"compare": {"27": str(d / "none.json")}}), {})
 
 
+# ---- experiment 46: the call of 45 on newly shot videos ----------------------------------------------------
+CFG46 = yaml.safe_load((ROOT / "configs/46_free_shape3d_new.yaml").read_text())
+
+
+class E4Config(unittest.TestCase):
+    def test_the_config_has_every_section_the_run_command_reads_and_45_settings_are_unchanged(self):
+        for k in run.E4_KEYS + ("videos", "input_dir", "ref_f_by_distance", "pipeline", "verdict", "bootstrap", "workers", "n_workers", "output", "code_46", "compare"):
+            self.assertIn(k, CFG46, k)
+        for k in ("candidate", "exclusion", "detector_settings", "free_shape3d", "verdict", "bootstrap", "input_dir"):
+            self.assertEqual(CFG46[k], CFG45[k], k)
+        self.assertEqual(CFG46["pipeline"]["estimate"], CFG45["pipeline"]["estimate"])
+        self.assertEqual(CFG46["pipeline"]["phases"], CFG45["pipeline"]["phases"])
+        self.assertEqual(CFG46["ref_f_by_distance"], {50: 1553, 60: 1553, 75: 1553})
+        got = {(e["file"], e["distance_cm"]) for e in CFG46["videos"]}
+        want = {(f"IMG_{n}.MOV", d) for n, d in ((7298, 50), (7299, 50), (7309, 50), (7310, 50), (7300, 60), (7301, 60), (7302, 60), (7303, 60), (7304, 75), (7305, 75), (7307, 75), (7308, 75))}
+        self.assertEqual(got, want)
+
+
+class E4Reports(unittest.TestCase):
+    def test_summary_report_and_yaml_keep_the_reference_in_summary_only(self):
+        ref = {float(d): float(f) for d, f in CFG46["ref_f_by_distance"].items()}
+        grid = np.geomspace(0.35 * 1920, 1.6 * 1920, 8)
+        cost = ((np.log(grid) - np.log(1600.0)) ** 2 + 0.01).tolist()
+        est = {"f": 1605.0, "f_planar": 1610.0, "f_grid": 1600.0, "at_grid_edge": False, "at_bound": False, "relief_rel": 0.01, "relief_per_joint": [0.01] * 16, "cost": 0.01, "cost_planar": 0.011,
+               "curve": {"grid": grid.tolist(), "cost": cost}, "sharpness": 1.4, "ba3_success": True, "ba3_nfev": 20, "ba3_rms_px": 0.2, "anchors": [0, 1, 2], "n_frames_in_problem": 120, "n_points": 900, "joint_ids": list(range(5, 21)), "elapsed_s": 60.0}
+        results = [{"video": e["file"], "group": "G8", "distance_cm": float(e["distance_cm"]), "hand": "unrecorded", "size": [1920, 1080], "n_frames": 300, "duration_s": 20.0, "detect_rate": 1.0, "edge_rate": 0.0, "excluded": [], "est": est}
+                   for e in CFG46["videos"]]
+        results[0].pop("est")
+        results[0]["excluded"] = ["가장자리 접촉 프레임 6.3% > 5%"]
+        inc = [r for r in results if "est" in r]
+        fb = {d: [r["est"]["f"] for r in inc if r["distance_cm"] == d] for d in (50.0, 60.0, 75.0)}
+        sl = hf.s3_slope(fb, {d: [False] * len(fb[d]) for d in fb}, 50, 42)
+        cur = {d: [r["est"]["curve"]["cost"] for r in inc if r["distance_cm"] == d] for d in fb}
+        psl = hf.pr_slope(cur, grid, 50, 42)
+        nv = {d: len(fb[d]) for d in fb}
+        ana = {"shape3d": {"slope": sl, "verdict": hf.pr_verdict(sl, ref, CFG46["verdict"], nv)}, "planar": {"slope": psl, "verdict": hf.pr_verdict(psl, ref, CFG46["verdict"], nv)}}
+        prior = {50.0: 1675.3, 60.0: 1476.1, 75.0: 1167.1}
+        with tempfile.TemporaryDirectory() as d:
+            d = Path(d)
+            (d / "figures").mkdir()
+            run.e4_figures(d / "figures", results, ana, ref, prior)
+            run.e4_report(d / "report.md", results, CFG46)
+            run.e4_summary(d / "summary.md", results, ana, ref, CFG46, prior)
+            (d / "results.json").write_text(json.dumps(hf.jsonable({"videos": results, "analysis": ana}), ensure_ascii=False))
+            (d / "metadata.json").write_text(json.dumps({"git": {"commit": "abcdef1234", "git_dirty": False}}))
+            cfg = copy.deepcopy(CFG46)
+            cfg["output"]["results_yaml"] = str(d / "r.yaml")
+            y = Path(run.e4_results_yaml(d, cfg)).read_text()
+            self.assertTrue((d / "figures/f_vs_distance_loglog.png").exists())
+            summ = (d / "summary.md").read_text()
+            self.assertIn("1553", summ)
+            self.assertIn("판정 (free_shape3d", summ)
+            for name, text in (("report", (d / "report.md").read_text()), ("yaml", y)):
+                self.assertNotIn("1553", text, name)
+            for line in summ.splitlines():
+                if line.startswith("|") and "---" not in line:
+                    self.assertEqual(line.count("|"), line.strip().count("|"), line)
+            self.assertEqual(run.e4_prior({"compare": {"45": str(d / "none.json")}}), {})
+            (d / "p45.json").write_text(json.dumps({"analysis": {"shape3d": {"slope": {"pooled_f": {"50.0": 1675.3, "60.0": 1476.1}}}}}))
+            self.assertEqual(run.e4_prior({"compare": {"45": str(d / "p45.json")}}), {50.0: 1675.3, 60.0: 1476.1})
+
+
 if __name__ == "__main__":
     unittest.main()
