@@ -5263,3 +5263,199 @@ def e3_video(args) -> dict:
                   "n_frames_in_problem": int(len(pb.keep)), "n_points": int(pb.n_points), "joint_ids": [int(x) for x in r["joint_ids"]], "elapsed_s": float(time.time() - t0),
                   "box_long_median_px": float(np.nanmedian(box_long(box)[present]))}
     return res
+
+
+# ====================================================================================================
+# mm  (experiment 47: the five MMPose 2-D hand models trained on COCO-WholeBody-Hand as detectors; new section, earlier functions are used unchanged)
+# Hand boxes come from an existing detection cache of the box source (no new hand detection); the worker (detector_worker.py mmpose_hand, own venv) writes 14's detection npz,
+# so track / analyze / gen_video read it like any other detector. swap_run_all_mm runs the existing detectors with swap_run_all and the new names with swap_mmpose_hand.
+# ====================================================================================================
+
+MM_DETECTORS = ("mmhand_hrnetv2_dark", "mmhand_hrnetv2", "mmhand_rtmpose_m", "mmhand_hourglass", "mmhand_scnet")
+MM_BOX_SOURCES = {"mediapipe": "mediapipe_hands", "wilor_yolo": "wilor_yolo"}
+
+
+def mm_box_cache(frames, cfg: dict) -> Path:
+    """The existing cache of the box source (hand_box_source) for this frame list, looked up in cfg['box_caches'] by the file name its own run would give it; never detected anew."""
+    name = MM_BOX_SOURCES[cfg["hand_box_source"]]
+    s = cfg["detector_settings"][name]
+    if name == "mediapipe_hands":
+        settings = {k: s[k] for k in ("weights", "num_hands", "min_hand_detection_confidence", "min_hand_presence_confidence", "box_margin", "remap")}
+        fname = f"mediapipe_hands_{frames_key(frames, settings, 'mediapipe_hands')}.npz"
+    else:
+        fname = f"detections_{cache_key(frames, {k: s.get(k) for k in ('weights', 'conf', 'iou', 'imgsz')})}.npz"
+    for d in cfg["box_caches"]:
+        p = Path(d).expanduser() / fname
+        if p.exists():
+            return p
+    raise SkipDetector(f"기존 {name} 검출 캐시가 없음 ({fname}); 손 박스는 새로 검출하지 않음")
+
+
+def mm_boxes_only(box_npz: Path, out: Path) -> Path:
+    z = np.load(box_npz)
+    np.savez(out, offsets=z["offsets"], boxes=z["boxes"], box_conf=z["box_conf"], cls=z["cls"])      # boxes only, no keypoints
+    return out
+
+
+def mm_worker_cmd(s: dict, mode: str, lst: Path, bx: Path, out: Path, extra=()) -> list:
+    return [s["python"], str(WORKER), mode, "--config", str(Path(s["config"]).expanduser()), "--checkpoint", str(Path(s["checkpoint"]).expanduser()), "--list", str(lst), "--boxes", str(bx),
+            "--out", str(out), "--device", str(s["device"]), "--batch-size", str(int(s["batch_size"])), "--tf32", str(int(bool(s.get("tf32", False)))), *extra]
+
+
+def swap_mmpose_hand(frames, s: dict, cache_dir: Path, log, box_npz: Path, name: str):
+    """One MMPose hand model on one frame list (cache by frame hashes + settings + the box file's hash; the GPU index is not part of the key)."""
+    settings = {k: s[k] for k in ("config", "checkpoint", "checkpoint_sha256", "box_source", "batch_size")}
+    settings["tf32"] = bool(s.get("tf32", False))
+    settings["boxes_sha256"] = hashlib.sha256(Path(box_npz).read_bytes()).hexdigest()
+    out = cache_dir / f"{name}_{frames_key(frames, settings, name)}.npz"
+    if not out.exists():
+        bx = mm_boxes_only(box_npz, cache_dir / (out.stem + "_boxes.npz"))
+        lst = cache_dir / (out.stem + ".tsv")
+        write_list(frames, lst)
+        try:
+            _run_worker(mm_worker_cmd(s, "mmpose_hand", lst, bx, out, ("--name", name)), log)
+        finally:
+            lst.unlink(missing_ok=True)
+            bx.unlink(missing_ok=True)
+    return out, {"box_source": s["box_source"]}
+
+
+def swap_run_all_mm(frames, cfg: dict, cache_dir: Path, log, box_npz: Path | None = None) -> dict:
+    """swap_run_all for a detectors list that may contain the MMPose names: the existing names go through swap_run_all unchanged, the new names use the boxes of
+    box_npz (an existing cache) or else of their box source's run in this call."""
+    cache_dir.mkdir(parents=True, exist_ok=True)
+    names = list(cfg["detectors"])
+    old = [d for d in names if d not in MM_DETECTORS]
+    out = swap_run_all(frames, {**cfg, "detectors": old}, cache_dir, log) if old else {}
+    for name in [d for d in names if d in MM_DETECTORS]:
+        s = cfg["detector_settings"][name]
+        try:
+            src = MM_BOX_SOURCES[s["box_source"]]
+            bnpz = box_npz if box_npz is not None else (out.get(src) or {}).get("npz")
+            if bnpz is None:
+                raise SkipDetector(f"box source {src} unavailable")
+            p, extra = swap_mmpose_hand(frames, s, cache_dir, log, Path(bnpz), name)
+            d = load_detections(p)
+            check_alignment(frames, d)
+            out[name] = {"npz": p, **extra, "info": d["info"]}
+            log(f"  검출 {name}: 후보 {len(d['boxes'])}개 ({p.name})")
+        except (SkipDetector, DetectorError, FileNotFoundError) as e:
+            out[name] = {"skipped": str(e)}
+            log(f"  검출 {name}: 건너뜀 — {e}")
+    return out
+
+
+def mm_official_check(frames, s: dict, box_npz: Path, work: Path, n_frames: int, log=print) -> dict:
+    """The worker's mmpose_hand_check: wrapper (batched) against mmpose.apis.inference_topdown on the first n_frames frames that have boxes."""
+    work.mkdir(parents=True, exist_ok=True)
+    lst, bx, out = work / "frames.tsv", mm_boxes_only(box_npz, work / "boxes.npz"), work / "check.json"
+    write_list(frames, lst)
+    _run_worker(mm_worker_cmd(s, "mmpose_hand_check", lst, bx, out, ("--n-frames", str(int(n_frames)))), log)
+    r = json.loads(out.read_text())
+    for p in (lst, bx, out):
+        p.unlink(missing_ok=True)
+    return r
+
+
+def mm_gpu_temp(gpu: int):
+    try:
+        p = subprocess.run(["nvidia-smi", "-i", str(int(gpu)), "--query-gpu=temperature.gpu", "--format=csv,noheader,nounits"], capture_output=True, text=True, timeout=20)
+        return float(p.stdout.strip().splitlines()[0])
+    except Exception:                                                  # no reading: do not block the job
+        return None
+
+
+def mm_thermal_wait(gpu: int, tcfg: dict, log=print, poll_s: float = 15.0, temp_fn=None):
+    """Thermal guard before a GPU job: at pause_c or above wait until the GPU is below resume_c (returns the seconds waited)."""
+    temp_fn = temp_fn or mm_gpu_temp
+    t = temp_fn(gpu)
+    if t is None or t < float(tcfg["pause_c"]):
+        return 0.0
+    log(f"  GPU {gpu} {t:.0f}°C ≥ {tcfg['pause_c']}°C: {tcfg['resume_c']}°C 미만까지 대기")
+    t0 = time.time()
+    while True:
+        time.sleep(poll_s)
+        t = temp_fn(gpu)
+        if t is None or t < float(tcfg["resume_c"]):
+            return time.time() - t0
+
+
+def mm_agreement(ref: dict, det: dict, conf_min: float) -> dict:
+    """Same frames, same boxes (the model ran on the box source's boxes, candidate k <-> candidate k): distance of each point to the box source's point in % of the box's long side,
+    the share of points below conf_min and the point-order check (Hungarian assignment of the median distances, order_assignment)."""
+    if [int(x) for x in ref["offsets"]] != [int(x) for x in det["offsets"]] or not np.allclose(ref["boxes"], det["boxes"]):
+        raise DetectorError("box source and model candidates differ")
+    n = len(det["boxes"])
+    if n == 0:
+        return {"n_boxes": 0, "median_pct": None, "p90_pct": None, "per_joint_median_pct": [None] * 21, "low_conf_frac": None, "order": None}
+    bl = box_long(ref["boxes"])
+    d = np.linalg.norm(det["kxy"] - ref["kxy"], axis=-1) / bl[:, None] * 100.0
+    return {"n_boxes": int(n), "median_pct": float(np.median(d)), "p90_pct": float(np.percentile(d, 90)), "per_joint_median_pct": [float(x) for x in np.median(d, axis=0)],
+            "low_conf_frac": float(np.mean(det["kconf"] < float(conf_min))), "order": order_assignment(ref["kxy"], det["kxy"], np.ones((n, 21), bool))}
+
+
+MM_SKELETON = [(0, 1), (1, 2), (2, 3), (3, 4), (0, 5), (5, 6), (6, 7), (7, 8), (0, 9), (9, 10), (10, 11), (11, 12), (0, 13), (13, 14), (14, 15), (15, 16), (0, 17), (17, 18), (18, 19), (19, 20)]
+
+
+def mm_overlay(frames, dets: dict, out_dir: Path, video: str, n_frames: int, conf_min: dict) -> list:
+    """n_frames frames (evenly spaced among the frames with a box) cropped around the box source's first box; one panel per detector (points below conf_min drawn hollow)."""
+    out_dir.mkdir(parents=True, exist_ok=True)
+    names = list(dets)
+    ref = dets[names[0]]
+    has = [r for r in range(len(frames)) if ref["offsets"][r + 1] > ref["offsets"][r]]
+    pick = [has[int(i)] for i in np.unique(np.linspace(0, len(has) - 1, int(n_frames)).round().astype(int))] if has else []
+    files = []
+    for r in pick:
+        img = cv2.imread(frames[r]["png"], cv2.IMREAD_COLOR)
+        k0 = int(ref["offsets"][r])
+        b = ref["boxes"][k0]
+        c, h = (b[:2] + b[2:]) / 2, max(b[2] - b[0], b[3] - b[1]) * 0.65
+        x0, y0 = int(max(0, c[0] - h)), int(max(0, c[1] - h))
+        x1, y1 = int(min(img.shape[1], c[0] + h)), int(min(img.shape[0], c[1] + h))
+        panels = []
+        for nm in names:
+            d = dets[nm]
+            crop = img[y0:y1, x0:x1].copy()
+            s = 360.0 / max(1, max(crop.shape[:2]))
+            crop = cv2.resize(crop, None, fx=s, fy=s, interpolation=cv2.INTER_AREA)
+            if d["offsets"][r + 1] > d["offsets"][r]:
+                k = int(d["offsets"][r])
+                p = (d["kxy"][k] - [x0, y0]) * s
+                for a_, b_ in MM_SKELETON:
+                    cv2.line(crop, tuple(int(v) for v in p[a_]), tuple(int(v) for v in p[b_]), (0, 200, 255), 1, cv2.LINE_AA)
+                for j in range(21):
+                    cv2.circle(crop, tuple(int(v) for v in p[j]), 3, (0, 0, 255), -1 if d["kconf"][k][j] >= conf_min[nm] else 1, cv2.LINE_AA)
+            cv2.putText(crop, nm, (6, 18), cv2.FONT_HERSHEY_SIMPLEX, 0.5, (255, 255, 255), 2, cv2.LINE_AA)
+            cv2.putText(crop, nm, (6, 18), cv2.FONT_HERSHEY_SIMPLEX, 0.5, (0, 0, 0), 1, cv2.LINE_AA)
+            panels.append(crop)
+        hh = max(p.shape[0] for p in panels)
+        panels = [cv2.copyMakeBorder(p, 0, hh - p.shape[0], 0, 4, cv2.BORDER_CONSTANT, value=(255, 255, 255)) for p in panels]
+        cols = 3
+        rows_ = [np.hstack(panels[i:i + cols] + [np.full_like(panels[0], 255)] * (cols - len(panels[i:i + cols]))) for i in range(0, len(panels), cols)]
+        f = out_dir / f"{Path(video).stem}_frame{frames[r]['index']:05d}.png"
+        cv2.imwrite(str(f), np.vstack(rows_))
+        files.append(f.name)
+    return files
+
+
+def mm_video(args) -> dict:
+    """Stage 2, one video: gen_video (26's candidate: wrist_mode exclude, fixed_template, exclusion rules) once per detector on its cache. args = (entry, prep, npz_by_det, pcfg, c);
+    c needs candidate, exclusion, detector_settings, guide. The reference f is not stored."""
+    entry, prep, npz_by_det, pcfg, c = args[:5]
+    e2 = {"group": entry.get("group", entry["source"]), "person_id": None, "phone": "main", "lens": entry.get("lens", "1x"), "glove": False, "ref_f": 0.0, **entry}
+    out = {"video": entry["file"], "source": entry["source"], "distance_cm": entry.get("distance_cm"), "lens": entry.get("lens", "1x"), "detectors": {}}
+    for name, npz in npz_by_det.items():
+        if npz is None:
+            out["detectors"][name] = {"failed": "검출 없음"}
+            continue
+        c2 = {**c, "candidate": {**c["candidate"], "detector": name}, "trajectory": c.get("trajectory") or {}}
+        try:
+            r = gen_video((e2, prep, npz, pcfg, c2))
+        except Exception as e:                                         # a failure is a result, not a crash of the run
+            out["detectors"][name] = {"failed": f"{type(e).__name__}: {e}"}
+            continue
+        keep = {k: r[k] for k in ("n_frames", "duration_s", "detect_rate", "edge_rate", "excluded", "failed", "ft", "curve") if k in r}
+        if "motion" in r:
+            keep["theta_p90_deg"] = r["motion"]["theta_p90_deg"]
+        out["detectors"][name] = keep
+    return out

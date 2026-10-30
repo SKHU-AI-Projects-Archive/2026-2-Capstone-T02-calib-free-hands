@@ -6897,7 +6897,398 @@ def e4_results_yaml(run_dir: Path, cfg: dict):
 
 
 
-COMMANDS = {"protocol": protocol_main, "frame-filter": ff_main, "same-session": session_main, "overlay": overlay_main, "phase-segmentation": pseg_main, "guide-revision": grev_main, "f-response": fresp_main, "error-factors": ferr_main, "long-video-check": long_main, "generalization": gen_main, "main-camera-extension": ext_main, "wide-60cm": wide_main, "jointset-sets": jset_main, "verdict-calibration": cal_main, "printed-hand": pr_main, "hand-markers": mk_main, "markers-only": mo_main, "free-template": ft_main, "free-shape3d": s3_main, "free-shape3d-hand": h3_main, "free-shape3d-27": e3_main, "free-shape3d-new": e4_main}
+# ====================================================================================================
+# mm  (experiment 47: the five MMPose COCO-WholeBody-Hand models as detectors on the boxes of an existing detection cache; verification, then (run_stage2) f on existing videos)
+#     python HandCalib/run.py mmpose-hand --config HandCalib/configs/47_mmpose_hand_detectors.yaml [--videos A.MOV,B.MOV] [--out DIR]
+#     python HandCalib/run.py mmpose-hand --config ... results-yaml --run runs/47_mmpose_hand_detectors/<UTC>
+# ====================================================================================================
+from detector_worker import MM_HAND_NAMES                             # noqa: E402  (the cache's 21-point names, numpy-only module)
+MM_KEYS = ("candidate", "exclusion", "detector_settings", "guide")       # the config sections mm_video needs
+MM_NOTE = ("MMPose의 COCO-WholeBody-Hand 학습 손 2D 모델 5종(HRNetv2-w18+DARK, HRNetv2-w18, RTMPose-m, Hourglass52, SCNet-50)을 검출기로 추가하고, 기존 검출 캐시의 손 박스에서 관절을 구해 "
+           "기존 FT 코드(후보 설정: 손목 제외, fixed_template)로 f를 기록한 실험이다. 판정은 하지 않는다. 기준 f와의 비교는 summary.md에만 있다.")
+
+
+def mm_det_settings(cfg: dict, name: str, gpu=None) -> dict:
+    s = dict(cfg["detector_settings"][name])
+    s["box_source"] = cfg["hand_box_source"]                       # one box source for the five models (yaml hand_box_source)
+    if gpu is not None:
+        s["device"] = f"cuda:{int(gpu)}"
+    return s
+
+
+def mm_gpu_jobs(jobs: list, cfg: dict, log) -> list:
+    """jobs = [callable(gpu) -> result]; len(gpu_ids) x jobs_per_gpu threads, each bound to one GPU, take jobs from one queue; the thermal guard runs before every job."""
+    import queue
+    import threading
+    gpus = [int(g) for g in cfg["gpu_ids"]]
+    slots = [g for g in gpus for _ in range(int(cfg.get("jobs_per_gpu", 1)))]
+    q = queue.Queue()
+    for i, j in enumerate(jobs):
+        q.put((i, j))
+    out = [None] * len(jobs)
+
+    def worker(g):
+        while True:
+            try:
+                i, j = q.get_nowait()
+            except queue.Empty:
+                return
+            hf.mm_thermal_wait(g, cfg["thermal"], log)
+            try:
+                out[i] = j(g)
+            except Exception as e:                                      # recorded per job
+                out[i] = e
+    th = [threading.Thread(target=worker, args=(g,)) for g in slots]
+    for t in th:
+        t.start()
+    for t in th:
+        t.join()
+    return out
+
+
+def mm_existing_f(cfg: dict) -> dict:
+    """Official mediapipe f, sharpness and FT curve of every video in the existing runs (read only): {video: {f, sharpness, at_grid_edge, curve}}."""
+    out = {}
+    for src, p in (cfg.get("existing_results") or {}).items():
+        q = Path(str(p)).expanduser()
+        q = q if q.is_absolute() else hf.resolve(q)
+        if not q.exists():
+            continue
+        r = json.loads(q.read_text())
+        for v in r.get("videos") or r.get("new") or []:
+            if isinstance(v.get("ft"), dict) and "f" in v["ft"]:
+                out[v["video"]] = {"source": str(src), "f": float(v["ft"]["f"]), "sharpness": v["ft"].get("sharpness"), "at_grid_edge": v["ft"].get("at_grid_edge"),
+                                   "curve": (v.get("curve") or {}).get("cost")}
+    return out
+
+
+def mm_stage2_slopes(stage2: list, names: list, cfg: dict, existing: dict) -> dict:
+    """Experiment 27's distance videos: pooled f per distance and the log f / log distance slope (pr_slope, video-level bootstrap) for every detector and for 27's official values."""
+    bn, bs = int(cfg["bootstrap"]["n"]), int(cfg["bootstrap"]["seed"])
+    out = {}
+    g6 = [r for r in stage2 if r["source"] == "27" and r.get("distance_cm") is not None]
+    grid = None
+    for name in names:
+        cur = {}
+        for r in g6:
+            x = r["detectors"].get(name) or {}
+            if "ft" in x and not x.get("excluded"):
+                cur.setdefault(float(r["distance_cm"]), []).append(x["curve"]["cost"])
+                grid = np.array(x["curve"]["grid"])
+        out[name] = hf.pr_slope(cur, grid, bn, bs) if cur and len(cur) >= 2 else None
+        if out[name] is not None:
+            out[name]["n_videos"] = {d: len(v) for d, v in cur.items()}
+    cur = {}
+    for r in g6:
+        e = existing.get(r["video"])
+        x = r["detectors"].get("mediapipe_hands") or {}
+        if e and e.get("curve") and not x.get("excluded"):
+            cur.setdefault(float(r["distance_cm"]), []).append(e["curve"])
+    out["실험 27 공식 (mediapipe_hands)"] = hf.pr_slope(cur, grid, bn, bs) if cur and len(cur) >= 2 and grid is not None else None
+    return out
+
+
+def mm_report(path: Path, cfg: dict, env: dict, checks: dict, agree: dict, order: dict, fail: dict, overlays: list, verified: dict):
+    names = list(cfg["detectors"])
+    src = cfg["hand_box_source"]
+    L = ["# 실험 47: MMPose 손 2D 모델 5종을 검출기로 추가", "", MM_NOTE, "",
+         "## 1. 환경과 체크포인트", "",
+         f"- 가상환경: {cfg['detector_settings'][names[0]]['python']} (" + ", ".join(f"{k} {v}" for k, v in env.get("versions", {}).items()) + ")",
+         f"- 사용 GPU 번호: {', '.join(str(g) for g in cfg['gpu_ids'])} (GPU당 동시 작업 {cfg.get('jobs_per_gpu', 1)}개), 배치 크기 {cfg['detector_settings'][names[0]]['batch_size']}, "
+         f"TF32 {'켬' if cfg['detector_settings'][names[0]].get('tf32') else '끔 (완전한 FP32)'}",
+         f"- 손 박스 출처: {src} (기존 검출 캐시에서 읽음, 새로 검출하지 않음). 박스가 없는 프레임은 다섯 모델 모두 검출 실패.", "",
+         "| 검출기 | 모델 | COCO-WholeBody-Hand EPE | 체크포인트 | SHA256 | 출처 |", "|---|---|---|---|---|---|"]
+    for n in names:
+        s = cfg["detector_settings"][n]
+        L.append(f"| {n} | {s['model']} | {s['epe']} | {Path(s['checkpoint']).name} | {s['checkpoint_sha256']} | {s['checkpoint_url']} |")
+    L += ["", "| 검출기 | 설정 파일 | 설정 SHA256 | 데이터 처리 (설정 파일의 test pipeline) | 테스트 설정 |", "|---|---|---|---|---|"]
+    for n in names:
+        i = env["info"].get(n) or {}
+        L.append(f"| {n} | {Path(cfg['detector_settings'][n]['config']).name} | {i.get('config_sha256', '-')} | {' → '.join(i.get('test_pipeline', []))}, 입력 {'×'.join(str(x) for x in i.get('input_size', []))} | "
+                 f"{', '.join(f'{k} {v}' for k, v in (i.get('test_cfg') or {}).items())} |")
+    L += ["", f"- 기존 rtmpose_hand: {cfg['existing_rtmpose_hand']['checkpoint']} — {cfg['existing_rtmpose_hand']['note']} 기존 검출기와 설정은 바꾸지 않았다.", "",
+          "## 2. 관절 순서", "",
+          "- 모델이 내는 관절 이름(dataset_meta)을 기존 캐시 순서(0 손목, 1~4 엄지, 5~8 검지, 9~12 중지, 13~16 약지, 17~20 새끼)의 이름과 코드로 대조했다(detector_worker.mm_order).",
+          "- 실제 프레임에서도 확인: 같은 박스에서 각 모델 관절과 mediapipe 관절 사이 거리의 중앙값 행렬을 헝가리안 방법으로 짝지었을 때 항등 대응인지 본다.", "",
+          "| 검출기 | 이름 대조 | 순서 변환 | 실제 프레임 대응 (헝가리안) | 박스 수 |", "|---|---|---|---|---|"]
+    for n in names:
+        i = env["info"].get(n) or {}
+        o = order.get(n) or {}
+        L.append(f"| {n} | {'일치' if i.get('names_ok') else '불일치'} | {'없음 (항등)' if i.get('remap') is None else i.get('remap')} | {'항등' if o.get('identity') else ('불일치: ' + str(o.get('assignment')) if o else '-')} | {o.get('n_boxes', '-')} |")
+    L += ["", "## 3. 공식 추론 함수와의 일치", "",
+          f"- 같은 프레임·같은 박스를 mmpose.apis.inference_topdown(영상 프레임 PNG 경로 입력, 프레임마다 한 번 호출)과 우리 래퍼(배치 {cfg['detector_settings'][names[0]]['batch_size']}, 여러 프레임의 박스를 함께 처리)로 처리해 관절 좌표의 최대 차이를 본다. 기준 {cfg['verify']['tol_px']} px.",
+          "- TF32를 켜면(파이토치 기본값) 배치 구성에 따라 합성곱 결과가 조금 달라져 히트맵 최댓값이 한 칸(시험에서 최대 6.5 px) 옮겨 가는 일이 있었다. 그래서 래퍼와 공식 함수 모두 TF32를 끄고 비교·실행한다.", "",
+          "| 검출기 | 영상 | 프레임 | 박스 | 최대 차이 (px) | 신뢰도 최대 차이 | 통과 |", "|---|---|---|---|---|---|---|"]
+    for n in names:
+        for v, c in (checks.get(n) or {}).items():
+            if isinstance(c, dict) and "max_abs_px" in c:
+                L.append(f"| {n} | {v} | {len(c['frames'])} | {c['n_boxes']} | {c['max_abs_px']:.4g} | {c['max_abs_conf']:.2g} | {'예' if c['max_abs_px'] <= float(cfg['verify']['tol_px']) else '아니오'} |")
+            else:
+                L.append(f"| {n} | {v} | - | - | 실패: {c} | - | 아니오 |")
+    L += ["", "## 4. 검출기 간 일치도 (mediapipe 대비)", "",
+          "- 같은 프레임·같은 박스에서 각 모델 관절과 mediapipe 관절 사이 거리, 손 박스 긴 변 대비 %. 관절 21개 전체.", "",
+          "| 검출기 | 영상 | 박스 | 중앙값 (% 박스) | 90 백분위 (% 박스) | 신뢰도 문턱 미만 관절 비율 |", "|---|---|---|---|---|---|"]
+    for n in names:
+        for v, a in (agree.get(n) or {}).items():
+            if a.get("median_pct") is None:
+                L.append(f"| {n} | {v} | {a.get('n_boxes', 0)} | - | - | - |")
+            else:
+                L.append(f"| {n} | {v} | {a['n_boxes']} | {a['median_pct']:.2f} | {a['p90_pct']:.2f} | {100 * a['low_conf_frac']:.1f}% |")
+    L += ["", "## 5. 검출 실패율", "", "- 박스 없음 = 박스 출처 캐시에 손이 없는 프레임(다섯 모델 공통). 신뢰도 미만 = 그 모델의 conf_min 미만인 관절의 비율(박스가 있는 프레임).", "",
+          "| 영상 | 프레임 | 박스 없음 | " + " | ".join(f"{n} 신뢰도 미만" for n in names) + " |", "|---|---|---|" + "---|" * len(names)]
+    for v, fr in fail.items():
+        L.append(f"| {v} | {fr['n_frames']} | {100 * fr['no_box_frac']:.1f}% | " + " | ".join("-" if fr["low_conf"].get(n) is None else f"{100 * fr['low_conf'][n]:.1f}%" for n in names) + " |")
+    L += ["", "## 6. 오버레이", "", f"- runs 폴더의 overlay/ 에 저장(커밋하지 않음): {', '.join(overlays) if overlays else '없음'}. 칸 순서: " + ", ".join(["mediapipe_hands"] + names) + ". 속이 빈 점 = 신뢰도 문턱 미만.", "",
+          "## 7. 검증 결과", "", f"- 공식 추론 일치(모든 모델·영상 ≤ {cfg['verify']['tol_px']} px): {'통과' if verified['official'] else '실패'}",
+          f"- 관절 순서(이름 대조와 실제 프레임 대응이 모두 항등): {'통과' if verified['order'] else '실패'}",
+          f"- 2단계: {verified['stage2']}", ""]
+    path.write_text("\n".join(L) + "\n")
+
+
+def mm_summary(path: Path, cfg: dict, stage2: list, names: list, existing: dict, slopes: dict):
+    pct = lambda x: "-" if x is None else f"{100 * x:+.1f}%"      # noqa: E731
+    rf = cfg["ref_f"]
+    ref_of = lambda r: (float(rf["by_distance_27"][int(r["distance_cm"])]) if r["source"] == "27" else float(rf["lens_0.5x"] if r.get("lens") == "0.5x" else rf["lens_1x"]))   # noqa: E731
+    dets = ["mediapipe_hands"] + names
+    L = ["# 실험 47 summary (2단계: 기존 영상에서 기록, 판정 없음)", "", f"**{MM_NOTE}**", "",
+         f"- 대상: 실험 25의 1배 영상 {sum(r['source'] == '25' for r in stage2)}개, 실험 27의 G6 영상 {sum(r['source'] == '27' for r in stage2)}개, 실험 29의 0.5배 영상 {sum(r['source'] == '29' for r in stage2)}개. "
+         "후보 설정(손목 제외, fixed_template)과 실험 27의 제외 규칙·처리 설정을 그대로 썼다. mediapipe_hands = 같은 캐시로 이번 실행에서 다시 계산한 값, '공식' = 원래 실험의 결과 파일 값.",
+         f"- 기준 f: 실험 25 영상 {rf['lens_1x']} (1배 공칭값), 실험 27 영상 거리별 체커보드 값 " + " / ".join(f"{d} cm {v}" for d, v in rf["by_distance_27"].items()) + f" (실험 45와 같은 값), 실험 29 영상 {rf['lens_0.5x']} (0.5배).", "",
+         "## 1. 영상별 f (px)", "", "| 영상 | 실험 | 거리(cm) | 기준 f | 공식 mediapipe | " + " | ".join(dets) + " |", "|---|---|---|---|---|" + "---|" * len(dets)]
+    for r in stage2:
+        e = existing.get(r["video"])
+        cells = []
+        for n in dets:
+            x = r["detectors"].get(n) or {}
+            if "ft" in x and not x.get("excluded"):
+                cells.append(f"{x['ft']['f']:.1f}{' (경계)' if x['ft']['at_grid_edge'] else ''}")
+            else:
+                cells.append("제외: " + ("; ".join(x.get("excluded") or []) or x.get("failed") or "-"))
+        L.append(f"| {r['video']} | {r['source']} | {'-' if r.get('distance_cm') is None else format(float(r['distance_cm']), 'g')} | {ref_of(r):g} | {'-' if not e else format(e['f'], '.1f')} | " + " | ".join(cells) + " |")
+    L += ["", "## 2. 기준 f 대비 오차", "", "- 영상별 오차 = f ÷ 기준 f − 1. 중앙 절대 오차 = 포함된 영상의 |log(f ÷ 기준 f)| 중앙값을 %로 바꾼 값.", "",
+          "| 검출기 | 포함 영상 | 중앙 절대 오차 | 실험 25 오차 중앙값 | 실험 27 오차 중앙값 | 실험 29 오차 중앙값 |", "|---|---|---|---|---|---|"]
+    for n in ["공식 mediapipe"] + dets:
+        errs = {"25": [], "27": [], "29": []}
+        for r in stage2:
+            if n == "공식 mediapipe":
+                e = existing.get(r["video"])
+                x = (r["detectors"].get("mediapipe_hands") or {})
+                f = e["f"] if e and "ft" in x and not x.get("excluded") else None
+            else:
+                x = r["detectors"].get(n) or {}
+                f = x["ft"]["f"] if "ft" in x and not x.get("excluded") else None
+            if f is not None:
+                errs[r["source"]].append(float(np.log(f / ref_of(r))))
+        allv = sum(errs.values(), [])
+        med = lambda v: None if not v else float(np.exp(np.median(v)) - 1.0)      # noqa: E731
+        L.append(f"| {n} | {len(allv)} | {'-' if not allv else format(100 * (np.exp(np.median(np.abs(allv))) - 1.0), '.1f') + '%'} | {pct(med(errs['25']))} | {pct(med(errs['27']))} | {pct(med(errs['29']))} |")
+    L += ["", "## 3. 실험 27 거리 영상 (G6): 거리별 합동 f와 기울기", "", "- 합동 f = 포함된 영상의 비용 곡선을 더한 곡선의 최솟값. 기울기 = log f 대 log 거리, 95% 구간은 영상 단위 부트스트랩(실험 39~45와 같은 계산). 체커보드 기준 f의 기울기는 약 -0.02.", "",
+          "| 검출기 | 50 cm f | 60 cm f | 75 cm f | 50 cm 기준 대비 | 60 cm 기준 대비 | 75 cm 기준 대비 | 기울기 | 95% 구간 |", "|---|---|---|---|---|---|---|---|---|"]
+    for n, s in slopes.items():
+        if not s:
+            L.append(f"| {n} | - | - | - | - | - | - | - | - |")
+            continue
+        pf = {float(d): f for d, f in s["pooled_f"].items()}
+        fc = [pf.get(float(d)) for d in (50, 60, 75)]
+        rc = [pct(None if f is None else f / float(rf["by_distance_27"][d]) - 1.0) for f, d in zip(fc, (50, 60, 75))]
+        L.append(f"| {n} | " + " | ".join("-" if f is None else f"{f:.1f}" for f in fc) + " | " + " | ".join(rc) +
+                 f" | {'-' if s['slope'] is None else format(s['slope'], '+.3f')} | {'-' if not s['interval_95'] else format(s['interval_95'][0], '+.3f') + ' ~ ' + format(s['interval_95'][1], '+.3f')} |")
+    L += ["", "## 4. 날카로움 (FT 비용 곡선)", "", "| 영상 | " + " | ".join(dets) + " |", "|---|" + "---|" * len(dets)]
+    for r in stage2:
+        L.append(f"| {r['video']} | " + " | ".join("-" if "ft" not in (r["detectors"].get(n) or {}) or (r["detectors"].get(n) or {}).get("excluded") else f"{r['detectors'][n]['ft']['sharpness']:.3f}" for n in dets) + " |")
+    L += ["", "## 한계", "", "- 판정은 하지 않는다(기록용). 거리마다 영상이 3개 이하라 기울기 구간이 거칠다.",
+          "- 실험 25·29 영상에는 mediapipe 외 기존 검출기(wilor_yolo, rtmpose_hand)의 캐시가 없어 기존 검출기 비교는 mediapipe만 있다.",
+          "- 실험 27 영상의 기준 f는 이 영상 세션에서 새로 재지 않은 체커보드 값이다.", ""]
+    path.write_text("\n".join(L) + "\n")
+
+
+def mm_main(argv=None):
+    ap = argparse.ArgumentParser()
+    ap.add_argument("--config", default=str(hf.PROJECT_ROOT / "configs/47_mmpose_hand_detectors.yaml"))
+    sub = ap.add_subparsers(dest="cmd")
+    ry = sub.add_parser("results-yaml")
+    ry.add_argument("--run", required=True)
+    ap.add_argument("--videos", default=None, help="comma list of file names narrowing the videos")
+    ap.add_argument("--out", default=None)
+    a = ap.parse_args(argv)
+    text = Path(a.config).read_text()
+    cfg = yaml.safe_load(text)
+    if a.cmd == "results-yaml":
+        print(mm_results_yaml(hf.resolve(a.run), cfg))
+        return None
+    names = [d for d in cfg["detectors"] if d in hf.MM_DETECTORS]
+    s2 = list(cfg["stage2_videos"]) if cfg.get("run_stage2") else []
+    vids = list(dict.fromkeys(list(cfg["verify"]["videos"]) + [e["file"] for e in s2]))
+    if a.videos:
+        vids = [v for v in vids if v in a.videos.split(",")]
+        s2 = [e for e in s2 if e["file"] in vids]
+    missing = [v for v in vids if not (Path(cfg["input_dir"]).expanduser() / v).exists()]
+    if missing:
+        raise SystemExit(f"영상이 없습니다: {missing}")
+    for n in names:                                                    # the checkpoints must be the recorded files
+        s = cfg["detector_settings"][n]
+        got = hf.sha256_file(Path(s["checkpoint"]).expanduser())
+        if got != s["checkpoint_sha256"]:
+            raise SystemExit(f"{n}: 체크포인트 SHA256이 다릅니다 ({got})")
+    run_root = Path(a.out).expanduser() if a.out else hf.resolve(cfg["output"]["root"]) / utc_stamp()
+    run_root.mkdir(parents=True)
+    log = Log(run_root / "log.txt")
+    log(f"47 MMPose 손 검출기 공식 실행: 검출기 {len(names)}개, 영상 {len(vids)}개 (검증 {len(cfg['verify']['videos'])}, 2단계 {len(s2)}) → {run_root}")
+    t0 = time.time()
+    tmp_root = run_root / "_frames"
+    tmp_root.mkdir()
+    cache_dir = run_root / "detection_cache"
+    cache_dir.mkdir()
+    for k in ("OMP_NUM_THREADS", "OPENBLAS_NUM_THREADS", "MKL_NUM_THREADS"):
+        os.environ[k] = "1"
+    import multiprocessing as mp
+    from concurrent.futures import ProcessPoolExecutor
+    try:
+        with ProcessPoolExecutor(max_workers=int(cfg["workers"]), mp_context=mp.get_context("spawn")) as ex:
+            preps = dict(zip(vids, ex.map(hf.fresp_prepare, [(v, cfg["input_dir"], cfg["pipeline"], {}, str(tmp_root)) for v in vids])))
+        log(f"  프레임 준비 {time.time() - t0:.0f} s")
+        boxes = {}
+        for v in vids:
+            try:
+                boxes[v] = hf.mm_box_cache(preps[v]["frames"], cfg)
+                hf.check_alignment(preps[v]["frames"], hf.load_detections(boxes[v]))
+            except (hf.SkipDetector, hf.DetectorError) as e:
+                log(f"  {v}: 손 박스 없음 — {e}")
+        # ---- official-inference check (verification videos) and detection (every video), on the GPUs
+        jobs, keys = [], []
+        for n in names:
+            for v in cfg["verify"]["videos"]:
+                if v in boxes:
+                    jobs.append(lambda g, n=n, v=v: hf.mm_official_check(preps[v]["frames"], mm_det_settings(cfg, n, g), boxes[v], tmp_root / f"check_{n}_{Path(v).stem}", int(cfg["verify"]["official_check_frames"]), log))
+                    keys.append(("check", n, v))
+        for n in names:
+            for v in vids:
+                if v in boxes:
+                    jobs.append(lambda g, n=n, v=v: hf.swap_mmpose_hand(preps[v]["frames"], mm_det_settings(cfg, n, g), cache_dir, log, boxes[v], n)[0])
+                    keys.append(("det", n, v))
+        t1 = time.time()
+        res = mm_gpu_jobs(jobs, cfg, log)
+        log(f"  공식 일치 확인과 검출 {len(jobs)}개 작업: {time.time() - t1:.0f} s")
+        checks, npz = {}, {}
+        for (kind, n, v), r in zip(keys, res):
+            if isinstance(r, Exception):
+                log(f"  {kind} {n} {v}: 실패 — {r}")
+            if kind == "check":
+                checks.setdefault(n, {})[v] = str(r) if isinstance(r, Exception) else r
+            else:
+                npz.setdefault(n, {})[v] = None if isinstance(r, Exception) else r
+        # ---- verification: order, agreement, failure rates, overlays
+        env = {"info": {}, "versions": {}}
+        agree, fail, overlays = {}, {}, []
+        pooled = {n: ([], []) for n in names}
+        for v in vids:
+            if v not in boxes:
+                continue
+            ref = hf.load_detections(boxes[v])
+            nf = len(preps[v]["frames"])
+            fr = {"n_frames": nf, "no_box_frac": float(np.mean(np.diff(ref["offsets"]) == 0)), "low_conf": {}}
+            dets = {"mediapipe_hands": ref}
+            for n in names:
+                p = (npz.get(n) or {}).get(v)
+                if p is None:
+                    continue
+                d = hf.load_detections(p)
+                hf.check_alignment(preps[v]["frames"], d)
+                dets[n] = d
+                i = dict(d["info"])
+                i["names_ok"] = [i["keypoint_names"][k] for k in (i.get("remap") or range(21))] == list(MM_HAND_NAMES)
+                env["info"].setdefault(n, i)
+                env["versions"] = {k: i[k] for k in ("mmpose", "mmcv", "mmengine", "torch", "torch_cuda", "python") if k in i}
+                ag = hf.mm_agreement(ref, d, float(cfg["detector_settings"][n]["conf_min"]))
+                fr["low_conf"][n] = ag["low_conf_frac"]
+                agree.setdefault(n, {})[v] = {k: ag[k] for k in ("n_boxes", "median_pct", "p90_pct", "per_joint_median_pct", "low_conf_frac")}
+                if v in cfg["verify"]["videos"] and len(d["kxy"]):
+                    pooled[n][0].append(ref["kxy"])
+                    pooled[n][1].append(d["kxy"])
+            fail[v] = fr
+            if v in cfg["verify"]["videos"]:
+                overlays += hf.mm_overlay(preps[v]["frames"], dets, run_root / "overlay", v, int(cfg["verify"]["overlay_frames"]), {k: float(cfg["detector_settings"][k]["conf_min"]) for k in dets})
+        order = {}
+        for n in names:
+            if pooled[n][0]:
+                ra, rb = np.concatenate(pooled[n][0]), np.concatenate(pooled[n][1])
+                order[n] = {**hf.order_assignment(ra, rb, np.ones((len(ra), 21), bool)), "n_boxes": int(len(ra))}
+        tol = float(cfg["verify"]["tol_px"])
+        ok_off = all(isinstance(c, dict) and c.get("max_abs_px") is not None and c["max_abs_px"] <= tol for n in names for c in (checks.get(n) or {"-": None}).values())
+        ok_order = all((order.get(n) or {}).get("identity") and (env["info"].get(n) or {}).get("names_ok") and (env["info"].get(n) or {}).get("remap") is None for n in names)
+        verified = {"official": bool(ok_off), "order": bool(ok_order)}
+        log(f"  검증: 공식 일치 {'통과' if ok_off else '실패'}, 관절 순서 {'통과' if ok_order else '실패'}")
+        stage2 = []
+        if not cfg.get("run_stage2"):
+            verified["stage2"] = "꺼짐 (run_stage2: false)"
+        elif not (ok_off and ok_order):
+            verified["stage2"] = "검증 실패로 실행하지 않음"
+        else:
+            c = {k: cfg[k] for k in MM_KEYS}
+            src_name = hf.MM_BOX_SOURCES[cfg["hand_box_source"]]
+            args, owner = [], []                                       # one job per (video, detector); the results are merged per video
+            for e in s2:
+                by = {src_name: boxes.get(e["file"])} if src_name == "mediapipe_hands" else {}
+                by.update({n: (npz.get(n) or {}).get(e["file"]) for n in names})
+                for n, p in by.items():
+                    args.append((e, preps[e["file"]], {n: p}, cfg["pipeline"], c))
+                    owner.append(e["file"])
+            t2 = time.time()
+            with ProcessPoolExecutor(max_workers=int(cfg["stage2_workers"]), mp_context=mp.get_context("spawn")) as ex:
+                parts = list(ex.map(hf.mm_video, args))
+            merged = {}
+            for v, r in zip(owner, parts):
+                merged.setdefault(v, {**r, "detectors": {}})["detectors"].update(r["detectors"])
+            stage2 = [merged[e["file"]] for e in s2]
+            verified["stage2"] = f"실행함 (영상 {len(stage2)}개, {time.time() - t2:.0f} s)"
+            log(f"  2단계 FT: {verified['stage2']}")
+    finally:
+        shutil.rmtree(tmp_root, ignore_errors=True)
+    existing = mm_existing_f(cfg)
+    dets_all = ([hf.MM_BOX_SOURCES[cfg["hand_box_source"]]] if cfg["hand_box_source"] == "mediapipe" else []) + names
+    slopes = mm_stage2_slopes(stage2, dets_all, cfg, existing) if stage2 else {}
+    for r in stage2:
+        log(f"  {r['video']}: " + ", ".join(f"{n} " + (f"{x['ft']['f']:.0f}" if "ft" in x and not x.get("excluded") else "제외") for n, x in r["detectors"].items()))
+    mm_report(run_root / "report.md", cfg, env, checks, agree, order, fail, overlays, verified)
+    if stage2:
+        mm_summary(run_root / "summary.md", cfg, stage2, names, existing, slopes)
+    (run_root / "results.json").write_text(json.dumps(hf.jsonable({"verification": {"checks": checks, "order": order, "agreement": agree, "failure": fail, "verified": verified, "env": env},
+                                                                    "stage2": stage2, "slopes": slopes}), ensure_ascii=False, indent=1))
+    meta = hf.provenance_build(text, a.config, {"code_47": cfg["code_47"], "videos": vids, "elapsed_s": time.time() - t0})
+    (run_root / "metadata.json").write_text(json.dumps(hf.jsonable(meta), ensure_ascii=False, indent=1))
+    log(f"완료 {time.time() - t0:.0f} s → {run_root}")
+    log.close()
+    return run_root, verified
+
+
+def mm_results_yaml(run_dir: Path, cfg: dict):
+    """Values only (no reference f, no comparison with it); written to output.results_yaml."""
+    r = json.loads((run_dir / "results.json").read_text())
+    m = json.loads((run_dir / "metadata.json").read_text())
+    try:
+        run_name = str(run_dir.resolve().relative_to(hf.PROJECT_ROOT))
+    except ValueError:
+        run_name = str(run_dir)
+    rd = lambda x, n=4: None if x is None or (isinstance(x, float) and not np.isfinite(x)) else round(x, n)      # noqa: E731
+    v = r["verification"]
+    out = {"experiment": cfg["experiment"]["name"], "run": run_name, "code_commit": m["git"]["commit"][:7], "git_dirty_at_run": m["git"]["git_dirty"], "note": MM_NOTE,
+           "detectors": {n: {"checkpoint": Path(cfg["detector_settings"][n]["checkpoint"]).name, "checkpoint_sha256": cfg["detector_settings"][n]["checkpoint_sha256"]} for n in cfg["detectors"]},
+           "hand_box_source": cfg["hand_box_source"], "verified": v["verified"],
+           "official_check_max_px": {n: {vid: (c.get("max_abs_px") if isinstance(c, dict) else None) for vid, c in cs.items()} for n, cs in v["checks"].items()},
+           "order_identity": {n: o.get("identity") for n, o in v["order"].items()},
+           "agreement_vs_mediapipe_median_pct": {n: {vid: rd(a.get("median_pct"), 3) for vid, a in d.items()} for n, d in v["agreement"].items()}}
+    if r["stage2"]:
+        out["stage2_f_px"] = {s["video"]: {n: (round(x["ft"]["f"], 1) if "ft" in x and not x.get("excluded") else {"excluded": x.get("excluded") or x.get("failed")}) for n, x in s["detectors"].items()} for s in r["stage2"]}
+        out["stage2_sharpness"] = {s["video"]: {n: rd(x["ft"]["sharpness"]) for n, x in s["detectors"].items() if "ft" in x and not x.get("excluded")} for s in r["stage2"]}
+        out["distance_27"] = {n: (None if not s else {"pooled_f_px": {f"{float(d):g}": rd(f, 1) for d, f in s["pooled_f"].items()}, "slope": rd(s["slope"]),
+                                                       "slope_interval_95": None if not s["interval_95"] else [round(q, 4) for q in s["interval_95"]]}) for n, s in r["slopes"].items()}
+    p = hf.resolve(cfg["output"]["results_yaml"])
+    p.write_text(yaml.safe_dump(hf.jsonable(out), allow_unicode=True, sort_keys=False))
+    return p
+
+
+
+COMMANDS = {"protocol": protocol_main, "frame-filter": ff_main, "same-session": session_main, "overlay": overlay_main, "phase-segmentation": pseg_main, "guide-revision": grev_main, "f-response": fresp_main, "error-factors": ferr_main, "long-video-check": long_main, "generalization": gen_main, "main-camera-extension": ext_main, "wide-60cm": wide_main, "jointset-sets": jset_main, "verdict-calibration": cal_main, "printed-hand": pr_main, "hand-markers": mk_main, "markers-only": mo_main, "free-template": ft_main, "free-shape3d": s3_main, "free-shape3d-hand": h3_main, "free-shape3d-27": e3_main, "free-shape3d-new": e4_main, "mmpose-hand": mm_main}
 
 
 def main(argv=None):

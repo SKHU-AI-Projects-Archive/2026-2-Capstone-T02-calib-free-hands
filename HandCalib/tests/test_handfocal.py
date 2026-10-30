@@ -4065,5 +4065,230 @@ class E4Reports(unittest.TestCase):
             self.assertEqual(run.e4_prior({"compare": {"45": str(d / "p45.json")}}), {50.0: 1675.3, 60.0: 1476.1})
 
 
+# ---- experiment 47: MMPose hand models as detectors ----------------------------------------------------------
+CFG47 = yaml.safe_load((ROOT / "configs/47_mmpose_hand_detectors.yaml").read_text())
+MM_PY = Path(CFG47["detector_settings"]["mmhand_rtmpose_m"]["python"])
+MM_READY = MM_PY.exists() and all(Path(CFG47["detector_settings"][n]["checkpoint"]).exists() for n in hf.MM_DETECTORS)
+VID47 = Path(CFG47["input_dir"]) / "IMG_7220.MOV"
+LOCATION_TAGS = ("gps", "location", "latitude", "longitude", "com.apple.quicktime", "iphone", "make", "model_name", "creation_time")
+
+
+def mm_test_frames(d: Path, n=3, video=VID47):
+    """n frames of an input video (seconds 4, 6, 8, ...) as PNGs with the worker's frame list; a hand-sized box in the middle of every frame except the second (no box)."""
+    cap = cv2.VideoCapture(str(video))
+    rows = []
+    for k in range(n):
+        cap.set(cv2.CAP_PROP_POS_MSEC, 4000 + 2000 * k)
+        ok, img = cap.read()
+        p = d / f"f{k}.png"
+        cv2.imwrite(str(p), img)
+        rows.append({"index": k, "png": str(p), "sha256": hf.sha256_file(p)})
+    cap.release()
+    H, W = img.shape[:2]
+    box = [W * 0.35, H * 0.2, W * 0.65, H * 0.8]
+    offsets = [0] + [sum(1 for j in range(i + 1) if j != 1) for i in range(n)]
+    nb = offsets[-1]
+    np.savez(d / "boxes.npz", offsets=np.array(offsets), boxes=np.tile(box, (nb, 1)), box_conf=np.ones(nb), cls=np.ones(nb, int))
+    hf.write_list(rows, d / "frames.tsv")
+    return rows
+
+
+@unittest.skipUnless(MM_READY and VID47.exists() and GPU, "the det_mmpose_hand venv, the five checkpoints, IMG_7220 and a GPU are needed")
+class MMWorker(unittest.TestCase):
+    def test_each_wrapper_matches_the_official_inference_and_keeps_the_cache_order(self):
+        with tempfile.TemporaryDirectory() as d:
+            d = Path(d)
+            rows = mm_test_frames(d)
+            for n in hf.MM_DETECTORS:
+                r = hf.mm_official_check(rows, run.mm_det_settings(CFG47, n, 0), d / "boxes.npz", d / f"w_{n}", 3)
+                self.assertEqual(r["n_boxes"], 2, n)                                                   # the frame without a box is not processed
+                self.assertLessEqual(r["max_abs_px"], 0.1, n)
+                self.assertEqual(WC.mm_order(r["names"]), list(range(21)), n)                         # the model's points are already in the cache order
+
+    def test_a_frame_without_a_box_is_saved_as_a_detection_failure_and_the_cache_loads(self):
+        with tempfile.TemporaryDirectory() as d:
+            d = Path(d)
+            rows = mm_test_frames(d)
+            s = run.mm_det_settings(CFG47, "mmhand_rtmpose_m", 0)
+            p, extra = hf.swap_mmpose_hand(rows, s, d, print, d / "boxes.npz", "mmhand_rtmpose_m")
+            z = hf.load_detections(p)
+            hf.check_alignment(rows, z)
+            self.assertEqual([int(x) for x in z["offsets"]], [0, 1, 1, 2])
+            self.assertEqual(z["kxy"].shape, (2, 21, 2))
+            self.assertEqual(z["info"]["detector"], "mmhand_rtmpose_m")
+            self.assertEqual(z["info"]["checkpoint_sha256"], CFG47["detector_settings"]["mmhand_rtmpose_m"]["checkpoint_sha256"])
+            self.assertEqual(extra["box_source"], "mediapipe")
+            info = json.dumps(z["info"]).lower()
+            for tag in LOCATION_TAGS:
+                self.assertNotIn(tag, info, tag)
+
+
+class MMOrder(unittest.TestCase):
+    def test_the_order_map_follows_the_names_and_fails_on_a_missing_name(self):
+        self.assertEqual(WC.mm_order(WC.MM_HAND_NAMES), list(range(21)))
+        perm = list(reversed(WC.MM_HAND_NAMES))
+        o = WC.mm_order(perm)
+        self.assertEqual([perm[k] for k in o], WC.MM_HAND_NAMES)
+        with self.assertRaises(RuntimeError):
+            WC.mm_order(WC.MM_HAND_NAMES[:-1] + ["toe"])
+
+    def test_hungarian_order_check_finds_a_swapped_pair_on_a_synthetic_hand(self):
+        tr, _ = e3_fake_track(n=30)
+        kp = np.nan_to_num(tr["kp"].copy())
+        kp[:, :5] = kp[:, 5:10] + 30.0                                                                # fill the unused points with distinct positions
+        sw = kp.copy()
+        sw[:, [8, 12]] = sw[:, [12, 8]]
+        m = np.ones((30, 21), bool)
+        self.assertTrue(hf.order_assignment(kp, kp, m)["identity"])
+        r = hf.order_assignment(kp, sw, m)
+        self.assertFalse(r["identity"])
+        self.assertEqual((r["assignment"][8], r["assignment"][12]), (12, 8))
+
+
+class MMPipeline(unittest.TestCase):
+    def fake_cache(self, d: Path, drop=()):
+        tr, times = e3_fake_track(n=200)
+        frames = [{"index": i, "png": str(d / f"{i}.png"), "sha256": f"{i:064x}", "time_s": float(t)} for i, t in enumerate(times)]
+        per = [[] if i in drop else [{"box": tr["box"][i], "box_conf": 0.9, "cls": 1, "kxy": np.nan_to_num(tr["kp"][i], nan=1.0), "kconf": np.r_[np.zeros(5), np.ones(16)] * 0.9}]
+               for i in range(len(times))]
+        p = d / "mmhand_rtmpose_m_test.npz"
+        WC.save(p, [(r["index"], r["png"], r["sha256"]) for r in frames], per, {"detector": "mmhand_rtmpose_m"})
+        return frames, p
+
+    def test_a_new_cache_runs_through_the_existing_ft_code(self):
+        with tempfile.TemporaryDirectory() as d:
+            d = Path(d)
+            frames, p = self.fake_cache(d)
+            pcfg = copy.deepcopy(CFG47["pipeline"])
+            c = {k: CFG47[k] for k in run.MM_KEYS}
+            r = hf.mm_video(({"file": "x.MOV", "source": "27", "distance_cm": 60}, {"frames": frames, "size": (1920, 1080)}, {"mmhand_rtmpose_m": p}, pcfg, c))
+            x = r["detectors"]["mmhand_rtmpose_m"]
+            self.assertEqual(x.get("excluded"), [], x)
+            self.assertIn("ft", x)
+            self.assertGreater(x["ft"]["f"], 0)
+            self.assertNotIn("ref_f", json.dumps(hf.jsonable(r)))
+            frames2, p2 = self.fake_cache(d, drop=set(range(0, 200, 3)))                                   # a third of the frames without a box: detection failure -> excluded (> 20 %)
+            r2 = hf.mm_video(({"file": "x.MOV", "source": "27", "distance_cm": 60}, {"frames": frames2, "size": (1920, 1080)}, {"mmhand_rtmpose_m": p2}, pcfg, c))
+            self.assertTrue(any("검출 실패" in e for e in r2["detectors"]["mmhand_rtmpose_m"]["excluded"]))
+
+    def test_swap_run_all_mm_sends_old_names_to_swap_run_all_and_new_names_to_the_worker(self):
+        from unittest import mock
+        with tempfile.TemporaryDirectory() as d:
+            d = Path(d)
+            frames, p = self.fake_cache(d)
+            cfg = copy.deepcopy(CFG47)
+            cfg["detectors"] = ["mediapipe_hands", "mmhand_rtmpose_m"]
+            with mock.patch.object(hf._report, "swap_run_all", return_value={"mediapipe_hands": {"npz": p}}) as old, \
+                 mock.patch.object(hf._report, "swap_mmpose_hand", return_value=(p, {"box_source": "mediapipe"})) as new:
+                out = hf.swap_run_all_mm(frames, cfg, d / "c", print)
+            self.assertEqual(old.call_args[0][1]["detectors"], ["mediapipe_hands"])
+            self.assertEqual(new.call_args[0][4], p)                                                       # the boxes of the box source's run
+            self.assertEqual(new.call_args[0][5], "mmhand_rtmpose_m")
+            self.assertIn("npz", out["mmhand_rtmpose_m"])
+
+    def test_box_cache_is_only_read(self):
+        with tempfile.TemporaryDirectory() as d:
+            cfg = {**CFG47, "box_caches": [d]}
+            with self.assertRaises(hf.SkipDetector):
+                hf.mm_box_cache([{"index": 0, "sha256": "0" * 64}], cfg)
+            self.assertEqual(os.listdir(d), [])
+
+    def test_thermal_guard_waits_from_70_until_below_65(self):
+        temps = iter([72.0, 69.0, 66.0, 64.0])
+        logs = []
+        w = hf.mm_thermal_wait(0, CFG47["thermal"], logs.append, poll_s=0.0, temp_fn=lambda g: next(temps))
+        self.assertGreaterEqual(w, 0.0)
+        self.assertEqual(next(temps, None), None)                                                       # read until 64
+        self.assertEqual(hf.mm_thermal_wait(0, CFG47["thermal"], logs.append, poll_s=0.0, temp_fn=lambda g: 50.0), 0.0)
+
+    def test_agreement_uses_the_same_boxes(self):
+        with tempfile.TemporaryDirectory() as d:
+            d = Path(d)
+            frames, p = self.fake_cache(d)
+            a = hf.load_detections(p)
+            b = {k: (v.copy() if isinstance(v, np.ndarray) else v) for k, v in a.items()}
+            b["kxy"] = b["kxy"] + np.array([4.0, 3.0])                                                       # 5 px everywhere
+            r = hf.mm_agreement(a, b, 0.3)
+            self.assertAlmostEqual(r["median_pct"], 5.0 / 400.0 * 100.0, places=6)
+            self.assertTrue(r["order"]["identity"])
+            self.assertAlmostEqual(r["low_conf_frac"], 5 / 21)
+
+
+@unittest.skipUnless(VID47.exists() and Path(CFG47["existing_results"]["27"]).exists(), "IMG_7220, experiment 27's run and its detection cache are needed")
+class MMExistingDetector(unittest.TestCase):
+    def test_the_existing_detector_setting_reproduces_experiment_27(self):
+        prep = hf.fresp_prepare(("IMG_7220.MOV", CFG47["input_dir"], CFG47["pipeline"], {}, tempfile.mkdtemp(prefix="t47_")))
+        try:
+            box = hf.mm_box_cache(prep["frames"], CFG47)
+            c = {k: CFG47[k] for k in run.MM_KEYS}
+            e = next(x for x in CFG47["stage2_videos"] if x["file"] == "IMG_7220.MOV")
+            r = hf.mm_video((e, prep, {"mediapipe_hands": box}, CFG47["pipeline"], c))
+        finally:
+            shutil.rmtree(Path(prep["frames"][0]["png"]).parents[2], ignore_errors=True)
+        old = run.mm_existing_f(CFG47)["IMG_7220.MOV"]
+        x = r["detectors"]["mediapipe_hands"]["ft"]
+        self.assertAlmostEqual(x["f"], old["f"], delta=1e-6 * old["f"])
+        self.assertAlmostEqual(x["sharpness"], old["sharpness"], places=9)
+
+
+class MMReports(unittest.TestCase):
+    def test_report_summary_and_yaml_keep_the_reference_in_summary_only_and_have_no_location_tags(self):
+        names = list(hf.MM_DETECTORS)
+        grid = np.geomspace(0.35 * 1920, 1.6 * 1920, 60)
+        mk = lambda f: {"ft": {"f": f, "at_grid_edge": False, "sharpness": 1.01, "verdict": "REJECT"}, "excluded": [], "curve": {"grid": grid.tolist(), "cost": ((np.log(grid) - np.log(f)) ** 2).tolist()}}   # noqa: E731
+        stage2 = []
+        for e in CFG47["stage2_videos"]:
+            stage2.append({"video": e["file"], "source": e["source"], "distance_cm": e.get("distance_cm"), "lens": e["lens"], "detectors": {n: mk(1500.0 + 10 * k) for k, n in enumerate(["mediapipe_hands"] + names)}})
+        stage2[0]["detectors"]["mmhand_scnet"] = {"excluded": ["가장자리 접촉 프레임 6.3% > 5%"]}
+        existing = {s["video"]: {"source": s["source"], "f": 1490.0, "sharpness": 1.0, "at_grid_edge": False, "curve": ((np.log(grid) - np.log(1490.0)) ** 2).tolist()} for s in stage2}
+        slopes = run.mm_stage2_slopes(stage2, ["mediapipe_hands"] + names, CFG47, existing)
+        self.assertIsNotNone(slopes["mmhand_hrnetv2"]["slope"])
+        env = {"info": {n: {"config_sha256": "c" * 64, "test_pipeline": ["LoadImage", "GetBBoxCenterScale", "TopdownAffine", "PackPoseInputs"], "input_size": [256, 256], "test_cfg": {"flip_test": True},
+                            "remap": None, "names_ok": True} for n in names}, "versions": {"mmpose": "1.3.2"}}
+        checks = {n: {"IMG_7220.MOV": {"frames": [0, 1], "n_boxes": 2, "max_abs_px": 0.0, "max_abs_conf": 0.0}} for n in names}
+        agree = {n: {"IMG_7220.MOV": {"n_boxes": 2, "median_pct": 3.0, "p90_pct": 6.0, "per_joint_median_pct": [3.0] * 21, "low_conf_frac": 0.01}} for n in names}
+        order = {n: {"identity": True, "assignment": list(range(21)), "n_boxes": 2} for n in names}
+        fail = {"IMG_7220.MOV": {"n_frames": 300, "no_box_frac": 0.0, "low_conf": {n: 0.01 for n in names}}}
+        with tempfile.TemporaryDirectory() as d:
+            d = Path(d)
+            run.mm_report(d / "report.md", CFG47, env, checks, agree, order, fail, ["IMG_7220_frame00010.png"], {"official": True, "order": True, "stage2": "실행함"})
+            run.mm_summary(d / "summary.md", CFG47, stage2, names, existing, slopes)
+            (d / "results.json").write_text(json.dumps(hf.jsonable({"verification": {"checks": checks, "order": order, "agreement": agree, "failure": fail, "verified": {"official": True, "order": True}, "env": env},
+                                                                    "stage2": stage2, "slopes": slopes}), ensure_ascii=False))
+            (d / "metadata.json").write_text(json.dumps({"git": {"commit": "abcdef1234", "git_dirty": False}}))
+            cfg = copy.deepcopy(CFG47)
+            cfg["output"]["results_yaml"] = str(d / "r.yaml")
+            y = Path(run.mm_results_yaml(d, cfg)).read_text()
+            summ, rep = (d / "summary.md").read_text(), (d / "report.md").read_text()
+            self.assertIn("1680", summ)
+            self.assertIn("880", summ)
+            self.assertIn("1660.6", summ)
+            for name, text in (("report", rep), ("yaml", y)):
+                for val in ("1680", "1660.6", "1653.7", "1644.9", "기준 f 대비"):
+                    self.assertNotIn(val, text, name)
+            for name, text in (("report", rep), ("summary", summ), ("yaml", y)):
+                low = text.lower()
+                for tag in LOCATION_TAGS:
+                    self.assertNotIn(tag, low, (name, tag))
+            for text in (rep, summ):
+                for line in text.splitlines():
+                    if line.startswith("|") and "---" not in line:
+                        cells = line.strip().strip("|").split("|")
+                        self.assertTrue(all("|" not in c for c in cells))
+
+    def test_the_config_has_every_section_and_27s_settings(self):
+        C27 = yaml.safe_load((ROOT / "configs/27_main_camera_extension.yaml").read_text())
+        for k in run.MM_KEYS + ("detectors", "hand_box_source", "box_caches", "gpu_ids", "verify", "run_stage2", "stage2_videos", "existing_results", "ref_f", "code_47", "pipeline", "thermal"):
+            self.assertIn(k, CFG47, k)
+        self.assertEqual(CFG47["detectors"], list(hf.MM_DETECTORS))
+        for k in ("candidate", "exclusion", "guide", "input_dir"):
+            self.assertEqual(CFG47[k], C27[k], k)
+        self.assertEqual(CFG47["pipeline"]["estimate"], C27["pipeline"]["estimate"])
+        self.assertEqual(CFG47["detector_settings"]["mediapipe_hands"], C27["detector_settings"]["mediapipe_hands"])
+        files = [e["file"] for e in CFG47["stage2_videos"]]
+        self.assertEqual(len(files), 18)
+        self.assertTrue({"IMG_7220.MOV", "IMG_7192.MOV"} <= set(files))
+
+
 if __name__ == "__main__":
     unittest.main()

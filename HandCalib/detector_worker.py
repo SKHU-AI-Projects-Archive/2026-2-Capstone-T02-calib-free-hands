@@ -236,7 +236,155 @@ def rtmpose_hand(argv):
 
 WORKERS = {"wilor_yolo": wilor_yolo, "mediapipe_hands": mediapipe_hands, "rtmpose_hand": rtmpose_hand}
 
+
+# ---------------------------------------------------------------- mmpose_hand (det_mmpose_hand venv; experiment 47)
+# The five MMPose 2-D hand models trained on COCO-WholeBody-Hand, top-down on given hand boxes (the box source's boxes, no new hand detection).
+#     <det_mmpose_hand python> detector_worker.py mmpose_hand       --name N --config C.py --checkpoint W.pth --list frames.tsv --boxes boxes.npz --out det.npz [--device cuda:0 --batch-size 32]
+#     <det_mmpose_hand python> detector_worker.py mmpose_hand_check --config C.py --checkpoint W.pth --list frames.tsv --boxes boxes.npz --out check.json [--n-frames 5]
+# Data processing = mmpose.apis.inference_topdown (the config's test pipeline: LoadImage, GetBBoxCenterScale, TopdownAffine, PackPoseInputs; one sample per box, bbox score 1;
+# the model's data_preprocessor and test_cfg incl. flip test); only the batching differs: samples of several boxes and frames go through model.test_step together.
+# The image is read with cv2 (BGR), as LoadImage does; the data preprocessor converts it to RGB. Point confidence: pred_instances.keypoint_scores.
+# Left hands are not mirrored (as rtmpose_hand); box, box_conf and cls are the box source's.
+MM_HAND_NAMES = ["wrist", "thumb1", "thumb2", "thumb3", "thumb4", "forefinger1", "forefinger2", "forefinger3", "forefinger4",
+                 "middle_finger1", "middle_finger2", "middle_finger3", "middle_finger4", "ring_finger1", "ring_finger2", "ring_finger3", "ring_finger4",
+                 "pinky_finger1", "pinky_finger2", "pinky_finger3", "pinky_finger4"]     # the 21-point order of the existing caches (0 wrist, 1-4 thumb, ..., 17-20 little finger)
+
+
+def mm_order(names):
+    """Position in the model's output of each point of MM_HAND_NAMES (identity when the model uses the cache order)."""
+    names = list(names)
+    missing = [n for n in MM_HAND_NAMES if n not in names]
+    if missing:
+        raise RuntimeError(f"model has no keypoints named {missing}")
+    return [names.index(n) for n in MM_HAND_NAMES]
+
+
+def mm_load(config, checkpoint, device, tf32=False):
+    """tf32 False: full FP32 convolutions and matrix products (PyTorch enables TF32 convolutions on Ampere GPUs by default; with TF32 the result depends on
+    the batch composition and a heatmap maximum can move by one cell, so the batched wrapper and inference_topdown are compared with TF32 off)."""
+    import warnings
+    warnings.filterwarnings("ignore")
+    import torch
+    from mmpose.apis import init_model
+    torch.backends.cudnn.allow_tf32 = bool(tf32)
+    torch.backends.cuda.matmul.allow_tf32 = bool(tf32)
+    return init_model(config, checkpoint, device=device)
+
+
+def mm_infer(model, items, batch_size):
+    """items: list of (BGR image, box xyxy). inference_topdown's data processing, batched over items. Returns kxy (n, K, 2), kconf (n, K) in the model's point order."""
+    import torch
+    from mmengine.dataset import Compose, pseudo_collate
+    from mmengine.registry import init_default_scope
+    init_default_scope(model.cfg.get("default_scope", "mmpose"))
+    pipeline = Compose(model.cfg.test_dataloader.dataset.pipeline)
+    K = int(model.dataset_meta["num_keypoints"])
+    kxy, kconf = [], []
+    for s in range(0, len(items), int(batch_size)):
+        data = []
+        for img, box in items[s:s + int(batch_size)]:
+            d = {"img": img, "bbox": np.asarray(box, dtype=np.float64)[None], "bbox_score": np.ones(1, dtype=np.float32)}
+            d.update(model.dataset_meta)
+            data.append(pipeline(d))
+        with torch.no_grad():
+            out = model.test_step(pseudo_collate(data))
+        for o in out:
+            kxy.append(np.asarray(o.pred_instances.keypoints[0], dtype=np.float64))
+            kconf.append(np.asarray(o.pred_instances.keypoint_scores[0], dtype=np.float64))
+    return np.asarray(kxy).reshape(-1, K, 2), np.asarray(kconf).reshape(-1, K)
+
+
+def mm_versions():
+    import mmcv
+    import mmengine
+    import mmpose
+    import torch
+    return {"mmpose": mmpose.__version__, "mmcv": mmcv.__version__, "mmengine": mmengine.__version__, "torch": torch.__version__, "torch_cuda": torch.version.cuda,
+            "python": sys.version.split()[0]}
+
+
+def mm_args(argv, check=False):
+    ap = argparse.ArgumentParser()
+    if not check:
+        ap.add_argument("--name", required=True)
+    ap.add_argument("--config", required=True)
+    ap.add_argument("--checkpoint", required=True)
+    ap.add_argument("--list", required=True)
+    ap.add_argument("--boxes", required=True)
+    ap.add_argument("--out", required=True)
+    ap.add_argument("--device", default="cuda:0")
+    ap.add_argument("--batch-size", type=int, default=32)
+    ap.add_argument("--n-frames", type=int, default=5)
+    ap.add_argument("--tf32", type=int, default=0)
+    return ap.parse_args(argv)
+
+
+def mm_frames_boxes(a, rows):
+    bx = np.load(a.boxes)
+    if len(bx["offsets"]) != len(rows) + 1:
+        raise RuntimeError("box file and frame list differ in length")
+    return bx
+
+
+def mmpose_hand(argv):
+    a = mm_args(argv)
+    import cv2
+    rows = read_list(a.list)
+    verify(rows)
+    bx = mm_frames_boxes(a, rows)
+    model = mm_load(a.config, a.checkpoint, a.device, bool(a.tf32))
+    order = mm_order([model.dataset_meta["keypoint_id2name"][i] for i in range(int(model.dataset_meta["num_keypoints"]))])
+    items, owner = [], []
+    for r, (i, png, _) in enumerate(rows):
+        lo, hi = int(bx["offsets"][r]), int(bx["offsets"][r + 1])
+        if hi > lo:
+            img = cv2.imread(png, cv2.IMREAD_COLOR)
+            for k in range(lo, hi):
+                items.append((img, bx["boxes"][k]))
+                owner.append((r, k))
+    kxy, kconf = mm_infer(model, items, a.batch_size) if items else (np.zeros((0, 21, 2)), np.zeros((0, 21)))
+    kxy, kconf = kxy[:, order], kconf[:, order]
+    per_frame = [[] for _ in rows]                                    # a frame without a box stays without a candidate (a detection failure)
+    for n, (r, k) in enumerate(owner):
+        per_frame[r].append({"box": bx["boxes"][k], "box_conf": float(bx["box_conf"][k]), "cls": int(bx["cls"][k]), "kxy": kxy[n], "kconf": kconf[n]})
+    info = {"detector": a.name, **mm_versions(), "config": a.config, "config_sha256": sha256(a.config), "checkpoint": a.checkpoint, "checkpoint_sha256": sha256(a.checkpoint),
+            "device": a.device, "batch_size": a.batch_size, "tf32": bool(a.tf32), "test_pipeline": [t["type"] for t in model.cfg.test_dataloader.dataset.pipeline],
+            "input_size": list(model.cfg.codec["input_size"]), "test_cfg": dict(model.cfg.model.get("test_cfg") or {}), "dataset": model.dataset_meta["dataset_name"],
+            "keypoint_names": [model.dataset_meta["keypoint_id2name"][i] for i in range(int(model.dataset_meta["num_keypoints"]))], "remap": None if order == list(range(21)) else order, "color": "BGR read, data_preprocessor bgr_to_rgb", "point_confidence": "pred_instances.keypoint_scores",
+            "box_cls_from": "box source", "names": {"0": "left", "1": "right"}}
+    save(a.out, rows, per_frame, info)
+
+
+def mmpose_hand_check(argv):
+    """The wrapper (mm_infer, batched) against mmpose.apis.inference_topdown (one call per frame, image given as its path) on the first n frames that have boxes."""
+    a = mm_args(argv, check=True)
+    import cv2
+    from mmpose.apis import inference_topdown
+    rows = read_list(a.list)
+    verify(rows)
+    bx = mm_frames_boxes(a, rows)
+    model = mm_load(a.config, a.checkpoint, a.device, bool(a.tf32))
+    picked = [r for r in range(len(rows)) if bx["offsets"][r + 1] > bx["offsets"][r]][:a.n_frames]
+    items, ref = [], []
+    for r in picked:
+        boxes = bx["boxes"][int(bx["offsets"][r]):int(bx["offsets"][r + 1])]
+        img = cv2.imread(rows[r][1], cv2.IMREAD_COLOR)
+        items += [(img, b) for b in boxes]
+        for o in inference_topdown(model, rows[r][1], bboxes=np.asarray(boxes, dtype=np.float64), bbox_format="xyxy"):
+            ref.append((np.asarray(o.pred_instances.keypoints[0], dtype=np.float64), np.asarray(o.pred_instances.keypoint_scores[0], dtype=np.float64)))
+    kxy, kconf = mm_infer(model, items, a.batch_size) if items else (np.zeros((0, 21, 2)), np.zeros((0, 21)))
+    dxy = [float(np.abs(kxy[n] - ref[n][0]).max()) for n in range(len(ref))]
+    dc = [float(np.abs(kconf[n] - ref[n][1]).max()) for n in range(len(ref))]
+    out = {"frames": [int(rows[r][0]) for r in picked], "n_boxes": len(ref), "max_abs_px": max(dxy) if dxy else None, "max_abs_conf": max(dc) if dc else None,
+           "names": [model.dataset_meta["keypoint_id2name"][i] for i in range(int(model.dataset_meta["num_keypoints"]))], "batch_size": a.batch_size, "tf32": bool(a.tf32), "device": a.device, **mm_versions()}
+    with open(a.out, "w") as fh:
+        json.dump(out, fh)
+
+
+WORKERS["mmpose_hand"] = mmpose_hand
+WORKERS["mmpose_hand_check"] = mmpose_hand_check
+
 if __name__ == "__main__":
     if len(sys.argv) < 2 or sys.argv[1] not in WORKERS:
-        raise SystemExit("usage: detector_worker.py {wilor_yolo,mediapipe_hands,rtmpose_hand} ...")
+        raise SystemExit("usage: detector_worker.py {" + ",".join(WORKERS) + "} ...")
     WORKERS[sys.argv[1]](sys.argv[2:])
