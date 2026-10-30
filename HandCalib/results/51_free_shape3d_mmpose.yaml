@@ -1,0 +1,305 @@
+experiment: 51_free_shape3d_mmpose
+run: runs/51_free_shape3d_mmpose/20261030T072744Z
+code_commit: bf5c8fc
+git_dirty_at_run: false
+note: 실험 48·50에서 구한 검출기별 관절(mediapipe와 MMPose 손 모델 5종)에 교수님의 free_shape3d를 실험 46·49와
+  같은 호출·설정(손목 제외 16점, z_rel 0.2, alt_iters 3, max_frames 120, 같은 제외 규칙)으로 적용해 f를 구한
+  실험이다. 관절은 기존 검출 캐시에서 읽었고 새로 검출하지 않았다. 판정 규칙은 실험 46과 같다(영상별 3차원 f의 거리-f 기울기, 영상 단위
+  부트스트랩). 기준 f와의 비교는 summary.md에만 있다.
+free_shape3d:
+  z_rel: 0.2
+  alt_iters: 3
+  max_frames: 120
+verdict_rules:
+  slope_none_min: -0.3
+  slope_yes_max: -0.7
+  f_tol: 0.1
+sets:
+  실험 46 영상:
+    mediapipe_hands:
+      f_by_distance_px:
+        '50': 1106.5
+        '60': 982.4
+        '75': 1034.3
+      slope: null
+      slope_interval_95: null
+      verdict: 판단 불가
+      videos:
+        IMG_7298.MOV: 1170.6
+        IMG_7299.MOV: 1011.1
+        IMG_7309.MOV:
+          excluded:
+          - 가장자리 접촉 프레임 9.1% > 5%
+        IMG_7310.MOV: 1144.7
+        IMG_7300.MOV: 939.4
+        IMG_7301.MOV: 837.8
+        IMG_7302.MOV:
+          excluded:
+          - 가장자리 접촉 프레임 56.1% > 5%
+        IMG_7303.MOV: 1204.9
+        IMG_7304.MOV: 928.3
+        IMG_7305.MOV: 672.0
+        IMG_7307.MOV: 1469.8
+        IMG_7308.MOV: 1248.0
+    mmhand_hrnetv2_dark:
+      f_by_distance_px:
+        '50': 1340.5
+        '60': 1192.5
+        '75': 1265.1
+      slope: null
+      slope_interval_95: null
+      verdict: 판단 불가
+      videos:
+        IMG_7298.MOV: 1374.7
+        IMG_7299.MOV: 1217.7
+        IMG_7309.MOV:
+          excluded:
+          - 가장자리 접촉 프레임 9.1% > 5%
+        IMG_7310.MOV: 1439.1
+        IMG_7300.MOV: 1293.5
+        IMG_7301.MOV: 852.2
+        IMG_7302.MOV:
+          excluded:
+          - 가장자리 접촉 프레임 56.1% > 5%
+        IMG_7303.MOV: 1538.3
+        IMG_7304.MOV: 2845.8
+        IMG_7305.MOV: 921.4
+        IMG_7307.MOV: 1349.1
+        IMG_7308.MOV: 724.1
+    mmhand_hrnetv2:
+      f_by_distance_px:
+        '50': 1302.5
+        '60': 1231.3
+        '75': 1261.6
+      slope: null
+      slope_interval_95: null
+      verdict: 판단 불가
+      videos:
+        IMG_7298.MOV: 1417.7
+        IMG_7299.MOV: 1304.4
+        IMG_7309.MOV:
+          excluded:
+          - 가장자리 접촉 프레임 9.1% > 5%
+        IMG_7310.MOV: 1194.8
+        IMG_7300.MOV: 1901.8
+        IMG_7301.MOV: 956.0
+        IMG_7302.MOV:
+          excluded:
+          - 가장자리 접촉 프레임 56.1% > 5%
+        IMG_7303.MOV: 1026.7
+        IMG_7304.MOV: 3072.0
+        IMG_7305.MOV: 1025.4
+        IMG_7307.MOV: 1196.8
+        IMG_7308.MOV: 672.0
+    mmhand_rtmpose_m:
+      f_by_distance_px:
+        '50': 1050.3
+        '60': 890.3
+        '75': 844.1
+      slope: null
+      slope_interval_95: null
+      verdict: 판단 불가
+      videos:
+        IMG_7298.MOV: 1007.1
+        IMG_7299.MOV: 764.0
+        IMG_7309.MOV:
+          excluded:
+          - 가장자리 접촉 프레임 9.1% > 5%
+        IMG_7310.MOV: 1505.8
+        IMG_7300.MOV: 776.7
+        IMG_7301.MOV: 781.0
+        IMG_7302.MOV:
+          excluded:
+          - 가장자리 접촉 프레임 56.1% > 5%
+        IMG_7303.MOV: 1163.5
+        IMG_7304.MOV: 919.2
+        IMG_7305.MOV: 912.7
+        IMG_7307.MOV: 868.8
+        IMG_7308.MOV: 696.5
+    mmhand_hourglass:
+      f_by_distance_px:
+        '50': 942.2
+        '60': 748.6
+        '75': 795.2
+      slope: null
+      slope_interval_95: null
+      verdict: 판단 불가
+      videos:
+        IMG_7298.MOV: 914.9
+        IMG_7299.MOV: 929.9
+        IMG_7309.MOV:
+          excluded:
+          - 가장자리 접촉 프레임 9.1% > 5%
+        IMG_7310.MOV: 983.1
+        IMG_7300.MOV: 814.3
+        IMG_7301.MOV: 766.7
+        IMG_7302.MOV:
+          excluded:
+          - 가장자리 접촉 프레임 56.1% > 5%
+        IMG_7303.MOV: 672.0
+        IMG_7304.MOV: 1151.4
+        IMG_7305.MOV: 672.0
+        IMG_7307.MOV: 769.0
+        IMG_7308.MOV: 672.0
+    mmhand_scnet:
+      f_by_distance_px:
+        '50': 1788.5
+        '60': 2081.4
+        '75': 1680.6
+      slope: null
+      slope_interval_95: null
+      verdict: 판단 불가
+      videos:
+        IMG_7298.MOV: 2233.1
+        IMG_7299.MOV: 1732.5
+        IMG_7309.MOV:
+          excluded:
+          - 가장자리 접촉 프레임 9.1% > 5%
+        IMG_7310.MOV: 1478.7
+        IMG_7300.MOV: 3072.0
+        IMG_7301.MOV: 1511.1
+        IMG_7302.MOV:
+          excluded:
+          - 가장자리 접촉 프레임 56.1% > 5%
+        IMG_7303.MOV: 1942.4
+        IMG_7304.MOV: 3072.0
+        IMG_7305.MOV: 1570.3
+        IMG_7307.MOV: 1383.0
+        IMG_7308.MOV: 1195.6
+  실험 49 영상:
+    mediapipe_hands:
+      f_by_distance_px:
+        '50': 1421.1
+        '60': 1281.7
+        '75': 886.1
+      slope: -1.1831
+      slope_interval_95:
+      - -1.6656
+      - -0.7125
+      verdict: 반비례 있음
+      videos:
+        IMG_7312.MOV: 774.9
+        IMG_7313.MOV: 881.8
+        IMG_7314.MOV: 978.8
+        IMG_7315.MOV: 921.7
+        IMG_7316.MOV: 1539.6
+        IMG_7317.MOV: 1635.9
+        IMG_7318.MOV: 997.3
+        IMG_7319.MOV: 1074.4
+        IMG_7320.MOV: 1776.7
+        IMG_7321.MOV: 1599.8
+        IMG_7322.MOV: 1150.4
+        IMG_7323.MOV: 1247.4
+    mmhand_hrnetv2_dark:
+      f_by_distance_px:
+        '50': 1636.9
+        '60': 1373.8
+        '75': 1088.5
+      slope: -1.0077
+      slope_interval_95:
+      - -1.252
+      - -0.7348
+      verdict: 반비례 있음
+      videos:
+        IMG_7312.MOV: 1110.4
+        IMG_7313.MOV: 1273.5
+        IMG_7314.MOV: 1003.1
+        IMG_7315.MOV: 989.7
+        IMG_7316.MOV: 1399.5
+        IMG_7317.MOV: 1671.8
+        IMG_7318.MOV: 1167.8
+        IMG_7319.MOV: 1303.7
+        IMG_7320.MOV: 1592.1
+        IMG_7321.MOV: 1571.2
+        IMG_7322.MOV: 1705.3
+        IMG_7323.MOV: 1683.0
+    mmhand_hrnetv2:
+      f_by_distance_px:
+        '50': 1488.1
+        '60': 1189.4
+        '75': 1164.7
+      slope: -0.5854
+      slope_interval_95:
+      - -1.2739
+      - 0.092
+      verdict: 판단 보류
+      videos:
+        IMG_7312.MOV: 1524.3
+        IMG_7313.MOV: 1484.3
+        IMG_7314.MOV: 851.5
+        IMG_7315.MOV: 955.4
+        IMG_7316.MOV: 1207.1
+        IMG_7317.MOV: 1249.2
+        IMG_7318.MOV: 1233.7
+        IMG_7319.MOV: 1075.6
+        IMG_7320.MOV: 1327.4
+        IMG_7321.MOV: 1530.5
+        IMG_7322.MOV: 1623.3
+        IMG_7323.MOV: 1486.8
+    mmhand_rtmpose_m:
+      f_by_distance_px:
+        '50': 1593.5
+        '60': 1514.5
+        '75': 979.0
+      slope: null
+      slope_interval_95: null
+      verdict: 판단 불가
+      videos:
+        IMG_7312.MOV: 1233.5
+        IMG_7313.MOV: 1238.6
+        IMG_7314.MOV: 894.8
+        IMG_7315.MOV: 672.0
+        IMG_7316.MOV: 1678.9
+        IMG_7317.MOV: 1933.2
+        IMG_7318.MOV: 1160.5
+        IMG_7319.MOV: 1396.9
+        IMG_7320.MOV: 2204.1
+        IMG_7321.MOV: 1685.7
+        IMG_7322.MOV: 1434.7
+        IMG_7323.MOV: 1209.7
+    mmhand_hourglass:
+      f_by_distance_px:
+        '50': 1212.0
+        '60': 996.7
+        '75': 844.6
+      slope: -0.8853
+      slope_interval_95:
+      - -1.4243
+      - -0.4021
+      verdict: 판단 보류
+      videos:
+        IMG_7312.MOV: 1032.9
+        IMG_7313.MOV: 939.5
+        IMG_7314.MOV: 750.1
+        IMG_7315.MOV: 699.1
+        IMG_7316.MOV: 1096.6
+        IMG_7317.MOV: 1131.4
+        IMG_7318.MOV: 796.8
+        IMG_7319.MOV: 998.2
+        IMG_7320.MOV: 1494.6
+        IMG_7321.MOV: 1314.5
+        IMG_7322.MOV: 1066.3
+        IMG_7323.MOV: 1030.2
+    mmhand_scnet:
+      f_by_distance_px:
+        '50': 1552.5
+        '60': 1373.9
+        '75': 1197.2
+      slope: -0.64
+      slope_interval_95:
+      - -1.4102
+      - 0.1309
+      verdict: 판단 보류
+      videos:
+        IMG_7312.MOV: 1910.7
+        IMG_7313.MOV: 1169.3
+        IMG_7314.MOV: 1030.3
+        IMG_7315.MOV: 892.6
+        IMG_7316.MOV: 1440.5
+        IMG_7317.MOV: 1641.5
+        IMG_7318.MOV: 1423.9
+        IMG_7319.MOV: 1058.2
+        IMG_7320.MOV: 2077.8
+        IMG_7321.MOV: 1452.3
+        IMG_7322.MOV: 1423.4
+        IMG_7323.MOV: 1352.5
