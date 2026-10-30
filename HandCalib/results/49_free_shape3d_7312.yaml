@@ -1,0 +1,479 @@
+experiment: 49_free_shape3d_7312
+run: runs/49_free_shape3d_7312/20261030T062025Z
+code_commit: 393b3f8
+git_dirty_at_run: false
+note: '새로 촬영한 영상(설정 파일의 videos, 50/60/75 cm)에 실험 45·46과 같은 조건을 적용한 실험이다: MediaPipe
+  관절 16점(손목 제외), 교수님의 free_shape3d를 실험 41·45와 같은 호출로 사용, 제외 규칙(정면 창, 가장자리 접촉 5%, 손
+  검출 실패 20%)과 판정 규칙(영상별 3차원 f의 거리-f 기울기, 영상 단위 부트스트랩)도 실험 45와 같다. 규칙과 설정은 실행 전에 고정했다.
+  기준 f와의 비교는 summary.md에만 있다.'
+candidate:
+  detector: mediapipe_hands
+  wrist_mode: exclude
+  estimator: fixed_template
+  front_window: 17's (phase_mode nominal, tilt phase from 3.0 s)
+free_shape3d:
+  z_rel: 0.2
+  alt_iters: 3
+  max_frames: 120
+verdict_rules:
+  slope_none_min: -0.3
+  slope_yes_max: -0.7
+  f_tol: 0.1
+videos:
+  IMG_7312.MOV:
+    distance_cm: 75.0
+    duration_s: 14.73
+    detect_rate: 1.0
+    edge_rate: 0.0
+    free_shape3d:
+      f_3d_px: 774.9
+      f_planar_px: 766.7
+      f_grid_px: 1085.6
+      at_grid_edge: false
+      at_bound: false
+      relief_rel: 0.03283
+      relief_per_joint:
+      - 0.02181
+      - -0.04515
+      - -0.04839
+      - -0.01199
+      - 0.02368
+      - -0.00536
+      - 0.01096
+      - 0.0759
+      - 0.02906
+      - -0.00387
+      - 0.00302
+      - 0.02924
+      - 0.0209
+      - -0.02047
+      - -0.0346
+      - -0.04475
+      cost_3d: 7.08663
+      cost_planar: 8.96517
+      ba3_rms_px: 2.6667
+      ba3_success: true
+      ba3_nfev: 32
+      n_frames_in_problem: 222
+      elapsed_s: 2
+  IMG_7313.MOV:
+    distance_cm: 75.0
+    duration_s: 15.4
+    detect_rate: 1.0
+    edge_rate: 0.0
+    free_shape3d:
+      f_3d_px: 881.8
+      f_planar_px: 891.5
+      f_grid_px: 1090.2
+      at_grid_edge: false
+      at_bound: false
+      relief_rel: 0.03488
+      relief_per_joint:
+      - 0.01112
+      - -0.04999
+      - -0.04716
+      - -0.00574
+      - 0.01943
+      - 0.00917
+      - 0.01372
+      - 0.069
+      - 0.02887
+      - 0.01545
+      - 0.01133
+      - 0.02409
+      - 0.02349
+      - -0.01024
+      - -0.04208
+      - -0.07047
+      cost_3d: 4.91872
+      cost_planar: 6.36611
+      ba3_rms_px: 2.2178
+      ba3_success: false
+      ba3_nfev: 60
+      n_frames_in_problem: 232
+      elapsed_s: 3
+  IMG_7314.MOV:
+    distance_cm: 75.0
+    duration_s: 13.0
+    detect_rate: 1.0
+    edge_rate: 0.0
+    free_shape3d:
+      f_3d_px: 978.8
+      f_planar_px: 860.1
+      f_grid_px: 1206.6
+      at_grid_edge: false
+      at_bound: false
+      relief_rel: 0.02389
+      relief_per_joint:
+      - 0.00261
+      - -0.00482
+      - -0.01964
+      - -0.05922
+      - 0.01859
+      - 0.03986
+      - 0.03832
+      - 0.00763
+      - 0.00814
+      - 0.01935
+      - 0.0016
+      - -0.00162
+      - -0.0289
+      - -0.02001
+      - -0.0066
+      - 0.00469
+      cost_3d: 2.78035
+      cost_planar: 3.45936
+      ba3_rms_px: 1.6674
+      ba3_success: false
+      ba3_nfev: 60
+      n_frames_in_problem: 196
+      elapsed_s: 2
+  IMG_7315.MOV:
+    distance_cm: 75.0
+    duration_s: 12.75
+    detect_rate: 1.0
+    edge_rate: 0.0
+    free_shape3d:
+      f_3d_px: 921.7
+      f_planar_px: 810.5
+      f_grid_px: 943.6
+      at_grid_edge: false
+      at_bound: false
+      relief_rel: 0.01688
+      relief_per_joint:
+      - 0.00131
+      - 0.00375
+      - -0.01359
+      - -0.04242
+      - 0.00709
+      - 0.02751
+      - 0.02496
+      - 0.00605
+      - 0.00026
+      - 0.02185
+      - 0.00102
+      - -0.00456
+      - -0.02331
+      - -0.00404
+      - -6.0e-05
+      - -0.00582
+      cost_3d: 2.04136
+      cost_planar: 2.30938
+      ba3_rms_px: 1.4288
+      ba3_success: true
+      ba3_nfev: 17
+      n_frames_in_problem: 192
+      elapsed_s: 1
+  IMG_7316.MOV:
+    distance_cm: 60.0
+    duration_s: 14.87
+    detect_rate: 1.0
+    edge_rate: 0.0
+    free_shape3d:
+      f_3d_px: 1539.6
+      f_planar_px: 1587.9
+      f_grid_px: 1958.2
+      at_grid_edge: false
+      at_bound: false
+      relief_rel: 0.02101
+      relief_per_joint:
+      - 0.03544
+      - -0.02538
+      - -0.0373
+      - -0.01282
+      - 0.01219
+      - -0.00541
+      - -0.00294
+      - 0.04632
+      - 0.00671
+      - -0.01116
+      - -0.00059
+      - 0.0266
+      - 0.00253
+      - -0.01001
+      - -0.01187
+      - -0.01233
+      cost_3d: 7.5431
+      cost_planar: 8.8282
+      ba3_rms_px: 2.7465
+      ba3_success: true
+      ba3_nfev: 14
+      n_frames_in_problem: 224
+      elapsed_s: 1
+  IMG_7317.MOV:
+    distance_cm: 60.0
+    duration_s: 14.73
+    detect_rate: 1.0
+    edge_rate: 0.0
+    free_shape3d:
+      f_3d_px: 1635.9
+      f_planar_px: 1623.9
+      f_grid_px: 1780.4
+      at_grid_edge: false
+      at_bound: false
+      relief_rel: 0.0213
+      relief_per_joint:
+      - 0.03817
+      - -0.02076
+      - -0.03598
+      - -0.01851
+      - 0.01069
+      - -0.00618
+      - -0.00158
+      - 0.05167
+      - -7.0e-05
+      - -0.01711
+      - -0.00331
+      - 0.02119
+      - 0.00103
+      - -0.00419
+      - -0.00421
+      - -0.01086
+      cost_3d: 9.5238
+      cost_planar: 11.00594
+      ba3_rms_px: 3.0861
+      ba3_success: true
+      ba3_nfev: 40
+      n_frames_in_problem: 222
+      elapsed_s: 2
+  IMG_7318.MOV:
+    distance_cm: 60.0
+    duration_s: 12.67
+    detect_rate: 1.0
+    edge_rate: 0.0
+    free_shape3d:
+      f_3d_px: 997.3
+      f_planar_px: 915.7
+      f_grid_px: 1198.5
+      at_grid_edge: false
+      at_bound: false
+      relief_rel: 0.01854
+      relief_per_joint:
+      - -0.01061
+      - -0.0018
+      - -0.00457
+      - -0.03948
+      - 0.00734
+      - 0.02233
+      - 0.03298
+      - 0.00989
+      - 0.00614
+      - 0.02145
+      - 0.01204
+      - -0.01029
+      - -0.01549
+      - 0.00622
+      - -0.00419
+      - -0.03195
+      cost_3d: 3.19312
+      cost_planar: 4.02591
+      ba3_rms_px: 1.7869
+      ba3_success: true
+      ba3_nfev: 16
+      n_frames_in_problem: 191
+      elapsed_s: 1
+  IMG_7319.MOV:
+    distance_cm: 60.0
+    duration_s: 12.13
+    detect_rate: 1.0
+    edge_rate: 0.0
+    free_shape3d:
+      f_3d_px: 1074.4
+      f_planar_px: 961.9
+      f_grid_px: 1343.1
+      at_grid_edge: false
+      at_bound: false
+      relief_rel: 0.01743
+      relief_per_joint:
+      - -0.01362
+      - -0.00477
+      - -0.00717
+      - -0.03271
+      - 0.00865
+      - 0.02356
+      - 0.03132
+      - 0.00887
+      - 0.01233
+      - 0.02222
+      - 0.01092
+      - -0.01082
+      - -0.01426
+      - -0.00104
+      - -0.00684
+      - -0.02665
+      cost_3d: 4.70648
+      cost_planar: 5.83973
+      ba3_rms_px: 2.1694
+      ba3_success: true
+      ba3_nfev: 13
+      n_frames_in_problem: 183
+      elapsed_s: 1
+  IMG_7320.MOV:
+    distance_cm: 50.0
+    duration_s: 15.2
+    detect_rate: 1.0
+    edge_rate: 0.0
+    free_shape3d:
+      f_3d_px: 1776.7
+      f_planar_px: 1744.8
+      f_grid_px: 2313.9
+      at_grid_edge: false
+      at_bound: false
+      relief_rel: 0.02114
+      relief_per_joint:
+      - 0.02566
+      - -0.02517
+      - -0.03161
+      - -0.00145
+      - 0.01208
+      - -0.014
+      - -0.00742
+      - 0.04904
+      - 0.00999
+      - -0.01167
+      - 0.00292
+      - 0.02508
+      - 0.01554
+      - -0.00821
+      - -0.01607
+      - -0.02472
+      cost_3d: 7.74167
+      cost_planar: 9.96825
+      ba3_rms_px: 2.7824
+      ba3_success: true
+      ba3_nfev: 13
+      n_frames_in_problem: 229
+      elapsed_s: 1
+  IMG_7321.MOV:
+    distance_cm: 50.0
+    duration_s: 13.6
+    detect_rate: 1.0
+    edge_rate: 0.0
+    free_shape3d:
+      f_3d_px: 1599.8
+      f_planar_px: 1618.3
+      f_grid_px: 2035.8
+      at_grid_edge: false
+      at_bound: false
+      relief_rel: 0.02343
+      relief_per_joint:
+      - 0.0337
+      - -0.0286
+      - -0.04238
+      - -0.0174
+      - 0.02
+      - -0.00241
+      - -0.00597
+      - 0.04527
+      - 0.00921
+      - -0.00311
+      - 0.01211
+      - 0.0331
+      - -0.00195
+      - -0.01476
+      - -0.01687
+      - -0.01995
+      cost_3d: 9.29462
+      cost_planar: 11.91095
+      ba3_rms_px: 3.0487
+      ba3_success: true
+      ba3_nfev: 21
+      n_frames_in_problem: 205
+      elapsed_s: 1
+  IMG_7322.MOV:
+    distance_cm: 50.0
+    duration_s: 11.8
+    detect_rate: 1.0
+    edge_rate: 0.0
+    free_shape3d:
+      f_3d_px: 1150.4
+      f_planar_px: 1121.8
+      f_grid_px: 1434.5
+      at_grid_edge: false
+      at_bound: false
+      relief_rel: 0.02182
+      relief_per_joint:
+      - 0.03124
+      - -1.0e-05
+      - -0.01905
+      - -0.05705
+      - 0.00938
+      - 0.01449
+      - 0.0228
+      - 0.00749
+      - -0.01053
+      - 0.01531
+      - 0.0121
+      - 0.00367
+      - -0.03895
+      - -0.00519
+      - 0.00646
+      - 0.00783
+      cost_3d: 5.99303
+      cost_planar: 7.8264
+      ba3_rms_px: 2.4604
+      ba3_success: true
+      ba3_nfev: 14
+      n_frames_in_problem: 178
+      elapsed_s: 1
+  IMG_7323.MOV:
+    distance_cm: 50.0
+    duration_s: 12.53
+    detect_rate: 1.0
+    edge_rate: 0.0
+    free_shape3d:
+      f_3d_px: 1247.4
+      f_planar_px: 1112.5
+      f_grid_px: 1243.5
+      at_grid_edge: false
+      at_bound: false
+      relief_rel: 0.02381
+      relief_per_joint:
+      - 0.0087
+      - 0.01311
+      - -0.01622
+      - -0.06495
+      - 0.0095
+      - 0.02678
+      - 0.03187
+      - 0.00792
+      - -0.00504
+      - 0.01543
+      - 0.01753
+      - -0.00539
+      - -0.03973
+      - 0.00662
+      - 0.00728
+      - -0.01342
+      cost_3d: 4.41783
+      cost_planar: 6.24679
+      ba3_rms_px: 2.1025
+      ba3_success: true
+      ba3_nfev: 12
+      n_frames_in_problem: 189
+      elapsed_s: 2
+by_method:
+  free_shape3d:
+    f_by_distance_px:
+      '50': 1421.1
+      '60': 1281.7
+      '75': 886.1
+    slope: -1.1831
+    slope_interval_95:
+    - -1.6656
+    - -0.7125
+  planar_pooled_curves:
+    pooled_f_px:
+      '50': 1954.7
+      '60': 1536.9
+      '75': 1099.9
+    slope: -1.4211
+    slope_interval_95:
+    - -1.7377
+    - -0.529
+verdict:
+  free_shape3d:
+    verdict: 반비례 있음
+    reason: null
+  planar_pooled_curves:
+    verdict: 판단 보류
