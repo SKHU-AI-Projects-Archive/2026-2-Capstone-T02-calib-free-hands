@@ -1,0 +1,234 @@
+# 46: experiment 45's call (the supervisor's free_shape3d on the MediaPipe joints, wrist removed, 16 points) on 12 newly shot videos, as the user asked 2026-10-30: "videos 7298-50, 7299-50, 7309-50, 7310-50, 7300-60, 7301-60, 7302-60, 7303-60,
+# 7304-75, 7305-75, 7307-75, 7308-75 (number-distance in cm); same conditions as the earlier experiment; the reference focal length is 1553 px". The videos were shot again at the supervisor's request (IMG_7306 is not in the list).
+# Nothing of 27, 34-43, 45 (code, configs, runs, results) is changed. Same as 45, taken from its config unchanged: candidate (mediapipe_hands, wrist removed), exclusion (edge rate <= 5 %, hand-detection failure <= 20 %, a valid 1 s front window),
+# detector_settings, pipeline (phases, tracking conf_min 0.5, estimate: f grid 60 points 0.35-1.6 x the long side, coarse 8-point grid in free_template), free_shape3d (z_rel 0.2, alt_iters 3, max_frames 120), verdict thresholds, bootstrap (n 1000, seed 42).
+# Call (e3_video of 45, unchanged): pb, idx = free_problem(trk, (W, H), ecfg, huber_rel, ids); r = s3_estimate_run(pb, 'free_shape3d', grid, {**ecfg, 'free_template': free_shape3d}, 1.0).
+# Verdict (45's rule, fixed before the run) over all included videos (one group, 50 / 60 / 75 cm, four videos each): slope of log f on log distance from the geometric mean of the per-video 3-D f of each distance, video-level bootstrap, pr_verdict thresholds
+# (none: interval above -0.3 and every distance's f within +-10 % of the reference f; yes: interval below -0.7; else hold; a distance without a video, a 3-D f on a bound of the grid range, or a planar grid minimum on the grid edge gives 판단 불가).
+# The planar pooled-curve calculation is reported beside it. The reference f is 1553 px for every distance (user-provided, one value); it appears only in summary.md. Experiment 45's pooled f per distance is shown in summary.md for orientation (other videos).
+# Which hand and the shooting direction are not recorded in this file (not given). Nothing here was tuned on these videos. Code: branch exp/46-free-shape3d-new-videos; code commit in code_46 below (set after the code commit, before the run).
+experiment:
+  name: 46_free_shape3d_new
+  seed: 42
+
+videos:                              # entries: {file, distance_cm}; shooting order = IMG number
+  - {file: IMG_7298.MOV, distance_cm: 50}
+  - {file: IMG_7299.MOV, distance_cm: 50}
+  - {file: IMG_7309.MOV, distance_cm: 50}
+  - {file: IMG_7310.MOV, distance_cm: 50}
+  - {file: IMG_7300.MOV, distance_cm: 60}
+  - {file: IMG_7301.MOV, distance_cm: 60}
+  - {file: IMG_7302.MOV, distance_cm: 60}
+  - {file: IMG_7303.MOV, distance_cm: 60}
+  - {file: IMG_7304.MOV, distance_cm: 75}
+  - {file: IMG_7305.MOV, distance_cm: 75}
+  - {file: IMG_7307.MOV, distance_cm: 75}
+  - {file: IMG_7308.MOV, distance_cm: 75}
+input_dir: /home/juson/data/hand_focal_videos
+candidate:                           # fixed (22 / 25 / 26); not changed here
+  detector: mediapipe_hands
+  wrist_mode: exclude
+  estimator: fixed_template
+  front_window: 17's (phase_mode nominal, tilt phase from 3.0 s)
+exclusion:                           # same as 26 (shooting conditions only)
+  edge_rate_max: 0.05                # share of detected frames whose hand box touches the image border
+  detect_fail_max: 0.20              # share of frames without a detected hand
+
+
+pipeline:
+  experiment:
+    name: 46_free_shape3d_new
+    seed: 42
+  input_dir: /home/juson/data/hand_focal_videos
+  video_extensions:
+  - .mov
+  - .mp4
+  - .m4v
+  - .mkv
+  - .avi
+  min_duration_s: 5.0
+  normalize:
+    long_side: 1920
+    max_fps: 60
+    sdr_target: bt709
+    hdr_path:
+    - zscale_tonemap
+    - colorspace
+    codec: ffv1
+  frames:
+    detect_fps: 15
+    tmp_dir: null
+  detector:
+    name: mock
+    mock_npz: null
+    classes:
+      0: left
+      1: right
+    cache: true
+  tracking:
+    init_window_s: 1.0
+    iou_min: 0.3
+    conf_min: 0.5
+    smoothing:
+      enabled: false
+      window: 3
+  phases:
+    phase_mode: nominal
+    front_phase_s: 3.0
+    front_skip_s: 0.5
+    front_window_s: 1.0
+    front_min_detect_rate: 0.9
+    finger_extension_min: 0.9
+    auto_theta_deg: 10.0
+    auto_sustain_s: 0.5
+    auto_warn_diff_s: 1.0
+  joints:
+    sets:
+      palm4:
+      - 0
+      - 5
+      - 9
+      - 13
+      palm5:
+      - 0
+      - 5
+      - 9
+      - 13
+      - 17
+      palm_proximal9:
+      - 0
+      - 5
+      - 6
+      - 9
+      - 10
+      - 13
+      - 14
+      - 17
+      - 18
+      flat17:
+      - 0
+      - 5
+      - 6
+      - 7
+      - 8
+      - 9
+      - 10
+      - 11
+      - 12
+      - 13
+      - 14
+      - 15
+      - 16
+      - 17
+      - 18
+      - 19
+      - 20
+    estimate_set: flat17
+    uncertainty_sets:
+    - palm5
+    - palm_proximal9
+    - flat17
+    template_align_iters: 4
+  estimate:
+    estimator: fixed_template
+    synthetic_study_result: null
+    principal_point: center
+    distortion: null
+    f_grid_n: 60
+    f_ratio_range:
+    - 0.35
+    - 1.6
+    huber_rel: 0.02
+    min_points: 4
+    joint_delta:
+      delta_grid_deg:
+      - 0
+      - 4
+      - 8
+      - 12
+      - 16
+      - 20
+      phi_n: 6
+      delta_prior_deg: 8.0
+      prior_weight: auto
+      nm_max_iter: 300
+  anycalib:
+    enabled: true
+    model_id: anycalib_pinhole
+    cam_id: pinhole
+    stride: 1
+    device: cuda:0
+    extra_models:
+    - anycalib_gen
+    offline_env:
+      HF_HUB_OFFLINE: '1'
+      TRANSFORMERS_OFFLINE: '1'
+    torch_hub_dir: ~/.cache/torch/hub
+  uncertainty:
+    n_bootstrap: 30
+    block_frames: 10
+    time_budget_s: 600
+  verdict:
+    good:
+      detect_rate_min: 0.9
+      front_frames_min: 15
+      finger_extension_required: true
+      theta_p90_min_deg: 25.0
+      axis_bins_min: 5
+      reproj_rms_rel_max: 0.01
+      jointset_range_max: 0.04
+      bootstrap_rel_std_max: 0.03
+      consistency_range_max: 0.06
+      delta_abs_max_deg: 12.0
+      sharpness_min: 1.3
+    rough:
+      detect_rate_min: 0.7
+      theta_p90_min_deg: 12.0
+      axis_bins_min: 3
+      reproj_rms_rel_max: 0.025
+      jointset_range_max: 0.12
+    min_target_frames: 20
+  target_sizes:
+  - - 1920
+    - 1080
+  - - 1280
+    - 720
+  - - 3840
+    - 2160
+  output:
+    root: runs/26_generalization
+    results_yaml: results/26_generalization.yaml
+
+detector_settings:
+  mediapipe_hands:
+    model: MediaPipe Hand Landmarker (hand_landmarker.task float16/1)
+    weights: /home/juson/models/mediapipe/hand_landmarker.task
+    python: /home/juson/venvs/det_mediapipe/bin/python
+    device: cpu
+    num_hands: 2
+    min_hand_detection_confidence: 0.5
+    min_hand_presence_confidence: 0.5
+    box_margin: 0.1
+    conf_min: 0.5
+    remap: null
+
+output:
+  root: runs/46_free_shape3d_new
+  results_yaml: results/46_free_shape3d_new.yaml
+free_shape3d:
+  z_rel: 0.2
+  alt_iters: 3
+  max_frames: 120
+ref_f_by_distance: {50: 1553, 60: 1553, 75: 1553}     # one value for every distance (user-provided 2026-10-30); not measured by this code
+verdict:
+  slope_none_min: -0.3
+  slope_yes_max: -0.7
+  f_tol: 0.1
+bootstrap:
+  n: 1000
+  seed: 42
+compare:
+  '45': runs/45_free_shape3d_27/20261029T102021Z/results.json
+code_46: {branch: exp/46-free-shape3d-new-videos, commit: b9fc644, modules: [HandCalib/handfocal_estimate.py, HandCalib/handfocal_report.py, HandCalib/handfocal.py, HandCalib/run.py]}
+n_workers: 16                        # mediapipe (CPU) detection: lists at the same time (64 logical CPUs, keep <= half)
+workers: 9                           # parallel videos
