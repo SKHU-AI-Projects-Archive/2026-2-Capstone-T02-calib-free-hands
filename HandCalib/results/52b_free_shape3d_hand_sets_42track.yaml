@@ -1,0 +1,184 @@
+experiment: 52b_free_shape3d_hand_sets_42track
+run: runs/52b_free_shape3d_hand_sets_42track/20261102T023216Z
+code_commit: 0fc2c7b
+git_dirty_at_run: false
+note: 실험 42와 같은 실제 손 마커 영상 6개와 같은 호출(35c 추적 코드, 교수님 free_shape3d)에서 추정에 쓰는 마커만 바꾼
+  실험이다. 마커 묶음은 손바닥 5점(손목과 네 손가락 뿌리 관절)과 실험 42의 8점(손가락 뿌리 관절과 둘째 마디)에 손목을 더한 9점이다.
+  각 묶음은 35c 추적기의 사용 마커(기준 프레임, 75% 규칙, 호모그래피 검사)로도 쓰고, 나머지 설정과 판정 규칙은 실험 42 그대로 실행
+  전에 고정했다. 기준 f와의 비교는 summary.md에만 있다.
+point_sets:
+  palm5:
+  - 0
+  - 5
+  - 9
+  - 13
+  - 17
+  wrist_mcp_pip9:
+  - 0
+  - 5
+  - 6
+  - 9
+  - 10
+  - 13
+  - 14
+  - 17
+  - 18
+free_shape3d:
+  z_rel: 0.2
+  alt_iters: 3
+  max_frames: 120
+verdict_rules:
+  slope_none_min: -0.3
+  slope_yes_max: -0.7
+  f_tol: 0.1
+sets:
+  palm5:
+    f_by_distance_px:
+      '50': 928.5
+      '60': 697.8
+      '75': 695.2
+    slope: null
+    slope_interval_95: null
+    verdict: 판단 불가
+    reason: 기울기나 구간이 값 없음(격자 경계)
+    planar_pooled_f_px:
+      '50': 947.7
+      '60': 672.0
+      '75': 672.0
+    planar_slope: null
+    videos:
+      IMG_7267.MOV:
+        distance_cm: 50.0
+        marker_tilt_valid_ratio: 0.9247
+        f_3d_px: 1051.9
+        f_planar_px: 1262.6
+        at_bound: false
+        at_grid_edge: false
+        relief_rel: 0.01996
+        ba3_rms_px: 3.2112
+        n_frames_in_problem: 308
+      IMG_7266.MOV:
+        distance_cm: 50.0
+        marker_tilt_valid_ratio: 0.8667
+        f_3d_px: 819.6
+        f_planar_px: 820.6
+        at_bound: false
+        at_grid_edge: false
+        relief_rel: 0.02512
+        ba3_rms_px: 3.3594
+        n_frames_in_problem: 303
+      IMG_7265.MOV:
+        distance_cm: 60.0
+        marker_tilt_valid_ratio: 0.8762
+        f_3d_px: 672.0
+        f_planar_px: 672.0
+        at_bound: true
+        at_grid_edge: true
+        relief_rel: 0.02531
+        ba3_rms_px: 2.6516
+        n_frames_in_problem: 314
+      IMG_7264.MOV:
+        distance_cm: 60.0
+        marker_tilt_valid_ratio: 0.9583
+        f_3d_px: 724.7
+        f_planar_px: 972.8
+        at_bound: false
+        at_grid_edge: true
+        relief_rel: 0.03796
+        ba3_rms_px: 2.4868
+        n_frames_in_problem: 314
+      IMG_7263.MOV:
+        distance_cm: 75.0
+        marker_tilt_valid_ratio: 0.9873
+        f_3d_px: 672.0
+        f_planar_px: 846.9
+        at_bound: true
+        at_grid_edge: true
+        relief_rel: 0.03529
+        ba3_rms_px: 1.8961
+        n_frames_in_problem: 356
+      IMG_7262.MOV:
+        distance_cm: 75.0
+        marker_tilt_valid_ratio: 1.0
+        f_3d_px: 719.3
+        f_planar_px: 822.1
+        at_bound: false
+        at_grid_edge: true
+        relief_rel: 0.02246
+        ba3_rms_px: 1.8184
+        n_frames_in_problem: 337
+  wrist_mcp_pip9:
+    f_by_distance_px:
+      '50': 1679.7
+      '60': 2660.5
+      '75': 2255.3
+    slope: null
+    slope_interval_95: null
+    verdict: 판단 불가
+    reason: 기울기나 구간이 값 없음(격자 경계)
+    planar_pooled_f_px:
+      '50': 3072.0
+      '60': 3072.0
+      '75': 3072.0
+    planar_slope: null
+    videos:
+      IMG_7267.MOV:
+        distance_cm: 50.0
+        marker_tilt_valid_ratio: 0.9247
+        f_3d_px: 1451.2
+        f_planar_px: 3072.0
+        at_bound: false
+        at_grid_edge: true
+        relief_rel: 0.07763
+        ba3_rms_px: 1.6186
+        n_frames_in_problem: 315
+      IMG_7266.MOV:
+        distance_cm: 50.0
+        marker_tilt_valid_ratio: 0.8667
+        f_3d_px: 1944.1
+        f_planar_px: 3072.0
+        at_bound: false
+        at_grid_edge: true
+        relief_rel: 0.05726
+        ba3_rms_px: 4.9303
+        n_frames_in_problem: 305
+      IMG_7265.MOV:
+        distance_cm: 60.0
+        marker_tilt_valid_ratio: 0.8762
+        f_3d_px: 3072.0
+        f_planar_px: 3072.0
+        at_bound: true
+        at_grid_edge: true
+        relief_rel: 0.03554
+        ba3_rms_px: 4.1325
+        n_frames_in_problem: 314
+      IMG_7264.MOV:
+        distance_cm: 60.0
+        marker_tilt_valid_ratio: 0.9583
+        f_3d_px: 2304.1
+        f_planar_px: 3072.0
+        at_bound: false
+        at_grid_edge: true
+        relief_rel: 0.04813
+        ba3_rms_px: 4.1301
+        n_frames_in_problem: 321
+      IMG_7263.MOV:
+        distance_cm: 75.0
+        marker_tilt_valid_ratio: 0.9873
+        f_3d_px: 3072.0
+        f_planar_px: 3072.0
+        at_bound: true
+        at_grid_edge: true
+        relief_rel: 0.02578
+        ba3_rms_px: 3.0796
+        n_frames_in_problem: 357
+      IMG_7262.MOV:
+        distance_cm: 75.0
+        marker_tilt_valid_ratio: 1.0
+        f_3d_px: 1655.7
+        f_planar_px: 3072.0
+        at_bound: false
+        at_grid_edge: true
+        relief_rel: 0.04741
+        ba3_rms_px: 1.96
+        n_frames_in_problem: 342
