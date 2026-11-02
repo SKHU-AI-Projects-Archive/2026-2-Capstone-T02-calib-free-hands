@@ -1568,7 +1568,7 @@ The C-2B dashboard foundation is saved as a checkpoint. It is not the completion
 
 ### C-2B status
 
-The Presentation Redesign and media memory optimization are implemented. Report **C-2B READY FOR FINAL MANUAL REVIEW** until final Windows GUI review is complete. Do not report C-2B complete before that review.
+The Presentation Redesign and media memory optimization are implemented. Report **C-2B READY FOR FINAL MANUAL APPROVAL**. Do not report C-2B complete before the user's final visual approval.
 
 ## C-2B media source loading status
 

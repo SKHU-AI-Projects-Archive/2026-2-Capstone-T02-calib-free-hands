@@ -81,15 +81,13 @@
 - [x] Shared media source is decoded once and its frame list is reused across configurations
 - [x] Official WiLoR checkpoint and detector downloaded outside protected source tree
 - [x] Official model asset setup script with network access
-- [ ] Interactive viewer/manual validation
+- [x] Interactive Windows GUI inspection performed with actual same-source results; final user approval is still outstanding
 - [ ] C-2B normal Windows visual review: Overlay + 2 results, Split + 2, Split + 5
 - [ ] P1-B new original WiLoR run confirming MANO parameter persistence in a fresh real result
 - [x] Actual AnyCalib + WiLoR/MANO smoke on first 3 frames of existing `4_assemble.mp4`; single and two-configuration outputs validated without network downloads
 - [ ] `git diff` final review
 
-Known remaining validation gap: interactive Windows GUI and visual viewer controls
-still require a human manual check; automated offscreen construction and saved
-result reopening pass.
+Remaining visual-review items: Split + 2 and Split + 5 layouts, hovered-joint readability, all annotation modes, and final user approval. Actual Overlay + 3 and Split + 3 layouts were inspected in the normal Windows GUI.
 
 ## Milestone B ??UX Polish / CFH Result Bundle / Result Loading
 
@@ -164,12 +162,12 @@ result reopening pass.
 - [x] Process RAM sampled 3.72–3.74 GB, within the prior 3.9 GB observation; shared decoded frame cache remains unchanged
 - [x] HUD stylesheet/layout loop fix reduced sampled process CPU from 98.8% idle / 101.6% playback to 4.7% idle / 27.1% playback in matched 3-second probes
 - [x] OpenGL renderer identified as Intel UHD Graphics 750; per-process Windows GPU Engine 3D samples were 0–5.64% (one-second sampling, with invalid-data warnings on some samples); NVIDIA utilization was system-wide and not used to infer Intel rendering
-- [ ] HUMAN VISUAL REVIEW REQUIRED in the normal Windows GUI for speed selection, continuous playback, pause, and mode switching
+- [x] Windows GUI playback smoke: 0.1×/1×/2× selections, continuous playback, pause, source synchronization, auto-hide, and Split mode; the full eight-speed final matrix still needs user review
 
 ## C-2B Presentation UX Stabilization
 - [x] Full pytest suite: 201 passed; includes fixed viewport geometry, HUD interactions, hover menus, annotation modes, and reorder lifecycle
 - [x] Windows GUI visual check at 1280x800 with six synthetic test-only result panels; drag reorder changed Method 2/Method 1 ordering
-- [ ] Windows GUI visual review for hovered-joint readability and Split + 3 layout
+- [x] Windows GUI visual review for Split + 3 layout; hovered-joint readability remains for user review
 
 ## C-2B Media Memory Optimization
 - [x] Provider tests: lazy sequential decode, repeated request coalescing, cache hit/eviction/budget, reverse seek, latest request replacement, image buffer ownership, missing/changed source, and source sharing
