@@ -1,0 +1,46 @@
+# 57: 56's continuous tracking on palm videos (user 2026-11-02: "손등 영상 말고 손바닥 영상으로도 실험 진행해줘"; "이전 실험들에서 사용했던 영상들로 진행해줘"). The videos are the 24 of 46 (IMG_7298-7310)
+# and 49 (IMG_7312-7323): camera above the desk looking down, the right palm toward the camera (thumb folded), a front window and then the hand tilted (looked at one middle frame of every video; the
+# hand is not written in 46 / 49's configs, the frames show the right hand). Reference f 1553 px = the user's value of the 46 / 49 session. Everything of 56 is unchanged: kt_video (30 fps frames,
+# KLT on the hand mask, USAC_MAGSAC between neighbours, chained from the middle detected frame), the tracking settings, frames used = every tracked frame off the border, j16 main / j21 record,
+# the supervisor's free_template / free_shape3d through od_job, block bootstrap 30 frames x 100 (seed 42), 53's f verdict (min 30 frames; boundary or outside +-25 % -> 어려움; +-10 % with the
+# interval within f x (1 +- 0.10) -> 가능성 있음; else 판단 보류). The two warnings of 53 are for a hand on a 45 deg desk (tilt 30-60 deg, turn on the desk) and are not used here; the tilt change
+# over the frames (p95 - p5) and the median tilt are recorded instead. 46 / 49's per-video free_shape3d (per-frame MediaPipe j16, front-window rule) is read for comparison.
+# Fixed before the run.
+experiment:
+  name: 57_continuous_klt_palm
+  seed: 42
+base_config: configs/53_oblique_desk.yaml
+videos:
+  - {file: IMG_7298.MOV, session: "46", distance_cm: 50, hand: right}
+  - {file: IMG_7299.MOV, session: "46", distance_cm: 50, hand: right}
+  - {file: IMG_7309.MOV, session: "46", distance_cm: 50, hand: right}
+  - {file: IMG_7310.MOV, session: "46", distance_cm: 50, hand: right}
+  - {file: IMG_7300.MOV, session: "46", distance_cm: 60, hand: right}
+  - {file: IMG_7301.MOV, session: "46", distance_cm: 60, hand: right}
+  - {file: IMG_7302.MOV, session: "46", distance_cm: 60, hand: right}
+  - {file: IMG_7303.MOV, session: "46", distance_cm: 60, hand: right}
+  - {file: IMG_7304.MOV, session: "46", distance_cm: 75, hand: right}
+  - {file: IMG_7305.MOV, session: "46", distance_cm: 75, hand: right}
+  - {file: IMG_7307.MOV, session: "46", distance_cm: 75, hand: right}
+  - {file: IMG_7308.MOV, session: "46", distance_cm: 75, hand: right}
+  - {file: IMG_7320.MOV, session: "49", distance_cm: 50, hand: right}
+  - {file: IMG_7321.MOV, session: "49", distance_cm: 50, hand: right}
+  - {file: IMG_7322.MOV, session: "49", distance_cm: 50, hand: right}
+  - {file: IMG_7323.MOV, session: "49", distance_cm: 50, hand: right}
+  - {file: IMG_7316.MOV, session: "49", distance_cm: 60, hand: right}
+  - {file: IMG_7317.MOV, session: "49", distance_cm: 60, hand: right}
+  - {file: IMG_7318.MOV, session: "49", distance_cm: 60, hand: right}
+  - {file: IMG_7319.MOV, session: "49", distance_cm: 60, hand: right}
+  - {file: IMG_7312.MOV, session: "49", distance_cm: 75, hand: right}
+  - {file: IMG_7313.MOV, session: "49", distance_cm: 75, hand: right}
+  - {file: IMG_7314.MOV, session: "49", distance_cm: 75, hand: right}
+  - {file: IMG_7315.MOV, session: "49", distance_cm: 75, hand: right}
+tracking: {fps: 30, dilate_frac: 0.03, max_corners: 400, quality: 0.01, min_distance: 7, block: 7, win: 21, levels: 3, fb_px: 1.0, threshold_px: 1.5, min_inliers: 20}
+bootstrap: {n: 100, block: 30, seed: 42}
+compare: [results/46_free_shape3d_new.yaml, results/49_free_shape3d_7312.yaml]
+code_57: {branch: exp/57-continuous-klt-palm, base_commit: 67b2938, commit: 76e0562, modules: [HandCalib/run.py]}
+workers: 24
+n_workers: 8
+output:
+  root: runs/57_continuous_klt_palm
+  results_yaml: results/57_continuous_klt_palm.yaml
