@@ -4921,6 +4921,274 @@ def h4_video(args) -> dict:
 
 
 # ====================================================================================================
+# od  (experiment 53: camera about 45 deg to the desk, hand flat on the desk, moved and turned on it; no front window. The supervisor's free_template / free_shape3d (unchanged) through a thin bridge
+#      from our tracks; frame selection, block bootstrap, pose diagnostics and the synthetic check are new.)
+# ====================================================================================================
+OD_FINGERS = ((5, 6, 7, 8), (9, 10, 11, 12), (13, 14, 15, 16), (17, 18, 19, 20))      # MCP, PIP, DIP, TIP in the 21-joint (MediaPipe) order
+OD_REASONS = ("검출 실패", "가장자리 접촉", "움직임", "모양 변화")
+# a flat right hand in cm (wrist at 0, fingers along +y), the 21-joint order; only for the synthetic scenes
+OD_HAND_CM = np.array([[0.0, 0.0], [-2.3, 2.2], [-4.2, 4.0], [-5.6, 5.9], [-6.6, 7.5],
+                       [-3.1, 9.0], [-3.7, 12.9], [-4.0, 15.4], [-4.3, 17.4],
+                       [-1.0, 9.4], [-1.1, 13.9], [-1.2, 16.8], [-1.3, 19.0],
+                       [1.1, 9.0], [1.4, 13.2], [1.6, 15.9], [1.8, 18.0],
+                       [3.0, 8.3], [3.6, 11.5], [4.0, 13.5], [4.3, 15.3]])
+
+
+def od_shape_features(kp: np.ndarray) -> np.ndarray:
+    """(n, 21, 2) -> (n, 11): for each finger |DIP-PIP| / |PIP-MCP| and |TIP-DIP| / |PIP-MCP| (segment length ratios, 8), and the angle in degrees between the MCP->TIP directions of neighbouring
+    fingers (finger spread, 3). NaN where a joint is missing."""
+    n = len(kp)
+    out = np.full((n, 11), np.nan)
+    seg = lambda a, b: np.linalg.norm(kp[:, b] - kp[:, a], axis=1)      # noqa: E731
+    for k, (m, p, d, t) in enumerate(OD_FINGERS):
+        base = seg(m, p)
+        with np.errstate(invalid="ignore", divide="ignore"):
+            out[:, 2 * k] = seg(p, d) / base
+            out[:, 2 * k + 1] = seg(d, t) / base
+    dirs = [kp[:, f[3]] - kp[:, f[0]] for f in OD_FINGERS]
+    for k in range(3):
+        a, b = dirs[k], dirs[k + 1]
+        ang = np.degrees(np.arctan2(a[:, 0] * b[:, 1] - a[:, 1] * b[:, 0], (a * b).sum(1)))
+        out[:, 8 + k] = ang
+    return out
+
+
+def od_select(kp: np.ndarray, mask: np.ndarray, present: np.ndarray, box: np.ndarray, size_wh, scfg: dict) -> dict:
+    """Frame selection of 53, in this order (the first failing condition is the frame's reason): hand detected (track present); hand box not touching the image border (edge_flags);
+    hand nearly still (median joint movement to the previous and to the next detected frame, the larger of the two, below scfg.still_frac x the hand box long side; a frame without a detected
+    neighbour fails); hand shape close to the video median (every feature of od_shape_features within scfg.shape_z_max robust z = |x - median| / (1.4826 MAD) over the detected frames).
+    Returns {keep (n,), reason (n,), motion (n,), shape_z (n,), counts (first reason), counts_any (each condition alone, over the detected frames)}."""
+    W, H = size_wh
+    n = len(kp)
+    present = np.asarray(present, bool)
+    full = mask & np.isfinite(kp[..., 0])
+    edge = edge_flags(box, present, W, H)
+    bl = box_long(box)
+    motion = np.full(n, np.nan)
+    for i in np.flatnonzero(present):
+        m = []
+        for j in (i - 1, i + 1):
+            if 0 <= j < n and present[j]:
+                ok = full[i] & full[j]
+                if ok.sum() >= 4:
+                    m.append(float(np.median(np.linalg.norm(kp[i][ok] - kp[j][ok], axis=1))))
+        if m:
+            motion[i] = max(m) / bl[i]
+    kpn = np.where(full[..., None], kp, np.nan)
+    feat = od_shape_features(kpn)
+    shape_z = np.full(n, np.nan)
+    if present.any():
+        med = np.nanmedian(feat[present], axis=0)
+        mad = 1.4826 * np.nanmedian(np.abs(feat[present] - med), axis=0)
+        with np.errstate(invalid="ignore", divide="ignore"):
+            z = np.abs(feat - med) / np.where(mad > 0, mad, np.nan)
+        shape_z = np.where(np.isfinite(z).any(1), np.nanmax(np.where(np.isfinite(z), z, -np.inf), axis=1), np.nan)
+    still = np.isfinite(motion) & (motion < float(scfg["still_frac"]))
+    shape_ok = np.isfinite(shape_z) & (shape_z <= float(scfg["shape_z_max"]))
+    conds = [present, ~edge, still, shape_ok]
+    reason = np.array([""] * n, dtype=object)
+    for i in range(n):
+        for name, c in zip(OD_REASONS, conds):
+            if not c[i]:
+                reason[i] = name
+                break
+    keep = reason == ""
+    counts = {name: int((reason == name).sum()) for name in OD_REASONS}
+    counts_any = {name: int((present & ~c).sum()) for name, c in zip(OD_REASONS[1:], conds[1:])}
+    return {"keep": keep, "reason": reason, "motion": motion, "shape_z": shape_z, "counts": counts, "counts_any": counts_any, "n_frames": n, "n_present": int(present.sum()), "n_keep": int(keep.sum())}
+
+
+def od_bridge(kp: np.ndarray, mask: np.ndarray, frames, box: np.ndarray, size_wh, ecfg: dict, ids):
+    """Thin bridge from our track to the supervisor's input: the frames listed (indices into kp, repeats allowed for the bootstrap) become the present frames of free_problem
+    (21-joint MediaPipe order kept, visibility = mask, joints outside ids hidden; principal point, undistortion and the per-frame Huber width as free_problem makes them). Returns the Problem."""
+    fr = np.asarray(frames, int)
+    trk = {"kp": kp[fr], "mask": mask[fr], "present": np.ones(len(fr), bool), "box": box[fr]}
+    pb, _ = free_problem(trk, size_wh, ecfg, float(ecfg["huber_rel"]), ids=None if ids is None else [int(j) for j in ids])
+    return pb
+
+
+def od_estimate(pb, grid: np.ndarray, fs: dict) -> dict:
+    """free_template as s3_estimate_run calls it (the supervisor's defaults: alt_iters 3, refine, max_frames 120, coarse_n 8) and free_shape3d with fs on that planar result (s3_estimate_run's
+    free_shape3d runs the same free_template first when fs has alt_iters 3 and max_frames 120; otherwise it is computed again with fs)."""
+    A = free_template(pb, grid)
+    same = int(fs.get("alt_iters", 3)) == 3 and int(fs.get("max_frames", 120)) == 120
+    B = free_shape3d(pb, grid, z_rel=fs.get("z_rel", 0.2), alt_iters=int(fs.get("alt_iters", 3)), max_frames=int(fs.get("max_frames", 120)), planar=A if same else None)
+    return {"free_template": A, "free_shape3d": B}
+
+
+def od_boundary(f: float, grid, tol: float = 0.005) -> bool:
+    """The final f on a limit of the f search range (within tol). The coarse profile's minimum on the grid edge (at_grid_edge) is recorded apart: the supervisor's free_template profile can fall
+    all the way to the upper grid end while the LM refinement still finds f inside the range (the synthetic scene of 53 does this)."""
+    return bool(f <= grid[0] * (1 + tol) or f >= grid[-1] / (1 + tol))
+
+
+def od_poses(pb, f: float, T2: np.ndarray, ids, box_long_px: np.ndarray) -> dict:
+    """Per-frame pose of the planar template T2 (rows = joints ids) at f (frame_fit, IPPE) on every frame of pb: tilt of the hand plane to the image plane (degrees, angle between the plane normal
+    and the optical axis), the turn of the hand about its own normal relative to the first frame (degrees, unwrapped), and the reprojection RMS in % of the hand box."""
+    K = K_of(f, pb.cx, pb.cy)
+    ids = np.asarray(ids, int)
+    tilt, turn, res = [], [], []
+    R0 = None
+    for k, (o, v) in enumerate(pb.frames):
+        oo, vv = o[ids], v[ids]
+        if vv.sum() < 4:
+            tilt.append(np.nan)
+            turn.append(np.nan)
+            res.append(np.nan)
+            continue
+        r, R, _ = frame_fit(T2, oo, vv, K)
+        R0 = R if R0 is None else R0
+        M = R0.T @ R
+        tilt.append(float(np.degrees(np.arccos(min(abs(R[2, 2]), 1.0)))))
+        turn.append(float(np.degrees(np.arctan2(M[1, 0], M[0, 0]))))
+        res.append(float(100.0 * np.sqrt(np.mean(r ** 2)) / box_long_px[k]))
+    turn = np.asarray(turn)
+    ok = np.isfinite(turn)
+    if ok.any():
+        turn[ok] = np.degrees(np.unwrap(np.radians(turn[ok])))
+    return {"tilt_deg": np.asarray(tilt), "turn_deg": turn, "res_pct": np.asarray(res)}
+
+
+def od_plane_of(S: np.ndarray) -> np.ndarray:
+    """Best-fitting plane of a 3-D shape (J, 3) -> 2-D template (J, 2) in that plane."""
+    c = S - S.mean(0)
+    return c @ np.linalg.svd(c)[2][:2].T
+
+
+def od_image_turn(kp: np.ndarray, mask: np.ndarray, frames) -> np.ndarray:
+    """Image direction (degrees, unwrapped) of the wrist -> middle MCP vector on the frames listed; NaN where either joint is missing. Independent of f."""
+    fr = np.asarray(frames, int)
+    ok = mask[fr, 0] & mask[fr, 9]
+    v = kp[fr, 9] - kp[fr, 0]
+    a = np.full(len(fr), np.nan)
+    a[ok] = np.degrees(np.unwrap(np.arctan2(v[ok, 1], v[ok, 0])))
+    return a
+
+
+def od_job(args) -> dict:
+    """One estimate of 53: args = (kind, rep, kp, mask, frames, box, size_wh, ecfg, ids, fs, diag). The bridge, both methods, and with diag the pose diagnostics on the selected frames
+    (each method's template at its own f; free_shape3d's shape is flattened to its best plane). A failure is a result."""
+    kind, rep, kp, mask, frames, box, size_wh, ecfg, ids, fs, diag = args
+    os.environ.setdefault("OMP_NUM_THREADS", "1")
+    cv2.setNumThreads(1)
+    W, H = size_wh
+    grid = f_grid(ecfg, max(W, H))
+    t0 = time.time()
+    out = {"kind": kind, "rep": rep}
+    try:
+        pb = od_bridge(kp, mask, frames, box, size_wh, ecfg, ids)
+        r = od_estimate(pb, grid, fs)
+    except Exception as e:                                            # a failure is a result, not a crash of the run
+        out["failed"] = f"{type(e).__name__}: {e}"
+        return out
+    A, B = r["free_template"], r["free_shape3d"]
+    pg = np.asarray(A["profile_f"], float)
+    k = int(np.argmin(A["profile_cost"]))
+    out["free_template"] = {"f": float(A["f"]), "f_grid": float(A["f_grid"]), "at_grid_edge": bool(A["at_grid_edge"]), "boundary": od_boundary(float(A["f"]), grid),
+                            "cost": float(A["cost"]), "profile_f": pg.tolist(), "profile_cost": [float(x) for x in A["profile_cost"]], "sharpness": ft_sharpness(pg, A["profile_cost"], float(A["f"])),
+                            "ba": A.get("ba"), "joint_ids": [int(x) for x in A["joint_ids"]]}
+    out["free_shape3d"] = {"f": float(B["f"]), "f_planar": float(B["f_planar"]), "at_grid_edge": bool(B["at_grid_edge"]), "at_bound": bool(B["at_bound"]),
+                           "boundary": bool(B["at_bound"]) or od_boundary(float(B["f"]), grid), "cost": float(B["cost"]), "relief_rel": float(B["relief_rel"]),
+                           "profile_f": pg.tolist(), "profile_cost": [float(x) for x in B["profile_cost"]], "sharpness": ft_sharpness(pg, B["profile_cost"], float(B["f"])), "ba": B["ba"],
+                           "joint_ids": [int(x) for x in B["joint_ids"]]}
+    out["grid_f"] = [float(grid[0]), float(grid[-1])]
+    if diag:
+        bl = box_long(box[np.asarray(frames, int)])
+        for m, T2 in (("free_template", A["template"]), ("free_shape3d", od_plane_of(np.asarray(B["shape"], float)))):
+            p = od_poses(pb, out[m]["f"], np.asarray(T2, float), out[m]["joint_ids"], bl)
+            out[m]["poses"] = {k2: v.tolist() for k2, v in p.items()}
+            out[m]["template"] = np.asarray(T2, float).tolist()
+    out["elapsed_s"] = float(time.time() - t0)
+    return out
+
+
+def od_blocks(n: int, block: int, rep: int, seed: int) -> np.ndarray:
+    """Block bootstrap positions 0..n-1: blocks of `block` consecutive positions drawn with replacement until n positions (the last block cut)."""
+    rng = np.random.default_rng([int(seed), int(rep)])
+    starts = np.arange(0, n, block)
+    out = []
+    while len(out) < n:
+        s = int(rng.choice(starts))
+        out.extend(range(s, min(s + block, n)))
+    return np.asarray(out[:n], int)
+
+
+def od_ci(fs_boot: list, level: float = 0.95):
+    v = np.asarray([x for x in fs_boot if x is not None and np.isfinite(x)], float)
+    if len(v) < 2:
+        return None
+    a = (1 - level) / 2
+    return [float(np.exp(np.quantile(np.log(v), a))), float(np.exp(np.quantile(np.log(v), 1 - a)))]
+
+
+def od_verdict(est: dict | None, ci, n_keep: int, ref_f: float, vcfg: dict, tilt_med, turn_range) -> dict:
+    """Verdict of 53 (fixed before the run): 판단 불가 when fewer than min_frames frames are kept or the estimate failed; 어려움 when f is on the boundary or outside reject_tol of the reference;
+    가능성 있음 when f is not on the boundary, the bootstrap 95 % interval lies within f x (1 +- ci_tol) and f within accept_tol of the reference; otherwise 판단 보류.
+    Warnings (separate): the median plane tilt outside tilt_range_deg -> 평면 추정 의심; the turn range of the hand on the desk below min_turn_deg -> 회전 부족."""
+    warn = []
+    if tilt_med is not None and np.isfinite(tilt_med) and not (vcfg["tilt_range_deg"][0] <= tilt_med <= vcfg["tilt_range_deg"][1]):
+        warn.append("평면 추정 의심")
+    if turn_range is not None and np.isfinite(turn_range) and turn_range < float(vcfg["min_turn_deg"]):
+        warn.append("회전 부족")
+    if n_keep < int(vcfg["min_frames"]):
+        return {"verdict": "판단 불가", "reason": f"선택된 프레임 {n_keep}장 < {int(vcfg['min_frames'])}장", "warnings": warn}
+    if est is None:
+        return {"verdict": "판단 불가", "reason": "추정 실패", "warnings": warn}
+    f = float(est["f"])
+    err = f / float(ref_f) - 1.0
+    ci_ok = ci is not None and ci[0] >= f * (1 - float(vcfg["ci_tol"])) and ci[1] <= f * (1 + float(vcfg["ci_tol"]))
+    if est["boundary"] or abs(err) > float(vcfg["reject_tol"]):
+        v = "어려움"
+    elif ci_ok and abs(err) <= float(vcfg["accept_tol"]):
+        v = "가능성 있음"
+    else:
+        v = "판단 보류"
+    return {"verdict": v, "err": err, "ci_ok": bool(ci_ok), "boundary": bool(est["boundary"]), "warnings": warn}
+
+
+def od_synthetic(motion: str, f: float = 1655.0, noise_px: float = 0.5, n: int = 60, tilt_deg: float = 45.0, dist_cm: float = 60.0, size_wh=(1920, 1080), seed: int = 0) -> dict:
+    """Synthetic scene of 53: OD_HAND_CM lying on a desk plane seen at tilt_deg (camera optical axis to the desk normal) from dist_cm, the hand moved and / or turned on the desk
+    (motion 'both', 'translate', 'rotate'), pinhole f with the principal point at the image centre, Gaussian noise noise_px. Returns a track {kp (n, 21, 2), mask, present, box} and the size."""
+    W, H = size_wh
+    rng = np.random.default_rng(seed)
+    a = np.radians(tilt_deg)
+    C = np.array([0.0, -dist_cm * np.sin(a), dist_cm * np.cos(a)])
+    z = -C / np.linalg.norm(C)
+    x = np.array([1.0, 0.0, 0.0])
+    R = np.array([x, np.cross(z, x), z])
+    hand = OD_HAND_CM - OD_HAND_CM.mean(0)
+    s = np.linspace(0, 1, n)
+    turn = np.radians(35.0) * np.sin(2 * np.pi * s) if motion in ("both", "rotate") else np.zeros(n)
+    tx = 8.0 * np.sin(2 * np.pi * 1.5 * s + 0.4) if motion in ("both", "translate") else np.zeros(n)
+    ty = 5.0 * np.cos(2 * np.pi * s) if motion in ("both", "translate") else np.zeros(n)
+    kp = np.zeros((n, 21, 2))
+    for i in range(n):
+        c, sn = np.cos(turn[i]), np.sin(turn[i])
+        P = hand @ np.array([[c, sn], [-sn, c]]) + [tx[i], ty[i]]
+        Xc = (np.c_[P, np.zeros(21)] - C) @ R.T
+        kp[i] = f * Xc[:, :2] / Xc[:, 2:3] + [W / 2.0, H / 2.0] + rng.normal(0, noise_px, (21, 2))
+    box = np.c_[kp.min(1) - 20.0, kp.max(1) + 20.0]
+    return {"kp": kp, "mask": np.ones((n, 21), bool), "present": np.ones(n, bool), "box": box, "size": [W, H]}
+
+
+def od_fix_lines(path=None) -> list:
+    """Where the six corrections to the supervisor's code sit in handfocal_estimate.py (line numbers of the corrected spellings inside section 5)."""
+    p = Path(path) if path else Path(__file__).resolve().parent / "handfocal_estimate.py"
+    lines = p.read_text().splitlines()
+    try:
+        lo = next(i for i, s in enumerate(lines) if s.startswith("# 5. 교수님이 보내주신 free_template"))
+    except StopIteration:
+        lo = 0
+    fixes = [("np.c -> np.c_", "np.c_[", "backproject, ba3_refine"), ("_backproject -> backproject", "backproject(", "alt_template"), ("rodrigues -> _rodrigues", "_rodrigues(", "ba_refine, ba3_refine"),
+             ("np.r -> np.r_", "np.r_[", "ba_refine, ba3_refine"), ("lm_schur -> _lm_schur", "_lm_schur(", "ba_refine, ba3_refine"), ("Problem.new -> Problem.__new__", "Problem.__new__(", "_restrict")]
+    out = []
+    for what, tok, where in fixes:
+        nums = [i + 1 for i, s in enumerate(lines) if i > lo and tok in s and not s.lstrip().startswith("#") and not s.lstrip().startswith("def ")]
+        out.append({"fix": what, "functions": where, "lines": nums})
+    return out
+
+
+# ====================================================================================================
 # report  (was HandCalib/hand_focal/report.py)
 # Writers: figures, per_frame.csv, results.json, result.yaml, report.md (Korean). Points only - no video frames or images of the hand.
 # ====================================================================================================

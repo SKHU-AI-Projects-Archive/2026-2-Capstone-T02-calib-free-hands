@@ -4567,5 +4567,147 @@ class H4BSets(unittest.TestCase):
             self.assertNotIn(run.H4_NOTE, t)
 
 
+OD_ECFG = CFG49["pipeline"]["estimate"] if "CFG49" in globals() else yaml.safe_load((ROOT / "configs/49_free_shape3d_7312.yaml").read_text())["pipeline"]["estimate"]
+OD_FS = {"z_rel": 0.2, "alt_iters": 3, "max_frames": 120}
+OD_J16 = list(range(5, 21))
+
+
+class ODSynthetic(unittest.TestCase):
+    def run_od(self, motion):
+        s = hf.od_synthetic(motion)
+        return hf.od_job(("main", 0, s["kp"], s["mask"], np.arange(len(s["kp"])), s["box"], tuple(s["size"]), OD_ECFG, OD_J16, OD_FS, True))
+
+    def test_moved_and_turned_hand_on_a_45_degree_desk_gives_f_within_2_percent(self):
+        r = self.run_od("both")
+        self.assertNotIn("failed", r)
+        self.assertLess(abs(r["free_template"]["f"] / 1655.0 - 1.0), 0.02, r["free_template"]["f"])
+        self.assertFalse(r["free_template"]["boundary"])
+        self.assertLess(abs(np.nanmedian(r["free_template"]["poses"]["tilt_deg"]) - 45.0), 5.0)
+        self.assertGreater(np.nanmax(r["free_template"]["poses"]["turn_deg"]) - np.nanmin(r["free_template"]["poses"]["turn_deg"]), 50.0)
+
+    def test_record_translation_only_and_rotation_only(self):
+        rec = {m: self.run_od(m) for m in ("translate", "rotate")}
+        print("\n53 synthetic (true f 1655): " + ", ".join(f"{m} free_template {r['free_template']['f']:.1f} free_shape3d {r['free_shape3d']['f']:.1f}" for m, r in rec.items() if "failed" not in r))
+        for r in rec.values():
+            self.assertTrue("failed" in r or r["free_template"]["f"] > 0)
+
+
+class ODBridge(unittest.TestCase):
+    def test_bridge_keeps_the_joint_order_visibility_and_the_listed_frames(self):
+        s = hf.od_synthetic("both", n=12)
+        mask = s["mask"].copy()
+        mask[3, 7] = False
+        fr = [2, 3, 3, 5]
+        pb = hf.od_bridge(s["kp"], mask, fr, s["box"], tuple(s["size"]), OD_ECFG, OD_J16)
+        self.assertEqual(len(pb.frames), 4)
+        for (o, v), i in zip(pb.frames, fr):
+            np.testing.assert_allclose(o, s["kp"][i])                                                    # same 21-joint order, pixel coordinates (no distortion)
+            self.assertEqual(list(np.flatnonzero(v)), [j for j in OD_J16 if mask[i, j]])
+        self.assertAlmostEqual(pb.cx, 960.0)
+        self.assertAlmostEqual(pb.cy, 540.0)
+        pb21 = hf.od_bridge(s["kp"], mask, fr, s["box"], tuple(s["size"]), OD_ECFG, None)
+        self.assertEqual(int(pb21.frames[0][1].sum()), 21)
+
+    def test_blocks_are_consecutive_and_fixed_by_the_seed(self):
+        b = hf.od_blocks(35, 10, 3, 42)
+        self.assertEqual(len(b), 35)
+        np.testing.assert_array_equal(b, hf.od_blocks(35, 10, 3, 42))
+        self.assertTrue(set(np.flatnonzero(np.diff(b) != 1) + 1) <= set(range(0, 35, 1)))
+        self.assertTrue(all(x in range(35) for x in b))
+
+
+class ODSelect(unittest.TestCase):
+    def test_each_condition_removes_its_frames(self):
+        s = hf.od_synthetic("both", n=40)
+        kp = s["kp"].copy()
+        for i in range(40):                                                                             # still hand: repeat each pose for 4 frames
+            kp[i] = s["kp"][(i // 4) * 4]
+        present = np.ones(40, bool)
+        present[0] = False
+        box = s["box"].copy()
+        box[10] = [0.0, 0.0, 500.0, 500.0]                                                              # touches the border
+        kp[21, 8] = kp[21, 7] + 3 * (kp[21, 8] - kp[21, 7])                                             # a long fingertip segment: shape change
+        r = hf.od_select(kp, s["mask"], present, box, tuple(s["size"]), {"still_frac": 0.005, "shape_z_max": 4.0})
+        self.assertEqual(r["reason"][0], "검출 실패")
+        self.assertEqual(r["reason"][10], "가장자리 접촉")
+        self.assertEqual(r["reason"][21], "모양 변화")
+        self.assertEqual(r["reason"][4 * 6 + 3], "움직임")                                               # last frame of a block: next frame moved
+        self.assertTrue(r["keep"][4 * 6 + 1])
+        self.assertEqual(r["n_keep"], int(r["keep"].sum()))
+        self.assertEqual(sum(r["counts"].values()) + r["n_keep"], 40)
+
+
+class ODVerdict(unittest.TestCase):
+    VC = {"accept_tol": 0.10, "ci_tol": 0.10, "reject_tol": 0.25, "min_frames": 30, "min_turn_deg": 20, "tilt_range_deg": [30, 60]}
+
+    def test_rules(self):
+        v = lambda f, ci, n=50, b=False, tilt=45.0, turn=40.0: hf.od_verdict({"f": f, "boundary": b}, ci, n, 1553.0, self.VC, tilt, turn)      # noqa: E731
+        self.assertEqual(v(1600, [1500, 1700])["verdict"], "가능성 있음")
+        self.assertEqual(v(1600, [1300, 1900])["verdict"], "판단 보류")
+        self.assertEqual(v(1800, [1700, 1900])["verdict"], "판단 보류")
+        self.assertEqual(v(2000, [1900, 2100])["verdict"], "어려움")
+        self.assertEqual(v(1600, [1590, 1610], b=True)["verdict"], "어려움")
+        self.assertEqual(v(1600, [1500, 1700], n=29)["verdict"], "판단 불가")
+        self.assertEqual(v(1600, [1500, 1700], tilt=70.0)["warnings"], ["평면 추정 의심"])
+        self.assertEqual(v(1600, [1500, 1700], turn=10.0)["warnings"], ["회전 부족"])
+        self.assertEqual(hf.od_verdict(None, None, 50, 1553.0, self.VC, None, None)["verdict"], "판단 불가")
+
+    def test_boundary_is_the_final_f_on_the_range_limit(self):
+        g = np.geomspace(672.0, 3072.0, 60)
+        self.assertTrue(hf.od_boundary(3072.0, g))
+        self.assertTrue(hf.od_boundary(672.5, g))
+        self.assertFalse(hf.od_boundary(1600.0, g))
+
+
+class ODReports(unittest.TestCase):
+    def test_reports_keep_the_reference_in_summary_only_and_hold_no_location_or_device_tags(self):
+        own = yaml.safe_load((ROOT / "configs/53_oblique_desk.yaml").read_text()) if (ROOT / "configs/53_oblique_desk.yaml").exists() else None
+        if own is None:
+            self.skipTest("config 53 not present")
+        cfg = run.od_load(own)
+        s = hf.od_synthetic("both", n=40)
+        sel = {}
+        res = {}
+        for det in cfg["detectors"]:
+            r = hf.od_select(s["kp"], s["mask"], s["present"], s["box"], tuple(s["size"]), {"still_frac": 1.0, "shape_z_max": 100.0})
+            ki = np.flatnonzero(r["keep"])
+            r.update({"keep_idx": ki.tolist(), "times": (np.arange(40) / 15.0).tolist(), "image_turn_deg": hf.od_image_turn(s["kp"], s["mask"], ki).tolist(), "image_turn_range_deg": 30.0, "move_x_pct": 10.0, "move_y_pct": 5.0})
+            sel[det] = r
+            for sn, ids, _ in run.od_sets(cfg):
+                main = hf.od_job(("main", 0, s["kp"], s["mask"], ki, s["box"], tuple(s["size"]), OD_ECFG, ids, OD_FS, True))
+                boot = [hf.od_job(("boot", k, s["kp"], s["mask"], ki[hf.od_blocks(len(ki), 10, k, 42)], s["box"], tuple(s["size"]), OD_ECFG, ids, OD_FS, False)) for k in range(2)]
+                res[(det, sn)] = {"main": main, "boot": boot}
+        ana = run.od_analyze(res, sel, cfg)
+        synth = {"both": res[(cfg["detectors"][0], "j16")]["main"]}
+        with tempfile.TemporaryDirectory() as d:
+            d = Path(d)
+            (d / "figures").mkdir()
+            run.od_figures(d / "figures", res, sel, cfg)
+            run.od_report(d / "report.md", res, sel, ana, cfg, {"mediapipe_hands": {"free_template": (1400.0, 4), "free_shape3d": (1300.0, 4)}}, synth, hf.od_fix_lines())
+            run.od_summary(d / "summary.md", ana, cfg, sel)
+            (d / "results.json").write_text(json.dumps(hf.jsonable({"selection": {k: {kk: v[kk] for kk in ("n_frames", "n_present", "n_keep", "counts", "counts_any")} for k, v in sel.items()},
+                                                                    "analysis": ana, "synthetic": synth}), ensure_ascii=False))
+            (d / "metadata.json").write_text(json.dumps({"git": {"commit": "abcdef1234", "git_dirty": False}}))
+            cfg2 = copy.deepcopy(cfg)
+            cfg2["output"]["results_yaml"] = str(d / "r.yaml")
+            y = Path(run.od_results_yaml(d, cfg2)).read_text()
+            summ, rep = (d / "summary.md").read_text(), (d / "report.md").read_text()
+            self.assertTrue(summ.startswith("**판정 (mediapipe_hands j16 free_template): "))
+            self.assertIn("1553", summ)
+            for t in ("1553", "1655 대비"):
+                self.assertNotIn(t, y)
+            self.assertNotIn("1553", rep)
+            for tag in ("com.apple", "GPS", "location", "iPhone", "+37.", "make", "Make"):
+                for name, text in (("summary", summ), ("report", rep), ("yaml", y)):
+                    self.assertNotIn(tag, text, (tag, name))
+            self.assertEqual(len(hf.od_fix_lines()), 6)
+            self.assertTrue(all(x["lines"] for x in hf.od_fix_lines()))
+            for line in (summ + rep).splitlines():
+                if line.startswith("| ") and "---" not in line:
+                    self.assertGreater(len(line.split("|")), 2)
+            self.assertTrue((d / "figures/cost_profile_free_template.png").exists())
+            self.assertTrue((d / "figures/frames_mediapipe_hands.png").exists())
+
+
 if __name__ == "__main__":
     unittest.main()
