@@ -1,0 +1,17 @@
+# 52b: 52 (configs/52_free_shape3d_hand_sets.yaml, unchanged) excluded every video: no reference frame, because the wrist marker lies 0.088-0.095 x hand box from MediaPipe's wrist (naming radius 0.08).
+# User's choice 2026-11-02 ("추적은 42 그대로"): the tracking of 42 is not changed (used markers 5, 6, 9, 10, 13, 14, 17, 18 for the reference frame, the 75 % rule and the homography check; the wrist marker
+# is followed as in 42, NaN where it is not matched); only the markers that enter free_shape3d are each set below. Everything else is 42's config read from base_config. Fixed before the run.
+experiment:
+  name: 52b_free_shape3d_hand_sets_42track
+  seed: 42
+base_config: configs/42_free_shape3d_hand.yaml
+point_sets:
+  palm5: [0, 5, 9, 13, 17]                          # wrist + the four finger MCPs
+  wrist_mcp_pip9: [0, 5, 6, 9, 10, 13, 14, 17, 18]  # 42's 8 (MCP, PIP) + wrist
+compare_42: runs/42_free_shape3d_hand/20261029T085442Z/results.json
+code_52b: {branch: exp/52-free-shape3d-hand-sets, commit: bc3285b, modules: [HandCalib/run.py, HandCalib/handfocal_report.py]}
+n_workers: 16
+workers: 12
+output:
+  root: runs/52b_free_shape3d_hand_sets_42track
+  results_yaml: results/52b_free_shape3d_hand_sets_42track.yaml
