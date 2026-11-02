@@ -1,0 +1,772 @@
+experiment: 56_continuous_klt
+run: runs/56_continuous_klt/20261102T073343Z
+code_commit: dcdacb6
+git_dirty_at_run: false
+note: 실험 54의 비스듬한 책상 영상 12개를 30 fps로 뽑아, 손 영역의 특징점을 이웃 프레임끼리 KLT로 따라가고 프레임 사이 호모그래피를
+  기준 프레임(손이 검출된 프레임 중 가운데)에서 앞뒤로 이어 붙였다. 기준 프레임의 MediaPipe 관절을 이어 붙인 호모그래피로 옮긴 점을
+  각 프레임의 점으로 써서(검출기는 기준 프레임과 손 영역에만 씀), 추적이 이어지고 화면 가장자리에 닿지 않는 모든 프레임을 교수님 free_template·free_shape3d(od_job
+  그대로)에 넣었다. 부트스트랩은 1초 블록, 판정은 실험 53의 규칙이고 실행 전에 고정했다. 기준 f와의 비교는 summary.md에만 있다.
+tracking_rule:
+  fps: 30
+  dilate_frac: 0.03
+  max_corners: 400
+  quality: 0.01
+  min_distance: 7
+  block: 7
+  win: 21
+  levels: 3
+  fb_px: 1.0
+  threshold_px: 1.5
+  min_inliers: 20
+verdict_target:
+  detector: mediapipe_hands
+  joint_set: j16
+  method: free_template
+videos:
+  IMG_7346.MOV:
+    distance_cm: 50
+    hand: right
+    verdict: 판단 보류
+    reason: null
+    warnings: []
+    tracking:
+      n_frames: 678
+      ref: 338
+      ref_t: 11.266666666666667
+      breaks: 0
+      n_valid: 678
+      n_edge: 0
+      n_use: 678
+      inl_median: 400.0
+      loops:
+        뒤쪽:
+          median_px: 0.6396004388049645
+          max_px: 1.7488249465814838
+          frames: 339
+        앞쪽:
+          median_px: 1.8580753999943918
+          max_px: 3.934635355765679
+          frames: 338
+      det_dist_median_pct: 2.9945946160819883
+      det_dist_p90_pct: 4.5567422700103934
+      box_long_px: 607.0158312320709
+    estimates:
+      j16:
+        free_template:
+          f_px: 1864.7
+          ci95_px:
+          - 1671.7
+          - 2101.6
+          boundary: false
+          turn_range_deg: 103.4
+          tilt_median_deg: 56.4
+        free_shape3d:
+          f_px: 1870.6
+          ci95_px:
+          - 1651.1
+          - 2113.5
+          boundary: false
+          turn_range_deg: 103.1
+          tilt_median_deg: 56.2
+      j21:
+        free_template:
+          f_px: 1764.2
+          ci95_px:
+          - 1575.1
+          - 2069.6
+          boundary: false
+          turn_range_deg: 108.4
+          tilt_median_deg: 55.8
+        free_shape3d:
+          f_px: 1723.3
+          ci95_px:
+          - 1586.5
+          - 1917.7
+          boundary: false
+          turn_range_deg: 116.4
+          tilt_median_deg: 55.7
+  IMG_7347.MOV:
+    distance_cm: 50
+    hand: left
+    verdict: 어려움
+    reason: null
+    warnings: []
+    tracking:
+      n_frames: 658
+      ref: 328
+      ref_t: 10.933333333333334
+      breaks: 0
+      n_valid: 658
+      n_edge: 0
+      n_use: 658
+      inl_median: 398.0
+      loops:
+        뒤쪽:
+          median_px: 0.9546470233478793
+          max_px: 1.9023893567135515
+          frames: 329
+        앞쪽:
+          median_px: 2.529479129451565
+          max_px: 6.514081038360811
+          frames: 328
+      det_dist_median_pct: 1.6943759150311672
+      det_dist_p90_pct: 3.404841363836316
+      box_long_px: 566.2876739501953
+    estimates:
+      j16:
+        free_template:
+          f_px: 2215.9
+          ci95_px:
+          - 2035.1
+          - 3072.0
+          boundary: false
+          turn_range_deg: 82.9
+          tilt_median_deg: 55.3
+        free_shape3d:
+          f_px: 2246.5
+          ci95_px:
+          - 2068.7
+          - 2649.0
+          boundary: false
+          turn_range_deg: 175.3
+          tilt_median_deg: 55.4
+      j21:
+        free_template:
+          f_px: 2285.4
+          ci95_px:
+          - 2130.3
+          - 2699.5
+          boundary: false
+          turn_range_deg: 77.5
+          tilt_median_deg: 56.5
+        free_shape3d:
+          f_px: 2300.3
+          ci95_px:
+          - 2136.3
+          - 2637.2
+          boundary: false
+          turn_range_deg: 78.4
+          tilt_median_deg: 56.8
+  IMG_7348.MOV:
+    distance_cm: 50
+    hand: right
+    verdict: 판단 보류
+    reason: null
+    warnings: []
+    tracking:
+      n_frames: 618
+      ref: 308
+      ref_t: 10.266666666666667
+      breaks: 0
+      n_valid: 618
+      n_edge: 0
+      n_use: 618
+      inl_median: 400.0
+      loops:
+        뒤쪽:
+          median_px: 0.4613155472009792
+          max_px: 0.902475522344745
+          frames: 309
+        앞쪽:
+          median_px: 0.6029731858782709
+          max_px: 1.2594906254488738
+          frames: 308
+      det_dist_median_pct: 3.260745675448871
+      det_dist_p90_pct: 4.691295439077109
+      box_long_px: 550.5044467449188
+    estimates:
+      j16:
+        free_template:
+          f_px: 1853.0
+          ci95_px:
+          - 1608.8
+          - 3072.0
+          boundary: false
+          turn_range_deg: 97.3
+          tilt_median_deg: 55.2
+        free_shape3d:
+          f_px: 1944.5
+          ci95_px:
+          - 1592.2
+          - 2269.4
+          boundary: false
+          turn_range_deg: 95.9
+          tilt_median_deg: 55.3
+      j21:
+        free_template:
+          f_px: 1805.8
+          ci95_px:
+          - 1412.8
+          - 2433.9
+          boundary: false
+          turn_range_deg: 101.5
+          tilt_median_deg: 54.3
+        free_shape3d:
+          f_px: 1749.4
+          ci95_px:
+          - 1418.6
+          - 2048.7
+          boundary: false
+          turn_range_deg: 112.5
+          tilt_median_deg: 54.2
+  IMG_7349.MOV:
+    distance_cm: 50
+    hand: left
+    verdict: 어려움
+    reason: null
+    warnings: []
+    tracking:
+      n_frames: 683
+      ref: 341
+      ref_t: 11.366666666666667
+      breaks: 0
+      n_valid: 683
+      n_edge: 0
+      n_use: 683
+      inl_median: 395.5
+      loops:
+        뒤쪽:
+          median_px: 1.6845761063187132
+          max_px: 3.4394075299167786
+          frames: 341
+        앞쪽:
+          median_px: 1.7846426560176616
+          max_px: 13.999184193528036
+          frames: 341
+      det_dist_median_pct: 2.827662753217066
+      det_dist_p90_pct: 3.509697516790884
+      box_long_px: 611.5493545532227
+    estimates:
+      j16:
+        free_template:
+          f_px: 2916.7
+          ci95_px:
+          - 2398.8
+          - 3072.0
+          boundary: false
+          turn_range_deg: 87.5
+          tilt_median_deg: 55.7
+        free_shape3d:
+          f_px: 2838.9
+          ci95_px:
+          - 2283.3
+          - 3072.0
+          boundary: false
+          turn_range_deg: 162.8
+          tilt_median_deg: 55.9
+      j21:
+        free_template:
+          f_px: 2952.3
+          ci95_px:
+          - 2405.0
+          - 3072.0
+          boundary: false
+          turn_range_deg: 80.4
+          tilt_median_deg: 55.9
+        free_shape3d:
+          f_px: 2852.3
+          ci95_px:
+          - 2282.1
+          - 3072.0
+          boundary: false
+          turn_range_deg: 79.0
+          tilt_median_deg: 55.8
+  IMG_7350.MOV:
+    distance_cm: 60
+    hand: right
+    verdict: 어려움
+    reason: null
+    warnings:
+    - 평면 추정 의심
+    tracking:
+      n_frames: 700
+      ref: 349
+      ref_t: 11.633333333333333
+      breaks: 0
+      n_valid: 700
+      n_edge: 0
+      n_use: 700
+      inl_median: 343.0
+      loops:
+        뒤쪽:
+          median_px: 1.0002311946757978
+          max_px: 2.5666069759522294
+          frames: 350
+        앞쪽:
+          median_px: 1.1960940304307204
+          max_px: 4.030786772658065
+          frames: 349
+      det_dist_median_pct: 1.6258400784923064
+      det_dist_p90_pct: 2.751415914008353
+      box_long_px: 527.8395509719849
+    estimates:
+      j16:
+        free_template:
+          f_px: 3072.0
+          ci95_px:
+          - 1921.3
+          - 3072.0
+          boundary: true
+          turn_range_deg: 85.8
+          tilt_median_deg: 61.2
+        free_shape3d:
+          f_px: 2427.6
+          ci95_px:
+          - 1739.6
+          - 3072.0
+          boundary: false
+          turn_range_deg: 90.2
+          tilt_median_deg: 58.3
+      j21:
+        free_template:
+          f_px: 2584.9
+          ci95_px:
+          - 1720.8
+          - 3072.0
+          boundary: false
+          turn_range_deg: 102.2
+          tilt_median_deg: 59.0
+        free_shape3d:
+          f_px: 2120.6
+          ci95_px:
+          - 1657.6
+          - 2687.0
+          boundary: false
+          turn_range_deg: 128.0
+          tilt_median_deg: 55.9
+  IMG_7351.MOV:
+    distance_cm: 60
+    hand: left
+    verdict: 어려움
+    reason: null
+    warnings: []
+    tracking:
+      n_frames: 645
+      ref: 322
+      ref_t: 10.733333333333333
+      breaks: 0
+      n_valid: 645
+      n_edge: 0
+      n_use: 645
+      inl_median: 243.5
+      loops:
+        뒤쪽:
+          median_px: 1.0942293933885425
+          max_px: 2.359664461656359
+          frames: 322
+        앞쪽:
+          median_px: 1.6802827636325957
+          max_px: 4.252702795599366
+          frames: 322
+      det_dist_median_pct: 1.7539583393082658
+      det_dist_p90_pct: 3.4882992642092936
+      box_long_px: 468.72689151763916
+    estimates:
+      j16:
+        free_template:
+          f_px: 2103.7
+          ci95_px:
+          - 1346.4
+          - 2823.8
+          boundary: false
+          turn_range_deg: 95.0
+          tilt_median_deg: 54.1
+        free_shape3d:
+          f_px: 2078.2
+          ci95_px:
+          - 1426.6
+          - 2624.8
+          boundary: false
+          turn_range_deg: 170.0
+          tilt_median_deg: 54.6
+      j21:
+        free_template:
+          f_px: 2657.5
+          ci95_px:
+          - 1608.5
+          - 3072.0
+          boundary: false
+          turn_range_deg: 93.8
+          tilt_median_deg: 56.8
+        free_shape3d:
+          f_px: 2476.1
+          ci95_px:
+          - 1608.1
+          - 3072.0
+          boundary: false
+          turn_range_deg: 72.7
+          tilt_median_deg: 57.0
+  IMG_7352.MOV:
+    distance_cm: 60
+    hand: right
+    verdict: 판단 보류
+    reason: null
+    warnings: []
+    tracking:
+      n_frames: 707
+      ref: 353
+      ref_t: 11.766666666666667
+      breaks: 0
+      n_valid: 707
+      n_edge: 0
+      n_use: 707
+      inl_median: 290.0
+      loops:
+        뒤쪽:
+          median_px: 1.100094347939056
+          max_px: 2.40217958429585
+          frames: 353
+        앞쪽:
+          median_px: 0.9477137511876765
+          max_px: 2.31994417199255
+          frames: 353
+      det_dist_median_pct: 1.9376167988276687
+      det_dist_p90_pct: 3.0881661312295576
+      box_long_px: 539.4142913818359
+    estimates:
+      j16:
+        free_template:
+          f_px: 1915.7
+          ci95_px:
+          - 1389.8
+          - 3071.8
+          boundary: false
+          turn_range_deg: 110.1
+          tilt_median_deg: 52.4
+        free_shape3d:
+          f_px: 1573.2
+          ci95_px:
+          - 1370.9
+          - 2018.3
+          boundary: false
+          turn_range_deg: 109.6
+          tilt_median_deg: 50.4
+      j21:
+        free_template:
+          f_px: 1493.4
+          ci95_px:
+          - 1284.9
+          - 1827.8
+          boundary: false
+          turn_range_deg: 116.0
+          tilt_median_deg: 48.6
+        free_shape3d:
+          f_px: 1427.2
+          ci95_px:
+          - 1277.9
+          - 1634.2
+          boundary: false
+          turn_range_deg: 126.0
+          tilt_median_deg: 48.8
+  IMG_7353.MOV:
+    distance_cm: 60
+    hand: left
+    verdict: 판단 보류
+    reason: null
+    warnings: []
+    tracking:
+      n_frames: 681
+      ref: 340
+      ref_t: 11.333333333333334
+      breaks: 0
+      n_valid: 681
+      n_edge: 0
+      n_use: 681
+      inl_median: 398.0
+      loops:
+        뒤쪽:
+          median_px: 1.3564407936321854
+          max_px: 2.2695696536722965
+          frames: 340
+        앞쪽:
+          median_px: 1.7010306677529643
+          max_px: 5.930706962612629
+          frames: 340
+      det_dist_median_pct: 2.105606002213306
+      det_dist_p90_pct: 4.530364584806291
+      box_long_px: 444.3452253341675
+    estimates:
+      j16:
+        free_template:
+          f_px: 1569.6
+          ci95_px:
+          - 1291.9
+          - 2913.5
+          boundary: false
+          turn_range_deg: 81.3
+          tilt_median_deg: 54.1
+        free_shape3d:
+          f_px: 1528.0
+          ci95_px:
+          - 1281.4
+          - 3072.0
+          boundary: false
+          turn_range_deg: 205.7
+          tilt_median_deg: 55.2
+      j21:
+        free_template:
+          f_px: 1824.3
+          ci95_px:
+          - 1532.8
+          - 3072.0
+          boundary: false
+          turn_range_deg: 79.0
+          tilt_median_deg: 57.8
+        free_shape3d:
+          f_px: 1804.3
+          ci95_px:
+          - 1511.4
+          - 3072.0
+          boundary: false
+          turn_range_deg: 96.9
+          tilt_median_deg: 59.3
+  IMG_7354.MOV:
+    distance_cm: 75
+    hand: right
+    verdict: 어려움
+    reason: null
+    warnings:
+    - 평면 추정 의심
+    tracking:
+      n_frames: 624
+      ref: 311
+      ref_t: 10.366666666666667
+      breaks: 0
+      n_valid: 624
+      n_edge: 0
+      n_use: 624
+      inl_median: 180.0
+      loops:
+        뒤쪽:
+          median_px: 1.6309560177362483
+          max_px: 3.626131584314776
+          frames: 312
+        앞쪽:
+          median_px: 1.3298098663775928
+          max_px: 3.9418788378860974
+          frames: 311
+      det_dist_median_pct: 2.0454386727042553
+      det_dist_p90_pct: 3.6416968516792854
+      box_long_px: 385.961918592453
+    estimates:
+      j16:
+        free_template:
+          f_px: 3072.0
+          ci95_px:
+          - 2643.2
+          - 3072.0
+          boundary: true
+          turn_range_deg: 78.3
+          tilt_median_deg: 64.3
+        free_shape3d:
+          f_px: 3072.0
+          ci95_px:
+          - 2099.3
+          - 3072.0
+          boundary: true
+          turn_range_deg: 151.4
+          tilt_median_deg: 66.3
+      j21:
+        free_template:
+          f_px: 3072.0
+          ci95_px:
+          - 1975.2
+          - 3072.0
+          boundary: true
+          turn_range_deg: 106.8
+          tilt_median_deg: 64.5
+        free_shape3d:
+          f_px: 3072.0
+          ci95_px:
+          - 1768.0
+          - 3072.0
+          boundary: true
+          turn_range_deg: 154.8
+          tilt_median_deg: 66.1
+  IMG_7355.MOV:
+    distance_cm: 75
+    hand: left
+    verdict: 판단 보류
+    reason: null
+    warnings: []
+    tracking:
+      n_frames: 609
+      ref: 304
+      ref_t: 10.133333333333333
+      breaks: 0
+      n_valid: 609
+      n_edge: 0
+      n_use: 609
+      inl_median: 229.0
+      loops:
+        뒤쪽:
+          median_px: 2.337359299836752
+          max_px: 5.859858666974275
+          frames: 304
+        앞쪽:
+          median_px: 1.5624672929389163
+          max_px: 5.824995034541097
+          frames: 304
+      det_dist_median_pct: 3.4011970462649908
+      det_dist_p90_pct: 5.839113522650223
+      box_long_px: 337.7082853317261
+    estimates:
+      j16:
+        free_template:
+          f_px: 1559.4
+          ci95_px:
+          - 1366.7
+          - 2558.7
+          boundary: false
+          turn_range_deg: 110.4
+          tilt_median_deg: 48.9
+        free_shape3d:
+          f_px: 1651.9
+          ci95_px:
+          - 1406.2
+          - 2567.3
+          boundary: false
+          turn_range_deg: 186.8
+          tilt_median_deg: 52.0
+      j21:
+        free_template:
+          f_px: 1597.6
+          ci95_px:
+          - 1388.1
+          - 2500.1
+          boundary: false
+          turn_range_deg: 107.5
+          tilt_median_deg: 48.4
+        free_shape3d:
+          f_px: 1604.7
+          ci95_px:
+          - 1392.7
+          - 2904.8
+          boundary: false
+          turn_range_deg: 128.1
+          tilt_median_deg: 50.1
+  IMG_7356.MOV:
+    distance_cm: 75
+    hand: right
+    verdict: 어려움
+    reason: null
+    warnings:
+    - 평면 추정 의심
+    tracking:
+      n_frames: 627
+      ref: 313
+      ref_t: 10.433333333333334
+      breaks: 0
+      n_valid: 627
+      n_edge: 0
+      n_use: 627
+      inl_median: 181.0
+      loops:
+        뒤쪽:
+          median_px: 1.1005454569705286
+          max_px: 1.9324775560488083
+          frames: 313
+        앞쪽:
+          median_px: 2.579492967996235
+          max_px: 6.982814860412533
+          frames: 313
+      det_dist_median_pct: 1.565439984940609
+      det_dist_p90_pct: 2.2165700079953683
+      box_long_px: 418.95509147644043
+    estimates:
+      j16:
+        free_template:
+          f_px: 3072.0
+          ci95_px:
+          - 2738.9
+          - 3072.0
+          boundary: true
+          turn_range_deg: 50.0
+          tilt_median_deg: 66.7
+        free_shape3d:
+          f_px: 3072.0
+          ci95_px:
+          - 3072.0
+          - 3072.0
+          boundary: true
+          turn_range_deg: 218.8
+          tilt_median_deg: 67.9
+      j21:
+        free_template:
+          f_px: 3072.0
+          ci95_px:
+          - 2657.6
+          - 3072.0
+          boundary: true
+          turn_range_deg: 93.7
+          tilt_median_deg: 67.5
+        free_shape3d:
+          f_px: 3072.0
+          ci95_px:
+          - 2496.7
+          - 3072.0
+          boundary: true
+          turn_range_deg: 166.1
+          tilt_median_deg: 67.9
+  IMG_7357.MOV:
+    distance_cm: 75
+    hand: left
+    verdict: 판단 보류
+    reason: null
+    warnings: []
+    tracking:
+      n_frames: 601
+      ref: 300
+      ref_t: 10.0
+      breaks: 0
+      n_valid: 601
+      n_edge: 0
+      n_use: 601
+      inl_median: 227.0
+      loops:
+        뒤쪽:
+          median_px: 1.3003557291326775
+          max_px: 2.616124077245951
+          frames: 300
+        앞쪽:
+          median_px: 2.587802604094972
+          max_px: 10.391392265954961
+          frames: 300
+      det_dist_median_pct: 2.478391652404752
+      det_dist_p90_pct: 4.705089498253796
+      box_long_px: 350.7355556488037
+    estimates:
+      j16:
+        free_template:
+          f_px: 1797.1
+          ci95_px:
+          - 1520.6
+          - 3032.5
+          boundary: false
+          turn_range_deg: 102.9
+          tilt_median_deg: 54.3
+        free_shape3d:
+          f_px: 1774.6
+          ci95_px:
+          - 1500.8
+          - 3072.0
+          boundary: false
+          turn_range_deg: 178.6
+          tilt_median_deg: 54.6
+      j21:
+        free_template:
+          f_px: 1933.1
+          ci95_px:
+          - 1656.6
+          - 2762.0
+          boundary: false
+          turn_range_deg: 93.0
+          tilt_median_deg: 55.1
+        free_shape3d:
+          f_px: 1908.3
+          ci95_px:
+          - 1612.7
+          - 2735.2
+          boundary: false
+          turn_range_deg: 72.5
+          tilt_median_deg: 55.1
