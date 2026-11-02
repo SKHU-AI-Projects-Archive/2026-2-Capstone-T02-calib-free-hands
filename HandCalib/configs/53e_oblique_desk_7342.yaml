@@ -1,0 +1,48 @@
+# 53e: experiment 53 repeated unchanged on IMG_7342.MOV (user 2026-11-02: "7339, 7342 영상으로 실험 다시 해줘"). Every setting is 53's (configs/53_oblique_desk.yaml, unchanged); only the video file,
+# the experiment name and the output paths differ. Camera angle, distance, palm-down and no markers are assumed the same as 53 (the request names only the files). Code: 53's commit, nothing changed.
+# 53: oblique camera (about 45 deg to the desk), the hand flat on the desk (palm down) moved and turned on it; no front window, no front template. Preliminary (one video).
+# Estimators: the supervisor's free_template and free_shape3d (handfocal_estimate.py section 5, unchanged) fed through od_bridge (the selected frames become free_problem's present frames).
+# User's decisions 2026-11-02, fixed before the run: ref_f 1553 px (the 46 / 49 session value, user-provided, not measured again in this session) - the verdict uses it only, the error against 1655 is
+# written in summary.md for the record; main joint set = 16 points (45 / 49 / 51: wrist and thumb out), record = 21 points (the supervisor's default ids=None); no markers, the main target is
+# mediapipe's free_template; fewer than 30 selected frames -> 판단 불가; turn range on the desk below 20 deg -> warning 회전 부족; still threshold 0.5 % and the edge rule unchanged, the frames each
+# condition removes are reported; bootstrap 100 repetitions (seed fixed); free_template is called as s3_estimate_run calls it (the supervisor's defaults), the values used are written in report.md.
+# Choices made by me before the run (no result seen): shape_z_max 4 (robust z of 11 shape features); 경계 = the final f on a limit of the f range (the coarse 8-point profile's edge flag is recorded
+# apart, because in the synthetic check the supervisor's coarse profile falls to the upper grid end while the LM refinement recovers f); the turn range of the warning comes from the main estimate's
+# poses (the image direction of the hand when there is no estimate).
+experiment:
+  name: 53e_oblique_desk_7342
+  seed: 42
+base_config: configs/49_free_shape3d_7312.yaml     # read only: pipeline (frame extraction, f grid 0.35-1.6 x long side / 60 points, Huber 0.02, principal point centre, no distortion), mediapipe settings, free_shape3d
+mm_config: configs/47_mmpose_hand_detectors.yaml   # read only: MMPose settings (mediapipe boxes, TF32 off, conf_min 0.3)
+video: {file: IMG_7342.MOV, camera_angle_deg: 45, distance_cm: 60, palm_down: true, markers: false}
+input_dir: /home/juson/data/hand_focal_videos
+ref_f:
+  value: 1553
+  source: 실험 46·49 세션 값(사용자 제공), 이 영상 세션에서 다시 재지 않음
+  record: 1655                                     # error against it only in summary.md, for the record
+markers: {enabled: false}                          # (the 35c marker path needs a front window; not part of this run)
+detectors: [mediapipe_hands, mmhand_scnet, mmhand_hrnetv2_dark]
+selection:
+  still_frac: 0.005                                # median joint movement to the previous / next detected frame (the larger) < this x hand box long side
+  shape_z_max: 4.0                                 # every shape feature within this robust z of the video median
+joint_sets:
+  main: {name: j16, ids: [5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20]}
+  record:
+    - {name: j21, ids: null}
+bootstrap: {n: 100, block: 10, seed: 42, level: 0.95}
+verdict:
+  main: {detector: mediapipe_hands, joint_set: j16, method: free_template}
+  accept_tol: 0.10                                 # 가능성 있음: within +-10 % of ref_f ...
+  ci_tol: 0.10                                     # ... and the bootstrap 95 % interval within f x (1 +- 0.10), f not on the boundary
+  reject_tol: 0.25                                 # 어려움: outside +-25 % of ref_f or f on the boundary
+  min_frames: 30                                   # 판단 불가 below
+  min_turn_deg: 20                                 # warning 회전 부족 below
+  tilt_range_deg: [30, 60]                         # warning 평면 추정 의심 outside
+compare_49: {results: runs/51_free_shape3d_mmpose/20261030T072744Z/results.json, set: 실험 49 영상, distance_cm: 60}
+overlay_frames: 3
+code_53: {branch: exp/53-oblique-desk, base_commit: 7cc6944, commit: e7c4955, modules: [HandCalib/handfocal_report.py, HandCalib/run.py]}
+n_workers: 4
+workers: 24
+output:
+  root: runs/53e_oblique_desk_7342
+  results_yaml: results/53e_oblique_desk_7342.yaml
