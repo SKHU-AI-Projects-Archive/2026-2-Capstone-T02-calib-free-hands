@@ -1,0 +1,262 @@
+experiment: 53e_oblique_desk_7342
+run: runs/53e_oblique_desk_7342/20261102T033958Z
+code_commit: b99560e
+git_dirty_at_run: false
+note: '카메라를 책상 면에 대해 약 45°로 두고, 손바닥을 책상에 평평하게 댄 채 옮기고 돌린 영상 하나로 f를 추정한 예비 실험이다. 정면
+  구간과 정면 템플릿은 쓰지 않고, 교수님 코드(free_template, free_shape3d, 고치지 않음)에 우리 추적 결과를 얇은 연결
+  함수(od_bridge: 선택된 프레임만 free_problem에 넘김)로 넣었다. 프레임 선택(검출, 가장자리, 정지, 손 모양), 블록 부트스트랩,
+  판정 규칙은 실행 전에 yaml에 고정했다. 기준 f와의 비교는 summary.md에만 있다.'
+video:
+  file: IMG_7342.MOV
+  camera_angle_deg: 45
+  distance_cm: 60
+  palm_down: true
+  markers: false
+detectors:
+- mediapipe_hands
+- mmhand_scnet
+- mmhand_hrnetv2_dark
+joint_sets:
+  j16:
+  - 5
+  - 6
+  - 7
+  - 8
+  - 9
+  - 10
+  - 11
+  - 12
+  - 13
+  - 14
+  - 15
+  - 16
+  - 17
+  - 18
+  - 19
+  - 20
+  j21: null
+selection_rules:
+  still_frac: 0.005
+  shape_z_max: 4.0
+bootstrap:
+  n: 100
+  block: 10
+  seed: 42
+  level: 0.95
+free_shape3d:
+  z_rel: 0.2
+  alt_iters: 3
+  max_frames: 120
+verdict:
+  target:
+    detector: mediapipe_hands
+    joint_set: j16
+    method: free_template
+  verdict: 어려움
+  reason: null
+  warnings: []
+  turn_range_deg: 84.6
+selection:
+  mediapipe_hands:
+    n_frames: 385
+    n_present: 385
+    n_keep: 225
+    counts:
+      검출 실패: 0
+      가장자리 접촉: 0
+      움직임: 154
+      모양 변화: 6
+    counts_any:
+      가장자리 접촉: 0
+      움직임: 154
+      모양 변화: 29
+  mmhand_scnet:
+    n_frames: 385
+    n_present: 385
+    n_keep: 190
+    counts:
+      검출 실패: 0
+      가장자리 접촉: 0
+      움직임: 188
+      모양 변화: 7
+    counts_any:
+      가장자리 접촉: 0
+      움직임: 188
+      모양 변화: 14
+  mmhand_hrnetv2_dark:
+    n_frames: 385
+    n_present: 385
+    n_keep: 266
+    counts:
+      검출 실패: 0
+      가장자리 접촉: 0
+      움직임: 117
+      모양 변화: 2
+    counts_any:
+      가장자리 접촉: 0
+      움직임: 117
+      모양 변화: 7
+estimates:
+  mediapipe_hands:
+    j16:
+      free_template:
+        f_px: 3072.0
+        ci95_px:
+        - 2464.9
+        - 3072.0
+        n_boot_ok: 100
+        boundary: true
+        at_grid_edge: true
+        sharpness: null
+        tilt_median_deg: 58.2
+        turn_range_deg: 84.6
+        res_median_pct: 0.629
+      free_shape3d:
+        f_px: 3072.0
+        ci95_px:
+        - 2333.8
+        - 3072.0
+        n_boot_ok: 100
+        boundary: true
+        at_grid_edge: true
+        sharpness: null
+        tilt_median_deg: 60.5
+        turn_range_deg: 84.8
+        res_median_pct: 1.49
+    j21:
+      free_template:
+        f_px: 880.8
+        ci95_px:
+        - 800.1
+        - 935.2
+        n_boot_ok: 100
+        boundary: false
+        at_grid_edge: false
+        sharpness: 0.964
+        tilt_median_deg: 47.6
+        turn_range_deg: 92.5
+        res_median_pct: 1.052
+      free_shape3d:
+        f_px: 2088.9
+        ci95_px:
+        - 1895.1
+        - 2865.8
+        n_boot_ok: 100
+        boundary: false
+        at_grid_edge: false
+        sharpness: 0.999
+        tilt_median_deg: 46.7
+        turn_range_deg: 101.9
+        res_median_pct: 2.194
+  mmhand_scnet:
+    j16:
+      free_template:
+        f_px: 2010.6
+        ci95_px:
+        - 1622.1
+        - 2744.9
+        n_boot_ok: 100
+        boundary: false
+        at_grid_edge: false
+        sharpness: 1.003
+        tilt_median_deg: 66.4
+        turn_range_deg: 113.0
+        res_median_pct: 0.938
+      free_shape3d:
+        f_px: 3072.0
+        ci95_px:
+        - 3072.0
+        - 3072.0
+        n_boot_ok: 100
+        boundary: true
+        at_grid_edge: false
+        sharpness: null
+        tilt_median_deg: 44.9
+        turn_range_deg: 114.9
+        res_median_pct: 1.109
+    j21:
+      free_template:
+        f_px: 1198.8
+        ci95_px:
+        - 1164.7
+        - 1488.5
+        n_boot_ok: 100
+        boundary: false
+        at_grid_edge: false
+        sharpness: 0.917
+        tilt_median_deg: 50.1
+        turn_range_deg: 105.2
+        res_median_pct: 1.527
+      free_shape3d:
+        f_px: 3072.0
+        ci95_px:
+        - 3072.0
+        - 3072.0
+        n_boot_ok: 100
+        boundary: true
+        at_grid_edge: false
+        sharpness: null
+        tilt_median_deg: 38.7
+        turn_range_deg: 114.8
+        res_median_pct: 1.68
+  mmhand_hrnetv2_dark:
+    j16:
+      free_template:
+        f_px: 2575.0
+        ci95_px:
+        - 2326.9
+        - 3072.0
+        n_boot_ok: 100
+        boundary: false
+        at_grid_edge: true
+        sharpness: 0.989
+        tilt_median_deg: 54.3
+        turn_range_deg: 112.5
+        res_median_pct: 0.967
+      free_shape3d:
+        f_px: 3072.0
+        ci95_px:
+        - 3072.0
+        - 3072.0
+        n_boot_ok: 100
+        boundary: true
+        at_grid_edge: true
+        sharpness: null
+        tilt_median_deg: 42.6
+        turn_range_deg: 110.6
+        res_median_pct: 1.088
+    j21:
+      free_template:
+        f_px: 1562.7
+        ci95_px:
+        - 1336.1
+        - 1737.9
+        n_boot_ok: 100
+        boundary: false
+        at_grid_edge: false
+        sharpness: 0.959
+        tilt_median_deg: 46.6
+        turn_range_deg: 95.7
+        res_median_pct: 1.221
+      free_shape3d:
+        f_px: 2691.4
+        ci95_px:
+        - 2363.7
+        - 2984.5
+        n_boot_ok: 100
+        boundary: false
+        at_grid_edge: false
+        sharpness: null
+        tilt_median_deg: 36.3
+        turn_range_deg: 112.1
+        res_median_pct: 1.415
+synthetic_true_f_1655:
+  both:
+    free_template: 1664.6
+    free_shape3d: 1668.4
+  translate:
+    free_template: 3072.0
+    free_shape3d: 3072.0
+  rotate:
+    free_template: 1631.3
+    free_shape3d: 1637.4
