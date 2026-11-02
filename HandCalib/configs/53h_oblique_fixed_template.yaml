@@ -1,0 +1,20 @@
+# 53h: the existing fixed_template on the oblique desk videos with enough turn (user 2026-11-02: "그럼 원래 사용하던 fixed_template로도 실험해줘"; videos: "회전이 충분한 3개" = IMG_7342, 7344, 7345;
+# template: "영상 첫 구간 (기존 방식)" = the stillest 1 s window in 0.5-3.0 s (front_window, 49's phases), template_build on its frames with every joint of the set visible). The hand there is
+# also about 45 deg tilted, so the template is foreshortened: a baseline only. Everything else is 53's (configs/53_oblique_desk.yaml via base_config, read only): frame selection (front-window frames
+# taken out of the selected frames, but kept in the problem as in the existing pipeline), detectors, joint sets (j16 main, j21 record), bootstrap 100, verdict rule and warnings, ref_f 1553.
+# fixed_template on the full 60-point f grid (no coarse grid). Fixed before the run.
+experiment:
+  name: 53h_oblique_fixed_template
+  seed: 42
+base_config: configs/53_oblique_desk.yaml
+videos: [IMG_7342.MOV, IMG_7344.MOV, IMG_7345.MOV]
+compare_53:
+  IMG_7342.MOV: runs/53e_oblique_desk_7342/20261102T033958Z/results.json
+  IMG_7344.MOV: runs/53f_oblique_desk_7344/20261102T035835Z/results.json
+  IMG_7345.MOV: runs/53g_oblique_desk_7345/20261102T040138Z/results.json
+code_53h: {branch: exp/53-oblique-desk, commit: a7a7297, modules: [HandCalib/handfocal_report.py, HandCalib/run.py]}
+n_workers: 4
+workers: 24
+output:
+  root: runs/53h_oblique_fixed_template
+  results_yaml: results/53h_oblique_fixed_template.yaml
