@@ -172,10 +172,10 @@ Remaining visual-review items: Split + 2 and Split + 5 layouts, hovered-joint re
 ## C-2B Media Memory Optimization
 - [x] Provider tests: lazy sequential decode, repeated request coalescing, cache hit/eviction/budget, reverse seek, latest request replacement, image buffer ownership, missing/changed source, and source sharing
 - [x] Full Windows pytest suite: 207 passed; `import calibfreehands.app.main`, compileall, and diff check pass
-- [x] Windows 4_assemble.mp4 + three same-source CFH results: provider shared by all rows; 863 decoded-frame insertions including rereads after eviction; cache 379.7 MiB under 384 MiB cap
-- [x] Measured process RSS: 215.1 MiB after open, 601.4 MiB after full source decode; previous full-frame preload observation was about 3.7 GiB
-- [x] Seek latency at frames 0/60/150/300/501: 78/332/502/829/1120 ms
-- [x] 4-second playback probes: 1x 29.99 source fps at 22.3% process CPU; 2x 59.72 source fps at 29.7% process CPU
+- [x] Windows 4_assemble.mp4 (570 frames) + three same-source CFH results: one provider shared by all rows; frame 569 decoded; 931 decoded-frame insertions including rereads after eviction; cache 379.7 MiB under 384 MiB cap
+- [x] Measured process RSS: 220.7 MiB after opening results, 594.5 MiB after decoding through frame 569, and 606.9 MiB after playback; previous full-frame preload observation was about 3.7 GiB
+- [x] Seek latency at frames 0/60/150/300/569: 0/310/506/834/1458 ms
+- [x] 4-second playback probes: 1x 29.99 source fps at 19.1% process CPU; 2x 59.95 source fps at 30.8% process CPU
 
 ## C-2B Final Validation
 - [x] Windows GUI opened three actual same-source CFH results without inference; Overlay and Split + 3 results inspected at 1280x800
