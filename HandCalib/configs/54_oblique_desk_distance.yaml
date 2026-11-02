@@ -1,0 +1,29 @@
+# 54: 53's oblique desk run on 12 videos (user 2026-11-02: "7346-50-right, 7347-50-left, 7348-50-right, 7349-50-left, 7340-60-right, 7351-60-left, 7352-60-right, 7353-60-left, 7354-75-right,
+# 7455-75-left, 7356-75-right, 7357-75-left ... free_template, free_shape3d로 실험해줘"). IMG_7340 and IMG_7455 do not exist; IMG_7350 and IMG_7355 fill the sequence 7346-7357 and are taken as meant
+# (7350 = 60 cm right, 7355 = 75 cm left). Every setting is 53's (configs/53_oblique_desk.yaml via base_config, unchanged): detectors, frame selection, j16 main / j21 record, bootstrap 100, the
+# per-video verdict and warnings, ref_f 1553 (not given for these videos; the 46 / 49 value as in 53), camera angle about 45 deg assumed. The f-distance slope is a record only (s3_slope, video bootstrap
+# 1000, seed 42). Fixed before the run.
+experiment:
+  name: 54_oblique_desk_distance
+  seed: 42
+base_config: configs/53_oblique_desk.yaml
+videos:
+  - {file: IMG_7346.MOV, distance_cm: 50, hand: right}
+  - {file: IMG_7347.MOV, distance_cm: 50, hand: left}
+  - {file: IMG_7348.MOV, distance_cm: 50, hand: right}
+  - {file: IMG_7349.MOV, distance_cm: 50, hand: left}
+  - {file: IMG_7350.MOV, distance_cm: 60, hand: right}
+  - {file: IMG_7351.MOV, distance_cm: 60, hand: left}
+  - {file: IMG_7352.MOV, distance_cm: 60, hand: right}
+  - {file: IMG_7353.MOV, distance_cm: 60, hand: left}
+  - {file: IMG_7354.MOV, distance_cm: 75, hand: right}
+  - {file: IMG_7355.MOV, distance_cm: 75, hand: left}
+  - {file: IMG_7356.MOV, distance_cm: 75, hand: right}
+  - {file: IMG_7357.MOV, distance_cm: 75, hand: left}
+slope_bootstrap: {n: 1000, seed: 42}
+code_54: {branch: exp/54-oblique-desk-distance, base_commit: 23810ab, commit: 1f977cb, modules: [HandCalib/run.py]}
+workers: 24
+n_workers: 4
+output:
+  root: runs/54_oblique_desk_distance
+  results_yaml: results/54_oblique_desk_distance.yaml
