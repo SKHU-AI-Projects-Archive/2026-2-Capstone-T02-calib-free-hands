@@ -1,0 +1,33 @@
+# 56: continuous tracking (user 2026-11-02: "연속 추적을 실험해줘"). Feasibility checked first without f on IMG_7350 / 7353 / 7355 (no chain break; forward-backward loop error of the joints
+# 2.2-2.7 px). 54's 12 videos at 30 fps (the pipeline's frame extraction with detect_fps 30). KLT corners inside the previous frame's hand mask (mediapipe joint hull dilated by 3 % of the box,
+# the last detected joints carried over where the hand is not detected), LK forward-backward check, USAC_MAGSAC homography between neighbours, chained from the reference frame (the detected
+# frame nearest the middle) forward and backward; a step with < 20 inliers breaks the chain from there on. Points of a frame = the reference frame's mediapipe 21 joints moved by the chain; frames
+# used = every tracked frame whose tracked joints stay off the image border (no stillness rule; the supervisor's code keeps 120 evenly spaced). j16 main / j21 record, the supervisor's free_template
+# / free_shape3d through od_job (unchanged), block bootstrap 30 frames (1 s) x 100, seed 42. Verdict: 53's rule and warnings (min 30 frames), main target j16 free_template.
+# Everything else from 53 via base_config. Fixed before the run.
+experiment:
+  name: 56_continuous_klt
+  seed: 42
+base_config: configs/53_oblique_desk.yaml
+videos:
+  - {file: IMG_7346.MOV, distance_cm: 50, hand: right}
+  - {file: IMG_7347.MOV, distance_cm: 50, hand: left}
+  - {file: IMG_7348.MOV, distance_cm: 50, hand: right}
+  - {file: IMG_7349.MOV, distance_cm: 50, hand: left}
+  - {file: IMG_7350.MOV, distance_cm: 60, hand: right}
+  - {file: IMG_7351.MOV, distance_cm: 60, hand: left}
+  - {file: IMG_7352.MOV, distance_cm: 60, hand: right}
+  - {file: IMG_7353.MOV, distance_cm: 60, hand: left}
+  - {file: IMG_7354.MOV, distance_cm: 75, hand: right}
+  - {file: IMG_7355.MOV, distance_cm: 75, hand: left}
+  - {file: IMG_7356.MOV, distance_cm: 75, hand: right}
+  - {file: IMG_7357.MOV, distance_cm: 75, hand: left}
+tracking: {fps: 30, dilate_frac: 0.03, max_corners: 400, quality: 0.01, min_distance: 7, block: 7, win: 21, levels: 3, fb_px: 1.0, threshold_px: 1.5, min_inliers: 20}
+bootstrap: {n: 100, block: 30, seed: 42}
+compare_54: runs/54_oblique_desk_distance/20261102T044010Z
+code_56: {branch: exp/56-continuous-klt, base_commit: 8bd7a3e, commit: 7e665ee, modules: [HandCalib/handfocal_report.py, HandCalib/run.py]}
+workers: 24
+n_workers: 8
+output:
+  root: runs/56_continuous_klt
+  results_yaml: results/56_continuous_klt.yaml
