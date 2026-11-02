@@ -5222,6 +5222,45 @@ def od2_job(args) -> dict:
     return r
 
 
+def od3_job(args) -> dict:
+    """One fixed_template estimate of 53h: args = (kind, rep, kp, mask, front_idx, frames, box, size_wh, ecfg, ids, align_iters, diag). The template is built as the existing pipeline builds it
+    (template_build on the front-window frames where every joint of ids is visible; at least 3 frames), the problem holds those frames and the listed frames (repeats allowed), fixed_template on the
+    full f grid; with diag the pose diagnostics of od_poses at the found f. A failure is a result."""
+    kind, rep, kp, mask, front_idx, frames, box, size_wh, ecfg, ids, align_iters, diag = args
+    os.environ.setdefault("OMP_NUM_THREADS", "1")
+    cv2.setNumThreads(1)
+    W, H = size_wh
+    ids = list(range(kp.shape[1])) if ids is None else [int(j) for j in ids]
+    kp = undistort(np.asarray(kp, float), ecfg, W, H)
+    out = {"kind": kind, "rep": rep}
+    fr_full = [int(i) for i in front_idx if mask[i, ids].all() and np.isfinite(kp[i, ids]).all()]
+    if len(fr_full) < 3:
+        out["failed"] = f"모든 관절이 보이는 정면 창 프레임 {len(fr_full)}장 (3장 미만, 템플릿 없음)"
+        return out
+    tpl = template_build(kp[fr_full][:, ids], int(align_iters))
+    used = fr_full + [int(i) for i in frames]
+    bl = box_long(box[used])
+    cx, cy = principal_point(ecfg, W, H)
+    pb = Problem(tpl["template"], [(kp[i][ids], mask[i][ids] & np.isfinite(kp[i][ids]).all(1)) for i in used], cx, cy, float(ecfg["huber_rel"]) * bl, ecfg["min_points"])
+    grid = f_grid(ecfg, max(W, H))
+    t0 = time.time()
+    try:
+        r = fixed_template(pb, grid)
+    except Exception as e:                                            # a failure is a result, not a crash of the run
+        out["failed"] = f"{type(e).__name__}: {e}"
+        return out
+    out["fixed_template"] = {"f": float(r["f"]), "at_grid_edge": bool(r["at_grid_edge"]), "boundary": od_boundary(float(r["f"]), grid), "cost": float(r["cost"]),
+                             "profile_f": [float(x) for x in r["profile_f"]], "profile_cost": [float(x) for x in r["profile_cost"]], "sharpness": ft_sharpness(r["profile_f"], r["profile_cost"], float(r["f"])),
+                             "joint_ids": ids, "template_frames": len(fr_full), "template_jitter_px": float(tpl["jitter_rms_px"]), "n_frames_in_problem": len(pb.keep)}
+    if diag:
+        p = od_poses(pb, out["fixed_template"]["f"], tpl["template"], list(range(len(ids))), bl)
+        q = {k: np.asarray(v)[len(fr_full):] for k, v in p.items()}                                  # the selected frames only (as 53)
+        out["fixed_template"]["poses"] = {k: v.tolist() for k, v in q.items()}
+        out["fixed_template"]["template"] = np.asarray(tpl["template"]).tolist()
+    out["elapsed_s"] = float(time.time() - t0)
+    return out
+
+
 def od_fix_lines(path=None) -> list:
     """Where the six corrections to the supervisor's code sit in handfocal_estimate.py (line numbers of the corrected spellings inside section 5)."""
     p = Path(path) if path else Path(__file__).resolve().parent / "handfocal_estimate.py"

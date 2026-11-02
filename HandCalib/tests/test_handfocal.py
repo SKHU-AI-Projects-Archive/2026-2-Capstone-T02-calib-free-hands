@@ -4736,5 +4736,39 @@ class SYSynthetic(unittest.TestCase):
             self.assertIn("| 20° | 0.1% | 3072.0 (+85.6%) | 3072.0 ~ 3072.0 | 2 / 2 | 2 / 2 |", t)
 
 
+class FXJob(unittest.TestCase):
+    def test_template_from_the_front_window_and_failure_without_one(self):
+        s = hf.od2_synthetic(90.0, [4.5, 34.6], 0.001, n=40)
+        r = hf.od3_job(("main", 0, s["kp"], s["mask"], list(range(8)), np.arange(8, 40), s["box"], tuple(s["size"]), OD_ECFG, OD_J16, 4, True))
+        x = r["fixed_template"]
+        self.assertEqual(x["template_frames"], 8)
+        self.assertEqual(x["n_frames_in_problem"], 40)
+        self.assertEqual(len(x["poses"]["tilt_deg"]), 32)
+        self.assertEqual(np.asarray(x["template"]).shape, (16, 2))
+        mask = s["mask"].copy()
+        mask[:8, 9] = False
+        self.assertIn("failed", hf.od3_job(("main", 0, s["kp"], mask, list(range(8)), np.arange(8, 40), s["box"], tuple(s["size"]), OD_ECFG, OD_J16, 4, False)))
+
+    def test_summary_and_yaml(self):
+        own = {"experiment": {"name": "53h_oblique_fixed_template"}, "base_config": "configs/53_oblique_desk.yaml", "videos": ["A.MOV"], "output": {"root": "x", "results_yaml": "x"}}
+        base = run.od_load(yaml.safe_load((ROOT / own["base_config"]).read_text()))
+        cfg = {**base, **own}
+        e = {"f": 1600.0, "ci": [1500.0, 1700.0], "n_boot_ok": 2, "boundary": False, "at_grid_edge": False, "sharpness": 1.2, "tilt_median_deg": 45.0, "turn_range_deg": 90.0, "res_median_pct": 0.5, "template_frames": 15, "template_jitter_px": 1.0}
+        by = {d: {sn: {"n_keep": 100, "failed": None, "n_boot": 2, "fixed_template": e} for sn, _, _ in run.od_sets(cfg)} for d in cfg["detectors"]}
+        ana = {"A.MOV": {"by": by, "verdict": hf.od_verdict({"f": 1600.0, "boundary": False}, [1500.0, 1700.0], 100, 1553.0, cfg["verdict"], 45.0, 90.0)}}
+        with tempfile.TemporaryDirectory() as d:
+            d = Path(d)
+            run.fx_summary(d / "summary.md", ana, cfg, {"A.MOV": {"mediapipe_hands|j16": {"free_template": 3072.0}}}, {"fixed_template": {"f": 3072.0}})
+            t = (d / "summary.md").read_text()
+            self.assertTrue(t.startswith("**판정 A.MOV (mediapipe_hands j16 fixed_template): 가능성 있음**"))
+            self.assertIn("1600.0 (+3.0%)", t)
+            self.assertIn("3072.0 (+97.8%)", t)
+            (d / "results.json").write_text(json.dumps(hf.jsonable({"analysis": ana, "synthetic": {"fixed_template": {"f": 3072.0}}})))
+            (d / "metadata.json").write_text(json.dumps({"git": {"commit": "abcdef1234", "git_dirty": False}}))
+            cfg["output"] = {"results_yaml": str(d / "r.yaml")}
+            y = Path(run.fx_results_yaml(d, cfg)).read_text()
+            self.assertNotIn("1553", y)
+
+
 if __name__ == "__main__":
     unittest.main()

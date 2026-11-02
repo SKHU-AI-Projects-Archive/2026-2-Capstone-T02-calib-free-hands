@@ -9027,7 +9027,237 @@ def sy_results_yaml(run_dir: Path, cfg: dict):
     return p
 
 
-COMMANDS = {"protocol": protocol_main, "frame-filter": ff_main, "same-session": session_main, "overlay": overlay_main, "phase-segmentation": pseg_main, "guide-revision": grev_main, "f-response": fresp_main, "error-factors": ferr_main, "long-video-check": long_main, "generalization": gen_main, "main-camera-extension": ext_main, "wide-60cm": wide_main, "jointset-sets": jset_main, "verdict-calibration": cal_main, "printed-hand": pr_main, "hand-markers": mk_main, "markers-only": mo_main, "free-template": ft_main, "free-shape3d": s3_main, "free-shape3d-hand": h3_main, "free-shape3d-27": e3_main, "free-shape3d-new": e4_main, "mmpose-hand": mm_main, "mmpose-hand-46": mm2_main, "free-shape3d-new2": e5_main, "mmpose-hand-src": mm3_main, "free-shape3d-detectors": fs_main, "free-shape3d-hand-sets": h4_main, "free-shape3d-hand-sets-42track": h4b_main, "oblique-desk": od_main, "oblique-synthetic": sy_main}
+# ====================================================================================================
+# fx  (experiment 53h: fixed_template on 53's oblique desk videos with enough turn (7342, 7344, 7345); template from the front window as the existing pipeline builds it (the user's choice, no
+#      front-parallel hand in these videos); 53's frame selection, detectors, joint sets, bootstrap and verdict rule; 53e / 53f / 53g's free_template beside it)
+#     python HandCalib/run.py oblique-fixed-template --config HandCalib/configs/53h_oblique_fixed_template.yaml [--out DIR]
+#     python HandCalib/run.py oblique-fixed-template --config ... results-yaml --run runs/53h_oblique_fixed_template/<UTC>
+# ====================================================================================================
+FX_NOTE = ("실험 53e·53f·53g의 비스듬한 책상 영상(IMG_7342, 7344, 7345)에 기존 fixed_template를 적용한 실험이다. 이 영상에는 화면과 평행한 정면 손이 없어서, 템플릿은 사용자 결정대로 기존 방식(영상 0.5~3초 안에서 가장 덜 움직인 1초 창)으로 만들었다. "
+           "그 손도 약 45° 기울어 찍혀 템플릿이 찌그러져 있으므로 f가 체계적으로 틀릴 수 있다(기준선 비교용). 프레임 선택, 검출기, 관절 집합, 부트스트랩, 판정 규칙은 실험 53 그대로 실행 전에 고정했다. 기준 f와의 비교는 summary.md에만 있다.")
+
+
+def fx_track(v: str, cfg: dict, run_root: Path, log) -> dict:
+    """Frames, detections (mediapipe, MMPose on mediapipe's boxes), tracks, 53's frame selection and the front window of one video; the frames are removed afterwards."""
+    pc = cfg["pipeline"]
+    tmp_root = run_root / "_frames"
+    tmp_root.mkdir(exist_ok=True)
+    try:
+        prep = hf.fresp_prepare((v, cfg["input_dir"], pc, {}, str(tmp_root)))
+        frames, (W, H) = prep["frames"], prep["size"]
+        times = np.array([r["time_s"] for r in frames])
+        cache = run_root / "detection_cache"
+        npz = {"mediapipe_hands": hf.fresp_detect_many([((v, "orig"), frames)], cfg["detector_settings"]["mediapipe_hands"], cache, int(cfg["n_workers"]), log)[(v, "orig")]}
+        for det in cfg["detectors"]:
+            if det != "mediapipe_hands":
+                npz[det], _ = hf.swap_mmpose_hand(frames, cfg["detector_settings"][det], cache, log, Path(npz["mediapipe_hands"]), det)
+        dets = {det: hf.load_detections(Path(npz[det])) for det in cfg["detectors"]}
+        for d in dets.values():
+            hf.check_alignment(frames, d)
+    finally:
+        shutil.rmtree(tmp_root, ignore_errors=True)
+    out = {"size": (W, H), "times": times, "det": {}}
+    for det in cfg["detectors"]:
+        p2 = copy.deepcopy(pc)
+        p2["tracking"]["conf_min"] = float(cfg["detector_settings"][det]["conf_min"])
+        tr = hf.track(dets[det], times, (W, H), p2["tracking"], front_start_s=float(p2["phases"]["front_skip_s"]))
+        s = hf.od_select(tr["kp"], tr["mask"], tr["present"], tr["box"], (W, H), cfg["selection"])
+        fw = hf.front_window(times, tr["present"], tr["kp"], tr["mask"], tr["box"], p2["phases"])
+        fwi = [int(i) for i in fw["idx"]]
+        ki = [int(i) for i in np.flatnonzero(s["keep"]) if int(i) not in set(fwi)]
+        s.update({"keep_idx": ki, "n_keep": len(ki), "front_idx": fwi, "front_t": [fw.get("t0"), fw.get("t1")]})
+        out["det"][det] = {"tr": tr, "sel": s}
+        log(f"  {v} {det}: 정면 창 {fw.get('t0')}~{fw.get('t1')} s ({len(fwi)}장), 사용 프레임 {len(ki)} (정면 창 제외), 제외 {s['counts']}")
+    return out
+
+
+def fx_prior(cfg: dict) -> dict:
+    """free_template / free_shape3d f of 53e / 53f / 53g (read only): {video: {det|set: {method: f}}}."""
+    out = {}
+    for v, p in (cfg.get("compare_53") or {}).items():
+        q = hf.resolve(p)
+        if q.exists():
+            r = json.loads(q.read_text())
+            out[v] = {k: {m: x[m]["f"] for m in OD_METHODS if m in x} for k, x in r["main"].items()}
+    return out
+
+
+def fx_summary(path: Path, ana: dict, cfg: dict, prior: dict, synth: dict):
+    ref = float(cfg["ref_f"]["value"])
+    rec = cfg["ref_f"].get("record")
+    t = cfg["verdict"]["main"]
+    L = []
+    for v in cfg["videos"]:
+        vv = ana[v]["verdict"]
+        L.append(f"**판정 {v} ({t['detector']} {t['joint_set']} fixed_template): {vv['verdict']}**" + (f" — {vv['reason']}" if vv.get("reason") else "") + (" [경고: " + ", ".join(vv["warnings"]) + "]" if vv.get("warnings") else ""))
+        L.append("")
+    vc = cfg["verdict"]
+    L += ["# 실험 53h summary", "", f"**{FX_NOTE}**", "",
+          f"- 기준 f: {ref:g} px ({cfg['ref_f']['source']})" + (f"; {rec:g} px 대비 오차는 기록용" if rec else ""),
+          f"- 판정 규칙(실험 53과 같음): 사용 프레임 {vc['min_frames']}장 미만이면 판단 불가; f가 탐색 범위 끝에 붙거나 기준 f의 ±{100 * float(vc['reject_tol']):.0f}% 밖이면 어려움; f가 끝에 붙지 않고 부트스트랩 95% 구간이 f의 ±{100 * float(vc['ci_tol']):.0f}% 안이며 기준 f의 ±{100 * float(vc['accept_tol']):.0f}% 안이면 가능성 있음; 그 외 판단 보류. 경고: 손 평면 기울기 {vc['tilt_range_deg'][0]}~{vc['tilt_range_deg'][1]}° 밖, 책상 위 회전 {vc['min_turn_deg']}° 미만.",
+          f"- 합성 확인 (45° 책상, 참 f 1655, 회전 90°, 잡음 손 박스의 0.1%, 앞 10장을 정면 창으로 써서 찌그러진 템플릿): fixed_template " + ("실패: " + synth["failed"] if "failed" in synth else f"{synth['fixed_template']['f']:.1f} px ({100 * (synth['fixed_template']['f'] / 1655 - 1):+.1f}%)"), "",
+          "| 영상 | 검출기 | 관절 집합 | fixed_template 초점 거리 (기준 f 대비) | 95% 구간 (px) | " + (f"{rec:g} 대비 (기록용) | " if rec else "") + "날카로움 | 경계 | 손 평면 기울기 | 책상 위 회전 범위 | 사용 프레임 | 템플릿 프레임 | free_template (실험 53e~g) |",
+          "|---|---|---|---|---|" + ("---|" if rec else "") + "---|---|---|---|---|---|---|"]
+    for v in cfg["videos"]:
+        for det in cfg["detectors"]:
+            for sn, _, _ in od_sets(cfg):
+                b = ana[v]["by"][det][sn]
+                pf = (prior.get(v, {}).get(f"{det}|{sn}") or {}).get("free_template")
+                pfs = "-" if pf is None else f"{pf:.1f} ({100 * (pf / ref - 1):+.1f}%)"
+                a = b.get("fixed_template")
+                if not a:
+                    L.append(f"| {v} | {det} | {sn} | 추정 없음: {b.get('failed') or '-'} | - | " + ("- | " if rec else "") + f"- | - | - | - | {b['n_keep']} | - | {pfs} |")
+                    continue
+                ci = "-" if not a["ci"] else f"{a['ci'][0]:.1f} ~ {a['ci'][1]:.1f}"
+                L.append(f"| {v} | {det} | {sn} | {a['f']:.1f} ({100 * (a['f'] / ref - 1):+.1f}%) | {ci} | " + (f"{100 * (a['f'] / rec - 1):+.1f}% | " if rec else "")
+                         + f"{long_fmt(a['sharpness'], 3)} | {'예' if a['boundary'] else '아니오'} | {long_fmt(a['tilt_median_deg'], 1)}° | {long_fmt(a['turn_range_deg'], 1)}° | {b['n_keep']} | {a['template_frames']} | {pfs} |")
+    L += ["", "사용 프레임은 실험 53의 선택 규칙으로 남은 프레임에서 정면 창 프레임을 뺀 수이다(문제에는 정면 창 프레임도 들어간다). 날카로움은 60점 f 격자 비용 곡선에서 잰 값이다.", "",
+          "## 한계", "", "- 템플릿을 만든 정면 창의 손도 약 45° 기울어 있어 템플릿이 참 손 모양이 아니다. fixed_template의 가정(정면 손 = 참 모양)이 깨진 상태의 기준선이다.",
+          "- 영상 3개, 영상마다 부트스트랩은 사용 프레임을 연속 블록으로 다시 뽑은 것이라 영상 사이 차이는 담지 않는다.", ""]
+    path.write_text("\n".join(L) + "\n")
+
+
+def fx_main(argv=None):
+    ap = argparse.ArgumentParser()
+    ap.add_argument("--config", default=str(hf.PROJECT_ROOT / "configs/53h_oblique_fixed_template.yaml"))
+    sub = ap.add_subparsers(dest="cmd")
+    ry = sub.add_parser("results-yaml")
+    ry.add_argument("--run", required=True)
+    ap.add_argument("--out", default=None)
+    a = ap.parse_args(argv)
+    text = Path(a.config).read_text()
+    own = yaml.safe_load(text)
+    base = od_load(yaml.safe_load(hf.resolve(own["base_config"]).read_text()))
+    cfg = {**base, **{k: own[k] for k in ("experiment", "videos", "compare_53", "workers", "n_workers", "output") if k in own}}
+    if a.cmd == "results-yaml":
+        print(fx_results_yaml(hf.resolve(a.run), cfg))
+        return None
+    missing = [v for v in cfg["videos"] if not (Path(cfg["input_dir"]).expanduser() / v).exists()]
+    if missing:
+        raise SystemExit(f"영상이 없습니다: {missing}")
+    run_root = Path(a.out).expanduser() if a.out else hf.resolve(cfg["output"]["root"]) / utc_stamp()
+    run_root.mkdir(parents=True)
+    (run_root / "figures").mkdir()
+    log = Log(run_root / "log.txt")
+    log(f"53h fixed_template 비스듬한 책상 영상: {cfg['videos']}, 검출기 {cfg['detectors']}, 관절 집합 {[s[0] for s in od_sets(cfg)]} → {run_root}")
+    t0 = time.time()
+    for k in ("OMP_NUM_THREADS", "OPENBLAS_NUM_THREADS", "MKL_NUM_THREADS"):
+        os.environ[k] = "1"
+    ecfg, bc = cfg["pipeline"]["estimate"], cfg["bootstrap"]
+    it = int(cfg["pipeline"]["joints"]["template_align_iters"])
+    trk = {v: fx_track(v, cfg, run_root, log) for v in cfg["videos"]}
+    jobs, keys = [], []
+    for v in cfg["videos"]:
+        W, H = trk[v]["size"]
+        for det in cfg["detectors"]:
+            tr, s = trk[v]["det"][det]["tr"], trk[v]["det"][det]["sel"]
+            ki = np.asarray(s["keep_idx"], int)
+            if len(ki) < 4:
+                continue
+            for sn, ids, _ in od_sets(cfg):
+                jobs.append(("main", 0, tr["kp"], tr["mask"], s["front_idx"], ki, tr["box"], (W, H), ecfg, ids, it, True))
+                keys.append((v, det, sn))
+                for rep in range(int(bc["n"])):
+                    jobs.append(("boot", rep, tr["kp"], tr["mask"], s["front_idx"], ki[hf.od_blocks(len(ki), int(bc["block"]), rep, int(bc["seed"]))], tr["box"], (W, H), ecfg, ids, it, False))
+                    keys.append((v, det, sn))
+    ss = hf.od2_synthetic(90.0, [4.5, 34.6], 0.001, n=60)
+    sj = ("synthetic", 0, ss["kp"], ss["mask"], list(range(10)), np.arange(10, 60), ss["box"], tuple(ss["size"]), ecfg, od_sets(cfg)[0][1], it, False)
+    import multiprocessing as mp
+    from concurrent.futures import ProcessPoolExecutor
+    t1 = time.time()
+    with ProcessPoolExecutor(max_workers=int(cfg["workers"]), mp_context=mp.get_context("spawn")) as ex:
+        out = list(ex.map(hf.od3_job, jobs + [sj], chunksize=1))
+    log(f"  추정 {len(jobs) + 1}건: {time.time() - t1:.0f} s")
+    synth = out[-1]
+    res = {}
+    for k, o in zip(keys, out[:-1]):
+        r = res.setdefault(k, {"main": None, "boot": []})
+        if o["kind"] == "main":
+            r["main"] = o
+        else:
+            r["boot"].append(o)
+    vc, ref = cfg["verdict"], float(cfg["ref_f"]["value"])
+    lvl = float(bc.get("level", 0.95))
+    ana = {}
+    for v in cfg["videos"]:
+        by = {}
+        for det in cfg["detectors"]:
+            for sn, _, _ in od_sets(cfg):
+                r = res.get((v, det, sn), {"main": {"failed": "사용 프레임 4장 미만 (추정하지 않음)"}, "boot": []})
+                b = by.setdefault(det, {})[sn] = {"n_keep": trk[v]["det"][det]["sel"]["n_keep"], "failed": r["main"].get("failed"), "n_boot": len(r["boot"])}
+                e = r["main"].get("fixed_template")
+                if e:
+                    fb = [x["fixed_template"]["f"] for x in r["boot"] if "fixed_template" in x]
+                    p = e.get("poses", {})
+                    b["fixed_template"] = {"f": e["f"], "ci": hf.od_ci(fb, lvl), "n_boot_ok": len(fb), "boundary": e["boundary"], "at_grid_edge": e["at_grid_edge"], "sharpness": e["sharpness"],
+                                           "tilt_median_deg": None if not p else float(np.nanmedian(p["tilt_deg"])), "turn_range_deg": None if not p else od_range(p["turn_deg"]),
+                                           "res_median_pct": None if not p else float(np.nanmedian(p["res_pct"])), "template_frames": e["template_frames"], "template_jitter_px": e["template_jitter_px"]}
+        t = vc["main"]
+        m = by[t["detector"]][t["joint_set"]].get("fixed_template")
+        vv = hf.od_verdict(None if m is None else {"f": m["f"], "boundary": m["boundary"]}, None if m is None else m["ci"], trk[v]["det"][t["detector"]]["sel"]["n_keep"], ref, vc,
+                           None if m is None else m["tilt_median_deg"], None if m is None else m["turn_range_deg"])
+        ana[v] = {"by": by, "verdict": vv}
+        log(f"  {v} 판정: {vv['verdict']}" + (f" ({vv['reason']})" if vv.get("reason") else "") + (f" [경고: {', '.join(vv['warnings'])}]" if vv.get("warnings") else ""))
+        for det in cfg["detectors"]:
+            for sn, _, _ in od_sets(cfg):
+                x = by[det][sn].get("fixed_template")
+                log(f"    {det} {sn}: " + (f"{x['f']:.1f} px" + (f" [{x['ci'][0]:.1f} ~ {x['ci'][1]:.1f}]" if x["ci"] else "") if x else (by[det][sn].get("failed") or "-")))
+    log("  합성 (찌그러진 템플릿): " + (synth.get("failed") or f"{synth['fixed_template']['f']:.1f} px"))
+    plt = _plt()
+    for v in cfg["videos"]:
+        fig, ax = plt.subplots(figsize=(6.4, 4.4))
+        for det in cfg["detectors"]:
+            for sn, _, is_main in od_sets(cfg):
+                e = (res.get((v, det, sn)) or {}).get("main", {}).get("fixed_template")
+                if e:
+                    c = np.asarray(e["profile_cost"], float)
+                    ax.plot(e["profile_f"], c / c.min(), "-" if is_main else "--", label=f"{det} {sn}")
+        ax.set_xscale("log")
+        ax.set_xlabel("f (px)")
+        ax.set_ylabel("비용 / 최솟값")
+        ax.set_title(f"{v} fixed_template 비용 곡선")
+        ax.legend(fontsize=6)
+        ax.grid(alpha=0.3, which="both")
+        fig.tight_layout()
+        fig.savefig(run_root / "figures" / f"cost_profile_{Path(v).stem}.png", dpi=110)
+        plt.close(fig)
+    fx_summary(run_root / "summary.md", ana, cfg, fx_prior(cfg), synth)
+    sel_out = {v: {d: {k: x["sel"][k] for k in ("n_frames", "n_present", "n_keep", "counts", "front_idx", "front_t")} for d, x in trk[v]["det"].items()} for v in cfg["videos"]}
+    (run_root / "results.json").write_text(json.dumps(hf.jsonable({"selection": sel_out, "analysis": ana, "synthetic": synth, "main": {f"{v}|{d}|{sn}": r["main"] for (v, d, sn), r in res.items()}}), ensure_ascii=False, indent=1))
+    meta = hf.provenance_build(text, a.config, {"code_53h": own.get("code_53h"), "base_config": own["base_config"], "videos": cfg["videos"], "elapsed_s": time.time() - t0})
+    (run_root / "metadata.json").write_text(json.dumps(hf.jsonable(meta), ensure_ascii=False, indent=1))
+    log(f"완료 {time.time() - t0:.0f} s → {run_root}")
+    log.close()
+    return run_root, ana
+
+
+def fx_results_yaml(run_dir: Path, cfg: dict):
+    """Values and verdicts only (no reference f, no comparison); written to output.results_yaml."""
+    r = json.loads((run_dir / "results.json").read_text())
+    m = json.loads((run_dir / "metadata.json").read_text())
+    try:
+        run_name = str(run_dir.resolve().relative_to(hf.PROJECT_ROOT))
+    except ValueError:
+        run_name = str(run_dir)
+    rd = lambda x, n=4: None if x is None or (isinstance(x, float) and not np.isfinite(x)) else round(x, n)      # noqa: E731
+    out = {"experiment": cfg["experiment"]["name"], "run": run_name, "code_commit": m["git"]["commit"][:7], "git_dirty_at_run": m["git"]["git_dirty"], "note": FX_NOTE, "videos": {},
+           "detectors": cfg["detectors"], "joint_sets": {s[0]: s[1] for s in od_sets(cfg)}, "selection_rules": cfg["selection"], "bootstrap": cfg["bootstrap"]}
+    for v, a in r["analysis"].items():
+        o = out["videos"][v] = {"verdict": {"target": cfg["verdict"]["main"], "verdict": a["verdict"]["verdict"], "reason": a["verdict"].get("reason"), "warnings": a["verdict"].get("warnings", [])}, "estimates": {}}
+        for d, by in a["by"].items():
+            for sn, b in by.items():
+                x = b.get("fixed_template")
+                o["estimates"].setdefault(d, {})[sn] = {"failed": b.get("failed")} if not x else {"f_px": round(x["f"], 1), "ci95_px": None if not x["ci"] else [round(q, 1) for q in x["ci"]], "boundary": x["boundary"],
+                                                                                                  "sharpness": rd(x["sharpness"], 3), "tilt_median_deg": rd(x["tilt_median_deg"], 1), "turn_range_deg": rd(x["turn_range_deg"], 1),
+                                                                                                  "n_keep": b["n_keep"], "template_frames": x["template_frames"]}
+    s = r["synthetic"]
+    out["synthetic_true_f_1655_turn90_noise0.1pct"] = {"failed": s["failed"]} if "failed" in s else round(s["fixed_template"]["f"], 1)
+    p = hf.resolve(cfg["output"]["results_yaml"])
+    p.write_text(yaml.safe_dump(hf.jsonable(out), allow_unicode=True, sort_keys=False))
+    return p
+
+
+COMMANDS = {"protocol": protocol_main, "frame-filter": ff_main, "same-session": session_main, "overlay": overlay_main, "phase-segmentation": pseg_main, "guide-revision": grev_main, "f-response": fresp_main, "error-factors": ferr_main, "long-video-check": long_main, "generalization": gen_main, "main-camera-extension": ext_main, "wide-60cm": wide_main, "jointset-sets": jset_main, "verdict-calibration": cal_main, "printed-hand": pr_main, "hand-markers": mk_main, "markers-only": mo_main, "free-template": ft_main, "free-shape3d": s3_main, "free-shape3d-hand": h3_main, "free-shape3d-27": e3_main, "free-shape3d-new": e4_main, "mmpose-hand": mm_main, "mmpose-hand-46": mm2_main, "free-shape3d-new2": e5_main, "mmpose-hand-src": mm3_main, "free-shape3d-detectors": fs_main, "free-shape3d-hand-sets": h4_main, "free-shape3d-hand-sets-42track": h4b_main, "oblique-desk": od_main, "oblique-synthetic": sy_main, "oblique-fixed-template": fx_main}
 
 
 def main(argv=None):
