@@ -336,7 +336,7 @@ def test_comparison_dashboard_uses_viewport_overlays_and_compact_menus(tmp_path,
     assert viewer.split_views[1].minimumHeight() >= 240
     assert set(viewer.mode_buttons) == {"overlay", "split"}
     assert viewer.results_menu_button.text().startswith("Results")
-    assert "Detection confidence" in viewer.confidence_menu_button.text()
+    assert viewer.confidence_menu_button.text() == "Detection"
     assert len(viewer.visibility_checks) == 5
     assert all(check.parentWidget() is not viewer for check in viewer.visibility_checks)
     for button in viewer.view_buttons + viewer.playback_buttons:
@@ -368,14 +368,16 @@ def test_presentation_hud_is_viewport_child_and_reorder_preserves_result_data(tm
     assert viewer.results_menu.actions()[0].defaultWidget().findChild(QCheckBox).text() == "Method 2"
     for loaded, points in zip(viewer.loaded_results, before):
         np.testing.assert_array_equal(loaded.result.keypoints_3d, points)
-    viewer.set_annotation_mode("error")
+    viewer.set_annotation_mode("all")
+    viewer._set_annotation_content("error")
     candidate_labels = viewer.split_annotations[1].projected_annotations()
     reference_labels = viewer.split_annotations[0].projected_annotations()
     assert candidate_labels and not reference_labels
     assert candidate_labels[0][3] == "1414.2"
     viewer.split_views[1].show_left = False
     assert {row[1] for row in viewer.split_annotations[1].projected_annotations()} == {"right"}
-    viewer.set_annotation_mode("name")
+    viewer.set_annotation_mode("all")
+    viewer._set_annotation_content("name")
     assert {row[3] for row in viewer.split_annotations[1].projected_annotations()} <= set(JOINT_NAMES)
     viewer.set_annotation_mode("off")
     assert not viewer.split_annotations[1].projected_annotations()
@@ -385,7 +387,7 @@ def test_presentation_hud_is_viewport_child_and_reorder_preserves_result_data(tm
 def test_presentation_controls_keep_detection_and_mesh_opacity_distinct(tmp_path, qapp):
     from calibfreehands.visualization.comparison import ComparisonViewer
     viewer = ComparisonViewer(_session(tmp_path, 2, mesh=True))
-    assert viewer.confidence_menu_button.text().startswith("Detection confidence")
+    assert viewer.confidence_menu_button.text() == "Detection"
     assert viewer.confidence_opacity_checkbox.text() == "Use as opacity"
     assert viewer.confidence_numeric_checkbox.text() == "Numeric value"
     assert viewer.mesh_opacity_label.text() == "Mesh opacity"
@@ -448,3 +450,151 @@ def test_mainwindow_checkerboard_focal_has_no_duplicate_row_label(tmp_path, monk
     assert not any(label.text() == "Reference Focal" for label in row.reference_focal_container.findChildren(QLabel))
     assert row.reference_focal_container.layout().itemAt(0).widget() is row.reference_focal
     window.close()
+
+
+def test_presentation_controls_overlay_without_changing_viewport_geometry(tmp_path, qapp):
+    from PySide6.QtCore import Qt
+    from PySide6.QtWidgets import QGridLayout
+    from calibfreehands.visualization.comparison import ComparisonViewer
+
+    viewer = ComparisonViewer(_session(tmp_path, 2))
+    viewer.resize(1280, 800)
+    viewer.show()
+    qapp.processEvents()
+    layout = viewer.layout()
+    assert isinstance(layout, QGridLayout)
+    viewport = viewer.views.geometry()
+    viewer.chrome.hide()
+    qapp.processEvents()
+    assert viewer.views.geometry() == viewport
+    viewer.chrome.show()
+    qapp.processEvents()
+    assert viewer.views.geometry() == viewport
+    assert layout.itemAt(1).alignment() & Qt.AlignmentFlag.AlignBottom
+    viewer.close()
+
+
+def test_presentation_pin_and_annotation_density_modes(tmp_path, qapp):
+    from calibfreehands.visualization.comparison import ComparisonViewer
+
+    viewer = ComparisonViewer(_session(tmp_path, 2))
+    assert hasattr(viewer, "pin_controls_button")
+    viewer.pin_controls_button.setChecked(True)
+    viewer.timer.start()
+    viewer._auto_hide_controls()
+    assert not viewer.chrome.isHidden()
+    assert {"off", "hovered", "key_joints", "worst5", "all"} <= set(viewer.annotation_actions)
+    viewer.set_annotation_mode("worst5")
+    assert viewer.annotation_mode == "worst5"
+    viewer.close()
+
+
+def test_joint_annotation_density_and_label_content_use_joint_errors(tmp_path, qapp):
+    from calibfreehands.visualization.comparison import ComparisonViewer
+
+    viewer = ComparisonViewer(_session(tmp_path, 2))
+    layer = viewer.split_annotations[1]
+    viewer.set_mode("split")
+    viewer.set_annotation_mode("all")
+    all_rows = layer.projected_annotations()
+    assert len(all_rows) == 42
+    assert all(row[3].replace(".", "", 1).isdigit() for row in all_rows)
+    viewer.set_annotation_mode("key_joints")
+    assert len(layer.projected_annotations()) == 12
+    viewer.set_annotation_mode("worst5")
+    worst = layer.projected_annotations()
+    assert len(worst) == 10
+    assert all(label == "1414.2" for *_, label, _, _ in worst)
+    viewer.set_annotation_mode("hovered")
+    layer.hover_position = __import__("PySide6.QtCore", fromlist=["QPoint"]).QPoint(320, 240)
+    assert len(layer.projected_annotations()) <= 2
+    viewer._set_annotation_content("name")
+    named = layer.projected_annotations()
+    assert all(row[3] in JOINT_NAMES for row in named)
+    viewer.close()
+
+
+def test_compact_presentation_explains_disabled_options_and_hud_background_default(tmp_path, qapp):
+    from calibfreehands.visualization.comparison import ComparisonViewer
+
+    viewer = ComparisonViewer(_session(tmp_path, 2))
+    assert viewer.metric_checks["f@5"].toolTip().startswith("Protocol pending:")
+    assert viewer.results_menu_button.text() == "Results (2/2)"
+    assert viewer.error_vectors_button.text() == "Vectors: Off"
+    assert viewer.overlay_panel.background == "none"
+    assert "transparent" in viewer.overlay_panel.card.styleSheet()
+    assert viewer.confidence_color_mode.itemText(1) == "Detection"
+    viewer.close()
+
+
+def test_toolbutton_menu_opens_after_hover_dwell_and_closes_after_leave(tmp_path, qapp):
+    from PySide6.QtCore import QPoint
+    from PySide6.QtTest import QTest
+    from calibfreehands.visualization.comparison import ComparisonViewer
+
+    viewer = ComparisonViewer(_session(tmp_path, 2))
+    viewer.resize(1280, 800); viewer.show(); qapp.processEvents()
+    button = viewer.metric_menu_button
+    QTest.mouseMove(button, button.rect().center())
+    QTest.qWait(260); qapp.processEvents()
+    assert viewer.metric_menu.isVisible()
+    QTest.mouseMove(viewer.views, QPoint(40, 40))
+    QTest.qWait(300); qapp.processEvents()
+    assert not viewer.metric_menu.isVisible()
+    viewer.close()
+
+
+def test_combo_hover_popup_stays_open_while_pointer_enters_popup(tmp_path, qapp):
+    from PySide6.QtCore import QPoint
+    from PySide6.QtTest import QTest
+    from calibfreehands.visualization.comparison import ComparisonViewer
+
+    viewer = ComparisonViewer(_session(tmp_path, 2))
+    viewer.resize(1280, 800); viewer.show(); qapp.processEvents()
+    combo = viewer.reference_selector
+    QTest.mouseMove(combo, combo.rect().center())
+    QTest.qWait(260); qapp.processEvents()
+    assert combo.view().isVisible()
+    QTest.mouseMove(combo.view().viewport(), combo.view().viewport().rect().center())
+    QTest.qWait(300); qapp.processEvents()
+    assert combo.view().isVisible()
+    combo.hidePopup(); viewer.close()
+
+
+def test_hud_wheel_scroll_does_not_change_3d_camera(tmp_path, qapp):
+    from PySide6.QtCore import QPoint, QPointF, Qt
+    from PySide6.QtGui import QWheelEvent
+    from calibfreehands.visualization.comparison import ComparisonViewer
+
+    viewer = ComparisonViewer(_session(tmp_path, 6))
+    viewer.resize(1280, 800); viewer.show(); viewer.confidence_numeric_checkbox.setChecked(True)
+    qapp.processEvents()
+    panel = viewer.overlay_panel
+    scrollbar = panel.scroll.verticalScrollBar()
+    assert scrollbar.maximum() > 0
+    before_camera = viewer.overlay_view.cameraParams()
+    before_scroll = scrollbar.value()
+    position = QPointF(panel.scroll.viewport().rect().center())
+    event = QWheelEvent(position, panel.scroll.viewport().mapToGlobal(position.toPoint()),
+                        QPoint(), QPoint(0, -120), Qt.MouseButton.NoButton,
+                        Qt.KeyboardModifier.NoModifier, Qt.ScrollPhase.ScrollUpdate, False)
+    qapp.sendEvent(panel.scroll.viewport(), event)
+    assert scrollbar.value() > before_scroll
+    assert viewer.overlay_view.cameraParams() == before_camera
+    scroll_position = scrollbar.value()
+    viewer.slider.setValue(1); qapp.processEvents()
+    assert scrollbar.value() == scroll_position
+    viewer.close()
+
+
+def test_mouse_move_over_viewport_restores_hidden_controls(tmp_path, qapp):
+    from PySide6.QtTest import QTest
+    from calibfreehands.visualization.comparison import ComparisonViewer
+
+    viewer = ComparisonViewer(_session(tmp_path, 2))
+    viewer.resize(1280, 800); viewer.show(); qapp.processEvents()
+    viewer.timer.start(1000); viewer.chrome.hide()
+    QTest.mouseMove(viewer.overlay_view, viewer.overlay_view.rect().center())
+    qapp.processEvents()
+    assert not viewer.chrome.isHidden()
+    viewer.close()

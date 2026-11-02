@@ -8,7 +8,7 @@ from time import monotonic
 
 import numpy as np
 import pyqtgraph.opengl as gl
-from PySide6.QtCore import QEvent, Qt, QTimer, QSignalBlocker
+from PySide6.QtCore import QEvent, QPoint, Qt, QTimer, QSignalBlocker
 from PySide6.QtGui import QAction, QActionGroup
 from PySide6.QtWidgets import (
     QApplication, QCheckBox, QColorDialog, QComboBox, QDialog, QFileDialog, QGridLayout,
@@ -258,10 +258,17 @@ class _LinkedResultView(_GLResultView):
         self.camera_changed(self)
 
     def dragEnterEvent(self, event):
-        if event.mimeData().hasText(): event.acceptProposedAction()
+        if event.mimeData().hasText():
+            self.setStyleSheet("border: 2px solid palette(highlight);")
+            event.acceptProposedAction()
         else: event.ignore()
 
+    def dragLeaveEvent(self, event):
+        self.setStyleSheet("")
+        super().dragLeaveEvent(event)
+
     def dropEvent(self, event):
+        self.setStyleSheet("")
         if event.mimeData().hasText() and hasattr(self, "viewer"):
             self.viewer.reorder_result(event.mimeData().text(), self.configuration_id)
             event.acceptProposedAction()
@@ -523,6 +530,7 @@ class ComparisonViewer(QWidget):
         for view, panel in zip(self.split_views, self.split_panels): view.hud = panel
         self.split_result_order = list(range(len(entries)))
         self.annotation_mode = "off"
+        self.annotation_content = "error"
         self.overlay_annotations = _JointAnnotationLayer(self, self.overlay_view, list(range(len(entries))))
         self.split_annotations = [_JointAnnotationLayer(self, view, [index])
                                   for index, view in enumerate(self.split_views)]
@@ -630,8 +638,8 @@ class ComparisonViewer(QWidget):
             available = self._metric_has_data(definition.metric_id)
             check.setEnabled(definition.status.value == "READY" and available)
             if not check.isEnabled():
-                check.setToolTip("Protocol pending / not implemented" if definition.status.value != "READY"
-                                 else "Required result data is unavailable")
+                check.setToolTip("Protocol pending: this metric is not defined for this prototype" if definition.status.value != "READY"
+                                 else "Unavailable: compatible result data is missing")
             check.toggled.connect(lambda value, key=definition.metric_id: self._set_metric_selected(key, value))
             action = QWidgetAction(category)
             action.setDefaultWidget(check)
@@ -652,11 +660,11 @@ class ComparisonViewer(QWidget):
         self.confidence_menu_button = QToolButton()
         self.confidence_menu_button.setPopupMode(QToolButton.ToolButtonPopupMode.InstantPopup)
         self.confidence_menu_button.setMenu(self.confidence_menu)
-        self.confidence_menu_button.setText("Detection confidence")
+        self.confidence_menu_button.setText("Detection")
         self._update_confidence_button()
         self.confidence_color_mode = QComboBox()
         self.confidence_color_mode.addItem("Result", "configuration")
-        self.confidence_color_mode.addItem("Detection confidence", "confidence")
+        self.confidence_color_mode.addItem("Detection", "confidence")
         self.confidence_color_mode.currentIndexChanged.connect(self._confidence_color_changed)
 
         self.error_vectors_checkbox = QCheckBox("Error vectors")
@@ -689,7 +697,8 @@ class ComparisonViewer(QWidget):
         self.annotation_menu = QMenu(self)
         self.annotation_group = QActionGroup(self); self.annotation_group.setExclusive(True)
         self.annotation_actions = {}
-        for text, mode in (("Off", "off"), ("Error (mm)", "error"), ("Joint name", "name")):
+        for text, mode in (("Off", "off"), ("Hovered joint", "hovered"),
+                           ("Key joints", "key_joints"), ("Worst 5", "worst5"), ("All joints", "all")):
             action = QAction(text, self); action.setCheckable(True); action.setChecked(mode == "off")
             action.triggered.connect(lambda checked, value=mode: self.set_annotation_mode(value) if checked else None)
             self.annotation_group.addAction(action); self.annotation_menu.addAction(action)
@@ -697,6 +706,15 @@ class ComparisonViewer(QWidget):
         self.annotation_button = QToolButton(); self.annotation_button.setText("Joint annotations")
         self.annotation_button.setPopupMode(QToolButton.ToolButtonPopupMode.InstantPopup)
         self.annotation_button.setMenu(self.annotation_menu)
+        self.annotation_button.setText("Joints")
+        self.annotation_content_menu = self.annotation_menu.addMenu("Label")
+        self.annotation_content_group = QActionGroup(self); self.annotation_content_group.setExclusive(True)
+        self.annotation_content_actions = {}
+        for label, content in (("Error (mm)", "error"), ("Joint name", "name")):
+            action = QAction(label, self); action.setCheckable(True); action.setChecked(content == self.annotation_content)
+            action.triggered.connect(lambda checked, value=content: self._set_annotation_content(value) if checked else None)
+            self.annotation_content_group.addAction(action); self.annotation_content_menu.addAction(action)
+            self.annotation_content_actions[content] = action
         self.hud_menu = QMenu(self)
         for label, anchor in (("Top left", "top-left"), ("Top right", "top-right"),
                               ("Bottom left", "bottom-left"), ("Bottom right", "bottom-right")):
@@ -708,10 +726,18 @@ class ComparisonViewer(QWidget):
             size_menu.addAction(action)
         opacity_widget = QWidget(); opacity_layout = QHBoxLayout(opacity_widget); opacity_layout.setContentsMargins(8, 2, 8, 2)
         opacity_layout.addWidget(QLabel("HUD opacity")); self.hud_opacity_slider = QSlider(Qt.Orientation.Horizontal)
-        self.hud_opacity_slider.setRange(20, 100); self.hud_opacity_slider.setValue(86); self.hud_opacity_slider.setFixedWidth(100)
+        self.hud_opacity_slider.setRange(20, 100); self.hud_opacity_slider.setValue(100); self.hud_opacity_slider.setFixedWidth(100)
         self.hud_opacity_slider.valueChanged.connect(lambda value: self._set_hud(opacity=value / 100))
         opacity_layout.addWidget(self.hud_opacity_slider); opacity_action = QWidgetAction(self.hud_menu)
         opacity_action.setDefaultWidget(opacity_widget); self.hud_menu.addAction(opacity_action)
+        self.hud_background_menu = self.hud_menu.addMenu("Background")
+        self.hud_background_group = QActionGroup(self); self.hud_background_group.setExclusive(True)
+        self.hud_background_actions = {}
+        for label, style in (("None", "none"), ("Subtle", "subtle")):
+            action = QAction(label, self); action.setCheckable(True); action.setChecked(style == "none")
+            action.triggered.connect(lambda checked, value=style: self._set_hud_background(value) if checked else None)
+            self.hud_background_group.addAction(action); self.hud_background_menu.addAction(action)
+            self.hud_background_actions[style] = action
         self.hud_button = QToolButton(); self.hud_button.setText("HUD")
         self.hud_button.setPopupMode(QToolButton.ToolButtonPopupMode.InstantPopup); self.hud_button.setMenu(self.hud_menu)
 
@@ -734,14 +760,19 @@ class ComparisonViewer(QWidget):
             button.clicked.connect(callback)
 
         toolbar = QHBoxLayout()
-        toolbar.addWidget(QLabel("View")); toolbar.addWidget(self.mode_selector)
+        toolbar.addWidget(self.mode_selector)
         toolbar.addWidget(self.results_menu_button)
         toolbar.addWidget(self.reference_label); toolbar.addWidget(self.reference_selector)
         toolbar.addWidget(self.metric_menu_button)
-        toolbar.addWidget(QLabel("Color by")); toolbar.addWidget(self.confidence_color_mode)
+        toolbar.addWidget(self.confidence_color_mode)
         toolbar.addWidget(self.confidence_menu_button)
         toolbar.addWidget(self.error_vectors_button)
-        toolbar.addWidget(self.annotation_button); toolbar.addWidget(self.hud_button); toolbar.addWidget(self.more_button)
+        self.error_vectors_button.setText("Vectors: Off")
+        self.error_vectors_button.setToolTip("Show selected Reference → Candidate error vectors")
+        toolbar.addWidget(self.annotation_button); toolbar.addWidget(self.hud_button)
+        self.pin_controls_button = QToolButton(); self.pin_controls_button.setText("Pin")
+        self.pin_controls_button.setCheckable(True); self.pin_controls_button.setToolTip("Keep controls visible")
+        toolbar.addWidget(self.pin_controls_button); toolbar.addWidget(self.more_button)
         toolbar.addStretch(1)
 
         self.joint_checkbox = QCheckBox("Joint")
@@ -778,6 +809,9 @@ class ComparisonViewer(QWidget):
             check.setChecked(True)
             check.toggled.connect(lambda value, name=attr: self._set_geometry(name, value))
             geometry.addWidget(check)
+            if not hasattr(self, "geometry_checks"):
+                self.geometry_checks = {}
+            self.geometry_checks[attr] = check
         geometry.addStretch(1)
 
         self.view_buttons = []
@@ -792,6 +826,30 @@ class ComparisonViewer(QWidget):
             view_toolbar.addWidget(button)
             self.view_buttons.append(button)
         view_toolbar.addStretch(1)
+
+        geometry_menu = self.more_menu.addMenu("Geometry")
+        for label, check in (("Joints", self.joint_checkbox), ("Bones", self.bone_checkbox),
+                             ("Mesh", self.mesh_checkbox),
+                             *[(name, self.geometry_checks[attr]) for name, attr in
+                               (("Left hand", "show_left"), ("Right hand", "show_right"),
+                                ("Grid", "show_grid"), ("Axis", "show_axis"))]):
+            action = geometry_menu.addAction(label)
+            action.setCheckable(True); action.setChecked(check.isChecked()); action.setEnabled(check.isEnabled())
+            action.toggled.connect(check.setChecked); check.toggled.connect(action.setChecked)
+        mesh_opacity_action = QWidgetAction(geometry_menu)
+        mesh_opacity_action.setDefaultWidget(self.mesh_opacity_group)
+        geometry_menu.addAction(mesh_opacity_action)
+        for widget in (self.joint_checkbox, self.bone_checkbox, self.mesh_checkbox,
+                       *self.geometry_checks.values(), *self.view_buttons):
+            widget.setParent(self)
+            widget.hide()
+        camera_menu = self.more_menu.addMenu("Camera")
+        for text, method in (("Front", "front_view"), ("Side", "side_view"), ("Top", "top_view"),
+                             ("Fit", "fit_hands"), ("Reset", "reset_camera")):
+            camera_menu.addAction(text, lambda _=False, name=method: self._apply_camera_preset(name))
+        self.more_menu.addSeparator()
+        self.more_menu.addAction("Export CSV…", self._export_csv)
+        self.more_menu.addAction("Export JSON…", self._export_json)
 
         playback_fps = 30.0
         metadata = self.loaded_results[0].metadata or {}
@@ -843,17 +901,28 @@ class ComparisonViewer(QWidget):
         exports.addWidget(self.metric_status, 1)
         exports.addWidget(self.export_csv_button)
         exports.addWidget(self.export_json_button)
-        layout = QVBoxLayout(self)
-        layout.addWidget(self.views, 1)
+        layout = QGridLayout(self)
+        layout.setContentsMargins(0, 0, 0, 0)
+        layout.addWidget(self.views, 0, 0)
         self.chrome = QWidget(); chrome_layout = QVBoxLayout(self.chrome); chrome_layout.setContentsMargins(0, 0, 0, 0)
-        chrome_layout.addWidget(self.slider); chrome_layout.addLayout(toolbar); chrome_layout.addLayout(geometry)
-        chrome_layout.addLayout(view_toolbar); chrome_layout.addLayout(playback); chrome_layout.addWidget(self.status)
-        chrome_layout.addLayout(exports); chrome_layout.addWidget(self.performance_stats_label); layout.addWidget(self.chrome)
+        chrome_layout.addLayout(toolbar); chrome_layout.addWidget(self.slider)
+        playback.addWidget(self.status)
+        playback.addWidget(self.metric_status, 1)
+        chrome_layout.addLayout(playback); chrome_layout.addWidget(self.performance_stats_label)
+        layout.addWidget(self.chrome, 0, 0, Qt.AlignmentFlag.AlignBottom)
         self.auto_hide_timer = QTimer(self); self.auto_hide_timer.setSingleShot(True); self.auto_hide_timer.setInterval(2500)
         self.auto_hide_timer.timeout.connect(self._auto_hide_controls)
-        self.installEventFilter(self)
+        self.pin_controls_button.toggled.connect(lambda pinned: self.auto_hide_timer.stop() if pinned else self._show_controls())
+        self._panel_reorder_active = False
+        self._hover_menu_target = None
+        self.hover_menu_timer = QTimer(self); self.hover_menu_timer.setSingleShot(True); self.hover_menu_timer.setInterval(220)
+        self.hover_menu_timer.timeout.connect(self._open_hover_menu)
+        self.hover_close_timer = QTimer(self); self.hover_close_timer.setSingleShot(True); self.hover_close_timer.setInterval(250)
+        self.hover_close_timer.timeout.connect(self._close_hover_menu)
+        self.setMouseTracking(True)
         for widget in self.findChildren(QWidget):
-            widget.installEventFilter(self)
+            widget.setMouseTracking(True)
+        QApplication.instance().installEventFilter(self)
         self._compute_metrics()
         self._refresh_metric_panels()
         self._refresh_annotations()
@@ -877,19 +946,24 @@ class ComparisonViewer(QWidget):
     def _set_hud(self, anchor=None, scale=None, opacity=None):
         for hud in (self.overlay_panel, *self.split_panels): hud.set_presentation(anchor, scale, opacity)
 
+    def _set_hud_background(self, style):
+        for hud in (self.overlay_panel, *self.split_panels): hud.set_background(style)
+
     def _select_error_candidate(self, candidate_id):
         index = self.error_candidate_selector.findData(candidate_id)
         if index >= 0: self.error_candidate_selector.setCurrentIndex(index)
         self.error_vectors_checkbox.setChecked(True)
         name = next(config["name"] for config in self.configurations if config["id"] == candidate_id)
-        self.error_vectors_button.setText(f"Error vectors: {name}")
+        self.error_vectors_button.setText("Vectors: Candidate")
+        self.error_vectors_button.setToolTip(f"Show selected Reference → {name} error vectors")
 
     def _show_controls(self):
         self.chrome.show()
         if self.timer.isActive() and self.auto_hide_action.isChecked(): self.auto_hide_timer.start()
 
     def _auto_hide_controls(self):
-        if not self.timer.isActive() or not self.auto_hide_action.isChecked(): return
+        if (not self.timer.isActive() or not self.auto_hide_action.isChecked()
+                or self.pin_controls_button.isChecked() or self._panel_reorder_active): return
         popup_open = any(menu.isVisible() for menu in self.findChildren(QMenu))
         combo_open = any(combo.view().isVisible() for combo in self.findChildren(QComboBox))
         modal = QApplication.activeModalWidget()
@@ -928,8 +1002,14 @@ class ComparisonViewer(QWidget):
         self._update_results_button()
 
     def set_annotation_mode(self, mode):
-        if mode not in ("off", "error", "name"): raise ValueError(mode)
+        if mode not in ("off", "hovered", "key_joints", "worst5", "all"): raise ValueError(mode)
         self.annotation_mode = mode
+        self._refresh_annotations()
+
+    def _set_annotation_content(self, content):
+        if content not in ("error", "name"):
+            raise ValueError(content)
+        self.annotation_content = content
         self._refresh_annotations()
 
     @staticmethod
@@ -947,16 +1027,16 @@ class ComparisonViewer(QWidget):
 
     def _update_results_button(self):
         visible = sum(check.isChecked() for check in self.visibility_checks)
-        self.results_menu_button.setText(f"Results {visible}/{len(self.visibility_checks)} visible v")
+        self.results_menu_button.setText(f"Results ({visible}/{len(self.visibility_checks)})")
 
     def _update_metrics_button(self):
-        self.metric_menu_button.setText(f"Metrics {len(self.selected_metric_ids)} selected v")
+        self.metric_menu_button.setText("Metrics")
 
     def _update_confidence_button(self):
         active = sum(check.isChecked() for check in (self.confidence_opacity_checkbox,
                                                        self.confidence_numeric_checkbox,
                                                        self.confidence_bar_checkbox))
-        self.confidence_menu_button.setText(f"Detection confidence ({active})")
+        self.confidence_menu_button.setText("Detection")
 
     def _default_reference_id(self):
         checkerboards = [c for c in self.configurations
@@ -1348,9 +1428,49 @@ class ComparisonViewer(QWidget):
             self.metric_status.setText(f"Export failed: {exc}")
 
     def eventFilter(self, watched, event):
-        if event.type() in (QEvent.Type.MouseMove, QEvent.Type.MouseButtonPress, QEvent.Type.KeyPress):
-            protected = isinstance(watched, (QMenu, QComboBox, QSlider, QDialog))
-            if not protected: self._show_controls()
+        if isinstance(watched, QWidget) and (watched is self or self.isAncestorOf(watched)):
+            if isinstance(watched, QToolButton) and watched.menu() is not None:
+                if event.type() == QEvent.Type.Enter:
+                    self.hover_close_timer.stop()
+                    self._hover_menu_target = watched
+                    self.hover_menu_timer.start()
+                elif event.type() == QEvent.Type.Leave:
+                    self.hover_menu_timer.stop()
+                    self.hover_close_timer.start()
+            elif isinstance(watched, QComboBox):
+                if event.type() == QEvent.Type.Enter:
+                    self.hover_close_timer.stop()
+                    self._hover_menu_target = watched
+                    self.hover_menu_timer.start()
+                elif event.type() == QEvent.Type.Leave:
+                    self.hover_menu_timer.stop()
+                    self.hover_close_timer.start()
+            elif any(watched in (combo.view(), combo.view().viewport())
+                     for combo in self.findChildren(QComboBox)):
+                if event.type() == QEvent.Type.Enter:
+                    self.hover_close_timer.stop()
+                elif event.type() == QEvent.Type.Leave:
+                    self.hover_close_timer.start()
+            if isinstance(watched, QMenu):
+                if event.type() == QEvent.Type.Enter:
+                    self.hover_close_timer.stop()
+                elif event.type() == QEvent.Type.Leave:
+                    self.hover_close_timer.start()
+            if event.type() in (QEvent.Type.MouseMove, QEvent.Type.MouseButtonPress, QEvent.Type.Wheel, QEvent.Type.KeyPress):
+                if not isinstance(watched, (QMenu, QComboBox, QSlider, QDialog)):
+                    self._show_controls()
+            if event.type() == QEvent.Type.MouseMove and self.annotation_mode == "hovered":
+                for layer in (self.overlay_annotations, *self.split_annotations):
+                    if layer.view is watched:
+                        layer.hover_position = event.position().toPoint()
+                        layer.update()
+        if event.type() == QEvent.Type.Wheel:
+            for panel in (self.overlay_panel, *self.split_panels):
+                if watched is panel.scroll or panel.scroll.isAncestorOf(watched):
+                    bar = panel.scroll.verticalScrollBar()
+                    bar.setValue(bar.value() - event.angleDelta().y())
+                    event.accept()
+                    return True
         if event.type() in (QEvent.Type.MouseMove, QEvent.Type.Wheel, QEvent.Type.Resize):
             if watched is self.overlay_view or watched in self.split_views:
                 self._refresh_annotations()
@@ -1375,3 +1495,35 @@ class ComparisonViewer(QWidget):
                 self._refresh_annotations()
                 event.accept(); return True
         return super().eventFilter(watched, event)
+
+    def _open_hover_menu(self):
+        button = self._hover_menu_target
+        if isinstance(button, QComboBox) and button.underMouse():
+            button.showPopup()
+        elif button is not None and button.underMouse() and button.menu() is not None:
+            menu = button.menu()
+            menu.popup(button.mapToGlobal(QPoint(0, button.height())))
+
+    def _close_hover_menu(self):
+        from PySide6.QtGui import QCursor
+        button = self._hover_menu_target
+        menu = button.menu() if button is not None else None
+        position = QCursor.pos()
+        if isinstance(button, QComboBox):
+            popup = button.view()
+            if button.rect().contains(button.mapFromGlobal(position)):
+                return
+            if popup.isVisible() and popup.rect().contains(popup.mapFromGlobal(position)):
+                return
+            button.hidePopup()
+            return
+        if button is not None and button.rect().contains(button.mapFromGlobal(position)):
+            return
+        if menu is not None and menu.isVisible() and menu.rect().contains(menu.mapFromGlobal(position)):
+            return
+        if menu is not None:
+            menu.hide()
+
+    def closeEvent(self, event):
+        QApplication.instance().removeEventFilter(self)
+        super().closeEvent(event)

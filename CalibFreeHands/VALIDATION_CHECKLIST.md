@@ -165,3 +165,8 @@ result reopening pass.
 - [x] HUD stylesheet/layout loop fix reduced sampled process CPU from 98.8% idle / 101.6% playback to 4.7% idle / 27.1% playback in matched 3-second probes
 - [x] OpenGL renderer identified as Intel UHD Graphics 750; per-process Windows GPU Engine 3D samples were 0–5.64% (one-second sampling, with invalid-data warnings on some samples); NVIDIA utilization was system-wide and not used to infer Intel rendering
 - [ ] HUMAN VISUAL REVIEW REQUIRED in the normal Windows GUI for speed selection, continuous playback, pause, and mode switching
+
+## C-2B Presentation UX Stabilization
+- [x] Full pytest suite: 201 passed; includes fixed viewport geometry, HUD interactions, hover menus, annotation modes, and reorder lifecycle
+- [x] Windows GUI visual check at 1280x800 with six synthetic test-only result panels; drag reorder changed Method 2/Method 1 ordering
+- [ ] Windows GUI visual review for hovered-joint readability and Split + 3 layout

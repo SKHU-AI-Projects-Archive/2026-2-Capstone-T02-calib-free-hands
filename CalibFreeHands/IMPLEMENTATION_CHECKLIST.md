@@ -91,3 +91,4 @@
 - [x] C-2A explicit protocol-pending states for unreproduced WiLoR benchmark/temporal metrics
 - [x] C-2B viewport-first presentation: compact controls, selected metric overlays, Reference badge, on-demand 21-joint details, and no permanent metric table
 - [x] C-2B duplicate Checkerboard Reference Focal row label removed while retaining the header and value control
+- [x] C-2B presentation stabilization: fixed viewport overlay chrome, pin, mouse restore, compact menus, text-only HUD, bounded annotation modes, and pointer-based panel reorder

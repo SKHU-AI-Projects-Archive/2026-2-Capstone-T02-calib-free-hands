@@ -1,9 +1,9 @@
 from __future__ import annotations
 
 import numpy as np
-from PySide6.QtCore import QEvent, Qt, QMimeData, QTimer
-from PySide6.QtGui import QColor, QDrag, QFont, QPainter, QPen, QVector4D
-from PySide6.QtWidgets import QCheckBox, QFrame, QGraphicsOpacityEffect, QHBoxLayout, QLabel, QProgressBar, QPushButton, QScrollArea, QSizePolicy, QToolButton, QVBoxLayout, QWidget
+from PySide6.QtCore import QEvent, Qt, QTimer
+from PySide6.QtGui import QColor, QFont, QPainter, QPen, QVector4D
+from PySide6.QtWidgets import QApplication, QCheckBox, QFrame, QGraphicsOpacityEffect, QHBoxLayout, QLabel, QProgressBar, QPushButton, QScrollArea, QSizePolicy, QToolButton, QVBoxLayout, QWidget
 
 from calibfreehands.joint_schema import JOINT_NAMES
 from .topology import RAW_TO_VIEW
@@ -18,7 +18,9 @@ class _ViewportPanel(QWidget):
         self.card.setObjectName("metricOverlay")
         self.opacity_effect = QGraphicsOpacityEffect(self.card)
         self.card.setGraphicsEffect(self.opacity_effect)
-        self.card.setStyleSheet("QFrame#metricOverlay { background-color: rgba(25, 30, 38, 220); color: white; border: 1px solid rgba(255,255,255,65); border-radius: 5px; }")
+        self.background = "none"
+        self._drop_active = False
+        self.card.setStyleSheet("QFrame#metricOverlay { background: transparent; color: white; border: none; }")
         self.card.setMaximumWidth(330)
         self.card.setMaximumHeight(175)
         card_layout = QVBoxLayout(self.card)
@@ -39,7 +41,7 @@ class _ViewportPanel(QWidget):
         card_layout.addWidget(self.scroll)
         self.anchor = "top-left"
         self.scale = "medium"
-        self.opacity = 0.86
+        self.opacity = 1.0
         self.opacity_effect.setOpacity(self.opacity)
         self._apply_style()
         self.installEventFilter(self)
@@ -56,13 +58,45 @@ class _ViewportPanel(QWidget):
             self._position()
         return super().eventFilter(watched, event)
 
+    def dragEnterEvent(self, event):
+        if hasattr(self.view, "configuration_id") and event.mimeData().hasText():
+            self._drop_active = True
+            self._apply_style()
+            event.acceptProposedAction()
+        else:
+            event.ignore()
+
+    def dragLeaveEvent(self, event):
+        self._drop_active = False
+        self._apply_style()
+        super().dragLeaveEvent(event)
+
+    def dropEvent(self, event):
+        self._drop_active = False
+        self._apply_style()
+        if hasattr(self.view, "configuration_id") and event.mimeData().hasText():
+            self.view.viewer.reorder_result(event.mimeData().text(), self.view.configuration_id)
+            event.acceptProposedAction()
+        else:
+            event.ignore()
+
     def _apply_style(self):
         font_size = {"small": 8, "medium": 9, "large": 11}[self.scale]
+        background = "rgba(25, 30, 38, 175)" if self.background == "subtle" else "transparent"
+        border = ("2px solid palette(highlight)" if self._drop_active else
+                  "1px solid rgba(255,255,255,35)" if self.background == "subtle" else "none")
         self.card.setStyleSheet(
-            "QFrame#metricOverlay { background-color: rgba(25, 30, 38, 220); "
-            "color: white; border: 1px solid rgba(255,255,255,65); border-radius: 5px; } "
-            f"QLabel {{ font-size: {font_size}pt; }}"
+            f"QFrame#metricOverlay {{ background-color: {background}; color: white; border: {border}; "
+            "border-radius: 4px; } "
+            f"QLabel {{ font-size: {font_size}pt; color: white; }}"
         )
+
+    def set_background(self, style):
+        if style not in ("none", "subtle"):
+            raise ValueError(style)
+        if style != self.background:
+            self.background = style
+            self._apply_style()
 
     def _position(self):
         self.setGeometry(self.view.rect())
@@ -238,18 +272,82 @@ class _ResultDragHandle(QToolButton):
         self.setText("⠿"); self.setToolTip("Drag to reorder result panels")
         self.setFixedWidth(20)
         self._press = None
+        self._dragging = False
+        self._drop_target = None
+        if isinstance(parent, QWidget):
+            parent.installEventFilter(self)
 
     def mousePressEvent(self, event):
-        self._press = event.position().toPoint()
+        if event.button() == Qt.MouseButton.LeftButton:
+            self._press = event.globalPosition().toPoint()
+            self._dragging = False
+            event.accept()
+            return
         super().mousePressEvent(event)
 
     def mouseMoveEvent(self, event):
-        if self._press is not None and (event.position().toPoint() - self._press).manhattanLength() >= 8:
-            mime = QMimeData(); mime.setText(self.configuration_id)
-            drag = QDrag(self); drag.setMimeData(mime); drag.exec(Qt.DropAction.MoveAction)
-            self._press = None
-        else:
-            super().mouseMoveEvent(event)
+        if self._press is not None and event.buttons() & Qt.MouseButton.LeftButton:
+            self._move_drag(event.globalPosition().toPoint())
+            event.accept()
+            return
+        super().mouseMoveEvent(event)
+
+    def mouseReleaseEvent(self, event):
+        if event.button() == Qt.MouseButton.LeftButton and self._press is not None:
+            self._finish_drag(event.globalPosition().toPoint())
+            event.accept()
+            return
+        super().mouseReleaseEvent(event)
+
+    def eventFilter(self, watched, event):
+        if watched is self.parentWidget():
+            if event.type() == QEvent.Type.MouseButtonPress and event.button() == Qt.MouseButton.LeftButton:
+                self._press = event.globalPosition().toPoint()
+                self._dragging = False
+            elif event.type() == QEvent.Type.MouseMove and self._press is not None:
+                self._move_drag(event.globalPosition().toPoint())
+            elif event.type() == QEvent.Type.MouseButtonRelease:
+                self._finish_drag(event.globalPosition().toPoint())
+        return super().eventFilter(watched, event)
+
+    def _move_drag(self, global_position):
+        if self._press is None:
+            return
+        if not self._dragging and (global_position - self._press).manhattanLength() < 8:
+            return
+        self._dragging = True
+        self.viewer._panel_reorder_active = True
+        target = next((view for view in self.viewer.split_views
+                       if view.rect().contains(view.mapFromGlobal(global_position))), None)
+        if target is self.viewer.split_views[next(i for i, c in enumerate(self.viewer.configurations)
+                                                  if c["id"] == self.configuration_id)]:
+            target = None
+        if target is not self._drop_target:
+            for panel in self.viewer.split_panels:
+                panel._drop_active = panel.view is target
+                panel._apply_style()
+            for view in self.viewer.split_views:
+                view.setStyleSheet("border: 2px solid palette(highlight);" if view is target else "")
+            self._drop_target = target
+
+    def _finish_drag(self, global_position):
+        if self._press is None:
+            return
+        if (global_position - self._press).manhattanLength() >= 8:
+            self._move_drag(global_position)
+        if self._dragging:
+            target = self._drop_target
+            if target is not None:
+                self.viewer.reorder_result(self.configuration_id, target.configuration_id)
+        for panel in self.viewer.split_panels:
+            panel._drop_active = False
+            panel._apply_style()
+        for view in self.viewer.split_views:
+            view.setStyleSheet("")
+        self.viewer._panel_reorder_active = False
+        self._drop_target = None
+        self._press = None
+        self._dragging = False
 
 
 class _JointAnnotationLayer(QWidget):
@@ -257,6 +355,8 @@ class _JointAnnotationLayer(QWidget):
         super().__init__(view)
         self.viewer, self.view = viewer, view
         self.configuration_indices = configuration_indices
+        self.hover_position = None
+        self.setAcceptDrops(True)
         self.setAttribute(Qt.WidgetAttribute.WA_TransparentForMouseEvents)
         self.setAttribute(Qt.WidgetAttribute.WA_TranslucentBackground)
         self.view.installEventFilter(self)
@@ -295,6 +395,7 @@ class _JointAnnotationLayer(QWidget):
                 pair = viewer._metric_cache.get(config["id"], {}).get((frame, hand_name))
                 if pair is None: continue
                 occupied = []
+                candidates = []
                 for joint, (point, error) in enumerate(zip(result.keypoints_3d[position, hand], pair.joint_errors_mm)):
                     if not np.isfinite(point).all() or not np.isfinite(error): continue
                     clip = matrix.map(QVector4D(float((point @ RAW_TO_VIEW.T)[0]),
@@ -303,8 +404,20 @@ class _JointAnnotationLayer(QWidget):
                     if clip.w() <= 0: continue
                     x, y = clip.x() / clip.w(), clip.y() / clip.w()
                     if abs(x) > 1 or abs(y) > 1: continue
-                    label = f"{error:.1f}" if viewer.annotation_mode == "error" else JOINT_NAMES[joint]
                     px, base_y = (x + 1) * self.width() / 2 + 5, (1 - y) * self.height() / 2 - 4
+                    candidates.append((joint, float(error), px, base_y))
+                if viewer.annotation_mode == "key_joints":
+                    candidates = [item for item in candidates if item[0] in (0, 4, 8, 12, 16, 20)]
+                elif viewer.annotation_mode == "worst5":
+                    candidates = sorted(candidates, key=lambda item: item[1], reverse=True)[:5]
+                elif viewer.annotation_mode == "hovered":
+                    if self.hover_position is None or not candidates:
+                        candidates = []
+                    else:
+                        mx, my = self.hover_position.x(), self.hover_position.y()
+                        candidates = [min(candidates, key=lambda item: (item[2] - mx) ** 2 + (item[3] - my) ** 2)]
+                for joint, error, px, base_y in candidates:
+                    label = f"{error:.1f}" if viewer.annotation_content == "error" else JOINT_NAMES[joint]
                     width = max(18, len(label) * 8)
                     offsets = [0] + [offset for step in range(1, 22) for offset in (-15 * step, 15 * step)]
                     py = next((base_y + offset for offset in offsets
