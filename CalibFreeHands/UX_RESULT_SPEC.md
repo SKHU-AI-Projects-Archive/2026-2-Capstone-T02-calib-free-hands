@@ -1537,7 +1537,7 @@ The C-2B dashboard foundation is saved as a checkpoint. It is not the completion
 ### In-viewport HUD and annotations
 
 - Metric and Detection Confidence HUDs are rendered over their associated 3D viewport as display layers. They must not be sibling layout cells, side panels, or scroll areas that reduce viewport geometry.
-- The viewport remains the dominant surface. HUD content is compact, readable, high contrast, and must not obscure the hand unnecessarily. Bound HUD height and allow its own content to scroll when needed; never shrink the 3D view to fit more rows.
+- The viewport remains the dominant surface. HUD content is compact, readable, high contrast, and must not obscure the hand unnecessarily. HUDs have no scroll area or scrollbar. Fit rows vertically by reducing their font from the selected size down to 7 pt, recomputing only when viewport geometry, row count, or selected size changes; never shrink the 3D view to fit more rows.
 - Candidate HUDs identify the result and show selected aggregate metrics for the current frame. Overlay mode groups values by result. A Reference shows its identity and `REFERENCE` badge without self-comparison metric rows.
 - Detection Confidence is shown at most once per detected hand and is explicitly named as detector confidence. Missing values remain unavailable; do not fabricate them.
 - Joint annotation is a separate optional display layer with `Off`, `Error (mm)`, and `Joint name` modes; compatible modes may be combined. `Error (mm)` is the existing per-joint Euclidean distance between the candidate and selected Reference, not confidence. Draw labels near current projected joint positions without changing raw coordinates. Show only valid paired joints and identify the selected Reference context.
@@ -1575,3 +1575,15 @@ The Presentation Redesign and media memory optimization are implemented. Report 
 Comparison and saved-result viewers share a source-keyed asynchronous frame provider. Video RGB frames are decoded only when requested and retained in a 384 MiB byte-bounded LRU cache; images use one static cached frame. Display images copy from the cached NumPy frame so cache eviction cannot invalidate a visible QImage. Missing or changed source media does not prevent viewing the saved 3D result. On the Windows 570-frame `4_assemble.mp4` source with three same-source results, the measured cache stayed at 379.7 MiB; process RSS was 594.5 MiB after decoding through frame 569 and 606.9 MiB after playback, versus the earlier approximately 3.7 GiB full-frame preload observation. This is a local benchmark, not a platform-wide memory guarantee.
 
 C-2B Final Validation remains **READY FOR FINAL MANUAL APPROVAL**. Automated tests and local Windows visual review passed; the user's final visual approval is outstanding.
+
+
+## C-2B Final Stabilization and Hardening
+
+- Keep the source viewport and 3D viewport geometry fixed while control chrome hides and returns. Controls use compact outer padding and remain within the normal 1280x800 review target.
+- Pin has an explicit checked appearance and a `Pinned` label; pinned controls do not auto-hide. Mouse movement restores hidden controls without a click.
+- QToolButton menus open immediately on hover, remain open while the pointer moves between the button and menu, and close when the pointer leaves both. Clicking latches the menu until its action, outside click, Escape, or a second toggle closes it. QComboBox popups remain click-only.
+- The default HUD is transparent text without a scroll area, scrollbar, panel border, background, or result-group separator. Optional subtle background remains an explicit setting. Font fitting is limited to viewport geometry, row-count, and selected-size changes; playback updates reuse label widgets.
+- If a source frame is not in the asynchronous cache, keep the last valid source image visible until the currently requested frame is ready. Ignore ready notifications for stale frame requests.
+- Viewer interactions never rerun inference or modify canonical results.
+
+C-2B remains **READY FOR FINAL MANUAL APPROVAL** until the user completes the final visual review.

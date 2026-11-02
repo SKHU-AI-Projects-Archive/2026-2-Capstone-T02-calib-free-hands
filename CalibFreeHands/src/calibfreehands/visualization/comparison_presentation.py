@@ -1,9 +1,9 @@
 from __future__ import annotations
 
 import numpy as np
-from PySide6.QtCore import QEvent, Qt, QTimer
+from PySide6.QtCore import QEvent, Qt
 from PySide6.QtGui import QColor, QFont, QPainter, QPen, QVector4D
-from PySide6.QtWidgets import QApplication, QCheckBox, QFrame, QGraphicsOpacityEffect, QHBoxLayout, QLabel, QProgressBar, QPushButton, QScrollArea, QSizePolicy, QToolButton, QVBoxLayout, QWidget
+from PySide6.QtWidgets import QCheckBox, QFrame, QGraphicsOpacityEffect, QHBoxLayout, QLabel, QProgressBar, QPushButton, QSizePolicy, QToolButton, QVBoxLayout, QWidget
 
 from calibfreehands.joint_schema import JOINT_NAMES
 from .topology import RAW_TO_VIEW
@@ -16,29 +16,25 @@ class _ViewportPanel(QWidget):
         self.configuration_indices = configuration_indices
         self.card = QFrame(self)
         self.card.setObjectName("metricOverlay")
+        self.card.setFrameShape(QFrame.Shape.NoFrame)
         self.opacity_effect = QGraphicsOpacityEffect(self.card)
         self.card.setGraphicsEffect(self.opacity_effect)
         self.background = "none"
         self._drop_active = False
+        self._fit_signature = None
         self.card.setStyleSheet("QFrame#metricOverlay { background: transparent; color: white; border: none; }")
         self.card.setMaximumWidth(330)
-        self.card.setMaximumHeight(175)
+        self.card.setMaximumHeight(16777215)
         card_layout = QVBoxLayout(self.card)
         card_layout.setContentsMargins(8, 6, 8, 6)
         card_layout.setSpacing(2)
-        self.scroll = QScrollArea()
-        self.scroll.setWidgetResizable(True)
-        self.scroll.setFrameShape(QFrame.Shape.NoFrame)
-        self.scroll.setHorizontalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAlwaysOff)
-        self.scroll.setStyleSheet("background: transparent;")
         self.body = QWidget()
         self.body.setStyleSheet("background: transparent;")
         self.body_layout = QVBoxLayout(self.body)
         self.body_layout.setContentsMargins(0, 0, 0, 0)
-        self.body_layout.setSpacing(4)
+        self.body_layout.setSpacing(2)
         self.body.installEventFilter(self)
-        self.scroll.setWidget(self.body)
-        card_layout.addWidget(self.scroll)
+        card_layout.addWidget(self.body)
         self.anchor = "top-left"
         self.scale = "medium"
         self.opacity = 1.0
@@ -81,15 +77,12 @@ class _ViewportPanel(QWidget):
             event.ignore()
 
     def _apply_style(self):
-        font_size = {"small": 8, "medium": 9, "large": 11}[self.scale]
         background = "rgba(25, 30, 38, 175)" if self.background == "subtle" else "transparent"
-        border = ("2px solid palette(highlight)" if self._drop_active else
-                  "1px solid rgba(255,255,255,35)" if self.background == "subtle" else "none")
+        border = "2px solid palette(highlight)" if self._drop_active else "none"
         self.card.setStyleSheet(
-            f"QFrame#metricOverlay {{ background-color: {background}; color: white; border: {border}; "
-            "border-radius: 4px; } "
-            f"QLabel {{ font-size: {font_size}pt; color: white; }}"
-        )
+            f"QFrame#metricOverlay {{ background-color: {background}; color: white; border: {border}; }}")
+        self._fit_signature = None
+        self._fit_content()
 
     def set_background(self, style):
         if style not in ("none", "subtle"):
@@ -101,15 +94,35 @@ class _ViewportPanel(QWidget):
     def _position(self):
         self.setGeometry(self.view.rect())
         content_width = self.body_layout.sizeHint().width() + 20
-        content_height = self.body_layout.sizeHint().height() + 20
+        content_height = self.body_layout.sizeHint().height() + 12
         width = min(330, max(200, self.view.width() - 24), max(240, content_width + 60))
-        height = min(220, max(64, min(content_height, self.view.height() - 24)))
+        height = min(max(64, content_height), max(64, self.view.height() - 24))
         self.card.setFixedSize(width, height)
         x = 12 if "left" in self.anchor else max(0, self.width() - width - 12)
         y = 12 if "top" in self.anchor else max(0, self.height() - height - 12)
         self.card.move(x, y)
         self.opacity_effect.setOpacity(self.opacity)
         self.raise_()
+        self._fit_content()
+
+    def _fit_content(self):
+        signature = (self.view.height(), self.body_layout.count(), self.scale)
+        if signature == self._fit_signature:
+            return
+        self._fit_signature = signature
+        base = {"small": 8.0, "medium": 9.0, "large": 10.0}[self.scale]
+        available = max(24, min(self.view.height() - 36, 220) - 12)
+        labels = self.body.findChildren(QLabel)
+        size = base
+        while True:
+            font = QFont()
+            font.setPointSizeF(size)
+            for label in labels:
+                label.setFont(font)
+            self.body_layout.activate()
+            if self.body_layout.sizeHint().height() <= available or size <= 7.0:
+                break
+            size = max(7.0, size - 0.5)
 
     def set_presentation(self, anchor=None, scale=None, opacity=None):
         if anchor is not None: self.anchor = anchor
@@ -120,7 +133,6 @@ class _ViewportPanel(QWidget):
         self._position()
 
     def refresh(self, viewer):
-        scroll_position = self.scroll.verticalScrollBar().value()
         self._clear_layout(self.body_layout)
         self.metric_rows.clear()
         self.details_buttons.clear()
@@ -135,10 +147,8 @@ class _ViewportPanel(QWidget):
         if not self.body_layout.count():
             self.body_layout.addWidget(QLabel("No visible results"))
         self.body_layout.activate()
+        self._fit_signature = None
         self._position()
-        QTimer.singleShot(0, self._position)
-        QTimer.singleShot(0, lambda: self.scroll.verticalScrollBar().setValue(
-            min(scroll_position, self.scroll.verticalScrollBar().maximum())))
 
     def update_values(self, viewer):
         frame = viewer.slider.value()
@@ -259,9 +269,6 @@ class _ViewportPanel(QWidget):
                 row_layout.addStretch(1)
                 self.body_layout.addWidget(row)
                 self.confidence_rows[(config["id"], hand)] = value_label
-        separator = QFrame()
-        separator.setFrameShape(QFrame.Shape.HLine)
-        self.body_layout.addWidget(separator)
         self._position()
 
 

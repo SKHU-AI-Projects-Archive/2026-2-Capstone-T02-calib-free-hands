@@ -84,6 +84,26 @@ def test_overlay_float32_and_nan_coordinates_render_without_qt_errors(qapp):
     assert not canvas.isVisible() or canvas.size().width() == 64
 
 
+def test_overlay_keeps_last_source_image_during_cache_miss_and_ignores_stale_ready(qapp):
+    from calibfreehands.visualization.viewer import LoadedResult, _OverlayCanvas
+    first = np.full((48, 64, 3), (210, 20, 30), dtype=np.uint8)
+    keypoints_2d = np.full((2, 2, 21, 2), np.nan, dtype=np.float32)
+    keypoints_3d = np.full((2, 2, 21, 3), np.nan, dtype=np.float32)
+    result = CanonicalResult(np.array([0, 1]), np.array([0.0, .1]), keypoints_2d, keypoints_3d,
+                             np.zeros((2, 2), bool), np.full(2, 500.), (64, 48))
+    canvas = _OverlayCanvas(LoadedResult(result, [first, None]))
+    canvas.resize(64, 48)
+    canvas.paintEvent(None)
+    assert canvas._display_image.pixelColor(0, 0).red() > 180
+    canvas.set_frame(1)
+    canvas.paintEvent(None)
+    assert canvas._display_image.pixelColor(0, 0).red() > 180
+    updates = []
+    canvas.update = lambda: updates.append(True)
+    canvas._frame_ready(0)
+    assert not updates
+
+
 def _viewer_result(mesh=True):
     keypoints_2d = np.full((2, 2, 21, 2), np.nan, dtype=np.float32); keypoints_2d[:, 0] = 0
     keypoints_3d = np.full((2, 2, 21, 3), np.nan, dtype=np.float32)

@@ -70,9 +70,9 @@
 - [x] C-2B compact semantic controls, More/Detach menu, and drag-to-reorder result panels with runtime-only order
 - [x] C-2B current-Reference CSV/JSON export and per-joint detail table
 - [x] C-2B timestamp-driven monotonic playback, speed presets, frame dropping, and active-view-only updates
-- [x] C-2B in-place HUD value updates, preserved scroll position, and stylesheet/layout churn removal
+- [x] C-2B in-place HUD value updates, widget reuse, and stylesheet/layout churn removal
 - [x] C-2B optional playback statistics and reusable OpenGL geometry items; no inference or CUDA work during playback
-- [x] C-2B frame-value HUD updates preserve widget identities and scroll; geometry changes update the active view once
+- [x] C-2B frame-value HUD updates preserve widget identities; geometry changes update the active view once
 - [x] Comparison viewer session opening without inference rerun; source frames decoded once and shared
 - [x] Milestone B bundle format: atomic ZIP-compatible `.cfh` with canonical `result.npz` and validated `metadata.json`
 - [x] Safe result filenames, SHA256 source identity, model/checkpoint/MANO provenance, and file-scoped collision handling
@@ -95,4 +95,16 @@
 - [x] C-2B shared asynchronous MediaFrameProvider with lazy FFmpeg frames, source identity sharing, and a 384 MiB byte-bounded LRU cache
 - [x] C-2B viewer frame requests remain non-blocking; copied QImage display storage survives cache eviction
 - [x] C-2B static image sources use one cached RGB frame; missing and changed source media remain non-blocking for 3D results
-- [x] C-2B final automated and Windows GUI validation completed; waiting for user visual approval before marking the milestone complete
+- [x] C-2B automated and Windows GUI validation completed; user final visual approval remains outstanding
+
+
+## C-2B Final Stabilization and Hardening
+
+- [x] QWindow-safe activity filtering and QComboBox-safe menu close handling
+- [x] Immediate QToolButton hover menus, button/menu pointer transit, click latch, outside click, second toggle, action close, Escape, and click-only combos
+- [x] Checked Pin presentation, pinned visibility, and mouse-movement control restore
+- [x] HUD has no scroll area or result separators; adaptive font fit, transparent default, and reusable per-frame labels
+- [x] Source frame cache misses retain the last valid image; stale frame-ready events do not replace the current request
+- [x] Targeted viewer/presentation/media-provider tests pass; full suite result recorded in VALIDATION_CHECKLIST.md
+- [x] Actual three-result Windows Comparison Viewer inspected in Overlay and Split without inference rerun; source frames, pose overlays, metrics, pin state, and playback updates observed
+- [ ] User final visual approval remains required

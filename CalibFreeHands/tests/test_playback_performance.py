@@ -179,7 +179,8 @@ def test_overlay_result_visibility_restores_reused_geometry(tmp_path, qapp):
     viewer.close()
 
 
-def test_hud_scroll_position_survives_frame_value_updates(tmp_path, qapp):
+def test_hud_frame_value_updates_keep_label_widgets_reused(tmp_path, qapp):
+    from PySide6.QtWidgets import QScrollArea
     from calibfreehands.visualization.comparison import ComparisonViewer
     from tests.test_comparison_viewer import _session
 
@@ -187,15 +188,12 @@ def test_hud_scroll_position_survives_frame_value_updates(tmp_path, qapp):
     viewer.show()
     qapp.processEvents()
     panel = viewer.overlay_panel
-    maximum = panel.scroll.verticalScrollBar().maximum()
-    assert maximum > 0
-    position = min(24, maximum)
-    panel.scroll.verticalScrollBar().setValue(position)
+    labels = dict(panel.metric_rows)
     viewer.slider.setValue(1)
-    assert panel.scroll.verticalScrollBar().value() == position
+    assert panel.metric_rows == labels
     viewer.confidence_numeric_checkbox.setChecked(True)
     qapp.processEvents()
-    assert panel.scroll.verticalScrollBar().value() == min(position, panel.scroll.verticalScrollBar().maximum())
+    assert not panel.findChildren(QScrollArea)
     viewer.close()
 
 

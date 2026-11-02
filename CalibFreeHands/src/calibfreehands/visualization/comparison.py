@@ -754,6 +754,8 @@ class ComparisonViewer(QWidget):
             button.clicked.connect(callback)
 
         toolbar = QHBoxLayout()
+        toolbar.setContentsMargins(14, 8, 14, 6)
+        toolbar.setSpacing(7)
         toolbar.addWidget(self.mode_selector)
         toolbar.addWidget(self.results_menu_button)
         toolbar.addWidget(self.reference_label); toolbar.addWidget(self.reference_selector)
@@ -766,6 +768,7 @@ class ComparisonViewer(QWidget):
         toolbar.addWidget(self.annotation_button); toolbar.addWidget(self.hud_button)
         self.pin_controls_button = QToolButton(); self.pin_controls_button.setText("Pin")
         self.pin_controls_button.setCheckable(True); self.pin_controls_button.setToolTip("Keep controls visible")
+        self.pin_controls_button.setStyleSheet("QToolButton:checked { background: palette(highlight); color: palette(highlighted-text); }")
         toolbar.addWidget(self.pin_controls_button); toolbar.addWidget(self.more_button)
         toolbar.addStretch(1)
 
@@ -898,7 +901,7 @@ class ComparisonViewer(QWidget):
         layout = QGridLayout(self)
         layout.setContentsMargins(0, 0, 0, 0)
         layout.addWidget(self.views, 0, 0)
-        self.chrome = QWidget(); chrome_layout = QVBoxLayout(self.chrome); chrome_layout.setContentsMargins(0, 0, 0, 0)
+        self.chrome = QWidget(); chrome_layout = QVBoxLayout(self.chrome); chrome_layout.setContentsMargins(0, 8, 0, 12); chrome_layout.setSpacing(6)
         chrome_layout.addLayout(toolbar); chrome_layout.addWidget(self.slider)
         playback.addWidget(self.status)
         playback.addWidget(self.metric_status, 1)
@@ -907,15 +910,24 @@ class ComparisonViewer(QWidget):
         self.auto_hide_timer = QTimer(self); self.auto_hide_timer.setSingleShot(True); self.auto_hide_timer.setInterval(2500)
         self.auto_hide_timer.timeout.connect(self._auto_hide_controls)
         self.pin_controls_button.toggled.connect(lambda pinned: self.auto_hide_timer.stop() if pinned else self._show_controls())
+        self.pin_controls_button.toggled.connect(self._set_pin_label)
         self._panel_reorder_active = False
         self._hover_menu_target = None
-        self.hover_menu_timer = QTimer(self); self.hover_menu_timer.setSingleShot(True); self.hover_menu_timer.setInterval(220)
+        self._hover_button_entered = False
+        self._opening_menu_by_hover = False
+        self._hover_menu_latched = False
+        self._last_pointer_position = None
+        self._last_pointer_widget = None
+        self.hover_menu_timer = QTimer(self); self.hover_menu_timer.setSingleShot(True); self.hover_menu_timer.setInterval(0)
         self.hover_menu_timer.timeout.connect(self._open_hover_menu)
-        self.hover_close_timer = QTimer(self); self.hover_close_timer.setSingleShot(True); self.hover_close_timer.setInterval(250)
+        self.hover_close_timer = QTimer(self); self.hover_close_timer.setSingleShot(True); self.hover_close_timer.setInterval(0)
         self.hover_close_timer.timeout.connect(self._close_hover_menu)
         self.setMouseTracking(True)
         for widget in self.findChildren(QWidget):
             widget.setMouseTracking(True)
+        for menu in self.findChildren(QMenu):
+            menu.aboutToShow.connect(lambda m=menu: self._menu_about_to_show(m))
+            menu.aboutToHide.connect(lambda m=menu: self._menu_about_to_hide(m))
         QApplication.instance().installEventFilter(self)
         self._compute_metrics()
         self._refresh_metric_panels()
@@ -954,6 +966,19 @@ class ComparisonViewer(QWidget):
     def _show_controls(self):
         self.chrome.show()
         if self.timer.isActive() and self.auto_hide_action.isChecked(): self.auto_hide_timer.start()
+
+    def _set_pin_label(self, pinned):
+        self.pin_controls_button.setText("Pinned" if pinned else "Pin")
+        self.pin_controls_button.setToolTip("Controls stay visible while pinned" if pinned else "Keep controls visible")
+
+    def _menu_about_to_show(self, menu):
+        if not self._opening_menu_by_hover and menu is getattr(self._hover_menu_target, "menu", lambda: None)():
+            self._hover_menu_latched = True
+
+    def _menu_about_to_hide(self, menu):
+        button = self._hover_menu_target
+        if isinstance(button, QToolButton) and button.menu() is menu:
+            self._hover_menu_latched = False
 
     def _auto_hide_controls(self):
         if (not self.timer.isActive() or not self.auto_hide_action.isChecked()
@@ -1422,49 +1447,70 @@ class ComparisonViewer(QWidget):
             self.metric_status.setText(f"Export failed: {exc}")
 
     def eventFilter(self, watched, event):
-        if isinstance(watched, QWidget) and (watched is self or self.isAncestorOf(watched)):
+        if event.type() in (QEvent.Type.MouseMove, QEvent.Type.MouseButtonPress):
+            self._last_pointer_widget = watched if isinstance(watched, QWidget) else None
+            try:
+                self._last_pointer_position = event.globalPosition().toPoint()
+            except AttributeError:
+                pass
+        active_button = self._hover_menu_target
+        if (event.type() == QEvent.Type.MouseButtonPress and self._hover_menu_latched
+                and isinstance(active_button, QToolButton) and active_button.menu() is not None):
+            root_menu = active_button.menu()
+            inside_menu = (isinstance(watched, QWidget)
+                           and any(watched is menu or menu.isAncestorOf(watched)
+                                   for menu in (root_menu, *root_menu.findChildren(QMenu))))
+            inside_button = isinstance(watched, QWidget) and (
+                watched is active_button or active_button.isAncestorOf(watched))
+            if not inside_menu and not inside_button:
+                self._hover_menu_latched = False
+                root_menu.hide()
+        if (event.type() == QEvent.Type.MouseMove and not self._hover_menu_latched
+                and isinstance(active_button, QToolButton) and active_button.menu() is not None
+                and active_button.menu().isVisible()):
+            self.hover_close_timer.start()
+        is_child_widget = isinstance(watched, QWidget) and (watched is self or self.isAncestorOf(watched))
+        if is_child_widget:
             if isinstance(watched, QToolButton) and watched.menu() is not None:
                 if event.type() == QEvent.Type.Enter:
-                    self.hover_close_timer.stop()
-                    self._hover_menu_target = watched
-                    self.hover_menu_timer.start()
+                    if not self._hover_menu_latched or watched is self._hover_menu_target:
+                        self.hover_close_timer.stop()
+                        self._hover_menu_target = watched
+                        self._hover_button_entered = True
+                        self.hover_menu_timer.start()
                 elif event.type() == QEvent.Type.Leave:
-                    self.hover_menu_timer.stop()
+                    self._hover_button_entered = False
                     self.hover_close_timer.start()
-            elif isinstance(watched, QComboBox):
-                if event.type() == QEvent.Type.Enter:
-                    self.hover_close_timer.stop()
-                    self._hover_menu_target = watched
-                    self.hover_menu_timer.start()
-                elif event.type() == QEvent.Type.Leave:
-                    self.hover_menu_timer.stop()
-                    self.hover_close_timer.start()
-            elif any(watched in (combo.view(), combo.view().viewport())
-                     for combo in self.findChildren(QComboBox)):
+            elif isinstance(watched, QMenu) and self._is_active_hover_menu(watched):
                 if event.type() == QEvent.Type.Enter:
                     self.hover_close_timer.stop()
                 elif event.type() == QEvent.Type.Leave:
                     self.hover_close_timer.start()
-            if isinstance(watched, QMenu):
-                if event.type() == QEvent.Type.Enter:
-                    self.hover_close_timer.stop()
-                elif event.type() == QEvent.Type.Leave:
+                elif event.type() == QEvent.Type.MouseMove:
                     self.hover_close_timer.start()
             if event.type() in (QEvent.Type.MouseMove, QEvent.Type.MouseButtonPress, QEvent.Type.Wheel, QEvent.Type.KeyPress):
                 if not isinstance(watched, (QMenu, QComboBox, QSlider, QDialog)):
                     self._show_controls()
+            if event.type() == QEvent.Type.MouseButtonPress and isinstance(watched, QToolButton) and watched.menu() is not None:
+                menu = watched.menu()
+                if menu.isVisible():
+                    if self._hover_menu_latched:
+                        self._hover_menu_latched = False
+                        menu.hide()
+                    else:
+                        self._hover_menu_latched = True
+                    event.accept()
+                    return True
+                self._hover_menu_target = watched
+                self._hover_menu_latched = True
             if event.type() == QEvent.Type.MouseMove and self.annotation_mode == "hovered":
                 for layer in (self.overlay_annotations, *self.split_annotations):
                     if layer.view is watched:
                         layer.hover_position = event.position().toPoint()
                         layer.update()
-        if event.type() == QEvent.Type.Wheel:
-            for panel in (self.overlay_panel, *self.split_panels):
-                if watched is panel.scroll or panel.scroll.isAncestorOf(watched):
-                    bar = panel.scroll.verticalScrollBar()
-                    bar.setValue(bar.value() - event.angleDelta().y())
-                    event.accept()
-                    return True
+        elif event.type() in (QEvent.Type.MouseMove, QEvent.Type.MouseButtonPress, QEvent.Type.Wheel, QEvent.Type.KeyPress):
+            if not isinstance(watched, (QMenu, QComboBox, QSlider, QDialog)):
+                self._show_controls()
         if event.type() in (QEvent.Type.MouseMove, QEvent.Type.Wheel, QEvent.Type.Resize):
             if watched is self.overlay_view or watched in self.split_views:
                 self._refresh_annotations()
@@ -1475,7 +1521,8 @@ class ComparisonViewer(QWidget):
         if event.type() == QEvent.Type.KeyPress and event.key() == Qt.Key.Key_Escape and self.window().isFullScreen():
             self.window().showNormal(); event.accept(); return True
         if event.type() == QEvent.Type.MouseButtonPress:
-            self._arrow_mode = "orbit" if any(watched is view or view.isAncestorOf(watched) for view in self.split_views + [self.overlay_view]) else "frame"
+            if isinstance(watched, QWidget):
+                self._arrow_mode = "orbit" if any(watched is view or view.isAncestorOf(watched) for view in self.split_views + [self.overlay_view]) else "frame"
         elif event.type() == QEvent.Type.KeyPress:
             if event.key() == Qt.Key.Key_Space:
                 self._play(); event.accept(); return True
@@ -1492,29 +1539,38 @@ class ComparisonViewer(QWidget):
 
     def _open_hover_menu(self):
         button = self._hover_menu_target
-        if isinstance(button, QComboBox) and button.underMouse():
-            button.showPopup()
-        elif button is not None and button.underMouse() and button.menu() is not None:
+        if isinstance(button, QToolButton) and self._hover_button_entered and button.menu() is not None:
             menu = button.menu()
-            menu.popup(button.mapToGlobal(QPoint(0, button.height())))
+            if not menu.isVisible():
+                self._opening_menu_by_hover = True
+                menu.popup(button.mapToGlobal(QPoint(0, button.height())))
+                self._opening_menu_by_hover = False
+
+    def _is_active_hover_menu(self, target):
+        button = self._hover_menu_target
+        if not isinstance(button, QToolButton) or button.menu() is None:
+            return False
+        root = button.menu()
+        return target is root or root.isAncestorOf(target)
 
     def _close_hover_menu(self):
-        from PySide6.QtGui import QCursor
         button = self._hover_menu_target
-        menu = button.menu() if button is not None else None
-        position = QCursor.pos()
-        if isinstance(button, QComboBox):
-            popup = button.view()
-            if button.rect().contains(button.mapFromGlobal(position)):
-                return
-            if popup.isVisible() and popup.rect().contains(popup.mapFromGlobal(position)):
-                return
-            button.hidePopup()
+        if self._hover_menu_latched:
             return
+        menu = button.menu() if isinstance(button, QToolButton) else None
+        position = self._last_pointer_position
+        pointer_widget = self._last_pointer_widget
+        if pointer_widget is button and position is not None and button.rect().contains(button.mapFromGlobal(position)):
+            return
+        if position is None:
+            from PySide6.QtGui import QCursor
+            position = QCursor.pos()
         if button is not None and button.rect().contains(button.mapFromGlobal(position)):
             return
-        if menu is not None and menu.isVisible() and menu.rect().contains(menu.mapFromGlobal(position)):
-            return
+        if menu is not None:
+            for child_menu in (menu, *menu.findChildren(QMenu)):
+                if child_menu.isVisible() and child_menu.rect().contains(child_menu.mapFromGlobal(position)):
+                    return
         if menu is not None:
             menu.hide()
 

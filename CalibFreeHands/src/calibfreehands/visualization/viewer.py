@@ -133,13 +133,18 @@ class _OverlayCanvas(QWidget):
             else:
                 rgb = provider[self.frame] if self.frame < len(provider) else None
             if rgb is None:
-                painter.setPen(Qt.GlobalColor.lightGray)
-                painter.drawText(self.rect(), Qt.AlignmentFlag.AlignCenter, "Loading source frame…")
-                return
-            image = QImage(rgb.data, rgb.shape[1], rgb.shape[0], rgb.strides[0], QImage.Format.Format_RGB888).copy()
-            self._display_image = image
-            sx, sy = self.width() / rgb.shape[1], self.height() / rgb.shape[0]
-            painter.drawImage(self.rect(), self._display_image)
+                if self._display_image.isNull():
+                    painter.setPen(Qt.GlobalColor.lightGray)
+                    painter.drawText(self.rect(), Qt.AlignmentFlag.AlignCenter, "Loading source frame...")
+                    return
+                image = self._display_image
+                image_width, image_height = image.width(), image.height()
+            else:
+                image = QImage(rgb.data, rgb.shape[1], rgb.shape[0], rgb.strides[0], QImage.Format.Format_RGB888).copy()
+                self._display_image = image
+                image_width, image_height = rgb.shape[1], rgb.shape[0]
+            sx, sy = self.width() / image_width, self.height() / image_height
+            painter.drawImage(self.rect(), image)
             for hand_i, hand in enumerate(self.loaded.result.keypoints_2d[self.frame]):
                 if not self.loaded.detected[self.frame, hand_i] or (hand_i == 0 and not self.show_left) or (hand_i == 1 and not self.show_right): continue
                 painter.setPen(QPen(Qt.GlobalColor.cyan if hand_i == 0 else Qt.GlobalColor.yellow, 2))

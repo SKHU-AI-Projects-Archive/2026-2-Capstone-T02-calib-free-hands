@@ -487,12 +487,75 @@ def test_presentation_pin_and_annotation_density_modes(tmp_path, qapp):
     viewer = ComparisonViewer(_session(tmp_path, 2))
     assert hasattr(viewer, "pin_controls_button")
     viewer.pin_controls_button.setChecked(True)
+    assert viewer.pin_controls_button.text() in {"Pinned", "Pin: On"}
     viewer.timer.start()
     viewer._auto_hide_controls()
     assert not viewer.chrome.isHidden()
     assert {"off", "hovered", "key_joints", "worst5", "all"} <= set(viewer.annotation_actions)
     viewer.set_annotation_mode("worst5")
     assert viewer.annotation_mode == "worst5"
+    viewer.close()
+
+
+def test_comparison_event_filter_accepts_qwindow_and_combo_close_target(tmp_path, qapp):
+    from PySide6.QtCore import QEvent
+    from PySide6.QtGui import QWindow
+    from calibfreehands.visualization.comparison import ComparisonViewer
+
+    viewer = ComparisonViewer(_session(tmp_path, 2))
+    window = QWindow()
+    assert viewer.eventFilter(window, QEvent(QEvent.Type.MouseButtonPress)) is False
+    viewer._hover_menu_target = viewer.reference_selector
+    viewer._close_hover_menu()
+    assert not viewer.reference_selector.view().isVisible()
+    window.deleteLater()
+    viewer.close()
+
+
+def test_hover_menu_becomes_latched_by_click_and_closes_on_action(tmp_path, qapp):
+    from PySide6.QtCore import QPoint, Qt
+    from PySide6.QtTest import QTest
+    from calibfreehands.visualization.comparison import ComparisonViewer
+
+    viewer = ComparisonViewer(_session(tmp_path, 2))
+    viewer.resize(1280, 800); viewer.show(); qapp.processEvents()
+    button = viewer.annotation_button
+    menu = viewer.annotation_menu
+    QTest.mouseMove(viewer.views, QPoint(40, 40)); qapp.processEvents()
+    QTest.mouseMove(button, button.rect().center()); qapp.processEvents()
+    assert menu.isVisible()
+    QTest.mouseClick(button, Qt.MouseButton.LeftButton); qapp.processEvents()
+    QTest.mouseMove(viewer.views, QPoint(40, 40)); qapp.processEvents()
+    assert menu.isVisible()
+    action = next(action for action in menu.actions() if action.isCheckable())
+    QTest.mouseClick(menu, Qt.MouseButton.LeftButton, pos=menu.actionGeometry(action).center())
+    qapp.processEvents()
+    assert not menu.isVisible()
+    viewer.close()
+
+
+def test_clicked_menu_stays_latched_until_second_toggle_or_escape(tmp_path, qapp):
+    from PySide6.QtCore import QPoint, Qt
+    from PySide6.QtTest import QTest
+    from calibfreehands.visualization.comparison import ComparisonViewer
+
+    viewer = ComparisonViewer(_session(tmp_path, 2))
+    viewer.resize(1280, 800); viewer.show(); qapp.processEvents()
+    button = viewer.hud_button
+    QTest.mouseClick(button, Qt.MouseButton.LeftButton); qapp.processEvents()
+    assert viewer.hud_menu.isVisible() and viewer._hover_menu_latched
+    QTest.mouseMove(viewer.views, QPoint(40, 40)); qapp.processEvents()
+    assert viewer.hud_menu.isVisible()
+    QTest.mouseClick(button, Qt.MouseButton.LeftButton); qapp.processEvents()
+    assert not viewer.hud_menu.isVisible()
+    QTest.mouseClick(button, Qt.MouseButton.LeftButton); qapp.processEvents()
+    assert viewer.hud_menu.isVisible()
+    QTest.keyClick(viewer.hud_menu, Qt.Key.Key_Escape); qapp.processEvents()
+    assert not viewer.hud_menu.isVisible()
+    QTest.mouseClick(button, Qt.MouseButton.LeftButton); qapp.processEvents()
+    assert viewer.hud_menu.isVisible()
+    QTest.mouseClick(viewer.playback_buttons[-1], Qt.MouseButton.LeftButton); qapp.processEvents()
+    assert not viewer.hud_menu.isVisible() and not viewer._hover_menu_latched
     viewer.close()
 
 
@@ -534,7 +597,7 @@ def test_compact_presentation_explains_disabled_options_and_hud_background_defau
     viewer.close()
 
 
-def test_toolbutton_menu_opens_after_hover_dwell_and_closes_after_leave(tmp_path, qapp):
+def test_toolbutton_menu_opens_immediately_and_closes_when_pointer_leaves(tmp_path, qapp):
     from PySide6.QtCore import QPoint
     from PySide6.QtTest import QTest
     from calibfreehands.visualization.comparison import ComparisonViewer
@@ -542,17 +605,20 @@ def test_toolbutton_menu_opens_after_hover_dwell_and_closes_after_leave(tmp_path
     viewer = ComparisonViewer(_session(tmp_path, 2))
     viewer.resize(1280, 800); viewer.show(); qapp.processEvents()
     button = viewer.metric_menu_button
+    QTest.mouseMove(viewer.views, QPoint(40, 40)); qapp.processEvents()
     QTest.mouseMove(button, button.rect().center())
-    QTest.qWait(260); qapp.processEvents()
+    qapp.processEvents()
+    assert viewer.metric_menu.isVisible()
+    QTest.mouseMove(viewer.metric_menu, viewer.metric_menu.rect().center()); qapp.processEvents()
     assert viewer.metric_menu.isVisible()
     QTest.mouseMove(viewer.views, QPoint(40, 40))
-    QTest.qWait(300); qapp.processEvents()
+    qapp.processEvents()
     assert not viewer.metric_menu.isVisible()
     viewer.close()
 
 
-def test_combo_hover_popup_stays_open_while_pointer_enters_popup(tmp_path, qapp):
-    from PySide6.QtCore import QPoint
+def test_combo_boxes_remain_click_only(tmp_path, qapp):
+    from PySide6.QtCore import Qt
     from PySide6.QtTest import QTest
     from calibfreehands.visualization.comparison import ComparisonViewer
 
@@ -560,37 +626,29 @@ def test_combo_hover_popup_stays_open_while_pointer_enters_popup(tmp_path, qapp)
     viewer.resize(1280, 800); viewer.show(); qapp.processEvents()
     combo = viewer.reference_selector
     QTest.mouseMove(combo, combo.rect().center())
-    QTest.qWait(260); qapp.processEvents()
-    assert combo.view().isVisible()
-    QTest.mouseMove(combo.view().viewport(), combo.view().viewport().rect().center())
-    QTest.qWait(300); qapp.processEvents()
+    qapp.processEvents()
+    assert not combo.view().isVisible()
+    QTest.mouseClick(combo, Qt.MouseButton.LeftButton)
+    qapp.processEvents()
     assert combo.view().isVisible()
     combo.hidePopup(); viewer.close()
 
 
-def test_hud_wheel_scroll_does_not_change_3d_camera(tmp_path, qapp):
-    from PySide6.QtCore import QPoint, QPointF, Qt
-    from PySide6.QtGui import QWheelEvent
+def test_hud_is_text_only_and_has_no_scroll_area_or_group_separators(tmp_path, qapp):
+    from PySide6.QtWidgets import QFrame, QLabel, QScrollArea
     from calibfreehands.visualization.comparison import ComparisonViewer
 
     viewer = ComparisonViewer(_session(tmp_path, 6))
     viewer.resize(1280, 800); viewer.show(); viewer.confidence_numeric_checkbox.setChecked(True)
     qapp.processEvents()
     panel = viewer.overlay_panel
-    scrollbar = panel.scroll.verticalScrollBar()
-    assert scrollbar.maximum() > 0
-    before_camera = viewer.overlay_view.cameraParams()
-    before_scroll = scrollbar.value()
-    position = QPointF(panel.scroll.viewport().rect().center())
-    event = QWheelEvent(position, panel.scroll.viewport().mapToGlobal(position.toPoint()),
-                        QPoint(), QPoint(0, -120), Qt.MouseButton.NoButton,
-                        Qt.KeyboardModifier.NoModifier, Qt.ScrollPhase.ScrollUpdate, False)
-    qapp.sendEvent(panel.scroll.viewport(), event)
-    assert scrollbar.value() > before_scroll
-    assert viewer.overlay_view.cameraParams() == before_camera
-    scroll_position = scrollbar.value()
-    viewer.slider.setValue(1); qapp.processEvents()
-    assert scrollbar.value() == scroll_position
+    assert not panel.findChildren(QScrollArea)
+    assert not any(isinstance(panel.body_layout.itemAt(i).widget(), QFrame)
+                   and panel.body_layout.itemAt(i).widget().frameShape() == QFrame.Shape.HLine
+                   for i in range(panel.body_layout.count()) if panel.body_layout.itemAt(i).widget())
+    assert panel.card.geometry().right() <= panel.width()
+    assert panel.card.geometry().bottom() <= panel.height()
+    assert all(label.font().pointSizeF() >= 7 for label in panel.body.findChildren(QLabel))
     viewer.close()
 
 
