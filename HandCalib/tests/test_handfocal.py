@@ -4833,5 +4833,31 @@ class PSPauses(unittest.TestCase):
             self.assertLess(o2["spread_px"], 3.0)
 
 
+class KTChain(unittest.TestCase):
+    def test_chain_recovers_a_planar_motion_and_breaks_on_a_blank_frame(self):
+        rng = np.random.default_rng(1)
+        img = cv2.GaussianBlur((rng.random((540, 960)) * 255).astype(np.uint8), (0, 0), 1.5)
+        Hs = [np.array([[np.cos(a), -np.sin(a), 300 + 4 * k], [np.sin(a), np.cos(a), 150 + 2 * k], [0, 0, 1]]) for k, a in enumerate(np.radians(np.arange(12) * 1.5))]
+        base = np.c_[np.linspace(100, 250, 21), np.linspace(80, 200, 21)]
+        with tempfile.TemporaryDirectory() as d:
+            pngs = []
+            for k, Hk in enumerate(Hs):
+                q = str(Path(d) / f"{k}.png")
+                cv2.imwrite(q, cv2.warpPerspective(img, Hk, (960, 540)))
+                pngs.append(q)
+            kps = np.array([hf.kt_map(base, Hk) for Hk in Hs])
+            boxes = np.array([np.r_[k.min(0) - 20, k.max(0) + 20] for k in kps])
+            kc = {"win": 21, "levels": 3, "dilate_frac": 0.05, "max_corners": 400, "quality": 0.01, "min_distance": 7, "block": 7, "fb_px": 1.0, "min_inliers": 20, "threshold_px": 1.5}
+            ch = hf.kt_chain(pngs, kps, boxes, list(range(12)), kc)
+            self.assertEqual(ch["breaks"], 0)
+            np.testing.assert_allclose(hf.kt_map(kps[0], ch["H"][11]), kps[11], atol=0.5)
+            cv2.imwrite(pngs[6], np.zeros((540, 960), np.uint8))
+            ch2 = hf.kt_chain(pngs, kps, boxes, list(range(12)), kc)
+            self.assertEqual(ch2["breaks"], 1)
+            self.assertIsNone(ch2["H"][6])
+            self.assertIsNone(ch2["H"][11])
+        np.testing.assert_array_equal(hf.kt_carry(np.array([False, True, False, True]), np.array([0.0, 1.0, 2.0, 3.0])), [1.0, 1.0, 1.0, 3.0])
+
+
 if __name__ == "__main__":
     unittest.main()

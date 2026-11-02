@@ -5363,6 +5363,79 @@ def ps_average(kp: np.ndarray, mask: np.ndarray, ok: np.ndarray, seg, reg: dict 
     return {"kp": np.where(vis[:, None], mean, np.nan), "vis": vis, "n_frames": len(use), "spread_px": spread, "ref": ref}
 
 
+# ====================================================================================================
+# kt  (experiment 56: continuous tracking for 53's oblique desk videos: KLT features on the hand region between neighbouring frames (30 fps), homographies chained from a reference frame
+#      forward and backward; the reference joints moved by the chained homography become the points of every frame; the supervisor's code through od_job)
+# ====================================================================================================
+def kt_hand_mask(kp: np.ndarray, box: np.ndarray, shape, dilate_frac: float) -> np.ndarray:
+    m = np.zeros(shape, np.uint8)
+    p = kp[np.isfinite(kp).all(1)].astype(np.float32)
+    if len(p) >= 3:
+        cv2.fillConvexPoly(m, cv2.convexHull(p).astype(np.int32), 255)
+        r = max(1, int(round(float(dilate_frac) * float(box_long(np.asarray(box, float)[None])[0]))))
+        m = cv2.dilate(m, np.ones((2 * r + 1, 2 * r + 1), np.uint8))
+    return m
+
+
+def kt_chain(pngs: list, kps: np.ndarray, boxes: np.ndarray, order: list, kcfg: dict) -> dict:
+    """Homographies from order[0] to every later frame of order: at each step new corners (goodFeaturesToTrack) inside the previous frame's hand mask (hull of its joints, dilated), pyramidal LK
+    to the next frame with a forward-backward check, USAC_MAGSAC homography between the two frames, composed with the chain. A step with fewer than kcfg.min_inliers inliers breaks the chain:
+    that frame and every later one get None. kps / boxes: per frame (the last detected values carried over where the hand is not detected). Returns {H: {frame: 3x3 | None}, breaks, inl (list)}."""
+    lk = dict(winSize=(int(kcfg["win"]), int(kcfg["win"])), maxLevel=int(kcfg["levels"]), criteria=(cv2.TERM_CRITERIA_EPS | cv2.TERM_CRITERIA_COUNT, 30, 0.01))
+    Hc = {order[0]: np.eye(3)}
+    inls, breaks, broken = [], 0, False
+    gray = lambda i: cv2.cvtColor(cv2.imread(pngs[i], cv2.IMREAD_COLOR), cv2.COLOR_BGR2GRAY)      # noqa: E731
+    g0 = gray(order[0])
+    for prev, cur in zip(order[:-1], order[1:]):
+        g1 = gray(cur)
+        if broken:
+            Hc[cur] = None
+            g0 = g1
+            continue
+        m = kt_hand_mask(kps[prev], boxes[prev], g0.shape, kcfg["dilate_frac"])
+        c = cv2.goodFeaturesToTrack(g0, int(kcfg["max_corners"]), float(kcfg["quality"]), float(kcfg["min_distance"]), mask=m, blockSize=int(kcfg["block"]))
+        Hs = None
+        if c is not None and len(c) >= 8:
+            p0 = c.reshape(-1, 2).astype(np.float32)
+            p1, s1, _ = cv2.calcOpticalFlowPyrLK(g0, g1, p0.reshape(-1, 1, 2), None, **lk)
+            pb, s2, _ = cv2.calcOpticalFlowPyrLK(g1, g0, p1, None, **lk)
+            ok = (s1.ravel() == 1) & (s2.ravel() == 1) & (np.linalg.norm(pb.reshape(-1, 2) - p0, axis=1) < float(kcfg["fb_px"]))
+            if ok.sum() >= int(kcfg["min_inliers"]):
+                Hs, inl = cv2.findHomography(p0[ok].astype(np.float64), p1.reshape(-1, 2)[ok].astype(np.float64), cv2.USAC_MAGSAC, float(kcfg["threshold_px"]))
+                if Hs is None or inl is None or int(inl.sum()) < int(kcfg["min_inliers"]):
+                    Hs = None
+                else:
+                    inls.append(int(inl.sum()))
+        if Hs is None:
+            breaks += 1
+            broken = True
+            Hc[cur] = None
+        else:
+            Hc[cur] = Hs @ Hc[prev]
+        g0 = g1
+    return {"H": Hc, "breaks": breaks, "inl": inls}
+
+
+def kt_carry(present: np.ndarray, arr: np.ndarray) -> np.ndarray:
+    """Per frame values with the last detected value carried over (the first detected value before the first detection)."""
+    out = np.array(arr, float, copy=True)
+    idx = np.flatnonzero(present)
+    if not len(idx):
+        return out
+    last = idx[0]
+    for i in range(len(out)):
+        if present[i]:
+            last = i
+        out[i] = arr[last]
+    return out
+
+
+def kt_map(P: np.ndarray, H) -> np.ndarray:
+    if H is None:
+        return np.full_like(np.asarray(P, float), np.nan)
+    return cv2.perspectiveTransform(np.asarray(P, np.float64).reshape(-1, 1, 2), H).reshape(-1, 2)
+
+
 def od_fix_lines(path=None) -> list:
     """Where the six corrections to the supervisor's code sit in handfocal_estimate.py (line numbers of the corrected spellings inside section 5)."""
     p = Path(path) if path else Path(__file__).resolve().parent / "handfocal_estimate.py"
