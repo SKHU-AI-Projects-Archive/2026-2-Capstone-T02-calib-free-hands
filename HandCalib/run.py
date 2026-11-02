@@ -9933,7 +9933,206 @@ def kt_results_yaml(run_dir: Path, cfg: dict):
     return p
 
 
-COMMANDS = {"protocol": protocol_main, "frame-filter": ff_main, "same-session": session_main, "overlay": overlay_main, "phase-segmentation": pseg_main, "guide-revision": grev_main, "f-response": fresp_main, "error-factors": ferr_main, "long-video-check": long_main, "generalization": gen_main, "main-camera-extension": ext_main, "wide-60cm": wide_main, "jointset-sets": jset_main, "verdict-calibration": cal_main, "printed-hand": pr_main, "hand-markers": mk_main, "markers-only": mo_main, "free-template": ft_main, "free-shape3d": s3_main, "free-shape3d-hand": h3_main, "free-shape3d-27": e3_main, "free-shape3d-new": e4_main, "mmpose-hand": mm_main, "mmpose-hand-46": mm2_main, "free-shape3d-new2": e5_main, "mmpose-hand-src": mm3_main, "free-shape3d-detectors": fs_main, "free-shape3d-hand-sets": h4_main, "free-shape3d-hand-sets-42track": h4b_main, "oblique-desk": od_main, "oblique-synthetic": sy_main, "oblique-fixed-template": fx_main, "oblique-desk-videos": om_main, "pause-stabilized": ps_main, "continuous-klt": kt_main}
+# ====================================================================================================
+# kp  (experiment 57: 56's continuous KLT (kt_video unchanged) on the palm-up videos of 46 / 49 (camera above the desk, the right palm toward the camera, front window then tilt);
+#      the supervisor's free_template / free_shape3d through od_job; 1 s block bootstrap; 53's f verdict, the desk warnings off; compared with 46 / 49's per-frame free_shape3d)
+#     python HandCalib/run.py continuous-klt-palm --config HandCalib/configs/57_continuous_klt_palm.yaml [--out DIR]
+#     python HandCalib/run.py continuous-klt-palm --config ... results-yaml --run runs/57_continuous_klt_palm/<UTC>
+# ====================================================================================================
+KP_NOTE = ("실험 56의 연속 KLT 추적(손 영역 특징점을 이웃 프레임끼리 따라가 호모그래피를 이어 붙이고, 기준 프레임의 MediaPipe 관절을 옮겨 각 프레임의 점으로 씀)을 실험 46·49의 손바닥 영상 24개"
+           "(카메라가 책상 위에서 내려다보고, 오른손 손바닥을 카메라로 향한 채 정면 뒤 기울임)에 그대로 적용했다. 교수님 free_template·free_shape3d(od_job 그대로), 1초 블록 부트스트랩, 실험 53의 f 판정 규칙이고 "
+           "책상용 경고(기울기 30~60°, 책상 위 회전)는 쓰지 않았다. 실행 전에 고정했다. 기준 f와의 비교는 summary.md에만 있다.")
+
+
+def kp_prior(cfg: dict) -> dict:
+    """46 / 49's per-frame MediaPipe j16 free_shape3d (read only): {video: {'f_3d': , 'f_planar': }}."""
+    out = {}
+    for p in cfg.get("compare", []):
+        q = hf.resolve(p)
+        if not q.exists():
+            continue
+        for v, x in (yaml.safe_load(q.read_text()).get("videos") or {}).items():
+            s = (x or {}).get("free_shape3d") or {}
+            out[v] = {"f_3d": s.get("f_3d_px"), "f_planar": s.get("f_planar_px")}
+    return out
+
+
+def kp_spread(x) -> float | None:
+    """p95 - p5 of the finite values (the tilt change over the frames)."""
+    x = np.asarray(x, float)
+    x = x[np.isfinite(x)]
+    return float(np.percentile(x, 95) - np.percentile(x, 5)) if len(x) else None
+
+
+def kp_summary(path: Path, ana: dict, vid: dict, cfg: dict, prior: dict):
+    ref = float(cfg["ref_f"]["value"])
+    t = cfg["verdict"]["main"]
+    pe = lambda f: "-" if f is None else f"{f:.1f} ({100 * (f / ref - 1):+.1f}%)"      # noqa: E731
+    cnt = {}
+    for v in ana.values():
+        cnt[v["verdict"]["verdict"]] = cnt.get(v["verdict"]["verdict"], 0) + 1
+    vc = cfg["verdict"]
+    L = [f"**판정 (영상별, 추적 점 {t['joint_set']} {t['method']}): " + ", ".join(f"{k} {n}개" for k, n in cnt.items()) + "**", "", "# 실험 57 summary", "", f"**{KP_NOTE}**", "",
+         f"- 기준 f: {ref:g} px ({cfg['ref_f']['source']}).",
+         f"- 판정 규칙(실험 53과 같음): 사용 프레임 {vc['min_frames']}장 미만이면 판단 불가; 경계 또는 기준 ±{100 * float(vc['reject_tol']):.0f}% 밖이면 어려움; 경계 아님·부트스트랩 구간 f의 ±{100 * float(vc['ci_tol']):.0f}%·기준 ±{100 * float(vc['accept_tol']):.0f}% 안이면 가능성 있음; 그 외 판단 보류.", "",
+         "## 1. 영상별", "", "| 영상 | 촬영 묶음 | 거리(cm) | 판정 | free_template 초점 거리 (기준 f 대비) | 95% 구간 | free_shape3d 초점 거리 (기준 f 대비) | 21점 free_template | 실험 46·49 free_shape3d (프레임별 MediaPipe 16점) | 사용 프레임 | 기울기 변화 (5~95%) | 손 평면 기울기 중앙값 | 왕복 오차 (px) |",
+         "|---|---|---|---|---|---|---|---|---|---|---|---|---|"]
+    for e in cfg["videos"]:
+        v = e["file"]
+        x = vid[v]
+        if "failed" in x:
+            L.append(f"| {v} | {e['session']} | {e['distance_cm']:g} | 판단 불가 | 실행 실패: {x['failed']} | - | - | - | - | - | - | - | - |")
+            continue
+        b = ana[v]["by"]
+        a, s3, a21 = b[t["joint_set"]].get("free_template"), b[t["joint_set"]].get("free_shape3d"), (b.get("j21") or {}).get("free_template")
+        ci = "-" if not a or not a["ci"] else f"{a['ci'][0]:.1f} ~ {a['ci'][1]:.1f}"
+        vv = ana[v]["verdict"]
+        lp = x["loops"]
+        L.append(f"| {v} | {e['session']} | {e['distance_cm']:g} | {vv['verdict']} | {pe(a and a['f'])}{' (경계)' if a and a['boundary'] else ''} | {ci} | "
+                 f"{pe(s3 and s3['f'])}{' (경계)' if s3 and s3['boundary'] else ''} | {pe(a21 and a21['f'])}{' (경계)' if a21 and a21['boundary'] else ''} | {pe(prior.get(v, {}).get('f_3d'))} | {x['n_use']} | "
+                 f"{long_fmt(a and a['tilt_spread_deg'], 1)}° | {long_fmt(a and a['tilt_median_deg'], 1)}° | {long_fmt(lp['뒤쪽']['median_px'], 1)} / {long_fmt(lp['앞쪽']['median_px'], 1)} |")
+    L += ["", "왕복 오차: 기준 프레임에서 끝(또는 처음)까지 따라간 뒤 따로 되돌아온 체인으로 기준 프레임에 돌아왔을 때 기준 관절이 어긋난 거리의 중앙값(뒤쪽 / 앞쪽).", "",
+          "## 2. 거리별 기하평균 (16점), 초점 거리 (기준 f 대비)", ""]
+    ds = sorted({float(e["distance_cm"]) for e in cfg["videos"]})
+    rows = [(m, lambda e, m=m: (ana.get(e["file"], {}).get("by", {}).get(t["joint_set"]) or {}).get(m)) for m in OD_METHODS]
+    L += ["| 방식 | 촬영 묶음 | " + " | ".join(f"{d:g} cm" for d in ds) + " | 경계 영상 수 |", "|---|---|" + "---|" * (len(ds) + 1)]
+    for m, get in rows:
+        for ses in sorted({e["session"] for e in cfg["videos"]}) + ["전체"]:
+            cells, nb = [], 0
+            for d in ds:
+                fs = []
+                for e in cfg["videos"]:
+                    x = get(e)
+                    if x and (ses == "전체" or e["session"] == ses) and float(e["distance_cm"]) == d:
+                        fs.append(x["f"])
+                        nb += int(x["boundary"])
+                cells.append(pe(e3_gm(fs)) if fs else "-")
+            L.append(f"| {m} | {ses} | " + " | ".join(cells) + f" | {nb} |")
+    for ses in sorted({e["session"] for e in cfg["videos"]}) + ["전체"]:
+        cells = [pe(e3_gm([prior[e["file"]]["f_3d"] for e in cfg["videos"] if prior.get(e["file"], {}).get("f_3d") and (ses == "전체" or e["session"] == ses) and float(e["distance_cm"]) == d]) or None) for d in ds]
+        L.append(f"| 실험 46·49 free_shape3d (프레임별) | {ses} | " + " | ".join(cells) + " | - |")
+    ok = [vid[e["file"]] for e in cfg["videos"] if "failed" not in vid[e["file"]]]
+    L += ["", "## 3. 추적 진단", "", f"- 체인 끊김 합계 {sum(x['breaks'] for x in ok)}, 인라이어 중앙값 {np.median([x['inl_median'] for x in ok if x['inl_median']]):.0f}개.",
+          f"- 추적 점과 MediaPipe 관절의 차이 중앙값 {np.median([x['det_dist_median_pct'] for x in ok if x['det_dist_median_pct'] is not None]):.2f}% 박스 (영상별 90번째 백분위 중앙값 {np.median([x['det_dist_p90_pct'] for x in ok if x['det_dist_p90_pct'] is not None]):.2f}%). 이 차이는 검출기 오차와 추적 누적 오차가 섞인 값이다.", "",
+          "## 한계", "", "- 손 영역은 MediaPipe 관절의 볼록 영역(조금 넓힘)이라 손 가장자리의 책상 특징점이 섞일 수 있다(MAGSAC가 대부분 걸러냄).",
+          "- 손바닥은 오목하고 엄지를 접은 자세라 완전한 평면이 아니어서 호모그래피 하나로는 조금 어긋난다.", "- 기준 프레임의 관절 위치 오차는 손 모양(템플릿) 오차로만 들어간다.",
+          "- 실험 46·49 값은 그 실험의 free_shape3d 결과(정면 창 규칙, 프레임별 MediaPipe 관절)를 읽어 온 것으로, 프레임 선택이 이번 실험과 다르다.", ""]
+    path.write_text("\n".join(L) + "\n")
+
+
+def kp_main(argv=None):
+    ap = argparse.ArgumentParser()
+    ap.add_argument("--config", default=str(hf.PROJECT_ROOT / "configs/57_continuous_klt_palm.yaml"))
+    sub = ap.add_subparsers(dest="cmd")
+    ry = sub.add_parser("results-yaml")
+    ry.add_argument("--run", required=True)
+    ap.add_argument("--out", default=None)
+    a = ap.parse_args(argv)
+    text = Path(a.config).read_text()
+    own = yaml.safe_load(text)
+    base = od_load(yaml.safe_load(hf.resolve(own["base_config"]).read_text()))
+    cfg = {**base, **{k: own[k] for k in ("experiment", "videos", "tracking", "compare", "workers", "n_workers", "output") if k in own}, "bootstrap": {**base["bootstrap"], **own.get("bootstrap", {})}}
+    if a.cmd == "results-yaml":
+        print(kp_results_yaml(hf.resolve(a.run), cfg))
+        return None
+    missing = [e["file"] for e in cfg["videos"] if not (Path(cfg["input_dir"]).expanduser() / e["file"]).exists()]
+    if missing:
+        raise SystemExit(f"영상이 없습니다: {missing}")
+    run_root = Path(a.out).expanduser() if a.out else hf.resolve(cfg["output"]["root"]) / utc_stamp()
+    run_root.mkdir(parents=True)
+    log = Log(run_root / "log.txt")
+    log(f"57 손바닥 영상 연속 KLT 추적: 영상 {len(cfg['videos'])}개, {cfg['tracking']['fps']} fps → {run_root}")
+    t0 = time.time()
+    for k in ("OMP_NUM_THREADS", "OPENBLAS_NUM_THREADS", "MKL_NUM_THREADS"):
+        os.environ[k] = "1"
+    vid = {e["file"]: kt_video(e, cfg, run_root, log) for e in cfg["videos"]}
+    ecfg, bc = cfg["pipeline"]["estimate"], cfg["bootstrap"]
+    jobs, keys = [], []
+    for e in cfg["videos"]:
+        x = vid[e["file"]]
+        if "failed" in x:
+            continue
+        ui = np.flatnonzero(x["use"])
+        if len(ui) < 4:
+            continue
+        mask = np.isfinite(x["kp"]).all(2)
+        for sn, ids, _ in od_sets(cfg):
+            jobs.append(("main", 0, x["kp"], mask, ui, x["box"], tuple(x["size"]), ecfg, ids, cfg["free_shape3d"], True))
+            keys.append((e["file"], sn))
+            for rep in range(int(bc["n"])):
+                jobs.append(("boot", rep, x["kp"], mask, ui[hf.od_blocks(len(ui), int(bc["block"]), rep, int(bc["seed"]))], x["box"], tuple(x["size"]), ecfg, ids, cfg["free_shape3d"], False))
+                keys.append((e["file"], sn))
+    import multiprocessing as mp
+    from concurrent.futures import ProcessPoolExecutor
+    t1 = time.time()
+    with ProcessPoolExecutor(max_workers=int(cfg["workers"]), mp_context=mp.get_context("spawn")) as ex:
+        out = list(ex.map(hf.od_job, jobs, chunksize=1))
+    log(f"  추정 {len(jobs)}건: {time.time() - t1:.0f} s")
+    res = {}
+    for k, o in zip(keys, out):
+        r = res.setdefault(k, {"main": None, "boot": []})
+        if o["kind"] == "main":
+            r["main"] = o
+        else:
+            r["boot"].append(o)
+    vc, refv = cfg["verdict"], float(cfg["ref_f"]["value"])
+    lvl = float(bc.get("level", 0.95))
+    ana = {}
+    for e in cfg["videos"]:
+        v = e["file"]
+        by = {}
+        for sn, _, _ in od_sets(cfg):
+            r = res.get((v, sn), {"main": {"failed": "사용 프레임 4장 미만 또는 실행 실패"}, "boot": []})
+            b = by[sn] = {"failed": r["main"].get("failed"), "n_boot": len(r["boot"])}
+            for m in OD_METHODS:
+                xx = r["main"].get(m)
+                if xx:
+                    p = xx.get("poses", {})
+                    fb = [bb[m]["f"] for bb in r["boot"] if m in bb]
+                    b[m] = {"f": xx["f"], "ci": hf.od_ci(fb, lvl), "n_boot_ok": len(fb), "boundary": xx["boundary"], "boot_at_bound": sum(1 for bb in r["boot"] if m in bb and bb[m]["boundary"]),
+                            "tilt_median_deg": None if not p else float(np.nanmedian(p["tilt_deg"])), "tilt_spread_deg": None if not p else kp_spread(p["tilt_deg"]),
+                            "turn_range_deg": None if not p else od_range(p["turn_deg"]), "res_median_pct": None if not p else float(np.nanmedian(p["res_pct"]))}
+        t = vc["main"]
+        est = by[t["joint_set"]].get(t["method"])
+        nu = vid[v].get("n_use", 0)
+        vv = hf.od_verdict(None if est is None else {"f": est["f"], "boundary": est["boundary"]}, None if est is None else est["ci"], nu, refv, vc, None, None)
+        ana[v] = {"by": by, "verdict": vv}
+        log(f"  {v} ({e['session']}, {e['distance_cm']:g} cm): {vv['verdict']}" + (f" ({vv['reason']})" if vv.get("reason") else "") + " | " + ", ".join(f"{sn} {m} {by[sn][m]['f']:.1f}" for sn in by for m in OD_METHODS if m in by[sn]))
+    kp_summary(run_root / "summary.md", ana, vid, cfg, kp_prior(cfg))
+    vid_out = {v: ({"failed": x["failed"]} if "failed" in x else {k: x[k] for k in ("n_frames", "ref", "ref_t", "breaks", "n_valid", "n_edge", "n_use", "inl_median", "loops", "det_dist_median_pct", "det_dist_p90_pct", "box_long_px")}) for v, x in vid.items()}
+    (run_root / "results.json").write_text(json.dumps(hf.jsonable({"videos": vid_out, "analysis": ana}), ensure_ascii=False, indent=1))
+    meta = hf.provenance_build(text, a.config, {"code_57": own.get("code_57"), "base_config": own["base_config"], "elapsed_s": time.time() - t0})
+    (run_root / "metadata.json").write_text(json.dumps(hf.jsonable(meta), ensure_ascii=False, indent=1))
+    log(f"완료 {time.time() - t0:.0f} s → {run_root}")
+    log.close()
+    return run_root, ana
+
+
+def kp_results_yaml(run_dir: Path, cfg: dict):
+    """Values and verdicts only (no reference f); written to output.results_yaml."""
+    r = json.loads((run_dir / "results.json").read_text())
+    m = json.loads((run_dir / "metadata.json").read_text())
+    try:
+        run_name = str(run_dir.resolve().relative_to(hf.PROJECT_ROOT))
+    except ValueError:
+        run_name = str(run_dir)
+    rd = lambda x, n=4: None if x is None or (isinstance(x, float) and not np.isfinite(x)) else round(x, n)      # noqa: E731
+    out = {"experiment": cfg["experiment"]["name"], "run": run_name, "code_commit": m["git"]["commit"][:7], "git_dirty_at_run": m["git"]["git_dirty"], "note": KP_NOTE, "tracking_rule": cfg["tracking"],
+           "verdict_target": cfg["verdict"]["main"], "videos": {}}
+    for e in cfg["videos"]:
+        v = e["file"]
+        a = r["analysis"][v]
+        o = out["videos"][v] = {"session": e["session"], "distance_cm": e["distance_cm"], "hand": e["hand"], "verdict": a["verdict"]["verdict"], "reason": a["verdict"].get("reason"),
+                                "tracking": r["videos"][v], "estimates": {}}
+        for sn, b in a["by"].items():
+            o["estimates"][sn] = {mm: {"f_px": round(b[mm]["f"], 1), "ci95_px": None if not b[mm]["ci"] else [round(x, 1) for x in b[mm]["ci"]], "boundary": b[mm]["boundary"],
+                                       "tilt_spread_deg": rd(b[mm]["tilt_spread_deg"], 1), "tilt_median_deg": rd(b[mm]["tilt_median_deg"], 1)} for mm in OD_METHODS if mm in b}
+    p = hf.resolve(cfg["output"]["results_yaml"])
+    p.write_text(yaml.safe_dump(hf.jsonable(out), allow_unicode=True, sort_keys=False))
+    return p
+
+
+COMMANDS = {"protocol": protocol_main, "frame-filter": ff_main, "same-session": session_main, "overlay": overlay_main, "phase-segmentation": pseg_main, "guide-revision": grev_main, "f-response": fresp_main, "error-factors": ferr_main, "long-video-check": long_main, "generalization": gen_main, "main-camera-extension": ext_main, "wide-60cm": wide_main, "jointset-sets": jset_main, "verdict-calibration": cal_main, "printed-hand": pr_main, "hand-markers": mk_main, "markers-only": mo_main, "free-template": ft_main, "free-shape3d": s3_main, "free-shape3d-hand": h3_main, "free-shape3d-27": e3_main, "free-shape3d-new": e4_main, "mmpose-hand": mm_main, "mmpose-hand-46": mm2_main, "free-shape3d-new2": e5_main, "mmpose-hand-src": mm3_main, "free-shape3d-detectors": fs_main, "free-shape3d-hand-sets": h4_main, "free-shape3d-hand-sets-42track": h4b_main, "oblique-desk": od_main, "oblique-synthetic": sy_main, "oblique-fixed-template": fx_main, "oblique-desk-videos": om_main, "pause-stabilized": ps_main, "continuous-klt": kt_main, "continuous-klt-palm": kp_main}
 
 
 def main(argv=None):

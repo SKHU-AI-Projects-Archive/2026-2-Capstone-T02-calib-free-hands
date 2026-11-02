@@ -4859,5 +4859,21 @@ class KTChain(unittest.TestCase):
         np.testing.assert_array_equal(hf.kt_carry(np.array([False, True, False, True]), np.array([0.0, 1.0, 2.0, 3.0])), [1.0, 1.0, 1.0, 3.0])
 
 
+class KPPalm(unittest.TestCase):
+    def test_spread_prior_and_config(self):
+        self.assertAlmostEqual(run.kp_spread([np.nan] + list(range(101))), 90.0)
+        self.assertIsNone(run.kp_spread([np.nan]))
+        cfg = yaml.safe_load((ROOT / "configs/57_continuous_klt_palm.yaml").read_text())
+        pr = run.kp_prior(cfg)
+        self.assertEqual(len(cfg["videos"]), 24)
+        for e in cfg["videos"]:
+            self.assertIn(e["file"], pr)
+        self.assertEqual(sorted(v for v, x in pr.items() if x["f_3d"] is None), ["IMG_7302.MOV", "IMG_7309.MOV"])     # excluded in 46
+        b = yaml.safe_load((ROOT / "configs/56_continuous_klt.yaml").read_text())
+        self.assertEqual(cfg["tracking"], b["tracking"])
+        self.assertEqual(cfg["bootstrap"], b["bootstrap"])
+        self.assertEqual(cfg["base_config"], b["base_config"])
+
+
 if __name__ == "__main__":
     unittest.main()
