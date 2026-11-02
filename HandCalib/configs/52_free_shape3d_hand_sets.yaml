@@ -1,0 +1,19 @@
+# 52: experiment 42 (the supervisor's free_shape3d on the real-hand marker videos of 35c) with other marker sets (user's request 2026-11-02: "손바닥 점만 쓰기 와 이전에 사용했던 8개 점 + 손목도 같이 실험").
+# Everything except the used markers is 42's config, read from base_config (videos, input, 35c tracker settings, exclusion rules, f grid, free_shape3d z_rel 0.2 / alt_iters 3 / max_frames 120,
+# verdict rule and bootstrap, reference f). Each set is also the used set of the 35c tracker: the reference frame must show every marker of the set, a frame is kept with at least 75 % of them matched,
+# the homography check uses the set; the tilt-phase rule (>= 70 % kept) then excludes a video. 42 itself (the 8 MCP / PIP markers) is not rerun; its per-video f is read for comparison.
+# Fixed before the run; nothing is changed after seeing results.
+experiment:
+  name: 52_free_shape3d_hand_sets
+  seed: 42
+base_config: configs/42_free_shape3d_hand.yaml
+point_sets:
+  palm5: [0, 5, 9, 13, 17]                          # wrist + the four finger MCPs: the part of the hand that bends least
+  wrist_mcp_pip9: [0, 5, 6, 9, 10, 13, 14, 17, 18]  # 42's 8 (MCP, PIP) + wrist
+compare_42: runs/42_free_shape3d_hand/20261029T085442Z/results.json
+code_52: {branch: exp/52-free-shape3d-hand-sets, commit: 17ff5f0, modules: [HandCalib/run.py]}
+n_workers: 16
+workers: 12
+output:
+  root: runs/52_free_shape3d_hand_sets
+  results_yaml: results/52_free_shape3d_hand_sets.yaml
