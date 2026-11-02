@@ -8,8 +8,8 @@ from time import monotonic
 
 import numpy as np
 import pyqtgraph.opengl as gl
-from PySide6.QtCore import QEvent, QPoint, Qt, QTimer, QSignalBlocker
-from PySide6.QtGui import QAction, QActionGroup, QImage
+from PySide6.QtCore import QEvent, QObject, QPoint, Qt, QTimer, QSignalBlocker
+from PySide6.QtGui import QAction, QActionGroup, QImage, QWindow
 from PySide6.QtWidgets import (
     QApplication, QCheckBox, QColorDialog, QComboBox, QDialog, QFileDialog, QGridLayout,
     QHBoxLayout, QLabel, QMainWindow, QMenu, QPushButton, QScrollArea, QSizePolicy,
@@ -33,6 +33,14 @@ METRIC_FIELDS = ("source_identity", "reference_result_id", "candidate_result_id"
 
 def _finite(value):
     return float(value) if np.isfinite(value) else None
+
+
+def _is_widget_or_popup_window(parent: QWidget, target: QObject) -> bool:
+    if isinstance(target, QWidget):
+        return target is parent or parent.isAncestorOf(target)
+    if isinstance(target, QWindow):
+        return target is parent.windowHandle() or target is parent.window().windowHandle()
+    return False
 
 
 def _session_results(session_path: Path):
@@ -1658,11 +1666,11 @@ class ComparisonViewer(QWidget):
         button = self._hover_menu_target
         if isinstance(button, QComboBox):
             view = button.view()
-            return target is view or view.isAncestorOf(target) or target is view.window()
+            return _is_widget_or_popup_window(view, target)
         if not isinstance(button, QToolButton) or button.menu() is None:
             return False
         root = button.menu()
-        return target is root or root.isAncestorOf(target)
+        return _is_widget_or_popup_window(root, target)
 
     def _close_hover_menu(self):
         button = self._hover_menu_target

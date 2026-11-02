@@ -512,6 +512,56 @@ def test_comparison_event_filter_accepts_qwindow_and_combo_close_target(tmp_path
     viewer.close()
 
 
+def test_active_dropdown_filter_handles_qwindow_targets_without_widget_api_calls(tmp_path, qapp):
+    from PySide6.QtCore import QEvent
+    from PySide6.QtGui import QWindow
+    from PySide6.QtWidgets import QWidget
+    from calibfreehands.visualization.comparison import ComparisonViewer
+
+    viewer = ComparisonViewer(_session(tmp_path, 2))
+    unrelated_window = QWindow()
+
+    combo = viewer.reference_selector
+    combo_view = combo.view()
+    viewer._hover_menu_target = combo
+    assert viewer._is_active_hover_menu(combo_view)
+    assert viewer._is_active_hover_menu(combo_view.viewport())
+    assert not viewer._is_active_hover_menu(QWidget())
+    assert not viewer._is_active_hover_menu(unrelated_window)
+    assert viewer.eventFilter(unrelated_window, QEvent(QEvent.Type.Hide)) is False
+    combo.showPopup()
+    qapp.processEvents()
+    combo_popup_window = combo_view.window().windowHandle()
+    assert combo_popup_window is not None
+    assert viewer._is_active_hover_menu(combo_popup_window)
+    viewer._hover_menu_latched = True
+    assert viewer.eventFilter(combo_popup_window, QEvent(QEvent.Type.Hide)) is False
+    assert not viewer._hover_menu_latched
+    viewer._hide_hover_popup(combo)
+
+    menu_button = viewer.results_menu_button
+    menu = menu_button.menu()
+    viewer._hover_menu_target = menu_button
+    assert viewer._is_active_hover_menu(menu)
+    assert viewer._is_active_hover_menu(menu.actions()[0].defaultWidget())
+    assert not viewer._is_active_hover_menu(QWidget())
+    menu.popup(viewer.mapToGlobal(viewer.rect().center()))
+    qapp.processEvents()
+    menu_popup_window = menu.windowHandle()
+    assert menu_popup_window is not None
+    assert viewer._is_active_hover_menu(menu_popup_window)
+    viewer._hover_menu_latched = True
+    assert viewer.eventFilter(menu_popup_window, QEvent(QEvent.Type.MouseButtonPress)) is False
+    assert viewer._hover_menu_latched
+    menu.hide()
+    viewer._hover_menu_latched = True
+    assert viewer.eventFilter(unrelated_window, QEvent(QEvent.Type.MouseButtonPress)) is False
+    assert not viewer._hover_menu_latched
+
+    unrelated_window.deleteLater()
+    viewer.close()
+
+
 def test_hover_menu_becomes_latched_by_click_and_closes_on_action(tmp_path, qapp):
     from PySide6.QtCore import QPoint, Qt
     from PySide6.QtTest import QTest

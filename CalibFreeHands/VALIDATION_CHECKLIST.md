@@ -205,3 +205,11 @@ Remaining visual-review items: Split + 2 and Split + 5 layouts, hovered-joint re
 - [x] Normal Windows GUI opened three actual same-source `.cfh` results without inference; 2× playback advanced source, overlay, 3D poses, and current-frame metrics together; pause retained the displayed frame.
 - [x] Results and Detection menus opened; Reference changed from 1300 to 1500 and metrics refreshed. Speed selector accepted 2×. Automated Qt tests cover hover-open, transient close, click latch, second toggle, outside click, Escape, and action dismissal across dropdown controls.
 - [ ] Actual Windows pointer hover-open behavior was not directly exercised through the available UI automation controls. Final user visual review remains pending.
+
+## C-2B Final QWindow EventFilter Hotfix
+- [x] Regression reproduced: with an active Reference combo, `_is_active_hover_menu(QWindow)` raised `QWidget.isAncestorOf(QWindow)` TypeError before the fix.
+- [x] QWidget ancestry is checked only for QWidget targets; active combo/menu popup windows are matched by their QWidget `windowHandle()` identities. Unrelated QWindow targets return false without calling QWidget APIs.
+- [x] Regression coverage: QWidget root/child, unrelated QWindow, live QComboBox popup QWindow, live QMenu popup QWindow, and eventFilter Hide/MouseButtonPress handling for both active dropdown types.
+- [x] Targeted comparison viewer tests: 35 passed; full pytest: 219 passed; app import `IMPORT_OK`, compileall, and `git diff --check` passed.
+- [x] Windows GUI smoke: three existing same-source `.cfh` results opened without inference; Reference, Speed (2×), Results, and Detection popups exercised; 2× playback ran during a 22-second observation interval and advanced the frame; no traceback, Python override error, TypeError, or AttributeError in captured stderr (all counts 0).
+- [ ] Direct hover-only testing was limited by the available Windows UI automation API; dropdown entry/leave was exercised through pointer movement accompanying control clicks. Final user approval remains pending.
