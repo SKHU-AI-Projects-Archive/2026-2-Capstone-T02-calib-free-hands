@@ -9257,7 +9257,177 @@ def fx_results_yaml(run_dir: Path, cfg: dict):
     return p
 
 
-COMMANDS = {"protocol": protocol_main, "frame-filter": ff_main, "same-session": session_main, "overlay": overlay_main, "phase-segmentation": pseg_main, "guide-revision": grev_main, "f-response": fresp_main, "error-factors": ferr_main, "long-video-check": long_main, "generalization": gen_main, "main-camera-extension": ext_main, "wide-60cm": wide_main, "jointset-sets": jset_main, "verdict-calibration": cal_main, "printed-hand": pr_main, "hand-markers": mk_main, "markers-only": mo_main, "free-template": ft_main, "free-shape3d": s3_main, "free-shape3d-hand": h3_main, "free-shape3d-27": e3_main, "free-shape3d-new": e4_main, "mmpose-hand": mm_main, "mmpose-hand-46": mm2_main, "free-shape3d-new2": e5_main, "mmpose-hand-src": mm3_main, "free-shape3d-detectors": fs_main, "free-shape3d-hand-sets": h4_main, "free-shape3d-hand-sets-42track": h4b_main, "oblique-desk": od_main, "oblique-synthetic": sy_main, "oblique-fixed-template": fx_main}
+# ====================================================================================================
+# om  (experiment 54: 53's oblique desk run (od_main, unchanged) on several videos at 50 / 60 / 75 cm, right and left hands; one sub-folder per video, a summary over them and the f-distance slope as a record)
+#     python HandCalib/run.py oblique-desk-videos --config HandCalib/configs/54_oblique_desk_distance.yaml [--out DIR]
+#     python HandCalib/run.py oblique-desk-videos --config ... results-yaml --run runs/54_oblique_desk_distance/<UTC>
+# ====================================================================================================
+OM_NOTE = ("실험 53의 비스듬한 책상 촬영(카메라가 책상 면에 약 45°, 손바닥을 종이 위에 평평하게 대고 옮기고 돌림)을 50·60·75 cm에서 오른손과 왼손으로 찍은 영상 12개에, 실험 53의 실행(od_main, 고치지 않음: 프레임 선택, 교수님 "
+           "free_template·free_shape3d, 블록 부트스트랩, 판정 규칙)을 영상마다 그대로 적용한 실험이다. 영상별 판정은 실험 53의 규칙이고, 거리-f 기울기는 기록용이다. 기준 f와의 비교는 summary.md에만 있다.")
+
+
+def om_video_cfg(own: dict, base_text: str, e: dict) -> str:
+    """53's config text with one video entry of 54 (file, distance, hand) and 54's experiment name; written into the run folder and read by od_main."""
+    b = yaml.safe_load(base_text)
+    b["experiment"] = {"name": f"{own['experiment']['name']}_{Path(e['file']).stem}", "seed": own["experiment"].get("seed", 42)}
+    b["video"] = {**b["video"], "file": e["file"], "distance_cm": e["distance_cm"], "hand": e["hand"]}
+    b["output"] = {**b["output"], "results_yaml": f"runs/{own['experiment']['name']}/_unused_{Path(e['file']).stem}.yaml"}
+    for k in ("workers", "n_workers"):
+        if k in own:
+            b[k] = own[k]
+    return yaml.safe_dump(b, allow_unicode=True, sort_keys=False)
+
+
+def om_collect(run_root: Path, cfg: dict) -> list:
+    out = []
+    for e in cfg["videos"]:
+        q = run_root / Path(e["file"]).stem / "results.json"
+        r = json.loads(q.read_text()) if q.exists() else None
+        out.append({**e, "res": r})
+    return out
+
+
+def om_slopes(rows: list, cfg: dict) -> dict:
+    """Record: slope of log f on log distance for every detector x joint set x method (per-distance geometric mean of the per-video f, video bootstrap; s3_slope as 41 / 45 / 49)."""
+    bn, bs = int(cfg["slope_bootstrap"]["n"]), int(cfg["slope_bootstrap"]["seed"])
+    out = {}
+    base = rows[0]["res"]["analysis"]["by"] if rows and rows[0]["res"] else {}
+    for det, by in base.items():
+        for sn in by:
+            for m in OD_METHODS:
+                fb, eb = {}, {}
+                for r in rows:
+                    a = ((r["res"] or {}).get("analysis", {}).get("by", {}).get(det, {}).get(sn, {})).get(m)
+                    if a:
+                        fb.setdefault(float(r["distance_cm"]), []).append(a["f"])
+                        eb.setdefault(float(r["distance_cm"]), []).append(bool(a["boundary"]))
+                out[f"{det}|{sn}|{m}"] = hf.s3_slope(fb, eb, bn, bs) if len(fb) >= 2 else None
+    return out
+
+
+def om_summary(path: Path, rows: list, slopes: dict, cfg: dict):
+    ref = float(cfg["ref_f"]["value"])
+    t = cfg["verdict"]["main"]
+    pe = lambda f: "-" if f is None else f"{f:.1f} ({100 * (f / ref - 1):+.1f}%)"      # noqa: E731
+    cnt = {}
+    for r in rows:
+        v = (r["res"] or {}).get("analysis", {}).get("verdict", {}).get("verdict", "실행 실패")
+        cnt[v] = cnt.get(v, 0) + 1
+    L = ["**판정 (영상별, " + f"{t['detector']} {t['joint_set']} {t['method']}): " + ", ".join(f"{k} {n}개" for k, n in cnt.items()) + "**", "", "# 실험 54 summary", "", f"**{OM_NOTE}**", "",
+         f"- 기준 f: {ref:g} px ({cfg['ref_f']['source']}). 카메라 각도는 모든 영상에서 약 {cfg['video']['camera_angle_deg']}°로 가정했다(사용자가 거리와 손만 알려줌).",
+         "- 영상별 판정 규칙은 실험 53과 같다. 영상별 자세한 값은 각 영상 폴더의 summary.md와 report.md에 있다.", "",
+         "## 1. 영상별 (MediaPipe 16점)", "", "| 영상 | 거리(cm) | 손 | 판정 | 경고 | free_template 초점 거리 (기준 f 대비) | 95% 구간 | free_shape3d 초점 거리 (기준 f 대비) | 사용 프레임 | 책상 위 회전 범위 | 손 평면 기울기 |", "|---|---|---|---|---|---|---|---|---|---|---|"]
+    for r in rows:
+        if not r["res"]:
+            L.append(f"| {r['file']} | {r['distance_cm']:g} | {r['hand']} | 실행 실패 | - | - | - | - | - | - | - |")
+            continue
+        an = r["res"]["analysis"]
+        b = an["by"][t["detector"]][t["joint_set"]]
+        a, s3 = b.get("free_template"), b.get("free_shape3d")
+        ci = "-" if not a or not a["ci"] else f"{a['ci'][0]:.1f} ~ {a['ci'][1]:.1f}"
+        L.append(f"| {r['file']} | {r['distance_cm']:g} | {r['hand']} | {an['verdict']['verdict']} | {', '.join(an['verdict'].get('warnings') or []) or '-'} | {pe(a and a['f'])}{' (경계)' if a and a['boundary'] else ''} | {ci} | "
+                 f"{pe(s3 and s3['f'])}{' (경계)' if s3 and s3['boundary'] else ''} | {b['n_keep']} | {long_fmt(a and a['turn_range_deg'], 1)}° | {long_fmt(a and a['tilt_median_deg'], 1)}° |")
+    dets = list(rows[0]["res"]["analysis"]["by"]) if rows and rows[0]["res"] else []
+    sets = [s[0] for s in od_sets(cfg)]
+    ds = sorted({float(r["distance_cm"]) for r in rows})
+    for m in OD_METHODS:
+        L += ["", f"## 2. 거리별 기하평균 ({m}), 초점 거리 (기준 f 대비)", "", "| 검출기 | 관절 집합 | " + " | ".join(f"{d:g} cm" for d in ds) + " | 경계 영상 수 | 기울기 (기록용) | 95% 구간 |", "|---|---|" + "---|" * (len(ds) + 3)]
+        for det in dets:
+            for sn in sets:
+                vals, nb = [], 0
+                for d in ds:
+                    fs = []
+                    for r in rows:
+                        a = ((r["res"] or {}).get("analysis", {}).get("by", {}).get(det, {}).get(sn, {})).get(m)
+                        if a and float(r["distance_cm"]) == d:
+                            fs.append(a["f"])
+                            nb += int(bool(a["boundary"]))
+                    vals.append(pe(e3_gm(fs)) if fs else "-")
+                sl = slopes.get(f"{det}|{sn}|{m}") or {}
+                iv = sl.get("interval_95")
+                L.append(f"| {det} | {sn} | " + " | ".join(vals) + f" | {nb} | {long_fmt(sl.get('slope'), 3)} | {'-' if not iv else format(iv[0], '+.3f') + ' ~ ' + format(iv[1], '+.3f')} |")
+    L += ["", "기울기는 거리별 기하평균의 log f 대 log 거리 기울기(영상 단위 부트스트랩)이며 판정에 쓰지 않았다. 경계에 붙은 영상이 있으면 기울기와 구간이 비어 있을 수 있다(s3_slope 규칙).", "",
+          "## 한계", "", "- 거리·손마다 영상 2개씩이다. 카메라 각도는 재지 않았다.", "- 기준 f는 실험 46·49 세션 값이고 이 세션에서 다시 재지 않았다.", ""]
+    path.write_text("\n".join(L) + "\n")
+
+
+def om_main(argv=None):
+    ap = argparse.ArgumentParser()
+    ap.add_argument("--config", default=str(hf.PROJECT_ROOT / "configs/54_oblique_desk_distance.yaml"))
+    sub = ap.add_subparsers(dest="cmd")
+    ry = sub.add_parser("results-yaml")
+    ry.add_argument("--run", required=True)
+    ap.add_argument("--out", default=None)
+    a = ap.parse_args(argv)
+    text = Path(a.config).read_text()
+    own = yaml.safe_load(text)
+    base_text = hf.resolve(own["base_config"]).read_text()
+    cfg = {**od_load(yaml.safe_load(base_text)), **{k: own[k] for k in ("experiment", "videos", "slope_bootstrap", "output") if k in own}}
+    if a.cmd == "results-yaml":
+        print(om_results_yaml(hf.resolve(a.run), cfg))
+        return None
+    missing = [e["file"] for e in cfg["videos"] if not (Path(cfg["input_dir"]).expanduser() / e["file"]).exists()]
+    if missing:
+        raise SystemExit(f"영상이 없습니다: {missing}")
+    run_root = Path(a.out).expanduser() if a.out else hf.resolve(cfg["output"]["root"]) / utc_stamp()
+    run_root.mkdir(parents=True)
+    log = Log(run_root / "log.txt")
+    log(f"54 비스듬한 책상 영상 {len(cfg['videos'])}개 (실험 53 실행을 영상마다) → {run_root}")
+    t0 = time.time()
+    (run_root / "configs").mkdir()
+    for e in cfg["videos"]:
+        stem = Path(e["file"]).stem
+        p = run_root / "configs" / f"{stem}.yaml"
+        p.write_text(om_video_cfg(own, base_text, e))
+        try:
+            od_main(["--config", str(p), "--out", str(run_root / stem)])
+            r = json.loads((run_root / stem / "results.json").read_text())
+            v = r["analysis"]["verdict"]
+            log(f"  {e['file']} ({e['distance_cm']:g} cm, {e['hand']}): {v['verdict']}" + (f" [경고: {', '.join(v['warnings'])}]" if v.get("warnings") else ""))
+        except Exception as ex:                                       # one video failing does not stop the others
+            log(f"  {e['file']}: 실행 실패 {type(ex).__name__}: {ex}")
+    rows = om_collect(run_root, cfg)
+    slopes = om_slopes(rows, cfg)
+    om_summary(run_root / "summary.md", rows, slopes, cfg)
+    (run_root / "results.json").write_text(json.dumps(hf.jsonable({"videos": [{k: v for k, v in r.items() if k != "res"} | {"analysis": (r["res"] or {}).get("analysis")} for r in rows], "slopes": slopes}), ensure_ascii=False, indent=1))
+    meta = hf.provenance_build(text, a.config, {"code_54": own.get("code_54"), "base_config": own["base_config"], "elapsed_s": time.time() - t0})
+    (run_root / "metadata.json").write_text(json.dumps(hf.jsonable(meta), ensure_ascii=False, indent=1))
+    log(f"완료 {time.time() - t0:.0f} s → {run_root}")
+    log.close()
+    return run_root
+
+
+def om_results_yaml(run_dir: Path, cfg: dict):
+    """Values and verdicts only (no reference f); written to output.results_yaml."""
+    r = json.loads((run_dir / "results.json").read_text())
+    m = json.loads((run_dir / "metadata.json").read_text())
+    try:
+        run_name = str(run_dir.resolve().relative_to(hf.PROJECT_ROOT))
+    except ValueError:
+        run_name = str(run_dir)
+    rd = lambda x, n=4: None if x is None or (isinstance(x, float) and not np.isfinite(x)) else round(x, n)      # noqa: E731
+    out = {"experiment": cfg["experiment"]["name"], "run": run_name, "code_commit": m["git"]["commit"][:7], "git_dirty_at_run": m["git"]["git_dirty"], "note": OM_NOTE, "videos": {}, "slopes": {}}
+    for v in r["videos"]:
+        an = v.get("analysis")
+        o = out["videos"][v["file"]] = {"distance_cm": v["distance_cm"], "hand": v["hand"]}
+        if not an:
+            o["failed"] = True
+            continue
+        o["verdict"] = {"verdict": an["verdict"]["verdict"], "reason": an["verdict"].get("reason"), "warnings": an["verdict"].get("warnings", [])}
+        o["estimates"] = {}
+        for d, by in an["by"].items():
+            for sn, b in by.items():
+                o["estimates"].setdefault(d, {})[sn] = {mm: {"f_px": round(b[mm]["f"], 1), "ci95_px": None if not b[mm]["ci"] else [round(x, 1) for x in b[mm]["ci"]], "boundary": b[mm]["boundary"],
+                                                             "tilt_median_deg": rd(b[mm]["tilt_median_deg"], 1), "turn_range_deg": rd(b[mm]["turn_range_deg"], 1)} for mm in OD_METHODS if mm in b} | {"n_keep": b["n_keep"]}
+    for k, s in r["slopes"].items():
+        out["slopes"][k] = None if not s else {"slope": rd(s.get("slope")), "interval_95": None if not s.get("interval_95") else [round(q, 4) for q in s["interval_95"]],
+                                               "f_by_distance_px": {f"{float(d):g}": rd(f, 1) for d, f in (s.get("pooled_f") or {}).items()}}
+    p = hf.resolve(cfg["output"]["results_yaml"])
+    p.write_text(yaml.safe_dump(hf.jsonable(out), allow_unicode=True, sort_keys=False))
+    return p
+
+
+COMMANDS = {"protocol": protocol_main, "frame-filter": ff_main, "same-session": session_main, "overlay": overlay_main, "phase-segmentation": pseg_main, "guide-revision": grev_main, "f-response": fresp_main, "error-factors": ferr_main, "long-video-check": long_main, "generalization": gen_main, "main-camera-extension": ext_main, "wide-60cm": wide_main, "jointset-sets": jset_main, "verdict-calibration": cal_main, "printed-hand": pr_main, "hand-markers": mk_main, "markers-only": mo_main, "free-template": ft_main, "free-shape3d": s3_main, "free-shape3d-hand": h3_main, "free-shape3d-27": e3_main, "free-shape3d-new": e4_main, "mmpose-hand": mm_main, "mmpose-hand-46": mm2_main, "free-shape3d-new2": e5_main, "mmpose-hand-src": mm3_main, "free-shape3d-detectors": fs_main, "free-shape3d-hand-sets": h4_main, "free-shape3d-hand-sets-42track": h4b_main, "oblique-desk": od_main, "oblique-synthetic": sy_main, "oblique-fixed-template": fx_main, "oblique-desk-videos": om_main}
 
 
 def main(argv=None):

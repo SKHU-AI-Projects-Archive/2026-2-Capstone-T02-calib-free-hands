@@ -4770,5 +4770,34 @@ class FXJob(unittest.TestCase):
             self.assertNotIn("1553", y)
 
 
+class OMVideos(unittest.TestCase):
+    def test_video_config_keeps_53s_settings_and_summary_tables(self):
+        base_text = (ROOT / "configs/53_oblique_desk.yaml").read_text()
+        own = {"experiment": {"name": "54_oblique_desk_distance", "seed": 42}, "workers": 8}
+        c = yaml.safe_load(run.om_video_cfg(own, base_text, {"file": "IMG_7346.MOV", "distance_cm": 50, "hand": "right"}))
+        b = yaml.safe_load(base_text)
+        for k in ("selection", "joint_sets", "bootstrap", "verdict", "detectors", "ref_f", "base_config", "mm_config"):
+            self.assertEqual(c[k], b[k], k)
+        self.assertEqual(c["video"]["file"], "IMG_7346.MOV")
+        self.assertEqual(c["video"]["hand"], "right")
+        self.assertEqual(c["workers"], 8)
+        cfg = {**run.od_load(b), "videos": [], "slope_bootstrap": {"n": 50, "seed": 42}}
+        a = lambda f: {"f": f, "ci": [f * 0.95, f * 1.05], "boundary": False, "turn_range_deg": 90.0, "tilt_median_deg": 45.0}      # noqa: E731
+        rows = []
+        for k, (d, h) in enumerate([(50, "right"), (50, "left"), (60, "right"), (60, "left"), (75, "right"), (75, "left")]):
+            by = {det: {sn: {"n_keep": 100, "free_template": a(1500.0 + 10 * k), "free_shape3d": a(1600.0)} for sn in ("j16", "j21")} for det in cfg["detectors"]}
+            rows.append({"file": f"V{k}.MOV", "distance_cm": d, "hand": h, "res": {"analysis": {"by": by, "verdict": {"verdict": "가능성 있음", "warnings": []}}}})
+        rows.append({"file": "X.MOV", "distance_cm": 75, "hand": "left", "res": None})
+        sl = run.om_slopes(rows, cfg)
+        self.assertIsNotNone(sl["mediapipe_hands|j16|free_template"]["slope"])
+        with tempfile.TemporaryDirectory() as dd:
+            pth = Path(dd) / "s.md"
+            run.om_summary(pth, rows, sl, cfg)
+            t = pth.read_text()
+            self.assertTrue(t.startswith("**판정 (영상별, mediapipe_hands j16 free_template): 가능성 있음 6개, 실행 실패 1개**"))
+            self.assertIn("1500.0 (-3.4%)", t)
+            self.assertIn("| X.MOV | 75 | left | 실행 실패 |", t)
+
+
 if __name__ == "__main__":
     unittest.main()
