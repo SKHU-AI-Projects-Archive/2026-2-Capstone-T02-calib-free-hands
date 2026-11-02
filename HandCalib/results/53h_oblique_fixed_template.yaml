@@ -1,0 +1,278 @@
+experiment: 53h_oblique_fixed_template
+run: runs/53h_oblique_fixed_template/20261102T041000Z
+code_commit: 354b336
+git_dirty_at_run: false
+note: 실험 53e·53f·53g의 비스듬한 책상 영상(IMG_7342, 7344, 7345)에 기존 fixed_template를 적용한 실험이다.
+  이 영상에는 화면과 평행한 정면 손이 없어서, 템플릿은 사용자 결정대로 기존 방식(영상 0.5~3초 안에서 가장 덜 움직인 1초 창)으로 만들었다.
+  그 손도 약 45° 기울어 찍혀 템플릿이 찌그러져 있으므로 f가 체계적으로 틀릴 수 있다(기준선 비교용). 프레임 선택, 검출기, 관절 집합,
+  부트스트랩, 판정 규칙은 실험 53 그대로 실행 전에 고정했다. 기준 f와의 비교는 summary.md에만 있다.
+videos:
+  IMG_7342.MOV:
+    verdict:
+      target:
+        detector: mediapipe_hands
+        joint_set: j16
+        method: free_template
+      verdict: 어려움
+      reason: null
+      warnings: []
+    estimates:
+      mediapipe_hands:
+        j16:
+          f_px: 3072.0
+          ci95_px:
+          - 3072.0
+          - 3072.0
+          boundary: true
+          sharpness: null
+          tilt_median_deg: 44.1
+          turn_range_deg: 85.2
+          n_keep: 210
+          template_frames: 15
+        j21:
+          f_px: 3072.0
+          ci95_px:
+          - 2584.6
+          - 3072.0
+          boundary: true
+          sharpness: null
+          tilt_median_deg: 44.6
+          turn_range_deg: 86.3
+          n_keep: 210
+          template_frames: 15
+      mmhand_scnet:
+        j16:
+          f_px: 3072.0
+          ci95_px:
+          - 3072.0
+          - 3072.0
+          boundary: true
+          sharpness: null
+          tilt_median_deg: 53.9
+          turn_range_deg: 98.8
+          n_keep: 175
+          template_frames: 15
+        j21:
+          f_px: 2211.9
+          ci95_px:
+          - 2058.9
+          - 2335.7
+          boundary: false
+          sharpness: 1.004
+          tilt_median_deg: 51.6
+          turn_range_deg: 100.8
+          n_keep: 175
+          template_frames: 15
+      mmhand_hrnetv2_dark:
+        j16:
+          f_px: 3072.0
+          ci95_px:
+          - 3072.0
+          - 3072.0
+          boundary: true
+          sharpness: null
+          tilt_median_deg: 52.6
+          turn_range_deg: 79.4
+          n_keep: 251
+          template_frames: 15
+        j21:
+          f_px: 2737.1
+          ci95_px:
+          - 2597.1
+          - 2899.1
+          boundary: false
+          sharpness: null
+          tilt_median_deg: 50.8
+          turn_range_deg: 84.0
+          n_keep: 251
+          template_frames: 15
+  IMG_7344.MOV:
+    verdict:
+      target:
+        detector: mediapipe_hands
+        joint_set: j16
+        method: free_template
+      verdict: 어려움
+      reason: null
+      warnings: []
+    estimates:
+      mediapipe_hands:
+        j16:
+          f_px: 3072.0
+          ci95_px:
+          - 3072.0
+          - 3072.0
+          boundary: true
+          sharpness: null
+          tilt_median_deg: 52.0
+          turn_range_deg: 119.6
+          n_keep: 150
+          template_frames: 15
+        j21:
+          f_px: 3072.0
+          ci95_px:
+          - 3072.0
+          - 3072.0
+          boundary: true
+          sharpness: null
+          tilt_median_deg: 44.8
+          turn_range_deg: 77.5
+          n_keep: 150
+          template_frames: 15
+      mmhand_scnet:
+        j16:
+          f_px: 3072.0
+          ci95_px:
+          - 2874.1
+          - 3072.0
+          boundary: true
+          sharpness: null
+          tilt_median_deg: 35.5
+          turn_range_deg: 93.5
+          n_keep: 82
+          template_frames: 15
+        j21:
+          f_px: 3072.0
+          ci95_px:
+          - 3072.0
+          - 3072.0
+          boundary: true
+          sharpness: null
+          tilt_median_deg: 28.7
+          turn_range_deg: 90.5
+          n_keep: 82
+          template_frames: 15
+      mmhand_hrnetv2_dark:
+        j16:
+          f_px: 3072.0
+          ci95_px:
+          - 3072.0
+          - 3072.0
+          boundary: true
+          sharpness: null
+          tilt_median_deg: 53.0
+          turn_range_deg: 110.1
+          n_keep: 218
+          template_frames: 15
+        j21:
+          f_px: 3072.0
+          ci95_px:
+          - 3072.0
+          - 3072.0
+          boundary: true
+          sharpness: null
+          tilt_median_deg: 51.0
+          turn_range_deg: 78.4
+          n_keep: 218
+          template_frames: 15
+  IMG_7345.MOV:
+    verdict:
+      target:
+        detector: mediapipe_hands
+        joint_set: j16
+        method: free_template
+      verdict: 어려움
+      reason: null
+      warnings: []
+    estimates:
+      mediapipe_hands:
+        j16:
+          f_px: 3072.0
+          ci95_px:
+          - 3072.0
+          - 3072.0
+          boundary: true
+          sharpness: null
+          tilt_median_deg: 43.7
+          turn_range_deg: 98.0
+          n_keep: 161
+          template_frames: 15
+        j21:
+          f_px: 3072.0
+          ci95_px:
+          - 3072.0
+          - 3072.0
+          boundary: true
+          sharpness: null
+          tilt_median_deg: 50.6
+          turn_range_deg: 107.2
+          n_keep: 161
+          template_frames: 15
+      mmhand_scnet:
+        j16:
+          f_px: 3072.0
+          ci95_px:
+          - 3072.0
+          - 3072.0
+          boundary: true
+          sharpness: null
+          tilt_median_deg: 37.1
+          turn_range_deg: 106.2
+          n_keep: 117
+          template_frames: 15
+        j21:
+          f_px: 3072.0
+          ci95_px:
+          - 2728.5
+          - 3072.0
+          boundary: true
+          sharpness: null
+          tilt_median_deg: 46.2
+          turn_range_deg: 93.5
+          n_keep: 117
+          template_frames: 3
+      mmhand_hrnetv2_dark:
+        j16:
+          f_px: 1867.2
+          ci95_px:
+          - 1729.5
+          - 2147.5
+          boundary: false
+          sharpness: 1.006
+          tilt_median_deg: 45.9
+          turn_range_deg: 87.2
+          n_keep: 197
+          template_frames: 15
+        j21:
+          f_px: 2304.3
+          ci95_px:
+          - 1680.7
+          - 3072.0
+          boundary: false
+          sharpness: 1.002
+          tilt_median_deg: 50.8
+          turn_range_deg: 97.3
+          n_keep: 197
+          template_frames: 12
+detectors:
+- mediapipe_hands
+- mmhand_scnet
+- mmhand_hrnetv2_dark
+joint_sets:
+  j16:
+  - 5
+  - 6
+  - 7
+  - 8
+  - 9
+  - 10
+  - 11
+  - 12
+  - 13
+  - 14
+  - 15
+  - 16
+  - 17
+  - 18
+  - 19
+  - 20
+  j21: null
+selection_rules:
+  still_frac: 0.005
+  shape_z_max: 4.0
+bootstrap:
+  n: 100
+  block: 10
+  seed: 42
+  level: 0.95
+synthetic_true_f_1655_turn90_noise0.1pct: 3072.0
