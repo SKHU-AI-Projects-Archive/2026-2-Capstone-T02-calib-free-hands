@@ -195,3 +195,13 @@ Remaining visual-review items: Split + 2 and Split + 5 layouts, hovered-joint re
 - [x] Full pytest after final edits: 211 passed; startup import `IMPORT_OK`; compileall and `git diff --check` pass
 - [x] 1280x800 offscreen layout checks keep the HUD inside the viewport; actual Windows window inspected at 1282x752 (minimum content target 1280x720)
 - [ ] User final visual review/approval remains pending, including hovered-joint readability, all annotation modes, and the full eight-speed playback matrix
+
+## C-2B Final Sync & Menu Consistency Fix
+- [x] Reproduced the desynchronization path: ComparisonViewer advanced its slider, 2D/3D, and HUD immediately while the shared MediaFrameProvider could still be decoding the requested RGB frame.
+- [x] Added delayed-source tests for held presentation, atomic ready transition, stale completion discard, pause invalidation, and exact manual seek.
+- [x] Added hover-open/click-latch tests for Reference, Speed, and Color by combo selectors; retained QToolButton menu transition, outside-click, second-toggle, action, and Escape coverage.
+- [x] Targeted comparison viewer tests after final sync changes: 34 passed.
+- [x] Full Windows pytest suite after final sync changes: 218 passed; application import, compileall, and `git diff --check` passed.
+- [x] Normal Windows GUI opened three actual same-source `.cfh` results without inference; 2× playback advanced source, overlay, 3D poses, and current-frame metrics together; pause retained the displayed frame.
+- [x] Results and Detection menus opened; Reference changed from 1300 to 1500 and metrics refreshed. Speed selector accepted 2×. Automated Qt tests cover hover-open, transient close, click latch, second toggle, outside click, Escape, and action dismissal across dropdown controls.
+- [ ] Actual Windows pointer hover-open behavior was not directly exercised through the available UI automation controls. Final user visual review remains pending.

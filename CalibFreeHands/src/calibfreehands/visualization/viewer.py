@@ -97,8 +97,10 @@ class _OverlayCanvas(QWidget):
             provider.signals.frame_ready.connect(self._frame_ready)
             self.set_frame(0)
         self.show_joints = self.show_bones = self.show_left = self.show_right = True
-    def set_frame(self, frame):
+    def set_frame(self, frame, source_image=None):
         self.frame = max(0, min(frame, self.loaded.frame_count - 1))
+        if source_image is not None:
+            self._display_image = source_image
         provider = self.loaded.media_frames
         if isinstance(provider, MediaFrameProvider):
             source_index = int(self.loaded.result.frame_indices[self.frame])

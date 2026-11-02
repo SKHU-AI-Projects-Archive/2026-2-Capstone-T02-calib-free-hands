@@ -9,7 +9,7 @@ from time import monotonic
 import numpy as np
 import pyqtgraph.opengl as gl
 from PySide6.QtCore import QEvent, QPoint, Qt, QTimer, QSignalBlocker
-from PySide6.QtGui import QAction, QActionGroup
+from PySide6.QtGui import QAction, QActionGroup, QImage
 from PySide6.QtWidgets import (
     QApplication, QCheckBox, QColorDialog, QComboBox, QDialog, QFileDialog, QGridLayout,
     QHBoxLayout, QLabel, QMainWindow, QMenu, QPushButton, QScrollArea, QSizePolicy,
@@ -17,7 +17,7 @@ from PySide6.QtWidgets import (
     QVBoxLayout, QWidget, QWidgetAction,
 )
 
-from calibfreehands.media.provider import shared_media_provider
+from calibfreehands.media.provider import MediaFrameProvider, shared_media_provider
 from .topology import HAND_CONNECTIONS, RAW_TO_VIEW
 from calibfreehands.pipeline.result_bundle import ResultBundle
 from calibfreehands.pipeline.metrics import compare_results, metric_registry
@@ -566,6 +566,7 @@ class ComparisonViewer(QWidget):
 
         self.slider = QSlider(Qt.Orientation.Horizontal)
         self.slider.setRange(0, self.loaded_results[0].frame_count - 1)
+        self.slider.setTracking(False)
         self.slider.valueChanged.connect(self._set_frame)
         self.status = QLabel()
         self.metric_status = QLabel()
@@ -863,6 +864,10 @@ class ComparisonViewer(QWidget):
         self.playback_clock = PlaybackClock(self.loaded_results[0].result.timestamps, fps=playback_fps, monotonic=monotonic)
         self._clock_driven_update = False
         self._last_rendered_frame = None
+        self._requested_frame = None
+        self.requested_frame = None
+        self.presented_frame = None
+        self._presented_source_image = QImage()
         self._stats_frames = 0
         self._stats_skipped = 0
         self._stats_started = monotonic()
@@ -928,6 +933,9 @@ class ComparisonViewer(QWidget):
         for menu in self.findChildren(QMenu):
             menu.aboutToShow.connect(lambda m=menu: self._menu_about_to_show(m))
             menu.aboutToHide.connect(lambda m=menu: self._menu_about_to_hide(m))
+        source_provider = self._source_provider()
+        if source_provider is not None:
+            self._watch_source_provider(source_provider)
         QApplication.instance().installEventFilter(self)
         self._compute_metrics()
         self._refresh_metric_panels()
@@ -1264,8 +1272,7 @@ class ComparisonViewer(QWidget):
         self.mode = mode
         self.views.setCurrentIndex(0 if mode == "overlay" else 1)
         for name, button in self.mode_buttons.items(): button.setChecked(name == mode)
-        self._last_rendered_frame = None
-        self._set_frame(self.slider.value())
+        self._render_active_frame()
         self._refresh_metric_panels()
         self._refresh_annotations()
 
@@ -1324,23 +1331,72 @@ class ComparisonViewer(QWidget):
 
     def _set_frame(self, frame):
         frame = int(frame)
-        if frame == self._last_rendered_frame:
+        if frame == self._last_rendered_frame and frame == self._requested_frame:
             return
-        previous = self._last_rendered_frame
+        self._requested_frame = frame
+        self.requested_frame = frame
         if self.timer.isActive() and not self._clock_driven_update:
             self.playback_clock.play(frame)
+        provider = self._source_provider()
+        if provider is not None:
+            source_index = self._source_index(frame, provider)
+            rgb = provider.cached_frame(source_index)
+            if rgb is None:
+                provider.frame(source_index)
+                if self._last_rendered_frame is not None and self.slider.value() != self._last_rendered_frame:
+                    blocker = QSignalBlocker(self.slider)
+                    self.slider.setValue(self._last_rendered_frame)
+                    del blocker
+                return
+        self._present_frame(frame, source_rgb=rgb if provider is not None else None)
+
+    def _source_provider(self):
+        provider = self.loaded_results[0].media_frames
+        return provider if isinstance(provider, MediaFrameProvider) else None
+
+    def _source_index(self, frame, provider):
+        if provider._is_image:
+            return 0
+        return int(self.loaded_results[0].result.frame_indices[frame])
+
+    def _watch_source_provider(self, provider):
+        provider.signals.frame_ready.connect(self._source_frame_ready)
+
+    def _source_frame_ready(self, source_index):
+        frame = self._requested_frame
+        provider = self._source_provider()
+        if frame is None or provider is None or self._source_index(frame, provider) != source_index:
+            return
+        rgb = provider.cached_frame(source_index)
+        if rgb is None:
+            return
+        self._present_frame(frame, source_rgb=rgb)
+
+    def _present_frame(self, frame, *, force=False, source_rgb=None):
+        if frame == self._last_rendered_frame and not force:
+            return
+        previous = self._last_rendered_frame
+        if self.slider.value() != frame:
+            blocker = QSignalBlocker(self.slider)
+            self.slider.setValue(frame)
+            del blocker
+        if source_rgb is not None:
+            self._presented_source_image = QImage(
+                source_rgb.data, source_rgb.shape[1], source_rgb.shape[0], source_rgb.strides[0],
+                QImage.Format.Format_RGB888).copy()
+        source_image = self._presented_source_image if not self._presented_source_image.isNull() else None
         if self.mode == "overlay":
-            self.source_overlay.set_frame(frame)
+            self.source_overlay.set_frame(frame, source_image)
             self.overlay_view.set_frame(frame)
         else:
-            self.split_source_overlay.set_frame(frame)
+            self.split_source_overlay.set_frame(frame, source_image)
             for index, view in enumerate(self.split_views):
                 if self.visibility_checks[index].isChecked():
                     view.set_frame(frame)
         for _window, detached_source, views in self._detached_windows:
             if not _window.isVisible():
                 continue
-            detached_source.set_frame(frame)
+            detached_source.set_frame(frame, source_image)
             for view in views:
                 if not view.isHidden():
                     view.set_frame(frame)
@@ -1358,12 +1414,15 @@ class ComparisonViewer(QWidget):
         source = " | Source media missing" if self.loaded_results[0].source_status == "missing" else (" | Source media changed" if self.loaded_results[0].source_status == "changed" else "")
         self.status.setText(f"Frame {frame + 1} / {self.loaded_results[0].frame_count}{suffix}{source}")
         self._last_rendered_frame = frame
+        self.presented_frame = frame
         if previous is not None and self.timer.isActive() and self._clock_driven_update:
             self._stats_frames += 1
 
     def _render_active_frame(self):
-        self._last_rendered_frame = None
-        self._set_frame(self.slider.value())
+        if self.presented_frame is not None:
+            self._present_frame(self.presented_frame, force=True)
+        else:
+            self._set_frame(self.slider.value())
 
     def _set_playback_speed(self, index):
         self.playback_clock.set_speed(self.speed_selector.itemData(index))
@@ -1413,7 +1472,7 @@ class ComparisonViewer(QWidget):
     def _advance(self):
         frame_count = max(1, self.slider.maximum() + 1)
         target = self.playback_clock.frame_at()
-        previous = self.slider.value()
+        previous = self._requested_frame if self._requested_frame is not None else self.slider.value()
         if target == previous:
             return
         distance = (target - previous) % frame_count
@@ -1425,7 +1484,10 @@ class ComparisonViewer(QWidget):
             self._clock_driven_update = False
     def _play(self):
         if self.timer.isActive():
-            self.timer.stop(); self.playback_clock.pause(self.slider.value()); self.auto_hide_timer.stop(); self.chrome.show()
+            pause_frame = self._last_rendered_frame if self._last_rendered_frame is not None else self.slider.value()
+            self.timer.stop(); self.playback_clock.pause(pause_frame); self._requested_frame = pause_frame
+            self.requested_frame = pause_frame
+            self.auto_hide_timer.stop(); self.chrome.show()
         else:
             self.playback_clock.play(self.slider.value()); self.timer.start(); self._show_controls()
 
@@ -1454,24 +1516,29 @@ class ComparisonViewer(QWidget):
             except AttributeError:
                 pass
         active_button = self._hover_menu_target
+        if (event.type() == QEvent.Type.Hide and isinstance(active_button, QComboBox)
+                and self._is_active_hover_menu(watched)):
+            self._hover_menu_latched = False
+        active_combo = isinstance(active_button, QComboBox)
+        active_menu = active_button.menu() if isinstance(active_button, QToolButton) else None
+        active_popup_visible = (active_menu.isVisible() if active_menu is not None else
+                                active_button.view().isVisible() if active_combo else False)
         if (event.type() == QEvent.Type.MouseButtonPress and self._hover_menu_latched
-                and isinstance(active_button, QToolButton) and active_button.menu() is not None):
-            root_menu = active_button.menu()
-            inside_menu = (isinstance(watched, QWidget)
-                           and any(watched is menu or menu.isAncestorOf(watched)
-                                   for menu in (root_menu, *root_menu.findChildren(QMenu))))
+                and (active_menu is not None or active_combo)):
+            inside_menu = self._is_active_hover_menu(watched)
             inside_button = isinstance(watched, QWidget) and (
                 watched is active_button or active_button.isAncestorOf(watched))
             if not inside_menu and not inside_button:
                 self._hover_menu_latched = False
-                root_menu.hide()
+                if isinstance(active_button, QToolButton) and active_button.menu() is not None:
+                    active_button.menu().hide()
         if (event.type() == QEvent.Type.MouseMove and not self._hover_menu_latched
-                and isinstance(active_button, QToolButton) and active_button.menu() is not None
-                and active_button.menu().isVisible()):
+                and active_popup_visible):
             self.hover_close_timer.start()
         is_child_widget = isinstance(watched, QWidget) and (watched is self or self.isAncestorOf(watched))
         if is_child_widget:
-            if isinstance(watched, QToolButton) and watched.menu() is not None:
+            if ((isinstance(watched, QToolButton) and watched.menu() is not None)
+                    or isinstance(watched, QComboBox)):
                 if event.type() == QEvent.Type.Enter:
                     if not self._hover_menu_latched or watched is self._hover_menu_target:
                         self.hover_close_timer.stop()
@@ -1481,7 +1548,7 @@ class ComparisonViewer(QWidget):
                 elif event.type() == QEvent.Type.Leave:
                     self._hover_button_entered = False
                     self.hover_close_timer.start()
-            elif isinstance(watched, QMenu) and self._is_active_hover_menu(watched):
+            elif self._is_active_hover_menu(watched):
                 if event.type() == QEvent.Type.Enter:
                     self.hover_close_timer.stop()
                 elif event.type() == QEvent.Type.Leave:
@@ -1491,18 +1558,30 @@ class ComparisonViewer(QWidget):
             if event.type() in (QEvent.Type.MouseMove, QEvent.Type.MouseButtonPress, QEvent.Type.Wheel, QEvent.Type.KeyPress):
                 if not isinstance(watched, (QMenu, QComboBox, QSlider, QDialog)):
                     self._show_controls()
-            if event.type() == QEvent.Type.MouseButtonPress and isinstance(watched, QToolButton) and watched.menu() is not None:
-                menu = watched.menu()
-                if menu.isVisible():
+            if event.type() == QEvent.Type.MouseButtonPress and (
+                    (isinstance(watched, QToolButton) and watched.menu() is not None)
+                    or isinstance(watched, QComboBox)):
+                popup_visible = (watched.menu().isVisible() if isinstance(watched, QToolButton)
+                                 else watched.view().isVisible())
+                if popup_visible:
                     if self._hover_menu_latched:
                         self._hover_menu_latched = False
-                        menu.hide()
+                        if isinstance(watched, QComboBox):
+                            QTimer.singleShot(0, lambda target=watched: self._dismiss_combo_popup(target))
+                            return False
+                        self._hide_hover_popup(watched)
                     else:
                         self._hover_menu_latched = True
                     event.accept()
                     return True
                 self._hover_menu_target = watched
                 self._hover_menu_latched = True
+                if isinstance(watched, QToolButton):
+                    self._show_hover_popup(watched)
+                else:
+                    return False
+                event.accept()
+                return True
             if event.type() == QEvent.Type.MouseMove and self.annotation_mode == "hovered":
                 for layer in (self.overlay_annotations, *self.split_annotations):
                     if layer.view is watched:
@@ -1524,6 +1603,11 @@ class ComparisonViewer(QWidget):
             if isinstance(watched, QWidget):
                 self._arrow_mode = "orbit" if any(watched is view or view.isAncestorOf(watched) for view in self.split_views + [self.overlay_view]) else "frame"
         elif event.type() == QEvent.Type.KeyPress:
+            if event.key() == Qt.Key.Key_Escape and self._hover_menu_latched and self._hover_menu_target is not None:
+                self._hover_menu_latched = False
+                if isinstance(self._hover_menu_target, QToolButton):
+                    self._hide_hover_popup(self._hover_menu_target)
+                    event.accept(); return True
             if event.key() == Qt.Key.Key_Space:
                 self._play(); event.accept(); return True
             if self._arrow_mode == "frame" and event.key() == Qt.Key.Key_Left: self._previous(); event.accept(); return True
@@ -1538,16 +1622,43 @@ class ComparisonViewer(QWidget):
         return super().eventFilter(watched, event)
 
     def _open_hover_menu(self):
-        button = self._hover_menu_target
-        if isinstance(button, QToolButton) and self._hover_button_entered and button.menu() is not None:
-            menu = button.menu()
-            if not menu.isVisible():
+        target = self._hover_menu_target
+        if self._hover_button_entered and target is not None:
+            if isinstance(target, QComboBox):
+                if not target.view().isVisible():
+                    target.showPopup()
+            elif isinstance(target, QToolButton) and target.menu() is not None and not target.menu().isVisible():
                 self._opening_menu_by_hover = True
-                menu.popup(button.mapToGlobal(QPoint(0, button.height())))
+                target.menu().popup(target.mapToGlobal(QPoint(0, target.height())))
                 self._opening_menu_by_hover = False
+
+    def _show_hover_popup(self, target):
+        self._hover_menu_target = target
+        if isinstance(target, QComboBox):
+            target.showPopup()
+        elif isinstance(target, QToolButton) and target.menu() is not None:
+            target.menu().popup(target.mapToGlobal(QPoint(0, target.height())))
+
+    def _hide_hover_popup(self, target):
+        if isinstance(target, QComboBox):
+            application = QApplication.instance()
+            application.removeEventFilter(self)
+            try:
+                target.hidePopup()
+            finally:
+                application.installEventFilter(self)
+        elif isinstance(target, QToolButton) and target.menu() is not None:
+            target.menu().hide()
+
+    def _dismiss_combo_popup(self, combo):
+        if combo.view().isVisible():
+            self._hide_hover_popup(combo)
 
     def _is_active_hover_menu(self, target):
         button = self._hover_menu_target
+        if isinstance(button, QComboBox):
+            view = button.view()
+            return target is view or view.isAncestorOf(target) or target is view.window()
         if not isinstance(button, QToolButton) or button.menu() is None:
             return False
         root = button.menu()
@@ -1558,6 +1669,7 @@ class ComparisonViewer(QWidget):
         if self._hover_menu_latched:
             return
         menu = button.menu() if isinstance(button, QToolButton) else None
+        combo_view = button.view() if isinstance(button, QComboBox) else None
         position = self._last_pointer_position
         pointer_widget = self._last_pointer_widget
         if pointer_widget is button and position is not None and button.rect().contains(button.mapFromGlobal(position)):
@@ -1571,9 +1683,18 @@ class ComparisonViewer(QWidget):
             for child_menu in (menu, *menu.findChildren(QMenu)):
                 if child_menu.isVisible() and child_menu.rect().contains(child_menu.mapFromGlobal(position)):
                     return
+        if combo_view is not None and combo_view.isVisible() and combo_view.window().rect().contains(
+                combo_view.window().mapFromGlobal(position)):
+            return
         if menu is not None:
             menu.hide()
+        elif combo_view is not None:
+            self._hide_hover_popup(button)
 
     def closeEvent(self, event):
-        QApplication.instance().removeEventFilter(self)
+        application = QApplication.instance()
+        application.removeEventFilter(self)
+        self.hover_menu_timer.stop(); self.hover_close_timer.stop()
+        if isinstance(self._hover_menu_target, QComboBox):
+            self._hover_menu_target.hidePopup()
         super().closeEvent(event)

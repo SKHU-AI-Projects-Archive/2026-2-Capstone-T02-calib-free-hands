@@ -101,10 +101,12 @@
 ## C-2B Final Stabilization and Hardening
 
 - [x] QWindow-safe activity filtering and QComboBox-safe menu close handling
-- [x] Immediate QToolButton hover menus, button/menu pointer transit, click latch, outside click, second toggle, action close, Escape, and click-only combos
+- [x] Unified dropdown hover/click behavior for QToolButton menus and visible QComboBox selectors; button/popup transit, outside click, second toggle, action close, and Escape
 - [x] Checked Pin presentation, pinned visibility, and mouse-movement control restore
 - [x] HUD has no scroll area or result separators; adaptive font fit, transparent default, and reusable per-frame labels
-- [x] Source frame cache misses retain the last valid image; stale frame-ready events do not replace the current request
+- [x] Comparison presentation tracks requested and presented frames separately; source misses retain the full previous presentation and stale frame-ready events are discarded
+- [x] Comparison frame-ready transition updates source, 2D, 3D, HUD/metrics, annotations, slider, and status from one presented-frame index
+- [x] Playback clock continues while decoding; pause invalidates pending playback presentation and paused manual seek remains exact
 - [x] Targeted viewer/presentation/media-provider tests pass; full suite result recorded in VALIDATION_CHECKLIST.md
 - [x] Actual three-result Windows Comparison Viewer inspected in Overlay and Split without inference rerun; source frames, pose overlays, metrics, pin state, and playback updates observed
 - [ ] User final visual approval remains required

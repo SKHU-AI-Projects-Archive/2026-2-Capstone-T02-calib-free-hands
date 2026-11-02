@@ -598,7 +598,7 @@ def test_compact_presentation_explains_disabled_options_and_hud_background_defau
 
 
 def test_toolbutton_menu_opens_immediately_and_closes_when_pointer_leaves(tmp_path, qapp):
-    from PySide6.QtCore import QPoint
+    from PySide6.QtCore import QPoint, Qt
     from PySide6.QtTest import QTest
     from calibfreehands.visualization.comparison import ComparisonViewer
 
@@ -617,7 +617,7 @@ def test_toolbutton_menu_opens_immediately_and_closes_when_pointer_leaves(tmp_pa
     viewer.close()
 
 
-def test_combo_boxes_remain_click_only(tmp_path, qapp):
+def test_combo_boxes_open_on_hover_and_close_after_click_latch(tmp_path, qapp):
     from PySide6.QtCore import Qt
     from PySide6.QtTest import QTest
     from calibfreehands.visualization.comparison import ComparisonViewer
@@ -627,11 +627,137 @@ def test_combo_boxes_remain_click_only(tmp_path, qapp):
     combo = viewer.reference_selector
     QTest.mouseMove(combo, combo.rect().center())
     qapp.processEvents()
-    assert not combo.view().isVisible()
+    assert combo.view().isVisible()
     QTest.mouseClick(combo, Qt.MouseButton.LeftButton)
     qapp.processEvents()
+    assert combo.view().isVisible() and viewer._hover_menu_latched
+    QTest.mouseClick(combo, Qt.MouseButton.LeftButton)
+    qapp.processEvents()
+    assert not combo.view().isVisible()
+    viewer.close()
+
+
+def test_comparison_frame_waits_for_matching_source_frame_before_presenting(tmp_path, qapp):
+    from calibfreehands.media.provider import MediaFrameProvider
+    from calibfreehands.visualization.comparison import ComparisonViewer
+
+    viewer = ComparisonViewer(_session(tmp_path, 2))
+    provider = MediaFrameProvider(tmp_path / "source.mp4", frame_loader=lambda index: np.full((24, 32, 3), index, np.uint8))
+    provider._store(0, np.zeros((24, 32, 3), np.uint8))
+    for loaded in viewer.loaded_results:
+        loaded.media_frames = provider
+    viewer._watch_source_provider(provider)
+    hud_frames = []
+    original_update = viewer.overlay_panel.update_values
+    viewer.overlay_panel.update_values = lambda owner: (hud_frames.append(owner.slider.value()), original_update(owner))
+
+    viewer.slider.setValue(1)
+    assert viewer._last_rendered_frame == 0
+    assert viewer.slider.value() == 0
+    assert viewer.overlay_view.frame == 0
+    assert viewer.status.text().startswith("Frame 1 /")
+
+    provider._store(1, np.ones((24, 32, 3), np.uint8))
+    provider.signals.frame_ready.emit(1)
+    assert viewer._last_rendered_frame == 1
+    assert viewer.slider.value() == 1
+    assert viewer.overlay_view.frame == 1
+    assert viewer.status.text().startswith("Frame 2 /")
+    assert hud_frames[-1] == 1
+    assert viewer.presented_frame == viewer.requested_frame == 1
+    assert viewer.source_overlay._display_image.pixelColor(0, 0).red() == 1
+    provider.close()
+    viewer.close()
+
+
+def test_comparison_ignores_stale_source_completion_and_tracks_latest_request(tmp_path, qapp):
+    from calibfreehands.media.provider import MediaFrameProvider
+    from calibfreehands.visualization.comparison import ComparisonViewer
+
+    viewer = ComparisonViewer(_session(tmp_path, 2))
+    provider = MediaFrameProvider(tmp_path / "source.mp4", frame_loader=lambda index: np.full((24, 32, 3), index, np.uint8))
+    provider._store(0, np.zeros((24, 32, 3), np.uint8))
+    for loaded in viewer.loaded_results:
+        loaded.media_frames = provider
+    viewer._watch_source_provider(provider)
+
+    viewer._set_frame(1)
+    viewer._set_frame(2)
+    provider._store(1, np.ones((24, 32, 3), np.uint8))
+    provider.signals.frame_ready.emit(1)
+    assert viewer._last_rendered_frame == 0
+    provider._store(2, np.full((24, 32, 3), 2, np.uint8))
+    provider.signals.frame_ready.emit(2)
+    assert viewer._last_rendered_frame == 2
+    assert viewer.slider.value() == 2
+    provider.close()
+    viewer.close()
+
+
+def test_pause_discards_pending_playback_frame_but_manual_seek_is_exact(tmp_path, qapp):
+    from calibfreehands.media.provider import MediaFrameProvider
+    from calibfreehands.visualization.comparison import ComparisonViewer
+
+    viewer = ComparisonViewer(_session(tmp_path, 2))
+    provider = MediaFrameProvider(tmp_path / "source.mp4", frame_loader=lambda index: np.full((24, 32, 3), index, np.uint8))
+    provider._store(0, np.zeros((24, 32, 3), np.uint8))
+    for loaded in viewer.loaded_results:
+        loaded.media_frames = provider
+    viewer._watch_source_provider(provider)
+
+    viewer.timer.start(1000)
+    viewer._set_frame(1)
+    viewer._play()
+    provider._store(1, np.ones((24, 32, 3), np.uint8))
+    provider.signals.frame_ready.emit(1)
+    assert viewer.presented_frame == 0
+    assert viewer.requested_frame == 0
+
+    viewer.slider.setValue(2)
+    assert viewer.presented_frame == 0
+    provider._store(2, np.full((24, 32, 3), 2, np.uint8))
+    provider.signals.frame_ready.emit(2)
+    assert viewer.presented_frame == 2
+    assert viewer.overlay_view.frame == 2
+    assert viewer.slider.value() == 2
+    assert viewer.status.text().startswith("Frame 3 /")
+    provider.close()
+    viewer.close()
+
+
+@pytest.mark.parametrize("selector_name", ["reference_selector", "speed_selector", "confidence_color_mode"])
+def test_dropdown_combos_open_on_hover_and_click_latches(tmp_path, qapp, selector_name):
+    from PySide6.QtCore import QPoint, Qt
+    from PySide6.QtTest import QTest
+    from calibfreehands.visualization.comparison import ComparisonViewer
+
+    viewer = ComparisonViewer(_session(tmp_path, 2))
+    viewer.resize(1280, 800); viewer.show(); qapp.processEvents()
+    combo = getattr(viewer, selector_name)
+    QTest.mouseMove(combo, combo.rect().center()); qapp.processEvents()
     assert combo.view().isVisible()
-    combo.hidePopup(); viewer.close()
+    QTest.mouseClick(combo, Qt.MouseButton.LeftButton); qapp.processEvents()
+    assert combo.view().isVisible() and viewer._hover_menu_latched
+    QTest.mouseMove(viewer.views, QPoint(40, 40)); qapp.processEvents()
+    assert combo.view().isVisible()
+    QTest.mouseClick(combo, Qt.MouseButton.LeftButton); qapp.processEvents()
+    assert not combo.view().isVisible()
+    viewer.close()
+
+
+def test_combo_hover_popup_closes_when_pointer_leaves_control_and_popup(tmp_path, qapp):
+    from PySide6.QtCore import QPoint, Qt
+    from PySide6.QtTest import QTest
+    from calibfreehands.visualization.comparison import ComparisonViewer
+
+    viewer = ComparisonViewer(_session(tmp_path, 2))
+    viewer.resize(1280, 800); viewer.show(); qapp.processEvents()
+    combo = viewer.reference_selector
+    QTest.mouseMove(combo, combo.rect().center()); qapp.processEvents()
+    assert combo.view().isVisible()
+    QTest.mouseMove(viewer.views, QPoint(40, 40)); qapp.processEvents()
+    assert not combo.view().isVisible()
+    viewer.close()
 
 
 def test_hud_is_text_only_and_has_no_scroll_area_or_group_separators(tmp_path, qapp):

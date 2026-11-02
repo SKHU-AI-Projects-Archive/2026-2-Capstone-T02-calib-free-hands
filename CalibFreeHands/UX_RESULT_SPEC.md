@@ -1581,9 +1581,18 @@ C-2B Final Validation remains **READY FOR FINAL MANUAL APPROVAL**. Automated tes
 
 - Keep the source viewport and 3D viewport geometry fixed while control chrome hides and returns. Controls use compact outer padding and remain within the normal 1280x800 review target.
 - Pin has an explicit checked appearance and a `Pinned` label; pinned controls do not auto-hide. Mouse movement restores hidden controls without a click.
-- QToolButton menus open immediately on hover, remain open while the pointer moves between the button and menu, and close when the pointer leaves both. Clicking latches the menu until its action, outside click, Escape, or a second toggle closes it. QComboBox popups remain click-only.
+- QToolButton menus and visible QComboBox selectors use the same transient-hover and click-latched policy. Hover opens immediately; leaving both control and popup closes a transient popup. A click latches it until outside click, Escape, second toggle, action selection, or normal dismissal. A latched popup has priority over other hover targets; clicking another dropdown dismisses the old popup and opens the new one.
 - The default HUD is transparent text without a scroll area, scrollbar, panel border, background, or result-group separator. Optional subtle background remains an explicit setting. Font fitting is limited to viewport geometry, row-count, and selected-size changes; playback updates reuse label widgets.
-- If a source frame is not in the asynchronous cache, keep the last valid source image visible until the currently requested frame is ready. Ignore ready notifications for stale frame requests.
+- Comparison playback separates `requested_frame` from `presented_frame`. While a requested source frame is missing, the source image, 2D/3D results, mesh, error vectors, annotations, metrics/HUD, slider, and status retain the previous presented frame. A ready notification is applied only if it still matches the newest request. Playback time continues and can skip frames; pause invalidates pending playback presentation, while manual seek presents the exact requested frame when ready. Source images retain their last valid decoded frame.
+- Dropdown-like control audit: Results (QToolButton/QMenu, multi-select), Reference (QComboBox, single-select), Metrics (QToolButton/QMenu, multi-select), Color by (QComboBox, single-select), Detection (QToolButton/QMenu, multi-option), Error vectors (QToolButton/QMenu), Joints (QToolButton/QMenu), HUD (QToolButton/QMenu), More (QToolButton/QMenu), and Speed (QComboBox, single-select).
 - Viewer interactions never rerun inference or modify canonical results.
 
 C-2B remains **READY FOR FINAL MANUAL APPROVAL** until the user completes the final visual review.
+
+## C-2B Final Sync & Menu Consistency Fix
+
+- Comparison presentation uses a single `presented_frame` for RGB, 2D/3D, mesh, metrics/HUD, annotations, slider, and status. Async cache misses retain the prior full presentation; out-of-date completions are ignored.
+- Playback clock time advances during decode and may drop intermediate frames. Pause discards pending playback presentation. A paused manual seek remains the newest exact target and presents when its source frame is ready.
+- Results, Metrics, Detection, Vectors, Joints, HUD, and More use QToolButton/QMenu. Reference, Color by, and Speed remain QComboBox selectors. All visible dropdown controls open on immediate hover and follow the same transient/click-latched dismissal policy. A click on another control dismisses the old latch and opens the new control; passive hover does not steal a latched popup.
+- This pass does not change canonical result data, metric definitions, inference, the bounded media cache, or the single-result/comparison viewer routing.
+- Validation and normal Windows GUI evidence for this pass are recorded in `VALIDATION_CHECKLIST.md`; final user visual approval remains outstanding.
