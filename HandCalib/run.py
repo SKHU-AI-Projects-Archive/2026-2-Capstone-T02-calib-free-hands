@@ -8222,7 +8222,211 @@ def fs_results_yaml(run_dir: Path, cfg: dict):
 
 
 
-COMMANDS = {"protocol": protocol_main, "frame-filter": ff_main, "same-session": session_main, "overlay": overlay_main, "phase-segmentation": pseg_main, "guide-revision": grev_main, "f-response": fresp_main, "error-factors": ferr_main, "long-video-check": long_main, "generalization": gen_main, "main-camera-extension": ext_main, "wide-60cm": wide_main, "jointset-sets": jset_main, "verdict-calibration": cal_main, "printed-hand": pr_main, "hand-markers": mk_main, "markers-only": mo_main, "free-template": ft_main, "free-shape3d": s3_main, "free-shape3d-hand": h3_main, "free-shape3d-27": e3_main, "free-shape3d-new": e4_main, "mmpose-hand": mm_main, "mmpose-hand-46": mm2_main, "free-shape3d-new2": e5_main, "mmpose-hand-src": mm3_main, "free-shape3d-detectors": fs_main}
+# ====================================================================================================
+# h4  (experiment 52: 42 on the same marker videos with other marker sets: palm only (wrist + 4 MCP) and 42's 8 MCP/PIP + wrist; each set is also the used set of the 35c tracker)
+#     python HandCalib/run.py free-shape3d-hand-sets --config HandCalib/configs/52_free_shape3d_hand_sets.yaml [--out DIR]
+#     python HandCalib/run.py free-shape3d-hand-sets --config ... results-yaml --run runs/52_free_shape3d_hand_sets/<UTC>
+# ====================================================================================================
+H4_NOTE = ("실험 42와 같은 실제 손 마커 영상 6개와 같은 호출(35c 추적 코드, 교수님 free_shape3d)에서 추정에 쓰는 마커만 바꾼 실험이다. 마커 묶음은 손바닥 5점(손목과 네 손가락 뿌리 관절)과 실험 42의 8점(손가락 뿌리 관절과 둘째 마디)에 손목을 더한 9점이다. "
+           "각 묶음은 35c 추적기의 사용 마커(기준 프레임, 75% 규칙, 호모그래피 검사)로도 쓰고, 나머지 설정과 판정 규칙은 실험 42 그대로 실행 전에 고정했다. 기준 f와의 비교는 summary.md에만 있다.")
+
+
+def h4_load(cfg: dict) -> dict:
+    """The 42 config (base_config, read only) with the run fields of 52 on top."""
+    base = yaml.safe_load(hf.resolve(cfg["base_config"]).read_text())
+    return {**base, **{k: cfg[k] for k in ("experiment", "point_sets", "compare_42", "workers", "n_workers", "output") if k in cfg}}
+
+
+def h4_c(cfg: dict, ids: list) -> dict:
+    """h3_video's config sections with markers.used_ids replaced by one marker set."""
+    c = {k: copy.deepcopy(cfg[k]) for k in H3_KEYS}
+    c["markers"]["used_ids"] = [int(x) for x in ids]
+    return c
+
+
+def h4_analyze(results: list, cfg: dict) -> dict:
+    """42's analysis of one marker set: per-distance geometric mean of the 3-D f and its slope (video bootstrap), the pooled planar curves beside it."""
+    ref = {float(d): float(f) for d, f in cfg["ref_f_by_distance"].items()}
+    bn, bs = int(cfg["bootstrap"]["n"]), int(cfg["bootstrap"]["seed"])
+    inc = [r for r in results if "f" in r["marker"]]
+    ds = sorted({r["distance_cm"] for r in inc})
+    if not ds:
+        return {"shape3d": {"verdict": {"verdict": "판단 불가", "reason": "분석된 영상이 없음"}}}
+    fb = {d: [r["marker"]["f"] for r in inc if r["distance_cm"] == d] for d in ds}
+    eb = {d: [r["marker"]["at_bound"] or r["marker"]["at_grid_edge"] for r in inc if r["distance_cm"] == d] for d in ds}
+    sl = hf.s3_slope(fb, eb, bn, bs)
+    nv = {d: len(fb.get(d, [])) for d in ref}
+    grid = np.array(inc[0]["marker"]["curve"]["grid"])
+    psl = hf.pr_slope({d: [r["marker"]["curve"]["cost"] for r in inc if r["distance_cm"] == d] for d in ds}, grid, bn, bs)
+    return {"shape3d": {"slope": sl, "verdict": hf.pr_verdict(sl, ref, cfg["verdict"], nv)}, "planar": {"slope": psl, "verdict": hf.pr_verdict(psl, ref, cfg["verdict"], nv)}}
+
+
+def h4_prior(cfg: dict) -> dict:
+    """Per-video 3-D f of experiment 42 (the 8 markers; read only)."""
+    q = Path(str(cfg.get("compare_42") or "x")).expanduser()
+    q = q if q.is_absolute() else hf.resolve(q)
+    if not q.exists():
+        return {}
+    return {v["video"]: v["marker"]["f"] for v in json.loads(q.read_text())["videos"] if "f" in v["marker"]}
+
+
+def h4_report(path: Path, results: list, cfg: dict):
+    fs = cfg["free_shape3d"]
+    L = ["# 실험 52: free_shape3d (실험 42의 실제 손 마커 영상, 마커 묶음별)", "", H4_NOTE, "", f"free_shape3d(z_rel {fs['z_rel']}, alt_iters {fs['alt_iters']}, max_frames {fs['max_frames']}), f 격자 {cfg['pipeline']['estimate']['f_grid_n']}점.", "",
+         "| 묶음 | 점 번호 |", "|---|---|"] + [f"| {n} | {', '.join(str(x) for x in ids)} |" for n, ids in cfg["point_sets"].items()] + [
+         "", "## 1. 영상별 값", "", "| 묶음 | 영상 | 거리(cm) | 기울기 구간 유효 프레임 | 포함 | f 3차원 (px) | f 평면 번들 조정 (px) | 상대 깊이 변위 | 3차원 조정이 f 한계에 붙음 | 평면 격자 최솟값이 가장자리 | 3차원 RMS (px) | 사용 프레임 | 걸린 시간(초) |",
+         "|---|---|---|---|---|---|---|---|---|---|---|---|---|"]
+    for r in results:
+        x, tv = r["marker"], r["marker_stats"].get("tilt_valid_ratio")
+        tvs = "-" if tv is None else f"{100 * tv:.1f}%"
+        if "f" in x:
+            L.append(f"| {r['set']} | {r['video']} | {r['distance_cm']:g} | {tvs} | 포함 | {x['f']:.1f} | {x['f_planar']:.1f} | {x['relief_rel']:.4f} | {'예' if x['at_bound'] else '아니오'} | {'예' if x['at_grid_edge'] else '아니오'} | {long_fmt(x['ba3_rms_px'], 3)} | {x['n_frames_in_problem']} | {x['elapsed_s']:.0f} |")
+        else:
+            L.append(f"| {r['set']} | {r['video']} | {r['distance_cm']:g} | {tvs} | 제외: {'; '.join(x.get('excluded') or []) or x.get('failed') or '제외'} | - | - | - | - | - | - | - | - |")
+    L += ["", "## 한계", "", "- 영상은 거리마다 2개씩이라 기울기 구간이 거칠다.", "- 마커는 피부 위 점이라 손가락이 굽으면 점 사이 모양이 바뀐다(손바닥 묶음은 이 영향을 줄이려는 것이다).", ""]
+    path.write_text("\n".join(L) + "\n")
+
+
+def h4_summary(path: Path, results: list, ana: dict, cfg: dict, prior: dict):
+    ref = {float(d): float(f) for d, f in cfg["ref_f_by_distance"].items()}
+    vcfg = cfg["verdict"]
+    fe = lambda f, rf: "-" if f is None else f"{f:.1f} ({100 * (f / rf - 1.0):+.1f}%)"      # noqa: E731
+    L = ["# 실험 52 summary", "", f"**{H4_NOTE}**", "", "## 판정", ""]
+    for n in cfg["point_sets"]:
+        v = ana[n]["shape3d"]["verdict"]
+        s_ = f"- **{n}: {v['verdict']}**"
+        if v.get("slope") is not None and v.get("interval_95"):
+            s_ += f" — 기울기 {v['slope']:+.3f}, 95% 구간 {v['interval_95'][0]:+.3f} ~ {v['interval_95'][1]:+.3f}"
+        elif v.get("reason"):
+            s_ += f" — {v['reason']}"
+        L.append(s_)
+    L += [f"- 판정 규칙(실행 전 고정, 실험 42와 같음): 반비례 없음 = 기울기 구간 전체가 {vcfg['slope_none_min']:g}보다 위이고 세 거리의 f(영상별 3차원 f의 기하평균)가 모두 기준 f의 ±{100 * float(vcfg['f_tol']):.0f}% 안; 반비례 있음 = 구간 전체가 {vcfg['slope_yes_max']:g}보다 아래; 그 외 판단 보류; 거리에 영상이 없거나, 3차원 f가 f 범위 한계에 붙었거나 평면 격자 최솟값이 격자 가장자리인 영상이 있으면 판단 불가.", "",
+          "## 1. 거리별 f, 초점 거리 (기준 f 대비)", "", "| 거리(cm) | 기준 f (체커보드) | " + " | ".join(cfg["point_sets"]) + " | 실험 42 (8점) |", "|---|---|" + "---|" * (len(cfg["point_sets"]) + 1)]
+    for d in sorted(ref):
+        row = [f"{d:g}", f"{ref[d]:.1f}"]
+        for n in cfg["point_sets"]:
+            sl = ana[n]["shape3d"].get("slope") or {}
+            f = (sl.get("pooled_f") or {}).get(d)
+            row.append(fe(f, ref[d]) + (" (한계)" if f is not None and (sl.get("pooled_edge") or {}).get(d) else ""))
+        p42 = [prior[r["video"]] for r in results if r["set"] == list(cfg["point_sets"])[0] and r["distance_cm"] == d and r["video"] in prior]
+        row.append(fe(float(np.exp(np.mean(np.log(p42)))) if p42 else None, ref[d]))
+        L.append("| " + " | ".join(row) + " |")
+    L += ["", "| 묶음 | 기울기 (영상별 3차원 f) | 95% 구간 | 평면 합동 곡선 기울기 |", "|---|---|---|---|"]
+    for n in cfg["point_sets"]:
+        sl, pl = ana[n]["shape3d"].get("slope") or {}, (ana[n].get("planar") or {}).get("slope") or {}
+        L.append(f"| {n} | {long_fmt(sl.get('slope'), 3)} | {'-' if not sl.get('interval_95') else format(sl['interval_95'][0], '+.3f') + ' ~ ' + format(sl['interval_95'][1], '+.3f')} | {long_fmt(pl.get('slope'), 3)} |")
+    L += ["", "## 2. 영상별 f, 초점 거리 (기준 f 대비)", "", "| 영상 | 거리(cm) | " + " | ".join(f"{n} 3차원" for n in cfg["point_sets"]) + " | " + " | ".join(f"{n} 평면" for n in cfg["point_sets"]) + " | " + " | ".join(f"{n} RMS (px)" for n in cfg["point_sets"]) + " | 실험 42 (8점) |",
+          "|---|---|" + "---|" * (3 * len(cfg["point_sets"]) + 1)]
+    by = {(r["set"], r["video"]): r for r in results}
+    for r in [r for r in results if r["set"] == list(cfg["point_sets"])[0]]:
+        rf = ref[r["distance_cm"]]
+        xs = [by[(n, r["video"])]["marker"] for n in cfg["point_sets"]]
+        c3 = [(fe(x["f"], rf) + (" (한계)" if x["at_bound"] else "")) if "f" in x else "제외: " + ("; ".join(x.get("excluded") or []) or x.get("failed") or "-") for x in xs]
+        cp = [fe(x["f_planar"], rf) if "f" in x else "-" for x in xs]
+        cr = [long_fmt(x["ba3_rms_px"], 3) if "f" in x else "-" for x in xs]
+        L.append(f"| {r['video']} | {r['distance_cm']:g} | " + " | ".join(c3 + cp + cr) + f" | {fe(prior.get(r['video']), rf)} |")
+    L += ["", "## 한계", "", "- 기준 f는 실험 35c 때 체커보드 거리 실험의 값(사용자 제공)이며 이 영상 세션에서 새로 재지 않았다.", "- 거리마다 영상이 2개라 기울기 구간이 거칠다.", ""]
+    path.write_text("\n".join(L) + "\n")
+
+
+def h4_main(argv=None):
+    ap = argparse.ArgumentParser()
+    ap.add_argument("--config", default=str(hf.PROJECT_ROOT / "configs/52_free_shape3d_hand_sets.yaml"))
+    sub = ap.add_subparsers(dest="cmd")
+    ry = sub.add_parser("results-yaml")
+    ry.add_argument("--run", required=True)
+    ap.add_argument("--out", default=None)
+    a = ap.parse_args(argv)
+    text = Path(a.config).read_text()
+    own = yaml.safe_load(text)
+    cfg = h4_load(own)
+    if a.cmd == "results-yaml":
+        print(h4_results_yaml(hf.resolve(a.run), cfg))
+        return None
+    entries = list(cfg["videos"])
+    missing = [e["file"] for e in entries if not (Path(cfg["input_dir"]).expanduser() / e["file"]).exists()]
+    if missing:
+        raise SystemExit(f"영상이 없습니다: {missing}")
+    run_root = Path(a.out).expanduser() if a.out else hf.resolve(cfg["output"]["root"]) / utc_stamp()
+    run_root.mkdir(parents=True)
+    log = Log(run_root / "log.txt")
+    log(f"52 free_shape3d 마커 묶음별 공식 실행: 영상 {len(entries)}개, 묶음 {dict(cfg['point_sets'])} → {run_root}")
+    t0 = time.time()
+    tmp_root = run_root / "_frames"
+    tmp_root.mkdir()
+    dset = cfg["detector_settings"][cfg["candidate"]["detector"]]
+    for k in ("OMP_NUM_THREADS", "OPENBLAS_NUM_THREADS", "MKL_NUM_THREADS"):
+        os.environ[k] = "1"
+    import multiprocessing as mp
+    from concurrent.futures import ProcessPoolExecutor
+    try:
+        with ProcessPoolExecutor(max_workers=int(cfg["workers"]), mp_context=mp.get_context("spawn")) as ex:
+            preps = list(ex.map(hf.fresp_prepare, [(e["file"], cfg["input_dir"], cfg["pipeline"], {}, str(tmp_root)) for e in entries]))
+            found = hf.fresp_detect_many([((e["file"], "orig"), p["frames"]) for e, p in zip(entries, preps)], dset, run_root / "detection_cache", int(cfg["n_workers"]), log)
+            jobs = [(n, (e, p, found[(e["file"], "orig")], cfg["pipeline"], h4_c(cfg, ids))) for n, ids in cfg["point_sets"].items() for e, p in zip(entries, preps)]
+            res = list(ex.map(hf.h3_video, [j for _, j in jobs]))
+    finally:
+        shutil.rmtree(tmp_root, ignore_errors=True)
+    results = [{"set": n, **r} for (n, _), r in zip(jobs, res)]
+    for r in results:
+        x = r["marker"]
+        log(f"  {r['set']} {r['video']} ({r['distance_cm']:g} cm): " + (f"f {x['f']:.1f} px (평면 {x['f_planar']:.1f}, 상대 깊이 변위 {x['relief_rel']:.4f}, RMS {x['ba3_rms_px']:.3f} px{', f 한계에 붙음' if x['at_bound'] else ''}{', 평면 격자 가장자리' if x['at_grid_edge'] else ''})" if "f" in x else "제외")
+            + (f" [제외: {'; '.join(x['excluded'])}]" if x.get("excluded") else "") + (f" [{x['failed']}]" if x.get("failed") else ""))
+    ana = {n: h4_analyze([r for r in results if r["set"] == n], cfg) for n in cfg["point_sets"]}
+    for n in cfg["point_sets"]:
+        v = ana[n]["shape3d"]["verdict"]
+        log(f"  {n}: {v['verdict']}" + (f" (기울기 {v['slope']:+.3f})" if v.get("slope") is not None else "") + (f" [{v.get('reason')}]" if v.get("reason") else ""))
+    ref = {float(d): float(f) for d, f in cfg["ref_f_by_distance"].items()}
+    prior42 = h3_prior(cfg)
+    for n in cfg["point_sets"]:
+        (run_root / "figures" / n).mkdir(parents=True)
+        h3_figures(run_root / "figures" / n, [r for r in results if r["set"] == n], ana[n], ref, prior42)
+    h4_report(run_root / "report.md", results, cfg)
+    h4_summary(run_root / "summary.md", results, ana, cfg, h4_prior(cfg))
+    (run_root / "results.json").write_text(json.dumps(hf.jsonable({"videos": results, "analysis": ana}), ensure_ascii=False, indent=1))
+    meta = hf.provenance_build(text, a.config, {"code_52": own.get("code_52"), "base_config": own["base_config"], "videos": [e["file"] for e in entries], "elapsed_s": time.time() - t0})
+    (run_root / "metadata.json").write_text(json.dumps(hf.jsonable(meta), ensure_ascii=False, indent=1))
+    log(f"완료 {time.time() - t0:.0f} s → {run_root}")
+    log.close()
+    return run_root, results, ana
+
+
+def h4_results_yaml(run_dir: Path, cfg: dict):
+    """Values and verdicts only (no reference f); written to output.results_yaml."""
+    r = json.loads((run_dir / "results.json").read_text())
+    m = json.loads((run_dir / "metadata.json").read_text())
+    try:
+        run_name = str(run_dir.resolve().relative_to(hf.PROJECT_ROOT))
+    except ValueError:
+        run_name = str(run_dir)
+    rd = lambda x, n=4: None if x is None or (isinstance(x, float) and not np.isfinite(x)) else round(x, n)      # noqa: E731
+    out = {"experiment": cfg["experiment"]["name"], "run": run_name, "code_commit": m["git"]["commit"][:7], "git_dirty_at_run": m["git"]["git_dirty"], "note": H4_NOTE,
+           "point_sets": {n: [int(x) for x in ids] for n, ids in cfg["point_sets"].items()}, "free_shape3d": cfg["free_shape3d"], "verdict_rules": cfg["verdict"], "sets": {}}
+    for n in cfg["point_sets"]:
+        a = r["analysis"][n]
+        sl = a["shape3d"].get("slope") or {}
+        ps = (a.get("planar") or {}).get("slope") or {}
+        o = out["sets"][n] = {"f_by_distance_px": {f"{float(d):g}": rd(f, 1) for d, f in (sl.get("pooled_f") or {}).items()}, "slope": rd(sl.get("slope")),
+                              "slope_interval_95": None if not sl.get("interval_95") else [round(q, 4) for q in sl["interval_95"]], "verdict": a["shape3d"]["verdict"]["verdict"], "reason": a["shape3d"]["verdict"].get("reason"),
+                              "planar_pooled_f_px": {f"{float(d):g}": rd(f, 1) for d, f in (ps.get("pooled_f") or {}).items()}, "planar_slope": rd(ps.get("slope")), "videos": {}}
+        for v in r["videos"]:
+            if v["set"] != n:
+                continue
+            x = v["marker"]
+            e = {"distance_cm": v["distance_cm"], "marker_tilt_valid_ratio": rd(v["marker_stats"].get("tilt_valid_ratio"))}
+            if "f" in x:
+                e.update({"f_3d_px": round(x["f"], 1), "f_planar_px": round(x["f_planar"], 1), "at_bound": x["at_bound"], "at_grid_edge": x["at_grid_edge"], "relief_rel": rd(x["relief_rel"], 5),
+                          "ba3_rms_px": rd(x["ba3_rms_px"], 4), "n_frames_in_problem": x["n_frames_in_problem"]})
+            else:
+                e["excluded"] = x.get("excluded") or x.get("failed") or "제외"
+            o["videos"][v["video"]] = e
+    p = hf.resolve(cfg["output"]["results_yaml"])
+    p.write_text(yaml.safe_dump(hf.jsonable(out), allow_unicode=True, sort_keys=False))
+    return p
+
+
+
+COMMANDS = {"protocol": protocol_main, "frame-filter": ff_main, "same-session": session_main, "overlay": overlay_main, "phase-segmentation": pseg_main, "guide-revision": grev_main, "f-response": fresp_main, "error-factors": ferr_main, "long-video-check": long_main, "generalization": gen_main, "main-camera-extension": ext_main, "wide-60cm": wide_main, "jointset-sets": jset_main, "verdict-calibration": cal_main, "printed-hand": pr_main, "hand-markers": mk_main, "markers-only": mo_main, "free-template": ft_main, "free-shape3d": s3_main, "free-shape3d-hand": h3_main, "free-shape3d-27": e3_main, "free-shape3d-new": e4_main, "mmpose-hand": mm_main, "mmpose-hand-46": mm2_main, "free-shape3d-new2": e5_main, "mmpose-hand-src": mm3_main, "free-shape3d-detectors": fs_main, "free-shape3d-hand-sets": h4_main}
 
 
 def main(argv=None):

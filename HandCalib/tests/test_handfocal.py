@@ -4477,5 +4477,68 @@ class FSReports(unittest.TestCase):
             self.assertIn("1553", summ)
 
 
+CFG52_OWN = {"experiment": {"name": "52_free_shape3d_hand_sets", "seed": 42}, "base_config": "configs/42_free_shape3d_hand.yaml",
+             "point_sets": {"palm5": [0, 5, 9, 13, 17], "wrist_mcp_pip9": [0, 5, 6, 9, 10, 13, 14, 17, 18]}, "compare_42": "none.json", "workers": 2, "n_workers": 2,
+             "output": {"root": "runs/52_free_shape3d_hand_sets", "results_yaml": "results/52_free_shape3d_hand_sets.yaml"}}
+
+
+class H4Sets(unittest.TestCase):
+    def test_load_keeps_42s_settings_and_each_set_becomes_the_used_markers(self):
+        cfg = run.h4_load(CFG52_OWN)
+        for k in run.H3_KEYS + ("videos", "input_dir", "ref_f_by_distance", "pipeline", "verdict", "bootstrap"):
+            self.assertEqual(cfg[k], CFG42[k], k)
+        self.assertEqual(cfg["experiment"]["name"], "52_free_shape3d_hand_sets")
+        c = run.h4_c(cfg, cfg["point_sets"]["palm5"])
+        self.assertEqual(c["markers"]["used_ids"], [0, 5, 9, 13, 17])
+        self.assertEqual(CFG42["markers"]["used_ids"], [5, 6, 9, 10, 13, 14, 17, 18])               # the 42 config is not touched
+        self.assertEqual({k: v for k, v in c["markers"].items() if k != "used_ids"}, {k: v for k, v in CFG42["markers"].items() if k != "used_ids"})
+
+    def test_h3_video_estimates_with_the_set(self):
+        from unittest import mock
+        cfg = run.h4_load(CFG52_OWN)
+        c = run.h4_c(cfg, cfg["point_sets"]["palm5"])
+        c["free_shape3d"] = {"z_rel": 0.2, "alt_iters": 1, "max_frames": 12}
+        pcfg = copy.deepcopy(CFG42["pipeline"])
+        pcfg["estimate"]["f_grid_n"] = 6
+        with mock.patch.object(hf._report, "mk_process", return_value=h3_fake_proc()):
+            x = hf.h3_video(({"file": "x.MOV", "distance_cm": 50}, None, None, pcfg, c))["marker"]
+        self.assertEqual(sorted(x.get("joint_ids", [])), [5, 9, 13, 17], x)                              # the fake track has no wrist marker; PIP markers are left out
+
+    def test_summary_has_f_with_error_and_report_and_yaml_have_no_reference(self):
+        cfg = run.h4_load(CFG52_OWN)
+        grid = np.geomspace(0.35 * 1920, 1.6 * 1920, 60)
+        cost = ((np.log(grid) - np.log(1700.0)) ** 2 + 0.01).tolist()
+        results = []
+        for n, ids in cfg["point_sets"].items():
+            for f, d in (("IMG_7267.MOV", 50), ("IMG_7266.MOV", 50), ("IMG_7265.MOV", 60), ("IMG_7264.MOV", 60), ("IMG_7263.MOV", 75), ("IMG_7262.MOV", 75)):
+                results.append({"set": n, "video": f, "distance_cm": float(d), "marker_stats": {"tilt_valid_ratio": 0.98},
+                                "marker": {"f": 1700.0, "f_planar": 1710.0, "at_grid_edge": False, "at_bound": False, "relief_rel": 0.01, "relief_per_joint": [0.01] * len(ids), "curve": {"grid": grid.tolist(), "cost": cost},
+                                           "ba3_rms_px": 0.2, "n_frames_in_problem": 120, "joint_ids": ids, "elapsed_s": 60.0}})
+        results[1] = {**results[1], "marker": {"excluded": ["기울기 구간 유효 프레임 50.0% < 70%"]}}
+        ana = {n: run.h4_analyze([r for r in results if r["set"] == n], cfg) for n in cfg["point_sets"]}
+        with tempfile.TemporaryDirectory() as d:
+            d = Path(d)
+            (d / "figures").mkdir()
+            run.h3_figures(d / "figures", [r for r in results if r["set"] == "palm5"], ana["palm5"], {50.0: 1660.6, 60.0: 1653.7, 75.0: 1644.9}, run.h3_prior({"compare": {}}))
+            run.h4_report(d / "report.md", results, cfg)
+            run.h4_summary(d / "summary.md", results, ana, cfg, {"IMG_7267.MOV": 3072.0})
+            (d / "results.json").write_text(json.dumps(hf.jsonable({"videos": results, "analysis": ana}), ensure_ascii=False))
+            (d / "metadata.json").write_text(json.dumps({"git": {"commit": "abcdef1234", "git_dirty": False}}))
+            cfg2 = copy.deepcopy(cfg)
+            cfg2["output"]["results_yaml"] = str(d / "r.yaml")
+            y = Path(run.h4_results_yaml(d, cfg2)).read_text()
+            summ, rep = (d / "summary.md").read_text(), (d / "report.md").read_text()
+            self.assertIn("1700.0 (+2.4%)", summ)
+            self.assertIn("3072.0 (+85.0%)", summ)
+            self.assertIn("제외: 기울기 구간", summ)
+            for val in ("1660.6", "1653.7", "1644.9"):
+                self.assertNotIn(val, rep + y)
+            self.assertIn("1660.6", summ)
+            for line in (summ + rep).splitlines():
+                if line.startswith("| ") and "---" not in line:
+                    self.assertFalse(line.split("|")[1:-1] == [], line)
+            self.assertIn("palm5", yaml.safe_load(y)["sets"])
+
+
 if __name__ == "__main__":
     unittest.main()
