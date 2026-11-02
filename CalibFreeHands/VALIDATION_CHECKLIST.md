@@ -178,3 +178,10 @@ result reopening pass.
 - [x] Measured process RSS: 215.1 MiB after open, 601.4 MiB after full source decode; previous full-frame preload observation was about 3.7 GiB
 - [x] Seek latency at frames 0/60/150/300/501: 78/332/502/829/1120 ms
 - [x] 4-second playback probes: 1x 29.99 source fps at 22.3% process CPU; 2x 59.72 source fps at 29.7% process CPU
+
+## C-2B Final Validation
+- [x] Windows GUI opened three actual same-source CFH results without inference; Overlay and Split + 3 results inspected at 1280x800
+- [x] Real source video, synchronized result poses, and current-frame metrics updated during playback; controls auto-hid while playing and returned on mouse activity
+- [x] Windows UI speed selector accepted 0.1x and 2x; separate 4-second probes verified 1x/2x playback rates
+- [x] Full final pytest suite: 207 passed; application import, compileall, and diff check passed
+- [ ] HUMAN FINAL REVIEW REQUIRED: hovered-joint annotation readability, all annotation modes, and final approval. Automated tests and agent visual inspection do not count as user approval.

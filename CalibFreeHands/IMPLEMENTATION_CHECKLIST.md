@@ -95,3 +95,4 @@
 - [x] C-2B shared asynchronous MediaFrameProvider with lazy FFmpeg frames, source identity sharing, and a 384 MiB byte-bounded LRU cache
 - [x] C-2B viewer frame requests remain non-blocking; copied QImage display storage survives cache eviction
 - [x] C-2B static image sources use one cached RGB frame; missing and changed source media remain non-blocking for 3D results
+- [x] C-2B final automated and Windows GUI validation completed; waiting for user visual approval before marking the milestone complete

@@ -1573,3 +1573,5 @@ The Presentation Redesign and media memory optimization are implemented. Report 
 ## C-2B media source loading status
 
 Comparison and saved-result viewers share a source-keyed asynchronous frame provider. Video RGB frames are decoded only when requested and retained in a 384 MiB byte-bounded LRU cache; images use one static cached frame. Display images copy from the cached NumPy frame so cache eviction cannot invalidate a visible QImage. Missing or changed source media does not prevent viewing the saved 3D result. On the Windows `4_assemble.mp4` source with three same-source results, the measured cache stayed at 379.7 MiB; process RSS after decoding the full source was 601.4 MiB, versus the earlier approximately 3.7 GiB full-frame preload observation. This is a local benchmark, not a platform-wide memory guarantee.
+
+C-2B Final Validation remains **READY FOR FINAL MANUAL APPROVAL**. Automated tests and local Windows visual review passed; the user's final visual approval is outstanding.
