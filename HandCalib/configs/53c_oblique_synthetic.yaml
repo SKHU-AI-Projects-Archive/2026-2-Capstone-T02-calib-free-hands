@@ -1,0 +1,19 @@
+# 53c: synthetic check of 53's setting (user 2026-11-02), record only, no verdict; real videos are not recomputed. 45-degree desk, 60 cm, true f 1655 px, the supervisor's free_template and
+# free_shape3d through od_job (as 53), 16 points; the turn on the desk spans 20 / 40 / 60 / 90 deg; the translation is scaled so the hand box centre spans what 53b's selected MediaPipe frames span
+# (4.5 % of the width, 34.6 % of the height); independent Gaussian noise per coordinate, joint and frame of 0.1 / 0.5 / 1.0 % of the hand box long side; 5 seeds (noise only). 60 frames per scene
+# (53b kept 61 MediaPipe frames). Upper limit = the final f within 0.5 % of the top of the f range (53's boundary rule). Fixed before the run.
+experiment:
+  name: 53c_oblique_synthetic
+  seed: 42
+base_config: configs/49_free_shape3d_7312.yaml   # read only: pipeline.estimate (f range 0.35-1.6 x 1920, 60-point grid, Huber 0.02, principal point centre) and free_shape3d (as 53)
+true_f: 1655.0
+scene: {tilt_deg: 45, dist_cm: 60, n_frames: 60, move_pct_xy: [4.5, 34.6]}
+turn_ranges_deg: [20, 40, 60, 90]
+noise_rel: [0.001, 0.005, 0.01]
+seeds: [0, 1, 2, 3, 4]
+ids: [5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20]
+code_53c: {branch: exp/53-oblique-desk, commit: 1a40e91, modules: [HandCalib/handfocal_report.py, HandCalib/run.py]}
+workers: 24
+output:
+  root: runs/53c_oblique_synthetic
+  results_yaml: results/53c_oblique_synthetic.yaml
