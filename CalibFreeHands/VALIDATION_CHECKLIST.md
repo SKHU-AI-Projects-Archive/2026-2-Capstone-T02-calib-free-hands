@@ -178,8 +178,20 @@ Remaining visual-review items: Split + 2 and Split + 5 layouts, hovered-joint re
 - [x] 4-second playback probes: 1x 29.99 source fps at 19.1% process CPU; 2x 59.95 source fps at 30.8% process CPU
 
 ## C-2B Final Validation
-- [x] Windows GUI opened three actual same-source CFH results without inference; Overlay and Split + 3 results inspected at 1280x800
+- [x] Windows GUI opened three actual same-source CFH results without inference; Overlay and Split + 3 inspected at the 1280x720 minimum window; 1280x800 layout geometry also covered offscreen
 - [x] Real source video, synchronized result poses, and current-frame metrics updated during playback; controls auto-hid while playing and returned on mouse activity
 - [x] Windows UI speed selector accepted 0.1x and 2x; separate 4-second probes verified 1x/2x playback rates
-- [x] Full final pytest suite: 207 passed; application import, compileall, and diff check passed
+- [x] Final C-2B hardening suite: 211 passed; application import, compileall, and diff check passed
 - [ ] HUMAN FINAL REVIEW REQUIRED: hovered-joint annotation readability, all annotation modes, and final approval. Automated tests and agent visual inspection do not count as user approval.
+
+
+## C-2B Final Stabilization and Hardening
+
+- [x] Regression tests first reproduced QWindow `isAncestorOf` TypeError, QComboBox `.menu()` AttributeError, delayed hover behavior, HUD scroll-area presence, and source-frame placeholder flicker
+- [x] Targeted presentation/viewer/provider suite after final hardening: 60 passed
+- [x] Offscreen Qt checks cover QWindow events, combo close safety, immediate hover-open, button/menu transit, click latch, outside-click dismissal, second toggle, Escape/action dismissal, no-scroll HUD, fit bounds, source-frame retention, and stale-ready filtering
+- [x] Windows app opened the three actual same-source `.cfh` results without inference; Overlay and Split + 3 were inspected, including playback frame/metric updates and pin state
+- [x] Existing Phase 3 local media benchmark remains: 379.7 MiB cache under 384 MiB, 606.9 MiB process RSS after playback, 1x/2x playback probes at 29.99/59.95 source fps
+- [x] Full pytest after final edits: 211 passed; startup import `IMPORT_OK`; compileall and `git diff --check` pass
+- [x] 1280x800 offscreen layout checks keep the HUD inside the viewport; actual Windows window inspected at 1282x752 (minimum content target 1280x720)
+- [ ] User final visual review/approval remains pending
