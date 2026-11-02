@@ -9,8 +9,8 @@
 - Milestone A — implemented and manually validated
 - Milestone B — implemented and manually validated
 - Milestone C-1 — implemented and manually approved after Fix Pass
-- Milestone C-2A ??implemented and automated tests pass — Metric Engine
-- Next: Milestone C-2B — Comparison Dashboard
+- Milestone C-2A — implemented and automated tests pass — Metric Engine
+- Milestone C-2B — foundation checkpoint saved; Presentation Redesign is next
 - Then: Milestone D — Calibration model expansion
 - Later: Milestone E — Performance / packaging
 
@@ -1063,14 +1063,20 @@ Do not color-style the checkbox indicator itself in a way that hides checked sta
 Frozen mapping:
 
 ```text
-Configuration identity = base hue
-Handedness             = deterministic variants of base hue
-Confidence             = alpha
+Result identity      = base hue
+Handedness           = deterministic variants of base hue
+Detection Confidence = optional whole-hand color mapping or opacity input
 ```
 
 Left/right variants must be distinguishable but related.
 
-The currently saved confidence scalar is `[frame, hand]`. C-2B may show it as geometry opacity, a numeric value, or a compact bar, and may switch color mapping between configuration identity and confidence. These are visualization controls only; confidence is never expanded into per-joint values and never enters metric calculations.
+The existing result field named `confidence` stores the YOLO hand bounding-box detector score with shape `[frame, hand]` (`left`, then `right`). It is not emitted by the WiLoR reconstruction model. In user-facing text call it **Hand Detection Confidence**; compact controls may say **Detection confidence**.
+
+Read-only inspection of three local Original WiLoR `.cfh` samples found shape `(570, 2)`, dtype `float32`, and finite values approximately `0.3284`–`0.8926`; their confidence arrays were identical across the inspected calibration variants. This is an observation about those files, not a universal schema constraint or a claim about every model run. The local WiLoR source tree does not pin a separate upstream revision.
+
+This score is not WiLoR reconstruction confidence, 3D-pose correctness probability, joint correctness probability, joint confidence, or an uncertainty estimate. A high detector score does not guarantee an accurate 3D reconstruction. Never copy the hand score to 21 joints or fabricate per-joint values.
+
+Detection confidence may be shown as one value/bar per hand, used as a whole-hand opacity input, or mapped to whole-hand color. These controls are display-only and must not alter result arrays or metric calculations. Color-by-confidence must remain visually distinct from result identity; prefer a perceptually ordered sequential scale over a rainbow scale.
 
 ---
 
@@ -1084,7 +1090,7 @@ It must not modify:
 
 - `.cfh`;
 - coordinates;
-- confidence;
+- detection confidence;
 - metric values.
 
 Persistence across sessions is optional initially.
@@ -1096,10 +1102,10 @@ Persistence across sessions is optional initially.
 Compact UI:
 
 ```text
-Opacity [────●────]
+Mesh opacity [────●────]
 ```
 
-Mesh opacity and confidence alpha remain distinct concepts.
+Mesh opacity controls mesh rendering only. **Use Detection Confidence as opacity** is a separate optional whole-hand visualization. The two values must not be conflated. Disable the mesh-opacity control when Mesh is off so the control cannot imply an active effect.
 
 ---
 
@@ -1111,6 +1117,7 @@ Preserve:
 - Bone
 - Mesh
 - mesh opacity
+- Use Detection Confidence as opacity
 - Left Hand
 - Right Hand
 - Grid
@@ -1126,6 +1133,8 @@ Preserve:
 - frame slider
 - metrics CSV
 - metrics JSON
+
+Comparison playback uses `CanonicalResult.timestamps` with a monotonic wall clock, skips stale frames when rendering is behind, and wraps at the end as in the current viewer. Invalid or non-increasing timestamps use the median positive timestamp interval when available, then recorded source FPS, then 30 fps. Offer compact playback speeds of 0.1×, 0.25×, 0.5×, 0.75×, 1.0×, 1.25×, 1.5×, and 2.0×; changing speed preserves the current source position. Pausing holds the displayed frame.
 
 ---
 
@@ -1298,8 +1307,8 @@ After C-2A passes:
 - checkbox visual fix;
 - color swatches;
 - handedness variants;
-- confidence alpha;
-- compact opacity;
+- optional Hand Detection Confidence value/bar/whole-hand color/opacity;
+- compact Mesh opacity, separate from Detection Confidence visualization;
 - Separate Windows / Detach.
 
 ---
@@ -1397,8 +1406,8 @@ Realtime remains deferred unless reprioritized.
 A     COMPLETE
 B     COMPLETE
 C-1   IMPLEMENTED + MANUALLY APPROVED
-C-2A  NEXT
-C-2B  AFTER C-2A
+C-2A  IMPLEMENTED + AUTOMATED TESTS PASS
+C-2B  FOUNDATION CHECKPOINT SAVED; PRESENTATION REDESIGN NEXT
 D     LATER
 E     LATER
 ```
@@ -1451,8 +1460,9 @@ C-2B is complete only when:
 - separate color swatch;
 - selectable base hue;
 - left/right variants distinguishable;
-- confidence remains alpha;
-- compact Opacity;
+- Hand Detection Confidence is the YOLO box detector score and is stored as `[frame, hand]`;
+- Detection Confidence may affect whole-hand display only, never per-joint confidence or metric weighting;
+- compact Mesh opacity, separate from Detection Confidence visualization;
 - Separate Windows / Detach works;
 - Viewer-only actions rerun no inference;
 - metric export works;
@@ -1485,7 +1495,7 @@ C-2B is complete only when:
 21. Undefined benchmark protocols are never fabricated.
 22. Configuration identity = base hue.
 23. Handedness = hue variants.
-24. Confidence = alpha.
+24. The legacy `confidence` result field means YOLO Hand Detection Confidence `[frame, hand]`; opacity is only one optional visualization of that score.
 25. Viewer colors do not mutate result files.
 26. C-2A correctness precedes C-2B dashboard expansion.
 27. New Calibration models belong to D.
@@ -1515,7 +1525,47 @@ Every implementation agent must:
 - Comparison Viewer prioritizes the source and 3D viewports; it does not show a permanent metric table.
 - Selected frame-level metrics appear in a compact, internally scrollable overlay grouped by result. The selected Reference is marked `REFERENCE` and does not show self-comparison metrics.
 - Per-Joint Error opens its 21-joint Left/Right detail table on demand. Error vectors remain an independent visualization.
-- View, Results, Reference, Metrics, Confidence, and color controls stay compact; result swatches remain separate from visibility controls.
+- View, Results, Reference, Metrics, Detection confidence, and color controls stay compact; result swatches remain separate from visibility controls.
 - Split mode retains the source panel and lays out visible result panels in an adaptive grid. The Comparison Viewer minimum size is 1280×720; 1920×1080 is the visual review target.
 - Checkerboard's Reference Focal column header remains the label; its row contains the value control without a duplicate label.
 - This pass changes presentation only. Metric definitions, result arrays, and inference behavior remain unchanged.
+
+## C-2B Presentation Redesign contract
+
+The C-2B dashboard foundation is saved as a checkpoint. It is not the completion of C-2B. The next implementation pass is a presentation redesign and must preserve the existing scientific metric definitions, Reference behavior, result visibility, confidence provenance, exports, and no-reinference behavior.
+
+### In-viewport HUD and annotations
+
+- Metric and Detection Confidence HUDs are rendered over their associated 3D viewport as display layers. They must not be sibling layout cells, side panels, or scroll areas that reduce viewport geometry.
+- The viewport remains the dominant surface. HUD content is compact, readable, high contrast, and must not obscure the hand unnecessarily. Bound HUD height and allow its own content to scroll when needed; never shrink the 3D view to fit more rows.
+- Candidate HUDs identify the result and show selected aggregate metrics for the current frame. Overlay mode groups values by result. A Reference shows its identity and `REFERENCE` badge without self-comparison metric rows.
+- Detection Confidence is shown at most once per detected hand and is explicitly named as detector confidence. Missing values remain unavailable; do not fabricate them.
+- Joint annotation is a separate optional display layer with `Off`, `Error (mm)`, and `Joint name` modes; compatible modes may be combined. `Error (mm)` is the existing per-joint Euclidean distance between the candidate and selected Reference, not confidence. Draw labels near current projected joint positions without changing raw coordinates. Show only valid paired joints and identify the selected Reference context.
+- The existing 21-row Per-Joint Details view remains available for exact inspection; it is distinct from in-viewport annotations.
+- HUD size, background opacity, and corner/position may be user-adjustable. Defaults must preserve readability and hand visibility; do not freeze a specific text color independent of theme.
+
+### Presentation mode and controls
+
+- Provide Presentation Mode with a fullscreen option. While media is playing, automatically hide toolbar/control chrome after approximately two seconds without user input; keep media, 3D viewports, HUD, and annotations visible.
+- Mouse movement, click, or keyboard input reveals controls. Pausing keeps controls visible. An open menu/dialog, active slider drag, or active panel reorder prevents auto-hide until the interaction ends.
+- Keep existing compact, content-sized controls. Do not stretch buttons to fill unused width.
+- Control semantics: View and Reference are single-select; Results and Metrics are multi-select; geometry visibility and Detection Confidence display options are independent toggles.
+- Name the confidence menu **Detection confidence** with `Use as opacity`, `Show value`, and `Show bar` options. Name the color selector **Color by** with `Result` and `Detection confidence` choices.
+- Keep `Mesh opacity` separate from the confidence-opacity toggle and disable it while Mesh is off.
+- Make Error Vectors a clear on/off action with an explicit candidate target. Keep Detach in a secondary `More` menu so it does not displace primary viewing controls.
+- In Split mode, keep Original media fixed in its source panel and allow result panels to be reordered using a visible drag handle. Reordering is presentation-only: result identity, color mapping, Reference ID, and data association stay attached to each result.
+- Auto-hide, fullscreen, reordering, HUD controls, annotations, and control-menu changes must not rerun inference or mutate canonical results.
+
+### Detection Confidence frozen decisions
+
+1. The current `confidence` field is YOLO hand bounding-box detector confidence, sourced from `det.boxes.conf` and carried through `HandPrediction.score`.
+2. Its current saved shape is `[frame, hand]`, with left/right hand slots; it is not `[frame, hand, joint]`.
+3. It is not WiLoR reconstruction confidence, 3D correctness probability, per-joint confidence, or uncertainty.
+4. Never duplicate a hand score across joints or invent joint-specific scores.
+5. Whole-hand numeric/bar/opacity/color visualizations are permitted when labeled as Detection Confidence; do not use it to weight or correct metrics/results.
+6. Genuine future joint confidence requires a backend that actually emits joint-specific values and a separately specified canonical field and provenance. It is outside the current C-2B scope.
+7. Per-Joint Error annotations are error in millimetres and remain separate from confidence.
+
+### C-2B status
+
+Until the Presentation Redesign is implemented and reviewed, report **C-2B FOUNDATION CHECKPOINT SAVED**. Do not report C-2B complete. Human visual review in the normal Windows GUI remains required.

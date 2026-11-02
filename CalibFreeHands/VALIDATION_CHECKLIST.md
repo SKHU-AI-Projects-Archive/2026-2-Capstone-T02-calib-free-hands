@@ -140,8 +140,28 @@ result reopening pass.
 
 ## C-2B UI / Presentation Fix Pass
 
-- [x] Targeted Comparison Viewer and focal-row regression tests: 14 passed
-- [x] Full pytest suite: 179 passed
-- [x] Startup import, compileall, and `git diff --check`
-- [x] Offscreen 1920x1080 captures created and inspected for Overlay + 3, Split + 3, and Split + 5
-- [ ] HUMAN VISUAL REVIEW REQUIRED in the normal Windows GUI. Offscreen rendering shows missing glyphs and blank/black OpenGL viewports, so it cannot confirm final visual quality.
+- [x] Targeted Comparison Viewer and focal-row regression tests: 16 passed
+- [x] Viewport-child HUD geometry, immediate metrics, Reference badge, and HUD controls covered
+- [x] Synthetic joint error values, Reference exclusion, handedness visibility, and joint-name mode covered
+- [x] Detection confidence terminology/hand-level scope, separate Mesh opacity, and Mesh-off disabled state covered
+- [x] Runtime-only panel reorder preserves IDs/raw arrays and updates Results menu order
+- [x] Playback auto-hide, mouse restore, pause visibility, and F11/Escape behavior covered
+- [x] Full pytest suite: 182 passed
+- [x] Startup import, compileall, and `git diff --check` for Presentation Redesign
+- [x] Offscreen captures created and inspected for Overlay + 3 (visible/hidden), Split + 3, Split + 5, and joint annotations
+- [x] Offscreen review confirms HUD overlay, compact metric rows, Original Media first, and usable Split 3/5 layout
+- [x] Offscreen joint annotation capture confirms projected labels; coincident synthetic joints stack vertically as expected
+- [ ] HUMAN VISUAL REVIEW REQUIRED in the normal Windows GUI. Headless OpenGL capture does not reliably render hand meshes/source imagery and can corrupt HUD text in the controls-visible Overlay capture.
+
+## C-2B Playback Performance Optimization Pass
+
+- [x] PlaybackClock fake-monotonic tests cover 30 fps, irregular timestamps, invalid/duplicate fallback, speed continuity, pause/resume, and frame skipping
+- [x] Offscreen ComparisonViewer checks cover 100-frame HUD reuse, scroll preservation, active mode, hidden results, disabled annotations/vectors, and speed controls
+- [x] Full Windows pytest suite: 193 passed
+- [x] Startup import, `compileall -q src tests`, and `git diff --check`
+- [x] Real Windows `4_assemble.mp4` (1080×1920, 30 fps) with three same-source `.cfh` results: five six-second scenarios; source clock measured 6.0 source seconds per 6.0 wall seconds
+- [x] Frame updates / mean `_set_frame` ms / p95 ms: Overlay 29.99 fps / 0.61 / 0.67; Confidence 29.96 / 6.12 / 10.85; Annotations 29.99 / 0.61 / 0.72; Full 29.99 / 6.56 / 13.70; Split 3 29.88 / 0.33 / 0.36
+- [x] Process RAM sampled 3.72–3.74 GB, within the prior 3.9 GB observation; shared decoded frame cache remains unchanged
+- [x] HUD stylesheet/layout loop fix reduced sampled process CPU from 98.8% idle / 101.6% playback to 4.7% idle / 27.1% playback in matched 3-second probes
+- [x] OpenGL renderer identified as Intel UHD Graphics 750; per-process Windows GPU Engine 3D samples were 0–5.64% (one-second sampling, with invalid-data warnings on some samples); NVIDIA utilization was system-wide and not used to infer Intel rendering
+- [ ] HUMAN VISUAL REVIEW REQUIRED in the normal Windows GUI for speed selection, continuous playback, pause, and mode switching

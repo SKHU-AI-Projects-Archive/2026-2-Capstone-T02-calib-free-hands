@@ -221,7 +221,9 @@ class _GLResultView(gl.GLViewWidget):
         for hand_i in range(2):
             visible = bool(result.detected[self.frame, hand_i]) and not (hand_i == 0 and not self.show_left) and not (hand_i == 1 and not self.show_right)
             for item in (self.joints[hand_i], self.bones[hand_i], self.meshes[hand_i]): item.setVisible(False)
-            if not visible: continue
+            has_visible_geometry = (self.show_joints or self.show_bones
+                                    or (self.show_mesh and self.loaded.has_mesh_topology))
+            if not visible or not has_visible_geometry: continue
             points = np.asarray(result.keypoints_3d[self.frame, hand_i]) @ RAW_TO_VIEW.T
             if not np.isfinite(points).all(): continue
             if self.show_joints:

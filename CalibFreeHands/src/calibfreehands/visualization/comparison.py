@@ -4,14 +4,16 @@ import colorsys
 import csv
 import json
 from pathlib import Path
+from time import monotonic
 
 import numpy as np
 import pyqtgraph.opengl as gl
 from PySide6.QtCore import QEvent, Qt, QTimer, QSignalBlocker
+from PySide6.QtGui import QAction, QActionGroup
 from PySide6.QtWidgets import (
-    QCheckBox, QColorDialog, QComboBox, QDialog, QFileDialog, QFrame, QGridLayout,
+    QApplication, QCheckBox, QColorDialog, QComboBox, QDialog, QFileDialog, QGridLayout,
     QHBoxLayout, QLabel, QMainWindow, QMenu, QPushButton, QScrollArea, QSizePolicy,
-    QProgressBar, QSlider, QSplitter, QStackedWidget, QTableWidget, QTableWidgetItem, QToolButton,
+    QSlider, QSplitter, QStackedWidget, QTableWidget, QTableWidgetItem, QToolButton,
     QVBoxLayout, QWidget, QWidgetAction,
 )
 
@@ -22,6 +24,8 @@ from calibfreehands.pipeline.result_bundle import ResultBundle
 from calibfreehands.pipeline.metrics import compare_results, metric_registry
 from calibfreehands.joint_schema import JOINT_NAMES
 from .viewer import _GLResultView, _OverlayCanvas, load_bundle_result, load_npz_result
+from .comparison_presentation import _JointAnnotationLayer, _ViewportPanel
+from .playback import PlaybackClock
 
 METRIC_FIELDS = ("source_identity", "reference_result_id", "candidate_result_id", "candidate_name", "metric_id",
                  "metric_name", "category", "protocol_version", "frame_index", "timestamp_s", "hand",
@@ -48,7 +52,17 @@ def _session_results(session_path: Path):
         result_path = (session_path.parent / entry["path"]).resolve()
         if session_path.parent not in result_path.parents:
             raise ValueError("comparison result path escapes the session directory")
-        results.append((config, load_npz_result(result_path, decode_media=False)))
+        loaded = load_npz_result(result_path, decode_media=False)
+        run_relative = entry.get("run_json")
+        if run_relative:
+            run_path = (session_path.parent / run_relative).resolve()
+            if session_path.parent not in run_path.parents:
+                raise ValueError("comparison provenance path escapes the session directory")
+            try:
+                loaded.metadata = {"run_provenance": json.loads(run_path.read_text(encoding="utf-8"))}
+            except (OSError, ValueError):
+                pass
+        results.append((config, loaded))
     if not results:
         raise ValueError("comparison session contains no saved results")
     source = data.get("source_media") or ""
@@ -243,6 +257,16 @@ class _LinkedResultView(_GLResultView):
         super().wheelEvent(event)
         self.camera_changed(self)
 
+    def dragEnterEvent(self, event):
+        if event.mimeData().hasText(): event.acceptProposedAction()
+        else: event.ignore()
+
+    def dropEvent(self, event):
+        if event.mimeData().hasText() and hasattr(self, "viewer"):
+            self.viewer.reorder_result(event.mimeData().text(), self.configuration_id)
+            event.acceptProposedAction()
+        else: event.ignore()
+
     def set_mesh_opacity(self, opacity):
         super().set_mesh_opacity(opacity)
         if not hasattr(self, "loaded") or not hasattr(self, "configuration_color"):
@@ -338,7 +362,14 @@ class _OverlayComparisonView(_GLResultView):
 
     def set_configuration_visible(self, index, visible):
         self.configuration_visible[index] = bool(visible)
-        self.set_frame(self.frame)
+        if index == 0:
+            for item in (*self.joints, *self.bones, *self.meshes):
+                item.setVisible(item.visible() and self.configuration_visible[0])
+        else:
+            for item in self.extra_items[index - 1]:
+                for visual in item:
+                    if not visible:
+                        visual.setVisible(False)
 
     def set_frame(self, frame):
         super().set_frame(frame)
@@ -367,7 +398,9 @@ class _OverlayComparisonView(_GLResultView):
                     item.setVisible(False)
                 visible = self.configuration_visible[config_index] and bool(result.detected[position, hand])
                 visible &= not (hand == 0 and not self.show_left) and not (hand == 1 and not self.show_right)
-                if not visible:
+                has_visible_geometry = (self.show_joints or self.show_bones
+                                        or (self.show_mesh and loaded.has_mesh_topology))
+                if not visible or not has_visible_geometry:
                     continue
                 alpha = _confidence_alpha(result, position, hand) if self.confidence_opacity_enabled else 1.0
                 hand_color = _hand_variant(color, hand)
@@ -392,18 +425,21 @@ class _OverlayComparisonView(_GLResultView):
                         mesh.setMeshData(meshdata=gl.MeshData(vertexes=np.ascontiguousarray(vertices, dtype=np.float32), faces=np.ascontiguousarray(faces, dtype=np.int32)))
                         _set_mesh_color(mesh, hand_color, alpha * self.mesh_opacity)
                         mesh.setVisible(True)
-        self._update_error_vectors()
+        if self.error_vectors_enabled:
+            self._update_error_vectors()
 
     def _update_error_vectors(self):
         if not self.error_items:
             return
-        for item in self.error_items:
-            item.setVisible(False)
         if (not self.error_vectors_enabled or self.error_candidate == self.reference_index
                 or not 0 <= self.error_candidate < len(self.loaded_results)):
+            for item in self.error_items:
+                item.setVisible(False)
             return
         ref = self.loaded_results[self.reference_index].result
         candidate = self.loaded_results[self.error_candidate].result
+        for item in self.error_items:
+            item.setVisible(False)
         ref_pos = np.flatnonzero(ref.frame_indices == ref.frame_indices[min(self.frame, len(ref.frame_indices)-1)])
         candidate_pos = min(self.frame, len(candidate.frame_indices)-1)
         ref_pos = int(ref_pos[0])
@@ -430,138 +466,6 @@ class _OverlayComparisonView(_GLResultView):
             for hand, (_, _, mesh) in enumerate(hands):
                 alpha = _confidence_alpha(loaded.result, min(self.frame, loaded.frame_count - 1), hand) if self.confidence_opacity_enabled else 1.0
                 _set_mesh_color(mesh, _hand_variant(self.configuration_colors[config_index], hand), alpha * self.mesh_opacity)
-
-
-class _ViewportPanel(QWidget):
-    def __init__(self, view, configuration_indices):
-        super().__init__()
-        self.view = view
-        self.configuration_indices = configuration_indices
-        self.setMinimumSize(340, 260)
-        self.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Expanding)
-        layout = QGridLayout(self)
-        layout.setContentsMargins(0, 0, 0, 0)
-        layout.addWidget(view, 0, 0)
-        self.card = QFrame(self)
-        self.card.setObjectName("metricOverlay")
-        self.card.setStyleSheet("QFrame#metricOverlay { background-color: rgba(25, 30, 38, 220); color: white; border: 1px solid rgba(255,255,255,65); border-radius: 5px; }")
-        self.card.setMaximumWidth(330)
-        self.card.setMaximumHeight(175)
-        card_layout = QVBoxLayout(self.card)
-        card_layout.setContentsMargins(8, 6, 8, 6)
-        card_layout.setSpacing(2)
-        self.scroll = QScrollArea()
-        self.scroll.setWidgetResizable(True)
-        self.scroll.setFrameShape(QFrame.Shape.NoFrame)
-        self.scroll.setHorizontalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAlwaysOff)
-        self.scroll.setStyleSheet("background: transparent;")
-        self.body = QWidget()
-        self.body.setStyleSheet("background: transparent;")
-        self.body_layout = QVBoxLayout(self.body)
-        self.body_layout.setContentsMargins(0, 0, 0, 0)
-        self.body_layout.setSpacing(4)
-        self.scroll.setWidget(self.body)
-        card_layout.addWidget(self.scroll)
-        layout.addWidget(self.card, 0, 0, Qt.AlignmentFlag.AlignLeft | Qt.AlignmentFlag.AlignBottom)
-        self.metric_rows = {}
-        self.details_buttons = {}
-        self.reference_badges = {}
-        self.confidence_rows = {}
-
-    def refresh(self, viewer):
-        while self.body_layout.count():
-            item = self.body_layout.takeAt(0)
-            if item.widget():
-                item.widget().deleteLater()
-        self.metric_rows.clear()
-        self.details_buttons.clear()
-        self.reference_badges.clear()
-        self.confidence_rows.clear()
-        for config_index in self.configuration_indices:
-            config = viewer.configurations[config_index]
-            if viewer.mode == "overlay" and not viewer.overlay_view.configuration_visible[config_index]:
-                continue
-            self._add_result_group(viewer, config_index, config)
-        if not self.body_layout.count():
-            self.body_layout.addWidget(QLabel("No visible results"))
-
-    def _add_result_group(self, viewer, index, config):
-        header = QHBoxLayout()
-        swatch = QLabel()
-        swatch.setFixedSize(10, 10)
-        color = tuple(round(value * 255) for value in viewer.configuration_colors[index])
-        swatch.setStyleSheet(f"background-color: rgb{color}; border: 1px solid white;")
-        header.addWidget(swatch)
-        title = QLabel(config["name"])
-        title.setStyleSheet("font-weight: 600; color: white;")
-        title.setWordWrap(True)
-        header.addWidget(title, 1)
-        if config["id"] == viewer.reference_id:
-            badge = QLabel("REFERENCE")
-            badge.setStyleSheet("font-weight: 700; color: white; border: 1px solid white; padding: 1px 4px;")
-            header.addWidget(badge)
-            self.reference_badges[config["id"]] = badge
-        self.body_layout.addLayout(header)
-        if config["id"] != viewer.reference_id:
-            for definition in viewer.metric_definitions:
-                if definition.metric_id not in viewer.selected_metric_ids:
-                    continue
-                if definition.metric_id == "per_joint_error":
-                    row = QHBoxLayout()
-                    label = QLabel("Per-Joint Error (21 joints)")
-                    details = QPushButton("Details")
-                    details.setSizePolicy(QSizePolicy.Policy.Fixed, QSizePolicy.Policy.Fixed)
-                    details.clicked.connect(lambda _=False, cid=config["id"]: viewer._show_joint_table(cid))
-                    row.addWidget(label, 1)
-                    row.addWidget(details)
-                    self.body_layout.addLayout(row)
-                    self.metric_rows[(config["id"], definition.metric_id, "left")] = label
-                    self.details_buttons[(config["id"], definition.metric_id, "left")] = details
-                    continue
-                for hand_index, hand in enumerate(("left", "right")):
-                    frame_index = int(viewer.loaded_results[0].result.frame_indices[viewer.slider.value()])
-                    pair = viewer._metric_cache.get(config["id"], {}).get((frame_index, hand))
-                    value = None if pair is None else pair.metrics.get(definition.metric_id)
-                    text_value = f"{value:.1f} {definition.unit}" if value is not None and np.isscalar(value) and np.isfinite(value) else "N/A"
-                    side = "L" if hand_index == 0 else "R"
-                    display_name = "Wrist Error" if definition.metric_id == "wrist_error" else definition.name
-                    label = QLabel(f"{side} | {display_name}: {text_value}")
-                    label.setStyleSheet("color: white;")
-                    self.body_layout.addWidget(label)
-                    self.metric_rows[(config["id"], definition.metric_id, hand)] = label
-        if viewer.confidence_numeric_checkbox.isChecked() or viewer.confidence_bar_checkbox.isChecked():
-            result = viewer.loaded_results[index].result
-            frame = viewer.slider.value()
-            for hand_index, hand in enumerate(("left", "right")):
-                confidence = result.confidence[frame, hand_index] if result.confidence is not None else np.nan
-                display = float(confidence) if np.isfinite(confidence) else None
-                row = QWidget()
-                row_layout = QHBoxLayout(row)
-                row_layout.setContentsMargins(0, 0, 0, 0)
-                row_layout.setSpacing(5)
-                text = QLabel(("L" if hand_index == 0 else "R") + " confidence")
-                text.setStyleSheet("color: white;")
-                row_layout.addWidget(text)
-                value_label = text
-                if viewer.confidence_numeric_checkbox.isChecked():
-                    number = QLabel(f"{display:.2f}" if display is not None else "N/A")
-                    number.setStyleSheet("color: white;")
-                    row_layout.addWidget(number)
-                    value_label = number
-                if viewer.confidence_bar_checkbox.isChecked():
-                    bar = QProgressBar()
-                    bar.setRange(0, 100)
-                    bar.setFixedWidth(85)
-                    bar.setTextVisible(False)
-                    bar.setValue(round(display * 100) if display is not None else 0)
-                    bar.setToolTip("Frame/hand confidence" if display is not None else "Confidence unavailable")
-                    row_layout.addWidget(bar)
-                row_layout.addStretch(1)
-                self.body_layout.addWidget(row)
-                self.confidence_rows[(config["id"], hand)] = value_label
-        separator = QFrame()
-        separator.setFrameShape(QFrame.Shape.HLine)
-        self.body_layout.addWidget(separator)
 
 
 class ComparisonViewer(QWidget):
@@ -607,14 +511,25 @@ class ComparisonViewer(QWidget):
         self.source_overlay = _OverlayCanvas(self.loaded_results[0])
         self.source_overlay.setMinimumSize(360, 300)
         self.overlay_view = _OverlayComparisonView(self.loaded_results, self.configuration_colors)
+        self.overlay_view.setMinimumSize(340, 260)
         self.overlay_panel = _ViewportPanel(self.overlay_view, list(range(len(entries))))
+        self.overlay_view.hud = self.overlay_panel
         self.split_views = [_LinkedResultView(loaded, color, self._sync_camera)
                             for loaded, color in zip(self.loaded_results, self.configuration_colors)]
+        for index, view in enumerate(self.split_views):
+            view.setMinimumSize(340, 260); view.setAcceptDrops(True)
+            view.viewer = self; view.configuration_id = self.configurations[index]["id"]
         self.split_panels = [_ViewportPanel(view, [index]) for index, view in enumerate(self.split_views)]
+        for view, panel in zip(self.split_views, self.split_panels): view.hud = panel
+        self.split_result_order = list(range(len(entries)))
+        self.annotation_mode = "off"
+        self.overlay_annotations = _JointAnnotationLayer(self, self.overlay_view, list(range(len(entries))))
+        self.split_annotations = [_JointAnnotationLayer(self, view, [index])
+                                  for index, view in enumerate(self.split_views)]
         self.views = QStackedWidget()
         overlay_splitter = QSplitter(Qt.Orientation.Horizontal)
         overlay_splitter.addWidget(self.source_overlay)
-        overlay_splitter.addWidget(self.overlay_panel)
+        overlay_splitter.addWidget(self.overlay_view)
         overlay_splitter.setStretchFactor(0, 1)
         overlay_splitter.setStretchFactor(1, 2)
         overlay_splitter.setSizes([560, 1120])
@@ -635,8 +550,8 @@ class ComparisonViewer(QWidget):
         source_layout.addWidget(QLabel("Original media"))
         source_layout.addWidget(self.split_source_overlay, 1)
         self.split_grid.addWidget(source_cell, 0, 0)
-        for index, panel in enumerate(self.split_panels, 1):
-            self.split_grid.addWidget(panel, index // self.split_columns, index % self.split_columns)
+        for order, index in enumerate(self.split_result_order, 1):
+            self.split_grid.addWidget(self.split_views[index], order // self.split_columns, order % self.split_columns)
         for column in range(self.split_columns):
             self.split_grid.setColumnStretch(column, 1)
         for row in range(self.split_rows):
@@ -654,11 +569,15 @@ class ComparisonViewer(QWidget):
         self.metric_status = QLabel()
         self.metric_status.setToolTip("Camera-space differences from the selected Reference; these are not ground-truth errors.")
 
-        self.mode_selector = QComboBox()
-        self.mode_selector.addItem("Overlay", "overlay")
-        self.mode_selector.addItem("Split", "split")
-        self.mode_selector.setFixedWidth(110)
-        self.mode_selector.currentIndexChanged.connect(lambda: self.set_mode(self.mode_selector.currentData()))
+        self.mode_selector = QWidget()
+        mode_layout = QHBoxLayout(self.mode_selector); mode_layout.setContentsMargins(0, 0, 0, 0); mode_layout.setSpacing(2)
+        self.mode_buttons = {}
+        for text, mode in (("Overlay", "overlay"), ("Split", "split")):
+            button = QToolButton(); button.setText(text); button.setCheckable(True)
+            button.setSizePolicy(QSizePolicy.Policy.Fixed, QSizePolicy.Policy.Fixed)
+            button.clicked.connect(lambda checked=False, value=mode: self.set_mode(value))
+            mode_layout.addWidget(button); self.mode_buttons[mode] = button
+        self.mode_buttons["overlay"].setChecked(True)
 
         self.results_menu = QMenu(self)
         self.visibility_checks = []
@@ -693,7 +612,9 @@ class ComparisonViewer(QWidget):
             self.reference_selector.addItem(config["name"], config["id"])
         self.reference_selector.setCurrentIndex(next((i for i, config in enumerate(self.configurations)
                                                       if config["id"] == self.reference_id), 0))
-        self.reference_selector.setMaximumWidth(260)
+        self.reference_selector.setMaximumWidth(220)
+        self.reference_selector.setMinimumWidth(120)
+        self.reference_selector.setToolTip(self.reference_selector.currentText())
         self.reference_selector.currentIndexChanged.connect(self._reference_changed)
 
         self.metric_menu = QMenu(self)
@@ -722,7 +643,7 @@ class ComparisonViewer(QWidget):
         self._update_metrics_button()
 
         self.confidence_menu = QMenu(self)
-        self.confidence_opacity_checkbox = self._menu_checkbox(self.confidence_menu, "Opacity", checked=True)
+        self.confidence_opacity_checkbox = self._menu_checkbox(self.confidence_menu, "Use as opacity", checked=True)
         self.confidence_numeric_checkbox = self._menu_checkbox(self.confidence_menu, "Numeric value")
         self.confidence_bar_checkbox = self._menu_checkbox(self.confidence_menu, "Bar")
         self.confidence_opacity_checkbox.toggled.connect(self._confidence_opacity_changed)
@@ -731,11 +652,11 @@ class ComparisonViewer(QWidget):
         self.confidence_menu_button = QToolButton()
         self.confidence_menu_button.setPopupMode(QToolButton.ToolButtonPopupMode.InstantPopup)
         self.confidence_menu_button.setMenu(self.confidence_menu)
+        self.confidence_menu_button.setText("Detection confidence")
         self._update_confidence_button()
         self.confidence_color_mode = QComboBox()
-        self.confidence_color_mode.addItem("Configuration", "configuration")
-        self.confidence_color_mode.addItem("Confidence", "confidence")
-        self.confidence_color_mode.setFixedWidth(135)
+        self.confidence_color_mode.addItem("Result", "configuration")
+        self.confidence_color_mode.addItem("Detection confidence", "confidence")
         self.confidence_color_mode.currentIndexChanged.connect(self._confidence_color_changed)
 
         self.error_vectors_checkbox = QCheckBox("Error vectors")
@@ -749,10 +670,63 @@ class ComparisonViewer(QWidget):
         self.error_vectors_checkbox.toggled.connect(self._set_error_vectors)
         self.error_candidate_selector.currentIndexChanged.connect(lambda: self._set_error_vectors(self.error_vectors_checkbox.isChecked()))
         self.error_candidate_selector.hide()
+        self.error_vectors_menu = QMenu(self)
+        self.error_vectors_group = QActionGroup(self); self.error_vectors_group.setExclusive(True)
+        self.error_vectors_off = QAction("Off", self); self.error_vectors_off.setCheckable(True); self.error_vectors_off.setChecked(True)
+        self.error_vectors_group.addAction(self.error_vectors_off); self.error_vectors_menu.addAction(self.error_vectors_off)
+        self.error_vector_actions = {}
+        for config in self.configurations:
+            if config["id"] == self.reference_id: continue
+            action = QAction(config["name"], self); action.setCheckable(True)
+            action.triggered.connect(lambda checked, cid=config["id"]: self._select_error_candidate(cid) if checked else None)
+            self.error_vectors_group.addAction(action); self.error_vectors_menu.addAction(action)
+            self.error_vector_actions[config["id"]] = action
+        self.error_vectors_off.triggered.connect(lambda: self._set_error_vectors(False))
+        self.error_vectors_button = QToolButton(); self.error_vectors_button.setText("Error vectors: Off")
+        self.error_vectors_button.setPopupMode(QToolButton.ToolButtonPopupMode.InstantPopup)
+        self.error_vectors_button.setMenu(self.error_vectors_menu)
+
+        self.annotation_menu = QMenu(self)
+        self.annotation_group = QActionGroup(self); self.annotation_group.setExclusive(True)
+        self.annotation_actions = {}
+        for text, mode in (("Off", "off"), ("Error (mm)", "error"), ("Joint name", "name")):
+            action = QAction(text, self); action.setCheckable(True); action.setChecked(mode == "off")
+            action.triggered.connect(lambda checked, value=mode: self.set_annotation_mode(value) if checked else None)
+            self.annotation_group.addAction(action); self.annotation_menu.addAction(action)
+            self.annotation_actions[mode] = action
+        self.annotation_button = QToolButton(); self.annotation_button.setText("Joint annotations")
+        self.annotation_button.setPopupMode(QToolButton.ToolButtonPopupMode.InstantPopup)
+        self.annotation_button.setMenu(self.annotation_menu)
+        self.hud_menu = QMenu(self)
+        for label, anchor in (("Top left", "top-left"), ("Top right", "top-right"),
+                              ("Bottom left", "bottom-left"), ("Bottom right", "bottom-right")):
+            action = QAction(label, self); action.triggered.connect(lambda _=False, value=anchor: self._set_hud(anchor=value))
+            self.hud_menu.addAction(action)
+        size_menu = self.hud_menu.addMenu("Size")
+        for size in ("small", "medium", "large"):
+            action = QAction(size.title(), self); action.triggered.connect(lambda _=False, value=size: self._set_hud(scale=value))
+            size_menu.addAction(action)
+        opacity_widget = QWidget(); opacity_layout = QHBoxLayout(opacity_widget); opacity_layout.setContentsMargins(8, 2, 8, 2)
+        opacity_layout.addWidget(QLabel("HUD opacity")); self.hud_opacity_slider = QSlider(Qt.Orientation.Horizontal)
+        self.hud_opacity_slider.setRange(20, 100); self.hud_opacity_slider.setValue(86); self.hud_opacity_slider.setFixedWidth(100)
+        self.hud_opacity_slider.valueChanged.connect(lambda value: self._set_hud(opacity=value / 100))
+        opacity_layout.addWidget(self.hud_opacity_slider); opacity_action = QWidgetAction(self.hud_menu)
+        opacity_action.setDefaultWidget(opacity_widget); self.hud_menu.addAction(opacity_action)
+        self.hud_button = QToolButton(); self.hud_button.setText("HUD")
+        self.hud_button.setPopupMode(QToolButton.ToolButtonPopupMode.InstantPopup); self.hud_button.setMenu(self.hud_menu)
 
         self.detach_button = QPushButton("Detach")
         self.detach_button.setSizePolicy(QSizePolicy.Policy.Fixed, QSizePolicy.Policy.Fixed)
         self.detach_button.clicked.connect(self.detach_all)
+        self.more_menu = QMenu(self)
+        self.more_menu.addAction("Detach panels", self.detach_all)
+        self.performance_stats_action = self.more_menu.addAction("Performance stats")
+        self.performance_stats_action.setCheckable(True)
+        self.performance_stats_action.toggled.connect(self._set_performance_stats)
+        self.auto_hide_action = self.more_menu.addAction("Auto-hide controls while playing")
+        self.auto_hide_action.setCheckable(True); self.auto_hide_action.setChecked(True)
+        self.more_button = QToolButton(); self.more_button.setText("More")
+        self.more_button.setPopupMode(QToolButton.ToolButtonPopupMode.InstantPopup); self.more_button.setMenu(self.more_menu)
         self.export_csv_button = QPushButton("CSV")
         self.export_json_button = QPushButton("JSON")
         for button, callback in ((self.export_csv_button, self._export_csv), (self.export_json_button, self._export_json)):
@@ -764,10 +738,10 @@ class ComparisonViewer(QWidget):
         toolbar.addWidget(self.results_menu_button)
         toolbar.addWidget(self.reference_label); toolbar.addWidget(self.reference_selector)
         toolbar.addWidget(self.metric_menu_button)
-        toolbar.addWidget(QLabel("Color")); toolbar.addWidget(self.confidence_color_mode)
+        toolbar.addWidget(QLabel("Color by")); toolbar.addWidget(self.confidence_color_mode)
         toolbar.addWidget(self.confidence_menu_button)
-        toolbar.addWidget(self.error_vectors_checkbox); toolbar.addWidget(self.error_candidate_selector)
-        toolbar.addWidget(self.detach_button)
+        toolbar.addWidget(self.error_vectors_button)
+        toolbar.addWidget(self.annotation_button); toolbar.addWidget(self.hud_button); toolbar.addWidget(self.more_button)
         toolbar.addStretch(1)
 
         self.joint_checkbox = QCheckBox("Joint")
@@ -779,12 +753,13 @@ class ComparisonViewer(QWidget):
         self.mesh_checkbox = QCheckBox("Mesh")
         self.mesh_checkbox.setEnabled(any(loaded.has_mesh_topology for loaded in self.loaded_results))
         self.mesh_checkbox.toggled.connect(self._set_mesh)
-        self.mesh_opacity_label = QLabel("Opacity")
+        self.mesh_opacity_label = QLabel("Mesh opacity")
         self.mesh_opacity_slider = QSlider(Qt.Orientation.Horizontal)
         self.mesh_opacity_slider.setRange(10, 100)
         self.mesh_opacity_slider.setValue(100)
         self.mesh_opacity_slider.setFixedWidth(110)
-        self.mesh_opacity_slider.setEnabled(self.mesh_checkbox.isEnabled())
+        self.mesh_opacity_slider.setEnabled(self.mesh_checkbox.isEnabled() and self.mesh_checkbox.isChecked())
+        self.mesh_checkbox.toggled.connect(self.mesh_opacity_slider.setEnabled)
         self.mesh_opacity_value = QLabel("100%")
         self.mesh_opacity_value.setFixedWidth(self.mesh_opacity_value.fontMetrics().horizontalAdvance("100%") + 4)
         self.mesh_opacity_slider.valueChanged.connect(self._set_opacity)
@@ -818,7 +793,26 @@ class ComparisonViewer(QWidget):
             self.view_buttons.append(button)
         view_toolbar.addStretch(1)
 
+        playback_fps = 30.0
+        metadata = self.loaded_results[0].metadata or {}
+        provenance = metadata.get("run_provenance", {})
+        media_info = provenance.get("media_metadata", {}) if isinstance(provenance, dict) else {}
+        inference_info = provenance.get("inference_settings", {}) if isinstance(provenance, dict) else {}
+        for candidate_fps in (media_info.get("frame_rate"), inference_info.get("fps"), metadata.get("fps"), 30.0):
+            try:
+                if np.isfinite(float(candidate_fps)) and float(candidate_fps) > 0:
+                    playback_fps = float(candidate_fps)
+                    break
+            except (TypeError, ValueError):
+                continue
+        self.playback_clock = PlaybackClock(self.loaded_results[0].result.timestamps, fps=playback_fps, monotonic=monotonic)
+        self._clock_driven_update = False
+        self._last_rendered_frame = None
+        self._stats_frames = 0
+        self._stats_skipped = 0
+        self._stats_started = monotonic()
         self.timer = QTimer(self)
+        self.timer.setInterval(16)
         self.timer.timeout.connect(self._advance)
         self.playback_buttons = []
         playback = QHBoxLayout()
@@ -830,7 +824,20 @@ class ComparisonViewer(QWidget):
             button.clicked.connect(callback)
             playback.addWidget(button)
             self.playback_buttons.append(button)
+        playback.addWidget(QLabel("Speed"))
+        self.speed_selector = QComboBox()
+        for speed in PlaybackClock.SPEEDS:
+            self.speed_selector.addItem("1.0×" if speed == 1.0 else f"{speed:g}×", speed)
+        self.speed_selector.setCurrentIndex(PlaybackClock.SPEEDS.index(1.0))
+        self.speed_selector.setMaximumWidth(78)
+        self.speed_selector.currentIndexChanged.connect(self._set_playback_speed)
         playback.addStretch(1)
+        playback.addWidget(self.speed_selector)
+        self.performance_stats_label = QLabel()
+        self.performance_stats_label.hide()
+        self.performance_stats_timer = QTimer(self)
+        self.performance_stats_timer.setInterval(1000)
+        self.performance_stats_timer.timeout.connect(self._update_performance_stats)
 
         exports = QHBoxLayout()
         exports.addWidget(self.metric_status, 1)
@@ -838,19 +845,92 @@ class ComparisonViewer(QWidget):
         exports.addWidget(self.export_json_button)
         layout = QVBoxLayout(self)
         layout.addWidget(self.views, 1)
-        layout.addWidget(self.slider)
-        layout.addLayout(toolbar)
-        layout.addLayout(geometry)
-        layout.addLayout(view_toolbar)
-        layout.addLayout(playback)
-        layout.addWidget(self.status)
-        layout.addLayout(exports)
+        self.chrome = QWidget(); chrome_layout = QVBoxLayout(self.chrome); chrome_layout.setContentsMargins(0, 0, 0, 0)
+        chrome_layout.addWidget(self.slider); chrome_layout.addLayout(toolbar); chrome_layout.addLayout(geometry)
+        chrome_layout.addLayout(view_toolbar); chrome_layout.addLayout(playback); chrome_layout.addWidget(self.status)
+        chrome_layout.addLayout(exports); chrome_layout.addWidget(self.performance_stats_label); layout.addWidget(self.chrome)
+        self.auto_hide_timer = QTimer(self); self.auto_hide_timer.setSingleShot(True); self.auto_hide_timer.setInterval(2500)
+        self.auto_hide_timer.timeout.connect(self._auto_hide_controls)
         self.installEventFilter(self)
         for widget in self.findChildren(QWidget):
             widget.installEventFilter(self)
         self._compute_metrics()
+        self._refresh_metric_panels()
+        self._refresh_annotations()
         self._set_frame(0)
         self._sync_camera(self.split_views[0])
+
+    def _refresh_annotations(self):
+        if self.annotation_mode != "off":
+            layers = [self.overlay_annotations] if self.mode == "overlay" else self.split_annotations
+            for layer in layers:
+                layer.refresh()
+        else:
+            self.overlay_annotations.hide()
+            for layer in self.split_annotations:
+                layer.hide()
+        panels = [self.overlay_panel] if self.mode == "overlay" else self.split_panels
+        for panel in panels:
+            panel._position()
+            panel.raise_()
+
+    def _set_hud(self, anchor=None, scale=None, opacity=None):
+        for hud in (self.overlay_panel, *self.split_panels): hud.set_presentation(anchor, scale, opacity)
+
+    def _select_error_candidate(self, candidate_id):
+        index = self.error_candidate_selector.findData(candidate_id)
+        if index >= 0: self.error_candidate_selector.setCurrentIndex(index)
+        self.error_vectors_checkbox.setChecked(True)
+        name = next(config["name"] for config in self.configurations if config["id"] == candidate_id)
+        self.error_vectors_button.setText(f"Error vectors: {name}")
+
+    def _show_controls(self):
+        self.chrome.show()
+        if self.timer.isActive() and self.auto_hide_action.isChecked(): self.auto_hide_timer.start()
+
+    def _auto_hide_controls(self):
+        if not self.timer.isActive() or not self.auto_hide_action.isChecked(): return
+        popup_open = any(menu.isVisible() for menu in self.findChildren(QMenu))
+        combo_open = any(combo.view().isVisible() for combo in self.findChildren(QComboBox))
+        modal = QApplication.activeModalWidget()
+        dialog_open = modal is not None and (modal is self or self.isAncestorOf(modal))
+        dragging = bool(QApplication.mouseButtons() & Qt.MouseButton.LeftButton)
+        if popup_open or combo_open or dialog_open or self.slider.isSliderDown() or dragging: self.auto_hide_timer.start()
+        else: self.chrome.hide()
+
+    def reorder_result(self, source_id, target_id):
+        source = next(i for i, config in enumerate(self.configurations) if config["id"] == source_id)
+        target = next(i for i, config in enumerate(self.configurations) if config["id"] == target_id)
+        self.split_result_order.remove(source)
+        self.split_result_order.insert(self.split_result_order.index(target), source)
+        for position, index in enumerate(self.split_result_order, 1):
+            self.split_grid.addWidget(self.split_views[index], position // self.split_columns, position % self.split_columns)
+        for panel in (self.overlay_panel, *self.split_panels):
+            panel.configuration_indices = sorted(panel.configuration_indices,
+                key=lambda i: self.split_result_order.index(i) if i in self.split_result_order else i)
+            panel.refresh(self)
+        self._rebuild_results_menu()
+        self._refresh_annotations()
+
+    def _rebuild_results_menu(self):
+        self.results_menu.clear(); self.visibility_checks = [None] * len(self.configurations)
+        self.color_buttons = [None] * len(self.configurations)
+        for index in self.split_result_order:
+            config = self.configurations[index]
+            row = QWidget(); row_layout = QHBoxLayout(row); row_layout.setContentsMargins(6, 2, 8, 2)
+            check = QCheckBox(config["name"]); check.setChecked(self.overlay_view.configuration_visible[index])
+            check.toggled.connect(lambda value, i=index: self._set_configuration_visible(i, value))
+            swatch = QToolButton(); swatch.setFixedSize(20, 20); self._style_swatch(swatch, self.configuration_colors[index])
+            swatch.clicked.connect(lambda _=False, i=index: self._choose_color(i))
+            row_layout.addWidget(check, 1); row_layout.addWidget(swatch)
+            action = QWidgetAction(self.results_menu); action.setDefaultWidget(row); self.results_menu.addAction(action)
+            self.visibility_checks[index] = check; self.color_buttons[index] = swatch
+        self._update_results_button()
+
+    def set_annotation_mode(self, mode):
+        if mode not in ("off", "error", "name"): raise ValueError(mode)
+        self.annotation_mode = mode
+        self._refresh_annotations()
 
     @staticmethod
     def _menu_checkbox(menu, text, checked=False):
@@ -876,7 +956,7 @@ class ComparisonViewer(QWidget):
         active = sum(check.isChecked() for check in (self.confidence_opacity_checkbox,
                                                        self.confidence_numeric_checkbox,
                                                        self.confidence_bar_checkbox))
-        self.confidence_menu_button.setText(f"Confidence {active} v")
+        self.confidence_menu_button.setText(f"Detection confidence ({active})")
 
     def _default_reference_id(self):
         checkerboards = [c for c in self.configurations
@@ -932,6 +1012,7 @@ class ComparisonViewer(QWidget):
 
     def _reference_changed(self, _index):
         self.reference_id = self.reference_selector.currentData()
+        self.reference_selector.setToolTip(self.reference_selector.currentText())
         self.reference_label.setText("Reference")
         for definition in self.metric_definitions:
             if definition.metric_id in self.metric_checks:
@@ -943,12 +1024,26 @@ class ComparisonViewer(QWidget):
                 self.error_candidate_selector.addItem(config["name"], config["id"])
         self.error_vectors_checkbox.setEnabled(bool(self.error_candidate_selector.count()))
         self.error_candidate_selector.setEnabled(bool(self.error_candidate_selector.count()))
+        self.error_vectors_checkbox.setChecked(False)
         if not self.error_candidate_selector.count():
             self.error_vectors_checkbox.setChecked(False)
         self._compute_metrics()
         self._refresh_metric_panels()
-        if self.error_vectors_checkbox.isChecked():
-            self._set_error_vectors(True)
+        self.error_vectors_button.setText("Error vectors: Off")
+        self._rebuild_error_vector_menu()
+
+    def _rebuild_error_vector_menu(self):
+        self.error_vectors_menu.clear(); self.error_vector_actions.clear()
+        self.error_vectors_group = QActionGroup(self); self.error_vectors_group.setExclusive(True)
+        self.error_vectors_off = QAction("Off", self); self.error_vectors_off.setCheckable(True)
+        self.error_vectors_off.setChecked(True); self.error_vectors_off.triggered.connect(lambda: self._set_error_vectors(False))
+        self.error_vectors_group.addAction(self.error_vectors_off); self.error_vectors_menu.addAction(self.error_vectors_off)
+        for config in self.configurations:
+            if config["id"] == self.reference_id: continue
+            action = QAction(config["name"], self); action.setCheckable(True)
+            action.triggered.connect(lambda checked, cid=config["id"]: self._select_error_candidate(cid) if checked else None)
+            self.error_vectors_group.addAction(action); self.error_vectors_menu.addAction(action)
+            self.error_vector_actions[config["id"]] = action
 
     def _compute_metrics(self):
         reference_index = next(i for i, config in enumerate(self.configurations) if config["id"] == self.reference_id)
@@ -974,21 +1069,32 @@ class ComparisonViewer(QWidget):
         self.overlay_panel.refresh(self)
         for panel in self.split_panels:
             panel.refresh(self)
+        self._refresh_annotations()
 
     def _confidence_color_changed(self, _index):
         mode = self.confidence_color_mode.currentData()
-        self.overlay_view.confidence_color_mode = mode
-        self.overlay_view.set_frame(self.slider.value())
-        for view in self.split_views:
+        for view in [self.overlay_view, *self.split_views]:
             view.confidence_color_mode = mode
-            view.set_frame(self.slider.value())
+        self._render_active_frame()
         self._refresh_metric_panels()
 
     def _confidence_opacity_changed(self, enabled):
         self._update_confidence_button()
-        for view in (self.overlay_view, *self.split_views):
+        for view in [self.overlay_view, *self.split_views]:
             view.confidence_opacity_enabled = enabled
-            view.set_frame(self.slider.value())
+        for hand, mesh in enumerate(self.overlay_view.meshes):
+            alpha = _confidence_alpha(self.overlay_view.loaded.result, self.overlay_view.frame, hand) if enabled else 1.0
+            _set_mesh_color(mesh, _hand_variant(self.configuration_colors[0], hand), alpha * self.overlay_view.mesh_opacity)
+        for config_index, hands in enumerate(self.overlay_view.extra_items, 1):
+            result = self.loaded_results[config_index].result
+            frame = min(self.overlay_view.frame, self.loaded_results[config_index].frame_count - 1)
+            for hand, (_, _, mesh) in enumerate(hands):
+                alpha = _confidence_alpha(result, frame, hand) if enabled else 1.0
+                _set_mesh_color(mesh, _hand_variant(self.configuration_colors[config_index], hand), alpha * self.overlay_view.mesh_opacity)
+        for view in self.split_views:
+            for hand, mesh in enumerate(view.meshes):
+                alpha = _confidence_alpha(view.loaded.result, view.frame, hand) if enabled else 1.0
+                _set_mesh_color(mesh, view.hand_colors[hand], alpha * view.mesh_opacity)
 
     def _set_error_vectors(self, enabled):
         self.error_candidate_selector.setVisible(enabled and self.error_candidate_selector.count() > 0)
@@ -997,7 +1103,12 @@ class ComparisonViewer(QWidget):
                                                   if config["id"] == self.reference_id), 0)
         self.overlay_view.error_candidate = next((i for i, c in enumerate(self.configurations)
                                                    if c["id"] == self.error_candidate_selector.currentData()), -1)
-        self.overlay_view.set_frame(self.slider.value())
+        if enabled and self.mode == "overlay":
+            self.overlay_view.set_frame(self.slider.value())
+        elif not enabled:
+            for item in self.overlay_view.error_items:
+                item.setVisible(False)
+        if not enabled: self.error_vectors_button.setText("Error vectors: Off")
 
     def _show_joint_table(self, candidate_id):
         candidate_name = next(config["name"] for config in self.configurations if config["id"] == candidate_id)
@@ -1053,68 +1164,131 @@ class ComparisonViewer(QWidget):
             raise ValueError(f"unknown comparison view mode: {mode}")
         self.mode = mode
         self.views.setCurrentIndex(0 if mode == "overlay" else 1)
-        blocker = QSignalBlocker(self.mode_selector)
-        self.mode_selector.setCurrentIndex(self.mode_selector.findData(mode))
-        del blocker
+        for name, button in self.mode_buttons.items(): button.setChecked(name == mode)
+        self._last_rendered_frame = None
         self._set_frame(self.slider.value())
+        self._refresh_metric_panels()
+        self._refresh_annotations()
 
     def _set_configuration_visible(self, index, visible):
         self.overlay_view.set_configuration_visible(index, visible)
-        self.split_panels[index].setVisible(visible)
+        if visible and self.mode == "overlay":
+            self._render_active_frame()
+        self.split_views[index].setVisible(visible)
+        if visible and self.mode == "split":
+            self.split_views[index].set_frame(self.slider.value())
         self._update_results_button()
         self._refresh_metric_panels()
 
     def _set_geometry(self, attr, value):
-        setattr(self.source_overlay, attr, value) if hasattr(self.source_overlay, attr) else None
-        self.source_overlay.update()
-        setattr(self.split_source_overlay, attr, value)
-        self.split_source_overlay.update()
+        source = self.source_overlay if self.mode == "overlay" else self.split_source_overlay
+        if hasattr(source, attr):
+            setattr(source, attr, value)
+        source.update()
         for view in [self.overlay_view, *self.split_views]:
             setattr(view, attr, value)
-            view.set_frame(self.slider.value())
+        self._render_active_frame()
 
     def _set_mesh(self, value):
+        self.mesh_opacity_slider.setEnabled(bool(value) and self.mesh_checkbox.isEnabled())
         if value:
             for check in (self.joint_checkbox, self.bone_checkbox):
                 blocker = QSignalBlocker(check); check.setChecked(False); del blocker
-                self._set_geometry("show_joints" if check is self.joint_checkbox else "show_bones", False)
+                attr = "show_joints" if check is self.joint_checkbox else "show_bones"
+                for view in [self.overlay_view, *self.split_views]:
+                    setattr(view, attr, False)
         for view in [self.overlay_view, *self.split_views]:
             view.show_mesh = value
-            view.set_frame(self.slider.value())
+        self._render_active_frame()
 
     def _set_joint(self, value):
         if value and self.mesh_checkbox.isChecked():
             blocker = QSignalBlocker(self.mesh_checkbox); self.mesh_checkbox.setChecked(False); del blocker
-            self._set_mesh(False)
+            self.mesh_opacity_slider.setEnabled(False)
+            for view in [self.overlay_view, *self.split_views]:
+                view.show_mesh = False
         self._set_geometry("show_joints", value)
 
     def _set_bone(self, value):
         if value and self.mesh_checkbox.isChecked():
             blocker = QSignalBlocker(self.mesh_checkbox); self.mesh_checkbox.setChecked(False); del blocker
-            self._set_mesh(False)
+            self.mesh_opacity_slider.setEnabled(False)
+            for view in [self.overlay_view, *self.split_views]:
+                view.show_mesh = False
         self._set_geometry("show_bones", value)
 
     def _set_opacity(self, value):
         self.mesh_opacity_value.setText(f"{value}%")
         for view in [self.overlay_view, *self.split_views]:
-            view.set_mesh_opacity(value / 100)
-            view.set_frame(self.slider.value())
+            view.mesh_opacity = value / 100
+        self._render_active_frame()
 
     def _set_frame(self, frame):
-        self.source_overlay.set_frame(frame)
-        self.split_source_overlay.set_frame(frame)
-        self.overlay_view.set_frame(frame)
-        for view in self.split_views:
-            view.set_frame(frame)
+        frame = int(frame)
+        if frame == self._last_rendered_frame:
+            return
+        previous = self._last_rendered_frame
+        if self.timer.isActive() and not self._clock_driven_update:
+            self.playback_clock.play(frame)
+        if self.mode == "overlay":
+            self.source_overlay.set_frame(frame)
+            self.overlay_view.set_frame(frame)
+        else:
+            self.split_source_overlay.set_frame(frame)
+            for index, view in enumerate(self.split_views):
+                if self.visibility_checks[index].isChecked():
+                    view.set_frame(frame)
         for _window, detached_source, views in self._detached_windows:
+            if not _window.isVisible():
+                continue
             detached_source.set_frame(frame)
             for view in views:
-                view.set_frame(frame)
-        self._refresh_metric_panels()
+                if not view.isHidden():
+                    view.set_frame(frame)
+        panels = [self.overlay_panel] if self.mode == "overlay" else self.split_panels
+        for panel in panels:
+            if (self.mode == "split" and not self.visibility_checks[panel.configuration_indices[0]].isChecked()):
+                continue
+            panel.update_values(self)
+        if self.annotation_mode != "off":
+            layers = [self.overlay_annotations] if self.mode == "overlay" else self.split_annotations
+            for layer in layers:
+                layer.update()
         timestamp = self.loaded_results[0].result.timestamps[frame]
         suffix = f" | {float(timestamp):.3f} s" if np.isfinite(timestamp) else ""
         source = " | Source media missing" if self.loaded_results[0].source_status == "missing" else (" | Source media changed" if self.loaded_results[0].source_status == "changed" else "")
         self.status.setText(f"Frame {frame + 1} / {self.loaded_results[0].frame_count}{suffix}{source}")
+        self._last_rendered_frame = frame
+        if previous is not None and self.timer.isActive() and self._clock_driven_update:
+            self._stats_frames += 1
+
+    def _render_active_frame(self):
+        self._last_rendered_frame = None
+        self._set_frame(self.slider.value())
+
+    def _set_playback_speed(self, index):
+        self.playback_clock.set_speed(self.speed_selector.itemData(index))
+
+    def _set_performance_stats(self, enabled):
+        self.performance_stats_label.setVisible(enabled)
+        self._stats_started = monotonic()
+        self._stats_frames = 0
+        self._stats_skipped = 0
+        if enabled:
+            self.performance_stats_timer.start()
+            self._update_performance_stats()
+        else:
+            self.performance_stats_timer.stop()
+            self.performance_stats_label.clear()
+
+    def _update_performance_stats(self):
+        elapsed = max(1e-6, monotonic() - self._stats_started)
+        source_fps = 1.0 / self.playback_clock.frame_duration
+        self.performance_stats_label.setText(
+            f"Source {source_fps:.1f} fps · Frame updates {self._stats_frames / elapsed:.1f} fps · "
+            f"{self.playback_clock.speed:.2f}× · Skipped {self._stats_skipped}")
+        self._stats_started = monotonic()
+        self._stats_frames = 0
 
     def _sync_camera(self, source):
         if self._syncing_camera or not self.split_views:
@@ -1126,17 +1300,35 @@ class ComparisonViewer(QWidget):
                 if view is not source: view.setCameraParams(**params)
         finally:
             self._syncing_camera = False
+        self._refresh_annotations()
 
     def _apply_camera_preset(self, method):
         views = [self.overlay_view] if self.mode == "overlay" else self.split_views
         if not views: return
         getattr(views[0], method)()
         if self.mode == "split": self._sync_camera(views[0])
+        self._refresh_annotations()
 
     def _previous(self): self.slider.setValue(max(0, self.slider.value() - 1))
     def _next_frame(self): self.slider.setValue(min(self.slider.maximum(), self.slider.value() + 1))
-    def _advance(self): self.slider.setValue((self.slider.value() + 1) % max(1, self.slider.maximum() + 1))
-    def _play(self): self.timer.stop() if self.timer.isActive() else self.timer.start(100)
+    def _advance(self):
+        frame_count = max(1, self.slider.maximum() + 1)
+        target = self.playback_clock.frame_at()
+        previous = self.slider.value()
+        if target == previous:
+            return
+        distance = (target - previous) % frame_count
+        self._stats_skipped += max(0, distance - 1)
+        self._clock_driven_update = True
+        try:
+            self.slider.setValue(target)
+        finally:
+            self._clock_driven_update = False
+    def _play(self):
+        if self.timer.isActive():
+            self.timer.stop(); self.playback_clock.pause(self.slider.value()); self.auto_hide_timer.stop(); self.chrome.show()
+        else:
+            self.playback_clock.play(self.slider.value()); self.timer.start(); self._show_controls()
 
     def _export_csv(self): self._export("csv")
     def _export_json(self): self._export("json")
@@ -1156,6 +1348,18 @@ class ComparisonViewer(QWidget):
             self.metric_status.setText(f"Export failed: {exc}")
 
     def eventFilter(self, watched, event):
+        if event.type() in (QEvent.Type.MouseMove, QEvent.Type.MouseButtonPress, QEvent.Type.KeyPress):
+            protected = isinstance(watched, (QMenu, QComboBox, QSlider, QDialog))
+            if not protected: self._show_controls()
+        if event.type() in (QEvent.Type.MouseMove, QEvent.Type.Wheel, QEvent.Type.Resize):
+            if watched is self.overlay_view or watched in self.split_views:
+                self._refresh_annotations()
+        if event.type() == QEvent.Type.KeyPress and event.key() == Qt.Key.Key_F11:
+            window = self.window()
+            window.showNormal() if window.isFullScreen() else window.showFullScreen()
+            event.accept(); return True
+        if event.type() == QEvent.Type.KeyPress and event.key() == Qt.Key.Key_Escape and self.window().isFullScreen():
+            self.window().showNormal(); event.accept(); return True
         if event.type() == QEvent.Type.MouseButtonPress:
             self._arrow_mode = "orbit" if any(watched is view or view.isAncestorOf(watched) for view in self.split_views + [self.overlay_view]) else "frame"
         elif event.type() == QEvent.Type.KeyPress:
@@ -1168,5 +1372,6 @@ class ComparisonViewer(QWidget):
                 target = self.split_views[0] if self.mode == "split" else self.overlay_view
                 target.orbit(azim, elev)
                 if self.mode == "split": self._sync_camera(target)
+                self._refresh_annotations()
                 event.accept(); return True
         return super().eventFilter(watched, event)

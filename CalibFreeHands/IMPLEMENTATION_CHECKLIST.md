@@ -63,7 +63,16 @@
 - [x] C-2B runtime Reference selection and cached current-frame metric dashboard
 - [x] C-2B source-retaining adaptive Split grid, native visibility checkboxes, configurable swatches, and left/right hue variants
 - [x] C-2B confidence opacity/value/bar/color controls, single-candidate error vectors, and Detach All frame/camera synchronization
+- [x] C-2B true in-viewport metric HUD with adjustable corner, size, and background opacity
+- [x] C-2B projected Reference-to-candidate per-joint error/name annotations; raw arrays remain unchanged
+- [x] C-2B Detection Confidence terminology and whole-hand display; mesh opacity remains independent
+- [x] C-2B play-time control auto-hide, activity restore, pause visibility, and F11/Escape fullscreen handling
+- [x] C-2B compact semantic controls, More/Detach menu, and drag-to-reorder result panels with runtime-only order
 - [x] C-2B current-Reference CSV/JSON export and per-joint detail table
+- [x] C-2B timestamp-driven monotonic playback, speed presets, frame dropping, and active-view-only updates
+- [x] C-2B in-place HUD value updates, preserved scroll position, and stylesheet/layout churn removal
+- [x] C-2B optional playback statistics and reusable OpenGL geometry items; no inference or CUDA work during playback
+- [x] C-2B frame-value HUD updates preserve widget identities and scroll; geometry changes update the active view once
 - [x] Comparison viewer session opening without inference rerun; source frames decoded once and shared
 - [x] Milestone B bundle format: atomic ZIP-compatible `.cfh` with canonical `result.npz` and validated `metadata.json`
 - [x] Safe result filenames, SHA256 source identity, model/checkpoint/MANO provenance, and file-scoped collision handling

@@ -6,6 +6,7 @@ from PySide6.QtWidgets import QCheckBox
 
 from calibfreehands.pipeline import CanonicalResult, save_result
 from calibfreehands.pipeline.result_bundle import write_result_bundle
+from calibfreehands.joint_schema import JOINT_NAMES
 
 
 def _session(tmp_path, count=3, mesh=False):
@@ -264,6 +265,7 @@ def test_dashboard_metric_selection_error_vectors_and_confidence_are_runtime_onl
     viewer.confidence_numeric_checkbox.setChecked(True)
     viewer.confidence_bar_checkbox.setChecked(True)
     assert "0.50" in panel.confidence_rows["cfg-1", "left"].text()
+    assert set(panel.confidence_rows) == {("cfg-1", "left"), ("cfg-1", "right")}
     viewer.confidence_opacity_checkbox.setChecked(False)
     assert viewer.overlay_view.confidence_alpha(0, 0) < 1
     assert not viewer.overlay_view.confidence_opacity_enabled
@@ -319,7 +321,7 @@ def test_dashboard_missing_hand_is_na_and_fallback_is_visible(tmp_path, qapp):
     viewer = ComparisonViewer(path)
     assert viewer.reference_id == "cfg-0"
     assert "fallback" in viewer.reference_label.text()
-    assert viewer.split_panels[1].metric_rows[("cfg-1", "wrist_error", "left")].text().endswith("N/A")
+    assert "L N/A" in viewer.split_panels[1].metric_rows[("cfg-1", "wrist_error", "left")].text()
     assert not viewer.metric_checks["mpvpe"].isEnabled()
     viewer.close()
 
@@ -330,17 +332,109 @@ def test_comparison_dashboard_uses_viewport_overlays_and_compact_menus(tmp_path,
     viewer = ComparisonViewer(_session(tmp_path, 5))
     assert not hasattr(viewer, "metric_table")
     assert len(viewer.split_panels) == 5
-    assert viewer.split_panels[1].minimumWidth() >= 320
-    assert viewer.split_panels[1].minimumHeight() >= 240
-    assert viewer.mode_selector.count() == 2
+    assert viewer.split_views[1].minimumWidth() >= 320
+    assert viewer.split_views[1].minimumHeight() >= 240
+    assert set(viewer.mode_buttons) == {"overlay", "split"}
     assert viewer.results_menu_button.text().startswith("Results")
-    assert viewer.confidence_menu_button.text().startswith("Confidence")
+    assert "Detection confidence" in viewer.confidence_menu_button.text()
     assert len(viewer.visibility_checks) == 5
     assert all(check.parentWidget() is not viewer for check in viewer.visibility_checks)
     for button in viewer.view_buttons + viewer.playback_buttons:
         assert button.sizePolicy().horizontalPolicy() != QSizePolicy.Policy.Expanding
     assert not viewer.metric_checks["f@5"].isEnabled()
     assert "pending" in viewer.metric_checks["f@5"].toolTip().lower()
+    viewer.close()
+
+
+def test_presentation_hud_is_viewport_child_and_reorder_preserves_result_data(tmp_path, qapp):
+    from calibfreehands.visualization.comparison import ComparisonViewer
+    viewer = ComparisonViewer(_session(tmp_path, 3))
+    assert viewer.overlay_panel.parentWidget() is viewer.overlay_view
+    assert viewer.split_panels[1].parentWidget() is viewer.split_views[1]
+    assert viewer.overlay_panel.geometry() == viewer.overlay_view.rect()
+    assert viewer.split_panels[1].geometry() == viewer.split_views[1].rect()
+    overlay_splitter = viewer.views.widget(0)
+    assert overlay_splitter.widget(1) is viewer.overlay_view
+    original_media_cell = viewer.split_grid.itemAtPosition(0, 0).widget()
+    before = [loaded.result.keypoints_3d.copy() for loaded in viewer.loaded_results]
+    viewer.reorder_result("cfg-2", "cfg-0")
+    assert viewer.split_result_order == [2, 0, 1]
+    assert viewer.split_grid.itemAtPosition(0, 1).widget() is viewer.split_views[2]
+    assert viewer.split_grid.itemAtPosition(0, 0).widget() is original_media_cell
+    from calibfreehands.visualization.comparison_presentation import _ResultDragHandle
+    handle = viewer.split_panels[2].findChild(_ResultDragHandle)
+    assert handle is not None and not handle.isHidden()
+    assert viewer.split_views[2].acceptDrops()
+    assert viewer.results_menu.actions()[0].defaultWidget().findChild(QCheckBox).text() == "Method 2"
+    for loaded, points in zip(viewer.loaded_results, before):
+        np.testing.assert_array_equal(loaded.result.keypoints_3d, points)
+    viewer.set_annotation_mode("error")
+    candidate_labels = viewer.split_annotations[1].projected_annotations()
+    reference_labels = viewer.split_annotations[0].projected_annotations()
+    assert candidate_labels and not reference_labels
+    assert candidate_labels[0][3] == "1414.2"
+    viewer.split_views[1].show_left = False
+    assert {row[1] for row in viewer.split_annotations[1].projected_annotations()} == {"right"}
+    viewer.set_annotation_mode("name")
+    assert {row[3] for row in viewer.split_annotations[1].projected_annotations()} <= set(JOINT_NAMES)
+    viewer.set_annotation_mode("off")
+    assert not viewer.split_annotations[1].projected_annotations()
+    viewer.close()
+
+
+def test_presentation_controls_keep_detection_and_mesh_opacity_distinct(tmp_path, qapp):
+    from calibfreehands.visualization.comparison import ComparisonViewer
+    viewer = ComparisonViewer(_session(tmp_path, 2, mesh=True))
+    assert viewer.confidence_menu_button.text().startswith("Detection confidence")
+    assert viewer.confidence_opacity_checkbox.text() == "Use as opacity"
+    assert viewer.confidence_numeric_checkbox.text() == "Numeric value"
+    assert viewer.mesh_opacity_label.text() == "Mesh opacity"
+    assert not viewer.mesh_opacity_slider.isEnabled()
+    viewer.mesh_checkbox.setChecked(True)
+    assert viewer.mesh_opacity_slider.isEnabled()
+    viewer.mesh_opacity_slider.setValue(50)
+    mesh_alpha = viewer.split_views[0].meshes[0].opts["color"][3]
+    viewer.confidence_opacity_checkbox.setChecked(False)
+    assert viewer.split_views[0].meshes[0].opts["color"][3] > mesh_alpha
+    assert not viewer.joint_checkbox.isChecked() and not viewer.bone_checkbox.isChecked()
+    assert viewer.more_menu.actions()[0].text() == "Detach panels"
+    assert viewer.error_vectors_button.menu() is viewer.error_vectors_menu
+    assert viewer.annotation_button.menu() is viewer.annotation_menu
+    assert viewer.hud_button.menu() is viewer.hud_menu
+    viewer._set_hud(opacity=0.5, scale="large", anchor="bottom-right")
+    assert viewer.overlay_panel.opacity_effect.opacity() == pytest.approx(0.5)
+    assert viewer.split_panels[0].scale == "large"
+    assert viewer.split_panels[0].anchor == "bottom-right"
+    viewer.close()
+
+
+def test_presentation_auto_hide_activity_pause_and_fullscreen_keys(tmp_path, qapp):
+    from PySide6.QtCore import QEvent, Qt
+    from PySide6.QtGui import QKeyEvent
+    from calibfreehands.visualization.comparison import ComparisonViewer
+    viewer = ComparisonViewer(_session(tmp_path, 2))
+    viewer.show()
+    qapp.processEvents()
+    viewer.timer.start(1000)
+    viewer._auto_hide_controls()
+    assert viewer.chrome.isHidden()
+    viewer.eventFilter(viewer, QEvent(QEvent.Type.MouseMove))
+    assert not viewer.chrome.isHidden()
+    viewer.reference_selector.showPopup()
+    viewer._auto_hide_controls()
+    assert not viewer.chrome.isHidden()
+    viewer.reference_selector.hidePopup()
+    viewer._auto_hide_controls()
+    assert viewer.chrome.isHidden()
+    viewer.timer.stop()
+    viewer._play()
+    assert not viewer.chrome.isHidden()
+    f11 = QKeyEvent(QEvent.Type.KeyPress, Qt.Key.Key_F11, Qt.KeyboardModifier.NoModifier)
+    viewer.eventFilter(viewer, f11)
+    assert viewer.isFullScreen()
+    escape = QKeyEvent(QEvent.Type.KeyPress, Qt.Key.Key_Escape, Qt.KeyboardModifier.NoModifier)
+    viewer.eventFilter(viewer, escape)
+    assert not viewer.isFullScreen()
     viewer.close()
 
 

@@ -1,0 +1,332 @@
+from __future__ import annotations
+
+import numpy as np
+from PySide6.QtCore import QEvent, Qt, QMimeData, QTimer
+from PySide6.QtGui import QColor, QDrag, QFont, QPainter, QPen, QVector4D
+from PySide6.QtWidgets import QCheckBox, QFrame, QGraphicsOpacityEffect, QHBoxLayout, QLabel, QProgressBar, QPushButton, QScrollArea, QSizePolicy, QToolButton, QVBoxLayout, QWidget
+
+from calibfreehands.joint_schema import JOINT_NAMES
+from .topology import RAW_TO_VIEW
+
+
+class _ViewportPanel(QWidget):
+    def __init__(self, view, configuration_indices):
+        super().__init__(view)
+        self.view = view
+        self.configuration_indices = configuration_indices
+        self.card = QFrame(self)
+        self.card.setObjectName("metricOverlay")
+        self.opacity_effect = QGraphicsOpacityEffect(self.card)
+        self.card.setGraphicsEffect(self.opacity_effect)
+        self.card.setStyleSheet("QFrame#metricOverlay { background-color: rgba(25, 30, 38, 220); color: white; border: 1px solid rgba(255,255,255,65); border-radius: 5px; }")
+        self.card.setMaximumWidth(330)
+        self.card.setMaximumHeight(175)
+        card_layout = QVBoxLayout(self.card)
+        card_layout.setContentsMargins(8, 6, 8, 6)
+        card_layout.setSpacing(2)
+        self.scroll = QScrollArea()
+        self.scroll.setWidgetResizable(True)
+        self.scroll.setFrameShape(QFrame.Shape.NoFrame)
+        self.scroll.setHorizontalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAlwaysOff)
+        self.scroll.setStyleSheet("background: transparent;")
+        self.body = QWidget()
+        self.body.setStyleSheet("background: transparent;")
+        self.body_layout = QVBoxLayout(self.body)
+        self.body_layout.setContentsMargins(0, 0, 0, 0)
+        self.body_layout.setSpacing(4)
+        self.body.installEventFilter(self)
+        self.scroll.setWidget(self.body)
+        card_layout.addWidget(self.scroll)
+        self.anchor = "top-left"
+        self.scale = "medium"
+        self.opacity = 0.86
+        self.opacity_effect.setOpacity(self.opacity)
+        self._apply_style()
+        self.installEventFilter(self)
+        view.installEventFilter(self)
+        self._position()
+        self.metric_rows = {}
+        self.details_buttons = {}
+        self.reference_badges = {}
+        self.confidence_rows = {}
+        self.confidence_bars = {}
+
+    def eventFilter(self, watched, event):
+        if watched is self.view and event.type() == QEvent.Type.Resize:
+            self._position()
+        return super().eventFilter(watched, event)
+
+    def _apply_style(self):
+        font_size = {"small": 8, "medium": 9, "large": 11}[self.scale]
+        self.card.setStyleSheet(
+            "QFrame#metricOverlay { background-color: rgba(25, 30, 38, 220); "
+            "color: white; border: 1px solid rgba(255,255,255,65); border-radius: 5px; } "
+            f"QLabel {{ font-size: {font_size}pt; }}"
+        )
+
+    def _position(self):
+        self.setGeometry(self.view.rect())
+        content_width = self.body_layout.sizeHint().width() + 20
+        content_height = self.body_layout.sizeHint().height() + 20
+        width = min(330, max(200, self.view.width() - 24), max(240, content_width + 60))
+        height = min(220, max(64, min(content_height, self.view.height() - 24)))
+        self.card.setFixedSize(width, height)
+        x = 12 if "left" in self.anchor else max(0, self.width() - width - 12)
+        y = 12 if "top" in self.anchor else max(0, self.height() - height - 12)
+        self.card.move(x, y)
+        self.opacity_effect.setOpacity(self.opacity)
+        self.raise_()
+
+    def set_presentation(self, anchor=None, scale=None, opacity=None):
+        if anchor is not None: self.anchor = anchor
+        if scale is not None and scale != self.scale:
+            self.scale = scale
+            self._apply_style()
+        if opacity is not None: self.opacity = opacity
+        self._position()
+
+    def refresh(self, viewer):
+        scroll_position = self.scroll.verticalScrollBar().value()
+        self._clear_layout(self.body_layout)
+        self.metric_rows.clear()
+        self.details_buttons.clear()
+        self.reference_badges.clear()
+        self.confidence_rows.clear()
+        self.confidence_bars.clear()
+        for config_index in self.configuration_indices:
+            config = viewer.configurations[config_index]
+            if viewer.mode == "overlay" and not viewer.overlay_view.configuration_visible[config_index]:
+                continue
+            self._add_result_group(viewer, config_index, config)
+        if not self.body_layout.count():
+            self.body_layout.addWidget(QLabel("No visible results"))
+        self.body_layout.activate()
+        self._position()
+        QTimer.singleShot(0, self._position)
+        QTimer.singleShot(0, lambda: self.scroll.verticalScrollBar().setValue(
+            min(scroll_position, self.scroll.verticalScrollBar().maximum())))
+
+    def update_values(self, viewer):
+        frame = viewer.slider.value()
+        frame_index = int(viewer.loaded_results[0].result.frame_indices[frame])
+        for (config_id, metric_id, hand), label in self.metric_rows.items():
+            if hand != "left":
+                continue
+            if metric_id == "per_joint_error":
+                continue
+            values = []
+            for hand in ("left", "right"):
+                pair = viewer._metric_cache.get(config_id, {}).get((frame_index, hand))
+                value = pair.metrics.get(metric_id) if pair is not None else None
+                values.append(f"{value:.1f}" if value is not None and np.isscalar(value) and np.isfinite(value) else "N/A")
+            definition = next(item for item in viewer.metric_definitions if item.metric_id == metric_id)
+            name = "Wrist Error" if metric_id == "wrist_error" else definition.name
+            label.setText(f"{name} | L {values[0]} / R {values[1]} {definition.unit}")
+        for key, label in self.confidence_rows.items():
+            config_id, hand = key
+            config = next(i for i, item in enumerate(viewer.configurations) if item["id"] == config_id)
+            hand_index = 0 if hand == "left" else 1
+            result = viewer.loaded_results[config].result
+            value = result.confidence[frame, hand_index] if result.confidence is not None else np.nan
+            display = float(value) if np.isfinite(value) else None
+            if label.text() not in ("L detection", "R detection"):
+                label.setText(f"{display:.2f}" if display is not None else "N/A")
+            bar = self.confidence_bars.get(key)
+            if bar is not None:
+                bar.setValue(round(display * 100) if display is not None else 0)
+                bar.setToolTip("YOLO hand detection score" if display is not None else "Detection score unavailable")
+
+    @classmethod
+    def _clear_layout(cls, layout):
+        while layout.count():
+            item = layout.takeAt(0)
+            if item.widget():
+                item.widget().deleteLater()
+            elif item.layout():
+                cls._clear_layout(item.layout())
+                item.layout().deleteLater()
+
+    def _add_result_group(self, viewer, index, config):
+        header = QHBoxLayout()
+        swatch = QLabel()
+        swatch.setFixedSize(10, 10)
+        color = tuple(round(value * 255) for value in viewer.configuration_colors[index])
+        swatch.setStyleSheet(f"background-color: rgb{color}; border: 1px solid white;")
+        header.addWidget(swatch)
+        title = QLabel(config["name"])
+        title.setStyleSheet("font-weight: 600; color: white;")
+        title.setWordWrap(True)
+        header.addWidget(title, 1)
+        handle = _ResultDragHandle(viewer, config["id"], title)
+        header.insertWidget(0, handle)
+        if config["id"] == viewer.reference_id:
+            badge = QLabel("REFERENCE")
+            badge.setStyleSheet("font-weight: 700; color: white; border: 1px solid white; padding: 1px 4px;")
+            header.addWidget(badge)
+            self.reference_badges[config["id"]] = badge
+        self.body_layout.addLayout(header)
+        if config["id"] != viewer.reference_id:
+            for definition in viewer.metric_definitions:
+                if definition.metric_id not in viewer.selected_metric_ids:
+                    continue
+                if definition.metric_id == "per_joint_error":
+                    row = QHBoxLayout()
+                    label = QLabel("Per-Joint Error (21 joints)")
+                    details = QPushButton("Details")
+                    details.setSizePolicy(QSizePolicy.Policy.Fixed, QSizePolicy.Policy.Fixed)
+                    details.clicked.connect(lambda _=False, cid=config["id"]: viewer._show_joint_table(cid))
+                    row.addWidget(label, 1)
+                    row.addWidget(details)
+                    self.body_layout.addLayout(row)
+                    self.metric_rows[(config["id"], definition.metric_id, "left")] = label
+                    self.details_buttons[(config["id"], definition.metric_id, "left")] = details
+                    continue
+                frame_index = int(viewer.loaded_results[0].result.frame_indices[viewer.slider.value()])
+                values = []
+                for hand_index, hand in enumerate(("left", "right")):
+                    pair = viewer._metric_cache.get(config["id"], {}).get((frame_index, hand))
+                    value = None if pair is None else pair.metrics.get(definition.metric_id)
+                    text_value = f"{value:.1f}" if value is not None and np.isscalar(value) and np.isfinite(value) else "N/A"
+                    values.append(text_value)
+                display_name = "Wrist Error" if definition.metric_id == "wrist_error" else definition.name
+                label = QLabel(f"{display_name} | L {values[0]} / R {values[1]} {definition.unit}")
+                label.setStyleSheet("color: white;")
+                self.body_layout.addWidget(label)
+                for hand in ("left", "right"):
+                    self.metric_rows[(config["id"], definition.metric_id, hand)] = label
+        if viewer.confidence_numeric_checkbox.isChecked() or viewer.confidence_bar_checkbox.isChecked():
+            result = viewer.loaded_results[index].result
+            frame = viewer.slider.value()
+            for hand_index, hand in enumerate(("left", "right")):
+                confidence = result.confidence[frame, hand_index] if result.confidence is not None else np.nan
+                display = float(confidence) if np.isfinite(confidence) else None
+                row = QWidget()
+                row_layout = QHBoxLayout(row)
+                row_layout.setContentsMargins(0, 0, 0, 0)
+                row_layout.setSpacing(5)
+                text = QLabel(("L" if hand_index == 0 else "R") + " detection")
+                text.setStyleSheet("color: white;")
+                row_layout.addWidget(text)
+                value_label = text
+                if viewer.confidence_numeric_checkbox.isChecked():
+                    number = QLabel(f"{display:.2f}" if display is not None else "N/A")
+                    number.setStyleSheet("color: white;")
+                    row_layout.addWidget(number)
+                    value_label = number
+                if viewer.confidence_bar_checkbox.isChecked():
+                    bar = QProgressBar()
+                    bar.setRange(0, 100)
+                    bar.setFixedWidth(85)
+                    bar.setTextVisible(False)
+                    bar.setValue(round(display * 100) if display is not None else 0)
+                    bar.setToolTip("YOLO hand detection score" if display is not None else "Detection score unavailable")
+                    row_layout.addWidget(bar)
+                    self.confidence_bars[(config["id"], hand)] = bar
+                row_layout.addStretch(1)
+                self.body_layout.addWidget(row)
+                self.confidence_rows[(config["id"], hand)] = value_label
+        separator = QFrame()
+        separator.setFrameShape(QFrame.Shape.HLine)
+        self.body_layout.addWidget(separator)
+        self._position()
+
+
+class _ResultDragHandle(QToolButton):
+    def __init__(self, viewer, configuration_id, parent=None):
+        super().__init__(parent)
+        self.viewer, self.configuration_id = viewer, configuration_id
+        self.setText("⠿"); self.setToolTip("Drag to reorder result panels")
+        self.setFixedWidth(20)
+        self._press = None
+
+    def mousePressEvent(self, event):
+        self._press = event.position().toPoint()
+        super().mousePressEvent(event)
+
+    def mouseMoveEvent(self, event):
+        if self._press is not None and (event.position().toPoint() - self._press).manhattanLength() >= 8:
+            mime = QMimeData(); mime.setText(self.configuration_id)
+            drag = QDrag(self); drag.setMimeData(mime); drag.exec(Qt.DropAction.MoveAction)
+            self._press = None
+        else:
+            super().mouseMoveEvent(event)
+
+
+class _JointAnnotationLayer(QWidget):
+    def __init__(self, viewer, view, configuration_indices):
+        super().__init__(view)
+        self.viewer, self.view = viewer, view
+        self.configuration_indices = configuration_indices
+        self.setAttribute(Qt.WidgetAttribute.WA_TransparentForMouseEvents)
+        self.setAttribute(Qt.WidgetAttribute.WA_TranslucentBackground)
+        self.view.installEventFilter(self)
+        self.hide()
+
+    def eventFilter(self, watched, event):
+        if watched is self.view and event.type() == QEvent.Type.Resize:
+            self.setGeometry(self.view.rect())
+        return super().eventFilter(watched, event)
+
+    def refresh(self):
+        self.setGeometry(self.view.rect())
+        visible = self.viewer.annotation_mode != "off"
+        self.setVisible(visible)
+        self.raise_()
+        self.update()
+
+    def projected_annotations(self):
+        viewer, view = self.viewer, self.view
+        if viewer.annotation_mode == "off": return []
+        frame = int(viewer.loaded_results[0].result.frame_indices[viewer.slider.value()])
+        matrix = view.projectionMatrix((0, 0, max(1, view.width()), max(1, view.height())), view.getViewport()) * view.viewMatrix()
+        labels = []
+        for config_index in self.configuration_indices:
+            config = viewer.configurations[config_index]
+            if config["id"] == viewer.reference_id: continue
+            if hasattr(view, "configuration_visible") and not view.configuration_visible[config_index]: continue
+            result = viewer.loaded_results[config_index].result
+            positions = np.flatnonzero(result.frame_indices == frame)
+            if not positions.size: continue
+            position = int(positions[0])
+            for hand, hand_name in enumerate(("left", "right")):
+                if (not result.detected[position, hand] or (hand == 0 and not view.show_left)
+                        or (hand == 1 and not view.show_right)):
+                    continue
+                pair = viewer._metric_cache.get(config["id"], {}).get((frame, hand_name))
+                if pair is None: continue
+                occupied = []
+                for joint, (point, error) in enumerate(zip(result.keypoints_3d[position, hand], pair.joint_errors_mm)):
+                    if not np.isfinite(point).all() or not np.isfinite(error): continue
+                    clip = matrix.map(QVector4D(float((point @ RAW_TO_VIEW.T)[0]),
+                                                float((point @ RAW_TO_VIEW.T)[1]),
+                                                float((point @ RAW_TO_VIEW.T)[2]), 1.0))
+                    if clip.w() <= 0: continue
+                    x, y = clip.x() / clip.w(), clip.y() / clip.w()
+                    if abs(x) > 1 or abs(y) > 1: continue
+                    label = f"{error:.1f}" if viewer.annotation_mode == "error" else JOINT_NAMES[joint]
+                    px, base_y = (x + 1) * self.width() / 2 + 5, (1 - y) * self.height() / 2 - 4
+                    width = max(18, len(label) * 8)
+                    offsets = [0] + [offset for step in range(1, 22) for offset in (-15 * step, 15 * step)]
+                    py = next((base_y + offset for offset in offsets
+                               if 14 <= base_y + offset <= self.height() - 4
+                               and not any(px < old[0] + old[2] and px + width > old[0]
+                                           and base_y + offset - 12 < old[1] + old[3]
+                                           and base_y + offset + 2 > old[1] for old in occupied)), base_y)
+                    occupied.append((px, py - 12, width, 14))
+                    labels.append((config["id"], hand_name, joint, label, px, py))
+        return labels
+
+    def paintEvent(self, _event):
+        viewer = self.viewer
+        if viewer.annotation_mode == "off": return
+        painter = QPainter(self)
+        font = self.font(); font.setPointSize(max(9, font.pointSize())); font.setBold(True)
+        painter.setFont(font)
+        try:
+            for config_id, hand_name, joint, label, x, y in self.projected_annotations():
+                index = next(i for i, config in enumerate(viewer.configurations) if config["id"] == config_id)
+                color = QColor(*(round(channel * 255) for channel in viewer.configuration_colors[index]))
+                painter.setPen(QPen(QColor(0, 0, 0, 220), 3)); painter.drawText(int(x), int(y), label)
+                painter.setPen(color); painter.drawText(int(x), int(y), label)
+        finally:
+            painter.end()
