@@ -17,8 +17,7 @@ from PySide6.QtWidgets import (
     QVBoxLayout, QWidget, QWidgetAction,
 )
 
-from calibfreehands.media.ffmpeg import FFmpegDecoder
-from calibfreehands.media.probe import probe_media
+from calibfreehands.media.provider import shared_media_provider
 from .topology import HAND_CONNECTIONS, RAW_TO_VIEW
 from calibfreehands.pipeline.result_bundle import ResultBundle
 from calibfreehands.pipeline.metrics import compare_results, metric_registry
@@ -66,15 +65,10 @@ def _session_results(session_path: Path):
     if not results:
         raise ValueError("comparison session contains no saved results")
     source = data.get("source_media") or ""
-    media = None
-    if source and Path(source).is_file():
-        try:
-            info = probe_media(Path(source))
-            media = [frame.rgb for frame in FFmpegDecoder().decode_rgb(Path(source), info.width, info.height, info.frame_rate)]
-        except (OSError, ValueError, RuntimeError):
-            media = None
+    media, source_status = shared_media_provider(Path(source), data.get("source_media_sha256")) if source else (None, "missing")
     for _, loaded in results:
         loaded.media_frames = media
+        loaded.source_status = source_status
     return data, results
 
 

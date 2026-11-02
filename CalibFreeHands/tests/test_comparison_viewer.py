@@ -149,19 +149,26 @@ def test_comparison_mesh_visibility_remains_exclusive_with_skeleton(tmp_path, qa
 
 def test_comparison_viewer_decodes_shared_source_media_once(tmp_path, monkeypatch, qapp):
     import calibfreehands.visualization.comparison as comparison
+    from calibfreehands.media.provider import MediaFrameProvider
     source = tmp_path / "source.mp4"
     source.touch()
     manifest = _session(tmp_path)
     data = json.loads(manifest.read_text(encoding="utf-8"))
     data["source_media"] = str(source)
     manifest.write_text(json.dumps(data), encoding="utf-8")
-    image = np.zeros((24, 32, 3), np.uint8)
     calls = []
-    monkeypatch.setattr(comparison, "probe_media", lambda path: type("Info", (), {"width": 32, "height": 24, "frame_rate": 10})())
-    monkeypatch.setattr(comparison, "FFmpegDecoder", lambda: type("Decoder", (), {"decode_rgb": lambda self, *args: calls.append(args[0]) or [type("Frame", (), {"rgb": image})() for _ in range(3)]})())
+    provider = MediaFrameProvider(source, frame_loader=lambda index: calls.append(index) or np.zeros((24, 32, 3), np.uint8))
+    monkeypatch.setattr(comparison, "shared_media_provider", lambda *args: (provider, "available"))
     viewer = comparison.ComparisonViewer(manifest)
-    assert len(calls) == 1
+    assert calls in ([], [0])
     assert all(loaded.media_frames is viewer.loaded_results[0].media_frames for loaded in viewer.loaded_results)
+    viewer.source_overlay.set_frame(1)
+    deadline = __import__("time").monotonic() + 2
+    while (not calls or calls[-1] != 1) and __import__("time").monotonic() < deadline:
+        qapp.processEvents()
+        __import__("time").sleep(.005)
+    assert calls[-1] == 1
+    provider.close()
     viewer.close()
 
 

@@ -56,10 +56,12 @@ class FFmpegDecoder:
                 raise
             timestamps = []
         index = 0
+        reached_end = False
         try:
             while True:
                 raw = process.stdout.read(frame_bytes)
                 if len(raw) != frame_bytes:
+                    reached_end = True
                     break
                 timestamp = timestamps[index] if index < len(timestamps) else (
                     float(index) / frame_rate if frame_rate and frame_rate > 0 else float("nan")
@@ -68,7 +70,9 @@ class FFmpegDecoder:
                 index += 1
         finally:
             process.stdout.close()
+            if not reached_end and process.poll() is None:
+                process.terminate()
             process.wait()
-            if process.returncode not in (0, None):
+            if reached_end and process.returncode not in (0, None):
                 detail = process.stderr.read().decode(errors="replace")
                 raise RuntimeError(f"FFmpeg could not decode {path.name}: {detail.strip()}")

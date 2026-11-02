@@ -14,10 +14,8 @@ from PySide6.QtCore import QEvent, Qt, QTimer, QPointF, QLineF, QSignalBlocker
 from PySide6.QtGui import QGuiApplication, QImage, QPainter, QPen
 from PySide6.QtWidgets import QCheckBox, QHBoxLayout, QLabel, QPushButton, QSizePolicy, QSlider, QSplitter, QVBoxLayout, QWidget
 
-from calibfreehands.media.ffmpeg import FFmpegDecoder
-from calibfreehands.media.probe import probe_media
+from calibfreehands.media.provider import MediaFrameProvider, shared_media_provider
 from calibfreehands.pipeline.result import CanonicalResult
-from calibfreehands.pipeline.provenance import sha256_file
 from calibfreehands.pipeline.result_bundle import ResultBundle, load_result_bundle
 from .topology import HAND_CONNECTIONS, RAW_TO_VIEW
 
@@ -78,17 +76,8 @@ def load_npz_result(path: Path, decode_media: bool = True) -> LoadedResult:
     return LoadedResult(result, media_frames, source_status)
 
 
-def _decode_source(path: Path, expected_sha256: str | None) -> tuple[list[np.ndarray] | None, str]:
-    if not path.is_file():
-        return None, "missing"
-    try:
-        if expected_sha256 and sha256_file(path).casefold() != expected_sha256.casefold():
-            return None, "changed"
-        info = probe_media(path)
-        frames = [frame.rgb for frame in FFmpegDecoder().decode_rgb(path, info.width, info.height, info.frame_rate)]
-    except (OSError, ValueError, RuntimeError):
-        return None, "unavailable"
-    return frames, "available"
+def _decode_source(path: Path, expected_sha256: str | None) -> tuple[MediaFrameProvider | None, str]:
+    return shared_media_provider(path, expected_sha256)
 
 
 def load_bundle_result(bundle: ResultBundle, decode_media: bool = True) -> LoadedResult:
@@ -102,20 +91,55 @@ def load_bundle_result(bundle: ResultBundle, decode_media: bool = True) -> Loade
 
 class _OverlayCanvas(QWidget):
     def __init__(self, loaded):
-        super().__init__(); self.loaded = loaded; self.frame = 0
+        super().__init__(); self.loaded = loaded; self.frame = 0; self._display_image = QImage(); self._requested_source_index = None
+        provider = loaded.media_frames
+        if isinstance(provider, MediaFrameProvider):
+            provider.signals.frame_ready.connect(self._frame_ready)
+            self.set_frame(0)
         self.show_joints = self.show_bones = self.show_left = self.show_right = True
-    def set_frame(self, frame): self.frame = max(0, min(frame, self.loaded.frame_count - 1)); self.update()
+    def set_frame(self, frame):
+        self.frame = max(0, min(frame, self.loaded.frame_count - 1))
+        provider = self.loaded.media_frames
+        if isinstance(provider, MediaFrameProvider):
+            source_index = int(self.loaded.result.frame_indices[self.frame])
+            if provider._is_image:
+                source_index = 0
+            if source_index != self._requested_source_index:
+                self._requested_source_index = source_index
+                provider.frame(source_index)
+        self.update()
+
+    def _frame_ready(self, source_index):
+        expected = int(self.loaded.result.frame_indices[self.frame])
+        provider = self.loaded.media_frames
+        if isinstance(provider, MediaFrameProvider) and provider._is_image:
+            expected = 0
+        if source_index == expected:
+            self.update()
     def paintEvent(self, _event):
         painter = QPainter(self)
         try:
             painter.fillRect(self.rect(), Qt.GlobalColor.black)
-            if not self.loaded.media_frames or self.frame >= len(self.loaded.media_frames):
+            provider = self.loaded.media_frames
+            if provider is None:
                 message = "Source media is missing" if self.loaded.source_status == "missing" else "Source media is unavailable"
                 painter.setPen(Qt.GlobalColor.lightGray)
                 painter.drawText(self.rect(), Qt.AlignmentFlag.AlignCenter, message)
                 return
-            rgb = self.loaded.media_frames[self.frame]; image = QImage(rgb.data, rgb.shape[1], rgb.shape[0], rgb.strides[0], QImage.Format.Format_RGB888)
-            painter.drawImage(self.rect(), image); sx, sy = self.width() / rgb.shape[1], self.height() / rgb.shape[0]
+            source_index = int(self.loaded.result.frame_indices[self.frame])
+            if isinstance(provider, MediaFrameProvider):
+                source_index = 0 if provider._is_image else source_index
+                rgb = provider.cached_frame(source_index)
+            else:
+                rgb = provider[self.frame] if self.frame < len(provider) else None
+            if rgb is None:
+                painter.setPen(Qt.GlobalColor.lightGray)
+                painter.drawText(self.rect(), Qt.AlignmentFlag.AlignCenter, "Loading source frame…")
+                return
+            image = QImage(rgb.data, rgb.shape[1], rgb.shape[0], rgb.strides[0], QImage.Format.Format_RGB888).copy()
+            self._display_image = image
+            sx, sy = self.width() / rgb.shape[1], self.height() / rgb.shape[0]
+            painter.drawImage(self.rect(), self._display_image)
             for hand_i, hand in enumerate(self.loaded.result.keypoints_2d[self.frame]):
                 if not self.loaded.detected[self.frame, hand_i] or (hand_i == 0 and not self.show_left) or (hand_i == 1 and not self.show_right): continue
                 painter.setPen(QPen(Qt.GlobalColor.cyan if hand_i == 0 else Qt.GlobalColor.yellow, 2))

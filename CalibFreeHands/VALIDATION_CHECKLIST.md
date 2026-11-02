@@ -170,3 +170,11 @@ result reopening pass.
 - [x] Full pytest suite: 201 passed; includes fixed viewport geometry, HUD interactions, hover menus, annotation modes, and reorder lifecycle
 - [x] Windows GUI visual check at 1280x800 with six synthetic test-only result panels; drag reorder changed Method 2/Method 1 ordering
 - [ ] Windows GUI visual review for hovered-joint readability and Split + 3 layout
+
+## C-2B Media Memory Optimization
+- [x] Provider tests: lazy sequential decode, repeated request coalescing, cache hit/eviction/budget, reverse seek, latest request replacement, image buffer ownership, missing/changed source, and source sharing
+- [x] Full Windows pytest suite: 207 passed; `import calibfreehands.app.main`, compileall, and diff check pass
+- [x] Windows 4_assemble.mp4 + three same-source CFH results: provider shared by all rows; 863 decoded-frame insertions including rereads after eviction; cache 379.7 MiB under 384 MiB cap
+- [x] Measured process RSS: 215.1 MiB after open, 601.4 MiB after full source decode; previous full-frame preload observation was about 3.7 GiB
+- [x] Seek latency at frames 0/60/150/300/501: 78/332/502/829/1120 ms
+- [x] 4-second playback probes: 1x 29.99 source fps at 22.3% process CPU; 2x 59.72 source fps at 29.7% process CPU

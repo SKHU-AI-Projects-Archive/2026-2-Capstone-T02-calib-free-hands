@@ -92,3 +92,6 @@
 - [x] C-2B viewport-first presentation: compact controls, selected metric overlays, Reference badge, on-demand 21-joint details, and no permanent metric table
 - [x] C-2B duplicate Checkerboard Reference Focal row label removed while retaining the header and value control
 - [x] C-2B presentation stabilization: fixed viewport overlay chrome, pin, mouse restore, compact menus, text-only HUD, bounded annotation modes, and pointer-based panel reorder
+- [x] C-2B shared asynchronous MediaFrameProvider with lazy FFmpeg frames, source identity sharing, and a 384 MiB byte-bounded LRU cache
+- [x] C-2B viewer frame requests remain non-blocking; copied QImage display storage survives cache eviction
+- [x] C-2B static image sources use one cached RGB frame; missing and changed source media remain non-blocking for 3D results
