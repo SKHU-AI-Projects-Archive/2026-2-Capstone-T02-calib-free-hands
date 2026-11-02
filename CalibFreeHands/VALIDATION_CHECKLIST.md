@@ -182,7 +182,7 @@ Remaining visual-review items: Split + 2 and Split + 5 layouts, hovered-joint re
 - [x] Real source video, synchronized result poses, and current-frame metrics updated during playback; controls auto-hid while playing and returned on mouse activity
 - [x] Windows UI speed selector accepted 0.1x and 2x; separate 4-second probes verified 1x/2x playback rates
 - [x] Final C-2B hardening suite: 211 passed; application import, compileall, and diff check passed
-- [ ] HUMAN FINAL REVIEW REQUIRED: hovered-joint annotation readability, all annotation modes, and final approval. Automated tests and agent visual inspection do not count as user approval.
+- [ ] HUMAN FINAL REVIEW REQUIRED: hovered-joint readability, all annotation modes, full eight-speed playback matrix (0.1x through 2x), and final approval. Automated tests and agent visual inspection do not count as user approval.
 
 
 ## C-2B Final Stabilization and Hardening
@@ -194,4 +194,4 @@ Remaining visual-review items: Split + 2 and Split + 5 layouts, hovered-joint re
 - [x] Existing Phase 3 local media benchmark remains: 379.7 MiB cache under 384 MiB, 606.9 MiB process RSS after playback, 1x/2x playback probes at 29.99/59.95 source fps
 - [x] Full pytest after final edits: 211 passed; startup import `IMPORT_OK`; compileall and `git diff --check` pass
 - [x] 1280x800 offscreen layout checks keep the HUD inside the viewport; actual Windows window inspected at 1282x752 (minimum content target 1280x720)
-- [ ] User final visual review/approval remains pending
+- [ ] User final visual review/approval remains pending, including hovered-joint readability, all annotation modes, and the full eight-speed playback matrix
