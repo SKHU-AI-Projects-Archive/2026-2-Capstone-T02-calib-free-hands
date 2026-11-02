@@ -8426,7 +8426,109 @@ def h4_results_yaml(run_dir: Path, cfg: dict):
 
 
 
-COMMANDS = {"protocol": protocol_main, "frame-filter": ff_main, "same-session": session_main, "overlay": overlay_main, "phase-segmentation": pseg_main, "guide-revision": grev_main, "f-response": fresp_main, "error-factors": ferr_main, "long-video-check": long_main, "generalization": gen_main, "main-camera-extension": ext_main, "wide-60cm": wide_main, "jointset-sets": jset_main, "verdict-calibration": cal_main, "printed-hand": pr_main, "hand-markers": mk_main, "markers-only": mo_main, "free-template": ft_main, "free-shape3d": s3_main, "free-shape3d-hand": h3_main, "free-shape3d-27": e3_main, "free-shape3d-new": e4_main, "mmpose-hand": mm_main, "mmpose-hand-46": mm2_main, "free-shape3d-new2": e5_main, "mmpose-hand-src": mm3_main, "free-shape3d-detectors": fs_main, "free-shape3d-hand-sets": h4_main}
+# ====================================================================================================
+# h4b  (experiment 52b: 52 had no reference frame in any video (the wrist marker lies 0.088-0.095 x box from MediaPipe's wrist, over the 0.08 naming radius); user's choice 2026-11-02: tracking of 42 unchanged
+#       (used markers 5, 6, 9, 10, 13, 14, 17, 18 for the reference frame, the 75 % rule and the homography check; the wrist marker is followed as in 42), only the estimate uses each marker set)
+#     python HandCalib/run.py free-shape3d-hand-sets-42track --config HandCalib/configs/52b_free_shape3d_hand_sets_42track.yaml [--out DIR]
+#     python HandCalib/run.py free-shape3d-hand-sets-42track --config ... results-yaml --run runs/52b_free_shape3d_hand_sets_42track/<UTC>
+# ====================================================================================================
+H4B_NOTE = ("실험 42와 같은 실제 손 마커 영상 6개, 같은 추적(35c 추적 코드, 기준 프레임과 75% 규칙, 호모그래피 검사 모두 실험 42의 8점 기준)과 같은 호출(교수님 free_shape3d)에서 f 추정에 쓰는 마커만 바꾼 실험이다. "
+            "마커 묶음은 손바닥 5점(손목과 네 손가락 뿌리 관절)과 실험 42의 8점(손가락 뿌리 관절과 둘째 마디)에 손목을 더한 9점이다. 실험 52는 손목 마커가 이름 확인 반경(손 박스의 0.08배) 밖이라 기준 프레임이 없어 모든 영상이 제외되었고, "
+            "이번에는 추적 규칙을 바꾸지 않았다. 나머지 설정과 판정 규칙은 실험 42 그대로 실행 전에 고정했다. 기준 f와의 비교는 summary.md에만 있다.")
+
+
+def h4b_c(cfg: dict, ids: list) -> dict:
+    """h4_video's config sections: 42's markers (used_ids unchanged) and the estimate set."""
+    c = {k: copy.deepcopy(cfg[k]) for k in H3_KEYS}
+    c["estimate_ids"] = [int(x) for x in ids]
+    return c
+
+
+def h4b_text(path: Path):
+    t = Path(path).read_text().replace(H4_NOTE, H4B_NOTE).replace("# 실험 52 summary", "# 실험 52b summary").replace("# 실험 52: free_shape3d", "# 실험 52b: free_shape3d")
+    Path(path).write_text(t)
+
+
+def h4b_report(path: Path, results: list, cfg: dict):
+    h4_report(path, results, cfg)
+    h4b_text(path)
+
+
+def h4b_summary(path: Path, results: list, ana: dict, cfg: dict, prior: dict):
+    h4_summary(path, results, ana, cfg, prior)
+    h4b_text(path)
+
+
+def h4b_main(argv=None):
+    ap = argparse.ArgumentParser()
+    ap.add_argument("--config", default=str(hf.PROJECT_ROOT / "configs/52b_free_shape3d_hand_sets_42track.yaml"))
+    sub = ap.add_subparsers(dest="cmd")
+    ry = sub.add_parser("results-yaml")
+    ry.add_argument("--run", required=True)
+    ap.add_argument("--out", default=None)
+    a = ap.parse_args(argv)
+    text = Path(a.config).read_text()
+    own = yaml.safe_load(text)
+    cfg = h4_load(own)
+    if a.cmd == "results-yaml":
+        print(h4b_results_yaml(hf.resolve(a.run), cfg))
+        return None
+    entries = list(cfg["videos"])
+    missing = [e["file"] for e in entries if not (Path(cfg["input_dir"]).expanduser() / e["file"]).exists()]
+    if missing:
+        raise SystemExit(f"영상이 없습니다: {missing}")
+    run_root = Path(a.out).expanduser() if a.out else hf.resolve(cfg["output"]["root"]) / utc_stamp()
+    run_root.mkdir(parents=True)
+    log = Log(run_root / "log.txt")
+    log(f"52b free_shape3d 마커 묶음별 공식 실행(추적은 실험 42 그대로): 영상 {len(entries)}개, 묶음 {dict(cfg['point_sets'])} → {run_root}")
+    t0 = time.time()
+    tmp_root = run_root / "_frames"
+    tmp_root.mkdir()
+    dset = cfg["detector_settings"][cfg["candidate"]["detector"]]
+    for k in ("OMP_NUM_THREADS", "OPENBLAS_NUM_THREADS", "MKL_NUM_THREADS"):
+        os.environ[k] = "1"
+    import multiprocessing as mp
+    from concurrent.futures import ProcessPoolExecutor
+    try:
+        with ProcessPoolExecutor(max_workers=int(cfg["workers"]), mp_context=mp.get_context("spawn")) as ex:
+            preps = list(ex.map(hf.fresp_prepare, [(e["file"], cfg["input_dir"], cfg["pipeline"], {}, str(tmp_root)) for e in entries]))
+            found = hf.fresp_detect_many([((e["file"], "orig"), p["frames"]) for e, p in zip(entries, preps)], dset, run_root / "detection_cache", int(cfg["n_workers"]), log)
+            jobs = [(n, (e, p, found[(e["file"], "orig")], cfg["pipeline"], h4b_c(cfg, ids))) for n, ids in cfg["point_sets"].items() for e, p in zip(entries, preps)]
+            res = list(ex.map(hf.h4_video, [j for _, j in jobs]))
+    finally:
+        shutil.rmtree(tmp_root, ignore_errors=True)
+    results = [{"set": n, **r} for (n, _), r in zip(jobs, res)]
+    for r in results:
+        x = r["marker"]
+        log(f"  {r['set']} {r['video']} ({r['distance_cm']:g} cm): " + (f"f {x['f']:.1f} px (평면 {x['f_planar']:.1f}, 상대 깊이 변위 {x['relief_rel']:.4f}, RMS {x['ba3_rms_px']:.3f} px{', f 한계에 붙음' if x['at_bound'] else ''}{', 평면 격자 가장자리' if x['at_grid_edge'] else ''})" if "f" in x else "제외")
+            + (f" [제외: {'; '.join(x['excluded'])}]" if x.get("excluded") else "") + (f" [{x['failed']}]" if x.get("failed") else ""))
+    ana = {n: h4_analyze([r for r in results if r["set"] == n], cfg) for n in cfg["point_sets"]}
+    for n in cfg["point_sets"]:
+        v = ana[n]["shape3d"]["verdict"]
+        log(f"  {n}: {v['verdict']}" + (f" (기울기 {v['slope']:+.3f})" if v.get("slope") is not None else "") + (f" [{v.get('reason')}]" if v.get("reason") else ""))
+    ref = {float(d): float(f) for d, f in cfg["ref_f_by_distance"].items()}
+    prior42 = h3_prior(cfg)
+    for n in cfg["point_sets"]:
+        (run_root / "figures" / n).mkdir(parents=True)
+        h3_figures(run_root / "figures" / n, [r for r in results if r["set"] == n], ana[n], ref, prior42)
+    h4b_report(run_root / "report.md", results, cfg)
+    h4b_summary(run_root / "summary.md", results, ana, cfg, h4_prior(cfg))
+    (run_root / "results.json").write_text(json.dumps(hf.jsonable({"videos": results, "analysis": ana}), ensure_ascii=False, indent=1))
+    meta = hf.provenance_build(text, a.config, {"code_52b": own.get("code_52b"), "base_config": own["base_config"], "videos": [e["file"] for e in entries], "elapsed_s": time.time() - t0})
+    (run_root / "metadata.json").write_text(json.dumps(hf.jsonable(meta), ensure_ascii=False, indent=1))
+    log(f"완료 {time.time() - t0:.0f} s → {run_root}")
+    log.close()
+    return run_root, results, ana
+
+
+def h4b_results_yaml(run_dir: Path, cfg: dict):
+    p = h4_results_yaml(run_dir, cfg)
+    h4b_text(p)
+    return p
+
+
+
+COMMANDS = {"protocol": protocol_main, "frame-filter": ff_main, "same-session": session_main, "overlay": overlay_main, "phase-segmentation": pseg_main, "guide-revision": grev_main, "f-response": fresp_main, "error-factors": ferr_main, "long-video-check": long_main, "generalization": gen_main, "main-camera-extension": ext_main, "wide-60cm": wide_main, "jointset-sets": jset_main, "verdict-calibration": cal_main, "printed-hand": pr_main, "hand-markers": mk_main, "markers-only": mo_main, "free-template": ft_main, "free-shape3d": s3_main, "free-shape3d-hand": h3_main, "free-shape3d-27": e3_main, "free-shape3d-new": e4_main, "mmpose-hand": mm_main, "mmpose-hand-46": mm2_main, "free-shape3d-new2": e5_main, "mmpose-hand-src": mm3_main, "free-shape3d-detectors": fs_main, "free-shape3d-hand-sets": h4_main, "free-shape3d-hand-sets-42track": h4b_main}
 
 
 def main(argv=None):

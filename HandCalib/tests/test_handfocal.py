@@ -4540,5 +4540,32 @@ class H4Sets(unittest.TestCase):
             self.assertIn("palm5", yaml.safe_load(y)["sets"])
 
 
+class H4BSets(unittest.TestCase):
+    def test_tracking_keeps_42s_used_markers_and_the_estimate_uses_the_set(self):
+        from unittest import mock
+        cfg = run.h4_load(CFG52_OWN)
+        c = run.h4b_c(cfg, cfg["point_sets"]["palm5"])
+        self.assertEqual(c["markers"], CFG42["markers"])
+        self.assertEqual(c["estimate_ids"], [0, 5, 9, 13, 17])
+        c["free_shape3d"] = {"z_rel": 0.2, "alt_iters": 1, "max_frames": 12}
+        pcfg = copy.deepcopy(CFG42["pipeline"])
+        pcfg["estimate"]["f_grid_n"] = 6
+        seen = []
+        with mock.patch.object(hf._report, "mk_process", side_effect=lambda prep, npz, pc, cc: seen.append(cc["markers"]["used_ids"]) or h3_fake_proc()):
+            x = hf.h4_video(({"file": "x.MOV", "distance_cm": 50}, None, None, pcfg, c))["marker"]
+        self.assertEqual(seen, [[5, 6, 9, 10, 13, 14, 17, 18]])
+        self.assertEqual(sorted(x.get("joint_ids", [])), [5, 9, 13, 17], x)                              # the fake track has no wrist marker; PIP markers are left out
+
+    def test_texts_name_52b(self):
+        with tempfile.TemporaryDirectory() as d:
+            p = Path(d) / "s.md"
+            p.write_text("# 실험 52 summary\n\n**" + run.H4_NOTE + "**\n")
+            run.h4b_text(p)
+            t = p.read_text()
+            self.assertIn("# 실험 52b summary", t)
+            self.assertIn(run.H4B_NOTE, t)
+            self.assertNotIn(run.H4_NOTE, t)
+
+
 if __name__ == "__main__":
     unittest.main()

@@ -4873,6 +4873,53 @@ def h3_video(args) -> dict:
     return res
 
 
+def h4_video(args) -> dict:
+    """One video of experiment 52b: h3_video with the tracking of 42 (markers.used_ids, unchanged) and the estimate on c['estimate_ids'] (markers the 35c tracker followed: every named marker is
+    tracked, only the used ones are required). Returns h3_video's dict."""
+    entry, prep, npz, pcfg, c = args[:5]
+    os.environ.setdefault("OMP_NUM_THREADS", "1")
+    cv2.setNumThreads(1)
+    proc = mk_process(prep, npz, pcfg, c)
+    W, H = proc["size"]
+    res = {"video": entry["file"], "distance_cm": float(entry["distance_cm"]), "size": [W, H], "n_frames": proc["n_frames"], "duration_s": float(proc["times"][-1] - proc["times"][0]),
+           "marker_stats": {k: proc.get(k) for k in ("all_found_ratio", "valid_ratio", "tilt_valid_ratio", "n_detected_median", "hand_frames", "window_success", "window_frames", "ref_time_s", "reasons", "front_window", "per_marker_rate", "ignored_median", "ignored_share")}}
+    if "failed" in proc:
+        res["marker"] = {"failed": proc["failed"]}
+        return res
+    tr = proc["tr"]
+    reasons = []
+    lim = float(c["marker_exclusion"]["min_tilt_valid_ratio"])
+    if proc["tilt_valid_ratio"] < lim:
+        reasons.append(f"기울기 구간 유효 프레임 {100 * proc['tilt_valid_ratio']:.1f}% < {100 * lim:.0f}%")
+    edge = fresp_edge_rate(tr["box"][proc["present"]], np.ones(int(proc["present"].sum()), bool), W, H) if proc["present"].any() else 1.0
+    if edge > float(c["exclusion"]["edge_rate_max"]):
+        reasons.append(f"가장자리 접촉 프레임 {100 * edge:.1f}% > {100 * float(c['exclusion']['edge_rate_max']):.0f}%")
+    mk = {"excluded": reasons, "edge_rate": float(edge), "valid_ratio": proc["valid_ratio"], "names": [int(x) for x in proc["names"]]}
+    res["marker"] = mk
+    if reasons:
+        return res
+    ecfg = pcfg["estimate"]
+    grid = f_grid(ecfg, max(W, H))
+    ids = sorted(int(x) for x in c["estimate_ids"])
+    trk = {"kp": proc["kp"], "mask": proc["mask"], "present": proc["present"], "box": tr["box"]}
+    t0 = time.time()
+    try:
+        pb, idx = free_problem(trk, (W, H), ecfg, float(ecfg["huber_rel"]), ids=ids)
+        r = s3_estimate_run(pb, "free_shape3d", grid, {**ecfg, "free_template": c["free_shape3d"]}, 1.0)
+    except Exception as e:                                            # a failure is a result, not a crash of the run
+        mk["failed"] = f"{type(e).__name__}: {e}"
+        return res
+    pg = np.asarray(r["profile_f"], float)                                  # the (coarse) grid the supervisor's free_template used
+    k = int(np.argmin(r["profile_cost"]))
+    f_grid_min = float(np.exp(np.clip(_parabola(np.log(pg), np.asarray(r["profile_cost"]), k), np.log(pg[0]), np.log(pg[-1]))))
+    mk.update({"f": float(r["f"]), "f_planar": float(r["f_planar"]), "f_grid": f_grid_min, "at_grid_edge": bool(r["at_grid_edge"]), "at_bound": bool(r["at_bound"]),
+               "relief_rel": float(r["relief_rel"]), "relief_per_joint": [float(x) for x in r["relief_per_joint"]], "cost": float(r["cost"]), "cost_planar": float(r["cost_planar"]),
+               "curve": {"grid": pg.tolist(), "cost": [float(x) for x in r["profile_cost"]]}, "sharpness": ft_sharpness(pg, r["profile_cost"], f_grid_min),
+               "ba3_success": r["ba"]["success"], "ba3_nfev": r["ba"]["nfev"], "ba3_rms_px": r["ba"]["rms_px"], "anchors": [int(x) for x in r["ba"]["anchors"]], "n_frames_in_problem": int(len(pb.keep)),
+               "n_points": int(pb.n_points), "joint_ids": [int(x) for x in r["joint_ids"]], "elapsed_s": float(time.time() - t0), "box_long_median_px": float(np.nanmedian(proc["box_long"][proc["present"]]))})
+    return res
+
+
 # ====================================================================================================
 # report  (was HandCalib/hand_focal/report.py)
 # Writers: figures, per_frame.csv, results.json, result.yaml, report.md (Korean). Points only - no video frames or images of the hand.
