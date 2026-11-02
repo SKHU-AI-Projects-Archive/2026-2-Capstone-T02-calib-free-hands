@@ -1,0 +1,39 @@
+# 55: pause-level stabilisation (user 2026-11-02: option 4 "검출 대신 추적" -> after the feasibility check (direct SIFT / ECC registration to one reference fails across turns: skin appearance
+# changes) the user chose "멈춤 구간 단위 안정화"). 54's 12 videos. Pauses are taken from the hand box centre motion of the mediapipe track (the MMPose models use the same boxes), so they do not
+# depend on a detector: still_frac 0.005 (53's stillness value, here on the box centre), runs joined across gaps <= 2 frames, >= 5 frames. Inside a pause every frame is registered to the middle frame
+# by a SIFT homography on the hand region; the detector joints of the usable frames (53's rules except the joint stillness: detected, off the border, shape within z 4) are mapped into the middle
+# frame and averaged (a joint needs >= 50 % of the frames); one observation per pause (>= 3 usable frames) goes to od_job (the supervisor's free_template / free_shape3d, unchanged).
+# Record variant 'plain': the same average without registration. Bootstrap: pauses drawn with replacement, 100, seed 42. Verdict: 53's rule and warnings with min_pauses 5 in place of min_frames;
+# main target mediapipe_hands j16 reg free_template (as 53). Everything else from 53 via base_config. Fixed before the run.
+experiment:
+  name: 55_pause_stabilized
+  seed: 42
+base_config: configs/53_oblique_desk.yaml
+videos:
+  - {file: IMG_7346.MOV, distance_cm: 50, hand: right}
+  - {file: IMG_7347.MOV, distance_cm: 50, hand: left}
+  - {file: IMG_7348.MOV, distance_cm: 50, hand: right}
+  - {file: IMG_7349.MOV, distance_cm: 50, hand: left}
+  - {file: IMG_7350.MOV, distance_cm: 60, hand: right}
+  - {file: IMG_7351.MOV, distance_cm: 60, hand: left}
+  - {file: IMG_7352.MOV, distance_cm: 60, hand: right}
+  - {file: IMG_7353.MOV, distance_cm: 60, hand: left}
+  - {file: IMG_7354.MOV, distance_cm: 75, hand: right}
+  - {file: IMG_7355.MOV, distance_cm: 75, hand: left}
+  - {file: IMG_7356.MOV, distance_cm: 75, hand: right}
+  - {file: IMG_7357.MOV, distance_cm: 75, hand: left}
+pauses: {still_frac: 0.005, max_gap: 2, min_len: 5}
+registration: {clahe_clip: 2.0, contrast_threshold: 0.02, dilate_frac: 0.05, ratio: 0.75, threshold_px: 2.0, min_inliers: 30, max_rms_px: 1.5}
+average: {min_share: 0.5, min_frames: 3}
+bootstrap: {n: 100, seed: 42}
+verdict:
+  main: {detector: mediapipe_hands, joint_set: j16, variant: reg, method: free_template}
+  min_pauses: 5
+compare_54: runs/54_oblique_desk_distance/20261102T044010Z
+code_55: {branch: exp/55-pause-stabilized, base_commit: 825c3ed, commit: 9271015, modules: [HandCalib/handfocal_report.py, HandCalib/run.py]}
+reg_threads: 8
+workers: 24
+n_workers: 4
+output:
+  root: runs/55_pause_stabilized
+  results_yaml: results/55_pause_stabilized.yaml
