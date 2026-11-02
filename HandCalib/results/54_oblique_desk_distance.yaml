@@ -1,0 +1,1528 @@
+experiment: 54_oblique_desk_distance
+run: runs/54_oblique_desk_distance/20261102T044010Z
+code_commit: cb984c6
+git_dirty_at_run: false
+note: '실험 53의 비스듬한 책상 촬영(카메라가 책상 면에 약 45°, 손바닥을 종이 위에 평평하게 대고 옮기고 돌림)을 50·60·75 cm에서
+  오른손과 왼손으로 찍은 영상 12개에, 실험 53의 실행(od_main, 고치지 않음: 프레임 선택, 교수님 free_template·free_shape3d,
+  블록 부트스트랩, 판정 규칙)을 영상마다 그대로 적용한 실험이다. 영상별 판정은 실험 53의 규칙이고, 거리-f 기울기는 기록용이다. 기준 f와의
+  비교는 summary.md에만 있다.'
+videos:
+  IMG_7346.MOV:
+    distance_cm: 50
+    hand: right
+    verdict:
+      verdict: 어려움
+      reason: null
+      warnings:
+      - 평면 추정 의심
+    estimates:
+      mediapipe_hands:
+        j16:
+          free_template:
+            f_px: 3072.0
+            ci95_px:
+            - 3072.0
+            - 3072.0
+            boundary: true
+            tilt_median_deg: 60.9
+            turn_range_deg: 98.3
+          free_shape3d:
+            f_px: 3072.0
+            ci95_px:
+            - 3072.0
+            - 3072.0
+            boundary: true
+            tilt_median_deg: 60.5
+            turn_range_deg: 121.7
+          n_keep: 181
+        j21:
+          free_template:
+            f_px: 952.5
+            ci95_px:
+            - 862.8
+            - 1360.9
+            boundary: false
+            tilt_median_deg: 43.6
+            turn_range_deg: 110.0
+          free_shape3d:
+            f_px: 2162.7
+            ci95_px:
+            - 1926.2
+            - 3072.0
+            boundary: false
+            tilt_median_deg: 44.6
+            turn_range_deg: 112.8
+          n_keep: 181
+      mmhand_scnet:
+        j16:
+          free_template:
+            f_px: 731.5
+            ci95_px:
+            - 672.0
+            - 1974.9
+            boundary: false
+            tilt_median_deg: 6.8
+            turn_range_deg: 106.0
+          free_shape3d:
+            f_px: 3072.0
+            ci95_px:
+            - 672.0
+            - 3072.0
+            boundary: true
+            tilt_median_deg: 40.0
+            turn_range_deg: 120.4
+          n_keep: 113
+        j21:
+          free_template:
+            f_px: 1211.8
+            ci95_px:
+            - 929.2
+            - 3072.0
+            boundary: false
+            tilt_median_deg: 12.3
+            turn_range_deg: 110.0
+          free_shape3d:
+            f_px: 3072.0
+            ci95_px:
+            - 672.0
+            - 3072.0
+            boundary: true
+            tilt_median_deg: 49.4
+            turn_range_deg: 127.4
+          n_keep: 113
+      mmhand_hrnetv2_dark:
+        j16:
+          free_template:
+            f_px: 3072.0
+            ci95_px:
+            - 2503.4
+            - 3072.0
+            boundary: true
+            tilt_median_deg: 54.9
+            turn_range_deg: 108.5
+          free_shape3d:
+            f_px: 3072.0
+            ci95_px:
+            - 3072.0
+            - 3072.0
+            boundary: true
+            tilt_median_deg: 43.3
+            turn_range_deg: 120.5
+          n_keep: 210
+        j21:
+          free_template:
+            f_px: 1845.7
+            ci95_px:
+            - 1737.7
+            - 2008.7
+            boundary: false
+            tilt_median_deg: 51.7
+            turn_range_deg: 109.6
+          free_shape3d:
+            f_px: 2586.6
+            ci95_px:
+            - 2308.9
+            - 3010.7
+            boundary: false
+            tilt_median_deg: 41.8
+            turn_range_deg: 122.6
+          n_keep: 210
+  IMG_7347.MOV:
+    distance_cm: 50
+    hand: left
+    verdict:
+      verdict: 어려움
+      reason: null
+      warnings: []
+    estimates:
+      mediapipe_hands:
+        j16:
+          free_template:
+            f_px: 1976.7
+            ci95_px:
+            - 1531.3
+            - 3072.0
+            boundary: false
+            tilt_median_deg: 47.9
+            turn_range_deg: 115.5
+          free_shape3d:
+            f_px: 2959.4
+            ci95_px:
+            - 1831.0
+            - 3072.0
+            boundary: false
+            tilt_median_deg: 57.0
+            turn_range_deg: 136.8
+          n_keep: 153
+        j21:
+          free_template:
+            f_px: 3072.0
+            ci95_px:
+            - 2546.0
+            - 3072.0
+            boundary: true
+            tilt_median_deg: 40.3
+            turn_range_deg: 130.4
+          free_shape3d:
+            f_px: 3072.0
+            ci95_px:
+            - 3072.0
+            - 3072.0
+            boundary: true
+            tilt_median_deg: 48.6
+            turn_range_deg: 167.3
+          n_keep: 153
+      mmhand_scnet:
+        j16:
+          free_template:
+            f_px: 2079.7
+            ci95_px:
+            - 719.2
+            - 3072.0
+            boundary: false
+            tilt_median_deg: 34.3
+            turn_range_deg: 119.0
+          free_shape3d:
+            f_px: 3072.0
+            ci95_px:
+            - 2499.4
+            - 3072.0
+            boundary: true
+            tilt_median_deg: 40.4
+            turn_range_deg: 117.9
+          n_keep: 112
+        j21:
+          free_template:
+            f_px: 3072.0
+            ci95_px:
+            - 1834.7
+            - 3072.0
+            boundary: true
+            tilt_median_deg: 53.3
+            turn_range_deg: 141.6
+          free_shape3d:
+            f_px: 3072.0
+            ci95_px:
+            - 3072.0
+            - 3072.0
+            boundary: true
+            tilt_median_deg: 43.9
+            turn_range_deg: 127.1
+          n_keep: 112
+      mmhand_hrnetv2_dark:
+        j16:
+          free_template:
+            f_px: 1612.6
+            ci95_px:
+            - 1289.8
+            - 1882.4
+            boundary: false
+            tilt_median_deg: 45.2
+            turn_range_deg: 65.6
+          free_shape3d:
+            f_px: 3072.0
+            ci95_px:
+            - 3072.0
+            - 3072.0
+            boundary: true
+            tilt_median_deg: 30.0
+            turn_range_deg: 66.8
+          n_keep: 153
+        j21:
+          free_template:
+            f_px: 3072.0
+            ci95_px:
+            - 1018.2
+            - 3072.0
+            boundary: true
+            tilt_median_deg: 16.2
+            turn_range_deg: 40.5
+          free_shape3d:
+            f_px: 3072.0
+            ci95_px:
+            - 3072.0
+            - 3072.0
+            boundary: true
+            tilt_median_deg: 44.5
+            turn_range_deg: 63.9
+          n_keep: 153
+  IMG_7348.MOV:
+    distance_cm: 50
+    hand: right
+    verdict:
+      verdict: 어려움
+      reason: null
+      warnings: []
+    estimates:
+      mediapipe_hands:
+        j16:
+          free_template:
+            f_px: 3072.0
+            ci95_px:
+            - 2795.0
+            - 3072.0
+            boundary: true
+            tilt_median_deg: 56.0
+            turn_range_deg: 77.3
+          free_shape3d:
+            f_px: 3072.0
+            ci95_px:
+            - 3072.0
+            - 3072.0
+            boundary: true
+            tilt_median_deg: 58.1
+            turn_range_deg: 75.4
+          n_keep: 185
+        j21:
+          free_template:
+            f_px: 1105.1
+            ci95_px:
+            - 1029.8
+            - 1237.3
+            boundary: false
+            tilt_median_deg: 48.9
+            turn_range_deg: 110.0
+          free_shape3d:
+            f_px: 2088.4
+            ci95_px:
+            - 1977.6
+            - 2778.0
+            boundary: false
+            tilt_median_deg: 43.1
+            turn_range_deg: 117.1
+          n_keep: 185
+      mmhand_scnet:
+        j16:
+          free_template:
+            f_px: 864.6
+            ci95_px:
+            - 780.2
+            - 3072.0
+            boundary: false
+            tilt_median_deg: 51.7
+            turn_range_deg: 100.1
+          free_shape3d:
+            f_px: 3072.0
+            ci95_px:
+            - 2309.5
+            - 3072.0
+            boundary: true
+            tilt_median_deg: 48.5
+            turn_range_deg: 116.7
+          n_keep: 143
+        j21:
+          free_template:
+            f_px: 1301.7
+            ci95_px:
+            - 1198.7
+            - 1481.6
+            boundary: false
+            tilt_median_deg: 53.3
+            turn_range_deg: 107.5
+          free_shape3d:
+            f_px: 3072.0
+            ci95_px:
+            - 1149.8
+            - 3072.0
+            boundary: true
+            tilt_median_deg: 43.9
+            turn_range_deg: 126.5
+          n_keep: 143
+      mmhand_hrnetv2_dark:
+        j16:
+          free_template:
+            f_px: 1973.2
+            ci95_px:
+            - 1793.1
+            - 3072.0
+            boundary: false
+            tilt_median_deg: 53.9
+            turn_range_deg: 111.8
+          free_shape3d:
+            f_px: 3072.0
+            ci95_px:
+            - 3072.0
+            - 3072.0
+            boundary: true
+            tilt_median_deg: 42.7
+            turn_range_deg: 121.8
+          n_keep: 212
+        j21:
+          free_template:
+            f_px: 1807.2
+            ci95_px:
+            - 1519.0
+            - 2011.6
+            boundary: false
+            tilt_median_deg: 52.2
+            turn_range_deg: 112.3
+          free_shape3d:
+            f_px: 2478.3
+            ci95_px:
+            - 2151.0
+            - 3072.0
+            boundary: false
+            tilt_median_deg: 44.2
+            turn_range_deg: 123.4
+          n_keep: 212
+  IMG_7349.MOV:
+    distance_cm: 50
+    hand: left
+    verdict:
+      verdict: 판단 보류
+      reason: null
+      warnings: []
+    estimates:
+      mediapipe_hands:
+        j16:
+          free_template:
+            f_px: 1275.3
+            ci95_px:
+            - 1076.1
+            - 3072.0
+            boundary: false
+            tilt_median_deg: 46.1
+            turn_range_deg: 51.8
+          free_shape3d:
+            f_px: 3072.0
+            ci95_px:
+            - 3072.0
+            - 3072.0
+            boundary: true
+            tilt_median_deg: 57.3
+            turn_range_deg: 89.0
+          n_keep: 155
+        j21:
+          free_template:
+            f_px: 3072.0
+            ci95_px:
+            - 1029.7
+            - 3072.0
+            boundary: true
+            tilt_median_deg: 47.3
+            turn_range_deg: 77.5
+          free_shape3d:
+            f_px: 3072.0
+            ci95_px:
+            - 2459.4
+            - 3072.0
+            boundary: true
+            tilt_median_deg: 51.7
+            turn_range_deg: 99.9
+          n_keep: 155
+      mmhand_scnet:
+        j16:
+          free_template:
+            f_px: 2693.5
+            ci95_px:
+            - 672.0
+            - 3072.0
+            boundary: false
+            tilt_median_deg: 49.7
+            turn_range_deg: 88.0
+          free_shape3d:
+            f_px: 3072.0
+            ci95_px:
+            - 1250.3
+            - 3072.0
+            boundary: true
+            tilt_median_deg: 41.4
+            turn_range_deg: 71.9
+          n_keep: 119
+        j21:
+          free_template:
+            f_px: 2361.8
+            ci95_px:
+            - 1993.7
+            - 3072.0
+            boundary: false
+            tilt_median_deg: 46.4
+            turn_range_deg: 75.1
+          free_shape3d:
+            f_px: 3072.0
+            ci95_px:
+            - 3072.0
+            - 3072.0
+            boundary: true
+            tilt_median_deg: 41.1
+            turn_range_deg: 67.9
+          n_keep: 119
+      mmhand_hrnetv2_dark:
+        j16:
+          free_template:
+            f_px: 1677.4
+            ci95_px:
+            - 1421.0
+            - 2815.9
+            boundary: false
+            tilt_median_deg: 49.7
+            turn_range_deg: 65.5
+          free_shape3d:
+            f_px: 3072.0
+            ci95_px:
+            - 3072.0
+            - 3072.0
+            boundary: true
+            tilt_median_deg: 32.1
+            turn_range_deg: 58.9
+          n_keep: 164
+        j21:
+          free_template:
+            f_px: 3072.0
+            ci95_px:
+            - 2090.4
+            - 3072.0
+            boundary: true
+            tilt_median_deg: 27.2
+            turn_range_deg: 54.8
+          free_shape3d:
+            f_px: 3072.0
+            ci95_px:
+            - 3072.0
+            - 3072.0
+            boundary: true
+            tilt_median_deg: 44.6
+            turn_range_deg: 61.8
+          n_keep: 164
+  IMG_7350.MOV:
+    distance_cm: 60
+    hand: right
+    verdict:
+      verdict: 어려움
+      reason: null
+      warnings:
+      - 평면 추정 의심
+    estimates:
+      mediapipe_hands:
+        j16:
+          free_template:
+            f_px: 3071.9
+            ci95_px:
+            - 1667.9
+            - 3072.0
+            boundary: true
+            tilt_median_deg: 71.4
+            turn_range_deg: 67.6
+          free_shape3d:
+            f_px: 1579.0
+            ci95_px:
+            - 812.0
+            - 3072.0
+            boundary: false
+            tilt_median_deg: 54.9
+            turn_range_deg: 93.9
+          n_keep: 185
+        j21:
+          free_template:
+            f_px: 1145.7
+            ci95_px:
+            - 1029.5
+            - 1688.8
+            boundary: false
+            tilt_median_deg: 48.3
+            turn_range_deg: 106.9
+          free_shape3d:
+            f_px: 1056.8
+            ci95_px:
+            - 920.8
+            - 1596.5
+            boundary: false
+            tilt_median_deg: 48.5
+            turn_range_deg: 109.5
+          n_keep: 185
+      mmhand_scnet:
+        j16:
+          free_template:
+            f_px: 1935.4
+            ci95_px:
+            - 1067.6
+            - 2730.6
+            boundary: false
+            tilt_median_deg: 62.4
+            turn_range_deg: 90.2
+          free_shape3d:
+            f_px: 3072.0
+            ci95_px:
+            - 1489.6
+            - 3072.0
+            boundary: true
+            tilt_median_deg: 41.2
+            turn_range_deg: 121.4
+          n_keep: 199
+        j21:
+          free_template:
+            f_px: 1547.4
+            ci95_px:
+            - 1426.8
+            - 1695.1
+            boundary: false
+            tilt_median_deg: 53.9
+            turn_range_deg: 111.5
+          free_shape3d:
+            f_px: 2109.7
+            ci95_px:
+            - 1410.9
+            - 3072.0
+            boundary: false
+            tilt_median_deg: 62.1
+            turn_range_deg: 160.4
+          n_keep: 199
+      mmhand_hrnetv2_dark:
+        j16:
+          free_template:
+            f_px: 1670.7
+            ci95_px:
+            - 1407.3
+            - 1865.8
+            boundary: false
+            tilt_median_deg: 50.1
+            turn_range_deg: 103.1
+          free_shape3d:
+            f_px: 3072.0
+            ci95_px:
+            - 3072.0
+            - 3072.0
+            boundary: true
+            tilt_median_deg: 40.6
+            turn_range_deg: 116.2
+          n_keep: 239
+        j21:
+          free_template:
+            f_px: 1774.1
+            ci95_px:
+            - 1659.4
+            - 2833.8
+            boundary: false
+            tilt_median_deg: 51.0
+            turn_range_deg: 104.7
+          free_shape3d:
+            f_px: 3036.1
+            ci95_px:
+            - 2403.7
+            - 3072.0
+            boundary: false
+            tilt_median_deg: 36.6
+            turn_range_deg: 118.2
+          n_keep: 239
+  IMG_7351.MOV:
+    distance_cm: 60
+    hand: left
+    verdict:
+      verdict: 어려움
+      reason: null
+      warnings: []
+    estimates:
+      mediapipe_hands:
+        j16:
+          free_template:
+            f_px: 3072.0
+            ci95_px:
+            - 2421.0
+            - 3072.0
+            boundary: true
+            tilt_median_deg: 53.7
+            turn_range_deg: 122.6
+          free_shape3d:
+            f_px: 3072.0
+            ci95_px:
+            - 3072.0
+            - 3072.0
+            boundary: true
+            tilt_median_deg: 49.8
+            turn_range_deg: 132.4
+          n_keep: 172
+        j21:
+          free_template:
+            f_px: 3072.0
+            ci95_px:
+            - 3072.0
+            - 3072.0
+            boundary: true
+            tilt_median_deg: 37.9
+            turn_range_deg: 135.8
+          free_shape3d:
+            f_px: 3072.0
+            ci95_px:
+            - 1362.5
+            - 3072.0
+            boundary: true
+            tilt_median_deg: 40.3
+            turn_range_deg: 142.7
+          n_keep: 172
+      mmhand_scnet:
+        j16:
+          free_template:
+            f_px: 1007.6
+            ci95_px:
+            - 863.3
+            - 2931.4
+            boundary: false
+            tilt_median_deg: 47.4
+            turn_range_deg: 114.5
+          free_shape3d:
+            f_px: 1243.8
+            ci95_px:
+            - 678.2
+            - 3072.0
+            boundary: false
+            tilt_median_deg: 48.7
+            turn_range_deg: 134.3
+          n_keep: 146
+        j21:
+          free_template:
+            f_px: 3072.0
+            ci95_px:
+            - 1849.1
+            - 3072.0
+            boundary: true
+            tilt_median_deg: 40.4
+            turn_range_deg: 63.8
+          free_shape3d:
+            f_px: 3072.0
+            ci95_px:
+            - 2117.1
+            - 3072.0
+            boundary: true
+            tilt_median_deg: 49.8
+            turn_range_deg: 134.9
+          n_keep: 146
+      mmhand_hrnetv2_dark:
+        j16:
+          free_template:
+            f_px: 1870.3
+            ci95_px:
+            - 1133.2
+            - 3072.0
+            boundary: false
+            tilt_median_deg: 46.4
+            turn_range_deg: 78.7
+          free_shape3d:
+            f_px: 3072.0
+            ci95_px:
+            - 2055.1
+            - 3072.0
+            boundary: true
+            tilt_median_deg: 36.5
+            turn_range_deg: 76.6
+          n_keep: 118
+        j21:
+          free_template:
+            f_px: 2187.0
+            ci95_px:
+            - 1865.8
+            - 2929.2
+            boundary: false
+            tilt_median_deg: 20.2
+            turn_range_deg: 69.2
+          free_shape3d:
+            f_px: 3072.0
+            ci95_px:
+            - 1993.8
+            - 3072.0
+            boundary: true
+            tilt_median_deg: 44.2
+            turn_range_deg: 78.0
+          n_keep: 118
+  IMG_7352.MOV:
+    distance_cm: 60
+    hand: right
+    verdict:
+      verdict: 어려움
+      reason: null
+      warnings:
+      - 평면 추정 의심
+    estimates:
+      mediapipe_hands:
+        j16:
+          free_template:
+            f_px: 2949.0
+            ci95_px:
+            - 2110.4
+            - 3072.0
+            boundary: false
+            tilt_median_deg: 62.8
+            turn_range_deg: 89.6
+          free_shape3d:
+            f_px: 1952.2
+            ci95_px:
+            - 1449.0
+            - 3072.0
+            boundary: false
+            tilt_median_deg: 58.8
+            turn_range_deg: 112.6
+          n_keep: 189
+        j21:
+          free_template:
+            f_px: 1052.9
+            ci95_px:
+            - 1007.2
+            - 1444.7
+            boundary: false
+            tilt_median_deg: 47.4
+            turn_range_deg: 124.8
+          free_shape3d:
+            f_px: 1245.9
+            ci95_px:
+            - 1029.3
+            - 1417.5
+            boundary: false
+            tilt_median_deg: 46.7
+            turn_range_deg: 125.8
+          n_keep: 189
+      mmhand_scnet:
+        j16:
+          free_template:
+            f_px: 717.8
+            ci95_px:
+            - 672.0
+            - 1543.0
+            boundary: false
+            tilt_median_deg: 54.3
+            turn_range_deg: 119.2
+          free_shape3d:
+            f_px: 844.8
+            ci95_px:
+            - 672.0
+            - 3071.5
+            boundary: false
+            tilt_median_deg: 55.2
+            turn_range_deg: 122.6
+          n_keep: 171
+        j21:
+          free_template:
+            f_px: 1070.8
+            ci95_px:
+            - 992.5
+            - 1871.3
+            boundary: false
+            tilt_median_deg: 56.3
+            turn_range_deg: 120.7
+          free_shape3d:
+            f_px: 1030.7
+            ci95_px:
+            - 817.6
+            - 2508.7
+            boundary: false
+            tilt_median_deg: 62.7
+            turn_range_deg: 136.7
+          n_keep: 171
+      mmhand_hrnetv2_dark:
+        j16:
+          free_template:
+            f_px: 1528.1
+            ci95_px:
+            - 1334.7
+            - 3072.0
+            boundary: false
+            tilt_median_deg: 57.6
+            turn_range_deg: 120.7
+          free_shape3d:
+            f_px: 1955.0
+            ci95_px:
+            - 1548.3
+            - 2753.9
+            boundary: false
+            tilt_median_deg: 50.9
+            turn_range_deg: 125.5
+          n_keep: 238
+        j21:
+          free_template:
+            f_px: 1043.7
+            ci95_px:
+            - 984.4
+            - 1119.3
+            boundary: false
+            tilt_median_deg: 48.7
+            turn_range_deg: 118.7
+          free_shape3d:
+            f_px: 2265.4
+            ci95_px:
+            - 2055.1
+            - 2636.3
+            boundary: false
+            tilt_median_deg: 40.6
+            turn_range_deg: 132.0
+          n_keep: 238
+  IMG_7353.MOV:
+    distance_cm: 60
+    hand: left
+    verdict:
+      verdict: 어려움
+      reason: null
+      warnings: []
+    estimates:
+      mediapipe_hands:
+        j16:
+          free_template:
+            f_px: 3072.0
+            ci95_px:
+            - 1728.2
+            - 3072.0
+            boundary: true
+            tilt_median_deg: 58.5
+            turn_range_deg: 133.7
+          free_shape3d:
+            f_px: 3072.0
+            ci95_px:
+            - 2078.9
+            - 3072.0
+            boundary: true
+            tilt_median_deg: 60.8
+            turn_range_deg: 360.3
+          n_keep: 173
+        j21:
+          free_template:
+            f_px: 3072.0
+            ci95_px:
+            - 1622.1
+            - 3072.0
+            boundary: true
+            tilt_median_deg: 36.7
+            turn_range_deg: 150.4
+          free_shape3d:
+            f_px: 3072.0
+            ci95_px:
+            - 3072.0
+            - 3072.0
+            boundary: true
+            tilt_median_deg: 37.4
+            turn_range_deg: 135.4
+          n_keep: 173
+      mmhand_scnet:
+        j16:
+          free_template:
+            f_px: 1237.1
+            ci95_px:
+            - 1080.9
+            - 3072.0
+            boundary: false
+            tilt_median_deg: 22.2
+            turn_range_deg: 114.3
+          free_shape3d:
+            f_px: 3072.0
+            ci95_px:
+            - 1185.1
+            - 3072.0
+            boundary: true
+            tilt_median_deg: 32.7
+            turn_range_deg: 126.6
+          n_keep: 113
+        j21:
+          free_template:
+            f_px: 2147.4
+            ci95_px:
+            - 1236.5
+            - 2887.8
+            boundary: false
+            tilt_median_deg: 11.7
+            turn_range_deg: 117.7
+          free_shape3d:
+            f_px: 3072.0
+            ci95_px:
+            - 1033.4
+            - 3072.0
+            boundary: true
+            tilt_median_deg: 40.4
+            turn_range_deg: 126.6
+          n_keep: 113
+      mmhand_hrnetv2_dark:
+        j16:
+          free_template:
+            f_px: 3072.0
+            ci95_px:
+            - 1255.8
+            - 3072.0
+            boundary: true
+            tilt_median_deg: 54.5
+            turn_range_deg: 87.3
+          free_shape3d:
+            f_px: 3072.0
+            ci95_px:
+            - 1215.2
+            - 3072.0
+            boundary: true
+            tilt_median_deg: 60.6
+            turn_range_deg: 110.2
+          n_keep: 140
+        j21:
+          free_template:
+            f_px: 2101.2
+            ci95_px:
+            - 1944.2
+            - 3072.0
+            boundary: false
+            tilt_median_deg: 17.8
+            turn_range_deg: 38.6
+          free_shape3d:
+            f_px: 3072.0
+            ci95_px:
+            - 3072.0
+            - 3072.0
+            boundary: true
+            tilt_median_deg: 38.6
+            turn_range_deg: 70.6
+          n_keep: 140
+  IMG_7354.MOV:
+    distance_cm: 75
+    hand: right
+    verdict:
+      verdict: 판단 보류
+      reason: null
+      warnings: []
+    estimates:
+      mediapipe_hands:
+        j16:
+          free_template:
+            f_px: 1759.0
+            ci95_px:
+            - 1348.7
+            - 3070.1
+            boundary: false
+            tilt_median_deg: 58.5
+            turn_range_deg: 72.0
+          free_shape3d:
+            f_px: 3072.0
+            ci95_px:
+            - 973.6
+            - 3072.0
+            boundary: true
+            tilt_median_deg: 54.3
+            turn_range_deg: 80.3
+          n_keep: 173
+        j21:
+          free_template:
+            f_px: 800.7
+            ci95_px:
+            - 710.9
+            - 956.1
+            boundary: false
+            tilt_median_deg: 45.3
+            turn_range_deg: 120.1
+          free_shape3d:
+            f_px: 1341.1
+            ci95_px:
+            - 1234.6
+            - 1614.2
+            boundary: false
+            tilt_median_deg: 43.7
+            turn_range_deg: 127.8
+          n_keep: 173
+      mmhand_scnet:
+        j16:
+          free_template:
+            f_px: 672.0
+            ci95_px:
+            - 672.0
+            - 3072.0
+            boundary: true
+            tilt_median_deg: 46.0
+            turn_range_deg: 102.7
+          free_shape3d:
+            f_px: 672.0
+            ci95_px:
+            - 672.0
+            - 3072.0
+            boundary: true
+            tilt_median_deg: 50.8
+            turn_range_deg: 119.2
+          n_keep: 125
+        j21:
+          free_template:
+            f_px: 685.4
+            ci95_px:
+            - 672.0
+            - 2915.2
+            boundary: false
+            tilt_median_deg: 49.3
+            turn_range_deg: 113.6
+          free_shape3d:
+            f_px: 762.7
+            ci95_px:
+            - 680.2
+            - 3072.0
+            boundary: false
+            tilt_median_deg: 54.5
+            turn_range_deg: 134.1
+          n_keep: 125
+      mmhand_hrnetv2_dark:
+        j16:
+          free_template:
+            f_px: 2874.9
+            ci95_px:
+            - 2050.0
+            - 3072.0
+            boundary: false
+            tilt_median_deg: 17.7
+            turn_range_deg: 48.3
+          free_shape3d:
+            f_px: 3072.0
+            ci95_px:
+            - 1685.2
+            - 3072.0
+            boundary: true
+            tilt_median_deg: 24.6
+            turn_range_deg: 23.9
+          n_keep: 92
+        j21:
+          free_template:
+            f_px: 3072.0
+            ci95_px:
+            - 1898.9
+            - 3072.0
+            boundary: true
+            tilt_median_deg: 14.4
+            turn_range_deg: 79.3
+          free_shape3d:
+            f_px: 3072.0
+            ci95_px:
+            - 1318.4
+            - 3072.0
+            boundary: true
+            tilt_median_deg: 21.6
+            turn_range_deg: 59.2
+          n_keep: 92
+  IMG_7355.MOV:
+    distance_cm: 75
+    hand: left
+    verdict:
+      verdict: 어려움
+      reason: null
+      warnings:
+      - 평면 추정 의심
+    estimates:
+      mediapipe_hands:
+        j16:
+          free_template:
+            f_px: 3072.0
+            ci95_px:
+            - 1523.0
+            - 3072.0
+            boundary: true
+            tilt_median_deg: 63.5
+            turn_range_deg: 92.4
+          free_shape3d:
+            f_px: 3072.0
+            ci95_px:
+            - 973.0
+            - 3072.0
+            boundary: true
+            tilt_median_deg: 61.5
+            turn_range_deg: 117.0
+          n_keep: 142
+        j21:
+          free_template:
+            f_px: 3072.0
+            ci95_px:
+            - 2310.3
+            - 3072.0
+            boundary: true
+            tilt_median_deg: 39.1
+            turn_range_deg: 77.6
+          free_shape3d:
+            f_px: 2093.1
+            ci95_px:
+            - 1833.4
+            - 3072.0
+            boundary: false
+            tilt_median_deg: 41.3
+            turn_range_deg: 79.2
+          n_keep: 142
+      mmhand_scnet:
+        j16:
+          free_template:
+            f_px: 1376.6
+            ci95_px:
+            - 934.7
+            - 3072.0
+            boundary: false
+            tilt_median_deg: 51.9
+            turn_range_deg: 119.1
+          free_shape3d:
+            f_px: 1943.4
+            ci95_px:
+            - 1241.2
+            - 3072.0
+            boundary: false
+            tilt_median_deg: 34.7
+            turn_range_deg: 122.1
+          n_keep: 77
+        j21:
+          free_template:
+            f_px: 3072.0
+            ci95_px:
+            - 2611.4
+            - 3072.0
+            boundary: true
+            tilt_median_deg: 34.9
+            turn_range_deg: 70.2
+          free_shape3d:
+            f_px: 3072.0
+            ci95_px:
+            - 2064.0
+            - 3072.0
+            boundary: true
+            tilt_median_deg: 42.6
+            turn_range_deg: 26.9
+          n_keep: 77
+      mmhand_hrnetv2_dark:
+        j16:
+          free_template:
+            f_px: 1068.9
+            ci95_px:
+            - 864.4
+            - 1246.5
+            boundary: false
+            tilt_median_deg: 42.0
+            turn_range_deg: 116.3
+          free_shape3d:
+            f_px: 2836.0
+            ci95_px:
+            - 1900.6
+            - 3072.0
+            boundary: false
+            tilt_median_deg: 33.2
+            turn_range_deg: 121.5
+          n_keep: 190
+        j21:
+          free_template:
+            f_px: 3072.0
+            ci95_px:
+            - 3072.0
+            - 3072.0
+            boundary: true
+            tilt_median_deg: 43.2
+            turn_range_deg: 66.8
+          free_shape3d:
+            f_px: 3072.0
+            ci95_px:
+            - 2766.3
+            - 3072.0
+            boundary: true
+            tilt_median_deg: 41.3
+            turn_range_deg: 126.1
+          n_keep: 190
+  IMG_7356.MOV:
+    distance_cm: 75
+    hand: right
+    verdict:
+      verdict: 어려움
+      reason: null
+      warnings:
+      - 평면 추정 의심
+    estimates:
+      mediapipe_hands:
+        j16:
+          free_template:
+            f_px: 2878.4
+            ci95_px:
+            - 1868.9
+            - 3072.0
+            boundary: false
+            tilt_median_deg: 74.2
+            turn_range_deg: 65.1
+          free_shape3d:
+            f_px: 3072.0
+            ci95_px:
+            - 1244.9
+            - 3072.0
+            boundary: true
+            tilt_median_deg: 73.3
+            turn_range_deg: 363.8
+          n_keep: 153
+        j21:
+          free_template:
+            f_px: 776.4
+            ci95_px:
+            - 672.0
+            - 2176.3
+            boundary: false
+            tilt_median_deg: 47.4
+            turn_range_deg: 112.4
+          free_shape3d:
+            f_px: 672.0
+            ci95_px:
+            - 672.0
+            - 964.2
+            boundary: true
+            tilt_median_deg: 46.3
+            turn_range_deg: 111.8
+          n_keep: 153
+      mmhand_scnet:
+        j16:
+          free_template:
+            f_px: 3072.0
+            ci95_px:
+            - 1527.5
+            - 3072.0
+            boundary: true
+            tilt_median_deg: 46.9
+            turn_range_deg: 84.8
+          free_shape3d:
+            f_px: 3072.0
+            ci95_px:
+            - 1118.5
+            - 3072.0
+            boundary: true
+            tilt_median_deg: 33.0
+            turn_range_deg: 217.6
+          n_keep: 93
+        j21:
+          free_template:
+            f_px: 1350.0
+            ci95_px:
+            - 1124.1
+            - 3072.0
+            boundary: false
+            tilt_median_deg: 58.5
+            turn_range_deg: 114.1
+          free_shape3d:
+            f_px: 1834.3
+            ci95_px:
+            - 1195.6
+            - 3072.0
+            boundary: false
+            tilt_median_deg: 41.5
+            turn_range_deg: 129.4
+          n_keep: 93
+      mmhand_hrnetv2_dark:
+        j16:
+          free_template:
+            f_px: 3072.0
+            ci95_px:
+            - 3072.0
+            - 3072.0
+            boundary: true
+            tilt_median_deg: 39.6
+            turn_range_deg: 26.6
+          free_shape3d:
+            f_px: 1938.7
+            ci95_px:
+            - 1651.8
+            - 3072.0
+            boundary: false
+            tilt_median_deg: 67.8
+            turn_range_deg: 135.6
+          n_keep: 132
+        j21:
+          free_template:
+            f_px: 3072.0
+            ci95_px:
+            - 2470.1
+            - 3072.0
+            boundary: true
+            tilt_median_deg: 17.7
+            turn_range_deg: 79.0
+          free_shape3d:
+            f_px: 1357.9
+            ci95_px:
+            - 1167.4
+            - 3072.0
+            boundary: false
+            tilt_median_deg: 33.7
+            turn_range_deg: 64.1
+          n_keep: 132
+  IMG_7357.MOV:
+    distance_cm: 75
+    hand: left
+    verdict:
+      verdict: 어려움
+      reason: null
+      warnings:
+      - 평면 추정 의심
+    estimates:
+      mediapipe_hands:
+        j16:
+          free_template:
+            f_px: 3070.5
+            ci95_px:
+            - 1101.5
+            - 3072.0
+            boundary: true
+            tilt_median_deg: 65.9
+            turn_range_deg: 126.6
+          free_shape3d:
+            f_px: 1488.9
+            ci95_px:
+            - 708.2
+            - 3072.0
+            boundary: false
+            tilt_median_deg: 47.4
+            turn_range_deg: 124.2
+          n_keep: 131
+        j21:
+          free_template:
+            f_px: 3072.0
+            ci95_px:
+            - 3072.0
+            - 3072.0
+            boundary: true
+            tilt_median_deg: 42.6
+            turn_range_deg: 132.8
+          free_shape3d:
+            f_px: 3072.0
+            ci95_px:
+            - 2392.2
+            - 3072.0
+            boundary: true
+            tilt_median_deg: 41.4
+            turn_range_deg: 134.2
+          n_keep: 131
+      mmhand_scnet:
+        j16:
+          free_template:
+            f_px: 966.0
+            ci95_px:
+            - 672.0
+            - 3072.0
+            boundary: false
+            tilt_median_deg: 35.2
+            turn_range_deg: 116.2
+          free_shape3d:
+            f_px: 3036.9
+            ci95_px:
+            - 1113.8
+            - 3072.0
+            boundary: false
+            tilt_median_deg: 70.6
+            turn_range_deg: 170.1
+          n_keep: 84
+        j21:
+          free_template:
+            f_px: 3072.0
+            ci95_px:
+            - 3072.0
+            - 3072.0
+            boundary: true
+            tilt_median_deg: 39.0
+            turn_range_deg: 88.7
+          free_shape3d:
+            f_px: 3072.0
+            ci95_px:
+            - 3072.0
+            - 3072.0
+            boundary: true
+            tilt_median_deg: 38.6
+            turn_range_deg: 127.0
+          n_keep: 84
+      mmhand_hrnetv2_dark:
+        j16:
+          free_template:
+            f_px: 954.2
+            ci95_px:
+            - 818.8
+            - 1131.0
+            boundary: false
+            tilt_median_deg: 40.8
+            turn_range_deg: 117.6
+          free_shape3d:
+            f_px: 3048.3
+            ci95_px:
+            - 2058.0
+            - 3072.0
+            boundary: false
+            tilt_median_deg: 33.1
+            turn_range_deg: 123.5
+          n_keep: 198
+        j21:
+          free_template:
+            f_px: 3072.0
+            ci95_px:
+            - 3072.0
+            - 3072.0
+            boundary: true
+            tilt_median_deg: 42.2
+            turn_range_deg: 86.7
+          free_shape3d:
+            f_px: 3072.0
+            ci95_px:
+            - 2451.3
+            - 3072.0
+            boundary: true
+            tilt_median_deg: 42.6
+            turn_range_deg: 125.2
+          n_keep: 198
+slopes:
+  mediapipe_hands|j16|free_template:
+    slope: null
+    interval_95: null
+    f_by_distance_px:
+      '50': 2208.5
+      '60': 3040.8
+      '75': 2628.8
+  mediapipe_hands|j16|free_shape3d:
+    slope: null
+    interval_95: null
+    f_by_distance_px:
+      '50': 3043.5
+      '60': 2322.4
+      '75': 2563.2
+  mediapipe_hands|j21|free_template:
+    slope: null
+    interval_95: null
+    f_by_distance_px:
+      '50': 1775.3
+      '60': 1836.8
+      '75': 1556.3
+  mediapipe_hands|j21|free_shape3d:
+    slope: null
+    interval_95: null
+    f_by_distance_px:
+      '50': 2555.1
+      '60': 1877.5
+      '75': 1551.5
+  mmhand_scnet|j16|free_template:
+    slope: null
+    interval_95: null
+    f_by_distance_px:
+      '50': 1372.0
+      '60': 1147.1
+      '75': 1287.2
+  mmhand_scnet|j16|free_shape3d:
+    slope: null
+    interval_95: null
+    f_by_distance_px:
+      '50': 3072.0
+      '60': 1774.5
+      '75': 1868.3
+  mmhand_scnet|j21|free_template:
+    slope: null
+    interval_95: null
+    f_by_distance_px:
+      '50': 1839.3
+      '60': 1818.3
+      '75': 1719.0
+  mmhand_scnet|j21|free_shape3d:
+    slope: null
+    interval_95: null
+    f_by_distance_px:
+      '50': 3072.0
+      '60': 2128.4
+      '75': 1906.2
+  mmhand_hrnetv2_dark|j16|free_template:
+    slope: null
+    interval_95: null
+    f_by_distance_px:
+      '50': 2012.3
+      '60': 1957.0
+      '75': 1732.4
+  mmhand_hrnetv2_dark|j16|free_shape3d:
+    slope: null
+    interval_95: null
+    f_by_distance_px:
+      '50': 3072.0
+      '60': 2743.8
+      '75': 2678.7
+  mmhand_hrnetv2_dark|j21|free_template:
+    slope: null
+    interval_95: null
+    f_by_distance_px:
+      '50': 2368.6
+      '60': 1707.9
+      '75': 3072.0
+  mmhand_hrnetv2_dark|j21|free_shape3d:
+    slope: null
+    interval_95: null
+    f_by_distance_px:
+      '50': 2788.9
+      '60': 2838.4
+      '75': 2504.9
