@@ -5171,6 +5171,57 @@ def od_synthetic(motion: str, f: float = 1655.0, noise_px: float = 0.5, n: int =
     return {"kp": kp, "mask": np.ones((n, 21), bool), "present": np.ones(n, bool), "box": box, "size": [W, H]}
 
 
+def od2_synthetic(turn_range_deg: float, move_pct_xy, noise_rel: float, f: float = 1655.0, n: int = 60, tilt_deg: float = 45.0, dist_cm: float = 60.0, size_wh=(1920, 1080), seed: int = 0) -> dict:
+    """Synthetic scene of 53c: od_synthetic's desk, camera and hand, with the turn on the desk spanning turn_range_deg (sinusoid, -range / 2 .. +range / 2), the translation on the desk scaled so that
+    the hand box centre spans move_pct_xy (% of the image width, height; od_synthetic's motion shape), and independent Gaussian noise of noise_rel x the hand box long side on every coordinate of
+    every joint and frame (seed: the noise only). Returns od_synthetic's track plus the achieved {move_pct, box_long_median_px, noise_px_median}."""
+    W, H = size_wh
+    a = np.radians(tilt_deg)
+    C = np.array([0.0, -dist_cm * np.sin(a), dist_cm * np.cos(a)])
+    z = -C / np.linalg.norm(C)
+    x = np.array([1.0, 0.0, 0.0])
+    R = np.array([x, np.cross(z, x), z])
+    hand = OD_HAND_CM - OD_HAND_CM.mean(0)
+    s = np.linspace(0, 1, n)
+    turn = np.radians(turn_range_deg / 2.0) * np.sin(2 * np.pi * s)
+    ux, uy = np.sin(2 * np.pi * 1.5 * s + 0.4), np.cos(2 * np.pi * s)
+
+    def project(ax, ay):
+        kp = np.zeros((n, 21, 2))
+        for i in range(n):
+            c, sn = np.cos(turn[i]), np.sin(turn[i])
+            P = hand @ np.array([[c, sn], [-sn, c]]) + [ax * ux[i], ay * uy[i]]
+            Xc = (np.c_[P, np.zeros(21)] - C) @ R.T
+            kp[i] = f * Xc[:, :2] / Xc[:, 2:3] + [W / 2.0, H / 2.0]
+        return kp
+
+    def ranges(kp):
+        c = (kp.min(1) + kp.max(1)) / 2
+        return 100.0 * (c[:, 0].max() - c[:, 0].min()) / W, 100.0 * (c[:, 1].max() - c[:, 1].min()) / H
+
+    ax, ay = 1.0, 1.0
+    for _ in range(6):
+        rx, ry = ranges(project(ax, ay))
+        ax *= float(move_pct_xy[0]) / rx if rx > 1e-9 else 1.0
+        ay *= float(move_pct_xy[1]) / ry if ry > 1e-9 else 1.0
+    kp0 = project(ax, ay)
+    bl = (kp0.max(1) - kp0.min(1)).max(1)
+    rng = np.random.default_rng(seed)
+    kp = kp0 + rng.normal(0.0, 1.0, kp0.shape) * (float(noise_rel) * bl)[:, None, None]
+    box = np.c_[kp.min(1) - 20.0, kp.max(1) + 20.0]
+    return {"kp": kp, "mask": np.ones((n, 21), bool), "present": np.ones(n, bool), "box": box, "size": [W, H], "move_pct": list(ranges(kp0)),
+            "box_long_median_px": float(np.median(bl)), "noise_px_median": float(np.median(noise_rel * bl)), "translation_cm": [float(ax), float(ay)]}
+
+
+def od2_job(args) -> dict:
+    """One synthetic case of 53c: args = (key, turn_range_deg, move_pct_xy, noise_rel, seed, true_f, n, ecfg, ids, fs) -> od_job's estimate (no diagnostics) with the scene's achieved values."""
+    key, turn, move, noise, seed, true_f, n, ecfg, ids, fs = args
+    s = od2_synthetic(turn, move, noise, f=true_f, n=n, seed=seed)
+    r = od_job(("synthetic", seed, s["kp"], s["mask"], np.arange(n), s["box"], tuple(s["size"]), ecfg, ids, fs, False))
+    r.update({"key": key, "turn_range_deg": turn, "noise_rel": noise, "seed": seed, "move_pct": s["move_pct"], "box_long_median_px": s["box_long_median_px"], "noise_px_median": s["noise_px_median"]})
+    return r
+
+
 def od_fix_lines(path=None) -> list:
     """Where the six corrections to the supervisor's code sit in handfocal_estimate.py (line numbers of the corrected spellings inside section 5)."""
     p = Path(path) if path else Path(__file__).resolve().parent / "handfocal_estimate.py"

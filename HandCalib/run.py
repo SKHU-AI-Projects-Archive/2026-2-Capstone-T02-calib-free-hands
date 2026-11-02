@@ -8899,7 +8899,135 @@ def od_results_yaml(run_dir: Path, cfg: dict):
     return p
 
 
-COMMANDS = {"protocol": protocol_main, "frame-filter": ff_main, "same-session": session_main, "overlay": overlay_main, "phase-segmentation": pseg_main, "guide-revision": grev_main, "f-response": fresp_main, "error-factors": ferr_main, "long-video-check": long_main, "generalization": gen_main, "main-camera-extension": ext_main, "wide-60cm": wide_main, "jointset-sets": jset_main, "verdict-calibration": cal_main, "printed-hand": pr_main, "hand-markers": mk_main, "markers-only": mo_main, "free-template": ft_main, "free-shape3d": s3_main, "free-shape3d-hand": h3_main, "free-shape3d-27": e3_main, "free-shape3d-new": e4_main, "mmpose-hand": mm_main, "mmpose-hand-46": mm2_main, "free-shape3d-new2": e5_main, "mmpose-hand-src": mm3_main, "free-shape3d-detectors": fs_main, "free-shape3d-hand-sets": h4_main, "free-shape3d-hand-sets-42track": h4b_main, "oblique-desk": od_main}
+# ====================================================================================================
+# sy  (experiment 53c: synthetic check of 53's setting, record only: turn range on the desk x joint noise, 5 noise seeds each; the supervisor's free_template / free_shape3d through od_job, 16 points)
+#     python HandCalib/run.py oblique-synthetic --config HandCalib/configs/53c_oblique_synthetic.yaml [--out DIR]
+#     python HandCalib/run.py oblique-synthetic --config ... results-yaml --run runs/53c_oblique_synthetic/<UTC>
+# ====================================================================================================
+SY_NOTE = ("실험 53의 촬영 조건(카메라가 책상 면에 약 45°, 거리 60 cm, 책상 위에 평평한 손)을 합성 장면으로 만들어, 책상 위 회전 범위와 관절 잡음에 따라 교수님 free_template와 free_shape3d(16점, od_job 그대로)가 "
+           "참 f를 얼마나 복원하는지 본 기록용 실험이다. 이동 범위는 실험 53b 영상의 사용 프레임과 같게 맞췄고, 잡음은 프레임·관절마다 독립인 가우스 잡음이다. 경계 규칙은 실험 53과 같다. 실제 영상의 f는 다시 계산하지 않았다.")
+
+
+def sy_table(results: list, cfg: dict) -> dict:
+    """Per (turn, noise, method): median f over the seeds, its error against the true f, the share of seeds on the upper limit and on any limit, failures."""
+    tf = float(cfg["true_f"])
+    out = {}
+    for t in cfg["turn_ranges_deg"]:
+        for nz in cfg["noise_rel"]:
+            rs = [r for r in results if r["turn_range_deg"] == t and r["noise_rel"] == nz]
+            for m in OD_METHODS:
+                ok = [r[m] for r in rs if m in r]
+                fv = [x["f"] for x in ok]
+                up = [x["f"] >= x["profile_f"][-1] / 1.005 for x in ok]
+                med = float(np.median(fv)) if fv else None
+                out[(t, nz, m)] = {"f_median": med, "err_median": None if med is None else med / tf - 1.0, "f_min": min(fv) if fv else None, "f_max": max(fv) if fv else None,
+                                   "upper_share": float(np.mean(up)) if up else None, "boundary_share": float(np.mean([x["boundary"] for x in ok])) if ok else None, "n": len(ok), "failed": len(rs) - len(ok)}
+    return out
+
+
+def sy_figure(path: Path, tab: dict, cfg: dict):
+    plt = _plt()
+    fig, axs = plt.subplots(1, 2, figsize=(10, 4.2), sharey=True)
+    for ax, m in zip(axs, OD_METHODS):
+        for nz in cfg["noise_rel"]:
+            ts = cfg["turn_ranges_deg"]
+            ax.plot(ts, [tab[(t, nz, m)]["f_median"] for t in ts], "o-", label=f"잡음 손 박스의 {100 * nz:g}%")
+        ax.axhline(float(cfg["true_f"]), color="#555", ls="--", lw=1, label="참 f")
+        ax.set_yscale("log")
+        ax.set_xlabel("책상 위 회전 범위 (°)")
+        ax.set_title(f"{m} (시드 {len(cfg['seeds'])}개의 중앙값)")
+        ax.grid(alpha=0.3, which="both")
+        ax.legend(fontsize=7)
+    axs[0].set_ylabel("f (px)")
+    fig.tight_layout()
+    fig.savefig(path, dpi=110)
+    plt.close(fig)
+
+
+def sy_summary(path: Path, results: list, tab: dict, cfg: dict):
+    tf = float(cfg["true_f"])
+    L = ["# 실험 53c summary", "", f"**{SY_NOTE}**", "",
+         f"- 조건: 카메라 기울기 {cfg['scene']['tilt_deg']}°, 거리 {cfg['scene']['dist_cm']} cm, 참 f {tf:g} px, 1920x1080, 주점 중심, 프레임 {cfg['scene']['n_frames']}장, 이동 범위 화면 가로 {cfg['scene']['move_pct_xy'][0]}% · 세로 {cfg['scene']['move_pct_xy'][1]}%, 관절 {len(cfg['ids'])}점",
+         f"- 시드 {cfg['seeds']} (잡음만 바뀜). 상한 = 최종 f가 탐색 범위 위 끝(0.5% 안)에 붙음. 오차는 시드 중앙값 f의 참값 대비 오차.",
+         f"- 합성 손 박스 긴 변 중앙값 약 {np.median([r['box_long_median_px'] for r in results]):.0f} px (잡음 0.1% ≈ {np.median([r['noise_px_median'] for r in results if r['noise_rel'] == min(cfg['noise_rel'])]):.2f} px, 1.0% ≈ {np.median([r['noise_px_median'] for r in results if r['noise_rel'] == max(cfg['noise_rel'])]):.2f} px).", ""]
+    for m in OD_METHODS:
+        L += [f"## {m}", "", "| 회전 범위 | 잡음 (손 박스 대비) | f 중앙값, 초점 거리 (참값 대비) | f 최소 ~ 최대 | 상한에 붙은 비율 | 범위 끝에 붙은 비율 |", "|---|---|---|---|---|---|"]
+        for t in cfg["turn_ranges_deg"]:
+            for nz in cfg["noise_rel"]:
+                x = tab[(t, nz, m)]
+                fm = "-" if x["f_median"] is None else f"{x['f_median']:.1f} ({100 * x['err_median']:+.1f}%)"
+                rg = "-" if x["f_min"] is None else f"{x['f_min']:.1f} ~ {x['f_max']:.1f}"
+                L.append(f"| {t:g}° | {100 * nz:g}% | {fm} | {rg} | {x['n'] and round(x['upper_share'] * x['n'])} / {x['n']} | {x['n'] and round(x['boundary_share'] * x['n'])} / {x['n']} |" + ("" if not x["failed"] else f" 실패 {x['failed']} |"))
+        L.append("")
+    L += ["![회전 범위 대 f](figures/f_vs_turn.png)", "", "## 참고", "", "- 실험 53b 영상: 사용 프레임 안 책상 위 회전 17.1°(추정 자세) / 영상 속 손 방향 20.4°, 재투영 잔차 중앙값 손 박스의 0.47%(MediaPipe 16점 free_template).",
+          "- 합성은 손이 완전히 평평하고 모양이 변하지 않으며 잡음이 프레임마다 독립이라고 가정한다. 실제 검출기 오차는 프레임 사이에 상관이 있을 수 있다.", ""]
+    path.write_text("\n".join(L) + "\n")
+
+
+def sy_main(argv=None):
+    ap = argparse.ArgumentParser()
+    ap.add_argument("--config", default=str(hf.PROJECT_ROOT / "configs/53c_oblique_synthetic.yaml"))
+    sub = ap.add_subparsers(dest="cmd")
+    ry = sub.add_parser("results-yaml")
+    ry.add_argument("--run", required=True)
+    ap.add_argument("--out", default=None)
+    a = ap.parse_args(argv)
+    text = Path(a.config).read_text()
+    own = yaml.safe_load(text)
+    base = yaml.safe_load(hf.resolve(own["base_config"]).read_text())
+    cfg = {**own, "ecfg": base["pipeline"]["estimate"], "free_shape3d": base["free_shape3d"]}
+    if a.cmd == "results-yaml":
+        print(sy_results_yaml(hf.resolve(a.run), cfg))
+        return None
+    run_root = Path(a.out).expanduser() if a.out else hf.resolve(cfg["output"]["root"]) / utc_stamp()
+    run_root.mkdir(parents=True)
+    (run_root / "figures").mkdir()
+    log = Log(run_root / "log.txt")
+    sc = cfg["scene"]
+    jobs = [(f"{t}_{nz}_{sd}", float(t), sc["move_pct_xy"], float(nz), int(sd), float(cfg["true_f"]), int(sc["n_frames"]), cfg["ecfg"], cfg["ids"], cfg["free_shape3d"])
+            for t in cfg["turn_ranges_deg"] for nz in cfg["noise_rel"] for sd in cfg["seeds"]]
+    log(f"53c 합성 확인: 회전 범위 {cfg['turn_ranges_deg']}, 잡음 {cfg['noise_rel']}, 시드 {cfg['seeds']} → {len(jobs)}건 → {run_root}")
+    t0 = time.time()
+    for k in ("OMP_NUM_THREADS", "OPENBLAS_NUM_THREADS", "MKL_NUM_THREADS"):
+        os.environ[k] = "1"
+    import multiprocessing as mp
+    from concurrent.futures import ProcessPoolExecutor
+    with ProcessPoolExecutor(max_workers=int(cfg["workers"]), mp_context=mp.get_context("spawn")) as ex:
+        results = list(ex.map(hf.od2_job, jobs, chunksize=1))
+    tab = sy_table(results, cfg)
+    for (t, nz, m), x in tab.items():
+        log(f"  회전 {t:g}° 잡음 {100 * nz:g}% {m}: f 중앙값 {long_fmt(x['f_median'], 1)} px, 상한 {x['upper_share']}")
+    sy_figure(run_root / "figures" / "f_vs_turn.png", tab, cfg)
+    sy_summary(run_root / "summary.md", results, tab, cfg)
+    (run_root / "results.json").write_text(json.dumps(hf.jsonable({"cases": [{k: v for k, v in r.items() if k not in ("free_template", "free_shape3d")} | {m: {kk: r[m][kk] for kk in ("f", "boundary", "at_grid_edge")} for m in OD_METHODS if m in r} for r in results],
+                                                                  "table": [{"turn_range_deg": t, "noise_rel": nz, "method": m, **x} for (t, nz, m), x in tab.items()]}), ensure_ascii=False, indent=1))
+    meta = hf.provenance_build(text, a.config, {"code_53c": own.get("code_53c"), "base_config": own["base_config"], "elapsed_s": time.time() - t0})
+    (run_root / "metadata.json").write_text(json.dumps(hf.jsonable(meta), ensure_ascii=False, indent=1))
+    log(f"완료 {time.time() - t0:.0f} s → {run_root}")
+    log.close()
+    return run_root, tab
+
+
+def sy_results_yaml(run_dir: Path, cfg: dict):
+    """Values only (record experiment, no verdict); written to output.results_yaml."""
+    r = json.loads((run_dir / "results.json").read_text())
+    m = json.loads((run_dir / "metadata.json").read_text())
+    try:
+        run_name = str(run_dir.resolve().relative_to(hf.PROJECT_ROOT))
+    except ValueError:
+        run_name = str(run_dir)
+    rd = lambda x, n=4: None if x is None or (isinstance(x, float) and not np.isfinite(x)) else round(x, n)      # noqa: E731
+    out = {"experiment": cfg["experiment"]["name"], "run": run_name, "code_commit": m["git"]["commit"][:7], "git_dirty_at_run": m["git"]["git_dirty"], "note": SY_NOTE,
+           "true_f": cfg["true_f"], "scene": cfg["scene"], "ids": cfg["ids"], "seeds": cfg["seeds"], "free_shape3d": cfg["free_shape3d"], "table": []}
+    for x in r["table"]:
+        out["table"].append({"turn_range_deg": x["turn_range_deg"], "noise_rel": x["noise_rel"], "method": x["method"], "f_median_px": rd(x["f_median"], 1), "err_median": rd(x["err_median"]),
+                             "f_min_px": rd(x["f_min"], 1), "f_max_px": rd(x["f_max"], 1), "upper_share": x["upper_share"], "boundary_share": x["boundary_share"], "n": x["n"], "failed": x["failed"]})
+    p = hf.resolve(cfg["output"]["results_yaml"])
+    p.write_text(yaml.safe_dump(hf.jsonable(out), allow_unicode=True, sort_keys=False))
+    return p
+
+
+COMMANDS = {"protocol": protocol_main, "frame-filter": ff_main, "same-session": session_main, "overlay": overlay_main, "phase-segmentation": pseg_main, "guide-revision": grev_main, "f-response": fresp_main, "error-factors": ferr_main, "long-video-check": long_main, "generalization": gen_main, "main-camera-extension": ext_main, "wide-60cm": wide_main, "jointset-sets": jset_main, "verdict-calibration": cal_main, "printed-hand": pr_main, "hand-markers": mk_main, "markers-only": mo_main, "free-template": ft_main, "free-shape3d": s3_main, "free-shape3d-hand": h3_main, "free-shape3d-27": e3_main, "free-shape3d-new": e4_main, "mmpose-hand": mm_main, "mmpose-hand-46": mm2_main, "free-shape3d-new2": e5_main, "mmpose-hand-src": mm3_main, "free-shape3d-detectors": fs_main, "free-shape3d-hand-sets": h4_main, "free-shape3d-hand-sets-42track": h4b_main, "oblique-desk": od_main, "oblique-synthetic": sy_main}
 
 
 def main(argv=None):

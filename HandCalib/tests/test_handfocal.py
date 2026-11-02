@@ -4709,5 +4709,32 @@ class ODReports(unittest.TestCase):
             self.assertTrue((d / "figures/frames_mediapipe_hands.png").exists())
 
 
+class SYSynthetic(unittest.TestCase):
+    def test_scene_matches_the_requested_turn_motion_and_noise(self):
+        s0 = hf.od2_synthetic(40.0, [4.5, 34.6], 0.0, n=30)
+        np.testing.assert_allclose(s0["move_pct"], [4.5, 34.6], atol=0.1)
+        s1 = hf.od2_synthetic(40.0, [4.5, 34.6], 0.01, n=30, seed=3)
+        d = (s1["kp"] - s0["kp"]).reshape(-1)
+        self.assertAlmostEqual(np.std(d) / s0["box_long_median_px"], 0.01, delta=0.002)
+        np.testing.assert_array_equal(s1["kp"], hf.od2_synthetic(40.0, [4.5, 34.6], 0.01, n=30, seed=3)["kp"])
+        r = hf.od2_job(("k", 60.0, [4.5, 34.6], 0.001, 0, 1655.0, 40, OD_ECFG, OD_J16, OD_FS))
+        self.assertLess(abs(r["free_template"]["f"] / 1655.0 - 1.0), 0.05, r["free_template"]["f"])
+
+    def test_table_and_summary(self):
+        cfg = {"true_f": 1655.0, "turn_ranges_deg": [20, 60], "noise_rel": [0.001], "seeds": [0, 1], "ids": OD_J16, "scene": {"tilt_deg": 45, "dist_cm": 60, "n_frames": 30, "move_pct_xy": [4.5, 34.6]}}
+        e = lambda f: {"f": f, "boundary": f >= 3072 / 1.005, "profile_f": [672.0, 3072.0]}      # noqa: E731
+        res = [{"turn_range_deg": t, "noise_rel": 0.001, "seed": sd, "box_long_median_px": 400.0, "noise_px_median": 0.4, "free_template": e(f), "free_shape3d": e(f)}
+               for t, f0 in ((20, 3072.0), (60, 1650.0)) for sd, f in ((0, f0), (1, f0 + (0 if f0 == 3072.0 else 10)))]
+        tab = run.sy_table(res, cfg)
+        self.assertEqual(tab[(20, 0.001, "free_template")]["upper_share"], 1.0)
+        self.assertAlmostEqual(tab[(60, 0.001, "free_template")]["f_median"], 1655.0)
+        with tempfile.TemporaryDirectory() as d:
+            p = Path(d) / "s.md"
+            run.sy_summary(p, res, tab, cfg)
+            t = p.read_text()
+            self.assertIn("1655.0 (+0.0%)", t)
+            self.assertIn("| 20° | 0.1% | 3072.0 (+85.6%) | 3072.0 ~ 3072.0 | 2 / 2 | 2 / 2 |", t)
+
+
 if __name__ == "__main__":
     unittest.main()
