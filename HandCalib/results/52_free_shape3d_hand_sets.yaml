@@ -1,0 +1,100 @@
+experiment: 52_free_shape3d_hand_sets
+run: runs/52_free_shape3d_hand_sets/20261102T022441Z
+code_commit: 7bf0e73
+git_dirty_at_run: false
+note: 실험 42와 같은 실제 손 마커 영상 6개와 같은 호출(35c 추적 코드, 교수님 free_shape3d)에서 추정에 쓰는 마커만 바꾼
+  실험이다. 마커 묶음은 손바닥 5점(손목과 네 손가락 뿌리 관절)과 실험 42의 8점(손가락 뿌리 관절과 둘째 마디)에 손목을 더한 9점이다.
+  각 묶음은 35c 추적기의 사용 마커(기준 프레임, 75% 규칙, 호모그래피 검사)로도 쓰고, 나머지 설정과 판정 규칙은 실험 42 그대로 실행
+  전에 고정했다. 기준 f와의 비교는 summary.md에만 있다.
+point_sets:
+  palm5:
+  - 0
+  - 5
+  - 9
+  - 13
+  - 17
+  wrist_mcp_pip9:
+  - 0
+  - 5
+  - 6
+  - 9
+  - 10
+  - 13
+  - 14
+  - 17
+  - 18
+free_shape3d:
+  z_rel: 0.2
+  alt_iters: 3
+  max_frames: 120
+verdict_rules:
+  slope_none_min: -0.3
+  slope_yes_max: -0.7
+  f_tol: 0.1
+sets:
+  palm5:
+    f_by_distance_px: {}
+    slope: null
+    slope_interval_95: null
+    verdict: 판단 불가
+    reason: 분석된 영상이 없음
+    planar_pooled_f_px: {}
+    planar_slope: null
+    videos:
+      IMG_7267.MOV:
+        distance_cm: 50.0
+        marker_tilt_valid_ratio: null
+        excluded: 정면 창에 기준 프레임이 없음 (사용 표시가 모두 보이는 프레임)
+      IMG_7266.MOV:
+        distance_cm: 50.0
+        marker_tilt_valid_ratio: null
+        excluded: 정면 창에 기준 프레임이 없음 (사용 표시가 모두 보이는 프레임)
+      IMG_7265.MOV:
+        distance_cm: 60.0
+        marker_tilt_valid_ratio: null
+        excluded: 정면 창에 기준 프레임이 없음 (사용 표시가 모두 보이는 프레임)
+      IMG_7264.MOV:
+        distance_cm: 60.0
+        marker_tilt_valid_ratio: null
+        excluded: 정면 창에 기준 프레임이 없음 (사용 표시가 모두 보이는 프레임)
+      IMG_7263.MOV:
+        distance_cm: 75.0
+        marker_tilt_valid_ratio: null
+        excluded: 정면 창에 기준 프레임이 없음 (사용 표시가 모두 보이는 프레임)
+      IMG_7262.MOV:
+        distance_cm: 75.0
+        marker_tilt_valid_ratio: null
+        excluded: 정면 창에 기준 프레임이 없음 (사용 표시가 모두 보이는 프레임)
+  wrist_mcp_pip9:
+    f_by_distance_px: {}
+    slope: null
+    slope_interval_95: null
+    verdict: 판단 불가
+    reason: 분석된 영상이 없음
+    planar_pooled_f_px: {}
+    planar_slope: null
+    videos:
+      IMG_7267.MOV:
+        distance_cm: 50.0
+        marker_tilt_valid_ratio: null
+        excluded: 정면 창에 기준 프레임이 없음 (사용 표시가 모두 보이는 프레임)
+      IMG_7266.MOV:
+        distance_cm: 50.0
+        marker_tilt_valid_ratio: null
+        excluded: 정면 창에 기준 프레임이 없음 (사용 표시가 모두 보이는 프레임)
+      IMG_7265.MOV:
+        distance_cm: 60.0
+        marker_tilt_valid_ratio: null
+        excluded: 정면 창에 기준 프레임이 없음 (사용 표시가 모두 보이는 프레임)
+      IMG_7264.MOV:
+        distance_cm: 60.0
+        marker_tilt_valid_ratio: null
+        excluded: 정면 창에 기준 프레임이 없음 (사용 표시가 모두 보이는 프레임)
+      IMG_7263.MOV:
+        distance_cm: 75.0
+        marker_tilt_valid_ratio: null
+        excluded: 정면 창에 기준 프레임이 없음 (사용 표시가 모두 보이는 프레임)
+      IMG_7262.MOV:
+        distance_cm: 75.0
+        marker_tilt_valid_ratio: null
+        excluded: 정면 창에 기준 프레임이 없음 (사용 표시가 모두 보이는 프레임)
