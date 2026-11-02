@@ -9427,7 +9427,277 @@ def om_results_yaml(run_dir: Path, cfg: dict):
     return p
 
 
-COMMANDS = {"protocol": protocol_main, "frame-filter": ff_main, "same-session": session_main, "overlay": overlay_main, "phase-segmentation": pseg_main, "guide-revision": grev_main, "f-response": fresp_main, "error-factors": ferr_main, "long-video-check": long_main, "generalization": gen_main, "main-camera-extension": ext_main, "wide-60cm": wide_main, "jointset-sets": jset_main, "verdict-calibration": cal_main, "printed-hand": pr_main, "hand-markers": mk_main, "markers-only": mo_main, "free-template": ft_main, "free-shape3d": s3_main, "free-shape3d-hand": h3_main, "free-shape3d-27": e3_main, "free-shape3d-new": e4_main, "mmpose-hand": mm_main, "mmpose-hand-46": mm2_main, "free-shape3d-new2": e5_main, "mmpose-hand-src": mm3_main, "free-shape3d-detectors": fs_main, "free-shape3d-hand-sets": h4_main, "free-shape3d-hand-sets-42track": h4b_main, "oblique-desk": od_main, "oblique-synthetic": sy_main, "oblique-fixed-template": fx_main, "oblique-desk-videos": om_main}
+# ====================================================================================================
+# ps  (experiment 55: 54's videos, one observation per pause: pauses from the hand box motion, SIFT registration inside a pause, detector joints averaged; the supervisor's free_template /
+#      free_shape3d through od_job; the plain mean without registration as a record variant; bootstrap over pauses; 53's verdict with a minimum number of pauses)
+#     python HandCalib/run.py pause-stabilized --config HandCalib/configs/55_pause_stabilized.yaml [--out DIR]
+#     python HandCalib/run.py pause-stabilized --config ... results-yaml --run runs/55_pause_stabilized/<UTC>
+# ====================================================================================================
+PS_NOTE = ("실험 54의 비스듬한 책상 영상 12개에서, 손이 멈춘 구간마다 관측 하나를 만들어 교수님 free_template·free_shape3d(od_job 그대로)에 넣은 실험이다. 멈춘 구간은 손 박스 중심의 움직임으로 검출기와 무관하게 정하고, "
+           "구간 안 프레임을 구간 가운데 프레임에 SIFT 호모그래피로 맞춘 뒤 검출기 관절을 그 좌표로 옮겨 평균했다(정렬 없이 단순 평균한 것은 기록용 변형). 부트스트랩은 구간 단위로 다시 뽑았다. "
+           "판정은 실험 53의 규칙(최소 프레임 수 대신 최소 구간 수)이고 실행 전에 고정했다. 기준 f와의 비교는 summary.md에만 있다.")
+PS_VARIANTS = ("reg", "plain")
+
+
+def ps_video(e: dict, cfg: dict, run_root: Path, log) -> dict:
+    """Frames, detections, tracks, pauses, registration and the per-pause observations of every detector and variant for one video (the frames are removed afterwards)."""
+    pc = cfg["pipeline"]
+    tmp_root = run_root / "_frames"
+    tmp_root.mkdir(exist_ok=True)
+    v = e["file"]
+    from concurrent.futures import ThreadPoolExecutor
+    try:
+        prep = hf.fresp_prepare((v, cfg["input_dir"], pc, {}, str(tmp_root)))
+        frames, (W, H) = prep["frames"], prep["size"]
+        times = np.array([r["time_s"] for r in frames])
+        cache = run_root / "detection_cache"
+        npz = {"mediapipe_hands": hf.fresp_detect_many([((v, "orig"), frames)], cfg["detector_settings"]["mediapipe_hands"], cache, int(cfg["n_workers"]), log)[(v, "orig")]}
+        for det in cfg["detectors"]:
+            if det != "mediapipe_hands":
+                npz[det], _ = hf.swap_mmpose_hand(frames, cfg["detector_settings"][det], cache, log, Path(npz["mediapipe_hands"]), det)
+        trs = {}
+        for det in cfg["detectors"]:
+            d = hf.load_detections(Path(npz[det]))
+            hf.check_alignment(frames, d)
+            p2 = copy.deepcopy(pc)
+            p2["tracking"]["conf_min"] = float(cfg["detector_settings"][det]["conf_min"])
+            trs[det] = hf.track(d, times, (W, H), p2["tracking"], front_start_s=float(p2["phases"]["front_skip_s"]))
+        base = trs["mediapipe_hands"]
+        pauses = hf.ps_pauses(base["box"], base["present"], (W, H), cfg["pauses"])
+        pngs = [r["png"] for r in frames]
+        with ThreadPoolExecutor(max_workers=int(cfg["reg_threads"])) as ex:
+            regs = list(ex.map(lambda sg: hf.ps_register(pngs, sg, base["kp"][sg[len(sg) // 2]], base["box"], cfg["registration"]), pauses))
+    finally:
+        shutil.rmtree(tmp_root, ignore_errors=True)
+    out = {"size": (W, H), "n_frames": len(times), "pauses": [[int(x) for x in p] for p in pauses],
+           "reg": [{"ref": r["ref"], "n_reg": sum(h is not None for h in r["H"].values()), "n": len(r["H"]), "inl_median": float(np.median([n for i, n in r["n_inl"].items() if i != r["ref"]] or [np.nan])),
+                    "rms_median": float(np.nanmedian([x for i, x in r["rms"].items() if i != r["ref"]] or [np.nan]))} for r in regs], "det": {}}
+    for det in cfg["detectors"]:
+        tr = trs[det]
+        s = hf.od_select(tr["kp"], tr["mask"], tr["present"], tr["box"], (W, H), cfg["selection"])
+        ok = np.isin(s["reason"], ["", "움직임"])                       # 53's rules except the joint stillness (the pause replaces it)
+        dd = {}
+        for var in PS_VARIANTS:
+            obs = [hf.ps_average(tr["kp"], tr["mask"], ok, p, r if var == "reg" else None, float(cfg["average"]["min_share"])) for p, r in zip(pauses, regs)]
+            obs = [o for o in obs if o["n_frames"] >= int(cfg["average"]["min_frames"])]
+            dd[var] = {"kp": np.array([o["kp"] for o in obs]).reshape(-1, 21, 2), "mask": np.array([o["vis"] for o in obs]).reshape(-1, 21),
+                       "box": np.array([tr["box"][o["ref"]] for o in obs]).reshape(-1, 4), "n_frames": [o["n_frames"] for o in obs], "spread_px": [o["spread_px"] for o in obs], "ref": [o["ref"] for o in obs]}
+        out["det"][det] = dd
+        log(f"  {v} {det}: 멈춘 구간 {len(pauses)}개, 관측 (정렬) {len(dd['reg']['ref'])}개 / (단순) {len(dd['plain']['ref'])}개, 구간 안 관절 퍼짐 중앙값 정렬 {np.nanmedian(dd['reg']['spread_px'] or [np.nan]):.2f} px · 단순 {np.nanmedian(dd['plain']['spread_px'] or [np.nan]):.2f} px")
+    return out
+
+
+def ps_analyze(res: dict, vid: dict, cfg: dict) -> dict:
+    """Per video x detector x joint set x variant x method: f, pause bootstrap interval, diagnostics; the verdict of the main target (53's rule with min_pauses in place of min_frames)."""
+    vc = {**cfg["verdict"], "min_frames": cfg["verdict"]["min_pauses"]}
+    ref = float(cfg["ref_f"]["value"])
+    lvl = float(cfg["bootstrap"].get("level", 0.95))
+    ana = {}
+    for e in cfg["videos"]:
+        v = e["file"]
+        by = {}
+        for det in cfg["detectors"]:
+            for sn, _, _ in od_sets(cfg):
+                for var in PS_VARIANTS:
+                    r = res.get((v, det, sn, var), {"main": {"failed": "구간 4개 미만 (추정하지 않음)"}, "boot": []})
+                    b = by.setdefault(det, {}).setdefault(sn, {})[var] = {"n_pauses": len(vid[v]["det"][det][var]["ref"]), "failed": r["main"].get("failed"), "n_boot": len(r["boot"])}
+                    for m in OD_METHODS:
+                        x = r["main"].get(m)
+                        if not x:
+                            continue
+                        p = x.get("poses", {})
+                        fb = [bb[m]["f"] for bb in r["boot"] if m in bb]
+                        b[m] = {"f": x["f"], "ci": hf.od_ci(fb, lvl), "n_boot_ok": len(fb), "boundary": x["boundary"], "boot_at_bound": sum(1 for bb in r["boot"] if m in bb and bb[m]["boundary"]),
+                                "tilt_median_deg": None if not p else float(np.nanmedian(p["tilt_deg"])), "turn_range_deg": None if not p else od_range(p["turn_deg"]),
+                                "res_median_pct": None if not p else float(np.nanmedian(p["res_pct"]))}
+        t = cfg["verdict"]["main"]
+        mm = by[t["detector"]][t["joint_set"]][t["variant"]]
+        est = mm.get(t["method"])
+        vv = hf.od_verdict(None if est is None else {"f": est["f"], "boundary": est["boundary"]}, None if est is None else est["ci"], mm["n_pauses"], ref, vc,
+                           None if est is None else est["tilt_median_deg"], None if est is None else est["turn_range_deg"])
+        ana[v] = {"by": by, "verdict": vv}
+    return ana
+
+
+def ps_prior(cfg: dict) -> dict:
+    """54's per-frame f (read only): {video: {det|set: {method: f}}}."""
+    q = hf.resolve((cfg.get("compare_54") or "x"))
+    out = {}
+    if q.exists() and q.is_dir():
+        for e in cfg["videos"]:
+            p = q / Path(e["file"]).stem / "results.json"
+            if p.exists():
+                a = json.loads(p.read_text())["analysis"]["by"]
+                out[e["file"]] = {f"{d}|{sn}": {m: x[m]["f"] for m in OD_METHODS if m in x} for d, by in a.items() for sn, x in by.items()}
+    return out
+
+
+def ps_summary(path: Path, ana: dict, vid: dict, cfg: dict, prior: dict):
+    ref = float(cfg["ref_f"]["value"])
+    t = cfg["verdict"]["main"]
+    pe = lambda f: "-" if f is None else f"{f:.1f} ({100 * (f / ref - 1):+.1f}%)"      # noqa: E731
+    cnt = {}
+    for v in ana.values():
+        cnt[v["verdict"]["verdict"]] = cnt.get(v["verdict"]["verdict"], 0) + 1
+    vc = cfg["verdict"]
+    L = [f"**판정 (영상별, {t['detector']} {t['joint_set']} {t['variant']} {t['method']}): " + ", ".join(f"{k} {n}개" for k, n in cnt.items()) + "**", "", "# 실험 55 summary", "", f"**{PS_NOTE}**", "",
+         f"- 기준 f: {ref:g} px ({cfg['ref_f']['source']}). 카메라 각도 약 45°(수평계).",
+         f"- 판정 규칙: 구간 {vc['min_pauses']}개 미만이면 판단 불가; 그 밖은 실험 53과 같다(경계 또는 ±{100 * float(vc['reject_tol']):.0f}% 밖 어려움; 경계 아님·구간 ±{100 * float(vc['ci_tol']):.0f}%·기준 ±{100 * float(vc['accept_tol']):.0f}% 안이면 가능성 있음; 그 외 판단 보류).",
+         f"- 멈춘 구간: 손 박스 중심 이동 < 박스의 {100 * float(cfg['pauses']['still_frac']):.1f}%, {cfg['pauses']['min_len']}프레임 이상. 정렬: SIFT 호모그래피, 인라이어 {cfg['registration']['min_inliers']}개 이상·RMS {cfg['registration']['max_rms_px']} px 이하.", "",
+         "## 1. 영상별 (주 판정 조합)", "", "| 영상 | 거리(cm) | 손 | 판정 | 경고 | 구간 수 | free_template 초점 거리 (기준 f 대비) | 95% 구간 | free_shape3d 초점 거리 (기준 f 대비) | 실험 54 free_template (프레임별) | 책상 위 회전 범위 |",
+         "|---|---|---|---|---|---|---|---|---|---|---|"]
+    for e in cfg["videos"]:
+        v = e["file"]
+        b = ana[v]["by"][t["detector"]][t["joint_set"]][t["variant"]]
+        a, s3 = b.get("free_template"), b.get("free_shape3d")
+        p54 = (prior.get(v, {}).get(f"{t['detector']}|{t['joint_set']}") or {}).get("free_template")
+        ci = "-" if not a or not a["ci"] else f"{a['ci'][0]:.1f} ~ {a['ci'][1]:.1f}"
+        vv = ana[v]["verdict"]
+        L.append(f"| {v} | {e['distance_cm']:g} | {e['hand']} | {vv['verdict']} | {', '.join(vv.get('warnings') or []) or '-'} | {b['n_pauses']} | {pe(a and a['f'])}{' (경계)' if a and a['boundary'] else ''} | {ci} | "
+                 f"{pe(s3 and s3['f'])}{' (경계)' if s3 and s3['boundary'] else ''} | {pe(p54)} | {long_fmt(a and a['turn_range_deg'], 1)}° |")
+    L += ["", "## 2. 조합별 요약 (영상 12개)", "", "| 방식 | 검출기 | 관절 집합 | 변형 | 경계 영상 수 | 범위 안 오차 중앙값 | 기준 ±15% 안 | 실험 54 프레임별 경계 영상 수 | 실험 54 기준 ±15% 안 |", "|---|---|---|---|---|---|---|---|---|"]
+    for m in OD_METHODS:
+        for det in cfg["detectors"]:
+            for sn, _, _ in od_sets(cfg):
+                p54 = [(prior.get(e["file"], {}).get(f"{det}|{sn}") or {}).get(m) for e in cfg["videos"]]
+                p54 = [x for x in p54 if x is not None]
+                nb54 = sum(1 for x in p54 if x >= 3072 / 1.005 or x <= 672 * 1.005)
+                g54 = sum(1 for x in p54 if abs(x / ref - 1) <= 0.15 and not (x >= 3072 / 1.005 or x <= 672 * 1.005))
+                for var in PS_VARIANTS:
+                    xs = [ana[e["file"]]["by"][det][sn][var].get(m) for e in cfg["videos"]]
+                    xs = [x for x in xs if x]
+                    nb = sum(x["boundary"] for x in xs)
+                    errs = [x["f"] / ref - 1 for x in xs if not x["boundary"]]
+                    good = sum(1 for x in errs if abs(x) <= 0.15)
+                    L.append(f"| {m} | {det} | {sn} | {'정렬 평균' if var == 'reg' else '단순 평균'} | {nb} / {len(xs)} | {'-' if not errs else format(100 * np.median(errs), '+.1f') + '%'} | {good} | {nb54} / {len(p54)} | {g54} |")
+    L += ["", "## 3. 손·거리별 기하평균 (정렬 평균, 16점), 초점 거리 (기준 f 대비)", ""]
+    ds = sorted({float(e["distance_cm"]) for e in cfg["videos"]})
+    for m in OD_METHODS:
+        L += [f"### {m}", "", "| 검출기 | 손 | " + " | ".join(f"{d:g} cm" for d in ds) + " | 경계 영상 수 |", "|---|---|" + "---|" * (len(ds) + 1)]
+        for det in cfg["detectors"]:
+            for hand in sorted({e["hand"] for e in cfg["videos"]}, reverse=True):
+                cells, nb = [], 0
+                for d in ds:
+                    fs = []
+                    for e in cfg["videos"]:
+                        x = ana[e["file"]]["by"][det][od_sets(cfg)[0][0]]["reg"].get(m)
+                        if x and e["hand"] == hand and float(e["distance_cm"]) == d:
+                            fs.append(x["f"])
+                            nb += int(x["boundary"])
+                    cells.append(pe(e3_gm(fs)) if fs else "-")
+                L.append(f"| {det} | {hand} | " + " | ".join(cells) + f" | {nb} |")
+        L.append("")
+    sp = {var: [s for e in cfg["videos"] for s in vid[e["file"]]["det"][t["detector"]][var]["spread_px"] if np.isfinite(s)] for var in PS_VARIANTS}
+    regs = [r for e in cfg["videos"] for r in vid[e["file"]]["reg"]]
+    L += ["## 4. 정렬 진단", "", f"- 구간 안 프레임 정렬 성공 {sum(r['n_reg'] for r in regs)} / {sum(r['n'] for r in regs)}장, 인라이어 중앙값 {np.nanmedian([r['inl_median'] for r in regs]):.0f}개, 정렬 RMS 중앙값 {np.nanmedian([r['rms_median'] for r in regs]):.2f} px.",
+          f"- {t['detector']} 관절이 구간 안에서 흩어진 정도(평균 위치 주변 RMS) 중앙값: 정렬 평균 {np.median(sp['reg']) if sp['reg'] else float('nan'):.2f} px, 단순 평균 {np.median(sp['plain']) if sp['plain'] else float('nan'):.2f} px.", "",
+          "## 한계", "", "- 한 구간 안 프레임들은 거의 같은 영상이라 검출기 오차가 프레임 사이에 상관되어 있을 수 있다. 평균은 흔들림만 줄이고 치우침은 줄이지 않는다.", "- 구간이 영상마다 5~10개라 관측 수가 적다.", ""]
+    path.write_text("\n".join(L) + "\n")
+
+
+def ps_main(argv=None):
+    ap = argparse.ArgumentParser()
+    ap.add_argument("--config", default=str(hf.PROJECT_ROOT / "configs/55_pause_stabilized.yaml"))
+    sub = ap.add_subparsers(dest="cmd")
+    ry = sub.add_parser("results-yaml")
+    ry.add_argument("--run", required=True)
+    ap.add_argument("--out", default=None)
+    a = ap.parse_args(argv)
+    text = Path(a.config).read_text()
+    own = yaml.safe_load(text)
+    base = od_load(yaml.safe_load(hf.resolve(own["base_config"]).read_text()))
+    cfg = {**base, **{k: own[k] for k in ("experiment", "videos", "pauses", "registration", "average", "reg_threads", "compare_54", "workers", "n_workers", "output") if k in own},
+           "verdict": {**base["verdict"], **own["verdict"]}, "bootstrap": {**base["bootstrap"], **own.get("bootstrap", {})}}
+    if a.cmd == "results-yaml":
+        print(ps_results_yaml(hf.resolve(a.run), cfg))
+        return None
+    missing = [e["file"] for e in cfg["videos"] if not (Path(cfg["input_dir"]).expanduser() / e["file"]).exists()]
+    if missing:
+        raise SystemExit(f"영상이 없습니다: {missing}")
+    run_root = Path(a.out).expanduser() if a.out else hf.resolve(cfg["output"]["root"]) / utc_stamp()
+    run_root.mkdir(parents=True)
+    log = Log(run_root / "log.txt")
+    log(f"55 멈춘 구간 안정화: 영상 {len(cfg['videos'])}개, 검출기 {cfg['detectors']} → {run_root}")
+    t0 = time.time()
+    for k in ("OMP_NUM_THREADS", "OPENBLAS_NUM_THREADS", "MKL_NUM_THREADS"):
+        os.environ[k] = "1"
+    vid = {}
+    for e in cfg["videos"]:
+        vid[e["file"]] = ps_video(e, cfg, run_root, log)
+    ecfg, bc = cfg["pipeline"]["estimate"], cfg["bootstrap"]
+    jobs, keys = [], []
+    for e in cfg["videos"]:
+        W, H = vid[e["file"]]["size"]
+        for det in cfg["detectors"]:
+            for var in PS_VARIANTS:
+                o = vid[e["file"]]["det"][det][var]
+                S = len(o["ref"])
+                if S < 4:
+                    continue
+                for sn, ids, _ in od_sets(cfg):
+                    jobs.append(("main", 0, o["kp"], o["mask"], np.arange(S), o["box"], (W, H), ecfg, ids, cfg["free_shape3d"], True))
+                    keys.append((e["file"], det, sn, var))
+                    rng = np.random.default_rng(int(bc["seed"]))
+                    for rep in range(int(bc["n"])):
+                        jobs.append(("boot", rep, o["kp"], o["mask"], rng.integers(0, S, S), o["box"], (W, H), ecfg, ids, cfg["free_shape3d"], False))
+                        keys.append((e["file"], det, sn, var))
+    import multiprocessing as mp
+    from concurrent.futures import ProcessPoolExecutor
+    t1 = time.time()
+    with ProcessPoolExecutor(max_workers=int(cfg["workers"]), mp_context=mp.get_context("spawn")) as ex:
+        out = list(ex.map(hf.od_job, jobs, chunksize=4))
+    log(f"  추정 {len(jobs)}건: {time.time() - t1:.0f} s")
+    res = {}
+    for k, o in zip(keys, out):
+        r = res.setdefault(k, {"main": None, "boot": []})
+        if o["kind"] == "main":
+            r["main"] = o
+        else:
+            r["boot"].append(o)
+    ana = ps_analyze(res, vid, cfg)
+    t = cfg["verdict"]["main"]
+    for e in cfg["videos"]:
+        v = ana[e["file"]]
+        b = v["by"][t["detector"]][t["joint_set"]][t["variant"]]
+        log(f"  {e['file']} ({e['distance_cm']:g} cm, {e['hand']}): {v['verdict']['verdict']}" + (f" ({v['verdict']['reason']})" if v["verdict"].get("reason") else "")
+            + " | " + ", ".join(f"{m} {b[m]['f']:.1f}" for m in OD_METHODS if m in b))
+    ps_summary(run_root / "summary.md", ana, vid, cfg, ps_prior(cfg))
+    vid_out = {v: {"pauses": x["pauses"], "reg": x["reg"], "det": {d: {var: {k: y[k] for k in ("n_frames", "spread_px", "ref")} for var, y in dd.items()} for d, dd in x["det"].items()}} for v, x in vid.items()}
+    (run_root / "results.json").write_text(json.dumps(hf.jsonable({"videos": vid_out, "analysis": ana}), ensure_ascii=False, indent=1))
+    meta = hf.provenance_build(text, a.config, {"code_55": own.get("code_55"), "base_config": own["base_config"], "elapsed_s": time.time() - t0})
+    (run_root / "metadata.json").write_text(json.dumps(hf.jsonable(meta), ensure_ascii=False, indent=1))
+    log(f"완료 {time.time() - t0:.0f} s → {run_root}")
+    log.close()
+    return run_root, ana
+
+
+def ps_results_yaml(run_dir: Path, cfg: dict):
+    """Values and verdicts only (no reference f); written to output.results_yaml."""
+    r = json.loads((run_dir / "results.json").read_text())
+    m = json.loads((run_dir / "metadata.json").read_text())
+    try:
+        run_name = str(run_dir.resolve().relative_to(hf.PROJECT_ROOT))
+    except ValueError:
+        run_name = str(run_dir)
+    rd = lambda x, n=4: None if x is None or (isinstance(x, float) and not np.isfinite(x)) else round(x, n)      # noqa: E731
+    out = {"experiment": cfg["experiment"]["name"], "run": run_name, "code_commit": m["git"]["commit"][:7], "git_dirty_at_run": m["git"]["git_dirty"], "note": PS_NOTE,
+           "pauses_rule": cfg["pauses"], "registration_rule": cfg["registration"], "average_rule": cfg["average"], "verdict_target": cfg["verdict"]["main"], "videos": {}}
+    for e in cfg["videos"]:
+        v = e["file"]
+        a = r["analysis"][v]
+        o = out["videos"][v] = {"distance_cm": e["distance_cm"], "hand": e["hand"], "verdict": a["verdict"]["verdict"], "reason": a["verdict"].get("reason"), "warnings": a["verdict"].get("warnings", []),
+                                "n_pauses": len(r["videos"][v]["pauses"]), "estimates": {}}
+        for d, by in a["by"].items():
+            for sn, vv in by.items():
+                for var, b in vv.items():
+                    o["estimates"].setdefault(d, {}).setdefault(sn, {})[var] = {mm: {"f_px": round(b[mm]["f"], 1), "ci95_px": None if not b[mm]["ci"] else [round(x, 1) for x in b[mm]["ci"]], "boundary": b[mm]["boundary"],
+                                                                                         "turn_range_deg": rd(b[mm]["turn_range_deg"], 1), "tilt_median_deg": rd(b[mm]["tilt_median_deg"], 1)} for mm in OD_METHODS if mm in b} | {"n_pauses": b["n_pauses"]}
+    p = hf.resolve(cfg["output"]["results_yaml"])
+    p.write_text(yaml.safe_dump(hf.jsonable(out), allow_unicode=True, sort_keys=False))
+    return p
+
+
+COMMANDS = {"protocol": protocol_main, "frame-filter": ff_main, "same-session": session_main, "overlay": overlay_main, "phase-segmentation": pseg_main, "guide-revision": grev_main, "f-response": fresp_main, "error-factors": ferr_main, "long-video-check": long_main, "generalization": gen_main, "main-camera-extension": ext_main, "wide-60cm": wide_main, "jointset-sets": jset_main, "verdict-calibration": cal_main, "printed-hand": pr_main, "hand-markers": mk_main, "markers-only": mo_main, "free-template": ft_main, "free-shape3d": s3_main, "free-shape3d-hand": h3_main, "free-shape3d-27": e3_main, "free-shape3d-new": e4_main, "mmpose-hand": mm_main, "mmpose-hand-46": mm2_main, "free-shape3d-new2": e5_main, "mmpose-hand-src": mm3_main, "free-shape3d-detectors": fs_main, "free-shape3d-hand-sets": h4_main, "free-shape3d-hand-sets-42track": h4b_main, "oblique-desk": od_main, "oblique-synthetic": sy_main, "oblique-fixed-template": fx_main, "oblique-desk-videos": om_main, "pause-stabilized": ps_main}
 
 
 def main(argv=None):

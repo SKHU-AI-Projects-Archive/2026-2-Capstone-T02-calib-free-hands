@@ -24,6 +24,7 @@ import subprocess
 import sys
 import tempfile
 import time
+import warnings
 import yaml
 from concurrent.futures import ProcessPoolExecutor
 from fractions import Fraction
@@ -5259,6 +5260,107 @@ def od3_job(args) -> dict:
         out["fixed_template"]["template"] = np.asarray(tpl["template"]).tolist()
     out["elapsed_s"] = float(time.time() - t0)
     return out
+
+
+# ====================================================================================================
+# ps  (experiment 55: pause-level stabilisation for 53's oblique desk videos: pauses from the hand box motion (detector independent), every frame of a pause registered to the pause's middle frame
+#      by a SIFT homography on the hand region, the detector joints mapped into that frame and averaged; one observation per pause goes to the supervisor's code through od_job)
+# ====================================================================================================
+def ps_pauses(box: np.ndarray, present: np.ndarray, size_wh, pcfg: dict) -> list:
+    """Pauses: frames whose hand box centre moves less than pcfg.still_frac x the box long side to both neighbours (both present), box off the image border; runs joined across gaps of at most
+    pcfg.max_gap frames; runs of at least pcfg.min_len frames. Returns a list of index arrays."""
+    W, H = size_wh
+    n = len(box)
+    present = np.asarray(present, bool)
+    c = (box[:, :2] + box[:, 2:]) / 2
+    bl = box_long(box)
+    still = np.zeros(n, bool)
+    edge = edge_flags(box, present, W, H)
+    for i in range(1, n - 1):
+        if present[i - 1:i + 2].all() and not edge[i]:
+            still[i] = max(np.linalg.norm(c[i] - c[i - 1]), np.linalg.norm(c[i + 1] - c[i])) / bl[i] < float(pcfg["still_frac"])
+    k = np.flatnonzero(still)
+    if not len(k):
+        return []
+    runs = np.split(k, np.flatnonzero(np.diff(k) > int(pcfg["max_gap"]) + 1) + 1)
+    return [r for r in runs if len(r) >= int(pcfg["min_len"])]
+
+
+def ps_register(pngs: list, seg, ref_kp: np.ndarray, box: np.ndarray, rcfg: dict) -> dict:
+    """SIFT homography from the pause's middle frame to each frame of the pause on the hand region (convex hull of the reference joints, dilated by rcfg.dilate_frac x the box long side; CLAHE),
+    Lowe ratio, USAC_MAGSAC, least-squares refit on the inliers. A frame is registered when it keeps at least rcfg.min_inliers inliers with an inlier RMS of at most rcfg.max_rms_px.
+    Returns {ref, H: {frame: 3x3 | None}, n_inl: {frame: int}, rms: {frame: float}}."""
+    seg = [int(i) for i in seg]
+    ref = seg[len(seg) // 2]
+    clahe = cv2.createCLAHE(clipLimit=float(rcfg["clahe_clip"]), tileGridSize=(8, 8))
+    sift = cv2.SIFT_create(contrastThreshold=float(rcfg["contrast_threshold"]))
+    def gray(i):
+        return clahe.apply(cv2.cvtColor(cv2.imread(pngs[i], cv2.IMREAD_COLOR), cv2.COLOR_BGR2GRAY))
+    g0 = gray(ref)
+    m = np.zeros(g0.shape, np.uint8)
+    pts = ref_kp[np.isfinite(ref_kp).all(1)].astype(np.float32)
+    if len(pts) >= 3:
+        cv2.fillConvexPoly(m, cv2.convexHull(pts).astype(np.int32), 255)
+        r = max(1, int(round(float(rcfg["dilate_frac"]) * float(box_long(box[[ref]])[0]))))
+        m = cv2.dilate(m, np.ones((2 * r + 1, 2 * r + 1), np.uint8))
+    k0, d0 = sift.detectAndCompute(g0, m)
+    out = {"ref": ref, "H": {}, "n_inl": {}, "rms": {}}
+    bf = cv2.BFMatcher(cv2.NORM_L2)
+    for i in seg:
+        if i == ref:
+            out["H"][i], out["n_inl"][i], out["rms"][i] = np.eye(3), len(k0), 0.0
+            continue
+        out["H"][i], out["n_inl"][i], out["rms"][i] = None, 0, float("nan")
+        if d0 is None or len(k0) < 8:
+            continue
+        k1, d1 = sift.detectAndCompute(gray(i), None)
+        if d1 is None or len(k1) < 8:
+            continue
+        mm = [a for a, b in (x for x in bf.knnMatch(d0, d1, k=2) if len(x) == 2) if a.distance < float(rcfg["ratio"]) * b.distance]
+        if len(mm) < 8:
+            continue
+        P = np.float64([k0[a.queryIdx].pt for a in mm])
+        Q = np.float64([k1[a.trainIdx].pt for a in mm])
+        Hm, inl = cv2.findHomography(P, Q, cv2.USAC_MAGSAC, float(rcfg["threshold_px"]))
+        if Hm is None or inl is None or inl.sum() < 4:
+            continue
+        inl = inl.ravel() > 0
+        Hl, _ = cv2.findHomography(P[inl], Q[inl], 0)
+        Hm = Hm if Hl is None else Hl
+        e = cv2.perspectiveTransform(P[inl].reshape(-1, 1, 2), Hm).reshape(-1, 2) - Q[inl]
+        rms = float(np.sqrt((e ** 2).sum(1).mean()))
+        out["n_inl"][i], out["rms"][i] = int(inl.sum()), rms
+        if inl.sum() >= int(rcfg["min_inliers"]) and rms <= float(rcfg["max_rms_px"]):
+            out["H"][i] = Hm
+    return out
+
+
+def ps_average(kp: np.ndarray, mask: np.ndarray, ok: np.ndarray, seg, reg: dict | None, min_share: float) -> dict:
+    """One observation of a pause: the joints of every usable frame (ok and, with reg, registered) mapped into the pause's middle frame (inverse homography; reg None = no mapping, the plain
+    mean of the raw joints) and averaged; a joint counts when it is visible in at least min_share of the usable frames. Returns {kp (21, 2), vis (21,), n_frames, spread_px (RMS of the mapped
+    joints around their mean), ref}."""
+    seg = [int(i) for i in seg]
+    ref = seg[len(seg) // 2] if reg is None else reg["ref"]
+    use = [i for i in seg if ok[i] and (reg is None or reg["H"].get(i) is not None)]
+    J = kp.shape[1]
+    acc = np.full((len(use), J, 2), np.nan)
+    for k, i in enumerate(use):
+        p = np.where(mask[i][:, None], kp[i], np.nan)
+        if reg is not None and i != reg["ref"]:
+            fin = np.isfinite(p).all(1)
+            q = np.full_like(p, np.nan, dtype=np.float64)
+            if fin.any():                                             # perspectiveTransform turns NaN points into (0, 0): map the visible ones only
+                q[fin] = cv2.perspectiveTransform(p[fin].reshape(-1, 1, 2).astype(np.float64), np.linalg.inv(reg["H"][i])).reshape(-1, 2)
+            p = q
+        acc[k] = p
+    cnt = np.isfinite(acc[..., 0]).sum(0)
+    vis = (cnt >= max(1, np.ceil(min_share * len(use)))) if len(use) else np.zeros(J, bool)
+    with np.errstate(invalid="ignore"), warnings.catch_warnings():
+        warnings.simplefilter("ignore", RuntimeWarning)
+        mean = np.nanmean(acc, axis=0) if len(use) else np.full((J, 2), np.nan)
+    d = np.linalg.norm(acc - mean[None], axis=-1)
+    spread = float(np.sqrt(np.nanmean(d[:, vis] ** 2))) if len(use) and vis.any() and np.isfinite(d[:, vis]).any() else float("nan")
+    return {"kp": np.where(vis[:, None], mean, np.nan), "vis": vis, "n_frames": len(use), "spread_px": spread, "ref": ref}
 
 
 def od_fix_lines(path=None) -> list:

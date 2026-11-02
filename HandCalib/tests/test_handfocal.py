@@ -4799,5 +4799,39 @@ class OMVideos(unittest.TestCase):
             self.assertIn("| X.MOV | 75 | left | 실행 실패 |", t)
 
 
+class PSPauses(unittest.TestCase):
+    def test_pauses_registration_and_average(self):
+        n = 30
+        box = np.tile([800.0, 400.0, 1200.0, 800.0], (n, 1))
+        box[10:15] += np.arange(5)[:, None] * 40.0                                                      # moving: frames 10-15 are not still
+        p = hf.ps_pauses(box, np.ones(n, bool), (1920, 1080), {"still_frac": 0.005, "max_gap": 2, "min_len": 5})
+        self.assertEqual([(int(x[0]), int(x[-1])) for x in p], [(1, 9), (16, 28)])
+        rng = np.random.default_rng(0)
+        img = cv2.GaussianBlur((rng.random((1080, 1920)) * 255).astype(np.uint8), (0, 0), 2)
+        with tempfile.TemporaryDirectory() as d:
+            Hs = [np.array([[1, 0, 2.0 * k * k], [0, 1, -1.5 * k * k], [0, 0, 1]]) for k in range(5)]
+            pngs = []
+            for k, Hk in enumerate(Hs):
+                q = str(Path(d) / f"{k}.png")
+                cv2.imwrite(q, cv2.warpPerspective(img, Hk, (1920, 1080)))
+                pngs.append(q)
+            kp = np.tile(np.c_[np.linspace(900, 1100, 21), np.linspace(500, 700, 21)], (5, 1, 1)).astype(float)
+            kp[:] = [cv2.perspectiveTransform(kp[2].reshape(-1, 1, 2), Hk @ np.linalg.inv(Hs[2])).reshape(-1, 2) for Hk in Hs]
+            noisy = kp + rng.normal(0, 1.0, kp.shape)
+            reg = hf.ps_register(pngs, np.arange(5), kp[2], np.tile([800.0, 400.0, 1200.0, 800.0], (5, 1)), {"clahe_clip": 2.0, "contrast_threshold": 0.02, "dilate_frac": 0.2, "ratio": 0.75, "threshold_px": 2.0, "min_inliers": 30, "max_rms_px": 1.5})
+            self.assertEqual(reg["ref"], 2)
+            self.assertTrue(all(reg["H"][i] is not None for i in range(5)), reg["n_inl"])
+            o = hf.ps_average(noisy, np.ones((5, 21), bool), np.ones(5, bool), np.arange(5), reg, 0.5)
+            self.assertLess(np.median(np.linalg.norm(o["kp"] - kp[2], axis=1)), 1.0)
+            plain = hf.ps_average(noisy, np.ones((5, 21), bool), np.ones(5, bool), np.arange(5), None, 0.5)
+            self.assertGreater(np.median(np.linalg.norm(plain["kp"] - kp[2], axis=1)), 3.0)                # the plain mean is off by the motion
+            self.assertEqual(o["n_frames"], 5)
+            m = np.ones((5, 21), bool)
+            m[0, 4] = False                                                                             # a hidden joint must not turn into (0, 0)
+            o2 = hf.ps_average(noisy, m, np.ones(5, bool), np.arange(5), reg, 0.5)
+            self.assertLess(np.linalg.norm(o2["kp"][4] - kp[2][4]), 2.0)
+            self.assertLess(o2["spread_px"], 3.0)
+
+
 if __name__ == "__main__":
     unittest.main()
