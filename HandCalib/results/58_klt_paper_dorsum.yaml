@@ -1,0 +1,935 @@
+experiment: 58_klt_paper_dorsum
+run: runs/58_klt_paper_dorsum/20261103T024025Z
+code_commit: 2a0c35a
+git_dirty_at_run: false
+note: '실험 54 영상 12개에서 두 가지를 기록용으로 본 진단이다(판정 없음). 종이: 손이 멈춘 프레임(실험 53의 정지 규칙)마다 손 옆
+  종이 색으로 종이 영역을 찾고, 윤곽 구간마다 종이-책상 경계를 소수 px로 찾아 보이는 부분으로 네 변의 직선을 맞춘 뒤 교점 4개를 꼭짓점으로
+  썼다. 네 변의 잔차가 모두 1 px 이하인 프레임의 꼭짓점만 교수님 free_template에 넣었다(종이가 구겨져 A4 비율은 쓰지 않음).
+  손등 몸통: 실험 56의 연속 KLT 체인(설정 그대로)을 손목과 손가락 뿌리 관절(0, 1, 5, 9, 13, 17)의 볼록 영역(넓히지 않음)에만
+  돌리고, 기준 프레임 MediaPipe 관절 16점을 옮겨 free_template·free_shape3d(od_job 그대로)에 넣었다. 부트스트랩은
+  실험 56과 같다. 기준 f와의 비교는 summary.md에만 있다.'
+tracking_rule:
+  fps: 30
+  dilate_frac: 0.03
+  max_corners: 400
+  quality: 0.01
+  min_distance: 7
+  block: 7
+  win: 21
+  levels: 3
+  fb_px: 1.0
+  threshold_px: 1.5
+  min_inliers: 20
+paper_rule:
+  ring:
+  - 0.12
+  - 0.2
+  seed_pct: 75
+  color_tol: 6.0
+  light_drop: 90.0
+  open_px: 7
+  join_frac: 0.05
+  seg_eps: 0.01
+  seg_min: 0.04
+  step_px: 4
+  search_px: 12
+  blur_sigma: 1.0
+  contrast_min: 20
+  hand_dilate_frac: 0.1
+  trim_px: 3.0
+  min_points: 15
+  merge_deg: 5.0
+  min_span: 0.3
+  mid_frac: 0.1
+  rms_max_px: 1.0
+dorsum_rule:
+  joints:
+  - 0
+  - 1
+  - 5
+  - 9
+  - 13
+  - 17
+  dilate_frac: 0.0
+videos:
+  IMG_7346.MOV:
+    distance_cm: 50
+    hand: right
+    tracking:
+      n_frames: 678
+      ref: 338
+      ref_t: 11.266666666666667
+      paper:
+        n_still: 400
+        n_fitted: 215
+        excluded:
+          변 가려짐: 185
+        n_rms_over: 209
+        n_kept: 6
+        n_use: 6
+        sides:
+          '0':
+            n: 215
+            rms_median_px: 0.5195546608827608
+            rms_p90_px: 0.7473815097200581
+            bend_abs_median_px: 0.2989073701833185
+            bend_abs_max_px: 0.8245815688856274
+          '1':
+            n: 215
+            rms_median_px: 1.2617383242046776
+            rms_p90_px: 1.4715851567424956
+            bend_abs_median_px: 1.0007322298624457
+            bend_abs_max_px: 1.747762131369408
+          '2':
+            n: 215
+            rms_median_px: 0.4068224045672531
+            rms_p90_px: 0.463060845845772
+            bend_abs_median_px: 0.08803962646339011
+            bend_abs_max_px: 0.5473804060704648
+          '3':
+            n: 215
+            rms_median_px: 0.5348715057510637
+            rms_p90_px: 1.0511309252769012
+            bend_abs_median_px: 0.677406035837304
+            bend_abs_max_px: 0.9644930070241657
+      dorsum:
+        breaks: 0
+        n_valid: 678
+        n_edge: 151
+        n_use: 527
+        inl_median: 284.0
+        loops:
+          뒤쪽:
+            median_px: 10.596104352640577
+            frames: 339
+          앞쪽:
+            median_px: 4.096877675175196
+            frames: 338
+    estimates:
+      paper:
+        free_template:
+          f_px: 1555.2
+          ci95_px:
+          - 1555.2
+          - 1555.2
+          boundary: false
+          tilt_median_deg: 48.1
+      dorsum:
+        free_template:
+          f_px: 3072.0
+          ci95_px:
+          - 1945.3
+          - 3072.0
+          boundary: true
+          tilt_median_deg: 51.6
+        free_shape3d:
+          f_px: 3072.0
+          ci95_px:
+          - 1312.1
+          - 3072.0
+          boundary: true
+          tilt_median_deg: 47.2
+  IMG_7347.MOV:
+    distance_cm: 50
+    hand: left
+    tracking:
+      n_frames: 658
+      ref: 328
+      ref_t: 10.933333333333334
+      paper:
+        n_still: 333
+        n_fitted: 245
+        excluded:
+          변 가려짐: 88
+        n_rms_over: 245
+        n_kept: 0
+        n_use: 0
+        failed: 잔차 기준 안의 프레임 없음
+        sides:
+          '0':
+            n: 245
+            rms_median_px: 1.0001954871029743
+            rms_p90_px: 1.4387663899782566
+            bend_abs_median_px: 0.3411619267629264
+            bend_abs_max_px: 0.6602560807710518
+          '1':
+            n: 245
+            rms_median_px: 1.3147917938951594
+            rms_p90_px: 1.6513994557577527
+            bend_abs_median_px: 1.1392552560483569
+            bend_abs_max_px: 2.9541893097775946
+          '2':
+            n: 245
+            rms_median_px: 0.482827981426004
+            rms_p90_px: 1.2824329096322231
+            bend_abs_median_px: 0.44729185585087505
+            bend_abs_max_px: 2.9025227290679156
+          '3':
+            n: 245
+            rms_median_px: 0.671175391992011
+            rms_p90_px: 1.494099307048912
+            bend_abs_median_px: 0.24588094562076537
+            bend_abs_max_px: 2.9619593215684175
+      dorsum:
+        breaks: 0
+        n_valid: 658
+        n_edge: 165
+        n_use: 493
+        inl_median: 252.0
+        loops:
+          뒤쪽:
+            median_px: 5.651285151767899
+            frames: 329
+          앞쪽:
+            median_px: 5.255732255690824
+            frames: 328
+    estimates:
+      dorsum:
+        free_template:
+          f_px: 2022.7
+          ci95_px:
+          - 993.0
+          - 3072.0
+          boundary: false
+          tilt_median_deg: 35.4
+        free_shape3d:
+          f_px: 1669.1
+          ci95_px:
+          - 672.0
+          - 3072.0
+          boundary: false
+          tilt_median_deg: 33.3
+  IMG_7348.MOV:
+    distance_cm: 50
+    hand: right
+    tracking:
+      n_frames: 618
+      ref: 308
+      ref_t: 10.266666666666667
+      paper:
+        n_still: 418
+        n_fitted: 208
+        excluded:
+          변 가려짐: 210
+        n_rms_over: 208
+        n_kept: 0
+        n_use: 0
+        failed: 잔차 기준 안의 프레임 없음
+        sides:
+          '0':
+            n: 208
+            rms_median_px: 0.40307321899269777
+            rms_p90_px: 1.4222186979349933
+            bend_abs_median_px: 0.059040949018578176
+            bend_abs_max_px: 0.5141663147318617
+          '1':
+            n: 208
+            rms_median_px: 1.4955672793998058
+            rms_p90_px: 1.646729254021867
+            bend_abs_median_px: 2.112304841675763
+            bend_abs_max_px: 2.9961369731115743
+          '2':
+            n: 208
+            rms_median_px: 0.466734523904459
+            rms_p90_px: 1.0409520138868231
+            bend_abs_median_px: 0.12488707291257575
+            bend_abs_max_px: 1.2048561759696488
+          '3':
+            n: 208
+            rms_median_px: 0.37170286434597233
+            rms_p90_px: 1.1742411591795996
+            bend_abs_median_px: 0.0401891913815845
+            bend_abs_max_px: 0.0963364704916439
+      dorsum:
+        breaks: 0
+        n_valid: 618
+        n_edge: 0
+        n_use: 618
+        inl_median: 272.0
+        loops:
+          뒤쪽:
+            median_px: 2.569787106073369
+            frames: 309
+          앞쪽:
+            median_px: 2.2380551002508873
+            frames: 308
+    estimates:
+      dorsum:
+        free_template:
+          f_px: 1118.5
+          ci95_px:
+          - 686.7
+          - 3072.0
+          boundary: false
+          tilt_median_deg: 60.8
+        free_shape3d:
+          f_px: 922.6
+          ci95_px:
+          - 689.9
+          - 3072.0
+          boundary: false
+          tilt_median_deg: 58.0
+  IMG_7349.MOV:
+    distance_cm: 50
+    hand: left
+    tracking:
+      n_frames: 683
+      ref: 341
+      ref_t: 11.366666666666667
+      paper:
+        n_still: 359
+        n_fitted: 285
+        excluded:
+          변 가려짐: 74
+        n_rms_over: 285
+        n_kept: 0
+        n_use: 0
+        failed: 잔차 기준 안의 프레임 없음
+        sides:
+          '0':
+            n: 285
+            rms_median_px: 0.8847235940289166
+            rms_p90_px: 1.0568061079328868
+            bend_abs_median_px: 0.1417023701892152
+            bend_abs_max_px: 0.6651670518132008
+          '1':
+            n: 285
+            rms_median_px: 1.3783342022613434
+            rms_p90_px: 1.7720668066136331
+            bend_abs_median_px: 1.5709819613139269
+            bend_abs_max_px: 2.91667098309906
+          '2':
+            n: 285
+            rms_median_px: 0.581552761972654
+            rms_p90_px: 1.2395846079285588
+            bend_abs_median_px: 0.43883514196796547
+            bend_abs_max_px: 2.822566859041174
+          '3':
+            n: 285
+            rms_median_px: 0.42677834809032683
+            rms_p90_px: 1.5545431454429537
+            bend_abs_median_px: 0.029611704438782083
+            bend_abs_max_px: 2.157117245749092
+      dorsum:
+        breaks: 0
+        n_valid: 683
+        n_edge: 170
+        n_use: 513
+        inl_median: 232.0
+        loops:
+          뒤쪽:
+            median_px: 1.9741053258389336
+            frames: 341
+          앞쪽:
+            median_px: 18.128632906720657
+            frames: 341
+    estimates:
+      dorsum:
+        free_template:
+          f_px: 3072.0
+          ci95_px:
+          - 2337.2
+          - 3072.0
+          boundary: true
+          tilt_median_deg: 52.3
+        free_shape3d:
+          f_px: 3072.0
+          ci95_px:
+          - 2842.8
+          - 3072.0
+          boundary: true
+          tilt_median_deg: 53.2
+  IMG_7350.MOV:
+    distance_cm: 60
+    hand: right
+    tracking:
+      n_frames: 700
+      ref: 349
+      ref_t: 11.633333333333333
+      paper:
+        n_still: 485
+        n_fitted: 463
+        excluded:
+          변 가려짐: 22
+        n_rms_over: 109
+        n_kept: 354
+        n_use: 354
+        sides:
+          '0':
+            n: 463
+            rms_median_px: 0.5368476066346469
+            rms_p90_px: 0.7334951839077711
+            bend_abs_median_px: 0.2198731564135578
+            bend_abs_max_px: 0.8073280546852161
+          '1':
+            n: 463
+            rms_median_px: 0.44506924495287875
+            rms_p90_px: 0.6151282569220121
+            bend_abs_median_px: 0.0710486738805863
+            bend_abs_max_px: 0.4638032323723589
+          '2':
+            n: 463
+            rms_median_px: 0.35822579986662095
+            rms_p90_px: 0.9832042543093522
+            bend_abs_median_px: 0.2586455961019565
+            bend_abs_max_px: 1.193121065636632
+          '3':
+            n: 463
+            rms_median_px: 0.6237512455675764
+            rms_p90_px: 1.0532107795116803
+            bend_abs_median_px: 0.3881737036783691
+            bend_abs_max_px: 2.605097460026758
+      dorsum:
+        breaks: 0
+        n_valid: 700
+        n_edge: 0
+        n_use: 700
+        inl_median: 206.0
+        loops:
+          뒤쪽:
+            median_px: 3.441495229679666
+            frames: 350
+          앞쪽:
+            median_px: 4.6829958390219035
+            frames: 349
+    estimates:
+      paper:
+        free_template:
+          f_px: 1551.1
+          ci95_px:
+          - 1532.5
+          - 1566.4
+          boundary: false
+          tilt_median_deg: 45.6
+      dorsum:
+        free_template:
+          f_px: 3072.0
+          ci95_px:
+          - 1237.6
+          - 3072.0
+          boundary: true
+          tilt_median_deg: 78.5
+        free_shape3d:
+          f_px: 2229.0
+          ci95_px:
+          - 1249.8
+          - 3072.0
+          boundary: false
+          tilt_median_deg: 74.6
+  IMG_7351.MOV:
+    distance_cm: 60
+    hand: left
+    tracking:
+      n_frames: 645
+      ref: 322
+      ref_t: 10.733333333333333
+      paper:
+        n_still: 393
+        n_fitted: 339
+        excluded:
+          변 가려짐: 54
+        n_rms_over: 339
+        n_kept: 0
+        n_use: 0
+        failed: 잔차 기준 안의 프레임 없음
+        sides:
+          '0':
+            n: 339
+            rms_median_px: 0.925353121351931
+            rms_p90_px: 0.9756838921920409
+            bend_abs_median_px: 0.7415599014783374
+            bend_abs_max_px: 0.9732939820198503
+          '1':
+            n: 339
+            rms_median_px: 1.2408829845907516
+            rms_p90_px: 1.6136888664374551
+            bend_abs_median_px: 0.730044212393091
+            bend_abs_max_px: 2.864528409252711
+          '2':
+            n: 339
+            rms_median_px: 0.5714566035523079
+            rms_p90_px: 0.8013041258344114
+            bend_abs_median_px: 0.5379973412251768
+            bend_abs_max_px: 1.975002102453435
+          '3':
+            n: 339
+            rms_median_px: 1.2456960206078191
+            rms_p90_px: 1.4025258625516739
+            bend_abs_median_px: 1.0975351168929655
+            bend_abs_max_px: 1.8110247275470253
+      dorsum:
+        breaks: 0
+        n_valid: 645
+        n_edge: 238
+        n_use: 407
+        inl_median: 178.0
+        loops:
+          뒤쪽:
+            median_px: 3.608867100673507
+            frames: 322
+          앞쪽:
+            median_px: 16.171151659606835
+            frames: 322
+    estimates:
+      dorsum:
+        free_template:
+          f_px: 973.6
+          ci95_px:
+          - 672.0
+          - 3072.0
+          boundary: false
+          tilt_median_deg: 47.8
+        free_shape3d:
+          f_px: 969.5
+          ci95_px:
+          - 672.0
+          - 3072.0
+          boundary: false
+          tilt_median_deg: 47.7
+  IMG_7352.MOV:
+    distance_cm: 60
+    hand: right
+    tracking:
+      n_frames: 707
+      ref: 353
+      ref_t: 11.766666666666667
+      paper:
+        n_still: 446
+        n_fitted: 92
+        excluded:
+          변 가려짐: 354
+        n_rms_over: 4
+        n_kept: 88
+        n_use: 88
+        sides:
+          '0':
+            n: 92
+            rms_median_px: 0.7066347229779184
+            rms_p90_px: 0.7318658970596632
+            bend_abs_median_px: 0.7339346719814108
+            bend_abs_max_px: 0.799134351596413
+          '1':
+            n: 92
+            rms_median_px: 0.7220969727333681
+            rms_p90_px: 0.747822230358826
+            bend_abs_median_px: 0.5492492434297829
+            bend_abs_max_px: 1.4625391228205815
+          '2':
+            n: 92
+            rms_median_px: 0.6602173230520192
+            rms_p90_px: 0.6977183815111583
+            bend_abs_median_px: 0.16577875034424797
+            bend_abs_max_px: 1.3811844706984548
+          '3':
+            n: 92
+            rms_median_px: 0.8415798253020002
+            rms_p90_px: 0.8700491577698259
+            bend_abs_median_px: 0.7830719148702361
+            bend_abs_max_px: 0.9212847949798506
+      dorsum:
+        breaks: 0
+        n_valid: 707
+        n_edge: 164
+        n_use: 543
+        inl_median: 194.0
+        loops:
+          뒤쪽:
+            median_px: 9.58159964830795
+            frames: 353
+          앞쪽:
+            median_px: 4.908528924370143
+            frames: 353
+    estimates:
+      paper:
+        free_template:
+          f_px: 3072.0
+          ci95_px:
+          - 2934.3
+          - 3072.0
+          boundary: true
+          tilt_median_deg: 6.4
+      dorsum:
+        free_template:
+          f_px: 2351.1
+          ci95_px:
+          - 672.0
+          - 3072.0
+          boundary: false
+          tilt_median_deg: 50.1
+        free_shape3d:
+          f_px: 2660.4
+          ci95_px:
+          - 672.0
+          - 3072.0
+          boundary: false
+          tilt_median_deg: 48.8
+  IMG_7353.MOV:
+    distance_cm: 60
+    hand: left
+    tracking:
+      n_frames: 681
+      ref: 340
+      ref_t: 11.333333333333334
+      paper:
+        n_still: 433
+        n_fitted: 419
+        excluded:
+          변 가려짐: 14
+        n_rms_over: 417
+        n_kept: 2
+        n_use: 2
+        sides:
+          '0':
+            n: 419
+            rms_median_px: 0.8342549128040225
+            rms_p90_px: 1.7307461045401598
+            bend_abs_median_px: 0.7421133662294479
+            bend_abs_max_px: 0.8707753630964891
+          '1':
+            n: 419
+            rms_median_px: 1.6035324432383862
+            rms_p90_px: 1.761499256489276
+            bend_abs_median_px: 0.4996928672076392
+            bend_abs_max_px: 2.4835622402484265
+          '2':
+            n: 419
+            rms_median_px: 0.5333125840798353
+            rms_p90_px: 1.3813685095180075
+            bend_abs_median_px: 0.5439338935048186
+            bend_abs_max_px: 1.0705681768327542
+          '3':
+            n: 419
+            rms_median_px: 1.1257929764527863
+            rms_p90_px: 1.4012790851883459
+            bend_abs_median_px: 0.7842717317817789
+            bend_abs_max_px: 2.726306503411437
+      dorsum:
+        breaks: 1
+        n_valid: 413
+        n_edge: 49
+        n_use: 364
+        inl_median: 193.0
+        loops:
+          뒤쪽:
+            median_px: 6.326253818576215
+            frames: 340
+          앞쪽:
+            median_px: null
+            frames: 340
+    estimates:
+      dorsum:
+        free_template:
+          f_px: 3072.0
+          ci95_px:
+          - 1062.4
+          - 3072.0
+          boundary: true
+          tilt_median_deg: 81.9
+        free_shape3d:
+          f_px: 3072.0
+          ci95_px:
+          - 765.0
+          - 3072.0
+          boundary: true
+          tilt_median_deg: 82.3
+  IMG_7354.MOV:
+    distance_cm: 75
+    hand: right
+    tracking:
+      n_frames: 624
+      ref: 311
+      ref_t: 10.366666666666667
+      paper:
+        n_still: 384
+        n_fitted: 283
+        excluded:
+          변 가려짐: 101
+        n_rms_over: 274
+        n_kept: 9
+        n_use: 9
+        sides:
+          '0':
+            n: 283
+            rms_median_px: 0.508624296084765
+            rms_p90_px: 1.098394079457977
+            bend_abs_median_px: 0.45828203100558157
+            bend_abs_max_px: 1.5361431790425883
+          '1':
+            n: 283
+            rms_median_px: 0.9021102401407289
+            rms_p90_px: 1.3541970623409643
+            bend_abs_median_px: 0.7300373736251451
+            bend_abs_max_px: 2.995528877985529
+          '2':
+            n: 283
+            rms_median_px: 0.7164313451589106
+            rms_p90_px: 1.1336488345832456
+            bend_abs_median_px: 0.5460932895670285
+            bend_abs_max_px: 2.288636388213316
+          '3':
+            n: 283
+            rms_median_px: 0.6132421286143083
+            rms_p90_px: 1.073399657314167
+            bend_abs_median_px: 0.47868285315227516
+            bend_abs_max_px: 1.2599123730498014
+      dorsum:
+        breaks: 0
+        n_valid: 624
+        n_edge: 0
+        n_use: 624
+        inl_median: 121.0
+        loops:
+          뒤쪽:
+            median_px: 3.4802723672102878
+            frames: 312
+          앞쪽:
+            median_px: 7.391219553514636
+            frames: 311
+    estimates:
+      paper:
+        free_template:
+          f_px: 1540.0
+          ci95_px:
+          - 1540.0
+          - 1540.0
+          boundary: false
+          tilt_median_deg: 37.9
+      dorsum:
+        free_template:
+          f_px: 3072.0
+          ci95_px:
+          - 672.0
+          - 3072.0
+          boundary: true
+          tilt_median_deg: 73.0
+        free_shape3d:
+          f_px: 3072.0
+          ci95_px:
+          - 672.0
+          - 3072.0
+          boundary: true
+          tilt_median_deg: 73.3
+  IMG_7355.MOV:
+    distance_cm: 75
+    hand: left
+    tracking:
+      n_frames: 609
+      ref: 304
+      ref_t: 10.133333333333333
+      paper:
+        n_still: 325
+        n_fitted: 255
+        excluded:
+          변 가려짐: 70
+        n_rms_over: 226
+        n_kept: 29
+        n_use: 29
+        sides:
+          '0':
+            n: 255
+            rms_median_px: 1.2482100692229559
+            rms_p90_px: 1.443443636865694
+            bend_abs_median_px: 0.34822089987969
+            bend_abs_max_px: 2.341585737113803
+          '1':
+            n: 255
+            rms_median_px: 1.3831716611058409
+            rms_p90_px: 1.6640873006849215
+            bend_abs_median_px: 0.7681409795403382
+            bend_abs_max_px: 2.3401841996668646
+          '2':
+            n: 255
+            rms_median_px: 0.8557021205168291
+            rms_p90_px: 1.1692278348255656
+            bend_abs_median_px: 0.4154793049819968
+            bend_abs_max_px: 1.5488382617283387
+          '3':
+            n: 255
+            rms_median_px: 0.6979133548239376
+            rms_p90_px: 1.543362921537049
+            bend_abs_median_px: 0.16762197232981124
+            bend_abs_max_px: 2.7690558900037283
+      dorsum:
+        breaks: 2
+        n_valid: 144
+        n_edge: 90
+        n_use: 54
+        inl_median: 29.0
+        loops:
+          뒤쪽:
+            median_px: null
+            frames: 304
+          앞쪽:
+            median_px: null
+            frames: 304
+    estimates:
+      paper:
+        free_template:
+          f_px: 3072.0
+          ci95_px:
+          - 3072.0
+          - 3072.0
+          boundary: true
+          tilt_median_deg: 4.2
+      dorsum:
+        free_template:
+          f_px: 672.0
+          ci95_px:
+          - 672.0
+          - 672.0
+          boundary: true
+          tilt_median_deg: 49.5
+        free_shape3d:
+          f_px: 672.0
+          ci95_px:
+          - 672.0
+          - 672.0
+          boundary: true
+          tilt_median_deg: 63.2
+  IMG_7356.MOV:
+    distance_cm: 75
+    hand: right
+    tracking:
+      n_frames: 627
+      ref: 313
+      ref_t: 10.433333333333334
+      paper:
+        n_still: 401
+        n_fitted: 369
+        excluded:
+          변 가려짐: 32
+        n_rms_over: 369
+        n_kept: 0
+        n_use: 0
+        failed: 잔차 기준 안의 프레임 없음
+        sides:
+          '0':
+            n: 369
+            rms_median_px: 0.48104206935420685
+            rms_p90_px: 0.6240887363103329
+            bend_abs_median_px: 0.3487855789842723
+            bend_abs_max_px: 0.6174978654921095
+          '1':
+            n: 369
+            rms_median_px: 1.5784487834137666
+            rms_p90_px: 1.7338524583007122
+            bend_abs_median_px: 2.8109706122447884
+            bend_abs_max_px: 2.9744963398851
+          '2':
+            n: 369
+            rms_median_px: 0.7714590766131028
+            rms_p90_px: 1.0957831096317003
+            bend_abs_median_px: 0.6104994297839086
+            bend_abs_max_px: 0.8163890993390358
+          '3':
+            n: 369
+            rms_median_px: 1.2376054856095888
+            rms_p90_px: 1.3866843488588219
+            bend_abs_median_px: 0.041516163943224826
+            bend_abs_max_px: 0.3946688546748418
+      dorsum:
+        breaks: 0
+        n_valid: 627
+        n_edge: 0
+        n_use: 627
+        inl_median: 124.0
+        loops:
+          뒤쪽:
+            median_px: 0.6074167911411593
+            frames: 313
+          앞쪽:
+            median_px: 6.84500808133141
+            frames: 313
+    estimates:
+      dorsum:
+        free_template:
+          f_px: 1181.4
+          ci95_px:
+          - 672.0
+          - 3072.0
+          boundary: false
+          tilt_median_deg: 69.2
+        free_shape3d:
+          f_px: 672.0
+          ci95_px:
+          - 672.0
+          - 1270.6
+          boundary: true
+          tilt_median_deg: 59.5
+  IMG_7357.MOV:
+    distance_cm: 75
+    hand: left
+    tracking:
+      n_frames: 601
+      ref: 300
+      ref_t: 10.0
+      paper:
+        n_still: 302
+        n_fitted: 223
+        excluded:
+          변 가려짐: 79
+        n_rms_over: 209
+        n_kept: 14
+        n_use: 14
+        sides:
+          '0':
+            n: 223
+            rms_median_px: 0.5890824470955875
+            rms_p90_px: 1.1828416768904513
+            bend_abs_median_px: 0.4486550574314306
+            bend_abs_max_px: 2.8815103806499485
+          '1':
+            n: 223
+            rms_median_px: 1.3492150120184612
+            rms_p90_px: 1.5807275085887311
+            bend_abs_median_px: 1.9243188476444817
+            bend_abs_max_px: 2.9887677242426225
+          '2':
+            n: 223
+            rms_median_px: 0.7045627551548646
+            rms_p90_px: 0.9596314332437926
+            bend_abs_median_px: 0.25608942322072337
+            bend_abs_max_px: 1.005958701445726
+          '3':
+            n: 223
+            rms_median_px: 0.4670871757592264
+            rms_p90_px: 1.2997102842601327
+            bend_abs_median_px: 0.08260636171401743
+            bend_abs_max_px: 2.153173649461963
+      dorsum:
+        breaks: 1
+        n_valid: 448
+        n_edge: 33
+        n_use: 415
+        inl_median: 104.0
+        loops:
+          뒤쪽:
+            median_px: 2.3272744376286747
+            frames: 300
+          앞쪽:
+            median_px: null
+            frames: 300
+    estimates:
+      paper:
+        free_template:
+          f_px: 3070.9
+          ci95_px:
+          - 3070.9
+          - 3070.9
+          boundary: true
+          tilt_median_deg: 54.1
+      dorsum:
+        free_template:
+          f_px: 3072.0
+          ci95_px:
+          - 672.0
+          - 3072.0
+          boundary: true
+          tilt_median_deg: 83.6
+        free_shape3d:
+          f_px: 762.5
+          ci95_px:
+          - 672.0
+          - 3072.0
+          boundary: false
+          tilt_median_deg: 69.1
