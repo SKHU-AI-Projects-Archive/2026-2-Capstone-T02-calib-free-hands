@@ -10460,7 +10460,332 @@ def pp_results_yaml(run_dir: Path, cfg: dict):
     return p
 
 
-COMMANDS = {"protocol": protocol_main, "frame-filter": ff_main, "same-session": session_main, "overlay": overlay_main, "phase-segmentation": pseg_main, "guide-revision": grev_main, "f-response": fresp_main, "error-factors": ferr_main, "long-video-check": long_main, "generalization": gen_main, "main-camera-extension": ext_main, "wide-60cm": wide_main, "jointset-sets": jset_main, "verdict-calibration": cal_main, "printed-hand": pr_main, "hand-markers": mk_main, "markers-only": mo_main, "free-template": ft_main, "free-shape3d": s3_main, "free-shape3d-hand": h3_main, "free-shape3d-27": e3_main, "free-shape3d-new": e4_main, "mmpose-hand": mm_main, "mmpose-hand-46": mm2_main, "free-shape3d-new2": e5_main, "mmpose-hand-src": mm3_main, "free-shape3d-detectors": fs_main, "free-shape3d-hand-sets": h4_main, "free-shape3d-hand-sets-42track": h4b_main, "oblique-desk": od_main, "oblique-synthetic": sy_main, "oblique-fixed-template": fx_main, "oblique-desk-videos": om_main, "pause-stabilized": ps_main, "continuous-klt": kt_main, "continuous-klt-palm": kp_main, "klt-paper-dorsum": pp_main}
+# ====================================================================================================
+# hp  (experiment 59, record only, 58's rules: 1. IMG_7350 - the hand points seen against the paper: paper corners -> free_template f, template and per-frame paper poses; each hand point
+#      rigid to the paper triangulated (height above the paper) and the reprojection residuals of three models (free heights / one plane / the paper plane), for 56's tracked points and the
+#      mediapipe joints; free_shape3d with z_rel 0.2 and 0.5. 2. 7352 / 7355 (and 7350 as a control) - do the paper corner labels change between pauses? (hand joints moved by the paper
+#      homography of each cyclic relabelling); relabelled paper f when they do)
+#     python HandCalib/run.py paper-parallax --config HandCalib/configs/59_paper_parallax.yaml [--out DIR]
+#     python HandCalib/run.py paper-parallax --config ... results-yaml --run runs/59_paper_parallax/<UTC>
+# ====================================================================================================
+HP_NOTE = ("실험 58의 규칙(종이 변 맞추기, 잔차 1 px 이하 프레임, 실험 56 추적 설정과 부트스트랩)을 그대로 쓴 기록용 진단이다(판정 없음). 1) IMG_7350: 종이 꼭짓점으로 free_template의 f·종이 모양·프레임별 종이 자세를 구하고, "
+           "손이 종이에 붙어 움직인다고 보고 손 점마다 종이 기준 3차원 위치를 재투영 최소제곱으로 구했다(종이 호모그래피로 남는 시차를 높이로 푼 것). 높이는 종이 긴 변 대비 %와 긴 변을 297 mm로 둔 mm로 적었다. "
+           "점별 높이 모델·한 평면 모델·종이 평면(높이 0) 모델의 재투영 잔차를 비교했고, 손 점은 실험 56의 추적점과 MediaPipe 검출 관절 두 가지로 냈다. free_shape3d는 z_rel 0.2와 0.5로 돌렸다. "
+           "2) IMG_7352·7355(대조 7350): 멈춤 구간마다 꼭짓점 번호를 네 가지로 돌려 종이 호모그래피로 손 관절을 기준 구간에 옮겼을 때 가장 잘 겹치는 번호를 찾고, 번호가 바뀐 구간이 있으면 번호만 고쳐 종이 f를 다시 냈다. "
+           "기준 f와의 비교는 summary.md에만 있다.")
+
+
+def hp_video_job(args):
+    """Frames, detection and track (58's pp_video steps); the paper's sides on the still frames and the labelled corners of the frames within rms_max_px (58's rule); with chain=True also
+    56's hand chain (kt_chain on the joint hull widened by 3 %, reference = the middle detected frame) and its moved joints. Runs in a worker; returns (result, log lines)."""
+    e, cfg, run_root, chain = args
+    cv2.setNumThreads(1)
+    lines = []
+    log = lines.append
+    pc = copy.deepcopy(cfg["pipeline"])
+    pc["frames"]["detect_fps"] = int(cfg["tracking"]["fps"])
+    v = e["file"]
+    tmp_root = Path(run_root) / f"_frames_{Path(v).stem}"
+    tmp_root.mkdir(exist_ok=True)
+    kc, pcf = cfg["tracking"], cfg["paper"]
+    try:
+        prep = hf.fresp_prepare((v, cfg["input_dir"], pc, {}, str(tmp_root)))
+        frames, (W, H) = prep["frames"], prep["size"]
+        times = np.array([r["time_s"] for r in frames])
+        npz = hf.fresp_detect_many([((v, "orig"), frames)], cfg["detector_settings"]["mediapipe_hands"], Path(run_root) / "detection_cache", int(cfg["n_workers"]), log)[(v, "orig")]
+        d = hf.load_detections(Path(npz))
+        hf.check_alignment(frames, d)
+        p2 = copy.deepcopy(pc)
+        p2["tracking"]["conf_min"] = float(cfg["detector_settings"]["mediapipe_hands"]["conf_min"])
+        tr = hf.track(d, times, (W, H), p2["tracking"], front_start_s=float(p2["phases"]["front_skip_s"]))
+        pres = np.flatnonzero(tr["present"])
+        n = len(times)
+        a, b = int(pres[0]), int(pres[-1])
+        ref = int(pres[np.argmin(np.abs(pres - (a + b) / 2))])
+        kps = np.stack([hf.kt_carry(tr["present"], tr["kp"][:, j, k]) for j in range(21) for k in range(2)], axis=1).reshape(n, 21, 2)
+        boxes = np.stack([hf.kt_carry(tr["present"], tr["box"][:, k]) for k in range(4)], axis=1)
+        pngs = [r["png"] for r in frames]
+        motion = hf.od_select(tr["kp"], tr["mask"], tr["present"], tr["box"], (W, H), cfg["selection"])["motion"]
+        still = np.flatnonzero(np.isfinite(motion) & (motion < float(cfg["selection"]["still_frac"])))
+        fits = {int(i): hf.pq_frame(cv2.imread(pngs[i], cv2.IMREAD_COLOR), tr["kp"][i], tr["box"][i], pcf) for i in still}
+        out = {"size": (W, H), "n_frames": n, "ref": ref, "times": times, "det_kp": tr["kp"], "det_present": tr["present"], "det_box": tr["box"]}
+        if chain:
+            fwd = hf.kt_chain(pngs, kps, boxes, list(range(ref, b + 1)), kc)
+            bwd = hf.kt_chain(pngs, kps, boxes, list(range(ref, a - 1, -1)), kc)
+            kp, tb, valid, edge = pp_points(tr["kp"][ref], {**bwd["H"], **fwd["H"]}, n, W, H)
+            out.update({"trk_kp": kp, "trk_box": tb, "trk_use": valid & ~edge, "trk_breaks": fwd["breaks"] + bwd["breaks"]})
+    finally:
+        shutil.rmtree(tmp_root, ignore_errors=True)
+    kept = sorted(i for i, r in fits.items() if r["status"] == "ok" and r["rms_max_px"] <= float(pcf["rms_max_px"]))
+    out["kept"] = kept
+    out["corners"] = {}
+    if kept:
+        r0 = min(kept, key=lambda i: abs(i - ref))
+        _, rel0 = hf.pq_order(fits[r0]["corners"], tr["kp"][r0])
+        out["corners"] = {i: hf.pq_order(fits[i]["corners"], tr["kp"][i], rel0)[0] for i in kept}
+        out["r0"] = r0
+    log(f"  {v}: 멈춘 프레임 {len(fits)}, 잔차 {pcf['rms_max_px']} px 이하 {len(kept)}" + (f", 손 추적 사용 {int(out['trk_use'].sum())} (끊김 {out['trk_breaks']})" if chain else ""))
+    return out, lines
+
+
+def hp_paper_track(x: dict, labels: dict | None = None):
+    """The kept frames' corners as a 4-point track (n, 4, 2), relabelled per frame by labels {frame: cyclic shift} when given; mask, box, frame list."""
+    n = x["n_frames"]
+    kp4 = np.full((n, 4, 2), np.nan)
+    for i, c in x["corners"].items():
+        kp4[i] = np.roll(c, -int((labels or {}).get(i, 0)), axis=0)
+    valid = np.isfinite(kp4).all((1, 2))
+    tb = np.full((n, 4), np.nan)
+    tb[valid] = np.c_[kp4[valid].min(1), kp4[valid].max(1)]
+    return kp4, np.isfinite(kp4).all(2), tb, np.flatnonzero(valid)
+
+
+def hp_parallax(x: dict, cfg: dict) -> dict:
+    """1. on one video: free_template on the paper corners (the main estimate, as pq_job), the paper poses (frame_fit at that f), then for each hand point source the three models of
+    hf.hp_fit_points on the kept frames; heights signed towards the camera, in % of the paper's long side (mean of the two longer template sides) and in mm with that side = 297 mm."""
+    ecfg = cfg["pipeline"]["estimate"]
+    W, H = x["size"]
+    kp4, m4, b4, fr = hp_paper_track(x)
+    pb = hf.od_bridge(kp4, m4, fr, b4, (W, H), ecfg, None)
+    A = hf.free_template(pb, hf.f_grid(ecfg, max(W, H)))
+    T, f = np.asarray(A["template"], float), float(A["f"])
+    K = hf.K_of(f, pb.cx, pb.cy)
+    Rs, ts, tilt = [], [], []
+    for o, vv in pb.frames:
+        _, R, t = hf.frame_fit(T, o, vv, K)
+        Rs.append(R)
+        ts.append(t)
+        tilt.append(float(np.degrees(np.arccos(min(abs(R[2, 2]), 1.0)))))
+    Rs, ts = np.array(Rs), np.array(ts)
+    sgn = float(np.sign(np.median([-(R.T @ t)[2] for R, t in zip(Rs, ts)])))
+    sides = sorted(float(np.linalg.norm(T[(k + 1) % 4] - T[k])) for k in range(4))
+    long_side, short_side = (sides[2] + sides[3]) / 2, (sides[0] + sides[1]) / 2
+    j16 = np.array(cfg["joint_sets"]["main"]["ids"])
+    groups = hf.hp_groups(fr, int(cfg["pause_gap_frames"]))
+    gi = {i: k for k, g in enumerate(groups) for i in g}
+    out = {"f": f, "n_frames": len(fr), "tilt_median_deg": float(np.median(tilt)), "long_short_ratio": long_side / short_side, "sources": {}}
+    srcs = [("tracked", x.get("trk_kp")), ("detected", x["det_kp"])]
+    for name, kp in srcs:
+        if kp is None:
+            continue
+        obs = kp[fr].astype(float)
+        if name == "detected":
+            obs[~x["det_present"][fr]] = np.nan
+        free = hf.hp_fit_points(obs, Rs, ts, K, "free")
+        plane = hf.hp_fit_points(obs[:, j16], Rs, ts, K, "plane")
+        paper = hf.hp_fit_points(obs[:, j16], Rs, ts, K, "paper")
+        h = sgn * free["X"][:, 2]
+        hp_ = sgn * plane["X"][:, 2]
+        rms = lambda e: float(np.sqrt(np.nanmean(e ** 2)))      # noqa: E731
+        per_pause = [rms(free["res"][[k for k, i in enumerate(fr) if gi[i] == g]][:, j16]) for g in range(len(groups))]
+        out["sources"][name] = {"height_pct": (100 * h / long_side).tolist(), "height_mm": (297 * h / long_side).tolist(), "plane_height_mm_j16": (297 * hp_ / long_side).tolist(),
+                                "res_point_median_px": np.nanmedian(free["res"], axis=0).tolist(),
+                                "rms_px": {"free": rms(free["res"][:, j16]), "plane": rms(plane["res"]), "paper": rms(paper["res"])},
+                                "rms_free_per_pause_px": per_pause, "n_obs": int(np.isfinite(obs[:, j16]).all(2).sum())}
+    out["pauses"] = [[int(g[0]), int(g[-1])] for g in groups]
+    return out
+
+
+def hp_summary(path: Path, out: dict, cfg: dict):
+    ref = float(cfg["ref_f"]["value"])
+    pe = lambda f: "-" if f is None else f"{f:.1f} ({100 * (f / ref - 1):+.1f}%)"      # noqa: E731
+    ci = lambda c: "-" if not c else f"{c[0]:.1f} ~ {c[1]:.1f}"      # noqa: E731
+    bd = lambda b: " (경계)" if b else ""      # noqa: E731
+    px = cfg["parallax"]["video"]
+    P = out["parallax"]
+    L = ["# 실험 59 summary (기록용, 판정 없음)", "", f"**{HP_NOTE}**", "", f"- 기준 f: {ref:g} px ({cfg['ref_f']['source']}). 카메라 각도 약 45°(수평계).", "",
+         f"## 1. {px}: 종이 기준 손 점 높이", "",
+         f"- 종이 꼭짓점 free_template: {pe(P['f'])}, 프레임 {P['n_frames']}장 (멈춤 구간 {len(P['pauses'])}곳), 종이 기울기 중앙값 {P['tilt_median_deg']:.1f}°, 추정 종이 모양의 긴 변/짧은 변 {P['long_short_ratio']:.3f} (A4 1.414).",
+         "- 높이: 종이 면에서 카메라 쪽이 +. 손이 종이에 붙어 움직인다고 가정했다.", "",
+         "### 1-1. 점별 높이 (점별 높이 모델)", "", "| 관절 | 추적점 높이 (% 종이 긴 변) | 추적점 높이 (mm) | 추적점 잔차 중앙값 (px) | 검출 관절 높이 (% 종이 긴 변) | 검출 관절 높이 (mm) | 검출 관절 잔차 중앙값 (px) |",
+         "|---|---|---|---|---|---|---|"]
+    S = P["sources"]
+    for j in range(21):
+        cells = []
+        for s in ("tracked", "detected"):
+            y = S.get(s)
+            cells += ["-"] * 3 if not y else [f"{y['height_pct'][j]:+.2f}", f"{y['height_mm'][j]:+.1f}", f"{y['res_point_median_px'][j]:.2f}"]
+        L.append(f"| {j}{'' if j in cfg['joint_sets']['main']['ids'] else ' (16점 밖)'} | " + " | ".join(cells) + " |")
+    L += ["", "### 1-2. 재투영 잔차 RMS (16점, px)", "", "| 손 점 | 관측 수 | 점별 높이 모델 | 한 평면 모델 | 종이 평면 (높이 0) | 점별 높이 모델의 멈춤 구간별 RMS |", "|---|---|---|---|---|---|"]
+    for s, nm in (("tracked", "실험 56 추적점"), ("detected", "MediaPipe 검출 관절")):
+        y = S.get(s)
+        if y:
+            L.append(f"| {nm} | {y['n_obs']} | {y['rms_px']['free']:.2f} | {y['rms_px']['plane']:.2f} | {y['rms_px']['paper']:.2f} | " + ", ".join(f"{r:.1f}" for r in y["rms_free_per_pause_px"]) + " |")
+    L += ["", "### 1-3. 손 점 f (16점)", "", "| 손 점 | 사용 프레임 | free_template 초점 거리 | 95% 구간 | 기울기 | " +
+          " | ".join(f"free_shape3d z_rel {z:g} 초점 거리 | 95% 구간 | 기울기" for z in cfg["parallax"]["z_rels"]) + " |", "|---|---|---|---|---|" + "---|---|---|" * len(cfg["parallax"]["z_rels"])]
+    for s, nm in (("tracked", "실험 56 추적점"), ("detected", "MediaPipe 검출 관절")):
+        rows = out["hand_f"].get(s)
+        if not rows:
+            continue
+        z0 = rows[str(cfg["parallax"]["z_rels"][0])]
+        a = z0.get("free_template") or {}
+        cells = [str(z0["n_frames"]), pe(a.get("f")) + bd(a.get("boundary")), ci(a.get("ci")), "-" if a.get("tilt_median_deg") is None else f"{a['tilt_median_deg']:.1f}°"]
+        for z in cfg["parallax"]["z_rels"]:
+            b = rows[str(z)].get("free_shape3d") or {}
+            cells += [pe(b.get("f")) + bd(b.get("boundary")), ci(b.get("ci")), "-" if b.get("tilt_median_deg") is None else f"{b['tilt_median_deg']:.1f}°"]
+        L.append(f"| {nm} | " + " | ".join(cells) + " |")
+    L += ["", "## 2. 종이 꼭짓점 번호 확인", "",
+          "멈춤 구간마다(가운데 프레임) 꼭짓점 번호를 0~3칸 돌려 종이 호모그래피로 손 관절 21개를 기준 구간(가운데 프레임에 가장 가까운 사용 프레임이 든 구간)으로 옮겼을 때, 기준 구간 관절과의 거리 중앙값(기준 손 박스 긴 변 대비 %). 0칸이 원래 번호.", ""]
+    for v, c in out["labels"].items():
+        L += [f"### {v}" + (" (대조)" if v == px else ""), "", "| 멈춤 구간 | 프레임 | 사용 프레임 | 0칸 | 1칸 | 2칸 | 3칸 | 가장 잘 맞는 번호 |", "|---|---|---|---|---|---|---|---|"]
+        for k, g in enumerate(c["groups"]):
+            L.append(f"| {k}{' (기준)' if k == c['ref_group'] else ''} | {g['frames'][0]}~{g['frames'][1]} | {g['n']} | " + " | ".join(f"{e:.1f}" for e in g["err_pct"]) + f" | {g['best']}칸 |")
+        pf = out["paper_f"][v]
+        o, r = pf.get("original") or {}, pf.get("relabelled")
+        L += ["", f"- 번호 바뀜: {'있음 (' + str(sum(1 for g in c['groups'] if g['best'] != 0)) + '구간)' if c['changed'] else '없음'}.",
+              f"- 원래 번호 종이 f: {pe(o.get('f'))}{bd(o.get('boundary'))}, 95% 구간 {ci(o.get('ci'))}, 기울기 {'-' if o.get('tilt_median_deg') is None else format(o['tilt_median_deg'], '.1f') + '°'} (프레임 {pf['n_frames']})."]
+        if r:
+            L.append(f"- 번호 고친 종이 f: {pe(r.get('f'))}{bd(r.get('boundary'))}, 95% 구간 {ci(r.get('ci'))}, 기울기 {'-' if r.get('tilt_median_deg') is None else format(r['tilt_median_deg'], '.1f') + '°'}.")
+        L.append("")
+    L += ["## 한계", "", "- 높이는 손이 종이에 붙어 함께 움직인다는 가정에서 나온다. 손이 종이 위에서 미끄러지면 그만큼 잔차와 높이가 틀어진다(멈춤 구간별 잔차로 볼 수 있다).",
+          "- 종이 자세는 종이 꼭짓점에서 구한 f와 종이 모양(free_template)에 기대므로, 그 오차가 높이에 들어간다. mm는 긴 변을 297 mm로 둔 환산이다.",
+          "- 실험 56 추적점은 손 체인 하나의 호모그래피로 옮긴 점이라, 그 높이는 손 추적이 따라간 평면의 높이다. 실제 손 모양은 검출 관절 쪽이 보여 주지만 검출기 오차가 섞인다.",
+          "- 번호 확인은 손이 멈춤 구간 사이에 종이 위에서 크게 움직이지 않는다고 본 것이다.", ""]
+    path.write_text("\n".join(L) + "\n")
+
+
+def hp_main(argv=None):
+    ap = argparse.ArgumentParser()
+    ap.add_argument("--config", default=str(hf.PROJECT_ROOT / "configs/59_paper_parallax.yaml"))
+    sub = ap.add_subparsers(dest="cmd")
+    ry = sub.add_parser("results-yaml")
+    ry.add_argument("--run", required=True)
+    ap.add_argument("--out", default=None)
+    a = ap.parse_args(argv)
+    text = Path(a.config).read_text()
+    own = yaml.safe_load(text)
+    r58 = yaml.safe_load(hf.resolve(own["rules_config"]).read_text())
+    base = od_load(yaml.safe_load(hf.resolve(r58["base_config"]).read_text()))
+    cfg = {**base, **{k: r58[k] for k in ("tracking", "paper")}, "bootstrap": {**base["bootstrap"], **r58.get("bootstrap", {})},
+           **{k: own[k] for k in ("experiment", "videos", "parallax", "pause_gap_frames", "workers", "n_workers", "video_workers", "output") if k in own}}
+    if a.cmd == "results-yaml":
+        print(hp_results_yaml(hf.resolve(a.run), cfg))
+        return None
+    missing = [e["file"] for e in cfg["videos"] if not (Path(cfg["input_dir"]).expanduser() / e["file"]).exists()]
+    if missing:
+        raise SystemExit(f"영상이 없습니다: {missing}")
+    run_root = Path(a.out).expanduser() if a.out else hf.resolve(cfg["output"]["root"]) / utc_stamp()
+    run_root.mkdir(parents=True)
+    log = Log(run_root / "log.txt")
+    pxv = cfg["parallax"]["video"]
+    log(f"59 종이 기준 손 점 높이·꼭짓점 번호 확인(기록용): 영상 {len(cfg['videos'])}개 → {run_root}")
+    t0 = time.time()
+    for k in ("OMP_NUM_THREADS", "OPENBLAS_NUM_THREADS", "MKL_NUM_THREADS"):
+        os.environ[k] = "1"
+    import multiprocessing as mp
+    from concurrent.futures import ProcessPoolExecutor
+    vid = {}
+    with ProcessPoolExecutor(max_workers=int(cfg["video_workers"]), mp_context=mp.get_context("spawn")) as ex:
+        for e, (x, lines) in zip(cfg["videos"], ex.map(hp_video_job, [(e, cfg, str(run_root), e["file"] == pxv) for e in cfg["videos"]])):
+            vid[e["file"]] = x
+            for s in lines:
+                log(s)
+    log(f"  영상 처리: {time.time() - t0:.0f} s")
+    ecfg, bc = cfg["pipeline"]["estimate"], cfg["bootstrap"]
+    # 2. labels
+    labels, relab = {}, {}
+    for e in cfg["videos"]:
+        v, x = e["file"], vid[e["file"]]
+        if not x["kept"]:
+            labels[v] = {"groups": [], "ref_group": None, "changed": False}
+            continue
+        groups = hf.hp_groups(x["kept"], int(cfg["pause_gap_frames"]))
+        rg = next(k for k, g in enumerate(groups) if x["r0"] in g)
+        chk = hf.hp_label_check(x["corners"], {i: x["det_kp"][i] for i in x["kept"]}, groups, rg)
+        labels[v] = {"groups": chk, "ref_group": rg, "changed": any(c["best"] != 0 for c in chk)}
+        if labels[v]["changed"]:
+            relab[v] = {i: c["best"] for g, c in zip(groups, chk) for i in g}
+    # paper f (original labels; relabelled where changed) and the hand point f of the parallax video
+    jobs, keys = [], []
+
+    def add(key, fn, mk, ui):
+        jobs.append((fn, mk("main", 0, ui)))
+        keys.append(key)
+        for rep in range(int(bc["n"])):
+            jobs.append((fn, mk("boot", rep, ui[hf.od_blocks(len(ui), int(bc["block"]), rep, int(bc["seed"]))])))
+            keys.append(key)
+
+    nfr = {}
+    for e in cfg["videos"]:
+        v, x = e["file"], vid[e["file"]]
+        for lab in ("original", "relabelled"):
+            if lab == "relabelled" and v not in relab:
+                continue
+            kp4, m4, b4, fr = hp_paper_track(x, relab.get(v) if lab == "relabelled" else None)
+            nfr[v] = len(fr)
+            if len(fr) < 4:
+                continue
+            add((v, "paper", lab), hf.pq_job, lambda k, r, u, kp4=kp4, m4=m4, b4=b4, x=x: (k, r, kp4, m4, u, b4, tuple(x["size"]), ecfg, None, k == "main"), fr)
+    x = vid[pxv]
+    j16 = cfg["joint_sets"]["main"]["ids"]
+    W, H = x["size"]
+    det_use = x["det_present"] & ~hf.edge_flags(x["det_box"], x["det_present"], W, H)
+    for src, kp, box, use in (("tracked", x["trk_kp"], x["trk_box"], x["trk_use"]), ("detected", x["det_kp"], x["det_box"], det_use)):
+        ui = np.flatnonzero(use)
+        mask = np.isfinite(kp).all(2)
+        for z in cfg["parallax"]["z_rels"]:
+            fs = {**cfg["free_shape3d"], "z_rel": float(z)}
+            add((pxv, src, str(z)), hf.od_job, lambda k, r, u, kp=kp, mask=mask, box=box, fs=fs: (k, r, kp, mask, u, box, (W, H), ecfg, j16, fs, k == "main"), ui)
+            nfr[(src, str(z))] = len(ui)
+    t1 = time.time()
+    res = {}
+    with ProcessPoolExecutor(max_workers=int(cfg["workers"]), mp_context=mp.get_context("spawn")) as ex:
+        futs = [ex.submit(fn, args) for fn, args in jobs]
+        for k, fu in zip(keys, futs):
+            o = fu.result()
+            r = res.setdefault(k, {"main": None, "boot": []})
+            if o["kind"] == "main":
+                r["main"] = o
+            else:
+                r["boot"].append(o)
+    log(f"  추정 {len(jobs)}건: {time.time() - t1:.0f} s")
+    lvl = float(bc.get("level", 0.95))
+
+    def summ(r, m):
+        xx = r["main"].get(m)
+        if not xx:
+            return None
+        p = xx.get("poses", {})
+        fb = [bb[m]["f"] for bb in r["boot"] if m in bb]
+        return {"f": xx["f"], "ci": hf.od_ci(fb, lvl), "n_boot_ok": len(fb), "boundary": xx["boundary"], "tilt_median_deg": None if not p else float(np.nanmedian(p["tilt_deg"]))}
+
+    paper_f = {e["file"]: {"n_frames": nfr.get(e["file"], 0), **{lab: summ(res[(e["file"], "paper", lab)], "free_template") for lab in ("original", "relabelled") if (e["file"], "paper", lab) in res}}
+               for e in cfg["videos"]}
+    hand_f = {src: {str(z): {"n_frames": nfr[(src, str(z))], **{m: summ(res[(pxv, src, str(z))], m) for m in OD_METHODS}} for z in cfg["parallax"]["z_rels"]} for src in ("tracked", "detected")}
+    t2 = time.time()
+    par = hp_parallax(x, cfg)
+    log(f"  시차 계산: {time.time() - t2:.0f} s; 종이 f {par['f']:.1f}, 긴/짧은 변 {par['long_short_ratio']:.3f}; " +
+        ", ".join(f"{s} RMS 높이 {y['rms_px']['free']:.2f} / 한 평면 {y['rms_px']['plane']:.2f} / 종이 {y['rms_px']['paper']:.2f} px" for s, y in par["sources"].items()))
+    for v, c in labels.items():
+        log(f"  {v}: 번호 바뀜 {'있음' if c['changed'] else '없음'} " + str([g["best"] for g in c["groups"]]) + " | 종이 f " +
+            ", ".join(f"{lab} {paper_f[v][lab]['f']:.1f}" for lab in ("original", "relabelled") if paper_f[v].get(lab)))
+    out = {"parallax": par, "hand_f": hand_f, "labels": labels, "paper_f": paper_f,
+           "videos": {v: {"n_frames": x_["n_frames"], "n_kept": len(x_["kept"]), **({"trk_breaks": x_["trk_breaks"], "trk_use": int(x_["trk_use"].sum())} if "trk_use" in x_ else {})} for v, x_ in vid.items()}}
+    hp_summary(run_root / "summary.md", out, cfg)
+    (run_root / "results.json").write_text(json.dumps(hf.jsonable(out), ensure_ascii=False, indent=1))
+    meta = hf.provenance_build(text, a.config, {"code_59": own.get("code_59"), "rules_config": own["rules_config"], "elapsed_s": time.time() - t0})
+    (run_root / "metadata.json").write_text(json.dumps(hf.jsonable(meta), ensure_ascii=False, indent=1))
+    log(f"완료 {time.time() - t0:.0f} s → {run_root}")
+    log.close()
+    return run_root, out
+
+
+def hp_results_yaml(run_dir: Path, cfg: dict):
+    """Values only (no reference f, no verdict); written to output.results_yaml."""
+    r = json.loads((run_dir / "results.json").read_text())
+    m = json.loads((run_dir / "metadata.json").read_text())
+    try:
+        run_name = str(run_dir.resolve().relative_to(hf.PROJECT_ROOT))
+    except ValueError:
+        run_name = str(run_dir)
+    out = {"experiment": cfg["experiment"]["name"], "run": run_name, "code_commit": m["git"]["commit"][:7], "git_dirty_at_run": m["git"]["git_dirty"], "note": HP_NOTE,
+           "parallax_video": cfg["parallax"]["video"], **{k: r[k] for k in ("parallax", "hand_f", "labels", "paper_f", "videos")}}
+    p = hf.resolve(cfg["output"]["results_yaml"])
+    p.write_text(yaml.safe_dump(hf.jsonable(out), allow_unicode=True, sort_keys=False))
+    return p
+
+
+COMMANDS = {"protocol": protocol_main, "frame-filter": ff_main, "same-session": session_main, "overlay": overlay_main, "phase-segmentation": pseg_main, "guide-revision": grev_main, "f-response": fresp_main, "error-factors": ferr_main, "long-video-check": long_main, "generalization": gen_main, "main-camera-extension": ext_main, "wide-60cm": wide_main, "jointset-sets": jset_main, "verdict-calibration": cal_main, "printed-hand": pr_main, "hand-markers": mk_main, "markers-only": mo_main, "free-template": ft_main, "free-shape3d": s3_main, "free-shape3d-hand": h3_main, "free-shape3d-27": e3_main, "free-shape3d-new": e4_main, "mmpose-hand": mm_main, "mmpose-hand-46": mm2_main, "free-shape3d-new2": e5_main, "mmpose-hand-src": mm3_main, "free-shape3d-detectors": fs_main, "free-shape3d-hand-sets": h4_main, "free-shape3d-hand-sets-42track": h4b_main, "oblique-desk": od_main, "oblique-synthetic": sy_main, "oblique-fixed-template": fx_main, "oblique-desk-videos": om_main, "pause-stabilized": ps_main, "continuous-klt": kt_main, "continuous-klt-palm": kp_main, "klt-paper-dorsum": pp_main, "paper-parallax": hp_main}
 
 
 def main(argv=None):

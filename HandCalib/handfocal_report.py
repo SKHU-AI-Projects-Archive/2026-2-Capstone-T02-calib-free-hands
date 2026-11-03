@@ -5649,6 +5649,78 @@ def pq_order(corners: np.ndarray, kp: np.ndarray, ref_rel: np.ndarray | None = N
     return np.roll(cs, -best, axis=0), np.roll(rs, -best)
 
 
+def hp_groups(frames, gap: int) -> list:
+    """Consecutive runs of frame indices (a new run when the step is larger than gap)."""
+    fr = sorted(int(i) for i in frames)
+    out = []
+    for i in fr:
+        if out and i - out[-1][-1] <= gap:
+            out[-1].append(i)
+        else:
+            out.append([i])
+    return out
+
+
+def hp_project(X: np.ndarray, Rs: np.ndarray, ts: np.ndarray, K: np.ndarray) -> np.ndarray:
+    """Points X (J, 3) in the paper frame seen in T frames with poses (Rs (T, 3, 3), ts (T, 3)): pixels (T, J, 2)."""
+    Xc = np.einsum("tij,kj->tki", Rs, X) + ts[:, None, :]
+    return np.einsum("ij,tkj->tki", K[:2, :2], Xc[..., :2] / Xc[..., 2:3]) + K[:2, 2]
+
+
+def hp_fit_points(obs: np.ndarray, Rs: np.ndarray, ts: np.ndarray, K: np.ndarray, model: str) -> dict:
+    """Points rigid to the paper from their pixels in frames of known paper pose (least squares on the reprojection, scipy): model 'free' = every point (x, y, h) free; 'plane' = all
+    points on one plane h = a + b x + c y; 'paper' = all on the paper (h = 0). obs (T, J, 2), NaN = missing. Returns X (J, 3) and the residuals (T, J) in px."""
+    from scipy.optimize import least_squares
+    T, J, _ = obs.shape
+    ok = np.isfinite(obs).all(2)
+    # start: each point on the paper plane, back-projected through the median pose's plane homography
+    X0 = np.zeros((J, 3))
+    for j in range(J):
+        q = []
+        for t in np.flatnonzero(ok[:, j]):
+            Hp = K @ np.c_[Rs[t][:, :2], ts[t]]
+            p = np.linalg.solve(Hp, np.r_[obs[t, j], 1.0])
+            q.append(p[:2] / p[2])
+        X0[j, :2] = np.median(q, axis=0) if q else 0.0
+
+    def unpack(z):
+        if model == "free":
+            return z.reshape(J, 3)
+        xy = z[:2 * J].reshape(J, 2)
+        h = np.zeros(J) if model == "paper" else z[2 * J] + z[2 * J + 1] * xy[:, 0] + z[2 * J + 2] * xy[:, 1]
+        return np.c_[xy, h]
+
+    def resid(z):
+        d = hp_project(unpack(z), Rs, ts, K) - obs
+        return np.where(ok[..., None], d, 0.0).ravel()
+
+    z0 = X0.ravel() if model == "free" else np.r_[X0[:, :2].ravel(), np.zeros(3 if model == "plane" else 0)]
+    r = least_squares(resid, z0, method="trf", x_scale="jac")
+    X = unpack(r.x)
+    e = np.linalg.norm(hp_project(X, Rs, ts, K) - obs, axis=2)
+    return {"X": X, "res": np.where(ok, e, np.nan)}
+
+
+def hp_label_check(corners: dict, hand: dict, groups: list, ref_group: int) -> list:
+    """Do the corner labels stay with the paper from pause to pause? The hand rests on the paper, so the hand joints of a pause moved by the paper homography (that pause's corners -> the
+    reference pause's corners) should land on the reference pause's joints. For each pause (its middle frame) and each cyclic relabelling s of its corners, the median joint distance after
+    the move (in % of the reference hand box's long side). The labels are kept (s = 0) or the best s. corners / hand: {frame: (4, 2) / (21, 2)}."""
+    mid = lambda g: g[len(g) // 2]      # noqa: E731
+    fr0 = mid(groups[ref_group])
+    C0, J0 = corners[fr0], hand[fr0]
+    bl = float(max(np.ptp(J0[:, 0]), np.ptp(J0[:, 1])))
+    out = []
+    for g in groups:
+        f = mid(g)
+        errs = []
+        for s in range(4):
+            Hm = cv2.getPerspectiveTransform(np.roll(corners[f], -s, axis=0).astype(np.float32), C0.astype(np.float32))
+            q = cv2.perspectiveTransform(hand[f].reshape(-1, 1, 2).astype(np.float64), Hm).reshape(-1, 2)
+            errs.append(float(100 * np.median(np.linalg.norm(q - J0, axis=1)) / bl))
+        out.append({"frames": [int(g[0]), int(g[-1])], "n": len(g), "mid": int(f), "err_pct": errs, "best": int(np.argmin(errs))})
+    return out
+
+
 def od_fix_lines(path=None) -> list:
     """Where the six corrections to the supervisor's code sit in handfocal_estimate.py (line numbers of the corrected spellings inside section 5)."""
     p = Path(path) if path else Path(__file__).resolve().parent / "handfocal_estimate.py"

@@ -4906,5 +4906,40 @@ class PQPaper(unittest.TestCase):
         self.assertEqual(hf.pq_line(np.c_[np.arange(40.0), np.r_[np.zeros(39), 50.0]], 3.0)[2].sum(), 39)      # one gross outlier among 40 edge points
 
 
+class HPParallax(unittest.TestCase):
+    def test_heights_models_and_labels(self):
+        rng = np.random.default_rng(3)
+        K = hf.K_of(1600.0, 960.0, 540.0)
+        Rs, ts = [], []
+        for k in range(12):
+            a, b = np.radians(45 + 3 * np.sin(k)), np.radians(30 * k)
+            Rx = cv2.Rodrigues(np.array([a, 0.0, 0.0]))[0]
+            Rz = cv2.Rodrigues(np.array([0.0, 0.0, b]))[0]
+            Rs.append(Rx @ Rz)
+            ts.append(np.array([0.02 * k, 0.0, 0.6]))
+        Rs, ts = np.array(Rs), np.array(ts)
+        X = np.c_[rng.uniform(-0.08, 0.08, (6, 2)), np.array([0.0, 0.01, 0.02, 0.005, 0.015, 0.03])]
+        obs = hf.hp_project(X, Rs, ts, K) + rng.normal(0, 0.2, (12, 6, 2))
+        obs[3, 2] = np.nan
+        free = hf.hp_fit_points(obs, Rs, ts, K, "free")
+        np.testing.assert_allclose(free["X"], X, atol=0.003)
+        paper = hf.hp_fit_points(obs, Rs, ts, K, "paper")
+        plane = hf.hp_fit_points(obs, Rs, ts, K, "plane")
+        rms = lambda e: np.sqrt(np.nanmean(e ** 2))      # noqa: E731
+        self.assertLess(rms(free["res"]), 0.4)
+        self.assertGreater(rms(paper["res"]), rms(plane["res"]))
+        self.assertGreaterEqual(rms(plane["res"]), rms(free["res"]) - 1e-6)
+        self.assertTrue(np.isnan(free["res"][3, 2]))
+        self.assertEqual(hf.hp_groups([5, 1, 2, 3, 30, 31], 15), [[1, 2, 3, 5], [30, 31]])
+        C = np.array([[100.0, 100], [400, 120], [380, 330], [90, 300]])
+        J = np.c_[np.linspace(150, 300, 21), np.linspace(150, 250, 21)]
+        Hm = cv2.getPerspectiveTransform(C.astype(np.float32), (C + [50, 20]).astype(np.float32))
+        C2 = cv2.perspectiveTransform(C.reshape(-1, 1, 2), Hm).reshape(-1, 2)
+        J2 = cv2.perspectiveTransform(J.reshape(-1, 1, 2), Hm).reshape(-1, 2)
+        chk = hf.hp_label_check({0: C, 10: C2, 40: np.roll(C2, 1, axis=0)}, {0: J, 10: J2, 40: J2}, [[0], [10], [40]], 0)
+        self.assertEqual([c["best"] for c in chk], [0, 0, 1])
+        self.assertLess(chk[1]["err_pct"][0], 0.01)
+
+
 if __name__ == "__main__":
     unittest.main()
