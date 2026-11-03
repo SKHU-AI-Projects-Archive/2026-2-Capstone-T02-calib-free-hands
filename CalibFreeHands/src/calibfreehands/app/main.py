@@ -18,6 +18,7 @@ from PySide6.QtWidgets import (
 from calibfreehands.media import discover_media
 from calibfreehands.media.ffmpeg import FFmpegDecoder
 from calibfreehands.media.probe import probe_media
+from calibfreehands.media.provider import close_shared_media_providers
 from calibfreehands.app.configuration import (
     ApplicationConfiguration,
     ModelDefinition,
@@ -1175,6 +1176,7 @@ def main() -> int:
     app.setStyle("Fusion")
     window = MainWindow()
     window.show()
+    app.aboutToQuit.connect(close_shared_media_providers)
     return app.exec()
 
 

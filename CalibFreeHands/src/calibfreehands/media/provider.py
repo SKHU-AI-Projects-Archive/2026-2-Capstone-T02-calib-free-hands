@@ -193,3 +193,10 @@ def shared_media_provider(path: Path, expected_sha256: str | None = None) -> tup
         return provider, "available"
     except (OSError, ValueError, RuntimeError):
         return None, "unavailable"
+
+
+def close_shared_media_providers() -> None:
+    providers = tuple(_registry.values())
+    _registry.clear()
+    for provider in providers:
+        provider.close()

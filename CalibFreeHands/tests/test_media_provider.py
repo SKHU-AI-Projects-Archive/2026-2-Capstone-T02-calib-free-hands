@@ -35,6 +35,19 @@ def test_provider_decodes_on_request_and_bounds_lru_cache(tmp_path):
         provider.close()
 
 
+def test_application_shutdown_closes_registered_media_providers(tmp_path, monkeypatch):
+    import calibfreehands.media.provider as media_provider
+
+    worker = MediaFrameProvider(tmp_path / "clip.mp4", frame_loader=lambda index: np.zeros((1, 1, 3), np.uint8))
+    registry = {(str(worker.path), None): worker}
+    monkeypatch.setattr(media_provider, "_registry", registry)
+
+    media_provider.close_shared_media_providers()
+
+    assert worker._closed
+    assert registry == {}
+
+
 def test_provider_latest_seek_request_supersedes_stale_request(tmp_path):
     requested = []
     def load(index):

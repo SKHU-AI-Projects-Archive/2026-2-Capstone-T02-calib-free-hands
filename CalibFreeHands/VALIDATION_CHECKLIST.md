@@ -221,7 +221,8 @@ Specific Windows layout cases not individually recorded: Split + 2 and Split + 5
 - [x] Single-result mode acceptance covers Result title, no Reference/metrics/error vectors/comparison export/results menu, no self-reference metric cache or badge, one-result Split, source-missing 3D availability, eight speed presets, and exact frame seek
 - [x] Main-window processing auto-open routes one result to ComparisonViewer single mode and 2 results to ComparisonViewer comparison mode
 - [x] Manual `View Results...` routes one or multiple `.cfh` bundles to ComparisonViewer; multi-result same-source enforcement remains covered
-- [x] Full pytest: 221 passed; Windows actual single `.cfh` inspected in Overlay and Split; Windows three-result `.cfh` inspected in Overlay and Split
+- [x] Full pytest: 222 passed; Windows actual single `.cfh` inspected in Overlay and Split; Windows three-result `.cfh` inspected in Overlay and Split
 - [x] Current single and multi Windows windows showed source media and saved 2D/3D data without rerunning inference; single mode omitted comparison-only controls while multi mode retained Reference and comparison HUD
 - [x] Single-result playback probe on the 570-frame sample measured 29.75 source fps at 1x and 59.75 source fps at 2x over 4 seconds each; Windows 2x playback visually advanced source, 2D, and 3D together
-- [x] Single mode uses the existing 384 MiB bounded MediaFrameProvider without full-video preload; long-duration RAM was not remeasured in single mode, while shared-provider C-2B measurements remain recorded above
+- [x] During 24 seconds of single-result 1x playback, provider cache reached 398,131,200 of 402,653,184 bytes and evicted 656 frames; cache remained within its 384 MiB bound
+- [x] The QApplication shutdown hook closed providers after active single-result playback; the 7-second shutdown smoke produced no stderr
