@@ -1608,3 +1608,123 @@ Saved `.cfh` results use the modern Comparison Viewer engine whether the user op
 Single Result mode retains the modern source/2D/3D presentation, Overlay and source-plus-result Split views, timestamp-based playback controls, bounded asynchronous source provider, and detector-confidence controls. It shows the configuration identity and omits Reference selection, reference-difference metric HUD/menu, error vectors, error-valued joint labels, comparison metric exports, and result reordering. It does not compute or display self-reference metrics. Missing or changed source media does not prevent viewing the saved 3D result. A single bundle without a source hash can still open; hash matching remains mandatory for multi-result comparison.
 
 The legacy `ResultViewer` implementation remains available for existing NPZ/session compatibility. This pass changes the `.cfh` application route and does not change scientific result payloads, coordinates, metrics, confidence provenance, or inference.
+
+## First-User UX & Stability Pass
+
+**Status:** Specification only. Implementation has not started.
+
+This is a post-C-2C follow-up based on a team member's first use of the application, from launch through media selection, configuration, processing, opening a result, playback, and 3D inspection. The pass addresses discoverability, layout hierarchy, terminology, interaction consistency, and reproduced stability problems. It adds no scientific or inference features.
+
+### Project status and boundary
+
+- C-2B remains **COMPLETE — USER MANUALLY APPROVED** (2026-11-03).
+- C-2C Unified Result Viewer remains implemented and **READY FOR USER REVIEW**.
+- This pass is separate from both milestones. Its specification is ready for review; its implementation and validation are pending.
+- Preserve the C-2B and C-2C records and all scientific, bundle, preset, and backend compatibility contracts.
+
+### P0 stability and functional requirements
+
+#### Windows native media dialog
+
+The reported native-dialog failure displayed `Windows media dialog unavailable / using the fallback media picker`, followed by `counting selected media failed (HRESULT 0x80004002)`. Closing the message opened the Qt fallback instead of the Windows Explorer-style picker. Treat this as a P0 functional bug.
+
+On a normal supported Windows environment, the native Windows Common Item Dialog is the primary media picker. Selecting files or folders must not produce the reported HRESULT failure. Use the fallback only when the native dialog is genuinely unavailable. If fallback is needed, explain the reason in readable terms, keep the application alive, and allow the selection workflow to continue. Fallback use as a routine path on a normal Windows system is a failure.
+
+The native picker shall support single-file selection, multiple-file selection, folder selection, selecting the current folder, locations on C: and D:, cancellation, closing and reopening the dialog, and repeated use.
+
+#### Shared `MediaFrameProvider` ownership and release
+
+Treat the reported source-by-source RAM accumulation as a P0 lifecycle and memory bug. Shared source decoding and the bounded per-provider cache remain required.
+
+Provider ownership shall follow acquire/release semantics or an equivalent ownership model:
+
+- Viewers using the same source concurrently share its provider.
+- Closing one of several users keeps the provider available to the remaining users.
+- Closing the final user removes that source from the registry, stops its decode worker, and releases its cache and other source resources.
+- Application exit performs final cleanup of any providers still registered.
+- Do not preload a full video. Keep each active provider's frame cache bounded to the existing 384 MiB limit.
+
+After opening, playing, and closing result A, then B, then C from different source videos, closed sources must not retain their providers or full caches. Acceptance concerns active provider count, registry entries, worker count, and decoded cache bytes. The process RSS is not required to return exactly to its initial value because Python, Qt, and GPU allocators may retain memory.
+
+#### Error Vectors candidate state
+
+Treat the tiny unexplained candidate window and the repeated `Off → Candidate → Off → Candidate` failure as a P0/P1 functional interaction bug. Candidate selection shall remain within the Vectors control or its clearly associated menu; it shall not open an unexplained tiny popup/window. Repeatedly selecting Off and a candidate shall work. The selected UI state and rendered vectors must agree after every transition, and changing candidates must not leave stale vectors or state.
+
+#### HUD size, layout stability, and identity text
+
+HUD size is a functional state bug. Keep these values distinct:
+
+- **Requested HUD size:** Small, Medium, or Large, selected by the user.
+- **Effective HUD size:** the font size currently rendered after fitting the HUD into its viewport.
+
+When the viewport has room, effective size shall match the requested size. When space is limited, the HUD may reduce its effective font size to fit. When room returns, it shall restore the requested size. Selecting Small once must not permanently cap the effective size or prevent a later Medium or Large selection.
+
+HUD font fitting shall depend only on actual viewport bounds, requested HUD size, and current HUD content. Opening or closing Results/Detection popups, changing menu focus, or changing a menu check state shall not cause a transient shrink when the viewport and HUD content have not changed.
+
+Reference identity text shall keep its label, focal value, unit, and badge visually associated. Prefer the compact form `Manual Focal 1500 px [REFERENCE]`. In narrow viewports, wrap semantic groups naturally; never strand `px` on a separate line from its number or split the badge from the identity in a way that makes the label ambiguous.
+
+### MainWindow first-user UX
+
+#### Preset and configuration controls
+
+The Preset row shall contain preset-related controls, including the preset selector, Preset Actions, and Set as default. Remove Add Configuration from that row. Place a `+ Add` control below the configuration table, aligned naturally with the Name column. It shall remain below the last configuration row as rows are added and retain the existing Add Configuration row-creation behavior.
+
+Order configuration columns as:
+
+```text
+Name | Calibration | Focal | Reconstruction | Action
+```
+
+Focal is a Calibration parameter and belongs immediately after Calibration.
+
+#### Manual Focal terminology and field state
+
+Use **Manual Focal** consistently throughout the user-facing display layer for the calibration option that directly accepts a focal length in pixels. This applies to the Main Window selector and configuration row, Viewer result/configuration names, and newly created user-facing configuration/result display names. Show its parameter as **Focal (px)**. Enable the numeric field only for Manual Focal; for other calibration methods, show it disabled or as an unambiguous dash/N/A state. A Viewer name with a focal value shall read **Manual Focal 1500 px**; keep the name, value, and `[REFERENCE]` badge as a natural semantic group in the HUD (for example, **Manual Focal 1500 px [REFERENCE]**).
+
+Keep UI wording separate from internal identity. The existing `calibration_model_id = checkerboard_reference` may remain unchanged. Preserve old presets, `.cfh` results, metadata, and scientific schemas; a UI rename alone shall not trigger an internal ID or schema migration. Do not rewrite or migrate historical saved data or forcibly rename existing files. When displaying historical `.cfh` metadata whose saved display name says **Checkerboard Reference**, the Viewer may normalize the presentation to **Manual Focal** using the internal model ID or metadata context, but must not modify the file or its metadata.
+
+#### Settings hierarchy and Output row
+
+Swap the current placement of the Theme/Language area with the Sampling/Sample Count/Aggregate area. Keep Sampling and aggregation visually close to processing configuration; group Theme and Language with application preferences and Output. Do not add a new theme/settings framework.
+
+Present Output path, Browse, and Collision policy in one compact logical row. Give the path field most of the horizontal stretch while keeping ordinary paths inspectable. Keep Browse and Collision on the same row where the available window width permits and minimize clipping at smaller widths.
+
+### Viewer playback and mode controls
+
+Give the playback footer balanced left/right horizontal margins and natural spacing consistent with the bottom margin; controls shall not sit against the viewport/window edge.
+
+Replace the Speed dropdown with a stepper such as `▼ 1.0× ▲` (or equivalent). Keep the current speed visible, use the existing presets `0.1×, 0.25×, 0.5×, 0.75×, 1.0×, 1.25×, 1.5×, 2.0×`, and make the lower/upper control select the adjacent preset. At a limit, disable the corresponding control or make it a no-op. Changing speed shall preserve the current source-time position and existing timestamp-based playback-clock semantics.
+
+Replace Previous, Play/Pause, and Next text buttons with appropriate Qt native media icons or `QStyle` standard icons. The play control shall display Play while paused and Pause while playing. Preserve tooltips and accessible names. Do not add Stop, Fast Forward, or Rewind functionality.
+
+Replace separate Overlay and Split buttons with an exclusive two-state segmented control or equivalent. Exactly one mode shall always be active and clearly indicated; both modes must not be switchable off.
+
+Make Pin an explicit, clearly readable toggle. OFF means controls may auto-hide; ON means controls remain visible. The current state must be apparent without relying on stylesheet color alone.
+
+### HUD direct manipulation
+
+Dragging the HUD is the primary way to position it. On press within the HUD, the HUD captures the pointer interaction; while dragging, the 3D viewport must not orbit, pan, or change annotation hover in response to the same gesture. On release, snap the HUD to the nearest of the four allowed anchors: top-left, top-right, bottom-left, or bottom-right. Use HUD-center or equivalent geometry to determine the nearest corner.
+
+Animate the snap over approximately 120–180 ms, with no bounce. The animation shall not block playback, source-frame presentation, or 3D rendering. HUD Size, Background, opacity, and equivalent visual settings may remain in the HUD menu; corner-position menu actions may be removed. Normal viewport interactions resume after the drag ends.
+
+### Annotation terminology
+
+Rename the result annotation control/menu from **Joints** to **Annotations**, because it controls annotation modes and label content. Keep the separate geometry visibility checkbox **Joint**; it controls joint rendering and is not the annotation menu.
+
+### Terminology mapping
+
+| Existing UI wording/control | First-user wording/control |
+| --- | --- |
+| Checkerboard Reference (calibration option) | Manual Focal |
+| Reference Focal | Focal (px) |
+| Joints (annotation menu) | Annotations |
+| Separate Overlay and Split buttons | Exclusive Overlay/Split segmented toggle |
+| Speed dropdown | Speed stepper |
+
+`checkerboard_reference` remains a valid internal ID. Normalize the user-facing calibration/configuration/result name to **Manual Focal** across the Main Window and Viewer, including presentation-only normalization of historical display names; never rewrite saved metadata or filenames. The Viewer concept of a selected **Reference** and the `[REFERENCE]` badge remain unchanged and stay semantically grouped with the focal value (for example, **Manual Focal 1500 px [REFERENCE]**).
+
+### First-user acceptance
+
+After implementation, the team member who supplied this feedback shall repeat the complete flow without a preview explanation of the changes: launch, select media, configure, start processing, wait, open the result, play it, and inspect 3D. The goal is successful use without explanation. Prefer repeating the same task with a second team member who has not used the application; observe whether they can find the primary actions, understand Manual Focal, locate Add Configuration, and operate the result controls without coaching.
+
+No new scientific feature, metric, inference behavior, calibration model, confidence type, or playback operation is part of this pass. Preserve same-source result behavior, `.cfh` compatibility, C-2B/C-2C viewer behavior, scientific data and confidence semantics, and all established coordinate/metric contracts.

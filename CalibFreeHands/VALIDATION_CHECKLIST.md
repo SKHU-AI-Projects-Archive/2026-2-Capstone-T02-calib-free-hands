@@ -226,3 +226,58 @@ Specific Windows layout cases not individually recorded: Split + 2 and Split + 5
 - [x] Single-result playback probe on the 570-frame sample measured 29.75 source fps at 1x and 59.75 source fps at 2x over 4 seconds each; Windows 2x playback visually advanced source, 2D, and 3D together
 - [x] During 24 seconds of single-result 1x playback, provider cache reached 398,131,200 of 402,653,184 bytes and evicted 656 frames; cache remained within its 384 MiB bound
 - [x] The QApplication shutdown hook closed providers after active single-result playback; the 7-second shutdown smoke produced no stderr
+
+## First-User UX & Stability Pass
+
+All entries below are pending implementation and validation. No acceptance item has been run for this pass.
+
+### First-user flow
+
+- [ ] Original feedback provider repeats launch → media selection → configuration → Start Processing → completion → result viewer → playback → 3D inspection without being briefed on the changes
+- [ ] A second, previously inexperienced team member repeats the flow where available; observe Manual Focal meaning, Add location, and Viewer-control discoverability without coaching
+
+### P0 stability
+
+- [ ] Windows GUI picker matrix: single file, multiple files, folder, current folder, C: and D: locations, cancel, close/reopen, and repeated use; native picker is used normally and no HRESULT 0x80004002 occurs
+- [ ] Genuine native-picker failure shows a readable reason, opens fallback, does not crash, and allows selection to continue; fallback is not the routine path on a normal Windows installation
+- [ ] Open/play/close different-source results A, B, C and record process RSS, active provider count, registry entries, active worker count, and decoded cache bytes at each boundary
+- [ ] Verify same-source simultaneous Viewers share a provider; closing one retains it, closing the final user removes the registry entry, stops the worker, and releases cache/resources
+- [ ] Verify per-provider cache remains bounded and unused source caches do not accumulate; exact process RSS return to baseline is not required
+- [ ] Repeat Error Vectors Off/Candidate transitions several times; no tiny unexplained window, stale vectors, or UI/rendered-state mismatch
+- [ ] Exercise HUD Small → Medium → Large with sufficient and constrained viewport space; effective size may fit down and must restore the requested size
+- [ ] Change Results/Detection popup values, focus, and popup visibility; HUD does not transiently shrink unless viewport bounds, requested size, or content changed
+- [ ] Check Manual Focal in the Main Window selector/configuration row and Viewer result/configuration name/HUD (including `Manual Focal 1500 px [REFERENCE]`) at wide and narrow viewports; number and `px` remain associated and wrap is meaningful
+- [ ] Open a historical `.cfh` with `Checkerboard Reference` in its saved display name; Viewer presents `Manual Focal` from model/metadata context while file metadata and filename remain unchanged
+- [ ] Close the application with active source decoding/playback; no worker, Qt signal, or shutdown errors in console
+
+### MainWindow first-user layout
+
+- [ ] Preset row contains preset controls only; Add Configuration is no longer in that row
+- [ ] `+ Add` appears below the configuration table, aligns with Name, and remains below the final row after repeated additions
+- [ ] Column order is Name, Calibration, Focal, Reconstruction, Action
+- [ ] Manual Focal enables Focal (px); every other calibration choice disables it or displays an unambiguous N/A state
+- [ ] Sampling/Sample Count/Aggregate and Theme/Language occupy the requested hierarchy locations
+- [ ] Output path, Browse, and Collision appear together in a compact row; path has primary stretch and remains inspectable
+- [ ] Inspect default Original, one added configuration, multiple rows, Manual Focal row, a smaller desktop window, and 1280×800-class layout
+
+### Single-result Viewer
+
+- [ ] Playback footer has balanced horizontal breathing room
+- [ ] Speed stepper shows current preset; lower/upper actions select adjacent speeds and respect endpoints
+- [ ] Speed changes preserve playback position and existing timestamp-clock behavior
+- [ ] Previous, Play/Pause, and Next use appropriate native icons; icon changes with playback state; tooltip and accessible name remain available
+- [ ] Overlay/Split segmented control always has exactly one selected state
+- [ ] Pin toggle visibly distinguishes ON/OFF and ON prevents auto-hide while OFF permits it
+- [ ] Drag HUD to all four corners; it snaps to nearest anchor after release with smooth, non-blocking animation
+- [ ] HUD drag does not orbit/pan the 3D view or trigger annotation hover; viewport interaction resumes after release
+- [ ] HUD requested/effective Small/Medium/Large behavior and size recovery work at roomy and constrained viewport sizes
+- [ ] Detection, Results where applicable, Annotations, reference identity wrapping, console stability, fullscreen, and existing auto-hide behavior regressions pass
+
+### Multi-result Viewer and regressions
+
+- [ ] Repeat the Viewer interaction checks with multiple same-source results
+- [ ] Reference, Metrics, Error Vectors Off/Candidate repeated toggles, result visibility, and Detection retain correct state and rendering
+- [ ] C-2B atomic source/2D/3D presentation, 2× synchronization, pause/seek, bounded cache, auto-hide, Pin, fullscreen, and menu hover/latch regressions pass
+- [ ] C-2C unified single/multi routing, missing-source 3D, static image source, MANO mesh, and same-source validation regressions pass
+- [ ] `.cfh` schema, presets, internal model IDs, focal provenance, confidence semantics, metrics, coordinates, and all scientific contracts remain unchanged
+- [ ] Full test/import/compile/diff validation for implementation is recorded; no console traceback, Qt signal error, TypeError, or AttributeError remains in tested flows
