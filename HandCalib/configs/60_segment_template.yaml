@@ -1,0 +1,31 @@
+# 60: the hand template per segment (user 2026-11-03: "다음 단계 제안에서 종이 f 검증 확대 말고 손 경사 보정을 한번 해보자" - my proposal after 59: the hand points sit on the paper
+# about 6 px differently in every pause, so keep one hand template per pause segment and share f).
+# 56's rules, read from rules_config: 54's 12 videos, 30 fps frames, mediapipe track, 56's hand chain (kt_chain on the joint hull widened by 3 %, reference = the middle detected frame) and its
+# moved joints, frames used = tracked frames off the border (mediapipe joints: detected frames whose box is off the border), j16, bootstrap 30-frame blocks x 100 (seed 42), 53's verdict and
+# warnings (main target: tracked j16 with the segment templates; the turn warning uses the largest turn range of the segments).
+# Choices made by me before the run (no result of this experiment seen):
+#  - pauses = runs of still frames (53's rule: median joint movement to both neighbours < 0.5 % of the hand box) with steps <= pause_gap_frames and at least min_pause_frames frames; the video
+#    is cut at the middle of each pause; a segment with fewer than min_segment_frames used frames is joined to the previous one (the first to the next);
+#  - estimate: one f for all segments, one planar template per segment. Start from the supervisor's free_template parts (unchanged): per segment _restrict (max 120 frames) and procrustes_init,
+#    at each f of free_template's coarse 8-point grid alt_template (3 iterations), cost = frame-weighted mean of the segments' cost(), free_template's parabola -> f0; then a joint refinement of
+#    f, the segment templates and the poses (ba_refine's model: two anchor joints per template held, Huber at the median per-frame width), solved with scipy least_squares (trf, sparse
+#    Jacobian) because ba_refine takes one template. Synthetic check before the run (true f 1600, 0.3 px noise): one segment gives free_template's f; two hand shapes over two segments of
+#    120 deg turn each: segments 1606 vs one template 2002; six segments of 40 deg turn each: segments 1856 (same shape) / 1929 (two shapes) - short turns per segment push f up.
+#    In a bootstrap sample a segment with fewer than min_segment_frames / 3 frames is left out;
+#  - beside it: the same procedure with one segment (control: separates the optimiser from the per-segment templates), the supervisor's free_template on the same frames, free_template on each
+#    segment alone, the reprojection RMS (px) of free_template and of the segment fit, per-segment turn range and the median tilt at the segment f;
+#  - mediapipe joints (j16) the same way, as a record.
+# Reference f only in summary.md. Fixed before the run.
+experiment:
+  name: 60_segment_template
+  seed: 42
+rules_config: configs/56_continuous_klt.yaml
+segments: {pause_gap_frames: 15, min_pause_frames: 5, min_segment_frames: 30}
+compare_56: runs/56_continuous_klt/20261102T073343Z
+code_60: {branch: exp/60-segment-template, base_commit: ac55d2c, commit: 254b286, modules: [HandCalib/handfocal_report.py, HandCalib/run.py]}
+workers: 24
+n_workers: 4
+video_workers: 12
+output:
+  root: runs/60_segment_template
+  results_yaml: results/60_segment_template.yaml
