@@ -10163,9 +10163,9 @@ def pp_video(e: dict, cfg: dict, run_root: Path, log) -> dict:
     frame (pq_frame), per side and frame rows, and the corners of the frames within rms_max_px in a common label order."""
     pc = copy.deepcopy(cfg["pipeline"])
     pc["frames"]["detect_fps"] = int(cfg["tracking"]["fps"])
-    tmp_root = run_root / "_frames"
-    tmp_root.mkdir(exist_ok=True)
     v = e["file"]
+    tmp_root = run_root / f"_frames_{Path(v).stem}"                 # one folder per video (videos run in parallel)
+    tmp_root.mkdir(exist_ok=True)
     kc, pcf, dcf = cfg["tracking"], cfg["paper"], cfg["dorsum"]
     out = {}
     try:
@@ -10241,6 +10241,14 @@ def pp_video(e: dict, cfg: dict, run_root: Path, log) -> dict:
         log(f"  {v} {rg}: 끊김 {res[rg]['breaks']}, 사용 {res[rg]['n_use']} (가장자리 {res[rg]['n_edge']}), 인라이어 중앙값 {res[rg]['inl_median']}, "
             f"왕복 오차 뒤쪽 {long_fmt(loops['뒤쪽']['median_px'], 2)} px · 앞쪽 {long_fmt(loops['앞쪽']['median_px'], 2)} px")
     return res
+
+
+def pp_video_job(args):
+    """pp_video in a worker process (videos in parallel): the log lines are collected and returned with the result."""
+    e, cfg, run_root = args
+    cv2.setNumThreads(1)
+    lines = []
+    return pp_video(e, cfg, Path(run_root), lines.append), lines
 
 
 def pp_prior(cfg: dict) -> dict:
@@ -10334,7 +10342,7 @@ def pp_main(argv=None):
     text = Path(a.config).read_text()
     own = yaml.safe_load(text)
     base = od_load(yaml.safe_load(hf.resolve(own["base_config"]).read_text()))
-    cfg = {**base, **{k: own[k] for k in ("experiment", "videos", "tracking", "paper", "dorsum", "compare_56", "workers", "n_workers", "output") if k in own},
+    cfg = {**base, **{k: own[k] for k in ("experiment", "videos", "tracking", "paper", "dorsum", "compare_56", "workers", "n_workers", "video_workers", "output") if k in own},
            "bootstrap": {**base["bootstrap"], **own.get("bootstrap", {})}}
     if a.cmd == "results-yaml":
         print(pp_results_yaml(hf.resolve(a.run), cfg))
@@ -10349,7 +10357,15 @@ def pp_main(argv=None):
     t0 = time.time()
     for k in ("OMP_NUM_THREADS", "OPENBLAS_NUM_THREADS", "MKL_NUM_THREADS"):
         os.environ[k] = "1"
-    vid = {e["file"]: pp_video(e, cfg, run_root, log) for e in cfg["videos"]}
+    import multiprocessing as mp
+    from concurrent.futures import ProcessPoolExecutor
+    vid = {}
+    with ProcessPoolExecutor(max_workers=int(cfg["video_workers"]), mp_context=mp.get_context("spawn")) as ex:
+        for e, (x, lines) in zip(cfg["videos"], ex.map(pp_video_job, [(e, cfg, str(run_root)) for e in cfg["videos"]])):
+            vid[e["file"]] = x
+            for s in lines:
+                log(s)
+    log(f"  영상 처리: {time.time() - t0:.0f} s")
     with open(run_root / "paper_sides.csv", "w", newline="") as fh:
         w = csv.DictWriter(fh, fieldnames=["video", "frame", "time_s", "status", "side", "n_points", "span", "length_px", "rms_px", "bend_px"])
         w.writeheader()
@@ -10376,8 +10392,6 @@ def pp_main(argv=None):
             for rep in range(int(bc["n"])):
                 jobs[rg][0].append(mk("boot", rep, ui[hf.od_blocks(len(ui), int(bc["block"]), rep, int(bc["seed"]))]))
                 jobs[rg][1].append((e["file"], rg))
-    import multiprocessing as mp
-    from concurrent.futures import ProcessPoolExecutor
     t1 = time.time()
     res = {}
     with ProcessPoolExecutor(max_workers=int(cfg["workers"]), mp_context=mp.get_context("spawn")) as ex:
