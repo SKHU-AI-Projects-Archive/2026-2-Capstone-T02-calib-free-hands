@@ -5436,6 +5436,219 @@ def kt_map(P: np.ndarray, H) -> np.ndarray:
     return cv2.perspectiveTransform(np.asarray(P, np.float64).reshape(-1, 1, 2), H).reshape(-1, 2)
 
 
+def pp_disk(r: int) -> np.ndarray:
+    return cv2.getStructuringElement(cv2.MORPH_ELLIPSE, (2 * int(r) + 1, 2 * int(r) + 1))
+
+
+def pp_paper_color(bgr: np.ndarray, kp: np.ndarray, pcfg: dict) -> dict:
+    """The paper's colour next to the hand: the brightest pcfg.seed_pct % of a ring around the joint hull (between ring[0] and ring[1] x the hand's long side); median a*, b*, L (Lab, 5 px blur)."""
+    p = kp[np.isfinite(kp).all(1)].astype(np.float32)
+    bl = float(max(np.ptp(p[:, 0]), np.ptp(p[:, 1])))
+    hm = np.zeros(bgr.shape[:2], np.uint8)
+    cv2.fillConvexPoly(hm, cv2.convexHull(p).astype(np.int32), 255)
+    ring = (cv2.dilate(hm, pp_disk(round(pcfg["ring"][1] * bl))) > 0) & ~(cv2.dilate(hm, pp_disk(round(pcfg["ring"][0] * bl))) > 0)
+    lab = cv2.cvtColor(cv2.GaussianBlur(bgr, (5, 5), 0), cv2.COLOR_BGR2LAB).astype(float)
+    sel = ring & (lab[..., 0] >= np.percentile(lab[..., 0][ring], float(pcfg["seed_pct"])))
+    return {"a": float(np.median(lab[..., 1][sel])), "b": float(np.median(lab[..., 2][sel])), "L": float(np.median(lab[..., 0][sel])), "ring": ring}
+
+
+def pp_paper_pixels(bgr: np.ndarray, col: dict, pcfg: dict) -> np.ndarray:
+    """Pixels of the paper colour: Lab chroma distance to (a, b) below color_tol and L above L - light_drop, opened with an open_px square."""
+    lab = cv2.cvtColor(cv2.GaussianBlur(bgr, (5, 5), 0), cv2.COLOR_BGR2LAB).astype(float)
+    w = ((np.hypot(lab[..., 1] - col["a"], lab[..., 2] - col["b"]) < float(pcfg["color_tol"])) & (lab[..., 0] > col["L"] - float(pcfg["light_drop"]))).astype(np.uint8) * 255
+    return cv2.morphologyEx(w, cv2.MORPH_OPEN, np.ones((int(pcfg["open_px"]),) * 2, np.uint8))
+
+
+def pp_paper_ref(bgr: np.ndarray, kp: np.ndarray, pcfg: dict) -> dict:
+    """The paper of a frame: the paper-colour components touching the ring around the hand (the one touching most, and every other whose ring contact is at least join_frac of it - the arm can
+    cut the paper in two); the convex hull of their union (polygon) and the colour."""
+    col = pp_paper_color(bgr, kp, pcfg)
+    w = pp_paper_pixels(bgr, col, pcfg)
+    k, lab, _, _ = cv2.connectedComponentsWithStats(w)
+    if k < 2:
+        return {"failed": "종이 색 영역 없음"}
+    touch = np.bincount(lab[col["ring"]], minlength=k)
+    touch[0] = 0
+    if touch.max() == 0:
+        return {"failed": "손 옆 종이 없음"}
+    sel = np.isin(lab, np.flatnonzero(touch >= float(pcfg["join_frac"]) * touch.max()))
+    hull = cv2.convexHull(cv2.findNonZero(sel.astype(np.uint8))).reshape(-1, 2).astype(float)
+    return {"poly": hull, "color": {x: col[x] for x in ("a", "b", "L")}, "area_px": int(np.count_nonzero(sel))}
+
+
+def pq_side(gray: np.ndarray, p: np.ndarray, q: np.ndarray, centre: np.ndarray, block: np.ndarray, pcfg: dict) -> np.ndarray:
+    """Sub-pixel edge points of one paper side: every step_px along p -> q (5-95 %), a profile along the outward normal (+-search_px, 0.5 px steps, bilinear); the strongest bright -> dark step
+    outwards (derivative minimum, parabola vertex) kept when the contrast across it (4 px inside minus 4 px outside) is at least contrast_min and the point is not in the widened hand mask."""
+    d = q - p
+    ln = float(np.linalg.norm(d))
+    u = d / ln
+    n = np.array([-u[1], u[0]])
+    if np.dot((p + q) / 2 - centre, n) < 0:
+        n = -n
+    s = float(pcfg["search_px"])
+    offs = np.arange(-s, s + 0.25, 0.5)
+    ts = np.arange(0.05 * ln, 0.95 * ln, float(pcfg["step_px"]))
+    base = p[None] + ts[:, None] * u[None]
+    P = base[:, None, :] + offs[None, :, None] * n[None, None, :]
+    prof = cv2.remap(gray, P[..., 0].astype(np.float32), P[..., 1].astype(np.float32), cv2.INTER_LINEAR, borderValue=np.nan)
+    der = np.gradient(prof, 0.5, axis=1)
+    out = []
+    H, W = gray.shape
+    for k in range(len(ts)):
+        dk = der[k]
+        if not np.isfinite(dk).all():
+            continue
+        j = int(np.argmin(dk))
+        if j < 1 or j > len(dk) - 2:
+            continue
+        a, b, c = dk[j - 1], dk[j], dk[j + 1]
+        den = a - 2 * b + c
+        sub = 0.5 * (a - c) / den if den != 0 else 0.0
+        o = offs[j] + 0.5 * float(np.clip(sub, -0.5, 0.5))
+        i_in, i_out = np.searchsorted(offs, o - 4.0), np.searchsorted(offs, o + 4.0)
+        if i_in < 0 or i_out >= len(offs) or prof[k, i_in] - prof[k, i_out] < float(pcfg["contrast_min"]):
+            continue
+        x = base[k] + o * n
+        xi, yi = int(round(x[0])), int(round(x[1]))
+        if not (0 <= xi < W and 0 <= yi < H) or block[yi, xi]:
+            continue
+        out.append(x)
+    return np.array(out).reshape(-1, 2)
+
+
+def pq_line(pts: np.ndarray, trim_px: float, rounds: int = 3):
+    """Total-least-squares line with trimming (points farther than trim_px dropped, refit, `rounds` times). Returns (point on line, unit direction, kept mask, RMS of the kept points)."""
+    keep = np.ones(len(pts), bool)
+    for _ in range(rounds + 1):
+        if keep.sum() < 2:
+            return None, None, keep, np.nan
+        c = pts[keep].mean(0)
+        u = np.linalg.svd(pts[keep] - c)[2][0]
+        dist = (pts - c) @ np.array([-u[1], u[0]])
+        new = np.abs(dist) <= float(trim_px)
+        if (new == keep).all():
+            break
+        keep = new
+    return c, u, keep, float(np.sqrt(np.mean(dist[keep] ** 2))) if keep.any() else np.nan
+
+
+def pq_cross(c1, u1, c2, u2):
+    A = np.array([u1, -u2]).T
+    if abs(np.linalg.det(A)) < 1e-9:
+        return np.array([np.nan, np.nan])
+    t = np.linalg.solve(A, c2 - c1)
+    return c1 + t[0] * u1
+
+
+def pq_frame(bgr: np.ndarray, kp: np.ndarray, box, pcfg: dict) -> dict:
+    """The paper of one frame by its sides: paper component next to the hand (pp_paper_ref) -> hull simplified (approxPolyDP, seg_eps of the perimeter) -> for each hull segment of at least
+    seg_min of the perimeter the sub-pixel edge points (pq_side) and a trimmed line; a segment is a paper side when it has min_points points; sides closer than merge_deg in direction and
+    trim_px x 3 in offset are merged (points pooled, refit); the four sides with most points, ordered by angle about the paper centre, give the four crossings. Per side: points, visible
+    span (share of the side between its corners), RMS (px), bend (median signed distance to the line of the points within mid_frac of the side's middle, px). status 'ok' or why left out."""
+    pr = pp_paper_ref(bgr, kp, pcfg)
+    if "failed" in pr:
+        return {"status": "종이 없음"}
+    h = pr["poly"].astype(np.float32).reshape(-1, 1, 2)
+    per = cv2.arcLength(h, True)
+    poly = cv2.approxPolyDP(h, float(pcfg["seg_eps"]) * per, True).reshape(-1, 2).astype(float)
+    gray = cv2.GaussianBlur(cv2.cvtColor(bgr, cv2.COLOR_BGR2GRAY).astype(np.float32), (0, 0), float(pcfg["blur_sigma"]))
+    block = kt_hand_mask(kp, box, gray.shape, float(pcfg["hand_dilate_frac"])) > 0
+    centre = poly.mean(0)
+    cand = []
+    for k in range(len(poly)):
+        p, q = poly[k], poly[(k + 1) % len(poly)]
+        if np.linalg.norm(q - p) < float(pcfg["seg_min"]) * per:
+            continue
+        pts = pq_side(gray, p, q, centre, block, pcfg)
+        if len(pts) < int(pcfg["min_points"]):
+            continue
+        c, u, keep, rms = pq_line(pts, float(pcfg["trim_px"]))
+        if c is not None and keep.sum() >= int(pcfg["min_points"]):
+            cand.append(pts[keep])
+    merged = True
+    while merged:
+        merged = False
+        fits = [pq_line(P, float(pcfg["trim_px"]))[:2] for P in cand]
+        for i in range(len(cand)):
+            for j in range(i + 1, len(cand)):
+                (ci, ui), (cj, uj) = fits[i], fits[j]
+                ang = np.degrees(np.arccos(min(1.0, abs(float(ui @ uj)))))
+                off = abs(float((cj - ci) @ np.array([-ui[1], ui[0]])))
+                if ang < float(pcfg["merge_deg"]) and off < 3 * float(pcfg["trim_px"]):
+                    cand[i] = np.vstack([cand[i], cand[j]])
+                    del cand[j]
+                    merged = True
+                    break
+            if merged:
+                break
+    if len(cand) < 4:
+        return {"status": "변 가려짐", "n_sides_found": len(cand)}
+    cand = sorted(cand, key=len, reverse=True)[:4]
+    lines = []
+    for P in cand:
+        c, u, keep, rms = pq_line(P, float(pcfg["trim_px"]))
+        lines.append((c, u, P, keep, rms))
+    pc_all = np.vstack([L[2][L[3]] for L in lines]).mean(0)
+    lines.sort(key=lambda L: np.arctan2(*(L[2][L[3]].mean(0) - pc_all)[::-1]))
+    corners = np.array([pq_cross(lines[(k - 1) % 4][0], lines[(k - 1) % 4][1], lines[k][0], lines[k][1]) for k in range(4)])
+    sides, ok = [], bool(np.isfinite(corners).all())
+    H, W = gray.shape
+    if ok:
+        ok = bool(np.all(np.abs(corners - [W / 2, H / 2]) < [1.5 * W, 1.5 * H])) and cv2.isContourConvex(corners.astype(np.float32).reshape(-1, 1, 2))
+    for k in range(4):
+        c, u, P, keep, rms = lines[k]
+        a, b = corners[k], corners[(k + 1) % 4]
+        ln = float(np.linalg.norm(b - a)) if ok else np.nan
+        t = (P[keep] - a) @ ((b - a) / ln) if ok and ln > 0 else np.zeros(0)
+        span = float((t.max() - t.min()) / ln) if len(t) > 1 else 0.0
+        mid = np.abs(t - ln / 2) <= float(pcfg["mid_frac"]) * ln if len(t) else np.zeros(0, bool)
+        nrm = np.array([-u[1], u[0]])
+        sides.append({"n_points": int(keep.sum()), "rms_px": float(rms), "span": span, "length_px": None if not np.isfinite(ln) else ln,
+                      "bend_px": float(np.median((P[keep][mid] - c) @ nrm)) if mid.any() else None})
+        ok &= span >= float(pcfg["min_span"])
+    if not ok:
+        return {"status": "변 가려짐", "sides": sides}
+    return {"status": "ok", "sides": sides, "corners": corners, "rms_max_px": max(s["rms_px"] for s in sides)}
+
+
+def pq_job(args) -> dict:
+    """od_job with the free_template part only (the paper's four corners): args = (kind, rep, kp, mask, frames, box, size_wh, ecfg, ids, diag)."""
+    kind, rep, kp, mask, frames, box, size_wh, ecfg, ids, diag = args
+    os.environ.setdefault("OMP_NUM_THREADS", "1")
+    cv2.setNumThreads(1)
+    W, H = size_wh
+    grid = f_grid(ecfg, max(W, H))
+    out = {"kind": kind, "rep": rep}
+    try:
+        pb = od_bridge(kp, mask, frames, box, size_wh, ecfg, ids)
+        A = free_template(pb, grid)
+    except Exception as e:                                            # a failure is a result, not a crash of the run
+        out["failed"] = f"{type(e).__name__}: {e}"
+        return out
+    out["free_template"] = {"f": float(A["f"]), "at_grid_edge": bool(A["at_grid_edge"]), "boundary": od_boundary(float(A["f"]), grid), "cost": float(A["cost"]),
+                            "joint_ids": [int(x) for x in A["joint_ids"]]}
+    if diag:
+        p = od_poses(pb, out["free_template"]["f"], np.asarray(A["template"], float), out["free_template"]["joint_ids"], box_long(box[np.asarray(frames, int)]))
+        out["free_template"]["poses"] = {k: v.tolist() for k, v in p.items()}
+        out["free_template"]["template"] = np.asarray(A["template"], float).tolist()
+    return out
+
+
+def pq_order(corners: np.ndarray, kp: np.ndarray, ref_rel: np.ndarray | None = None):
+    """Corner labels that follow the paper: the angle of each corner about the paper centre, measured from the hand axis (wrist -> middle MCP), sorted; with ref_rel (the reference frame's
+    sorted relative angles) the cyclic shift closest to it. Returns (corners in label order, their relative angles)."""
+    ax = kp[9] - kp[0]
+    a0 = np.arctan2(ax[1], ax[0])
+    c = corners - corners.mean(0)
+    rel = np.mod(np.arctan2(c[:, 1], c[:, 0]) - a0, 2 * np.pi)
+    o = np.argsort(rel)
+    cs, rs = corners[o], rel[o]
+    if ref_rel is None:
+        return cs, rs
+    best = min(range(4), key=lambda s: float(np.sum(np.abs(np.angle(np.exp(1j * (np.roll(rs, -s) - ref_rel)))))))
+    return np.roll(cs, -best, axis=0), np.roll(rs, -best)
+
+
 def od_fix_lines(path=None) -> list:
     """Where the six corrections to the supervisor's code sit in handfocal_estimate.py (line numbers of the corrected spellings inside section 5)."""
     p = Path(path) if path else Path(__file__).resolve().parent / "handfocal_estimate.py"

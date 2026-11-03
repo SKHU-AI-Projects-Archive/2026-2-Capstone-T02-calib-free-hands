@@ -4875,5 +4875,36 @@ class KPPalm(unittest.TestCase):
         self.assertEqual(cfg["base_config"], b["base_config"])
 
 
+class PQPaper(unittest.TestCase):
+    def test_sides_corners_and_order_on_a_drawn_sheet(self):
+        img = np.full((540, 960, 3), (90, 140, 190), np.uint8)                      # warm desk
+        quad = np.array([[250.3, 120.6], [700.2, 160.4], [660.7, 440.1], [210.5, 400.8]])
+        sheet = np.zeros((540 * 8, 960 * 8), np.uint8)
+        cv2.fillConvexPoly(sheet, (quad * 8).astype(np.int32), 255, shift=0)
+        a = cv2.resize(sheet, (960, 540), interpolation=cv2.INTER_AREA).astype(float)[..., None] / 255
+        img = (img * (1 - a) + np.array([235, 235, 235]) * a).astype(np.uint8)
+        kp = np.c_[np.linspace(380, 520, 21), np.linspace(250, 300, 21)]          # a "hand" lying on the sheet (only its hull and box are used)
+        kp[9] = [520, 300]
+        kp[0] = [380, 250]
+        hand = np.zeros(img.shape[:2], np.uint8)
+        cv2.fillConvexPoly(hand, cv2.convexHull(kp.astype(np.float32)).astype(np.int32), 255)
+        hand = cv2.dilate(hand, np.ones((9, 9), np.uint8)) > 0
+        img[hand] = (120, 150, 200)
+        pcfg = yaml.safe_load((ROOT / "configs/58_klt_paper_dorsum.yaml").read_text())["paper"]
+        box = np.r_[kp.min(0), kp.max(0)]
+        r = hf.pq_frame(img, kp, box, pcfg)
+        self.assertEqual(r["status"], "ok")
+        for s in r["sides"]:
+            self.assertLess(s["rms_px"], 0.5)
+            self.assertLess(abs(s["bend_px"]), 0.5)
+        c = r["corners"]
+        d = np.min(np.linalg.norm(c[:, None] - quad[None], axis=2), axis=1)
+        self.assertTrue((d < 1.0).all(), d)
+        c1, rel = hf.pq_order(c, kp)
+        c2, _ = hf.pq_order(np.roll(c, 2, axis=0), kp, rel)
+        np.testing.assert_allclose(c1, c2)
+        self.assertEqual(hf.pq_line(np.c_[np.arange(40.0), np.r_[np.zeros(39), 50.0]], 3.0)[2].sum(), 39)      # one gross outlier among 40 edge points
+
+
 if __name__ == "__main__":
     unittest.main()

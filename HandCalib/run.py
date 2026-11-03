@@ -10132,7 +10132,321 @@ def kp_results_yaml(run_dir: Path, cfg: dict):
     return p
 
 
-COMMANDS = {"protocol": protocol_main, "frame-filter": ff_main, "same-session": session_main, "overlay": overlay_main, "phase-segmentation": pseg_main, "guide-revision": grev_main, "f-response": fresp_main, "error-factors": ferr_main, "long-video-check": long_main, "generalization": gen_main, "main-camera-extension": ext_main, "wide-60cm": wide_main, "jointset-sets": jset_main, "verdict-calibration": cal_main, "printed-hand": pr_main, "hand-markers": mk_main, "markers-only": mo_main, "free-template": ft_main, "free-shape3d": s3_main, "free-shape3d-hand": h3_main, "free-shape3d-27": e3_main, "free-shape3d-new": e4_main, "mmpose-hand": mm_main, "mmpose-hand-46": mm2_main, "free-shape3d-new2": e5_main, "mmpose-hand-src": mm3_main, "free-shape3d-detectors": fs_main, "free-shape3d-hand-sets": h4_main, "free-shape3d-hand-sets-42track": h4b_main, "oblique-desk": od_main, "oblique-synthetic": sy_main, "oblique-fixed-template": fx_main, "oblique-desk-videos": om_main, "pause-stabilized": ps_main, "continuous-klt": kt_main, "continuous-klt-palm": kp_main}
+# ====================================================================================================
+# pp  (experiment 58, record only, on 54's videos: the paper's four sides fitted on every still frame (sub-pixel edge points, trimmed lines, crossings = corners; frames whose largest side
+#      RMS is over rms_max_px left out) and its four corners through the supervisor's free_template; the dorsum body tracked by 56's chain (hull of the wrist and the MCPs, no widening) through
+#      od_job; 56's bootstrap; no verdict)
+#     python HandCalib/run.py klt-paper-dorsum --config HandCalib/configs/58_klt_paper_dorsum.yaml [--out DIR]
+#     python HandCalib/run.py klt-paper-dorsum --config ... results-yaml --run runs/58_klt_paper_dorsum/<UTC>
+# ====================================================================================================
+PP_NOTE = ("실험 54 영상 12개에서 두 가지를 기록용으로 본 진단이다(판정 없음). 종이: 손이 멈춘 프레임(실험 53의 정지 규칙)마다 손 옆 종이 색으로 종이 영역을 찾고, 윤곽 구간마다 종이-책상 경계를 소수 px로 찾아 "
+           "보이는 부분으로 네 변의 직선을 맞춘 뒤 교점 4개를 꼭짓점으로 썼다. 네 변의 잔차가 모두 1 px 이하인 프레임의 꼭짓점만 교수님 free_template에 넣었다(종이가 구겨져 A4 비율은 쓰지 않음). "
+           "손등 몸통: 실험 56의 연속 KLT 체인(설정 그대로)을 손목과 손가락 뿌리 관절(0, 1, 5, 9, 13, 17)의 볼록 영역(넓히지 않음)에만 돌리고, 기준 프레임 MediaPipe 관절 16점을 옮겨 "
+           "free_template·free_shape3d(od_job 그대로)에 넣었다. 부트스트랩은 실험 56과 같다. 기준 f와의 비교는 summary.md에만 있다.")
+PP_REGIONS = ("paper", "dorsum")
+
+
+def pp_points(P: np.ndarray, Hall: dict, n: int, W: int, H: int):
+    kp = np.full((n, len(P), 2), np.nan)
+    for i, Hm in Hall.items():
+        kp[i] = hf.kt_map(P, Hm)
+    valid = np.isfinite(kp).all((1, 2))
+    tb = np.full((n, 4), np.nan)
+    tb[valid] = np.c_[kp[valid].min(1), kp[valid].max(1)]
+    edge = np.zeros(n, bool)
+    edge[valid] = hf.edge_flags(tb[valid], np.ones(valid.sum(), bool), W, H)
+    return kp, tb, valid, edge
+
+
+def pp_video(e: dict, cfg: dict, run_root: Path, log) -> dict:
+    """kt_video's frames, detection and track; the dorsum body's four chains (reference -> end / start and back), moved points, edge flags and loop errors; the paper's sides on every still
+    frame (pq_frame), per side and frame rows, and the corners of the frames within rms_max_px in a common label order."""
+    pc = copy.deepcopy(cfg["pipeline"])
+    pc["frames"]["detect_fps"] = int(cfg["tracking"]["fps"])
+    tmp_root = run_root / "_frames"
+    tmp_root.mkdir(exist_ok=True)
+    v = e["file"]
+    kc, pcf, dcf = cfg["tracking"], cfg["paper"], cfg["dorsum"]
+    out = {}
+    try:
+        prep = hf.fresp_prepare((v, cfg["input_dir"], pc, {}, str(tmp_root)))
+        frames, (W, H) = prep["frames"], prep["size"]
+        times = np.array([r["time_s"] for r in frames])
+        npz = hf.fresp_detect_many([((v, "orig"), frames)], cfg["detector_settings"]["mediapipe_hands"], run_root / "detection_cache", int(cfg["n_workers"]), log)[(v, "orig")]
+        d = hf.load_detections(Path(npz))
+        hf.check_alignment(frames, d)
+        p2 = copy.deepcopy(pc)
+        p2["tracking"]["conf_min"] = float(cfg["detector_settings"]["mediapipe_hands"]["conf_min"])
+        tr = hf.track(d, times, (W, H), p2["tracking"], front_start_s=float(p2["phases"]["front_skip_s"]))
+        pres = np.flatnonzero(tr["present"])
+        if len(pres) < 2:
+            return {"failed": "손 검출 프레임 2장 미만", "size": (W, H)}
+        a, b = int(pres[0]), int(pres[-1])
+        ref = int(pres[np.argmin(np.abs(pres - (a + b) / 2))])
+        kps = np.stack([hf.kt_carry(tr["present"], tr["kp"][:, j, k]) for j in range(21) for k in range(2)], axis=1).reshape(len(times), 21, 2)
+        boxes = np.stack([hf.kt_carry(tr["present"], tr["box"][:, k]) for k in range(4)], axis=1)
+        pngs = [r["png"] for r in frames]
+        n = len(times)
+        # dorsum: kt_chain unchanged on the dorsum joints only, no widening
+        kd = kps.copy()
+        kd[:, [j for j in range(21) if j not in dcf["joints"]]] = np.nan
+        kcd = {**kc, "dilate_frac": float(dcf["dilate_frac"])}
+        ch = {"fwd": hf.kt_chain(pngs, kd, boxes, list(range(ref, b + 1)), kcd), "bwd": hf.kt_chain(pngs, kd, boxes, list(range(ref, a - 1, -1)), kcd),
+              "fwd_back": hf.kt_chain(pngs, kd, boxes, list(range(b, ref - 1, -1)), kcd), "bwd_back": hf.kt_chain(pngs, kd, boxes, list(range(a, ref + 1)), kcd)}
+        out["dorsum"] = {"P": tr["kp"][ref], "ch": ch}
+        # paper: the four sides fitted on every still frame (53's still rule on the mediapipe joints), corners labelled by their angle from the hand axis
+        motion = hf.od_select(tr["kp"], tr["mask"], tr["present"], tr["box"], (W, H), cfg["selection"])["motion"]
+        still = np.flatnonzero(np.isfinite(motion) & (motion < float(cfg["selection"]["still_frac"])))
+        rows, fits = [], {}
+        for i in still:
+            r = hf.pq_frame(cv2.imread(pngs[i], cv2.IMREAD_COLOR), tr["kp"][i], tr["box"][i], pcf)
+            fits[int(i)] = r
+            for k, s in enumerate(r.get("sides") or [{}] * 4):
+                rows.append({"frame": int(i), "time_s": round(float(times[i]), 3), "status": r["status"], "side": k, **{c: s.get(c) for c in ("n_points", "span", "length_px", "rms_px", "bend_px")}})
+        out["paper_rows"] = rows
+        out["paper_fits"] = fits
+    finally:
+        shutil.rmtree(tmp_root, ignore_errors=True)
+    res = {"size": (W, H), "n_frames": n, "ref": ref, "ref_t": float(times[ref])}
+    # paper points: frames whose four sides were fitted and whose largest side RMS is within rms_max_px; corners in the label order of the fitted frame nearest the middle
+    fits = out["paper_fits"]
+    okf = sorted(i for i, r in fits.items() if r["status"] == "ok")
+    kept = [i for i in okf if fits[i]["rms_max_px"] <= float(pcf["rms_max_px"])]
+    st = {"n_still": len(fits), "n_fitted": len(okf), "n_kept": len(kept), "excluded": {s: sum(1 for r in fits.values() if r["status"] == s) for s in sorted({r["status"] for r in fits.values()} - {"ok"})},
+          "n_rms_over": len(okf) - len(kept), "rows": out["paper_rows"]}
+    if kept:
+        r0 = min(kept, key=lambda i: abs(i - ref))
+        _, rel0 = hf.pq_order(fits[r0]["corners"], tr["kp"][r0])
+        kp4 = np.full((n, 4, 2), np.nan)
+        for i in kept:
+            kp4[i] = hf.pq_order(fits[i]["corners"], tr["kp"][i], rel0)[0]
+        valid = np.isfinite(kp4).all((1, 2))
+        tb = np.full((n, 4), np.nan)
+        tb[valid] = np.c_[kp4[valid].min(1), kp4[valid].max(1)]
+        res["paper"] = {"kp": kp4, "box": tb, "use": valid, "n_use": int(valid.sum()), **st}
+    else:
+        res["paper"] = {"failed": "잔차 기준 안의 프레임 없음", "n_use": 0, **st}
+    log(f"  {v} paper: 멈춘 프레임 {st['n_still']}, 네 변 맞춤 {st['n_fitted']} (제외 {st['excluded']}), 잔차 {pcf['rms_max_px']} px 이하 {st['n_kept']}")
+    for rg in ("dorsum",):
+        x = out[rg]
+        P, ch = x["P"], x["ch"]
+        kp, tb, valid, edge = pp_points(P, {**ch["bwd"]["H"], **ch["fwd"]["H"]}, n, W, H)
+        loops = {}
+        for name, c, back, end in (("뒤쪽", ch["fwd"], ch["fwd_back"], b), ("앞쪽", ch["bwd"], ch["bwd_back"], a)):
+            err = np.linalg.norm(hf.kt_map(hf.kt_map(P, c["H"].get(end)), back["H"].get(ref)) - P, axis=1)
+            loops[name] = {"median_px": float(np.nanmedian(err)) if np.isfinite(err).any() else None, "frames": abs(end - ref)}
+        inl = ch["fwd"]["inl"] + ch["bwd"]["inl"]
+        res[rg] = {"kp": kp, "box": tb, "use": valid & ~edge, "breaks": ch["fwd"]["breaks"] + ch["bwd"]["breaks"], "n_valid": int(valid.sum()), "n_edge": int((valid & edge).sum()),
+                   "n_use": int((valid & ~edge).sum()), "inl_median": float(np.median(inl)) if inl else None, "loops": loops}
+        log(f"  {v} {rg}: 끊김 {res[rg]['breaks']}, 사용 {res[rg]['n_use']} (가장자리 {res[rg]['n_edge']}), 인라이어 중앙값 {res[rg]['inl_median']}, "
+            f"왕복 오차 뒤쪽 {long_fmt(loops['뒤쪽']['median_px'], 2)} px · 앞쪽 {long_fmt(loops['앞쪽']['median_px'], 2)} px")
+    return res
+
+
+def pp_prior(cfg: dict) -> dict:
+    """56's j16 estimates (read only): {video: {method: {f, ci, tilt_median_deg}}}."""
+    q = hf.resolve(cfg.get("compare_56") or "x") / "results.json"
+    if not q.exists():
+        return {}
+    r = json.loads(q.read_text())
+    return {v: {m: x for m, x in (a["by"].get("j16") or {}).items() if m in OD_METHODS} for v, a in r["analysis"].items()}
+
+
+def pp_side_stats(rows: list) -> dict:
+    """Per side label of the fitted frames: median and 90th percentile RMS, median and largest |bend| (px)."""
+    out = {}
+    for k in range(4):
+        rr = [r for r in rows if r["side"] == k and r["status"] == "ok"]
+        rms = [r["rms_px"] for r in rr if r["rms_px"] is not None]
+        bend = [abs(r["bend_px"]) for r in rr if r["bend_px"] is not None]
+        out[k] = {"n": len(rr), "rms_median_px": float(np.median(rms)) if rms else None, "rms_p90_px": float(np.percentile(rms, 90)) if rms else None,
+                  "bend_abs_median_px": float(np.median(bend)) if bend else None, "bend_abs_max_px": float(np.max(bend)) if bend else None}
+    return out
+
+
+def pp_summary(path: Path, ana: dict, vid: dict, cfg: dict, prior: dict):
+    ref = float(cfg["ref_f"]["value"])
+    pe = lambda f: "-" if f is None else f"{f:.1f} ({100 * (f / ref - 1):+.1f}%)"      # noqa: E731
+    ci = lambda x: "-" if not x or not x.get("ci") else f"{x['ci'][0]:.1f} ~ {x['ci'][1]:.1f}"      # noqa: E731
+    tl = lambda x: "-" if not x or x.get("tilt_median_deg") is None else f"{x['tilt_median_deg']:.1f}°"      # noqa: E731
+    bd = lambda x: " (경계)" if x and x.get("boundary") else ""      # noqa: E731
+    pcf = cfg["paper"]
+    L = ["# 실험 58 summary (기록용, 판정 없음)", "", f"**{PP_NOTE}**", "", f"- 기준 f: {ref:g} px ({cfg['ref_f']['source']}). 카메라 각도 약 45°(수평계).", "",
+         "## 1. free_template: 초점 거리 (기준 f 대비), 95% 구간, 평면 기울기 중앙값", "",
+         "| 영상 | 거리(cm) | 손 | 종이 사용 프레임 | 종이 초점 거리 | 종이 95% 구간 | 종이 기울기 | 손등 몸통 사용 프레임 | 손등 몸통 초점 거리 | 손등 몸통 95% 구간 | 손등 몸통 기울기 | 기존 16점 초점 거리 (실험 56) | 기존 16점 95% 구간 | 기존 16점 기울기 |",
+         "|---|---|---|---|---|---|---|---|---|---|---|---|---|---|"]
+    for e in cfg["videos"]:
+        v = e["file"]
+        x = vid[v]
+        cells = []
+        for s in ("paper", "dorsum"):
+            y = (x.get(s) or {}) if "failed" not in x else {}
+            z = ((ana.get(v) or {}).get(s) or {}).get("free_template")
+            cells += [str(y.get("n_use", 0)), pe(z and z["f"]) + bd(z), ci(z), tl(z)]
+        z = (prior.get(v) or {}).get("free_template")
+        cells += [pe(z and z["f"]) + bd(z), ci(z), tl(z)]
+        L.append(f"| {v} | {e['distance_cm']:g} | {e['hand']} | " + " | ".join(cells) + " |")
+    L += ["", f"종이 사용 프레임: 멈춘 프레임 가운데 네 변을 맞췄고 네 변의 잔차가 모두 {pcf['rms_max_px']:g} px 이하인 프레임(꼭짓점 4개를 free_template에 넣음). 종이는 구겨져 있어 A4 비율은 쓰지 않았다.", "",
+          "## 2. 손등 몸통 free_shape3d (기록)", "", "| 영상 | 손등 몸통 free_shape3d 초점 거리 | 95% 구간 | 기울기 | 기존 16점 free_shape3d (실험 56) |", "|---|---|---|---|---|"]
+    for e in cfg["videos"]:
+        v = e["file"]
+        z = ((ana.get(v) or {}).get("dorsum") or {}).get("free_shape3d")
+        z56 = (prior.get(v) or {}).get("free_shape3d")
+        L.append(f"| {v} | {pe(z and z['f'])}{bd(z)} | {ci(z)} | {tl(z)} | {pe(z56 and z56['f'])}{bd(z56)} |")
+    L += ["", "## 3. 종이 변 맞추기", "", "| 영상 | 멈춘 프레임 | 네 변 맞춤 | 제외 (이유별) | 잔차 기준 초과 | 사용 | " + " | ".join(f"변 {k} 잔차 중앙값 / 90% (px) | 변 {k} 휘어짐 중앙값 / 최대 (px)" for k in range(4)) + " |",
+          "|---|---|---|---|---|---|" + "---|" * 8]
+    for e in cfg["videos"]:
+        x = vid[e["file"]]
+        y = x.get("paper") if "failed" not in x else None
+        if not y:
+            L.append(f"| {e['file']} | 실행 실패 |" + " - |" * 13)
+            continue
+        ss = pp_side_stats(y["rows"])
+        cells = [str(y["n_still"]), str(y["n_fitted"]), ", ".join(f"{k} {n}" for k, n in y["excluded"].items()) or "-", str(y["n_rms_over"]), str(y["n_kept"])]
+        for k in range(4):
+            cells += [f"{long_fmt(ss[k]['rms_median_px'], 2)} / {long_fmt(ss[k]['rms_p90_px'], 2)}", f"{long_fmt(ss[k]['bend_abs_median_px'], 2)} / {long_fmt(ss[k]['bend_abs_max_px'], 2)}"]
+        L.append(f"| {e['file']} | " + " | ".join(cells) + " |")
+    L += ["", "변 번호는 프레임 안에서 종이 중심을 도는 순서이고 프레임마다 같은 변이라는 보장은 없다(값은 변 번호별 모음). 휘어짐: 변 가운데(변 길이의 ±10%) 경계점이 맞춘 직선에서 벗어난 거리의 중앙값(부호 무시해 모음). "
+          "프레임별·변별 값은 실행 폴더의 paper_sides.csv에 있다.", "",
+          "## 4. 손등 몸통 추적 진단", "", "| 영상 | 사용 프레임 | 끊김 | 인라이어 중앙값 | 왕복 오차 (px) |", "|---|---|---|---|---|"]
+    for e in cfg["videos"]:
+        x = vid[e["file"]]
+        y = x.get("dorsum") if "failed" not in x else None
+        if not y:
+            L.append(f"| {e['file']} | 실행 실패 | - | - | - |")
+            continue
+        L.append(f"| {e['file']} | {y['n_use']} | {y['breaks']} | {long_fmt(y['inl_median'], 0)} | {long_fmt(y['loops']['뒤쪽']['median_px'], 1)} / {long_fmt(y['loops']['앞쪽']['median_px'], 1)} |")
+    L += ["", "## 한계", "", "- 종이 색 기준(색 차이·밝기·조각 합치기)과 변 찾기 설정은 이 12개 영상의 표본 프레임을 보고 정했다(f를 계산하기 전).",
+          "- 꼭짓점은 보이는 변을 늘린 직선의 교점이라, 팔에 가려진 꼭짓점도 계산된다. 종이가 구겨지면 직선이 휘어 꼭짓점이 어긋난다.",
+          "- 종이 꼭짓점 번호는 손 방향(손목 → 가운뎃손가락 뿌리) 기준 각도로 매겼다. 손이 종이 위에서 많이 돌면 번호가 바뀔 수 있다.",
+          "- 손등 몸통 영역은 작아서 특징점이 적다.", ""]
+    path.write_text("\n".join(L) + "\n")
+
+
+def pp_main(argv=None):
+    ap = argparse.ArgumentParser()
+    ap.add_argument("--config", default=str(hf.PROJECT_ROOT / "configs/58_klt_paper_dorsum.yaml"))
+    sub = ap.add_subparsers(dest="cmd")
+    ry = sub.add_parser("results-yaml")
+    ry.add_argument("--run", required=True)
+    ap.add_argument("--out", default=None)
+    a = ap.parse_args(argv)
+    text = Path(a.config).read_text()
+    own = yaml.safe_load(text)
+    base = od_load(yaml.safe_load(hf.resolve(own["base_config"]).read_text()))
+    cfg = {**base, **{k: own[k] for k in ("experiment", "videos", "tracking", "paper", "dorsum", "compare_56", "workers", "n_workers", "output") if k in own},
+           "bootstrap": {**base["bootstrap"], **own.get("bootstrap", {})}}
+    if a.cmd == "results-yaml":
+        print(pp_results_yaml(hf.resolve(a.run), cfg))
+        return None
+    missing = [e["file"] for e in cfg["videos"] if not (Path(cfg["input_dir"]).expanduser() / e["file"]).exists()]
+    if missing:
+        raise SystemExit(f"영상이 없습니다: {missing}")
+    run_root = Path(a.out).expanduser() if a.out else hf.resolve(cfg["output"]["root"]) / utc_stamp()
+    run_root.mkdir(parents=True)
+    log = Log(run_root / "log.txt")
+    log(f"58 종이 변 맞추기·손등 몸통 KLT 추적(기록용): 영상 {len(cfg['videos'])}개, {cfg['tracking']['fps']} fps → {run_root}")
+    t0 = time.time()
+    for k in ("OMP_NUM_THREADS", "OPENBLAS_NUM_THREADS", "MKL_NUM_THREADS"):
+        os.environ[k] = "1"
+    vid = {e["file"]: pp_video(e, cfg, run_root, log) for e in cfg["videos"]}
+    with open(run_root / "paper_sides.csv", "w", newline="") as fh:
+        w = csv.DictWriter(fh, fieldnames=["video", "frame", "time_s", "status", "side", "n_points", "span", "length_px", "rms_px", "bend_px"])
+        w.writeheader()
+        for v, x in vid.items():
+            for r in ((x.get("paper") or {}).get("rows") or []):
+                w.writerow({"video": v, **{k: (round(r[k], 4) if isinstance(r[k], float) else r[k]) for k in r}})
+    ecfg, bc = cfg["pipeline"]["estimate"], cfg["bootstrap"]
+    main_ids = cfg["joint_sets"]["main"]["ids"]
+    jobs = {"paper": ([], []), "dorsum": ([], [])}
+    for e in cfg["videos"]:
+        x = vid[e["file"]]
+        for rg in PP_REGIONS:
+            y = x.get(rg)
+            if not y or "failed" in y:
+                continue
+            ui = np.flatnonzero(y["use"])
+            if len(ui) < 4:
+                continue
+            mask = np.isfinite(y["kp"]).all(2)
+            mk = (lambda kind, rep, fr: (kind, rep, y["kp"], mask, fr, y["box"], tuple(x["size"]), ecfg, None, kind == "main")) if rg == "paper" else \
+                 (lambda kind, rep, fr: (kind, rep, y["kp"], mask, fr, y["box"], tuple(x["size"]), ecfg, main_ids, cfg["free_shape3d"], kind == "main"))
+            jobs[rg][0].append(mk("main", 0, ui))
+            jobs[rg][1].append((e["file"], rg))
+            for rep in range(int(bc["n"])):
+                jobs[rg][0].append(mk("boot", rep, ui[hf.od_blocks(len(ui), int(bc["block"]), rep, int(bc["seed"]))]))
+                jobs[rg][1].append((e["file"], rg))
+    import multiprocessing as mp
+    from concurrent.futures import ProcessPoolExecutor
+    t1 = time.time()
+    res = {}
+    with ProcessPoolExecutor(max_workers=int(cfg["workers"]), mp_context=mp.get_context("spawn")) as ex:
+        for rg, fn in (("paper", hf.pq_job), ("dorsum", hf.od_job)):
+            for k, o in zip(jobs[rg][1], ex.map(fn, jobs[rg][0], chunksize=1)):
+                r = res.setdefault(k, {"main": None, "boot": []})
+                if o["kind"] == "main":
+                    r["main"] = o
+                else:
+                    r["boot"].append(o)
+    log(f"  추정 {sum(len(j[0]) for j in jobs.values())}건: {time.time() - t1:.0f} s")
+    lvl = float(bc.get("level", 0.95))
+    ana = {}
+    for e in cfg["videos"]:
+        v = e["file"]
+        ana[v] = {}
+        for rg in PP_REGIONS:
+            r = res.get((v, rg))
+            if r is None:
+                continue
+            b = ana[v][rg] = {"failed": r["main"].get("failed"), "n_boot": len(r["boot"])}
+            for m in OD_METHODS:
+                xx = r["main"].get(m)
+                if xx:
+                    p = xx.get("poses", {})
+                    fb = [bb[m]["f"] for bb in r["boot"] if m in bb]
+                    b[m] = {"f": xx["f"], "ci": hf.od_ci(fb, lvl), "n_boot_ok": len(fb), "boundary": xx["boundary"], "boot_at_bound": sum(1 for bb in r["boot"] if m in bb and bb[m]["boundary"]),
+                            "tilt_median_deg": None if not p else float(np.nanmedian(p["tilt_deg"])), "turn_range_deg": None if not p else od_range(p["turn_deg"])}
+        log(f"  {v}: " + ", ".join(f"{rg} {m} {ana[v][rg][m]['f']:.1f}" for rg in ana[v] for m in OD_METHODS if m in ana[v][rg]))
+    pp_summary(run_root / "summary.md", ana, vid, cfg, pp_prior(cfg))
+    keep = {"dorsum": ("breaks", "n_valid", "n_edge", "n_use", "inl_median", "loops"), "paper": ("n_still", "n_fitted", "excluded", "n_rms_over", "n_kept", "n_use", "failed")}
+    vid_out = {}
+    for v, x in vid.items():
+        if "failed" in x:
+            vid_out[v] = {"failed": x["failed"]}
+            continue
+        vid_out[v] = {"n_frames": x["n_frames"], "ref": x["ref"], "ref_t": x["ref_t"], **{rg: {k: x[rg][k] for k in keep[rg] if k in x[rg]} for rg in PP_REGIONS}}
+        vid_out[v]["paper"]["sides"] = pp_side_stats(x["paper"]["rows"])
+    (run_root / "results.json").write_text(json.dumps(hf.jsonable({"videos": vid_out, "analysis": ana}), ensure_ascii=False, indent=1))
+    meta = hf.provenance_build(text, a.config, {"code_58": own.get("code_58"), "base_config": own["base_config"], "elapsed_s": time.time() - t0})
+    (run_root / "metadata.json").write_text(json.dumps(hf.jsonable(meta), ensure_ascii=False, indent=1))
+    log(f"완료 {time.time() - t0:.0f} s → {run_root}")
+    log.close()
+    return run_root, ana
+
+
+def pp_results_yaml(run_dir: Path, cfg: dict):
+    """Values only (no reference f, no verdict); written to output.results_yaml."""
+    r = json.loads((run_dir / "results.json").read_text())
+    m = json.loads((run_dir / "metadata.json").read_text())
+    try:
+        run_name = str(run_dir.resolve().relative_to(hf.PROJECT_ROOT))
+    except ValueError:
+        run_name = str(run_dir)
+    rd = lambda x, n=4: None if x is None or (isinstance(x, float) and not np.isfinite(x)) else round(x, n)      # noqa: E731
+    out = {"experiment": cfg["experiment"]["name"], "run": run_name, "code_commit": m["git"]["commit"][:7], "git_dirty_at_run": m["git"]["git_dirty"], "note": PP_NOTE,
+           "tracking_rule": cfg["tracking"], "paper_rule": cfg["paper"], "dorsum_rule": cfg["dorsum"], "videos": {}}
+    for e in cfg["videos"]:
+        v = e["file"]
+        o = out["videos"][v] = {"distance_cm": e["distance_cm"], "hand": e["hand"], "tracking": r["videos"][v], "estimates": {}}
+        for rg, b in (r["analysis"].get(v) or {}).items():
+            o["estimates"][rg] = {mm: {"f_px": round(b[mm]["f"], 1), "ci95_px": None if not b[mm]["ci"] else [round(x, 1) for x in b[mm]["ci"]], "boundary": b[mm]["boundary"],
+                                       "tilt_median_deg": rd(b[mm]["tilt_median_deg"], 1)} for mm in OD_METHODS if mm in b}
+    p = hf.resolve(cfg["output"]["results_yaml"])
+    p.write_text(yaml.safe_dump(hf.jsonable(out), allow_unicode=True, sort_keys=False))
+    return p
+
+
+COMMANDS = {"protocol": protocol_main, "frame-filter": ff_main, "same-session": session_main, "overlay": overlay_main, "phase-segmentation": pseg_main, "guide-revision": grev_main, "f-response": fresp_main, "error-factors": ferr_main, "long-video-check": long_main, "generalization": gen_main, "main-camera-extension": ext_main, "wide-60cm": wide_main, "jointset-sets": jset_main, "verdict-calibration": cal_main, "printed-hand": pr_main, "hand-markers": mk_main, "markers-only": mo_main, "free-template": ft_main, "free-shape3d": s3_main, "free-shape3d-hand": h3_main, "free-shape3d-27": e3_main, "free-shape3d-new": e4_main, "mmpose-hand": mm_main, "mmpose-hand-46": mm2_main, "free-shape3d-new2": e5_main, "mmpose-hand-src": mm3_main, "free-shape3d-detectors": fs_main, "free-shape3d-hand-sets": h4_main, "free-shape3d-hand-sets-42track": h4b_main, "oblique-desk": od_main, "oblique-synthetic": sy_main, "oblique-fixed-template": fx_main, "oblique-desk-videos": om_main, "pause-stabilized": ps_main, "continuous-klt": kt_main, "continuous-klt-palm": kp_main, "klt-paper-dorsum": pp_main}
 
 
 def main(argv=None):
