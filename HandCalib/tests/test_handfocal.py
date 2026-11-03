@@ -4971,5 +4971,17 @@ class SGSegments(unittest.TestCase):
         self.assertLess(o["seg"]["rms_px"], o["single"]["rms_px"])
 
 
+class TRTurnSynthetic(unittest.TestCase):
+    def test_table_shares(self):
+        cfg = {"true_f": 1000.0, "n_frames": [60], "turn_ranges_deg": [90], "noise_rel": [0.01], "seeds": [0, 1, 2, 3]}
+        fs = [950.0, 1200.0, 1080.0, 3000.0]
+        res = [{"n_frames": 60, "turn_range_deg": 90, "noise_rel": 0.01, **{m: {"f": f, "boundary": f == 3000.0, "profile_f": [500.0, 3000.0]} for m in run.OD_METHODS}} for f in fs]
+        x = run.tr_table(res, cfg)[(60, 90, 0.01, run.OD_METHODS[0])]
+        self.assertEqual(x["within10_share"], 0.5)
+        self.assertEqual(x["within25_share"], 0.75)
+        self.assertEqual(x["upper_share"], 0.25)
+        self.assertAlmostEqual(x["err_median"], 0.14)
+
+
 if __name__ == "__main__":
     unittest.main()
