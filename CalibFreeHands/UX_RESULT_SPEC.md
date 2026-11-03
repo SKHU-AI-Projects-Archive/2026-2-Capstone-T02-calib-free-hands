@@ -1600,3 +1600,11 @@ C-2B manual approval was recorded on 2026-11-03; see the authoritative closure e
 ## C-2B final closure
 
 **C-2B COMPLETE — USER MANUALLY APPROVED** (2026-11-03). The user confirmed final Windows behavior including source/2D/3D synchronization at 2×, pause/seek, popup and hover interactions, HUD, annotations, playback speed matrix, and a clean console after the QWindow event-filter hotfix. This overall acceptance does not mark specific layout cases as manually inspected unless their evidence is recorded individually in `VALIDATION_CHECKLIST.md`.
+
+## C-2C Unified Result Viewer
+
+Saved `.cfh` results use the modern Comparison Viewer engine whether the user opens one result or multiple results. One result enters Single Result mode; two or more results retain Comparison mode and require matching source-media SHA256 identities. The application also uses this path for automatic preview after processing.
+
+Single Result mode retains the modern source/2D/3D presentation, Overlay and source-plus-result Split views, timestamp-based playback controls, bounded asynchronous source provider, and detector-confidence controls. It shows the configuration identity and omits Reference selection, reference-difference metric HUD/menu, error vectors, error-valued joint labels, comparison metric exports, and result reordering. It does not compute or display self-reference metrics. Missing or changed source media does not prevent viewing the saved 3D result. A single bundle without a source hash can still open; hash matching remains mandatory for multi-result comparison.
+
+The legacy `ResultViewer` implementation remains available for existing NPZ/session compatibility. This pass changes the `.cfh` application route and does not change scientific result payloads, coordinates, metrics, confidence provenance, or inference.

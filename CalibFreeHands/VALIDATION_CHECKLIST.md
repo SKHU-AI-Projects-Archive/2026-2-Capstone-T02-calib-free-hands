@@ -215,3 +215,13 @@ Specific Windows layout cases not individually recorded: Split + 2 and Split + 5
 - [x] Targeted comparison viewer tests: 35 passed; full pytest: 219 passed; app import `IMPORT_OK`, compileall, and `git diff --check` passed.
 - [x] Windows GUI smoke: three existing same-source `.cfh` results opened without inference; Reference, Speed (2×), Results, and Detection popups exercised; 2× playback ran during a 22-second observation interval and advanced the frame; no traceback, Python override error, TypeError, or AttributeError in captured stderr (all counts 0).
 - [ ] Direct hover-only testing was limited by the available Windows UI automation API; dropdown entry/leave was exercised through pointer movement accompanying control clicks. Final user approval remains pending.
+
+## C-2C Unified Result Viewer
+
+- [x] Single-result mode acceptance covers Result title, no Reference/metrics/error vectors/comparison export/results menu, no self-reference metric cache or badge, one-result Split, source-missing 3D availability, eight speed presets, and exact frame seek
+- [x] Main-window processing auto-open routes one result to ComparisonViewer single mode and 2 results to ComparisonViewer comparison mode
+- [x] Manual `View Results...` routes one or multiple `.cfh` bundles to ComparisonViewer; multi-result same-source enforcement remains covered
+- [x] Full pytest: 221 passed; Windows actual single `.cfh` inspected in Overlay and Split; Windows three-result `.cfh` inspected in Overlay and Split
+- [x] Current single and multi Windows windows showed source media and saved 2D/3D data without rerunning inference; single mode omitted comparison-only controls while multi mode retained Reference and comparison HUD
+- [x] Single-result playback probe on the 570-frame sample measured 29.75 source fps at 1x and 59.75 source fps at 2x over 4 seconds each; Windows 2x playback visually advanced source, 2D, and 3D together
+- [x] Single mode uses the existing 384 MiB bounded MediaFrameProvider without full-video preload; long-duration RAM was not remeasured in single mode, while shared-provider C-2B measurements remain recorded above

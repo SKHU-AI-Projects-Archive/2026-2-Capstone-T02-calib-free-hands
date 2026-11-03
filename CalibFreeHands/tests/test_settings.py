@@ -353,7 +353,7 @@ def test_main_window_restores_controls_after_cancellation(tmp_path, monkeypatch,
 
 @pytest.mark.parametrize(
     "filenames, expected_viewer",
-    [(["result.cfh"], "result"), (["a.cfh", "b.cfh"], "comparison")],
+    [(["result.cfh"], "comparison"), (["a.cfh", "b.cfh"], "comparison")],
 )
 def test_view_results_opens_single_bundle_or_same_source_comparison(tmp_path, monkeypatch, qapp,
                                                                     filenames, expected_viewer):
@@ -378,9 +378,6 @@ def test_view_results_opens_single_bundle_or_same_source_comparison(tmp_path, mo
     window = main.MainWindow()
     window._open_result()
     assert opened["viewer"] == expected_viewer
-    if expected_viewer == "comparison":
-        assert len(opened["path"]) == 2
-    else:
-        assert opened["path"].metadata["source_media_sha256"] == "a" * 64
+    assert len(opened["path"]) == len(filenames)
     assert opened["shown"]
     window.close()

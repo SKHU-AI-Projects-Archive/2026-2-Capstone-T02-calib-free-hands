@@ -80,4 +80,4 @@ This script does not download MANO assets and does not modify the protected sour
 
 ## CalibFreeHands desktop application
 
-The desktop app lives in `CalibFreeHands/` and includes a saved-result Comparison Viewer. Its comparison layout prioritizes source media and 3D viewports, with selected metrics shown in viewport overlays and per-joint details opened on demand. See `CalibFreeHands/UX_RESULT_SPEC.md` for the result-viewer contract.
+The desktop app lives in `CalibFreeHands/` and includes a unified saved-result Viewer. Single-result mode prioritizes source media and one 3D result without comparison-only metrics; comparison mode shows same-source results with selected metrics in viewport overlays and per-joint details on demand. See `CalibFreeHands/UX_RESULT_SPEC.md` for the result-viewer contract.

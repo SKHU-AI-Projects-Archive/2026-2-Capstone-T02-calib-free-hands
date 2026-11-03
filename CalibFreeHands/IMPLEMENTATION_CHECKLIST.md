@@ -110,3 +110,12 @@
 - [x] Targeted viewer/presentation/media-provider tests pass; full suite result recorded in VALIDATION_CHECKLIST.md
 - [x] Actual three-result Windows Comparison Viewer inspected in Overlay and Split without inference rerun; source frames, pose overlays, metrics, pin state, and playback updates observed
 - [x] C-2B complete; user manually approved final acceptance on 2026-11-03
+
+## C-2C Unified Result Viewer
+
+- [x] Saved `.cfh` files use the same modern ComparisonViewer shell for one result and for 2+ same-source results; automatic post-processing preview follows the same route
+- [x] Single-result mode has a Result title and result identity HUD, retains Overlay/Split and the shared timestamp-based playback/provider path, and hides reference selection, comparison metrics, error vectors, comparison exports, and result reordering
+- [x] Single-result mode does not calculate reference metrics or expose self-reference error labels; joint-name annotations and detector-confidence display remain available
+- [x] Single-result bundles can be opened without a source hash; multi-result source SHA256 matching remains required
+- [x] Single-result playback probe measured 29.75 source fps at 1x and 59.75 source fps at 2x on the local 570-frame sample; playback uses the shared 384 MiB bounded provider
+- [x] Legacy ResultViewer and NPZ/session loading implementation remain present for compatibility

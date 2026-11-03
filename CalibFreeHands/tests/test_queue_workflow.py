@@ -368,7 +368,7 @@ def test_cancellation_is_checked_while_decoding_media(tmp_path, monkeypatch, qap
     window.close()
 
 
-@pytest.mark.parametrize("configuration_count, expected", [(1, "result"), (2, "comparison")])
+@pytest.mark.parametrize("configuration_count, expected", [(1, "comparison"), (2, "comparison")])
 def test_single_media_success_auto_opens_matching_viewer(tmp_path, monkeypatch, qapp, configuration_count, expected):
     main, window, _ = make_window(tmp_path, monkeypatch)
     source = tmp_path / "a.mp4"
@@ -401,10 +401,8 @@ def test_single_media_success_auto_opens_matching_viewer(tmp_path, monkeypatch, 
     assert len(opened) == 1
     assert opened[0][0] == expected
     assert opened[0][2]
-    if expected == "result":
-        assert not isinstance(opened[0][1], list)
-    else:
-        assert len(opened[0][1]) == 2
+    assert isinstance(opened[0][1], list)
+    assert len(opened[0][1]) == configuration_count
     assert window.progress.text() == "Completed"
     window.close()
 

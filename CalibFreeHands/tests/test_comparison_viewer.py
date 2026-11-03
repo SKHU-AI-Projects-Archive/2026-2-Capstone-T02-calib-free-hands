@@ -212,6 +212,72 @@ def test_comparison_viewer_accepts_same_source_bundles_and_keeps_existing_modes(
     viewer.close()
 
 
+def test_unified_viewer_single_result_hides_comparison_semantics_and_keeps_split_playback(tmp_path, qapp):
+    from calibfreehands.visualization.comparison import ComparisonViewer
+
+    bundle = _bundle(tmp_path, "Single method", "method", "missing.mp4", "a" * 64, 1)
+    bundle.metadata.pop("source_media_sha256")
+    viewer = ComparisonViewer([bundle])
+
+    assert viewer.single_mode
+    assert viewer.windowTitle() == "CalibFreeHands - Result"
+    assert viewer.reference_id is None
+    assert viewer.reference_label.isHidden()
+    assert viewer.reference_selector.isHidden()
+    assert viewer.metric_menu_button.isHidden()
+    assert viewer.error_vectors_button.isHidden()
+    assert viewer.export_csv_button.isHidden()
+    assert viewer.export_json_button.isHidden()
+    assert viewer.results_menu_button.isHidden()
+    assert viewer._metric_cache == {}
+    assert viewer.split_panels[0].reference_badges == {}
+    assert viewer.split_panels[0].metric_rows == {}
+    assert not viewer.annotation_content_actions["error"].isVisible()
+    assert viewer.annotation_content == "name"
+    assert not viewer.split_views[0].acceptDrops()
+    assert len(viewer.split_views) == 1
+    assert viewer.split_grid.count() == 2
+    assert viewer.speed_selector.count() == 8
+    assert viewer.playback_clock.speed == pytest.approx(1.0)
+    assert viewer.presented_frame == 0
+    assert viewer.loaded_results[0].source_status == "missing"
+    assert viewer.loaded_results[0].media_frames is None
+    with pytest.raises(ValueError, match="only support joint names"):
+        viewer._set_annotation_content("error")
+
+    viewer.set_mode("split")
+    assert viewer.views.currentIndex() == 1
+    assert viewer.split_grid.count() == 2
+    viewer.slider.setValue(1)
+    assert viewer.presented_frame == 1
+    viewer.close()
+
+
+def test_single_result_playback_uses_timestamp_clock_at_one_and_two_times(tmp_path, qapp, monkeypatch):
+    from calibfreehands.visualization import comparison
+    from calibfreehands.visualization.comparison import ComparisonViewer
+
+    class FakeClock:
+        value = 0.0
+        def __call__(self):
+            return self.value
+
+    now = FakeClock()
+    monkeypatch.setattr(comparison, "monotonic", now)
+    viewer = ComparisonViewer(_session(tmp_path, count=1))
+    viewer._play()
+    now.value = 0.15
+    viewer._advance()
+    assert viewer.presented_frame == viewer.requested_frame == 1
+
+    viewer.speed_selector.setCurrentIndex(viewer.speed_selector.findData(2.0))
+    now.value = 0.20
+    viewer._advance()
+    assert viewer.presented_frame == viewer.requested_frame == 2
+    viewer._play()
+    viewer.close()
+
+
 def test_comparison_viewer_rejects_different_source_hashes(tmp_path):
     from calibfreehands.visualization.comparison import ComparisonViewer
     bundles = [

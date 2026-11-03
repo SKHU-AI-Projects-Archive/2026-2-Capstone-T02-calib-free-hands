@@ -192,24 +192,27 @@ class _ViewportPanel(QWidget):
 
     def _add_result_group(self, viewer, index, config):
         header = QHBoxLayout()
-        swatch = QLabel()
-        swatch.setFixedSize(10, 10)
-        color = tuple(round(value * 255) for value in viewer.configuration_colors[index])
-        swatch.setStyleSheet(f"background-color: rgb{color}; border: 1px solid white;")
-        header.addWidget(swatch)
         title = QLabel(config["name"])
         title.setStyleSheet("font-weight: 600; color: white;")
         title.setWordWrap(True)
-        header.addWidget(title, 1)
-        handle = _ResultDragHandle(viewer, config["id"], title)
-        header.insertWidget(0, handle)
-        if config["id"] == viewer.reference_id:
+        if viewer.single_mode:
+            header.addWidget(title, 1)
+        else:
+            swatch = QLabel()
+            swatch.setFixedSize(10, 10)
+            color = tuple(round(value * 255) for value in viewer.configuration_colors[index])
+            swatch.setStyleSheet(f"background-color: rgb{color}; border: 1px solid white;")
+            header.addWidget(swatch)
+            header.addWidget(title, 1)
+            handle = _ResultDragHandle(viewer, config["id"], title)
+            header.insertWidget(0, handle)
+        if not viewer.single_mode and config["id"] == viewer.reference_id:
             badge = QLabel("REFERENCE")
             badge.setStyleSheet("font-weight: 700; color: white; border: 1px solid white; padding: 1px 4px;")
             header.addWidget(badge)
             self.reference_badges[config["id"]] = badge
         self.body_layout.addLayout(header)
-        if config["id"] != viewer.reference_id:
+        if not viewer.single_mode and config["id"] != viewer.reference_id:
             for definition in viewer.metric_definitions:
                 if definition.metric_id not in viewer.selected_metric_ids:
                     continue
@@ -400,11 +403,14 @@ class _JointAnnotationLayer(QWidget):
                         or (hand == 1 and not view.show_right)):
                     continue
                 pair = viewer._metric_cache.get(config["id"], {}).get((frame, hand_name))
-                if pair is None: continue
+                if pair is None and not (viewer.single_mode and viewer.annotation_content == "name"):
+                    continue
                 occupied = []
                 candidates = []
-                for joint, (point, error) in enumerate(zip(result.keypoints_3d[position, hand], pair.joint_errors_mm)):
-                    if not np.isfinite(point).all() or not np.isfinite(error): continue
+                errors = pair.joint_errors_mm if pair is not None else np.full(len(JOINT_NAMES), np.nan)
+                for joint, (point, error) in enumerate(zip(result.keypoints_3d[position, hand], errors)):
+                    if not np.isfinite(point).all(): continue
+                    if viewer.annotation_content == "error" and not np.isfinite(error): continue
                     clip = matrix.map(QVector4D(float((point @ RAW_TO_VIEW.T)[0]),
                                                 float((point @ RAW_TO_VIEW.T)[1]),
                                                 float((point @ RAW_TO_VIEW.T)[2]), 1.0))
@@ -412,7 +418,7 @@ class _JointAnnotationLayer(QWidget):
                     x, y = clip.x() / clip.w(), clip.y() / clip.w()
                     if abs(x) > 1 or abs(y) > 1: continue
                     px, base_y = (x + 1) * self.width() / 2 + 5, (1 - y) * self.height() / 2 - 4
-                    candidates.append((joint, float(error), px, base_y))
+                    candidates.append((joint, float(error) if np.isfinite(error) else np.nan, px, base_y))
                 if viewer.annotation_mode == "key_joints":
                     candidates = [item for item in candidates if item[0] in (0, 4, 8, 12, 16, 20)]
                 elif viewer.annotation_mode == "worst5":

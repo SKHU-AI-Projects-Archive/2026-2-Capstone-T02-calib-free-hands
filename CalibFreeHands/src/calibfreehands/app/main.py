@@ -1145,9 +1145,7 @@ class MainWindow(QMainWindow):
             source_ids = {bundle.metadata["source_media_sha256"].casefold() for bundle in bundles}
             if len(source_ids) != 1:
                 raise ValueError("Selected results were generated from different source media.")
-            viewer = ComparisonViewer(bundles)
-        else:
-            viewer = ResultViewer(bundles[0])
+        viewer = ComparisonViewer(bundles)
         viewer.setAttribute(Qt.WidgetAttribute.WA_DeleteOnClose)
         viewer.show()
         self._result_viewer = viewer

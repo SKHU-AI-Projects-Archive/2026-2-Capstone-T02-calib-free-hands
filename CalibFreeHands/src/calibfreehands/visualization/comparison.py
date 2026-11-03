@@ -83,8 +83,8 @@ def _session_results(session_path: Path):
 def _bundle_results(bundles: list[ResultBundle]):
     if not bundles:
         raise ValueError("no result bundles were selected")
-    source_ids = {bundle.metadata.get("source_media_sha256", "").casefold() for bundle in bundles}
-    if "" in source_ids or len(source_ids) != 1:
+    source_ids = {str(bundle.metadata.get("source_media_sha256") or "").casefold() for bundle in bundles}
+    if len(bundles) > 1 and ("" in source_ids or len(source_ids) != 1):
         raise ValueError("Selected results were generated from different source media.")
     results, configurations = [], []
     for index, bundle in enumerate(bundles):
@@ -111,7 +111,7 @@ def _bundle_results(bundles: list[ResultBundle]):
     session = {
         "schema_version": 1, "configurations": configurations, "final_results": {},
         "source_media": bundles[0].metadata.get("source_media_path", ""),
-        "source_media_sha256": bundles[0].metadata["source_media_sha256"],
+        "source_media_sha256": bundles[0].metadata.get("source_media_sha256"),
         "reference_configuration_id": bundles[0].metadata.get("reference_configuration_id"),
     }
     return session, results
@@ -483,6 +483,7 @@ class ComparisonViewer(QWidget):
         self.bundle_results = list(session_path) if isinstance(session_path, (list, tuple)) else None
         self.session_path = None if self.bundle_results is not None else Path(session_path).resolve()
         self.session, entries = _comparison_results(session_path)
+        self.single_mode = len(entries) == 1
         self.configurations = [config for config, _ in entries]
         self.loaded_results = [loaded for _, loaded in entries]
         for config, loaded in zip(self.configurations, self.loaded_results):
@@ -510,11 +511,11 @@ class ComparisonViewer(QWidget):
                 or any(not np.allclose(timestamps[0], values, equal_nan=True) for values in timestamps[1:])):
             raise ValueError("comparison results must have matching frame indices, timestamps, and counts")
         self._reference_fallback = False
-        self.reference_id = self._default_reference_id()
+        self.reference_id = None if self.single_mode else self._default_reference_id()
         self.metric_definitions = metric_registry()
         self.selected_metric_ids = {"wrist_error", "mpjpe", "wrist_depth_error"}
         self._metric_cache = {}
-        self.setWindowTitle("CalibFreeHands - Comparison")
+        self.setWindowTitle("CalibFreeHands - Result" if self.single_mode else "CalibFreeHands - Comparison")
         self.setMinimumSize(1280, 720)
 
         self.source_overlay = _OverlayCanvas(self.loaded_results[0])
@@ -526,13 +527,13 @@ class ComparisonViewer(QWidget):
         self.split_views = [_LinkedResultView(loaded, color, self._sync_camera)
                             for loaded, color in zip(self.loaded_results, self.configuration_colors)]
         for index, view in enumerate(self.split_views):
-            view.setMinimumSize(340, 260); view.setAcceptDrops(True)
+            view.setMinimumSize(340, 260); view.setAcceptDrops(not self.single_mode)
             view.viewer = self; view.configuration_id = self.configurations[index]["id"]
         self.split_panels = [_ViewportPanel(view, [index]) for index, view in enumerate(self.split_views)]
         for view, panel in zip(self.split_views, self.split_panels): view.hud = panel
         self.split_result_order = list(range(len(entries)))
         self.annotation_mode = "off"
-        self.annotation_content = "error"
+        self.annotation_content = "name" if self.single_mode else "error"
         self.overlay_annotations = _JointAnnotationLayer(self, self.overlay_view, list(range(len(entries))))
         self.split_annotations = [_JointAnnotationLayer(self, view, [index])
                                   for index, view in enumerate(self.split_views)]
@@ -616,6 +617,8 @@ class ComparisonViewer(QWidget):
         self.results_menu_button.setPopupMode(QToolButton.ToolButtonPopupMode.InstantPopup)
         self.results_menu_button.setMenu(self.results_menu)
         self._update_results_button()
+        if self.single_mode:
+            self.results_menu_button.hide()
 
         self.reference_label = QLabel("Reference" + (" ? fallback" if self._reference_fallback else ""))
         self.reference_selector = QComboBox()
@@ -627,6 +630,9 @@ class ComparisonViewer(QWidget):
         self.reference_selector.setMinimumWidth(120)
         self.reference_selector.setToolTip(self.reference_selector.currentText())
         self.reference_selector.currentIndexChanged.connect(self._reference_changed)
+        if self.single_mode:
+            for widget in (self.reference_label, self.reference_selector):
+                widget.hide()
 
         self.metric_menu = QMenu(self)
         self.metric_checks = {}
@@ -652,6 +658,8 @@ class ComparisonViewer(QWidget):
         self.metric_menu_button.setPopupMode(QToolButton.ToolButtonPopupMode.InstantPopup)
         self.metric_menu_button.setMenu(self.metric_menu)
         self._update_metrics_button()
+        if self.single_mode:
+            self.metric_menu_button.hide()
 
         self.confidence_menu = QMenu(self)
         self.confidence_opacity_checkbox = self._menu_checkbox(self.confidence_menu, "Use as opacity", checked=True)
@@ -696,6 +704,8 @@ class ComparisonViewer(QWidget):
         self.error_vectors_button = QToolButton(); self.error_vectors_button.setText("Error vectors: Off")
         self.error_vectors_button.setPopupMode(QToolButton.ToolButtonPopupMode.InstantPopup)
         self.error_vectors_button.setMenu(self.error_vectors_menu)
+        if self.single_mode:
+            self.error_vectors_button.hide()
 
         self.annotation_menu = QMenu(self)
         self.annotation_group = QActionGroup(self); self.annotation_group.setExclusive(True)
@@ -718,6 +728,9 @@ class ComparisonViewer(QWidget):
             action.triggered.connect(lambda checked, value=content: self._set_annotation_content(value) if checked else None)
             self.annotation_content_group.addAction(action); self.annotation_content_menu.addAction(action)
             self.annotation_content_actions[content] = action
+        if self.single_mode:
+            self.annotation_content_actions["error"].setVisible(False)
+            self.annotation_actions["worst5"].setVisible(False)
         self.hud_menu = QMenu(self)
         for label, anchor in (("Top left", "top-left"), ("Top right", "top-right"),
                               ("Bottom left", "bottom-left"), ("Bottom right", "bottom-right")):
@@ -761,6 +774,10 @@ class ComparisonViewer(QWidget):
         for button, callback in ((self.export_csv_button, self._export_csv), (self.export_json_button, self._export_json)):
             button.setSizePolicy(QSizePolicy.Policy.Fixed, QSizePolicy.Policy.Fixed)
             button.clicked.connect(callback)
+        if self.single_mode:
+            self.export_csv_button.hide()
+            self.export_json_button.hide()
+            self.metric_status.hide()
 
         toolbar = QHBoxLayout()
         toolbar.setContentsMargins(14, 8, 14, 6)
@@ -854,8 +871,11 @@ class ComparisonViewer(QWidget):
                              ("Fit", "fit_hands"), ("Reset", "reset_camera")):
             camera_menu.addAction(text, lambda _=False, name=method: self._apply_camera_preset(name))
         self.more_menu.addSeparator()
-        self.more_menu.addAction("Export CSV…", self._export_csv)
-        self.more_menu.addAction("Export JSON…", self._export_json)
+        self.export_csv_action = self.more_menu.addAction("Export CSV…", self._export_csv)
+        self.export_json_action = self.more_menu.addAction("Export JSON…", self._export_json)
+        if self.single_mode:
+            self.export_csv_action.setVisible(False)
+            self.export_json_action.setVisible(False)
 
         playback_fps = 30.0
         metadata = self.loaded_results[0].metadata or {}
@@ -1044,6 +1064,8 @@ class ComparisonViewer(QWidget):
     def _set_annotation_content(self, content):
         if content not in ("error", "name"):
             raise ValueError(content)
+        if self.single_mode and content == "error":
+            raise ValueError("single-result annotations only support joint names")
         self.annotation_content = content
         self._refresh_annotations()
 
@@ -1085,6 +1107,8 @@ class ComparisonViewer(QWidget):
         return self.configurations[0]["id"]
 
     def _metric_has_data(self, metric_id):
+        if self.single_mode:
+            return False
         if metric_id not in ("translation_error", "translation_z_error", "translation_xy_error", "mpvpe", "pa_mpvpe"):
             return True
         reference = self.loaded_results[next(i for i, c in enumerate(self.configurations)
@@ -1126,6 +1150,8 @@ class ComparisonViewer(QWidget):
         self._refresh_metric_panels()
 
     def _reference_changed(self, _index):
+        if self.single_mode:
+            return
         self.reference_id = self.reference_selector.currentData()
         self.reference_selector.setToolTip(self.reference_selector.currentText())
         self.reference_label.setText("Reference")
@@ -1161,6 +1187,9 @@ class ComparisonViewer(QWidget):
             self.error_vector_actions[config["id"]] = action
 
     def _compute_metrics(self):
+        if self.single_mode:
+            self._metric_cache = {}
+            return
         reference_index = next(i for i, config in enumerate(self.configurations) if config["id"] == self.reference_id)
         reference = self.loaded_results[reference_index].result
         cache = {}
@@ -1212,6 +1241,8 @@ class ComparisonViewer(QWidget):
                 _set_mesh_color(mesh, view.hand_colors[hand], alpha * view.mesh_opacity)
 
     def _set_error_vectors(self, enabled):
+        if self.single_mode:
+            return
         self.error_candidate_selector.setVisible(enabled and self.error_candidate_selector.count() > 0)
         self.overlay_view.error_vectors_enabled = enabled
         self.overlay_view.reference_index = next((i for i, config in enumerate(self.configurations)
@@ -1502,6 +1533,8 @@ class ComparisonViewer(QWidget):
     def _export_csv(self): self._export("csv")
     def _export_json(self): self._export("json")
     def _export(self, kind):
+        if self.single_mode:
+            return
         if self.session_path is not None:
             initial = self.session_path.with_suffix(f".{kind}")
         else:
