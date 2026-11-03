@@ -21,6 +21,8 @@
 # Dorsum body: kt_chain unchanged (56's tracking settings) with the hull of joints 0, 1, 5, 9, 13, 17 (dilate_frac 0: kt_hand_mask's 1 px minimum); points = the reference frame's 21 joints moved
 # by this chain, j16 through od_job (free_template and free_shape3d), 56's edge rule and bootstrap.
 # Old 16 points: 56's j16 estimates read from its run (not recomputed). Reference f only in summary.md. Fixed before the run.
+# The first official run (20261103T015501Z, code ae716d7) processed the videos one after another (about 10 min each) and was stopped by me after 4 of 12 videos at the user's request to run
+# the videos in parallel; no rule or setting of the analysis changed, only video_workers / n_workers (speed). Its partial log stays in its folder.
 experiment:
   name: 58_klt_paper_dorsum
   seed: 42
@@ -44,9 +46,10 @@ paper: {ring: [0.12, 0.20], seed_pct: 75, color_tol: 6.0, light_drop: 90.0, open
 dorsum: {joints: [0, 1, 5, 9, 13, 17], dilate_frac: 0.0}
 bootstrap: {n: 100, block: 30, seed: 42}
 compare_56: runs/56_continuous_klt/20261102T073343Z
-code_58: {branch: exp/58-klt-paper-dorsum, base_commit: 6b80e08, commit: ae716d7, modules: [HandCalib/handfocal_report.py, HandCalib/run.py]}
+code_58: {branch: exp/58-klt-paper-dorsum, base_commit: 6b80e08, commit: d171831, modules: [HandCalib/handfocal_report.py, HandCalib/run.py]}
 workers: 24
-n_workers: 8
+n_workers: 4                                       # mediapipe workers per video
+video_workers: 12                                  # videos processed in parallel (one process each)
 output:
   root: runs/58_klt_paper_dorsum
   results_yaml: results/58_klt_paper_dorsum.yaml
