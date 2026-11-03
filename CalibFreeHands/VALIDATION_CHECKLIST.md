@@ -281,3 +281,34 @@ All entries below are pending implementation and validation. No acceptance item 
 - [ ] C-2C unified single/multi routing, missing-source 3D, static image source, MANO mesh, and same-source validation regressions pass
 - [ ] `.cfh` schema, presets, internal model IDs, focal provenance, confidence semantics, metrics, coordinates, and all scientific contracts remain unchanged
 - [ ] Full test/import/compile/diff validation for implementation is recorded; no console traceback, Qt signal error, TypeError, or AttributeError remains in tested flows
+
+## First-User UX & Stability Pass — implementation checks (2026-11-03)
+
+### Automated
+
+- [x] Full pytest: `236 passed` on the project Python 3.11 virtual environment
+- [x] App import smoke: `import calibfreehands.app.main` printed `IMPORT_OK`
+- [x] `compileall -q src tests` completed successfully
+- [x] `git diff --check` completed successfully
+- [x] Speed stepper endpoints/sequence and timestamp-clock continuity are covered by viewer/playback tests
+- [x] HUD animation duration, all four nearest-corner destinations, final anchor position, and retained requested size are covered by offscreen Qt tests
+- [x] Single/comparison mode controls, Pin labels, icon state, annotations wording, and vectors state transitions are covered by offscreen Qt tests
+
+### Windows GUI observations
+
+- [x] Refreshed Main Window displayed the revised column order, `+ Add` below the row, processing/settings/output hierarchy, and path/Browse/Collision row. Added a second configuration, selected Manual Focal and saw its enabled focal field, then removed the temporary row.
+- [x] Native Common Item Dialog opened normally with C: as its initial location; navigated to D:, selected one MP4, observed it enter the queue, cancelled and reopened the picker, and cancelled again. No `0x80004002` failure appeared in this exercised single-file path.
+- [x] Opened a historical single `.cfh` through View Results without running inference. The Viewer presented `Manual Focal 1500 px`, source video, 2D overlay, 3D skeleton, Overlay/Split, media icons, and speed stepper.
+- [x] In the single-result Viewer, changed speed from 1.0× to 1.25×, played and paused, and observed the source frame and 2D/3D pose advance together. Pin showed explicit On state and kept controls visible during playback.
+- [x] Dragged the single-result HUD from its initial corner to bottom-right; the saved `.cfh` was read only.
+- [x] Opened a two-result Viewer from two existing same-source `.cfh` bundles without inference. Reference and Manual Focal labeling, metric HUD, result colors, and rendered candidate error vectors were visible. This smoke instantiated the Viewer from saved bundles directly; it did not exercise the Main Window's multi-file result selection flow.
+
+### Still pending for full Windows/user acceptance
+
+- [ ] Native picker multi-file selection, folder/current-folder selection, repeated use across the full C:/D: matrix, and fallback/error-path behavior
+- [ ] Main Window manual layout review at 1280×800, including several added rows and removal at that exact window size
+- [ ] End-to-end multi-file selection from Main Window, plus full comparison Results/Reference/Metrics/Detection/Annotations/vector-repeat interaction matrix
+- [ ] Manual HUD drag to each of the four corners, size/background/opacity menu review, and constrained-viewport recovery
+- [ ] Source A/B/C provider registry, worker, cache-byte, and RSS measurements; application console review during a complete close/shutdown cycle
+- [ ] Original feedback provider and second first-time user repeat the complete flow without coaching
+- [ ] Fresh AnyCalib/WiLoR inference smoke; existing saved results were used for Viewer inspection

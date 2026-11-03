@@ -291,7 +291,7 @@ def test_media_processing_exposes_only_cfh_and_cleans_internal_workspace(tmp_pat
     window.close()
 
 
-def test_checkerboard_result_filename_contains_reference_focal_without_changing_anycalib(tmp_path, monkeypatch, qapp):
+def test_manual_focal_result_filename_uses_user_facing_name_without_changing_anycalib(tmp_path, monkeypatch, qapp):
     main, window, _ = make_window(tmp_path, monkeypatch)
     source = tmp_path / "clip.mp4"
     source.touch()
@@ -310,7 +310,7 @@ def test_checkerboard_result_filename_contains_reference_focal_without_changing_
 
     assert {path.name for path in paths} == {
         "clip__Original-AnyCalib__Original-WiLoR.cfh",
-        "clip__Checkerboard-Reference-1280.5px__Original-WiLoR.cfh",
+        "clip__Manual-Focal-1280.5px__Original-WiLoR.cfh",
     }
     window.close()
 

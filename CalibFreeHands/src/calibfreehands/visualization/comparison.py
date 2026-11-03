@@ -3,6 +3,7 @@ from __future__ import annotations
 import colorsys
 import csv
 import json
+import re
 from pathlib import Path
 from time import monotonic
 
@@ -13,11 +14,11 @@ from PySide6.QtGui import QAction, QActionGroup, QImage, QWindow
 from PySide6.QtWidgets import (
     QApplication, QCheckBox, QColorDialog, QComboBox, QDialog, QFileDialog, QGridLayout,
     QHBoxLayout, QLabel, QMainWindow, QMenu, QPushButton, QScrollArea, QSizePolicy,
-    QSlider, QSplitter, QStackedWidget, QTableWidget, QTableWidgetItem, QToolButton,
+    QSlider, QSplitter, QStackedWidget, QStyle, QTableWidget, QTableWidgetItem, QToolButton, QButtonGroup,
     QVBoxLayout, QWidget, QWidgetAction,
 )
 
-from calibfreehands.media.provider import MediaFrameProvider, shared_media_provider
+from calibfreehands.media.provider import MediaFrameProvider, release_shared_media_provider, shared_media_provider
 from .topology import HAND_CONNECTIONS, RAW_TO_VIEW
 from calibfreehands.pipeline.result_bundle import ResultBundle
 from calibfreehands.pipeline.metrics import compare_results, metric_registry
@@ -137,6 +138,20 @@ def _hand_variant(color, hand):
 def _confidence_color(confidence):
     value = float(np.clip(confidence, 0, 1))
     return (value, 0.25 + 0.55 * (1 - value), 1 - value)
+
+
+def _manual_focal_display_name(model_id: str, saved_name: str, focal_px: float | None) -> str:
+    """Normalize the legacy calibration label for display without mutating saved metadata."""
+    if model_id != "checkerboard_reference":
+        return saved_name
+    name = saved_name.strip()
+    known_label = name.startswith("Checkerboard Reference") or name.startswith("Manual Focal")
+    if known_label and "px" in name.casefold():
+        name = name.replace("Checkerboard Reference", "Manual Focal", 1)
+        return re.sub(r"(?<=\d)\s+px\b", "\u00a0px", name, flags=re.IGNORECASE)
+    if focal_px is None:
+        return "Manual Focal"
+    return f"Manual Focal {focal_px:g}\u00a0px"
 
 
 def calculate_reference_metrics(session_path: Path | list[ResultBundle], reference_id=None) -> list[dict]:
@@ -486,14 +501,19 @@ class ComparisonViewer(QWidget):
         self.single_mode = len(entries) == 1
         self.configurations = [config for config, _ in entries]
         self.loaded_results = [loaded for _, loaded in entries]
+        self._owned_media_providers = tuple({
+            id(loaded.media_frames): loaded.media_frames for loaded in self.loaded_results
+            if isinstance(loaded.media_frames, MediaFrameProvider)
+        }.values())
+        self._media_providers_released = False
         for config, loaded in zip(self.configurations, self.loaded_results):
-            if config.get("calibration_model_id") == "checkerboard_reference" and "px" not in config["name"].lower():
-                focal = loaded.result.video_focal_px
-                if focal is None:
-                    finite = loaded.result.focal_px[np.isfinite(loaded.result.focal_px)]
-                    focal = float(np.median(finite)) if finite.size else None
-                if focal is not None:
-                    config["name"] = f"Checkerboard Reference {focal:g} px"
+            focal = loaded.result.video_focal_px
+            if focal is None:
+                finite = loaded.result.focal_px[np.isfinite(loaded.result.focal_px)]
+                focal = float(np.median(finite)) if finite.size else None
+            config["name"] = _manual_focal_display_name(
+                config.get("calibration_model_id", ""), config["name"], focal
+            )
         names = [config["name"] for config in self.configurations]
         for index, config in enumerate(self.configurations):
             if names.count(config["name"]) > 1:
@@ -583,11 +603,14 @@ class ComparisonViewer(QWidget):
 
         self.mode_selector = QWidget()
         mode_layout = QHBoxLayout(self.mode_selector); mode_layout.setContentsMargins(0, 0, 0, 0); mode_layout.setSpacing(2)
+        self.mode_button_group = QButtonGroup(self); self.mode_button_group.setExclusive(True)
         self.mode_buttons = {}
         for text, mode in (("Overlay", "overlay"), ("Split", "split")):
             button = QToolButton(); button.setText(text); button.setCheckable(True)
             button.setSizePolicy(QSizePolicy.Policy.Fixed, QSizePolicy.Policy.Fixed)
+            button.setAutoExclusive(True)
             button.clicked.connect(lambda checked=False, value=mode: self.set_mode(value))
+            self.mode_button_group.addButton(button)
             mode_layout.addWidget(button); self.mode_buttons[mode] = button
         self.mode_buttons["overlay"].setChecked(True)
 
@@ -686,6 +709,7 @@ class ComparisonViewer(QWidget):
         self.error_candidate_selector.setMaximumWidth(190)
         self.error_candidate_selector.setEnabled(self.error_candidate_selector.count() > 0)
         self.error_vectors_checkbox.setEnabled(self.error_candidate_selector.count() > 0)
+        self.selected_error_candidate_id = self.error_candidate_selector.currentData()
         self.error_vectors_checkbox.toggled.connect(self._set_error_vectors)
         self.error_candidate_selector.currentIndexChanged.connect(lambda: self._set_error_vectors(self.error_vectors_checkbox.isChecked()))
         self.error_candidate_selector.hide()
@@ -716,10 +740,9 @@ class ComparisonViewer(QWidget):
             action.triggered.connect(lambda checked, value=mode: self.set_annotation_mode(value) if checked else None)
             self.annotation_group.addAction(action); self.annotation_menu.addAction(action)
             self.annotation_actions[mode] = action
-        self.annotation_button = QToolButton(); self.annotation_button.setText("Joint annotations")
+        self.annotation_button = QToolButton(); self.annotation_button.setText("Annotations")
         self.annotation_button.setPopupMode(QToolButton.ToolButtonPopupMode.InstantPopup)
         self.annotation_button.setMenu(self.annotation_menu)
-        self.annotation_button.setText("Joints")
         self.annotation_content_menu = self.annotation_menu.addMenu("Label")
         self.annotation_content_group = QActionGroup(self); self.annotation_content_group.setExclusive(True)
         self.annotation_content_actions = {}
@@ -732,10 +755,6 @@ class ComparisonViewer(QWidget):
             self.annotation_content_actions["error"].setVisible(False)
             self.annotation_actions["worst5"].setVisible(False)
         self.hud_menu = QMenu(self)
-        for label, anchor in (("Top left", "top-left"), ("Top right", "top-right"),
-                              ("Bottom left", "bottom-left"), ("Bottom right", "bottom-right")):
-            action = QAction(label, self); action.triggered.connect(lambda _=False, value=anchor: self._set_hud(anchor=value))
-            self.hud_menu.addAction(action)
         size_menu = self.hud_menu.addMenu("Size")
         for size in ("small", "medium", "large"):
             action = QAction(size.title(), self); action.triggered.connect(lambda _=False, value=size: self._set_hud(scale=value))
@@ -792,7 +811,7 @@ class ComparisonViewer(QWidget):
         self.error_vectors_button.setText("Vectors: Off")
         self.error_vectors_button.setToolTip("Show selected Reference → Candidate error vectors")
         toolbar.addWidget(self.annotation_button); toolbar.addWidget(self.hud_button)
-        self.pin_controls_button = QToolButton(); self.pin_controls_button.setText("Pin")
+        self.pin_controls_button = QToolButton(); self.pin_controls_button.setText("Pin: Off")
         self.pin_controls_button.setCheckable(True); self.pin_controls_button.setToolTip("Keep controls visible")
         self.pin_controls_button.setStyleSheet("QToolButton:checked { background: palette(highlight); color: palette(highlighted-text); }")
         toolbar.addWidget(self.pin_controls_button); toolbar.addWidget(self.more_button)
@@ -905,22 +924,35 @@ class ComparisonViewer(QWidget):
         self.playback_buttons = []
         playback = QHBoxLayout()
         playback.addWidget(QLabel("Playback"))
-        for text, callback, width in (("Previous", self._previous, 82), ("Play / Pause", self._play, 100), ("Next", self._next_frame, 70)):
-            button = QPushButton(text)
-            button.setFixedWidth(width)
+        icons = (QStyle.StandardPixmap.SP_MediaSkipBackward, QStyle.StandardPixmap.SP_MediaPlay,
+                 QStyle.StandardPixmap.SP_MediaSkipForward)
+        accessible_names = ("Previous frame", "Play", "Next frame")
+        for callback, icon_kind, accessible_name in zip((self._previous, self._play, self._next_frame), icons, accessible_names):
+            button = QToolButton()
+            button.setIcon(self.style().standardIcon(icon_kind))
+            button.setAccessibleName(accessible_name)
+            button.setToolTip(accessible_name)
+            button.setFixedSize(36, 32)
             button.setSizePolicy(QSizePolicy.Policy.Fixed, QSizePolicy.Policy.Fixed)
             button.clicked.connect(callback)
             playback.addWidget(button)
             self.playback_buttons.append(button)
         playback.addWidget(QLabel("Speed"))
-        self.speed_selector = QComboBox()
-        for speed in PlaybackClock.SPEEDS:
-            self.speed_selector.addItem("1.0×" if speed == 1.0 else f"{speed:g}×", speed)
-        self.speed_selector.setCurrentIndex(PlaybackClock.SPEEDS.index(1.0))
-        self.speed_selector.setMaximumWidth(78)
-        self.speed_selector.currentIndexChanged.connect(self._set_playback_speed)
+        self.speed_down_button = QToolButton(); self.speed_down_button.setText("▼")
+        self.speed_down_button.setAccessibleName("Decrease playback speed")
+        self.speed_down_button.setToolTip("Decrease playback speed")
+        self.speed_down_button.clicked.connect(lambda: self._step_playback_speed(-1))
+        self.speed_value_label = QLabel("1.0×")
+        self.speed_value_label.setMinimumWidth(self.speed_value_label.fontMetrics().horizontalAdvance("1.25×"))
+        self.speed_value_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        self.speed_up_button = QToolButton(); self.speed_up_button.setText("▲")
+        self.speed_up_button.setAccessibleName("Increase playback speed")
+        self.speed_up_button.setToolTip("Increase playback speed")
+        self.speed_up_button.clicked.connect(lambda: self._step_playback_speed(1))
         playback.addStretch(1)
-        playback.addWidget(self.speed_selector)
+        playback.addWidget(self.speed_down_button)
+        playback.addWidget(self.speed_value_label)
+        playback.addWidget(self.speed_up_button)
         self.performance_stats_label = QLabel()
         self.performance_stats_label.hide()
         self.performance_stats_timer = QTimer(self)
@@ -934,7 +966,7 @@ class ComparisonViewer(QWidget):
         layout = QGridLayout(self)
         layout.setContentsMargins(0, 0, 0, 0)
         layout.addWidget(self.views, 0, 0)
-        self.chrome = QWidget(); chrome_layout = QVBoxLayout(self.chrome); chrome_layout.setContentsMargins(0, 8, 0, 12); chrome_layout.setSpacing(6)
+        self.chrome = QWidget(); chrome_layout = QVBoxLayout(self.chrome); chrome_layout.setContentsMargins(14, 8, 14, 12); chrome_layout.setSpacing(6)
         chrome_layout.addLayout(toolbar); chrome_layout.addWidget(self.slider)
         playback.addWidget(self.status)
         playback.addWidget(self.metric_status, 1)
@@ -944,6 +976,8 @@ class ComparisonViewer(QWidget):
         self.auto_hide_timer.timeout.connect(self._auto_hide_controls)
         self.pin_controls_button.toggled.connect(lambda pinned: self.auto_hide_timer.stop() if pinned else self._show_controls())
         self.pin_controls_button.toggled.connect(self._set_pin_label)
+        self._sync_speed_controls()
+        self._sync_play_icon()
         self._panel_reorder_active = False
         self._hover_menu_target = None
         self._hover_button_entered = False
@@ -992,11 +1026,19 @@ class ComparisonViewer(QWidget):
         for hud in (self.overlay_panel, *self.split_panels): hud.set_background(style)
 
     def _select_error_candidate(self, candidate_id):
+        if candidate_id == self.reference_id or candidate_id not in self.error_vector_actions:
+            return
+        self.selected_error_candidate_id = candidate_id
         index = self.error_candidate_selector.findData(candidate_id)
-        if index >= 0: self.error_candidate_selector.setCurrentIndex(index)
+        if index >= 0:
+            blocker = QSignalBlocker(self.error_candidate_selector)
+            self.error_candidate_selector.setCurrentIndex(index)
+            del blocker
+        self.error_candidate_selector.hide()
         self.error_vectors_checkbox.setChecked(True)
+        self._set_error_vectors(True)
         name = next(config["name"] for config in self.configurations if config["id"] == candidate_id)
-        self.error_vectors_button.setText("Vectors: Candidate")
+        self.error_vectors_button.setText(f"Vectors: {name}")
         self.error_vectors_button.setToolTip(f"Show selected Reference → {name} error vectors")
 
     def _show_controls(self):
@@ -1004,8 +1046,8 @@ class ComparisonViewer(QWidget):
         if self.timer.isActive() and self.auto_hide_action.isChecked(): self.auto_hide_timer.start()
 
     def _set_pin_label(self, pinned):
-        self.pin_controls_button.setText("Pinned" if pinned else "Pin")
-        self.pin_controls_button.setToolTip("Controls stay visible while pinned" if pinned else "Keep controls visible")
+        self.pin_controls_button.setText("Pin: On" if pinned else "Pin: Off")
+        self.pin_controls_button.setToolTip("Controls stay visible while pinned" if pinned else "Controls may hide during playback")
 
     def _menu_about_to_show(self, menu):
         if not self._opening_menu_by_hover and menu is getattr(self._hover_menu_target, "menu", lambda: None)():
@@ -1163,6 +1205,7 @@ class ComparisonViewer(QWidget):
         for config in self.configurations:
             if config["id"] != self.reference_id:
                 self.error_candidate_selector.addItem(config["name"], config["id"])
+        self.selected_error_candidate_id = self.error_candidate_selector.currentData()
         self.error_vectors_checkbox.setEnabled(bool(self.error_candidate_selector.count()))
         self.error_candidate_selector.setEnabled(bool(self.error_candidate_selector.count()))
         self.error_vectors_checkbox.setChecked(False)
@@ -1243,18 +1286,36 @@ class ComparisonViewer(QWidget):
     def _set_error_vectors(self, enabled):
         if self.single_mode:
             return
-        self.error_candidate_selector.setVisible(enabled and self.error_candidate_selector.count() > 0)
+        candidate_ids = {config["id"] for config in self.configurations if config["id"] != self.reference_id}
+        if self.selected_error_candidate_id not in candidate_ids:
+            self.selected_error_candidate_id = next(iter(candidate_ids), None)
+        enabled = bool(enabled and self.selected_error_candidate_id is not None)
+        if self.error_vectors_checkbox.isChecked() != enabled:
+            blocker = QSignalBlocker(self.error_vectors_checkbox)
+            self.error_vectors_checkbox.setChecked(enabled)
+            del blocker
+        self.error_candidate_selector.hide()
+        self.error_vectors_checkbox.setEnabled(bool(candidate_ids))
         self.overlay_view.error_vectors_enabled = enabled
         self.overlay_view.reference_index = next((i for i, config in enumerate(self.configurations)
                                                   if config["id"] == self.reference_id), 0)
         self.overlay_view.error_candidate = next((i for i, c in enumerate(self.configurations)
-                                                   if c["id"] == self.error_candidate_selector.currentData()), -1)
+                                                   if c["id"] == self.selected_error_candidate_id), -1)
+        self.error_vectors_off.setChecked(not enabled)
+        for candidate_id, action in self.error_vector_actions.items():
+            action.setChecked(enabled and candidate_id == self.selected_error_candidate_id)
         if enabled and self.mode == "overlay":
             self.overlay_view.set_frame(self.slider.value())
-        elif not enabled:
+        if not enabled:
             for item in self.overlay_view.error_items:
                 item.setVisible(False)
-        if not enabled: self.error_vectors_button.setText("Error vectors: Off")
+            self.error_vectors_button.setText("Vectors: Off")
+            self.error_vectors_button.setToolTip("Show selected Reference → Candidate error vectors")
+        else:
+            name = next(config["name"] for config in self.configurations
+                        if config["id"] == self.selected_error_candidate_id)
+            self.error_vectors_button.setText(f"Vectors: {name}")
+            self.error_vectors_button.setToolTip(f"Show selected Reference → {name} error vectors")
 
     def _show_joint_table(self, candidate_id):
         candidate_name = next(config["name"] for config in self.configurations if config["id"] == candidate_id)
@@ -1310,7 +1371,7 @@ class ComparisonViewer(QWidget):
             raise ValueError(f"unknown comparison view mode: {mode}")
         self.mode = mode
         self.views.setCurrentIndex(0 if mode == "overlay" else 1)
-        for name, button in self.mode_buttons.items(): button.setChecked(name == mode)
+        self.mode_buttons[mode].setChecked(True)
         self._render_active_frame()
         self._refresh_metric_panels()
         self._refresh_annotations()
@@ -1463,8 +1524,26 @@ class ComparisonViewer(QWidget):
         else:
             self._set_frame(self.slider.value())
 
-    def _set_playback_speed(self, index):
-        self.playback_clock.set_speed(self.speed_selector.itemData(index))
+    def _sync_speed_controls(self):
+        index = PlaybackClock.SPEEDS.index(self.playback_clock.speed)
+        speed = PlaybackClock.SPEEDS[index]
+        self.speed_value_label.setText(f"{speed:.1f}×" if speed == 1.0 else f"{speed:g}×")
+        self.speed_down_button.setEnabled(index > 0)
+        self.speed_up_button.setEnabled(index < len(PlaybackClock.SPEEDS) - 1)
+
+    def _step_playback_speed(self, direction):
+        index = PlaybackClock.SPEEDS.index(self.playback_clock.speed)
+        target = min(max(index + int(direction), 0), len(PlaybackClock.SPEEDS) - 1)
+        self.playback_clock.set_speed(PlaybackClock.SPEEDS[target])
+        self._sync_speed_controls()
+
+    def _sync_play_icon(self):
+        playing = self.timer.isActive()
+        button = self.playback_buttons[1]
+        button.setIcon(self.style().standardIcon(
+            QStyle.StandardPixmap.SP_MediaPause if playing else QStyle.StandardPixmap.SP_MediaPlay))
+        button.setAccessibleName("Pause" if playing else "Play")
+        button.setToolTip("Pause" if playing else "Play")
 
     def _set_performance_stats(self, enabled):
         self.performance_stats_label.setVisible(enabled)
@@ -1529,6 +1608,7 @@ class ComparisonViewer(QWidget):
             self.auto_hide_timer.stop(); self.chrome.show()
         else:
             self.playback_clock.play(self.slider.value()); self.timer.start(); self._show_controls()
+        self._sync_play_icon()
 
     def _export_csv(self): self._export("csv")
     def _export_json(self): self._export("json")
@@ -1738,4 +1818,8 @@ class ComparisonViewer(QWidget):
         self.hover_menu_timer.stop(); self.hover_close_timer.stop()
         if isinstance(self._hover_menu_target, QComboBox):
             self._hover_menu_target.hidePopup()
+        if not self._media_providers_released:
+            self._media_providers_released = True
+            for provider in self._owned_media_providers:
+                release_shared_media_provider(provider)
         super().closeEvent(event)

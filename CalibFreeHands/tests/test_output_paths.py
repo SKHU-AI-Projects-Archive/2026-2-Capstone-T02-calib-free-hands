@@ -17,6 +17,9 @@ def test_checkerboard_filename_includes_clean_reference_focal():
     assert result_filename("clip", "Checkerboard Reference", "Original WiLoR", 1280.5) == (
         "clip__Checkerboard-Reference-1280.5px__Original-WiLoR.cfh"
     )
+    assert result_filename("clip", "Manual Focal", "Original WiLoR", 1280.5) == (
+        "clip__Manual-Focal-1280.5px__Original-WiLoR.cfh"
+    )
 
 
 def test_predicted_focal_does_not_change_anycalib_filename():

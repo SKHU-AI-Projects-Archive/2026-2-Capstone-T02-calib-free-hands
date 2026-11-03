@@ -96,19 +96,100 @@ def test_provider_keeps_qimage_source_buffer_alive(qapp, tmp_path):
 def test_same_source_identity_reuses_one_provider_and_hash_mismatch_is_rejected(qapp, tmp_path):
     import hashlib
     from PySide6.QtGui import QImage
-    from calibfreehands.media.provider import shared_media_provider
+    import calibfreehands.media.provider as media_provider
     path = tmp_path / "shared.png"
     image = QImage(2, 2, QImage.Format.Format_RGB888)
     image.fill(0x123456)
     assert image.save(str(path))
     digest = hashlib.sha256(path.read_bytes()).hexdigest()
-    first, first_status = shared_media_provider(path, digest)
-    second, second_status = shared_media_provider(path, digest)
+    first, first_status = media_provider.shared_media_provider(path, digest)
+    second, second_status = media_provider.shared_media_provider(path, digest)
     assert first is second
     assert first_status == second_status == "available"
-    changed, changed_status = shared_media_provider(path, "0" * 64)
+    reference_count = getattr(media_provider, "media_provider_reference_count", None)
+    release = getattr(media_provider, "release_shared_media_provider", None)
+    assert callable(reference_count), "provider reference-count query is missing"
+    assert callable(release), "provider release operation is missing"
+    assert reference_count(first) == 2
+    changed, changed_status = media_provider.shared_media_provider(path, "0" * 64)
     assert changed is None and changed_status == "changed"
-    first.close()
+    release(first)
+    assert not first._closed
+    release(second)
+    assert first._closed
+
+
+def test_shared_provider_release_closes_only_after_last_owner(tmp_path, monkeypatch):
+    import calibfreehands.media.provider as media_provider
+
+    path = tmp_path / "shared.mp4"
+    path.write_bytes(b"video")
+    provider = MediaFrameProvider(
+        path, frame_loader=lambda index: np.full((1, 1, 3), index, np.uint8)
+    )
+    monkeypatch.setattr(media_provider, "MediaFrameProvider", lambda *_args, **_kwargs: provider)
+
+    first, _ = media_provider.shared_media_provider(path)
+    second, _ = media_provider.shared_media_provider(path)
+    assert first is second is provider
+    reference_count = getattr(media_provider, "media_provider_reference_count", None)
+    release = getattr(media_provider, "release_shared_media_provider", None)
+    assert callable(reference_count), "provider reference-count query is missing"
+    assert callable(release), "provider release operation is missing"
+    assert reference_count(provider) == 2
+
+    release(first)
+    assert reference_count(provider) == 1
+    assert not provider._closed
+
+    release(second)
+    assert reference_count(provider) == 0
+    assert provider._closed
+    assert not provider._worker.is_alive()
+    assert provider.cache_bytes == 0
+    assert media_provider._registry == {}
+
+
+def test_provider_close_is_idempotent_and_releases_cached_frames(tmp_path):
+    from PySide6.QtGui import QImage
+
+    image_path = tmp_path / "still.png"
+    image = QImage(3, 2, QImage.Format.Format_RGB888)
+    image.fill(0x123456)
+    assert image.save(str(image_path))
+    provider = MediaFrameProvider(image_path, is_image=True, cache_budget=1024)
+    assert provider.cache_bytes > 0
+
+    provider.close()
+    provider.close()
+
+    assert provider._closed
+    assert not provider._worker.is_alive()
+    assert provider.cache_bytes == 0
+
+
+def test_unrelated_source_providers_release_independently_after_last_owner(tmp_path, qapp):
+    import calibfreehands.media.provider as media_provider
+    from PySide6.QtGui import QImage
+
+    paths = []
+    for name in ("source-a.png", "source-b.png", "source-c.png"):
+        path = tmp_path / name
+        image = QImage(4, 3, QImage.Format.Format_RGB888)
+        image.fill(0x336699)
+        assert image.save(str(path))
+        paths.append(path)
+    providers = [media_provider.shared_media_provider(path)[0] for path in paths]
+
+    assert all(providers)
+    assert len(media_provider._registry) == 3
+    for provider in providers:
+        media_provider.release_shared_media_provider(provider)
+        assert provider._closed
+        assert not provider._worker.is_alive()
+        assert provider.cache_bytes == 0
+    assert media_provider._registry == {}
+    assert media_provider._reference_counts == {}
 
 def test_provider_sequential_decode_is_lazy_and_random_access_restarts(tmp_path):
     from dataclasses import dataclass

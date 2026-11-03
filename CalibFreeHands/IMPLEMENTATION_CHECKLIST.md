@@ -127,32 +127,34 @@
 
 ### P0 Stability / functional bugs
 
-- [ ] Fix Windows Common Item Dialog initialization/selection failure (HRESULT 0x80004002); native picker remains the normal Windows path and fallback is reserved for genuine unavailability
-- [ ] Add shared MediaFrameProvider acquire/release ownership; same-source viewers share providers, final release removes registry entry, stops worker, and releases cache/resources
-- [ ] Preserve bounded per-provider cache and prohibit full-video preload while ensuring unused source caches do not accumulate across A/B/C open-play-close sequence
-- [ ] Fix Error Vectors candidate selection UI; no unexplained tiny popup, repeated Off/Candidate transitions work, and selected/rendered state stays synchronized
-- [ ] Separate requested HUD size (Small/Medium/Large) from effective fitted font size and restore requested size when viewport space permits
-- [ ] Prevent transient HUD shrink from popup, menu focus, or check-state changes when viewport/content are unchanged
-- [ ] Keep Reference identity, focal value/unit, and badge semantically together with natural narrow-viewport wrapping
+- [x] Fix Windows Common Item Dialog initialization/selection failure (HRESULT 0x80004002); native picker remains the normal Windows path and fallback is reserved for genuine unavailability
+- [x] Add shared MediaFrameProvider acquire/release ownership; same-source viewers share providers, final release removes registry entry, stops worker, and releases cache/resources
+- [x] Preserve bounded per-provider cache and prohibit full-video preload while ensuring unused source caches do not accumulate across A/B/C open-play-close sequence
+- [x] Fix Error Vectors candidate selection UI; no unexplained tiny popup, repeated Off/Candidate transitions work, and selected/rendered state stays synchronized
+- [x] Separate requested HUD size (Small/Medium/Large) from effective fitted font size and restore requested size when viewport space permits
+- [x] Prevent transient HUD shrink from popup, menu focus, or check-state changes when viewport/content are unchanged
+- [x] Keep Reference identity, focal value/unit, and badge semantically together with natural narrow-viewport wrapping
 
 ### Main Window first-user UX
 
-- [ ] Keep Preset selector/actions/Set as default in Preset row; move Add Configuration out of Preset row
-- [ ] Add a `+ Add` control below the configuration table, aligned with Name and kept beneath the last row
-- [ ] Reorder configuration columns to Name, Calibration, Focal, Reconstruction, Action
-- [ ] Use Manual Focal consistently in the selector, configuration row, Viewer result/configuration names, and newly created user-facing names; retain `checkerboard_reference` and normalize historical display names in presentation only, without rewriting metadata or renaming files
-- [ ] Label the numeric parameter Focal (px); enable it only for Manual Focal and show a clear disabled/N/A state for other calibration choices
-- [ ] Relocate Sampling/Sample Count/Aggregate toward processing configuration and Theme/Language toward application preferences and Output
-- [ ] Compact Output path, Browse, and Collision into one logical row with stretch priority on the path field
+- [x] Keep Preset selector/actions/Set as default in Preset row; move Add Configuration out of Preset row
+- [x] Add a `+ Add` control below the configuration table, aligned with Name and kept beneath the last row
+- [x] Reorder configuration columns to Name, Calibration, Focal, Reconstruction, Action
+- [x] Use Manual Focal consistently in the selector, configuration row, Viewer result/configuration names, and newly created user-facing names; retain `checkerboard_reference` and normalize historical display names in presentation only, without rewriting metadata or renaming files
+- [x] Label the numeric parameter Focal (px); enable it only for Manual Focal and show a clear disabled/N/A state for other calibration choices
+- [x] Relocate Sampling/Sample Count/Aggregate toward processing configuration and Theme/Language toward application preferences and Output
+- [x] Compact Output path, Browse, and Collision into one logical row with stretch priority on the path field
 
 ### Viewer first-user UX
 
-- [ ] Add balanced horizontal margins to playback footer controls
-- [ ] Replace Speed dropdown with adjacent-preset stepper; preserve preset sequence, current source time, and timestamp clock behavior
-- [ ] Replace Previous/Play/Pause/Next text buttons with Qt-native media icons and retain tooltips/accessibility names
-- [ ] Replace Overlay/Split buttons with an exclusive two-state segmented control
-- [ ] Make Pin a clear ON/OFF toggle with explicit auto-hide semantics
-- [ ] Support HUD drag, pointer ownership, nearest-corner snap, and non-blocking 120–180 ms snap animation
-- [ ] Keep HUD visual settings available; remove corner menu actions if drag becomes the primary position control
-- [ ] Rename annotation menu Joints to Annotations while retaining the separate Joint geometry checkbox
-- [ ] Keep Manual Focal identity, focal number/unit, and Reference badge naturally grouped and wrapped (for example, `Manual Focal 1500 px [REFERENCE]`)
+- [x] Add balanced horizontal margins to playback footer controls
+- [x] Replace Speed dropdown with adjacent-preset stepper; preserve preset sequence, current source time, and timestamp clock behavior
+- [x] Replace Previous/Play/Pause/Next text buttons with Qt-native media icons and retain tooltips/accessibility names
+- [x] Replace Overlay/Split buttons with an exclusive two-state segmented control
+- [x] Make Pin a clear ON/OFF toggle with explicit auto-hide semantics
+- [x] Support HUD drag, pointer ownership, nearest-corner snap, and non-blocking 120–180 ms snap animation
+- [x] Keep HUD visual settings available; remove corner menu actions if drag becomes the primary position control
+- [x] Rename annotation menu Joints to Annotations while retaining the separate Joint geometry checkbox
+- [x] Keep Manual Focal identity, focal number/unit, and Reference badge naturally grouped and wrapped (for example, `Manual Focal 1500 px [REFERENCE]`)
+
+All implementation items above are complete. Remaining user and Windows GUI acceptance is tracked in `VALIDATION_CHECKLIST.md`; implementation completion alone does not establish overall readiness.

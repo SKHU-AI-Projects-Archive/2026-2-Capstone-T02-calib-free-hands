@@ -246,11 +246,12 @@ def test_main_window_groups_processing_settings_without_unused_audio_control(tmp
 
     assert "N" not in labels
     assert {"Collision", "Sampling", "Sample count", "Aggregate"}.issubset(labels)
-    compact_groups = [processing_row.itemAt(index).widget().layout() for index in range(4)]
+    compact_groups = [processing_row.itemAt(index).widget().layout() for index in range(3)]
     assert all(group is not None and group.contentsMargins().left() == 0 and group.spacing() <= 6 for group in compact_groups)
     assert processing_row.spacing() > max(group.spacing() for group in compact_groups)
-    assert processing_row.stretch(4) == 1
-    assert [group.itemAt(0).widget().text() for group in compact_groups] == ["Collision", "Sampling", "Sample count", "Aggregate"]
+    assert processing_row.stretch(3) == 1
+    assert [group.itemAt(0).widget().text() for group in compact_groups] == ["Sampling", "Sample count", "Aggregate"]
+    assert window.collision_group.layout().itemAt(0).widget().text() == "Collision"
     assert collision.currentText() == "Ask"
     assert sampling.currentText() == "Uniform"
     assert sample_count.currentText() == str(window.settings.get("sample_count"))

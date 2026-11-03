@@ -240,7 +240,7 @@ def test_unified_viewer_single_result_hides_comparison_semantics_and_keeps_split
     assert not viewer.split_views[0].acceptDrops()
     assert len(viewer.split_views) == 1
     assert viewer.split_grid.count() == 2
-    assert viewer.speed_selector.count() == 8
+    assert viewer.speed_value_label.text() == "1.0×"
     assert viewer.playback_clock.speed == pytest.approx(1.0)
     assert viewer.presented_frame == 0
     assert viewer.loaded_results[0].source_status == "missing"
@@ -273,7 +273,9 @@ def test_single_result_playback_uses_timestamp_clock_at_one_and_two_times(tmp_pa
     viewer._advance()
     assert viewer.presented_frame == viewer.requested_frame == 1
 
-    viewer.speed_selector.setCurrentIndex(viewer.speed_selector.findData(2.0))
+    viewer._step_playback_speed(1)
+    viewer._step_playback_speed(1)
+    viewer._step_playback_speed(1)
     now.value = 0.20
     viewer._advance()
     assert viewer.presented_frame == viewer.requested_frame == 2
@@ -306,7 +308,38 @@ def test_single_result_static_image_uses_one_cached_source_frame(tmp_path, qapp)
         assert not viewer._presented_source_image.isNull()
     finally:
         viewer.close()
-        provider.close()
+    assert provider._closed
+    assert provider.cache_bytes == 0
+
+
+def test_comparison_viewers_share_source_until_last_viewer_closes(tmp_path, qapp):
+    import hashlib
+    from PySide6.QtGui import QImage, QColor
+    import calibfreehands.media.provider as media_provider
+    from calibfreehands.visualization.comparison import ComparisonViewer
+
+    source = tmp_path / "shared.png"
+    image = QImage(7, 5, QImage.Format.Format_RGB888)
+    image.fill(QColor("steelblue"))
+    assert image.save(str(source))
+    digest = hashlib.sha256(source.read_bytes()).hexdigest()
+    bundle = _bundle(tmp_path, "Shared source", "method", source.name, digest, 1)
+    first = ComparisonViewer([bundle])
+    second = ComparisonViewer([bundle])
+    provider = first.loaded_results[0].media_frames
+    assert provider is second.loaded_results[0].media_frames
+    assert media_provider.media_provider_reference_count(provider) == 2
+
+    first.close()
+    qapp.processEvents()
+    assert not provider._closed
+    assert media_provider.media_provider_reference_count(provider) == 1
+
+    second.close()
+    qapp.processEvents()
+    assert provider._closed
+    assert provider.cache_bytes == 0
+    assert media_provider.media_provider_reference_count(provider) == 0
 
 
 def test_single_result_mano_mesh_toggle_remains_available(tmp_path, qapp):
@@ -399,6 +432,120 @@ def test_dashboard_metric_selection_error_vectors_and_confidence_are_runtime_onl
         np.testing.assert_array_equal(loaded.result.keypoints_3d, array)
     viewer.error_vectors_checkbox.setChecked(True)
     assert any(item.visible() for item in viewer.overlay_view.error_items)
+    viewer.close()
+
+
+def test_error_vector_actions_keep_candidate_state_consistent_across_repeated_switches(tmp_path, qapp):
+    from calibfreehands.visualization.comparison import ComparisonViewer
+
+    viewer = ComparisonViewer(_session(tmp_path, 3))
+    candidate_ids = [config["id"] for config in viewer.configurations if config["id"] != viewer.reference_id]
+
+    def choose(candidate_id):
+        viewer.error_vector_actions[candidate_id].trigger()
+        qapp.processEvents()
+        assert viewer.error_vectors_checkbox.isChecked()
+        assert getattr(viewer, "selected_error_candidate_id", None) == candidate_id
+        expected_index = next(i for i, config in enumerate(viewer.configurations)
+                              if config["id"] == candidate_id)
+        assert viewer.overlay_view.error_vectors_enabled
+        assert viewer.overlay_view.error_candidate == expected_index
+        assert viewer.error_vector_actions[candidate_id].isChecked()
+        assert viewer.error_vectors_off.isChecked() is False
+        assert not viewer.error_candidate_selector.isVisible()
+
+    def disable():
+        viewer.error_vectors_off.trigger()
+        qapp.processEvents()
+        assert not viewer.error_vectors_checkbox.isChecked()
+        assert not viewer.overlay_view.error_vectors_enabled
+        assert viewer.error_vectors_off.isChecked()
+        assert all(not action.isChecked() for action in viewer.error_vector_actions.values())
+        assert all(not item.visible() for item in viewer.overlay_view.error_items)
+        assert not viewer.error_candidate_selector.isVisible()
+
+    for _ in range(3):
+        choose(candidate_ids[0])
+        disable()
+        choose(candidate_ids[0])
+    choose(candidate_ids[1])
+    disable()
+    choose(candidate_ids[1])
+    viewer.close()
+
+
+def test_checkerboard_historical_viewer_name_normalizes_without_changing_saved_metadata():
+    import calibfreehands.visualization.comparison as comparison
+    display_name = getattr(comparison, "_manual_focal_display_name", None)
+    assert callable(display_name), "Manual Focal presentation normalizer is missing"
+
+    historical_metadata = {
+        "calibration_model_id": "checkerboard_reference",
+        "configuration_name": "Checkerboard Reference 1500 px",
+    }
+    display = display_name(
+        historical_metadata["calibration_model_id"], historical_metadata["configuration_name"], 1500.0
+    )
+    assert display == "Manual Focal 1500\u00a0px"
+    assert historical_metadata["configuration_name"] == "Checkerboard Reference 1500 px"
+    assert display_name("checkerboard_reference", "Configuration 2", 1500.0) == "Manual Focal 1500\u00a0px"
+
+
+def test_hud_requested_size_recovers_after_constrained_viewport_and_popup(tmp_path, qapp):
+    from PySide6.QtWidgets import QLabel, QWidget
+    from calibfreehands.visualization.comparison_presentation import _ViewportPanel
+
+    view = QWidget()
+    view.resize(500, 500)
+    panel = _ViewportPanel(view, [0])
+    for index in range(5):
+        panel.body_layout.addWidget(QLabel(f"Result {index}: wrist error | L 123.4 / R 234.5 mm"))
+    panel.set_presentation(scale="large")
+    view.show()
+    panel.show()
+    qapp.processEvents()
+    requested = getattr(panel, "requested_scale", None)
+    effective = getattr(panel, "effective_point_size", None)
+    assert requested == "large", "HUD requested size is not stored independently"
+    assert effective is not None, "HUD effective fitted size is not observable"
+    assert panel.requested_scale == "large"
+    roomy_size = panel.effective_point_size
+
+    original_height = panel.view.height()
+    original_minimum_height = panel.view.minimumHeight()
+    panel.view.setMinimumHeight(1)
+    panel.view.resize(panel.view.width(), 70)
+    panel._position()
+    qapp.processEvents()
+    assert panel.view.height() < original_height
+    assert panel.effective_point_size < roomy_size
+
+    panel.view.setMinimumHeight(original_minimum_height)
+    panel.view.resize(panel.view.width(), original_height)
+    panel._position()
+    qapp.processEvents()
+    restored_size = panel.effective_point_size
+    assert restored_size == roomy_size
+    assert panel.requested_scale == "large"
+    view.close()
+
+    from calibfreehands.visualization.comparison import ComparisonViewer
+    viewer = ComparisonViewer(_session(tmp_path, 2))
+    viewer.resize(1280, 800)
+    viewer.show()
+    qapp.processEvents()
+    panel = viewer.overlay_panel
+    viewer._set_hud(scale="large")
+    qapp.processEvents()
+    restored_size = panel.effective_point_size
+    original_height = panel.view.height()
+    viewer.results_menu_button.menu().popup(viewer.results_menu_button.mapToGlobal(
+        viewer.results_menu_button.rect().bottomLeft()
+    ))
+    qapp.processEvents()
+    assert panel.view.height() == original_height
+    assert panel.effective_point_size == restored_size
+    viewer.results_menu_button.menu().hide()
     viewer.close()
 
 
@@ -563,8 +710,8 @@ def test_mainwindow_checkerboard_focal_has_no_duplicate_row_label(tmp_path, monk
     _, window, _ = make_window(tmp_path, monkeypatch)
     row = window.configuration_rows[0]
     row.calibration.setCurrentIndex(row.calibration.findData("checkerboard_reference"))
-    assert window.rows_layout.itemAtPosition(0, 3).widget().text() == "Reference Focal"
-    assert not any(label.text() == "Reference Focal" for label in row.reference_focal_container.findChildren(QLabel))
+    assert window.rows_layout.itemAtPosition(0, 2).widget().text() == "Focal (px)"
+    assert not any(label.text() == "Focal (px)" for label in row.reference_focal_container.findChildren(QLabel))
     assert row.reference_focal_container.layout().itemAt(0).widget() is row.reference_focal
     window.close()
 
@@ -604,6 +751,97 @@ def test_presentation_pin_and_annotation_density_modes(tmp_path, qapp):
     assert {"off", "hovered", "key_joints", "worst5", "all"} <= set(viewer.annotation_actions)
     viewer.set_annotation_mode("worst5")
     assert viewer.annotation_mode == "worst5"
+    viewer.close()
+
+
+def test_viewer_playback_controls_are_accessible_steppers_and_exclusive_modes(tmp_path, qapp):
+    from calibfreehands.visualization.comparison import ComparisonViewer
+
+    viewer = ComparisonViewer(_session(tmp_path, 2))
+    assert viewer.speed_value_label.text() == "1.0×"
+    assert viewer.speed_down_button.isEnabled()
+    assert viewer.speed_up_button.isEnabled()
+    assert viewer.mode_buttons["overlay"].isChecked()
+    viewer.mode_buttons["split"].click()
+    assert viewer.mode_buttons["split"].isChecked()
+    assert not viewer.mode_buttons["overlay"].isChecked()
+    assert viewer.annotation_button.text() == "Annotations"
+    assert viewer.playback_buttons[0].accessibleName() == "Previous frame"
+    viewer.close()
+
+
+def test_viewer_speed_stepper_bounds_and_play_state_icon(tmp_path, qapp):
+    from PySide6.QtWidgets import QStyle
+    from calibfreehands.visualization.comparison import ComparisonViewer
+    from calibfreehands.visualization.playback import PlaybackClock
+
+    viewer = ComparisonViewer(_session(tmp_path, 2))
+    viewer._step_playback_speed(-1)
+    assert viewer.playback_clock.speed == PlaybackClock.SPEEDS[3]
+    viewer._step_playback_speed(1)
+    assert viewer.playback_clock.speed == 1.0
+    viewer.playback_clock.set_speed(PlaybackClock.SPEEDS[0])
+    viewer._sync_speed_controls()
+    assert not viewer.speed_down_button.isEnabled()
+    viewer.playback_clock.set_speed(PlaybackClock.SPEEDS[-1])
+    viewer._sync_speed_controls()
+    assert not viewer.speed_up_button.isEnabled()
+    viewer._play()
+    assert viewer.playback_buttons[1].accessibleName() == "Pause"
+    assert viewer.playback_buttons[1].icon().pixmap(32, 32).toImage() == viewer.style().standardIcon(QStyle.StandardPixmap.SP_MediaPause).pixmap(32, 32).toImage()
+    viewer._play()
+    assert viewer.playback_buttons[1].accessibleName() == "Play"
+    assert viewer.playback_buttons[1].icon().pixmap(32, 32).toImage() == viewer.style().standardIcon(QStyle.StandardPixmap.SP_MediaPlay).pixmap(32, 32).toImage()
+    viewer.close()
+
+
+def test_hud_can_be_dragged_and_snaps_to_nearest_corner_without_blocking(tmp_path, qapp):
+    from PySide6.QtCore import QPoint, Qt
+    from PySide6.QtTest import QTest
+    from calibfreehands.visualization.comparison import ComparisonViewer
+
+    viewer = ComparisonViewer(_session(tmp_path, 2))
+    viewer.resize(1280, 800); viewer.show(); qapp.processEvents()
+    panel = viewer.overlay_panel
+    panel._finish_drag(QPoint(20, 20))
+    assert panel.anchor == "top-left"
+    assert panel.snap_animation.duration() in range(120, 181)
+    QTest.mousePress(panel.card, Qt.MouseButton.LeftButton, pos=panel.card.rect().center())
+    QTest.mouseMove(panel.card, QPoint(panel.card.width() - 20, panel.card.height() - 20), 10)
+    QTest.mouseRelease(panel.card, Qt.MouseButton.LeftButton, pos=QPoint(panel.card.width() - 20, panel.card.height() - 20))
+    qapp.processEvents()
+    assert panel.anchor in {"top-left", "top-right", "bottom-left", "bottom-right"}
+    assert not viewer._panel_reorder_active
+    viewer.resize(1440, 900); qapp.processEvents()
+    assert panel.anchor in {"top-left", "top-right", "bottom-left", "bottom-right"}
+    viewer.close()
+
+
+def test_hud_snap_animation_reaches_each_corner_and_preserves_size(tmp_path, qapp):
+    from PySide6.QtCore import QPoint
+    from PySide6.QtTest import QTest
+    from calibfreehands.visualization.comparison import ComparisonViewer
+
+    viewer = ComparisonViewer(_session(tmp_path, 2))
+    viewer.resize(1280, 800); viewer.show(); qapp.processEvents()
+    panel = viewer.overlay_panel
+    requested_size = panel.requested_scale
+    right = panel.width() - panel.card.width() - 12
+    bottom = panel.height() - panel.card.height() - 12
+    anchors = {
+        "top-left": QPoint(12, 12),
+        "top-right": QPoint(right, 12),
+        "bottom-left": QPoint(12, bottom),
+        "bottom-right": QPoint(right, bottom),
+    }
+    for name, position in anchors.items():
+        panel.card.move(position + QPoint(3, 4))
+        panel._finish_drag()
+        QTest.qWait(175); qapp.processEvents()
+        assert panel.anchor == name
+        assert panel.card.pos() == position
+        assert panel.requested_scale == requested_size
+        assert panel.snap_animation.duration() in range(120, 181)
     viewer.close()
 
 
@@ -885,7 +1123,7 @@ def test_pause_discards_pending_playback_frame_but_manual_seek_is_exact(tmp_path
     viewer.close()
 
 
-@pytest.mark.parametrize("selector_name", ["reference_selector", "speed_selector", "confidence_color_mode"])
+@pytest.mark.parametrize("selector_name", ["reference_selector", "confidence_color_mode"])
 def test_dropdown_combos_open_on_hover_and_click_latches(tmp_path, qapp, selector_name):
     from PySide6.QtCore import QPoint, Qt
     from PySide6.QtTest import QTest

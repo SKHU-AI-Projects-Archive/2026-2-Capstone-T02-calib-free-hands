@@ -7,7 +7,7 @@ from .anycalib_backend import AnyCalibBackend
 
 
 class ReferenceFocalBackend:
-    name = "Checkerboard Reference"
+    name = "Manual Focal"
 
     def __init__(self, focal_px: float) -> None:
         if not math.isfinite(focal_px) or focal_px <= 0:
@@ -31,7 +31,7 @@ def create_calibration_backend(
         raise RuntimeError(f"Calibration model {model.display_name} is not available: {model.unavailable_reason}")
     if model.backend == "reference_focal":
         if reference_focal_px is None:
-            raise ValueError("Checkerboard Reference requires an explicit focal length in pixels")
+            raise ValueError("Manual Focal requires an explicit focal length in pixels")
         return ReferenceFocalBackend(reference_focal_px)
     if model.backend == "anycalib":
         return AnyCalibBackend(model_id=model.model_id or "anycalib_pinhole", device=device)

@@ -33,7 +33,7 @@ def result_filename(source_stem: str, calibration_name: str, reconstruction_name
         return cleaned
 
     calibration = calibration_name
-    if calibration_name == "Checkerboard Reference" and reference_focal_px is not None:
+    if calibration_name in {"Checkerboard Reference", "Manual Focal"} and reference_focal_px is not None:
         value = format(float(reference_focal_px), ".15f").rstrip("0").rstrip(".")
         calibration = f"{calibration_name}-{value}px"
     return f"{safe(source_stem)}__{safe(calibration)}__{safe(reconstruction_name)}.cfh"

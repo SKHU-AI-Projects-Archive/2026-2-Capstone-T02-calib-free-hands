@@ -134,8 +134,9 @@ def test_built_in_preset_is_immutable_and_controls_are_compact(tmp_path, monkeyp
     assert window.language_group.layout().count() == 2
     assert window.settings_row.stretch(3) == 1
     assert all(isinstance(combo, QComboBox) for combo in (window.theme_combo, window.language_combo))
-    assert len(window.processing_groups) == 4
+    assert len(window.processing_groups) == 3
     assert all(group.layout().count() == 2 for group in window.processing_groups)
+    assert window.collision_group.layout().count() == 2
     assert window.output_path.sizePolicy().horizontalPolicy() == QSizePolicy.Policy.Expanding
     assert window.output_browse_button.sizePolicy().horizontalPolicy() != QSizePolicy.Policy.Expanding
     assert window.configuration_rows[0].reference_focal.decimals() == 2

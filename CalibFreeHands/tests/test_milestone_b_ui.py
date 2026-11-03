@@ -151,7 +151,7 @@ def test_view_results_falls_back_when_saved_result_directory_was_removed(tmp_pat
 def test_configuration_layout_and_audio_preview_controls_match_bundle_workflow(tmp_path, monkeypatch, qapp):
     _, window = _window(tmp_path, monkeypatch)
     labels = {label.text() for label in window.findChildren(__import__("PySide6.QtWidgets", fromlist=["QLabel"]).QLabel)}
-    assert {"Name", "Calibration", "Reconstruction", "Reference Focal", "Action", "Theme", "Language", "Output"} <= labels
+    assert {"Name", "Calibration", "Reconstruction", "Focal (px)", "Action", "Theme", "Language", "Output"} <= labels
     row = window.configuration_rows[0]
     readable_name_width = row.name.fontMetrics().horizontalAdvance("Configuration 1")
     assert row.name.minimumWidth() >= readable_name_width
@@ -177,5 +177,73 @@ def test_added_configuration_uses_first_free_default_number_and_keeps_custom_nam
     assert window.configuration_rows[1].name.text() == "Proposed"
     assert [window.rows_layout.getItemPosition(window.rows_layout.indexOf(row.name))[0]
             for row in window.configuration_rows] == [1, 2, 3]
+    window.close()
+
+
+def test_first_user_main_window_layout_and_manual_focal_presentation(tmp_path, monkeypatch, qapp):
+    from PySide6.QtWidgets import QComboBox, QPushButton
+
+    monkeypatch.setattr(
+        importlib.import_module("calibfreehands.app.main"),
+        "AppSettings", lambda: AppSettings(tmp_path / "settings.ini"),
+    )
+    main = importlib.import_module("calibfreehands.app.main")
+    window = main.MainWindow()
+    header = [window.rows_layout.itemAtPosition(0, column).widget().text() for column in range(5)]
+    assert header == ["Name", "Calibration", "Focal (px)", "Reconstruction", "Action"]
+    assert window.configuration_rows[0].widgets == (
+        window.configuration_rows[0].name,
+        window.configuration_rows[0].calibration,
+        window.configuration_rows[0].reference_focal_container,
+        window.configuration_rows[0].reconstruction,
+        window.configuration_rows[0].remove,
+    )
+    assert window.configuration_rows[0].calibration.findData("checkerboard_reference") >= 0
+    window.configuration_rows[0].calibration.setCurrentIndex(
+        window.configuration_rows[0].calibration.findData("checkerboard_reference")
+    )
+    assert window.configuration_rows[0].calibration.currentText() == "Manual Focal"
+    assert window.configuration_rows[0].reference_focal.isEnabled()
+    window.configuration_rows[0].calibration.setCurrentIndex(0)
+    assert not window.configuration_rows[0].reference_focal.isEnabled()
+
+    assert window.add_configuration_button.text() == "+ Add"
+    assert window.rows_layout.getItemPosition(
+        window.rows_layout.indexOf(window.add_configuration_button)
+    ) == (len(window.configuration_rows) + 1, 0, 1, 1)
+    preset_items = [window.preset_row.itemAt(i).widget() for i in range(window.preset_row.count())]
+    assert window.add_configuration_button not in preset_items
+    window._add_configuration_row()
+    assert window.rows_layout.getItemPosition(
+        window.rows_layout.indexOf(window.add_configuration_button)
+    )[0] == len(window.configuration_rows) + 1
+    window._remove_configuration_row(window.configuration_rows[-1])
+    assert window.rows_layout.getItemPosition(
+        window.rows_layout.indexOf(window.add_configuration_button)
+    )[0] == len(window.configuration_rows) + 1
+
+    assert [group.layout().itemAt(0).widget().text() for group in window.processing_groups] == [
+        "Sampling", "Sample count", "Aggregate",
+    ]
+    assert window.main_layout.itemAt(5).layout() is window.processing_row
+    assert window.main_layout.itemAt(6).layout() is window.settings_row
+    assert window.main_layout.itemAt(7).layout() is window.output_row
+    assert window.collision_group in [window.output_row.itemAt(i).widget() for i in range(window.output_row.count())]
+
+    window.resize(1280, 800)
+    window.show()
+    qapp.processEvents()
+    assert window.output_path.width() >= 240
+    browse_center = window.output_browse_button.mapTo(
+        window.centralWidget(), window.output_browse_button.rect().center()
+    )
+    collision_center = window.collision_combo.mapTo(
+        window.centralWidget(), window.collision_combo.rect().center()
+    )
+    assert abs(browse_center.y() - collision_center.y()) <= 3
+    assert not any(isinstance(widget, QComboBox) and widget.currentText() == "Checkerboard Reference"
+                   for widget in window.findChildren(QComboBox))
+    assert not any(isinstance(widget, QPushButton) and widget.text() == "Add configuration"
+                   for widget in window.findChildren(QPushButton))
     window.close()
 

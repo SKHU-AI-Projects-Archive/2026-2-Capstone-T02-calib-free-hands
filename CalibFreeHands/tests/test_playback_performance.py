@@ -118,9 +118,9 @@ def test_playback_timer_drops_frames_to_clock_target_and_speed_choices_are_avail
     viewer._advance()
     assert viewer.slider.value() == 2
     assert viewer._stats_skipped == 1
-    assert [viewer.speed_selector.itemData(i) for i in range(viewer.speed_selector.count())] == [
-        0.1, 0.25, 0.5, 0.75, 1.0, 1.25, 1.5, 2.0]
-    assert viewer.speed_selector.currentText() == "1.0×"
+    assert viewer.speed_value_label.text() == "1.0×"
+    assert viewer.speed_down_button.isEnabled()
+    assert viewer.speed_up_button.isEnabled()
     viewer._play()
     viewer.close()
 

@@ -14,7 +14,7 @@ from PySide6.QtCore import QEvent, Qt, QTimer, QPointF, QLineF, QSignalBlocker
 from PySide6.QtGui import QGuiApplication, QImage, QPainter, QPen
 from PySide6.QtWidgets import QCheckBox, QHBoxLayout, QLabel, QPushButton, QSizePolicy, QSlider, QSplitter, QVBoxLayout, QWidget
 
-from calibfreehands.media.provider import MediaFrameProvider, shared_media_provider
+from calibfreehands.media.provider import MediaFrameProvider, release_shared_media_provider, shared_media_provider
 from calibfreehands.pipeline.result import CanonicalResult
 from calibfreehands.pipeline.result_bundle import ResultBundle, load_result_bundle
 from .topology import HAND_CONNECTIONS, RAW_TO_VIEW
@@ -279,6 +279,7 @@ class ResultViewer(QWidget):
             self.loaded = load_bundle_result(load_result_bundle(result_path))
         else:
             self.loaded = load_npz_result(result_path)
+        self._media_provider_released = False
         self.setWindowTitle("CalibFreeHands — Result"); self.setMinimumSize(960, 640)
         screen = QGuiApplication.primaryScreen().availableGeometry(); self.resize(min(1400, int(screen.width() * .8)), min(900, int(screen.height() * .8)))
         self._arrow_mode = "frame"
@@ -310,6 +311,14 @@ class ResultViewer(QWidget):
         self.installEventFilter(self)
         for widget in self.findChildren(QWidget): widget.installEventFilter(self)
         self._update_status()
+
+    def closeEvent(self, event):
+        if not self._media_provider_released:
+            self._media_provider_released = True
+            if isinstance(self.loaded.media_frames, MediaFrameProvider):
+                release_shared_media_provider(self.loaded.media_frames)
+        super().closeEvent(event)
+
     def _toggle(self, attr, value):
         if hasattr(self.overlay, attr): setattr(self.overlay, attr, value)
         setattr(self.gl_view, attr, value); self.overlay.update(); self.gl_view.set_frame(self.slider.value())

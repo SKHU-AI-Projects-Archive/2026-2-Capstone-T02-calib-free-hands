@@ -252,17 +252,10 @@ def _select_windows_media_paths(parent, start_directory: Path) -> list[Path]:
 
         get_results = method(dialog, 27, HRESULT, ctypes.POINTER(PVOID))
         check_hresult(get_results(dialog, ctypes.byref(results)), "Reading selected media")
-        count = DWORD()
-        check_hresult(method(results, 3, HRESULT, ctypes.POINTER(DWORD))(results, ctypes.byref(count)), "Counting selected media")
-        selected = []
-        for index in range(count.value):
-            item = PVOID()
-            check_hresult(method(results, 4, HRESULT, DWORD, ctypes.POINTER(PVOID))(results, index, ctypes.byref(item)), "Reading selected media item")
-            try:
-                selected.append(Path(_shell_item_path(item, method)))
-            finally:
-                method(item, 2, ULONG)(item)
-        return selected
+        return _selected_shell_item_paths(
+            results, method, shell_path=_shell_item_path,
+            release=lambda item: method(item, 2, ULONG)(item),
+        )
     except NativeMediaDialogError:
         raise
     except (OSError, ValueError, TypeError) as exc:
@@ -290,3 +283,29 @@ def _shell_item_path(item, method) -> str:
         return ctypes.wstring_at(display_name)
     finally:
         ctypes.WinDLL("ole32").CoTaskMemFree(display_name)
+
+
+def _selected_shell_item_paths(results, method, *, shell_path, release) -> list[Path]:
+    """Enumerate IShellItemArray using its GetCount/GetItemAt vtable slots."""
+    HRESULT = ctypes.c_long
+    DWORD = ctypes.c_uint32
+    PVOID = ctypes.c_void_p
+    count = DWORD()
+    # IShellItemArray inherits IUnknown and has four methods before GetCount.
+    get_count = method(results, 7, HRESULT, ctypes.POINTER(DWORD))
+    _check_hresult(get_count(results, ctypes.byref(count)), "Counting selected media")
+    get_item = method(results, 8, HRESULT, DWORD, ctypes.POINTER(PVOID))
+    selected: list[Path] = []
+    for index in range(count.value):
+        item = PVOID()
+        _check_hresult(get_item(results, DWORD(index), ctypes.byref(item)), "Reading selected media item")
+        try:
+            selected.append(Path(shell_path(item, method)))
+        finally:
+            release(item)
+    return selected
+
+
+def _check_hresult(hr, operation: str) -> None:
+    if hr < 0:
+        raise OSError(f"{operation} failed (HRESULT 0x{hr & 0xFFFFFFFF:08X})")

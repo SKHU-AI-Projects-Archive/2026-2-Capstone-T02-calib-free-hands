@@ -101,7 +101,7 @@ def validate_user_preset(
                 raise ValueError("Preset reference focal must be finite and positive")
             focal = float(focal)
         elif focal is not None:
-            raise ValueError("Preset reference focal is only valid for Checkerboard Reference")
+            raise ValueError("Preset focal value is only valid for Manual Focal")
         rows.append(PresetConfiguration(row_id, row_name.strip(), calibration_id, reconstruction_id, focal))
         row_ids.add(row_id)
 

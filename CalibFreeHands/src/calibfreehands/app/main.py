@@ -95,8 +95,8 @@ class ConfigurationRow:
         focal_layout.setSpacing(4)
         focal_layout.addWidget(self.reference_focal)
         self.remove = QPushButton("Remove")
-        self.widgets = (self.name, self.calibration, self.reconstruction,
-                        self.reference_focal_container, self.remove)
+        self.widgets = (self.name, self.calibration, self.reference_focal_container,
+                        self.reconstruction, self.remove)
         self.calibration.currentIndexChanged.connect(self._update_reference)
         self._update_reference()
 
@@ -184,22 +184,24 @@ class MainWindow(QMainWindow):
         self.rows_layout.setContentsMargins(0, 0, 0, 0)
         self.rows_layout.setHorizontalSpacing(8)
         self.rows_layout.setVerticalSpacing(4)
-        for column, title in enumerate(("Name", "Calibration", "Reconstruction", "Reference Focal", "Action")):
+        for column, title in enumerate(("Name", "Calibration", "Focal (px)", "Reconstruction", "Action")):
             self.rows_layout.addWidget(QLabel(title), 0, column)
         self.rows_layout.setColumnStretch(0, 2)
         self.rows_layout.setColumnStretch(1, 3)
-        self.rows_layout.setColumnStretch(2, 3)
-        self.rows_layout.setColumnStretch(5, 1)
+        self.rows_layout.setColumnStretch(2, 1)
+        self.rows_layout.setColumnStretch(3, 3)
+        self.rows_layout.setColumnStretch(4, 1)
+        self.add_configuration_button = QPushButton("+ Add")
+        self.add_configuration_button.clicked.connect(self._add_configuration_row)
+        self.rows_layout.addWidget(self.add_configuration_button, 1, 0, alignment=Qt.AlignmentFlag.AlignLeft)
         self.set_default_button = QPushButton("Set as default")
         self.set_default_button.clicked.connect(self._save_defaults)
         model_row = QHBoxLayout()
         model_row.addWidget(QLabel("Preset"))
         model_row.addWidget(self.preset_combo, 1)
         model_row.addWidget(self.preset_actions_button)
-        self.add_configuration_button = QPushButton("Add configuration")
-        self.add_configuration_button.clicked.connect(self._add_configuration_row)
-        model_row.addWidget(self.add_configuration_button)
         model_row.addWidget(self.set_default_button)
+        self.preset_row = model_row
         settings_row = QHBoxLayout()
         theme = QComboBox(); theme.addItems(["System", "Light", "Dark"]); theme.setCurrentText(self.settings.get("theme").title()); theme.currentTextChanged.connect(self._set_theme)
         language = QComboBox(); language.addItems(["English", "한국어"]); language.setCurrentText("한국어" if self.settings.get("language") == "ko" else "English"); language.currentTextChanged.connect(lambda value: self._set_setting("language", "ko" if value == "한국어" else "en"))
@@ -239,11 +241,15 @@ class MainWindow(QMainWindow):
         output_row.addWidget(QLabel("Output"))
         output_row.addWidget(self.output_path, 1)
         output_row.addWidget(self.output_browse_button)
+        self.output_path.setMinimumWidth(240)
         self.output_path.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Fixed)
+        self.collision_group = self._label_control_group("Collision", collision)
+        output_row.addWidget(self.collision_group)
+        self.output_row = output_row
         processing_row = QHBoxLayout()
         processing_row.setSpacing(14)
         self.processing_groups = []
-        for label, control in (("Collision", collision), ("Sampling", sampling), ("Sample count", sample_count), ("Aggregate", aggregation)):
+        for label, control in (("Sampling", sampling), ("Sample count", sample_count), ("Aggregate", aggregation)):
             group = self._label_control_group(label, control)
             self.processing_groups.append(group)
             processing_row.addWidget(group)
@@ -255,11 +261,12 @@ class MainWindow(QMainWindow):
         layout.addLayout(buttons)
         layout.addLayout(model_row)
         layout.addWidget(self.rows_widget)
+        layout.addLayout(processing_row)
         layout.addLayout(settings_row)
         layout.addLayout(output_row)
-        layout.addLayout(processing_row)
         layout.addWidget(QLabel("Original AnyCalib/WiLoR backends use the configured runtime assets."))
         layout.addWidget(self.progress)
+        self.main_layout = layout
         container = QWidget()
         container.setLayout(layout)
         self.setCentralWidget(container)
@@ -316,12 +323,10 @@ class MainWindow(QMainWindow):
         row.name.textEdited.connect(self._model_or_processing_changed)
         row.reference_focal.valueChanged.connect(self._model_or_processing_changed)
         self.configuration_rows.append(row)
-        grid_row = len(self.configuration_rows)
-        for column, widget in enumerate(row.widgets):
-            self.rows_layout.addWidget(widget, grid_row, column)
+        self._reposition_configuration_rows()
         focal_width = row.reference_focal_container.sizeHint().width()
         self.rows_layout.setColumnMinimumWidth(
-            3, max(self.rows_layout.columnMinimumWidth(3), focal_width)
+            2, max(self.rows_layout.columnMinimumWidth(2), focal_width)
         )
         self._refresh_row_buttons()
         return row
@@ -332,12 +337,17 @@ class MainWindow(QMainWindow):
             widget.deleteLater()
 
     def _reposition_configuration_rows(self):
+        self.rows_layout.removeWidget(self.add_configuration_button)
         for row in self.configuration_rows:
             for widget in row.widgets:
                 self.rows_layout.removeWidget(widget)
         for grid_row, row in enumerate(self.configuration_rows, start=1):
             for column, widget in enumerate(row.widgets):
                 self.rows_layout.addWidget(widget, grid_row, column)
+        self.rows_layout.addWidget(
+            self.add_configuration_button, len(self.configuration_rows) + 1, 0,
+            alignment=Qt.AlignmentFlag.AlignLeft,
+        )
 
     def _refresh_row_buttons(self):
         for row in self.configuration_rows:

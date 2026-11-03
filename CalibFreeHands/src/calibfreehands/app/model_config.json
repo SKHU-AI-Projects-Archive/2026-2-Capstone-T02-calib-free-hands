@@ -17,7 +17,7 @@
     },
     {
       "id": "checkerboard_reference",
-      "display_name": "Checkerboard Reference",
+      "display_name": "Manual Focal",
       "backend": "reference_focal",
       "available": true
     }

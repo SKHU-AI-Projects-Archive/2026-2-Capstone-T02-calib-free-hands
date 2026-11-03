@@ -2,7 +2,7 @@
 
 from collections import OrderedDict
 from pathlib import Path
-from threading import Condition, Thread
+from threading import Condition, Lock, Thread, current_thread
 from typing import Callable, Iterator
 
 import numpy as np
@@ -102,6 +102,8 @@ class MediaFrameProvider:
             return
         array.setflags(write=False)
         with self._condition:
+            if self._closed:
+                return
             old = self._cache.pop(index, None)
             if old is not None:
                 self._cache_bytes -= old.nbytes
@@ -117,7 +119,10 @@ class MediaFrameProvider:
         if self._loader is not None:
             frame = self._loader(target)
             self._store(target, frame)
-            self.signals.frame_ready.emit(target)
+            with self._condition:
+                still_open = not self._closed
+            if still_open:
+                self.signals.frame_ready.emit(target)
             return
         if self._sequential_frames is None:
             return
@@ -139,7 +144,10 @@ class MediaFrameProvider:
             index = int(item.index)
             self._store(index, item.rgb)
             self._next_index = index + 1
-            self.signals.frame_ready.emit(index)
+            with self._condition:
+                still_open = not self._closed
+            if still_open:
+                self.signals.frame_ready.emit(index)
 
     def _work(self) -> None:
         while True:
@@ -167,11 +175,16 @@ class MediaFrameProvider:
             self._closed = True
             self._requested = None
             self._condition.notify_all()
-        if self._worker.is_alive():
+        if self._worker.is_alive() and self._worker is not current_thread():
             self._worker.join(timeout=1.0)
+        with self._condition:
+            self._cache.clear()
+            self._cache_bytes = 0
 
 
 _registry: dict[tuple[str, str | None], MediaFrameProvider] = {}
+_reference_counts: dict[tuple[str, str | None], int] = {}
+_registry_lock = Lock()
 
 
 def shared_media_provider(path: Path, expected_sha256: str | None = None) -> tuple[MediaFrameProvider | None, str]:
@@ -184,19 +197,46 @@ def shared_media_provider(path: Path, expected_sha256: str | None = None) -> tup
             if sha256_file(path).casefold() != expected_sha256.casefold():
                 return None, "changed"
         key = (str(path), expected_sha256.casefold() if expected_sha256 else None)
-        provider = _registry.get(key)
-        if provider is None:
-            suffix = path.suffix.casefold()
-            is_image = suffix in {".png", ".jpg", ".jpeg", ".bmp", ".tif", ".tiff", ".webp"}
-            provider = MediaFrameProvider(path, is_image=is_image)
-            _registry[key] = provider
+        with _registry_lock:
+            provider = _registry.get(key)
+            if provider is None:
+                suffix = path.suffix.casefold()
+                is_image = suffix in {".png", ".jpg", ".jpeg", ".bmp", ".tif", ".tiff", ".webp"}
+                provider = MediaFrameProvider(path, is_image=is_image)
+                _registry[key] = provider
+                _reference_counts[key] = 0
+            _reference_counts[key] += 1
         return provider, "available"
     except (OSError, ValueError, RuntimeError):
         return None, "unavailable"
 
 
+def media_provider_reference_count(provider: MediaFrameProvider) -> int:
+    with _registry_lock:
+        key = next((key for key, value in _registry.items() if value is provider), None)
+        return _reference_counts.get(key, 0) if key is not None else 0
+
+
+def release_shared_media_provider(provider: MediaFrameProvider | None) -> None:
+    if provider is None:
+        return
+    with _registry_lock:
+        key = next((key for key, value in _registry.items() if value is provider), None)
+        if key is None:
+            return
+        remaining = _reference_counts.get(key, 0) - 1
+        if remaining > 0:
+            _reference_counts[key] = remaining
+            return
+        _reference_counts.pop(key, None)
+        _registry.pop(key, None)
+    provider.close()
+
+
 def close_shared_media_providers() -> None:
-    providers = tuple(_registry.values())
-    _registry.clear()
+    with _registry_lock:
+        providers = tuple(dict.fromkeys(_registry.values()))
+        _registry.clear()
+        _reference_counts.clear()
     for provider in providers:
         provider.close()

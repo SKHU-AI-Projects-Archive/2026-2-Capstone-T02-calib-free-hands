@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 import numpy as np
-from PySide6.QtCore import QEvent, Qt
+from PySide6.QtCore import QEvent, Qt, QPropertyAnimation, QEasingCurve, QPoint
 from PySide6.QtGui import QColor, QFont, QPainter, QPen, QVector4D
 from PySide6.QtWidgets import QCheckBox, QFrame, QGraphicsOpacityEffect, QHBoxLayout, QLabel, QProgressBar, QPushButton, QSizePolicy, QToolButton, QVBoxLayout, QWidget
 
@@ -22,6 +22,7 @@ class _ViewportPanel(QWidget):
         self.background = "none"
         self._drop_active = False
         self._fit_signature = None
+        self.effective_point_size = 0.0
         self.card.setStyleSheet("QFrame#metricOverlay { background: transparent; color: white; border: none; }")
         self.card.setMaximumWidth(330)
         self.card.setMaximumHeight(16777215)
@@ -38,6 +39,12 @@ class _ViewportPanel(QWidget):
         self.anchor = "top-left"
         self.scale = "medium"
         self.opacity = 1.0
+        self._drag_offset = None
+        self.snap_animation = QPropertyAnimation(self.card, b"pos", self)
+        self.snap_animation.setDuration(150)
+        self.snap_animation.setEasingCurve(QEasingCurve.Type.OutCubic)
+        self.card.setCursor(Qt.CursorShape.OpenHandCursor)
+        self.card.installEventFilter(self)
         self.opacity_effect.setOpacity(self.opacity)
         self._apply_style()
         self.installEventFilter(self)
@@ -51,8 +58,48 @@ class _ViewportPanel(QWidget):
 
     def eventFilter(self, watched, event):
         if watched is self.view and event.type() == QEvent.Type.Resize:
+            self.snap_animation.stop()
             self._position()
+        elif watched is self.card or (isinstance(watched, QWidget) and self.card.isAncestorOf(watched)):
+            if event.type() == QEvent.Type.MouseButtonPress and event.button() == Qt.MouseButton.LeftButton:
+                if isinstance(watched, (QPushButton, QToolButton)):
+                    return super().eventFilter(watched, event)
+                self.snap_animation.stop()
+                self._drag_offset = self.mapFromGlobal(event.globalPosition().toPoint()) - self.card.pos()
+                self.card.setCursor(Qt.CursorShape.ClosedHandCursor)
+                event.accept()
+                return True
+            if event.type() == QEvent.Type.MouseMove and self._drag_offset is not None:
+                next_position = self.mapFromGlobal(event.globalPosition().toPoint()) - self._drag_offset
+                bounds = self.rect().adjusted(0, 0, -self.card.width(), -self.card.height())
+                self.card.move(max(bounds.left(), min(bounds.right(), next_position.x())),
+                               max(bounds.top(), min(bounds.bottom(), next_position.y())))
+                event.accept()
+                return True
+            if event.type() == QEvent.Type.MouseButtonRelease and self._drag_offset is not None:
+                self._drag_offset = None
+                self.card.setCursor(Qt.CursorShape.OpenHandCursor)
+                self._finish_drag(event.globalPosition().toPoint())
+                event.accept()
+                return True
         return super().eventFilter(watched, event)
+
+    def _finish_drag(self, _global_position=None):
+        center = self.card.geometry().center()
+        margin = 12
+        anchors = {
+            "top-left": QPoint(margin, margin),
+            "top-right": QPoint(max(margin, self.width() - self.card.width() - margin), margin),
+            "bottom-left": QPoint(margin, max(margin, self.height() - self.card.height() - margin)),
+            "bottom-right": QPoint(max(margin, self.width() - self.card.width() - margin),
+                                    max(margin, self.height() - self.card.height() - margin)),
+        }
+        self.anchor = min(anchors, key=lambda name: (anchors[name].x() + self.card.width() / 2 - center.x()) ** 2
+                          + (anchors[name].y() + self.card.height() / 2 - center.y()) ** 2)
+        self.snap_animation.stop()
+        self.snap_animation.setStartValue(self.card.pos())
+        self.snap_animation.setEndValue(anchors[self.anchor])
+        self.snap_animation.start()
 
     def dragEnterEvent(self, event):
         if hasattr(self.view, "configuration_id") and event.mimeData().hasText():
@@ -93,6 +140,8 @@ class _ViewportPanel(QWidget):
 
     def _position(self):
         self.setGeometry(self.view.rect())
+        for child in self.card.findChildren(QWidget):
+            child.installEventFilter(self)
         content_width = self.body_layout.sizeHint().width() + 20
         content_height = self.body_layout.sizeHint().height() + 12
         width = min(330, max(200, self.view.width() - 24), max(240, content_width + 60))
@@ -100,18 +149,20 @@ class _ViewportPanel(QWidget):
         self.card.setFixedSize(width, height)
         x = 12 if "left" in self.anchor else max(0, self.width() - width - 12)
         y = 12 if "top" in self.anchor else max(0, self.height() - height - 12)
-        self.card.move(x, y)
+        if self._drag_offset is None and not self.snap_animation.state():
+            self.card.move(x, y)
         self.opacity_effect.setOpacity(self.opacity)
         self.raise_()
         self._fit_content()
 
     def _fit_content(self):
-        signature = (self.view.height(), self.body_layout.count(), self.scale)
+        viewport = self.view.contentsRect()
+        signature = (viewport.size(), self.body_layout.count(), len(self.body.findChildren(QLabel)), self.scale)
         if signature == self._fit_signature:
             return
         self._fit_signature = signature
         base = {"small": 8.0, "medium": 9.0, "large": 10.0}[self.scale]
-        available = max(24, min(self.view.height() - 36, 220) - 12)
+        available = max(24, min(viewport.height() - 36, 220) - 12)
         labels = self.body.findChildren(QLabel)
         size = base
         while True:
@@ -123,6 +174,11 @@ class _ViewportPanel(QWidget):
             if self.body_layout.sizeHint().height() <= available or size <= 7.0:
                 break
             size = max(7.0, size - 0.5)
+        self.effective_point_size = size
+
+    @property
+    def requested_scale(self):
+        return self.scale
 
     def set_presentation(self, anchor=None, scale=None, opacity=None):
         if anchor is not None: self.anchor = anchor
