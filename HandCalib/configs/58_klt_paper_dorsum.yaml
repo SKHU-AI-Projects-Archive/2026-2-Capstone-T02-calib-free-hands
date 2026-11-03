@@ -1,0 +1,52 @@
+# 58: record-only diagnostics of 56 on 54's 12 videos (user 2026-11-03), no verdict.
+# Request: "실험 56 설정·규칙 그대로, 기존 영상 12개로 진단 두 가지만 기록용으로 - 1. 종이 영역만 추적, 2. 손등 몸통만 추적 (손목과 MCP 사이, 박스 확장 0%); 영상별로 종이, 손등 몸통, 기존 16점의
+# f·95% 구간·기울기를 한 표로". A tracking-only check (no f) on IMG_7346 / 7354 showed that a KLT chain on the paper fails (the paper has no inner texture; the corners sit on its border and
+# the static desk grain next to it; loop errors 47 / 224 px), so the user changed the paper part: "종이는 KLT 대신 변 맞추기로 (기록용, 판정 없음) - 멈춘 프레임마다 종이 네 변을 경계 소수 px
+# 검출 -> 보이는 구간으로 직선 맞춤 -> 교점 4개; 변이 너무 가려져 직선 맞춤이 불안정한 프레임은 제외하고 그 수를 보고"; then "종이가 구겨져 있어 A4 비율 방식은 하지 않습니다; 변마다 직선
+# 맞춤 잔차(px)와 휘어짐(가운데 점의 직선 대비 벗어남)을 영상·프레임별로 보고; 잔차가 1 px 이하인 프레임만 free_template에 넣고, 남은 프레임 수와 함께 f·구간·기울기; 손등 몸통은 원래대로".
+# Paper (choices made by me, looked at sample frames of these 12 videos before any paper f was computed):
+#  - still frames: 53's rule on the mediapipe joints (median joint movement to both neighbours < still_frac 0.5 % of the hand box), no edge or shape rule;
+#  - paper pixels: the colour next to the hand (brightest quarter - from the 75th percentile of L - of a ring 12-20 % of the hand's long side outside the joint hull: median Lab a*, b*, L);
+#    Lab chroma distance < color_tol and L > L_ref - light_drop, opened open_px; every component whose contact with the ring is at least join_frac of the largest contact (the arm can cut the
+#    paper in two); convex hull of their union;
+#  - sides: the hull simplified (approxPolyDP, seg_eps of the perimeter); each segment of at least seg_min of the perimeter is searched for the paper -> desk step every step_px (profile along the
+#    outward normal +- search_px, Gaussian blur blur_sigma, derivative minimum with a parabola vertex, contrast across it >= contrast_min grey levels, not inside the joint hull widened by
+#    hand_dilate_frac); a segment with at least min_points points after a trimmed total-least-squares line (trim_px, 3 rounds) is a paper side; sides within merge_deg in direction and
+#    3 x trim_px in offset are merged; the four with most points, ordered about the paper centre, give the four crossings (corners); left out ("변 가려짐") when fewer than four sides are found,
+#    the corners are not a convex quadrilateral near the image, or a side's visible span is under min_span of its length between the corners;
+#  - reported per side and frame: points, span, length, RMS (px), bend = median signed distance to the line of the edge points within mid_frac of the side's middle (px);
+#  - frames into free_template: the fitted frames whose largest side RMS <= rms_max_px (1 px); the corners labelled by their angle about the paper centre from the hand axis (wrist -> middle MCP),
+#    the cyclic order closest to the fitted frame nearest the middle; the supervisor's free_template (pq_job: od_bridge + free_template, as od_job does; free_shape3d is not run on 4 points);
+#    block bootstrap as 56 (30 consecutive used frames x 100, seed 42). No A4 ratio.
+# Dorsum body: kt_chain unchanged (56's tracking settings) with the hull of joints 0, 1, 5, 9, 13, 17 (dilate_frac 0: kt_hand_mask's 1 px minimum); points = the reference frame's 21 joints moved
+# by this chain, j16 through od_job (free_template and free_shape3d), 56's edge rule and bootstrap.
+# Old 16 points: 56's j16 estimates read from its run (not recomputed). Reference f only in summary.md. Fixed before the run.
+experiment:
+  name: 58_klt_paper_dorsum
+  seed: 42
+base_config: configs/53_oblique_desk.yaml
+videos:
+  - {file: IMG_7346.MOV, distance_cm: 50, hand: right}
+  - {file: IMG_7347.MOV, distance_cm: 50, hand: left}
+  - {file: IMG_7348.MOV, distance_cm: 50, hand: right}
+  - {file: IMG_7349.MOV, distance_cm: 50, hand: left}
+  - {file: IMG_7350.MOV, distance_cm: 60, hand: right}
+  - {file: IMG_7351.MOV, distance_cm: 60, hand: left}
+  - {file: IMG_7352.MOV, distance_cm: 60, hand: right}
+  - {file: IMG_7353.MOV, distance_cm: 60, hand: left}
+  - {file: IMG_7354.MOV, distance_cm: 75, hand: right}
+  - {file: IMG_7355.MOV, distance_cm: 75, hand: left}
+  - {file: IMG_7356.MOV, distance_cm: 75, hand: right}
+  - {file: IMG_7357.MOV, distance_cm: 75, hand: left}
+tracking: {fps: 30, dilate_frac: 0.03, max_corners: 400, quality: 0.01, min_distance: 7, block: 7, win: 21, levels: 3, fb_px: 1.0, threshold_px: 1.5, min_inliers: 20}
+paper: {ring: [0.12, 0.20], seed_pct: 75, color_tol: 6.0, light_drop: 90.0, open_px: 7, join_frac: 0.05, seg_eps: 0.01, seg_min: 0.04, step_px: 4, search_px: 12, blur_sigma: 1.0,
+        contrast_min: 20, hand_dilate_frac: 0.10, trim_px: 3.0, min_points: 15, merge_deg: 5.0, min_span: 0.3, mid_frac: 0.1, rms_max_px: 1.0}
+dorsum: {joints: [0, 1, 5, 9, 13, 17], dilate_frac: 0.0}
+bootstrap: {n: 100, block: 30, seed: 42}
+compare_56: runs/56_continuous_klt/20261102T073343Z
+code_58: {branch: exp/58-klt-paper-dorsum, base_commit: 6b80e08, commit: ae716d7, modules: [HandCalib/handfocal_report.py, HandCalib/run.py]}
+workers: 24
+n_workers: 8
+output:
+  root: runs/58_klt_paper_dorsum
+  results_yaml: results/58_klt_paper_dorsum.yaml
