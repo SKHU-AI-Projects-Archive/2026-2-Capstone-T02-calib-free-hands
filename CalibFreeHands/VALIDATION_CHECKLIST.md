@@ -81,13 +81,13 @@
 - [x] Shared media source is decoded once and its frame list is reused across configurations
 - [x] Official WiLoR checkpoint and detector downloaded outside protected source tree
 - [x] Official model asset setup script with network access
-- [x] Interactive Windows GUI inspection performed with actual same-source results; final user approval is still outstanding
+- [x] Interactive Windows GUI inspection performed with actual same-source results; overall C-2B user approval recorded in the final-closure section
 - [ ] C-2B normal Windows visual review: Overlay + 2 results, Split + 2, Split + 5
 - [ ] P1-B new original WiLoR run confirming MANO parameter persistence in a fresh real result
 - [x] Actual AnyCalib + WiLoR/MANO smoke on first 3 frames of existing `4_assemble.mp4`; single and two-configuration outputs validated without network downloads
 - [ ] `git diff` final review
 
-Remaining visual-review items: Split + 2 and Split + 5 layouts, hovered-joint readability, all annotation modes, and final user approval. Actual Overlay + 3 and Split + 3 layouts were inspected in the normal Windows GUI.
+Specific Windows layout cases not individually recorded: Split + 2 and Split + 5. Actual Overlay + 3 and Split + 3 layouts were inspected; the user separately approved overall C-2B acceptance.
 
 ## Milestone B ??UX Polish / CFH Result Bundle / Result Loading
 
@@ -178,11 +178,13 @@ Remaining visual-review items: Split + 2 and Split + 5 layouts, hovered-joint re
 - [x] 4-second playback probes: 1x 29.99 source fps at 19.1% process CPU; 2x 59.95 source fps at 30.8% process CPU
 
 ## C-2B Final Validation
+- [x] C-2B COMPLETE — USER MANUALLY APPROVED (2026-11-03); detailed evidence remains limited to the individual scenarios recorded below.
 - [x] Windows GUI opened three actual same-source CFH results without inference; Overlay and Split + 3 inspected at the 1280x720 minimum window; 1280x800 layout geometry also covered offscreen
 - [x] Real source video, synchronized result poses, and current-frame metrics updated during playback; controls auto-hid while playing and returned on mouse activity
 - [x] Windows UI speed selector accepted 0.1x and 2x; separate 4-second probes verified 1x/2x playback rates
 - [x] Final C-2B hardening suite: 211 passed; application import, compileall, and diff check passed
-- [ ] HUMAN FINAL REVIEW REQUIRED: hovered-joint readability, all annotation modes, full eight-speed playback matrix (0.1x through 2x), and final approval. Automated tests and agent visual inspection do not count as user approval.
+- [x] User's final Windows review approved auto-hide, Pin, mouse restore, source loading stability, 2× source/2D/3D synchronization, pause/seek, dropdown and popup behavior, HUD, annotation modes, speed matrix, and clean console after the QWindow hotfix.
+- [ ] Specific historical scenarios not separately recorded (for example Split + 2 and Split + 5) remain unclaimed; this does not override the user's overall C-2B acceptance.
 
 
 ## C-2B Final Stabilization and Hardening
@@ -194,7 +196,7 @@ Remaining visual-review items: Split + 2 and Split + 5 layouts, hovered-joint re
 - [x] Existing Phase 3 local media benchmark remains: 379.7 MiB cache under 384 MiB, 606.9 MiB process RSS after playback, 1x/2x playback probes at 29.99/59.95 source fps
 - [x] Full pytest after final edits: 211 passed; startup import `IMPORT_OK`; compileall and `git diff --check` pass
 - [x] 1280x800 offscreen layout checks keep the HUD inside the viewport; actual Windows window inspected at 1282x752 (minimum content target 1280x720)
-- [ ] User final visual review/approval remains pending, including hovered-joint readability, all annotation modes, and the full eight-speed playback matrix
+- [x] User manually approved the overall C-2B result on 2026-11-03. This does not assert unrecorded individual layout scenarios.
 
 ## C-2B Final Sync & Menu Consistency Fix
 - [x] Reproduced the desynchronization path: ComparisonViewer advanced its slider, 2D/3D, and HUD immediately while the shared MediaFrameProvider could still be decoding the requested RGB frame.

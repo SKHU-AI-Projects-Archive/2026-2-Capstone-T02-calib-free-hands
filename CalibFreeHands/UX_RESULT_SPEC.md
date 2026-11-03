@@ -1568,13 +1568,13 @@ The C-2B dashboard foundation is saved as a checkpoint. It is not the completion
 
 ### C-2B status
 
-The Presentation Redesign and media memory optimization are implemented. Report **C-2B READY FOR FINAL MANUAL APPROVAL**. Do not report C-2B complete before the user's final visual approval.
+The Presentation Redesign and media memory optimization are implemented. This status was superseded on 2026-11-03 when the user completed final Windows review and manually approved C-2B. See the final closure record below.
 
 ## C-2B media source loading status
 
 Comparison and saved-result viewers share a source-keyed asynchronous frame provider. Video RGB frames are decoded only when requested and retained in a 384 MiB byte-bounded LRU cache; images use one static cached frame. Display images copy from the cached NumPy frame so cache eviction cannot invalidate a visible QImage. Missing or changed source media does not prevent viewing the saved 3D result. On the Windows 570-frame `4_assemble.mp4` source with three same-source results, the measured cache stayed at 379.7 MiB; process RSS was 594.5 MiB after decoding through frame 569 and 606.9 MiB after playback, versus the earlier approximately 3.7 GiB full-frame preload observation. This is a local benchmark, not a platform-wide memory guarantee.
 
-C-2B Final Validation remains **READY FOR FINAL MANUAL APPROVAL**. Automated tests and local Windows visual review passed; the user's final visual approval is outstanding.
+C-2B Final Validation was manually approved by the user on 2026-11-03. Historical entries preserve which automated and local visual checks were individually recorded.
 
 
 ## C-2B Final Stabilization and Hardening
@@ -1587,7 +1587,7 @@ C-2B Final Validation remains **READY FOR FINAL MANUAL APPROVAL**. Automated tes
 - Dropdown-like control audit: Results (QToolButton/QMenu, multi-select), Reference (QComboBox, single-select), Metrics (QToolButton/QMenu, multi-select), Color by (QComboBox, single-select), Detection (QToolButton/QMenu, multi-option), Error vectors (QToolButton/QMenu), Joints (QToolButton/QMenu), HUD (QToolButton/QMenu), More (QToolButton/QMenu), and Speed (QComboBox, single-select).
 - Viewer interactions never rerun inference or modify canonical results.
 
-C-2B remains **READY FOR FINAL MANUAL APPROVAL** until the user completes the final visual review.
+C-2B manual approval was recorded on 2026-11-03; see the authoritative closure entry at the end of this document.
 
 ## C-2B Final Sync & Menu Consistency Fix
 
@@ -1595,4 +1595,8 @@ C-2B remains **READY FOR FINAL MANUAL APPROVAL** until the user completes the fi
 - Playback clock time advances during decode and may drop intermediate frames. Pause discards pending playback presentation. A paused manual seek remains the newest exact target and presents when its source frame is ready.
 - Results, Metrics, Detection, Vectors, Joints, HUD, and More use QToolButton/QMenu. Reference, Color by, and Speed remain QComboBox selectors. All visible dropdown controls open on immediate hover and follow the same transient/click-latched dismissal policy. A click on another control dismisses the old latch and opens the new control; passive hover does not steal a latched popup.
 - This pass does not change canonical result data, metric definitions, inference, the bounded media cache, or the single-result/comparison viewer routing.
-- Validation and normal Windows GUI evidence for this pass are recorded in `VALIDATION_CHECKLIST.md`; final user visual approval remains outstanding.
+- Validation and normal Windows GUI evidence for this pass are recorded in `VALIDATION_CHECKLIST.md`; user approval is recorded below.
+
+## C-2B final closure
+
+**C-2B COMPLETE — USER MANUALLY APPROVED** (2026-11-03). The user confirmed final Windows behavior including source/2D/3D synchronization at 2×, pause/seek, popup and hover interactions, HUD, annotations, playback speed matrix, and a clean console after the QWindow event-filter hotfix. This overall acceptance does not mark specific layout cases as manually inspected unless their evidence is recorded individually in `VALIDATION_CHECKLIST.md`.

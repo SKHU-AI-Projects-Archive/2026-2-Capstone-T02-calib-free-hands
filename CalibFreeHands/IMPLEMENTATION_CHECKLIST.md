@@ -95,7 +95,7 @@
 - [x] C-2B shared asynchronous MediaFrameProvider with lazy FFmpeg frames, source identity sharing, and a 384 MiB byte-bounded LRU cache
 - [x] C-2B viewer frame requests remain non-blocking; copied QImage display storage survives cache eviction
 - [x] C-2B static image sources use one cached RGB frame; missing and changed source media remain non-blocking for 3D results
-- [x] C-2B automated and Windows GUI validation completed; user final visual approval remains outstanding
+- [x] C-2B automated and Windows GUI validation completed; user manually approved final acceptance on 2026-11-03
 
 
 ## C-2B Final Stabilization and Hardening
@@ -109,4 +109,4 @@
 - [x] Playback clock continues while decoding; pause invalidates pending playback presentation and paused manual seek remains exact
 - [x] Targeted viewer/presentation/media-provider tests pass; full suite result recorded in VALIDATION_CHECKLIST.md
 - [x] Actual three-result Windows Comparison Viewer inspected in Overlay and Split without inference rerun; source frames, pose overlays, metrics, pin state, and playback updates observed
-- [ ] User final visual approval remains required
+- [x] C-2B complete; user manually approved final acceptance on 2026-11-03
