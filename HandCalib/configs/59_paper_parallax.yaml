@@ -1,0 +1,35 @@
+# 59: record-only diagnostics with 58's rules (user 2026-11-03), no verdict.
+# Request: "실험 58 규칙 그대로, 기록용 진단 두 가지만. 1. IMG_7350: 종이 호모그래피로 손 추적점의 시차를 구해 점별 높이(종이 기준, 종이 크기 대비 %와 A4 기준 mm)를 추정; 그 높이와 종이 운동으로
+# 손 점의 재투영 잔차를 내고, 평면 가정일 때 잔차와 비교; free_shape3d를 z_rel 0.2와 0.5로 각각 돌려 f·기울기도 함께 보고. 2. 7352, 7355: 멈춤 구간 사이 종이 꼭짓점 번호가 바뀌었는지 확인하고,
+# 바뀌었으면 번호만 고쳐 종이 f를 다시 기록."
+# 58's rules, read from rules_config (not copied): 30 fps frames, mediapipe track, still frames (53's rule), paper side fitting (paper section), frames with the largest side RMS <= 1 px, corner
+# labels by angle from the hand axis (58's pq_order), 56's tracking settings, bootstrap 30-frame blocks x 100 (seed 42), the supervisor's free_template / free_shape3d through pq_job / od_job.
+# Choices made by me before the run (no result of this experiment seen):
+#  1. heights: the paper's free_template on the kept frames (its f, template, and the per-frame paper pose by frame_fit at that f); each hand point is taken as rigid to the paper and its
+#     position in the paper frame solved by least squares on the reprojection over the kept frames (scipy least_squares) - this is the parallax left after the paper homography, read as height;
+#     sign + towards the camera; % of the paper's long side (mean of the two longer sides of the template) and mm with that side = 297 mm (A4 long side; the ratio is not imposed - the paper is
+#     creased - and the template's long/short ratio is recorded). Models compared on j16: free heights / one common plane (h = a + b x + c y) / the paper plane (h = 0); the free model's RMS per
+#     pause too (a hand sliding on the paper shows there). Hand points: 56's tracked points (56's chain re-run on this video with 56's settings) and the mediapipe joints of the same frames.
+#     free_shape3d z_rel 0.2 and 0.5 (alt_iters 3, max_frames 120 as before) with free_template beside, on j16 of both sources: tracked = 56's frames (tracked, off the border), detected =
+#     detected frames whose hand box is off the border.
+#  2. labels: pauses = runs of kept frames with steps <= pause_gap_frames (15 = 0.5 s); for each pause's middle frame and each cyclic relabelling (0-3) of its corners, the 21 mediapipe joints
+#     moved by the paper homography (that pause -> the reference pause = the one holding 58's label frame) and their median distance to the reference pause's joints (% of its hand box);
+#     a pause whose best relabelling is not 0 counts as changed; then the paper f again with every frame of such a pause relabelled by its best shift (only the labels change). IMG_7350 as a control.
+# Reference f only in summary.md. Fixed before the run.
+experiment:
+  name: 59_paper_parallax
+  seed: 42
+rules_config: configs/58_klt_paper_dorsum.yaml
+videos:
+  - {file: IMG_7350.MOV, distance_cm: 60, hand: right}
+  - {file: IMG_7352.MOV, distance_cm: 60, hand: right}
+  - {file: IMG_7355.MOV, distance_cm: 75, hand: left}
+parallax: {video: IMG_7350.MOV, z_rels: [0.2, 0.5]}
+pause_gap_frames: 15
+code_59: {branch: exp/59-paper-parallax, base_commit: f92002c, commit: 8632875, modules: [HandCalib/handfocal_report.py, HandCalib/run.py]}
+workers: 24
+n_workers: 4
+video_workers: 3
+output:
+  root: runs/59_paper_parallax
+  results_yaml: results/59_paper_parallax.yaml
