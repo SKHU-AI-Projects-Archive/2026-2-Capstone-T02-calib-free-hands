@@ -4941,5 +4941,35 @@ class HPParallax(unittest.TestCase):
         self.assertLess(chk[1]["err_pct"][0], 0.01)
 
 
+class SGSegments(unittest.TestCase):
+    def test_segments_and_shared_f_with_two_hand_shapes(self):
+        still = np.zeros(200, bool)
+        still[[*range(40, 52), *range(120, 123), *range(150, 170)]] = True
+        lab = hf.sg_segments(200, still, np.ones(200, bool), 15, 5, 30)
+        self.assertEqual(sorted(set(lab.tolist())), [0, 1, 2])
+        self.assertEqual(int(np.flatnonzero(lab == 1)[0]), 45)
+        self.assertEqual(int(np.flatnonzero(lab == 2)[0]), 159)
+        K = hf.K_of(1600.0, 960.0, 540.0)
+        rng = np.random.default_rng(5)
+        base = np.c_[rng.uniform(-0.06, 0.06, 16), rng.uniform(-0.09, 0.09, 16), np.zeros(16)]
+        shapes = [base, base * [1.12, 0.92, 0] + [0.01, 0, 0]]
+        kp, seg = [], []
+        for s, X in enumerate(shapes):
+            for k in range(40):
+                R = cv2.Rodrigues(np.array([np.radians(45), 0, 0]))[0] @ cv2.Rodrigues(np.array([0, 0, np.radians(-60 + 3 * k + 20 * s)]))[0]
+                kp.append(hf.hp_project(X, R[None], np.array([[0.01 * s, 0.0, 0.6]]), K)[0] + rng.normal(0, 0.3, (16, 2)))
+                seg.append(s)
+        kp = np.array(kp)
+        kp = np.concatenate([np.full((80, 5, 2), np.nan), kp], axis=1)
+        mask = np.isfinite(kp).all(2)
+        box = np.c_[np.nanmin(kp, 1), np.nanmax(kp, 1)]
+        cfg = run.od_load(yaml.safe_load((ROOT / "configs/53_oblique_desk.yaml").read_text()))
+        ecfg = cfg["pipeline"]["estimate"]
+        o = hf.sg_job(("main", 0, kp, mask, np.arange(80), np.array(seg), box, (1920, 1080), ecfg, list(range(5, 21)), 10, True))
+        self.assertLess(abs(o["seg"]["f"] / 1600 - 1), 0.03, o["seg"]["f"])
+        self.assertEqual(o["seg"]["n_groups"], 2)
+        self.assertLess(o["seg"]["rms_px"], o["single"]["rms_px"])
+
+
 if __name__ == "__main__":
     unittest.main()

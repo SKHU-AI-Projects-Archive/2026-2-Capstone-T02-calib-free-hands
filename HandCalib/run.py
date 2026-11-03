@@ -10785,7 +10785,238 @@ def hp_results_yaml(run_dir: Path, cfg: dict):
     return p
 
 
-COMMANDS = {"protocol": protocol_main, "frame-filter": ff_main, "same-session": session_main, "overlay": overlay_main, "phase-segmentation": pseg_main, "guide-revision": grev_main, "f-response": fresp_main, "error-factors": ferr_main, "long-video-check": long_main, "generalization": gen_main, "main-camera-extension": ext_main, "wide-60cm": wide_main, "jointset-sets": jset_main, "verdict-calibration": cal_main, "printed-hand": pr_main, "hand-markers": mk_main, "markers-only": mo_main, "free-template": ft_main, "free-shape3d": s3_main, "free-shape3d-hand": h3_main, "free-shape3d-27": e3_main, "free-shape3d-new": e4_main, "mmpose-hand": mm_main, "mmpose-hand-46": mm2_main, "free-shape3d-new2": e5_main, "mmpose-hand-src": mm3_main, "free-shape3d-detectors": fs_main, "free-shape3d-hand-sets": h4_main, "free-shape3d-hand-sets-42track": h4b_main, "oblique-desk": od_main, "oblique-synthetic": sy_main, "oblique-fixed-template": fx_main, "oblique-desk-videos": om_main, "pause-stabilized": ps_main, "continuous-klt": kt_main, "continuous-klt-palm": kp_main, "klt-paper-dorsum": pp_main, "paper-parallax": hp_main}
+# ====================================================================================================
+# sg  (experiment 60: the hand template per segment - 56's tracked points (and the mediapipe joints as a record) on 54's 12 videos, the videos cut at the middle of each pause, one f shared by
+#      every segment and one planar template per segment (sg_fit from the supervisor's free_template parts); the same procedure with one segment and the supervisor's free_template beside it;
+#      56's frames and bootstrap; 53's verdict)
+#     python HandCalib/run.py segment-template --config HandCalib/configs/60_segment_template.yaml [--out DIR]
+#     python HandCalib/run.py segment-template --config ... results-yaml --run runs/60_segment_template/<UTC>
+# ====================================================================================================
+SG_NOTE = ("실험 59에서 손 점이 종이에 대해 멈춤 구간마다 약 6 px씩 다르게 놓인 것(손 모양·자세가 구간마다 조금 바뀜)을 보고, 손 모양(평면 템플릿)을 구간마다 따로 두고 f 하나만 함께 맞췄다. "
+           "구간은 손이 멈춘 구간(실험 53의 정지 규칙)의 가운데에서 잘랐고, 사용 프레임 30장 미만 구간은 이웃 구간에 합쳤다. 교수님 free_template의 부품(procrustes_init, alt_template, cost)을 그대로 쓰고, "
+           "성긴 격자 8점과 포물선 보간으로 시작값을 잡고, f·구간별 템플릿·프레임별 자세를 함께 다듬었다(ba_refine과 같은 모형; 구간 하나로 같은 절차를 돌린 대조값과 원래 free_template 값을 함께 낸다). 점은 실험 56의 추적점 16점(주)과 MediaPipe 검출 관절 16점(기록), "
+           "프레임은 실험 56 규칙, 부트스트랩은 1초 블록 100번, 판정은 실험 53의 규칙이다. 실행 전에 고정했다. 기준 f와의 비교는 summary.md에만 있다.")
+SG_SOURCES = ("tracked", "detected")
+
+
+def sg_video_job(args):
+    """Frames, detection and track; 56's hand chain (kt_chain, reference = the middle detected frame, forward and backward) and its moved joints with 56's edge rule; the still frames
+    (53's rule) and the segment labels of both point sources. Runs in a worker; returns (result, log lines)."""
+    e, cfg, run_root = args
+    cv2.setNumThreads(1)
+    lines = []
+    log = lines.append
+    pc = copy.deepcopy(cfg["pipeline"])
+    pc["frames"]["detect_fps"] = int(cfg["tracking"]["fps"])
+    v = e["file"]
+    tmp_root = Path(run_root) / f"_frames_{Path(v).stem}"
+    tmp_root.mkdir(exist_ok=True)
+    kc, sc = cfg["tracking"], cfg["segments"]
+    try:
+        prep = hf.fresp_prepare((v, cfg["input_dir"], pc, {}, str(tmp_root)))
+        frames, (W, H) = prep["frames"], prep["size"]
+        times = np.array([r["time_s"] for r in frames])
+        npz = hf.fresp_detect_many([((v, "orig"), frames)], cfg["detector_settings"]["mediapipe_hands"], Path(run_root) / "detection_cache", int(cfg["n_workers"]), log)[(v, "orig")]
+        d = hf.load_detections(Path(npz))
+        hf.check_alignment(frames, d)
+        p2 = copy.deepcopy(pc)
+        p2["tracking"]["conf_min"] = float(cfg["detector_settings"]["mediapipe_hands"]["conf_min"])
+        tr = hf.track(d, times, (W, H), p2["tracking"], front_start_s=float(p2["phases"]["front_skip_s"]))
+        pres = np.flatnonzero(tr["present"])
+        n = len(times)
+        a, b = int(pres[0]), int(pres[-1])
+        ref = int(pres[np.argmin(np.abs(pres - (a + b) / 2))])
+        kps = np.stack([hf.kt_carry(tr["present"], tr["kp"][:, j, k]) for j in range(21) for k in range(2)], axis=1).reshape(n, 21, 2)
+        boxes = np.stack([hf.kt_carry(tr["present"], tr["box"][:, k]) for k in range(4)], axis=1)
+        pngs = [r["png"] for r in frames]
+        fwd = hf.kt_chain(pngs, kps, boxes, list(range(ref, b + 1)), kc)
+        bwd = hf.kt_chain(pngs, kps, boxes, list(range(ref, a - 1, -1)), kc)
+    finally:
+        shutil.rmtree(tmp_root, ignore_errors=True)
+    kp, tb, valid, edge = pp_points(tr["kp"][ref], {**bwd["H"], **fwd["H"]}, n, W, H)
+    motion = hf.od_select(tr["kp"], tr["mask"], tr["present"], tr["box"], (W, H), cfg["selection"])["motion"]
+    still = np.isfinite(motion) & (motion < float(cfg["selection"]["still_frac"]))
+    det_use = tr["present"] & ~hf.edge_flags(tr["box"], tr["present"], W, H)
+    out = {"size": (W, H), "n_frames": n, "ref": ref, "breaks": fwd["breaks"] + bwd["breaks"], "n_still": int(still.sum()),
+           "tracked": {"kp": kp, "box": tb, "use": valid & ~edge}, "detected": {"kp": tr["kp"], "box": tr["box"], "use": det_use}}
+    for s in SG_SOURCES:
+        y = out[s]
+        y["seg"] = hf.sg_segments(n, still, y["use"], int(sc["pause_gap_frames"]), int(sc["min_pause_frames"]), int(sc["min_segment_frames"]))
+        y["n_use"] = int(y["use"].sum())
+        y["n_seg"] = int(y["seg"].max() + 1)
+    log(f"  {v}: 프레임 {n}, 끊김 {out['breaks']}, 멈춘 프레임 {out['n_still']}, 추적점 사용 {out['tracked']['n_use']} (구간 {out['tracked']['n_seg']}), "
+        f"검출 관절 사용 {out['detected']['n_use']} (구간 {out['detected']['n_seg']})")
+    return out, lines
+
+
+def sg_summary(path: Path, ana: dict, vid: dict, cfg: dict, prior: dict):
+    ref = float(cfg["ref_f"]["value"])
+    t = cfg["verdict"]["main"]
+    pe = lambda f: "-" if f is None else f"{f:.1f} ({100 * (f / ref - 1):+.1f}%)"      # noqa: E731
+    ci = lambda c: "-" if not c else f"{c[0]:.1f} ~ {c[1]:.1f}"      # noqa: E731
+    bd = lambda x: " (경계)" if x and x.get("boundary") else ""      # noqa: E731
+    fx = lambda x: "-" if not x or "f" not in x else pe(x["f"]) + bd(x)      # noqa: E731
+    cnt = {}
+    for v in ana.values():
+        cnt[v["verdict"]["verdict"]] = cnt.get(v["verdict"]["verdict"], 0) + 1
+    vc = cfg["verdict"]
+    L = [f"**판정 (영상별, 추적점 16점 구간별 템플릿): " + ", ".join(f"{k} {n}개" for k, n in cnt.items()) + "**", "", "# 실험 60 summary", "", f"**{SG_NOTE}**", "",
+         f"- 기준 f: {ref:g} px ({cfg['ref_f']['source']}). 카메라 각도 약 45°(수평계).",
+         f"- 판정 규칙(실험 53·56과 같음): 사용 프레임 {vc['min_frames']}장 미만이면 판단 불가; 경계 또는 기준 ±{100 * float(vc['reject_tol']):.0f}% 밖이면 어려움; 경계 아님·부트스트랩 구간 f의 ±{100 * float(vc['ci_tol']):.0f}%·기준 ±{100 * float(vc['accept_tol']):.0f}% 안이면 가능성 있음; 그 외 판단 보류. "
+         f"경고: 기울기 중앙값 {vc['tilt_range_deg'][0]}~{vc['tilt_range_deg'][1]}° 밖이면 평면 추정 의심, 구간별 회전 범위의 최댓값이 {vc['min_turn_deg']}° 미만이면 회전 부족.", ""]
+    for s, nm in (("tracked", "실험 56 추적점 16점 (주)"), ("detected", "MediaPipe 검출 관절 16점 (기록)")):
+        L += [f"## {'1' if s == 'tracked' else '2'}. {nm}", "",
+              "| 영상 | 거리(cm) | 손 | " + ("판정 | 경고 | " if s == "tracked" else "") + "구간 수 | 구간별 템플릿 초점 거리 | 95% 구간 | 기울기 | 구간 하나 (같은 절차) | 원래 free_template | " +
+              ("실험 56 free_template | " if s == "tracked" else "") + "재투영 RMS 원래 → 구간별 (px) | 구간별 회전 범위 (°) | 구간 하나씩 따로 낸 초점 거리 (중앙값, 경계 수) |",
+              "|---|---|---|" + ("---|---|" if s == "tracked" else "") + "---|---|---|---|---|---|" + ("---|" if s == "tracked" else "") + "---|---|---|"]
+        for e in cfg["videos"]:
+            v = e["file"]
+            a = ana[v][s]
+            m = a.get("main") or {}
+            sg, co, si = m.get("seg"), m.get("control"), m.get("single")
+            per = [p for p in (m.get("per_group") or []) if "f" in p]
+            cells = [v, f"{e['distance_cm']:g}", e["hand"]]
+            if s == "tracked":
+                vv = ana[v]["verdict"]
+                cells += [vv["verdict"], ", ".join(vv.get("warnings") or []) or "-"]
+            cells += [str(vid[v][s]["n_seg"]), fx(sg), ci(a.get("ci")), "-" if not sg or sg.get("tilt_median_deg") is None else f"{sg['tilt_median_deg']:.1f}°", fx(co), fx(si)]
+            if s == "tracked":
+                p56 = (prior.get(v) or {}).get("free_template")
+                cells.append(fx(p56))
+            cells += ["-" if not (si and "rms_px" in si and sg and "rms_px" in sg) else f"{si['rms_px']:.2f} → {sg['rms_px']:.2f}",
+                      "-" if not sg else ", ".join(long_fmt(x, 0) for x in sg.get("turn_range_deg", [])),
+                      "-" if not per else f"{pe(float(np.median([p['f'] for p in per])))}, {sum(p['boundary'] for p in per)}/{len(per)}"]
+            L.append("| " + " | ".join(cells) + " |")
+        L.append("")
+    L += ["## 한계", "", "- 구간마다 템플릿을 따로 두면 손 모양 변화는 흡수되지만, f는 각 구간 안의 회전에서만 나온다. 구간 안 회전이 작으면 f를 정할 정보가 줄어든다(구간별 회전 범위 참고).",
+          "- f 다듬기는 교수님 ba_refine과 같은 모형을 scipy로 푼 것이다(템플릿이 여러 개라 ba_refine을 그대로 쓸 수 없음). 이 차이는 '구간 하나' 대조값으로 볼 수 있다.",
+          "- 구간 경계(멈춤 가운데)는 손 모양이 바뀌는 순간을 직접 잰 것이 아니다.", ""]
+    path.write_text("\n".join(L) + "\n")
+
+
+def sg_main(argv=None):
+    ap = argparse.ArgumentParser()
+    ap.add_argument("--config", default=str(hf.PROJECT_ROOT / "configs/60_segment_template.yaml"))
+    sub = ap.add_subparsers(dest="cmd")
+    ry = sub.add_parser("results-yaml")
+    ry.add_argument("--run", required=True)
+    ap.add_argument("--out", default=None)
+    a = ap.parse_args(argv)
+    text = Path(a.config).read_text()
+    own = yaml.safe_load(text)
+    r56 = yaml.safe_load(hf.resolve(own["rules_config"]).read_text())
+    base = od_load(yaml.safe_load(hf.resolve(r56["base_config"]).read_text()))
+    cfg = {**base, "videos": r56["videos"], "tracking": r56["tracking"], "bootstrap": {**base["bootstrap"], **r56.get("bootstrap", {})},
+           **{k: own[k] for k in ("experiment", "segments", "compare_56", "workers", "n_workers", "video_workers", "output") if k in own}}
+    if a.cmd == "results-yaml":
+        print(sg_results_yaml(hf.resolve(a.run), cfg))
+        return None
+    missing = [e["file"] for e in cfg["videos"] if not (Path(cfg["input_dir"]).expanduser() / e["file"]).exists()]
+    if missing:
+        raise SystemExit(f"영상이 없습니다: {missing}")
+    run_root = Path(a.out).expanduser() if a.out else hf.resolve(cfg["output"]["root"]) / utc_stamp()
+    run_root.mkdir(parents=True)
+    log = Log(run_root / "log.txt")
+    log(f"60 구간별 손 템플릿: 영상 {len(cfg['videos'])}개 → {run_root}")
+    t0 = time.time()
+    for k in ("OMP_NUM_THREADS", "OPENBLAS_NUM_THREADS", "MKL_NUM_THREADS"):
+        os.environ[k] = "1"
+    import multiprocessing as mp
+    from concurrent.futures import ProcessPoolExecutor
+    vid = {}
+    with ProcessPoolExecutor(max_workers=int(cfg["video_workers"]), mp_context=mp.get_context("spawn")) as ex:
+        for e, (x, lines) in zip(cfg["videos"], ex.map(sg_video_job, [(e, cfg, str(run_root)) for e in cfg["videos"]])):
+            vid[e["file"]] = x
+            for s in lines:
+                log(s)
+    log(f"  영상 처리: {time.time() - t0:.0f} s")
+    ecfg, bc, sc = cfg["pipeline"]["estimate"], cfg["bootstrap"], cfg["segments"]
+    j16 = cfg["joint_sets"]["main"]["ids"]
+    jobs, keys = [], []
+    for e in cfg["videos"]:
+        x = vid[e["file"]]
+        for s in SG_SOURCES:
+            y = x[s]
+            ui = np.flatnonzero(y["use"])
+            if len(ui) < 4:
+                continue
+            mask = np.isfinite(y["kp"]).all(2)
+            mk = lambda kind, rep, u, y=y, mask=mask, x=x: (kind, rep, y["kp"], mask, u, y["seg"], y["box"], tuple(x["size"]), ecfg, j16, int(sc["min_segment_frames"]) // 3, kind == "main")      # noqa: E731
+            jobs.append(mk("main", 0, ui))
+            keys.append((e["file"], s))
+            for rep in range(int(bc["n"])):
+                jobs.append(mk("boot", rep, ui[hf.od_blocks(len(ui), int(bc["block"]), rep, int(bc["seed"]))]))
+                keys.append((e["file"], s))
+    t1 = time.time()
+    res = {}
+    with ProcessPoolExecutor(max_workers=int(cfg["workers"]), mp_context=mp.get_context("spawn")) as ex:
+        for k, o in zip(keys, ex.map(hf.sg_job, jobs, chunksize=1)):
+            r = res.setdefault(k, {"main": None, "boot": []})
+            if o["kind"] == "main":
+                r["main"] = o
+            else:
+                r["boot"].append(o)
+    log(f"  추정 {len(jobs)}건: {time.time() - t1:.0f} s")
+    vc, refv = cfg["verdict"], float(cfg["ref_f"]["value"])
+    lvl = float(bc.get("level", 0.95))
+    ana = {}
+    for e in cfg["videos"]:
+        v = e["file"]
+        ana[v] = {}
+        for s in SG_SOURCES:
+            r = res.get((v, s), {"main": {"failed": "사용 프레임 4장 미만"}, "boot": []})
+            fb = [bb["seg"]["f"] for bb in r["boot"] if "seg" in bb]
+            ana[v][s] = {"main": r["main"], "ci": hf.od_ci(fb, lvl), "n_boot_ok": len(fb), "boot_at_bound": sum(1 for bb in r["boot"] if "seg" in bb and bb["seg"]["boundary"])}
+        sgm = (ana[v]["tracked"]["main"] or {}).get("seg")
+        turns = [x for x in (sgm or {}).get("turn_range_deg", []) if x is not None and np.isfinite(x)]
+        vv = hf.od_verdict(None if not sgm else {"f": sgm["f"], "boundary": sgm["boundary"]}, ana[v]["tracked"]["ci"], vid[v]["tracked"]["n_use"], refv, vc,
+                           None if not sgm else sgm.get("tilt_median_deg"), max(turns) if turns else None)
+        ana[v]["verdict"] = vv
+        log(f"  {v}: {vv['verdict']}" + (f" ({vv['reason']})" if vv.get("reason") else "") + " | " +
+            ", ".join(f"{s} 구간별 {ana[v][s]['main']['seg']['f']:.1f} / 하나 {(ana[v][s]['main'].get('control') or {}).get('f', float('nan')):.1f} / free_template {(ana[v][s]['main'].get('single') or {}).get('f', float('nan')):.1f}"
+                      for s in SG_SOURCES if (ana[v][s]["main"] or {}).get("seg")))
+    sg_summary(run_root / "summary.md", ana, vid, cfg, pp_prior(cfg))
+    vid_out = {v: {"n_frames": x["n_frames"], "ref": x["ref"], "breaks": x["breaks"], "n_still": x["n_still"],
+                   **{s: {"n_use": x[s]["n_use"], "n_seg": x[s]["n_seg"]} for s in SG_SOURCES}} for v, x in vid.items()}
+    (run_root / "results.json").write_text(json.dumps(hf.jsonable({"videos": vid_out, "analysis": ana}), ensure_ascii=False, indent=1))
+    meta = hf.provenance_build(text, a.config, {"code_60": own.get("code_60"), "rules_config": own["rules_config"], "elapsed_s": time.time() - t0})
+    (run_root / "metadata.json").write_text(json.dumps(hf.jsonable(meta), ensure_ascii=False, indent=1))
+    log(f"완료 {time.time() - t0:.0f} s → {run_root}")
+    log.close()
+    return run_root, ana
+
+
+def sg_results_yaml(run_dir: Path, cfg: dict):
+    """Values and verdicts only (no reference f); written to output.results_yaml."""
+    r = json.loads((run_dir / "results.json").read_text())
+    m = json.loads((run_dir / "metadata.json").read_text())
+    try:
+        run_name = str(run_dir.resolve().relative_to(hf.PROJECT_ROOT))
+    except ValueError:
+        run_name = str(run_dir)
+    rd = lambda x, n=1: None if x is None or (isinstance(x, float) and not np.isfinite(x)) else round(x, n)      # noqa: E731
+    out = {"experiment": cfg["experiment"]["name"], "run": run_name, "code_commit": m["git"]["commit"][:7], "git_dirty_at_run": m["git"]["git_dirty"], "note": SG_NOTE,
+           "segments_rule": cfg["segments"], "verdict_target": "tracked j16 segmented template", "videos": {}}
+    for e in cfg["videos"]:
+        v = e["file"]
+        a = r["analysis"][v]
+        o = out["videos"][v] = {"distance_cm": e["distance_cm"], "hand": e["hand"], "verdict": a["verdict"]["verdict"], "reason": a["verdict"].get("reason"), "warnings": a["verdict"].get("warnings", []),
+                                "tracking": r["videos"][v], "estimates": {}}
+        for s in SG_SOURCES:
+            mm = a[s]["main"] or {}
+            sg, co, si = mm.get("seg") or {}, mm.get("control") or {}, mm.get("single") or {}
+            o["estimates"][s] = {"segmented": {"f_px": rd(sg.get("f")), "ci95_px": None if not a[s]["ci"] else [round(x, 1) for x in a[s]["ci"]], "boundary": sg.get("boundary"),
+                                               "tilt_median_deg": rd(sg.get("tilt_median_deg")), "turn_range_deg": [rd(x, 0) for x in sg.get("turn_range_deg", [])], "rms_px": rd(sg.get("rms_px"), 2),
+                                               "segment_frames": sg.get("frames")},
+                                 "one_segment": {"f_px": rd(co.get("f")), "boundary": co.get("boundary"), "rms_px": rd(co.get("rms_px"), 2)},
+                                 "free_template": {"f_px": rd(si.get("f")), "boundary": si.get("boundary"), "rms_px": rd(si.get("rms_px"), 2)},
+                                 "per_segment_f_px": [rd(p.get("f")) for p in mm.get("per_group") or []]}
+    p = hf.resolve(cfg["output"]["results_yaml"])
+    p.write_text(yaml.safe_dump(hf.jsonable(out), allow_unicode=True, sort_keys=False))
+    return p
+
+
+COMMANDS = {"protocol": protocol_main, "frame-filter": ff_main, "same-session": session_main, "overlay": overlay_main, "phase-segmentation": pseg_main, "guide-revision": grev_main, "f-response": fresp_main, "error-factors": ferr_main, "long-video-check": long_main, "generalization": gen_main, "main-camera-extension": ext_main, "wide-60cm": wide_main, "jointset-sets": jset_main, "verdict-calibration": cal_main, "printed-hand": pr_main, "hand-markers": mk_main, "markers-only": mo_main, "free-template": ft_main, "free-shape3d": s3_main, "free-shape3d-hand": h3_main, "free-shape3d-27": e3_main, "free-shape3d-new": e4_main, "mmpose-hand": mm_main, "mmpose-hand-46": mm2_main, "free-shape3d-new2": e5_main, "mmpose-hand-src": mm3_main, "free-shape3d-detectors": fs_main, "free-shape3d-hand-sets": h4_main, "free-shape3d-hand-sets-42track": h4b_main, "oblique-desk": od_main, "oblique-synthetic": sy_main, "oblique-fixed-template": fx_main, "oblique-desk-videos": om_main, "pause-stabilized": ps_main, "continuous-klt": kt_main, "continuous-klt-palm": kp_main, "klt-paper-dorsum": pp_main, "paper-parallax": hp_main, "segment-template": sg_main}
 
 
 def main(argv=None):

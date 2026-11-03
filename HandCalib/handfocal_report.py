@@ -5721,6 +5721,197 @@ def hp_label_check(corners: dict, hand: dict, groups: list, ref_group: int) -> l
     return out
 
 
+def sg_segments(n: int, still: np.ndarray, use: np.ndarray, gap: int, min_pause: int, min_seg: int) -> np.ndarray:
+    """Segment label per frame (-1 = not used): pauses = runs of still frames (steps <= gap) with at least min_pause frames; the segments are cut at the middle of each pause; a segment with
+    fewer than min_seg used frames is joined to the previous one (the first to the next)."""
+    runs = [g for g in hp_groups(np.flatnonzero(still), gap) if len(g) >= int(min_pause)]
+    cuts = [(g[0] + g[-1]) // 2 for g in runs]
+    edges = [0] + [c for c in cuts if 0 < c < n] + [n]
+    segs = [[i for i in range(a, b) if use[i]] for a, b in zip(edges[:-1], edges[1:])]
+    segs = [s for s in segs if s]
+    k = 0
+    while k < len(segs):
+        if len(segs) > 1 and len(segs[k]) < int(min_seg):
+            j = k - 1 if k > 0 else k + 1
+            segs[j] = sorted(segs[j] + segs[k])
+            del segs[k]
+            k = 0
+            continue
+        k += 1
+    lab = np.full(n, -1)
+    for s, fr in enumerate(segs):
+        lab[fr] = s
+    return lab
+
+
+def sg_ba(qs: list, f0: float, f_bounds, max_nfev: int = 200) -> dict:
+    """Joint refinement of one f, one planar template per group and one pose per frame (ba_refine's model and residuals - pinhole at the principal point, two anchor joints of each
+    template held, Huber at the median per-frame Huber width - solved with scipy least_squares (trf, sparse Jacobian) because f is shared across templates). qs: [(q, T at f0)]."""
+    from scipy.optimize import least_squares
+    from scipy.sparse import lil_matrix
+    K0 = K_of(f0, qs[0][0].cx, qs[0][0].cy)
+    cx, cy = qs[0][0].cx, qs[0][0].cy
+    fi, si, ji, uv, poses, Ts, cols, hub = [], [], [], [], [], [], [], []
+    off, nfr = 1, 0
+    for s, (q, T) in enumerate(qs):
+        frames = [q.frames[i] for i in q.keep]
+        hub += [q.huber[i] for i in q.keep]
+        a, b = _anchors(T, frames)
+        free = [j for j in range(len(T)) if j not in (a, b)]
+        col = np.full(len(T), -1)
+        col[free] = off + 2 * np.arange(len(free))
+        off += 2 * len(free)
+        Ts.append(np.asarray(T, float).copy())
+        cols.append((col, np.array(free)))
+        for o, v in frames:
+            _, R, t = frame_fit(T, o, v, K0)
+            poses.append(np.r_[cv2.Rodrigues(R)[0].ravel(), t])
+            jj = np.flatnonzero(v)
+            fi += [nfr] * len(jj)
+            si += [s] * len(jj)
+            ji += jj.tolist()
+            uv.append(o[v])
+            nfr += 1
+    fi, si, ji, uv = np.array(fi), np.array(si), np.array(ji), np.concatenate(uv)
+    nT = off - 1
+    M = len(ji)
+    tcol = np.array([cols[s][0][j] for s, j in zip(si, ji)])
+
+    def unpack(x):
+        T = [t.copy() for t in Ts]
+        for s, (col, free) in enumerate(cols):
+            if len(free):
+                T[s][free] = np.c_[x[col[free]], x[col[free] + 1]]
+        return np.exp(x[0]), T, x[1 + nT:].reshape(nfr, 6)
+
+    toff = np.cumsum([0] + [len(t) for t in Ts])[:-1]
+    gidx = toff[si] + ji
+    fcol = np.concatenate([col[free] for col, free in cols]) if nT else np.zeros(0, int)
+    frow = np.concatenate([toff[s] + free for s, (col, free) in enumerate(cols)]) if nT else np.zeros(0, int)
+    Tflat0 = np.concatenate(Ts)
+
+    def resid(x):
+        f = np.exp(x[0])
+        Tall = Tflat0.copy()
+        Tall[frow] = np.c_[x[fcol], x[fcol + 1]]
+        P = x[1 + nT:].reshape(nfr, 6)
+        R = _rodrigues(P[:, :3])
+        X = np.einsum("nab,nb->na", R[fi][:, :, :2], Tall[gidx]) + P[fi, 3:]
+        return np.r_[f * X[:, 0] / X[:, 2] + cx - uv[:, 0], f * X[:, 1] / X[:, 2] + cy - uv[:, 1]]
+
+    S = lil_matrix((2 * M, 1 + nT + 6 * nfr), dtype=int)
+    rows = np.arange(M)
+    for r0 in (0, M):
+        S[r0 + rows, 0] = 1
+        ok = tcol >= 0
+        S[r0 + rows[ok], tcol[ok]] = 1
+        S[r0 + rows[ok], tcol[ok] + 1] = 1
+        for k in range(6):
+            S[r0 + rows, 1 + nT + 6 * fi + k] = 1
+    x0 = np.r_[np.log(f0), np.zeros(nT), np.concatenate(poses)]
+    for s, (col, free) in enumerate(cols):
+        if len(free):
+            x0[col[free]], x0[col[free] + 1] = Ts[s][free, 0], Ts[s][free, 1]
+    lb = np.full(len(x0), -np.inf)
+    ub = np.full(len(x0), np.inf)
+    lb[0], ub[0] = np.log(f_bounds[0]), np.log(f_bounds[1])
+    x0[0] = np.clip(x0[0], lb[0] + 1e-9, ub[0] - 1e-9)
+    r = least_squares(resid, x0, jac_sparsity=S, bounds=(lb, ub), loss="huber", f_scale=float(np.median(hub)), x_scale="jac", max_nfev=max_nfev, method="trf")
+    f, T, _ = unpack(r.x)
+    return {"f": float(f), "templates": T, "nfev": int(r.nfev), "status": int(r.status)}
+
+
+def sg_fit(pbs: list, grid: np.ndarray, alt_iters: int = 3, max_frames: int = 120, coarse_n: int = 8) -> dict:
+    """One f shared by several frame groups, each with its own planar template. Start from the supervisor's free_template parts (unchanged): per group _restrict and procrustes_init, and
+    at each f of free_template's coarse grid (coarse_n points) alt_template; the cost at f = the frame-weighted mean of the groups' cost(); free_template's parabola at the minimum gives f0;
+    then sg_ba (one f, the groups' templates and the poses refined together, as ba_refine does for one template)."""
+    g = grid[np.unique(np.linspace(0, len(grid) - 1, coarse_n).round().astype(int))] if len(grid) > coarse_n else grid
+    qs = []
+    for pb in pbs:
+        q, ids = _restrict(pb, max_frames=max_frames)
+        if len(ids) >= 4 and len(q.keep) >= 3:
+            qs.append((q, procrustes_init(q), len(q.keep)))
+    if not qs:
+        raise ValueError("no usable segment")
+    wsum = float(sum(n for _, _, n in qs))
+    prof = []
+    for f in g:
+        Ts = [alt_template(q, f, T0, alt_iters) for q, T0, _ in qs]
+        prof.append((sum(n * cost(q, f, T) for (q, _, n), T in zip(qs, Ts)) / wsum, Ts))
+    c = np.array([p[0] for p in prof])
+    k = int(np.argmin(c))
+    f0 = float(np.exp(np.clip(_parabola(np.log(g), c, k), np.log(g[0]), np.log(g[-1]))))
+    T0s = [alt_template(q, f0, T0, alt_iters) for q, T0, _ in qs]
+    B = sg_ba([(q, T) for (q, _, _), T in zip(qs, T0s)], f0, (g[0], g[-1]))
+    f, Ts = B["f"], B["templates"]
+    cf = sum(n * cost(q, f, T) for (q, _, n), T in zip(qs, Ts)) / wsum
+    return {"f": f, "f_grid": f0, "cost": float(cf), "profile_f": g.tolist(), "profile_cost": c.tolist(), "at_grid_edge": bool(k in (0, len(g) - 1)), "templates": Ts,
+            "problems": [q for q, _, _ in qs], "n_frames": [n for _, _, n in qs], "ba_nfev": B["nfev"]}
+
+
+def sg_rms(q, f: float, T: np.ndarray) -> np.ndarray:
+    """Reprojection residuals (px) of every visible point of q's kept frames at f with template T (frame_fit through cost(details=True))."""
+    _, det = cost(q, f, T, details=True)
+    return np.concatenate([d["res"] for d in det]) if det else np.zeros(0)
+
+
+def sg_job(args) -> dict:
+    """Experiment 60, one estimate: args = (kind, rep, kp, mask, frames, seg (n,), box, size_wh, ecfg, ids, min_seg_frames, diag). The segmented fit (sg_fit) over the listed frames grouped
+    by seg (a group with fewer than min_seg_frames listed frames is left out); with diag also the same procedure with one group (control), the supervisor's free_template on all listed frames,
+    free_template on each group alone, residual RMS, and per-group poses (tilt, turn range) at the segmented f."""
+    kind, rep, kp, mask, frames, seg, box, size_wh, ecfg, ids, min_seg, diag = args
+    os.environ.setdefault("OMP_NUM_THREADS", "1")
+    cv2.setNumThreads(1)
+    W, H = size_wh
+    grid = f_grid(ecfg, max(W, H))
+    fr = np.asarray(frames, int)
+    out = {"kind": kind, "rep": rep}
+    try:
+        groups = [fr[seg[fr] == s] for s in sorted(set(seg[fr].tolist()) - {-1})]
+        groups = [g for g in groups if len(g) >= int(min_seg)]
+        pbs = [od_bridge(kp, mask, g, box, size_wh, ecfg, ids) for g in groups]
+        S = sg_fit(pbs, grid)
+    except Exception as e:                                            # a failure is a result, not a crash of the run
+        out["failed"] = f"{type(e).__name__}: {e}"
+        return out
+    out["seg"] = {"f": S["f"], "boundary": od_boundary(S["f"], grid), "at_grid_edge": S["at_grid_edge"], "cost": S["cost"], "n_groups": len(groups), "n_frames": S["n_frames"]}
+    if diag:
+        tilt, turns, res = [], [], []
+        for q, T, g in zip(S["problems"], S["templates"], groups):
+            p = od_poses(q, S["f"], np.asarray(T, float), list(range(len(T))), box_long(box[g]))
+            tilt += [x for k, x in enumerate(p["tilt_deg"]) if k in q.keep]
+            tk = np.array([x for k, x in enumerate(p["turn_deg"]) if k in q.keep], float)
+            tk = tk[np.isfinite(tk)]
+            turns.append(float(tk.max() - tk.min()) if len(tk) else None)
+            res.append(sg_rms(q, S["f"], T))
+        out["seg"].update({"tilt_median_deg": float(np.nanmedian(tilt)), "turn_range_deg": turns, "rms_px": float(np.sqrt(np.mean(np.concatenate(res) ** 2))),
+                           "frames": [[int(g[0]), int(g[-1]), len(g)] for g in groups], "profile_f": S["profile_f"], "profile_cost": S["profile_cost"]})
+        pb_all = od_bridge(kp, mask, fr, box, size_wh, ecfg, ids)
+        try:
+            C = sg_fit([pb_all], grid)
+            q1, T1 = C["problems"][0], C["templates"][0]
+            p = od_poses(q1, C["f"], np.asarray(T1, float), list(range(len(T1))), box_long(box[fr]))
+            out["control"] = {"f": C["f"], "boundary": od_boundary(C["f"], grid), "tilt_median_deg": float(np.nanmedian([p["tilt_deg"][k] for k in q1.keep])),
+                              "rms_px": float(np.sqrt(np.mean(sg_rms(q1, C["f"], T1) ** 2)))}
+        except Exception as e:
+            out["control"] = {"failed": f"{type(e).__name__}: {e}"}
+        try:
+            A = free_template(pb_all, grid)
+            q2, _ = _restrict(pb_all, max_frames=120)
+            out["single"] = {"f": float(A["f"]), "boundary": od_boundary(float(A["f"]), grid), "rms_px": float(np.sqrt(np.mean(sg_rms(q2, float(A["f"]), np.asarray(A["template"], float)) ** 2)))}
+        except Exception as e:
+            out["single"] = {"failed": f"{type(e).__name__}: {e}"}
+        per = []
+        for pb in pbs:
+            try:
+                A = free_template(pb, grid)
+                per.append({"f": float(A["f"]), "boundary": od_boundary(float(A["f"]), grid)})
+            except Exception as e:
+                per.append({"failed": f"{type(e).__name__}: {e}"})
+        out["per_group"] = per
+    return out
+
+
 def od_fix_lines(path=None) -> list:
     """Where the six corrections to the supervisor's code sit in handfocal_estimate.py (line numbers of the corrected spellings inside section 5)."""
     p = Path(path) if path else Path(__file__).resolve().parent / "handfocal_estimate.py"
