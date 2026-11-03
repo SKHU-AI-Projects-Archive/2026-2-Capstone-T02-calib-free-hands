@@ -117,6 +117,7 @@
 - [x] Single-result mode has a Result title and result identity HUD, retains Overlay/Split and the shared timestamp-based playback/provider path, and hides reference selection, comparison metrics, error vectors, comparison exports, and result reordering
 - [x] Single-result mode does not calculate reference metrics or expose self-reference error labels; joint-name annotations and detector-confidence display remain available
 - [x] Single-result bundles can be opened without a source hash; multi-result source SHA256 matching remains required
+- [x] Single-result static images use one cached RGB frame and remain seek-safe across result frames
 - [x] Single-result playback probe measured 29.75 source fps at 1x and 59.75 source fps at 2x on the local 570-frame sample; playback uses the shared 384 MiB bounded provider
 - [x] QApplication shutdown closes the shared media providers so decoder workers stop before Qt objects are torn down
 - [x] Legacy ResultViewer and NPZ/session loading implementation remain present for compatibility

@@ -278,6 +278,34 @@ def test_single_result_playback_uses_timestamp_clock_at_one_and_two_times(tmp_pa
     viewer.close()
 
 
+def test_single_result_static_image_uses_one_cached_source_frame(tmp_path, qapp):
+    import hashlib
+    from PySide6.QtGui import QImage, QColor
+    from calibfreehands.media.provider import MediaFrameProvider
+    from calibfreehands.visualization.comparison import ComparisonViewer
+
+    source = tmp_path / "still.png"
+    image = QImage(7, 5, QImage.Format.Format_RGB888)
+    image.fill(QColor("steelblue"))
+    assert image.save(str(source))
+    bundle = _bundle(tmp_path, "Single image", "method", source.name,
+                     hashlib.sha256(source.read_bytes()).hexdigest(), 1)
+    viewer = ComparisonViewer([bundle])
+    provider = viewer.loaded_results[0].media_frames
+    try:
+        assert isinstance(provider, MediaFrameProvider)
+        assert viewer.loaded_results[0].source_status == "available"
+        assert provider._is_image
+        assert provider.decoded_frames == 1
+        assert provider.cache_bytes == 7 * 5 * 3
+        viewer.slider.setValue(1)
+        assert viewer.presented_frame == 1
+        assert not viewer._presented_source_image.isNull()
+    finally:
+        viewer.close()
+        provider.close()
+
+
 def test_comparison_viewer_rejects_different_source_hashes(tmp_path):
     from calibfreehands.visualization.comparison import ComparisonViewer
     bundles = [
