@@ -172,11 +172,14 @@ def test_comparison_viewer_decodes_shared_source_media_once(tmp_path, monkeypatc
     viewer.close()
 
 
-def _bundle(tmp_path, name, model_id, source_name, source_sha, index):
+def _bundle(tmp_path, name, model_id, source_name, source_sha, index, mesh=False):
     result = CanonicalResult(
         np.array([0, 1]), np.array([0., .1]), np.zeros((2, 2, 21, 2), np.float32),
         np.full((2, 2, 21, 3), index, np.float32), np.ones((2, 2), bool),
-        np.full(2, 500., np.float32), (32, 24), confidence=np.full((2, 2), .8, np.float32),
+        np.full(2, 500., np.float32), (32, 24),
+        mano_vertices=np.zeros((2, 2, 3, 3), np.float32) if mesh else None,
+        mano_faces=np.array([[[0, 1, 2]], [[0, 2, 1]]], np.int32) if mesh else None,
+        confidence=np.full((2, 2), .8, np.float32),
     )
     npz, _ = save_result(result, tmp_path / f"{name}-internal", {})
     metadata = {
@@ -304,6 +307,19 @@ def test_single_result_static_image_uses_one_cached_source_frame(tmp_path, qapp)
     finally:
         viewer.close()
         provider.close()
+
+
+def test_single_result_mano_mesh_toggle_remains_available(tmp_path, qapp):
+    from calibfreehands.visualization.comparison import ComparisonViewer
+
+    bundle = _bundle(tmp_path, "Mesh result", "method", "missing.mp4", "a" * 64, 1, mesh=True)
+    viewer = ComparisonViewer([bundle])
+    assert viewer.mesh_checkbox.isEnabled()
+    viewer.mesh_checkbox.setChecked(True)
+    assert viewer.overlay_view.show_mesh
+    assert viewer.split_views[0].show_mesh
+    assert viewer.mesh_opacity_slider.isEnabled()
+    viewer.close()
 
 
 def test_comparison_viewer_rejects_different_source_hashes(tmp_path):
