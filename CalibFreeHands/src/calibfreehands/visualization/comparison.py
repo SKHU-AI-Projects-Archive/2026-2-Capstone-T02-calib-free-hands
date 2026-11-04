@@ -1562,28 +1562,19 @@ class ComparisonViewer(QWidget):
         self.mesh_opacity_slider.setEnabled(bool(value) and self.mesh_checkbox.isEnabled())
         if value:
             for check in (self.joint_checkbox, self.bone_checkbox):
-                blocker = QSignalBlocker(check); check.setChecked(False); del blocker
-                attr = "show_joints" if check is self.joint_checkbox else "show_bones"
-                for view in [self.overlay_view, *self.split_views]:
-                    setattr(view, attr, False)
+                check.setChecked(False)
         for view in [self.overlay_view, *self.split_views]:
             view.show_mesh = value
         self._render_active_frame()
 
     def _set_joint(self, value):
         if value and self.mesh_checkbox.isChecked():
-            blocker = QSignalBlocker(self.mesh_checkbox); self.mesh_checkbox.setChecked(False); del blocker
-            self.mesh_opacity_slider.setEnabled(False)
-            for view in [self.overlay_view, *self.split_views]:
-                view.show_mesh = False
+            self.mesh_checkbox.setChecked(False)
         self._set_geometry("show_joints", value)
 
     def _set_bone(self, value):
         if value and self.mesh_checkbox.isChecked():
-            blocker = QSignalBlocker(self.mesh_checkbox); self.mesh_checkbox.setChecked(False); del blocker
-            self.mesh_opacity_slider.setEnabled(False)
-            for view in [self.overlay_view, *self.split_views]:
-                view.show_mesh = False
+            self.mesh_checkbox.setChecked(False)
         self._set_geometry("show_bones", value)
 
     def _set_opacity(self, value):

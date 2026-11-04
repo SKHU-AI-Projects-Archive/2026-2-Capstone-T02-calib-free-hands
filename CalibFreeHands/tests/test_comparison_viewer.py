@@ -147,6 +147,67 @@ def test_comparison_mesh_visibility_remains_exclusive_with_skeleton(tmp_path, qa
     viewer.close()
 
 
+@pytest.mark.parametrize("result_count", [1, 3])
+def test_geometry_menu_actions_keep_mesh_and_skeleton_state_synchronized(tmp_path, qapp, result_count):
+    from calibfreehands.visualization.comparison import ComparisonViewer
+
+    viewer = ComparisonViewer(_session(tmp_path, result_count, mesh=True))
+    geometry_menu = next(action.menu() for action in viewer.more_menu.actions()
+                         if action.menu() is not None and action.menu().title() == "Geometry")
+    actions = {action.text(): action for action in geometry_menu.actions() if action.isCheckable()}
+    assert set(actions) >= {"Joints", "Bones", "Mesh"}
+    joint_action, bone_action, mesh_action = actions["Joints"], actions["Bones"], actions["Mesh"]
+    views = [viewer.overlay_view, *viewer.split_views]
+
+    def assert_state(joints, bones, mesh):
+        assert viewer.joint_checkbox.isChecked() is joints
+        assert viewer.bone_checkbox.isChecked() is bones
+        assert viewer.mesh_checkbox.isChecked() is mesh
+        assert joint_action.isChecked() is joints
+        assert bone_action.isChecked() is bones
+        assert mesh_action.isChecked() is mesh
+        assert viewer.mesh_opacity_slider.isEnabled() is mesh
+        for view in views:
+            assert view.show_joints is joints
+            assert view.show_bones is bones
+            assert view.show_mesh is mesh
+        rendered_views = [viewer.overlay_view] if viewer.mode == "overlay" else viewer.split_views
+        for view in rendered_views:
+            for geometry in ("joints", "bones", "meshes"):
+                items = list(getattr(view, geometry))
+                if hasattr(view, "extra_items"):
+                    item_index = {"joints": 0, "bones": 1, "meshes": 2}[geometry]
+                    items.extend(hand_items[item_index] for config_items in view.extra_items
+                                 for hand_items in config_items)
+                assert all(item.visible() is expected for item, expected in zip(
+                    items, ([joints] if geometry == "joints" else
+                            [bones] if geometry == "bones" else [mesh]) * len(items)))
+
+    assert_state(True, True, False)
+    modes = ("overlay", "split") if result_count > 1 else ("overlay",)
+    for mode in modes:
+        viewer.set_mode(mode)
+        if viewer.mesh_checkbox.isChecked():
+            joint_action.trigger()
+            bone_action.trigger()
+            assert_state(True, True, False)
+        for _ in range(3):
+            mesh_action.trigger()
+            assert_state(False, False, True)
+            joint_action.trigger()
+            assert_state(True, False, False)
+            bone_action.trigger()
+            assert_state(True, True, False)
+            mesh_action.trigger()
+            assert_state(False, False, True)
+            if _ < 2:
+                joint_action.trigger()
+                assert_state(True, False, False)
+                bone_action.trigger()
+                assert_state(True, True, False)
+    viewer.close()
+
+
 def test_comparison_viewer_decodes_shared_source_media_once(tmp_path, monkeypatch, qapp):
     import calibfreehands.visualization.comparison as comparison
     from calibfreehands.media.provider import MediaFrameProvider
