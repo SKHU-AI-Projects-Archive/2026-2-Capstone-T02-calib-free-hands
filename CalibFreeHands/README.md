@@ -19,17 +19,10 @@ python -m venv .venv
 .\.venv\Scripts\python.exe -m pip install -e ".[gui,test]"
 ```
 
-For a project-local FFmpeg binary, install the media extra:
+For project-local FFmpeg, install the optional media extra instead of relying on a system FFmpeg installation:
 
 ```powershell
 .\.venv\Scripts\python.exe -m pip install -e ".[gui,test,media]"
-```
-
-For an isolated Windows setup:
-
-```powershell
-python -m venv .venv
-.\.venv\Scripts\python.exe -m pip install -e ".[gui,test]"
 ```
 
 Run:
@@ -44,9 +37,7 @@ The effective output folder is shown in the main window, defaults to `Documents/
 
 Use **View Results...** to open one or more `.cfh` files. A single file opens the result viewer; multiple files open the Overlay/Split comparison viewer only when their source SHA256 values match. Historical canonical `results.npz` and `session.json` loading APIs remain available for development, while raw-pose NPZ files are rejected with a readable message. Automatic preview generation is disabled; the audio preference remains stored for future explicit preview export.
 
-FFmpeg can be supplied by a Windows system installation (`ffmpeg`/`ffprobe` on `PATH`) or by the optional project-local `imageio-ffmpeg` runtime. When only the bundled `ffmpeg` executable is available, decoding works with sequential timestamps; `ffprobe` is preferred for reliable source timestamps.
-
-FFmpeg is an external runtime dependency. Install a Windows build containing `ffprobe` and add its `bin` directory to `PATH`; missing `ffprobe` is reported explicitly.
+FFmpeg is required for video decoding. Provide it either through a Windows system installation with `ffmpeg` on `PATH`, or through the optional project-local `imageio-ffmpeg` runtime. `ffprobe` is recommended, but is not required for decoding: when available, the app uses source frame timestamps; when unavailable, decoding continues with sequential timestamps calculated as `frame_index / frame_rate` when a frame rate is known. Without `ffprobe`, timestamps for variable-frame-rate (VFR) media may be less accurate.
 
 ## Data contract
 
