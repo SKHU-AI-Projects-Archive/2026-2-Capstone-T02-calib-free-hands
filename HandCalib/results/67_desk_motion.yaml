@@ -1,0 +1,1319 @@
+experiment: 67_desk_motion
+run: runs/67_desk_motion/20261104T065230Z
+code_commit: 44c1566
+git_dirty_at_run: false
+note: '손이 책상(종이) 위에서 돌고 미끄러지기만 한다는 제약을 넣은 추정기(내가 만든 것, 교수님 코드 아님)를 실험 56의 점들에 적용한
+  기록이다(판정 없음). 모형: 손은 단단한 평면이고 손가락 끝 쪽이 낮고 손목 쪽이 높게 책상에 대해 기울어 있다(경사). 영상 전체에 책상 자세
+  하나, 프레임마다 책상 위 회전각 1개와 이동 2개, f, 손 평면 모양을 함께 푼다. 경사는 0°(손이 책상에 평평), 11° 고정(실험 59),
+  f와 함께 추정 세 가지. 시작값은 교수님 free_template 결과에서 얻고, f는 free_template처럼 거친 격자 8점의 프로파일에서
+  고른 뒤 다듬는다.'
+ramp_deg_fixed: 11.0
+videos:
+  IMG_7346.MOV:
+    distance_cm: 50
+    hand: right
+    tracked:
+      j16:
+        free_template:
+          f_px: 1864.7
+          boundary: false
+          rms_px: 0.76
+          plane_tilt_median_deg: 56.4
+        flat:
+          f_px: 1161.3
+          boundary: false
+          rms_px: 4.7
+          desk_tilt_deg: 50.4
+          turn_range_deg: 117.1
+        ramp_fixed:
+          f_px: 1483.3
+          boundary: false
+          rms_px: 3.64
+          desk_tilt_deg: 45.6
+          turn_range_deg: 115.7
+        ramp_free:
+          f_px: 1533.2
+          boundary: false
+          rms_px: 3.28
+          desk_tilt_deg: 48.2
+          turn_range_deg: 117.9
+          pitch_deg: 9.48
+          roll_deg: -4.57
+      j21:
+        free_template:
+          f_px: 1764.2
+          boundary: false
+          rms_px: 1.89
+          plane_tilt_median_deg: 55.8
+        flat:
+          f_px: 1186.1
+          boundary: false
+          rms_px: 10.47
+          desk_tilt_deg: 48.6
+          turn_range_deg: 115.1
+        ramp_fixed:
+          f_px: 1527.5
+          boundary: false
+          rms_px: 7.25
+          desk_tilt_deg: 43.3
+          turn_range_deg: 113.7
+        ramp_free:
+          f_px: 1862.0
+          boundary: false
+          rms_px: 5.08
+          desk_tilt_deg: 47.1
+          turn_range_deg: 117.8
+          pitch_deg: 13.02
+          roll_deg: -9.28
+    detected:
+      j16:
+        free_template:
+          f_px: 3072.0
+          boundary: true
+          rms_px: 4.09
+          plane_tilt_median_deg: 57.3
+        flat:
+          f_px: 1117.5
+          boundary: false
+          rms_px: 8.14
+          desk_tilt_deg: 50.0
+          turn_range_deg: 124.8
+        ramp_fixed:
+          f_px: 1393.8
+          boundary: false
+          rms_px: 6.98
+          desk_tilt_deg: 44.6
+          turn_range_deg: 456.1
+        ramp_free:
+          f_px: 1603.3
+          boundary: false
+          rms_px: 6.8
+          desk_tilt_deg: 41.0
+          turn_range_deg: 122.0
+          pitch_deg: 17.88
+          roll_deg: 0.28
+      j21:
+        free_template:
+          f_px: 1138.1
+          boundary: false
+          rms_px: 5.91
+          plane_tilt_median_deg: 46.7
+        flat:
+          f_px: 1022.1
+          boundary: false
+          rms_px: 12.11
+          desk_tilt_deg: 44.3
+          turn_range_deg: 118.1
+        ramp_fixed:
+          f_px: 1228.3
+          boundary: false
+          rms_px: 9.75
+          desk_tilt_deg: 38.7
+          turn_range_deg: 118.1
+        ramp_free:
+          f_px: 1318.2
+          boundary: false
+          rms_px: 9.56
+          desk_tilt_deg: 39.2
+          turn_range_deg: 119.3
+          pitch_deg: 12.86
+          roll_deg: -3.28
+  IMG_7347.MOV:
+    distance_cm: 50
+    hand: left
+    tracked:
+      j16:
+        free_template:
+          f_px: 2215.9
+          boundary: false
+          rms_px: 0.74
+          plane_tilt_median_deg: 55.3
+        flat:
+          f_px: 1139.6
+          boundary: false
+          rms_px: 6.01
+          desk_tilt_deg: 49.5
+          turn_range_deg: 116.9
+        ramp_fixed:
+          f_px: 1857.3
+          boundary: false
+          rms_px: 4.62
+          desk_tilt_deg: 45.6
+          turn_range_deg: 116.0
+        ramp_free:
+          f_px: 2479.2
+          boundary: false
+          rms_px: 4.26
+          desk_tilt_deg: 47.0
+          turn_range_deg: 118.5
+          pitch_deg: 13.37
+          roll_deg: -4.35
+      j21:
+        free_template:
+          f_px: 2285.4
+          boundary: false
+          rms_px: 1.42
+          plane_tilt_median_deg: 56.5
+        flat:
+          f_px: 1193.1
+          boundary: false
+          rms_px: 16.01
+          desk_tilt_deg: 49.9
+          turn_range_deg: 118.2
+        ramp_fixed:
+          f_px: 1885.9
+          boundary: false
+          rms_px: 9.81
+          desk_tilt_deg: 46.0
+          turn_range_deg: 117.4
+        ramp_free:
+          f_px: 3072.0
+          boundary: true
+          rms_px: 6.9
+          desk_tilt_deg: 47.8
+          turn_range_deg: 122.1
+          pitch_deg: 15.27
+          roll_deg: -6.35
+    detected:
+      j16:
+        free_template:
+          f_px: 1567.1
+          boundary: false
+          rms_px: 2.01
+          plane_tilt_median_deg: 43.9
+        flat:
+          f_px: 881.6
+          boundary: false
+          rms_px: 5.69
+          desk_tilt_deg: 42.8
+          turn_range_deg: 120.3
+        ramp_fixed:
+          f_px: 1193.9
+          boundary: false
+          rms_px: 4.86
+          desk_tilt_deg: 39.7
+          turn_range_deg: 120.5
+        ramp_free:
+          f_px: 1437.1
+          boundary: false
+          rms_px: 3.99
+          desk_tilt_deg: 44.9
+          turn_range_deg: 124.1
+          pitch_deg: 10.98
+          roll_deg: -10.12
+      j21:
+        free_template:
+          f_px: 1818.9
+          boundary: false
+          rms_px: 7.23
+          plane_tilt_median_deg: 42.1
+        flat:
+          f_px: 1280.6
+          boundary: false
+          rms_px: 25.62
+          desk_tilt_deg: 45.4
+          turn_range_deg: 121.1
+        ramp_fixed:
+          f_px: 2098.8
+          boundary: false
+          rms_px: 23.01
+          desk_tilt_deg: 44.9
+          turn_range_deg: 121.0
+        ramp_free:
+          f_px: 2186.2
+          boundary: false
+          rms_px: 18.13
+          desk_tilt_deg: 51.1
+          turn_range_deg: 133.8
+          pitch_deg: 7.35
+          roll_deg: -12.55
+  IMG_7348.MOV:
+    distance_cm: 50
+    hand: right
+    tracked:
+      j16:
+        free_template:
+          f_px: 1853.0
+          boundary: false
+          rms_px: 0.75
+          plane_tilt_median_deg: 55.2
+        flat:
+          f_px: 1005.3
+          boundary: false
+          rms_px: 6.07
+          desk_tilt_deg: 49.2
+          turn_range_deg: 119.8
+        ramp_fixed:
+          f_px: 1444.0
+          boundary: false
+          rms_px: 4.66
+          desk_tilt_deg: 45.1
+          turn_range_deg: 118.4
+        ramp_free:
+          f_px: 1644.3
+          boundary: false
+          rms_px: 3.93
+          desk_tilt_deg: 48.2
+          turn_range_deg: 121.7
+          pitch_deg: 10.69
+          roll_deg: -6.35
+      j21:
+        free_template:
+          f_px: 1805.8
+          boundary: false
+          rms_px: 2.12
+          plane_tilt_median_deg: 54.3
+        flat:
+          f_px: 1069.6
+          boundary: false
+          rms_px: 13.63
+          desk_tilt_deg: 47.5
+          turn_range_deg: 116.6
+        ramp_fixed:
+          f_px: 1542.3
+          boundary: false
+          rms_px: 8.46
+          desk_tilt_deg: 42.8
+          turn_range_deg: 115.4
+        ramp_free:
+          f_px: 2254.9
+          boundary: false
+          rms_px: 5.62
+          desk_tilt_deg: 47.3
+          turn_range_deg: 120.2
+          pitch_deg: 13.45
+          roll_deg: -10.04
+    detected:
+      j16:
+        free_template:
+          f_px: 3072.0
+          boundary: true
+          rms_px: 3.49
+          plane_tilt_median_deg: 61.2
+        flat:
+          f_px: 997.2
+          boundary: false
+          rms_px: 8.36
+          desk_tilt_deg: 49.3
+          turn_range_deg: 125.7
+        ramp_fixed:
+          f_px: 1443.3
+          boundary: false
+          rms_px: 6.69
+          desk_tilt_deg: 45.7
+          turn_range_deg: 124.8
+        ramp_free:
+          f_px: 3072.0
+          boundary: true
+          rms_px: 8.05
+          desk_tilt_deg: 34.0
+          turn_range_deg: 130.4
+          pitch_deg: -43.06
+          roll_deg: -8.68
+      j21:
+        free_template:
+          f_px: 1214.4
+          boundary: false
+          rms_px: 5.61
+          plane_tilt_median_deg: 50.0
+        flat:
+          f_px: 941.1
+          boundary: false
+          rms_px: 12.57
+          desk_tilt_deg: 43.8
+          turn_range_deg: 118.0
+        ramp_fixed:
+          f_px: 1249.9
+          boundary: false
+          rms_px: 9.51
+          desk_tilt_deg: 39.3
+          turn_range_deg: 117.8
+        ramp_free:
+          f_px: 1456.2
+          boundary: false
+          rms_px: 9.0
+          desk_tilt_deg: 41.0
+          turn_range_deg: 119.7
+          pitch_deg: 13.26
+          roll_deg: -4.88
+  IMG_7349.MOV:
+    distance_cm: 50
+    hand: left
+    tracked:
+      j16:
+        free_template:
+          f_px: 2916.7
+          boundary: false
+          rms_px: 1.07
+          plane_tilt_median_deg: 55.7
+        flat:
+          f_px: 1034.7
+          boundary: false
+          rms_px: 8.71
+          desk_tilt_deg: 48.0
+          turn_range_deg: 835.7
+        ramp_fixed:
+          f_px: 1732.6
+          boundary: false
+          rms_px: 8.84
+          desk_tilt_deg: 44.3
+          turn_range_deg: 446.6
+        ramp_free:
+          f_px: 3072.0
+          boundary: true
+          rms_px: 50.54
+          desk_tilt_deg: 86.3
+          turn_range_deg: 40.1
+          pitch_deg: -18.26
+          roll_deg: 3.25
+      j21:
+        free_template:
+          f_px: 2952.3
+          boundary: false
+          rms_px: 2.31
+          plane_tilt_median_deg: 55.9
+        flat:
+          f_px: 1062.1
+          boundary: false
+          rms_px: 22.97
+          desk_tilt_deg: 48.5
+          turn_range_deg: 2160.2
+        ramp_fixed:
+          f_px: 1721.7
+          boundary: false
+          rms_px: 20.0
+          desk_tilt_deg: 44.7
+          turn_range_deg: 123.8
+        ramp_free:
+          f_px: 3072.0
+          boundary: true
+          rms_px: 17.78
+          desk_tilt_deg: 50.4
+          turn_range_deg: 465.5
+          pitch_deg: -20.48
+          roll_deg: 13.56
+    detected:
+      j16:
+        free_template:
+          f_px: 1482.4
+          boundary: false
+          rms_px: 2.16
+          plane_tilt_median_deg: 46.9
+        flat:
+          f_px: 943.8
+          boundary: false
+          rms_px: 5.42
+          desk_tilt_deg: 39.1
+          turn_range_deg: 104.6
+        ramp_fixed:
+          f_px: 1212.6
+          boundary: false
+          rms_px: 4.72
+          desk_tilt_deg: 38.6
+          turn_range_deg: 106.3
+        ramp_free:
+          f_px: 1516.7
+          boundary: false
+          rms_px: 4.1
+          desk_tilt_deg: 45.3
+          turn_range_deg: 111.5
+          pitch_deg: 13.19
+          roll_deg: -12.0
+      j21:
+        free_template:
+          f_px: 1705.5
+          boundary: false
+          rms_px: 5.36
+          plane_tilt_median_deg: 45.1
+        flat:
+          f_px: 1252.5
+          boundary: false
+          rms_px: 11.19
+          desk_tilt_deg: 43.9
+          turn_range_deg: 110.8
+        ramp_fixed:
+          f_px: 2114.8
+          boundary: false
+          rms_px: 9.83
+          desk_tilt_deg: 45.5
+          turn_range_deg: 114.3
+        ramp_free:
+          f_px: 1900.0
+          boundary: false
+          rms_px: 9.31
+          desk_tilt_deg: 48.7
+          turn_range_deg: 118.5
+          pitch_deg: 8.45
+          roll_deg: -6.83
+  IMG_7350.MOV:
+    distance_cm: 60
+    hand: right
+    tracked:
+      j16:
+        free_template:
+          f_px: 3072.0
+          boundary: true
+          rms_px: 0.83
+          plane_tilt_median_deg: 61.2
+        flat:
+          f_px: 1088.3
+          boundary: false
+          rms_px: 3.91
+          desk_tilt_deg: 48.0
+          turn_range_deg: 116.6
+        ramp_fixed:
+          f_px: 1558.9
+          boundary: false
+          rms_px: 3.14
+          desk_tilt_deg: 45.8
+          turn_range_deg: 117.6
+        ramp_free:
+          f_px: 1559.7
+          boundary: false
+          rms_px: 3.05
+          desk_tilt_deg: 47.2
+          turn_range_deg: 118.9
+          pitch_deg: 10.15
+          roll_deg: -2.87
+      j21:
+        free_template:
+          f_px: 2584.9
+          boundary: false
+          rms_px: 1.84
+          plane_tilt_median_deg: 59.0
+        flat:
+          f_px: 1059.1
+          boundary: false
+          rms_px: 8.68
+          desk_tilt_deg: 46.1
+          turn_range_deg: 114.0
+        ramp_fixed:
+          f_px: 1475.1
+          boundary: false
+          rms_px: 6.41
+          desk_tilt_deg: 42.8
+          turn_range_deg: 114.3
+        ramp_free:
+          f_px: 1919.1
+          boundary: false
+          rms_px: 4.93
+          desk_tilt_deg: 46.1
+          turn_range_deg: 118.7
+          pitch_deg: 14.37
+          roll_deg: -8.48
+    detected:
+      j16:
+        free_template:
+          f_px: 3072.0
+          boundary: true
+          rms_px: 3.23
+          plane_tilt_median_deg: 64.2
+        flat:
+          f_px: 957.2
+          boundary: false
+          rms_px: 6.69
+          desk_tilt_deg: 48.1
+          turn_range_deg: 121.8
+        ramp_fixed:
+          f_px: 1325.8
+          boundary: false
+          rms_px: 5.84
+          desk_tilt_deg: 46.6
+          turn_range_deg: 476.3
+        ramp_free:
+          f_px: 1608.4
+          boundary: false
+          rms_px: 5.66
+          desk_tilt_deg: 43.9
+          turn_range_deg: 124.2
+          pitch_deg: 16.93
+          roll_deg: 3.66
+      j21:
+        free_template:
+          f_px: 1048.8
+          boundary: false
+          rms_px: 4.47
+          plane_tilt_median_deg: 47.7
+        flat:
+          f_px: 880.9
+          boundary: false
+          rms_px: 9.54
+          desk_tilt_deg: 43.2
+          turn_range_deg: 114.8
+        ramp_fixed:
+          f_px: 1136.8
+          boundary: false
+          rms_px: 7.93
+          desk_tilt_deg: 40.1
+          turn_range_deg: 115.8
+        ramp_free:
+          f_px: 1331.6
+          boundary: false
+          rms_px: 7.44
+          desk_tilt_deg: 42.5
+          turn_range_deg: 118.4
+          pitch_deg: 13.02
+          roll_deg: -6.58
+  IMG_7351.MOV:
+    distance_cm: 60
+    hand: left
+    tracked:
+      j16:
+        free_template:
+          f_px: 2103.7
+          boundary: false
+          rms_px: 1.07
+          plane_tilt_median_deg: 54.1
+        flat:
+          f_px: 1173.7
+          boundary: false
+          rms_px: 4.93
+          desk_tilt_deg: 48.4
+          turn_range_deg: 700.4
+        ramp_fixed:
+          f_px: 1750.6
+          boundary: false
+          rms_px: 4.25
+          desk_tilt_deg: 45.4
+          turn_range_deg: 120.5
+        ramp_free:
+          f_px: 3072.0
+          boundary: true
+          rms_px: 5.49
+          desk_tilt_deg: 35.5
+          turn_range_deg: 130.6
+          pitch_deg: -35.68
+          roll_deg: 3.59
+      j21:
+        free_template:
+          f_px: 2657.5
+          boundary: false
+          rms_px: 2.43
+          plane_tilt_median_deg: 56.8
+        flat:
+          f_px: 1016.9
+          boundary: false
+          rms_px: 10.78
+          desk_tilt_deg: 48.6
+          turn_range_deg: 384.4
+        ramp_fixed:
+          f_px: 1540.1
+          boundary: false
+          rms_px: 7.85
+          desk_tilt_deg: 45.6
+          turn_range_deg: 121.5
+        ramp_free:
+          f_px: 3072.0
+          boundary: true
+          rms_px: 7.98
+          desk_tilt_deg: 38.0
+          turn_range_deg: 132.1
+          pitch_deg: -31.49
+          roll_deg: 7.61
+    detected:
+      j16:
+        free_template:
+          f_px: 3072.0
+          boundary: true
+          rms_px: 2.16
+          plane_tilt_median_deg: 50.8
+        flat:
+          f_px: 863.0
+          boundary: false
+          rms_px: 5.5
+          desk_tilt_deg: 44.2
+          turn_range_deg: 122.0
+        ramp_fixed:
+          f_px: 1110.7
+          boundary: false
+          rms_px: 4.93
+          desk_tilt_deg: 41.6
+          turn_range_deg: 123.6
+        ramp_free:
+          f_px: 1452.7
+          boundary: false
+          rms_px: 4.3
+          desk_tilt_deg: 43.7
+          turn_range_deg: 127.5
+          pitch_deg: 15.02
+          roll_deg: -7.71
+      j21:
+        free_template:
+          f_px: 3072.0
+          boundary: true
+          rms_px: 8.47
+          plane_tilt_median_deg: 61.9
+        flat:
+          f_px: 1032.5
+          boundary: false
+          rms_px: 33.39
+          desk_tilt_deg: 47.1
+          turn_range_deg: 126.9
+        ramp_fixed:
+          f_px: 1726.0
+          boundary: false
+          rms_px: 32.21
+          desk_tilt_deg: 44.5
+          turn_range_deg: 128.6
+        ramp_free:
+          f_px: 2326.0
+          boundary: false
+          rms_px: 25.12
+          desk_tilt_deg: 49.2
+          turn_range_deg: 400.2
+          pitch_deg: 9.11
+          roll_deg: -14.51
+  IMG_7352.MOV:
+    distance_cm: 60
+    hand: right
+    tracked:
+      j16:
+        free_template:
+          f_px: 1915.7
+          boundary: false
+          rms_px: 0.82
+          plane_tilt_median_deg: 52.4
+        flat:
+          f_px: 1103.4
+          boundary: false
+          rms_px: 3.85
+          desk_tilt_deg: 48.4
+          turn_range_deg: 131.2
+        ramp_fixed:
+          f_px: 1562.9
+          boundary: false
+          rms_px: 3.31
+          desk_tilt_deg: 44.8
+          turn_range_deg: 131.0
+        ramp_free:
+          f_px: 1584.2
+          boundary: false
+          rms_px: 2.66
+          desk_tilt_deg: 47.9
+          turn_range_deg: 133.3
+          pitch_deg: 8.2
+          roll_deg: -6.57
+      j21:
+        free_template:
+          f_px: 1493.4
+          boundary: false
+          rms_px: 2.05
+          plane_tilt_median_deg: 48.6
+        flat:
+          f_px: 1086.8
+          boundary: false
+          rms_px: 9.51
+          desk_tilt_deg: 46.4
+          turn_range_deg: 129.0
+        ramp_fixed:
+          f_px: 1488.4
+          boundary: false
+          rms_px: 7.2
+          desk_tilt_deg: 41.9
+          turn_range_deg: 128.6
+        ramp_free:
+          f_px: 1994.9
+          boundary: false
+          rms_px: 4.56
+          desk_tilt_deg: 46.0
+          turn_range_deg: 133.0
+          pitch_deg: 12.73
+          roll_deg: -11.34
+    detected:
+      j16:
+        free_template:
+          f_px: 2666.6
+          boundary: false
+          rms_px: 3.28
+          plane_tilt_median_deg: 59.5
+        flat:
+          f_px: 945.8
+          boundary: false
+          rms_px: 6.7
+          desk_tilt_deg: 48.3
+          turn_range_deg: 136.3
+        ramp_fixed:
+          f_px: 1284.7
+          boundary: false
+          rms_px: 6.19
+          desk_tilt_deg: 46.0
+          turn_range_deg: 1866.3
+        ramp_free:
+          f_px: 1299.9
+          boundary: false
+          rms_px: 5.92
+          desk_tilt_deg: 43.1
+          turn_range_deg: 1505.8
+          pitch_deg: 12.91
+          roll_deg: 5.75
+      j21:
+        free_template:
+          f_px: 1012.2
+          boundary: false
+          rms_px: 4.74
+          plane_tilt_median_deg: 47.6
+        flat:
+          f_px: 875.6
+          boundary: false
+          rms_px: 9.32
+          desk_tilt_deg: 44.1
+          turn_range_deg: 131.0
+        ramp_fixed:
+          f_px: 1113.3
+          boundary: false
+          rms_px: 8.07
+          desk_tilt_deg: 40.2
+          turn_range_deg: 131.9
+        ramp_free:
+          f_px: 1169.8
+          boundary: false
+          rms_px: 7.74
+          desk_tilt_deg: 42.5
+          turn_range_deg: 133.2
+          pitch_deg: 10.02
+          roll_deg: -4.96
+  IMG_7353.MOV:
+    distance_cm: 60
+    hand: left
+    tracked:
+      j16:
+        free_template:
+          f_px: 1569.6
+          boundary: false
+          rms_px: 0.93
+          plane_tilt_median_deg: 54.1
+        flat:
+          f_px: 1032.1
+          boundary: false
+          rms_px: 4.98
+          desk_tilt_deg: 48.4
+          turn_range_deg: 117.3
+        ramp_fixed:
+          f_px: 1668.3
+          boundary: false
+          rms_px: 3.95
+          desk_tilt_deg: 44.8
+          turn_range_deg: 117.5
+        ramp_free:
+          f_px: 2285.0
+          boundary: false
+          rms_px: 3.7
+          desk_tilt_deg: 45.3
+          turn_range_deg: 119.7
+          pitch_deg: 14.32
+          roll_deg: -3.66
+      j21:
+        free_template:
+          f_px: 1824.3
+          boundary: false
+          rms_px: 2.1
+          plane_tilt_median_deg: 57.8
+        flat:
+          f_px: 1020.2
+          boundary: false
+          rms_px: 10.93
+          desk_tilt_deg: 48.8
+          turn_range_deg: 118.1
+        ramp_fixed:
+          f_px: 1775.1
+          boundary: false
+          rms_px: 6.79
+          desk_tilt_deg: 45.1
+          turn_range_deg: 118.5
+        ramp_free:
+          f_px: 3072.0
+          boundary: true
+          rms_px: 5.8
+          desk_tilt_deg: 44.1
+          turn_range_deg: 120.7
+          pitch_deg: 16.55
+          roll_deg: -2.42
+    detected:
+      j16:
+        free_template:
+          f_px: 3072.0
+          boundary: true
+          rms_px: 2.0
+          plane_tilt_median_deg: 53.3
+        flat:
+          f_px: 750.3
+          boundary: false
+          rms_px: 5.66
+          desk_tilt_deg: 45.3
+          turn_range_deg: 356.0
+        ramp_fixed:
+          f_px: 689.7
+          boundary: false
+          rms_px: 6.57
+          desk_tilt_deg: 39.9
+          turn_range_deg: 115.9
+        ramp_free:
+          f_px: 3072.0
+          boundary: true
+          rms_px: 38.7
+          desk_tilt_deg: 89.8
+          turn_range_deg: 1125.1
+          pitch_deg: -12.34
+          roll_deg: 18.04
+      j21:
+        free_template:
+          f_px: 1971.7
+          boundary: false
+          rms_px: 6.54
+          plane_tilt_median_deg: 42.6
+        flat:
+          f_px: 1007.7
+          boundary: false
+          rms_px: 22.75
+          desk_tilt_deg: 47.2
+          turn_range_deg: 127.6
+        ramp_fixed:
+          f_px: 2020.8
+          boundary: false
+          rms_px: 20.18
+          desk_tilt_deg: 44.5
+          turn_range_deg: 129.5
+        ramp_free:
+          f_px: 2747.3
+          boundary: false
+          rms_px: 16.34
+          desk_tilt_deg: 48.5
+          turn_range_deg: 135.6
+          pitch_deg: 10.5
+          roll_deg: -12.12
+  IMG_7354.MOV:
+    distance_cm: 75
+    hand: right
+    tracked:
+      j16:
+        free_template:
+          f_px: 3072.0
+          boundary: true
+          rms_px: 0.58
+          plane_tilt_median_deg: 64.3
+        flat:
+          f_px: 825.5
+          boundary: false
+          rms_px: 3.51
+          desk_tilt_deg: 44.9
+          turn_range_deg: 129.3
+        ramp_fixed:
+          f_px: 1654.4
+          boundary: false
+          rms_px: 2.56
+          desk_tilt_deg: 44.8
+          turn_range_deg: 128.1
+        ramp_free:
+          f_px: 1722.4
+          boundary: false
+          rms_px: 2.02
+          desk_tilt_deg: 47.3
+          turn_range_deg: 130.6
+          pitch_deg: 10.75
+          roll_deg: -6.04
+      j21:
+        free_template:
+          f_px: 3072.0
+          boundary: true
+          rms_px: 1.54
+          plane_tilt_median_deg: 64.5
+        flat:
+          f_px: 832.1
+          boundary: false
+          rms_px: 9.11
+          desk_tilt_deg: 44.1
+          turn_range_deg: 126.4
+        ramp_fixed:
+          f_px: 1612.1
+          boundary: false
+          rms_px: 5.93
+          desk_tilt_deg: 43.1
+          turn_range_deg: 125.2
+        ramp_free:
+          f_px: 2780.7
+          boundary: false
+          rms_px: 3.55
+          desk_tilt_deg: 47.7
+          turn_range_deg: 130.2
+          pitch_deg: 15.0
+          roll_deg: -10.25
+    detected:
+      j16:
+        free_template:
+          f_px: 2365.1
+          boundary: false
+          rms_px: 2.96
+          plane_tilt_median_deg: 64.3
+        flat:
+          f_px: 674.5
+          boundary: true
+          rms_px: 5.74
+          desk_tilt_deg: 43.1
+          turn_range_deg: 1147.1
+        ramp_fixed:
+          f_px: 883.2
+          boundary: false
+          rms_px: 6.42
+          desk_tilt_deg: 45.3
+          turn_range_deg: 137.1
+        ramp_free:
+          f_px: 1255.9
+          boundary: false
+          rms_px: 5.16
+          desk_tilt_deg: 40.3
+          turn_range_deg: 491.5
+          pitch_deg: 1.54
+          roll_deg: 15.13
+      j21:
+        free_template:
+          f_px: 720.2
+          boundary: false
+          rms_px: 3.92
+          plane_tilt_median_deg: 44.7
+        flat:
+          f_px: 672.0
+          boundary: true
+          rms_px: 7.83
+          desk_tilt_deg: 39.6
+          turn_range_deg: 127.6
+        ramp_fixed:
+          f_px: 1021.1
+          boundary: false
+          rms_px: 6.85
+          desk_tilt_deg: 37.7
+          turn_range_deg: 126.7
+        ramp_free:
+          f_px: 1014.8
+          boundary: false
+          rms_px: 6.46
+          desk_tilt_deg: 41.3
+          turn_range_deg: 129.2
+          pitch_deg: 8.71
+          roll_deg: -6.81
+  IMG_7355.MOV:
+    distance_cm: 75
+    hand: left
+    tracked:
+      j16:
+        free_template:
+          f_px: 1559.4
+          boundary: false
+          rms_px: 0.73
+          plane_tilt_median_deg: 48.9
+        flat:
+          f_px: 949.3
+          boundary: false
+          rms_px: 4.91
+          desk_tilt_deg: 45.8
+          turn_range_deg: 121.5
+        ramp_fixed:
+          f_px: 1810.7
+          boundary: false
+          rms_px: 4.17
+          desk_tilt_deg: 44.5
+          turn_range_deg: 119.7
+        ramp_free:
+          f_px: 3072.0
+          boundary: true
+          rms_px: 4.19
+          desk_tilt_deg: 45.8
+          turn_range_deg: 124.7
+          pitch_deg: -24.48
+          roll_deg: 9.63
+      j21:
+        free_template:
+          f_px: 1597.6
+          boundary: false
+          rms_px: 1.23
+          plane_tilt_median_deg: 48.4
+        flat:
+          f_px: 3072.0
+          boundary: true
+          rms_px: 17.88
+          desk_tilt_deg: 50.0
+          turn_range_deg: 121.1
+        ramp_fixed:
+          f_px: 1587.8
+          boundary: false
+          rms_px: 7.49
+          desk_tilt_deg: 45.2
+          turn_range_deg: 122.0
+        ramp_free:
+          f_px: 3072.0
+          boundary: true
+          rms_px: 5.88
+          desk_tilt_deg: 48.0
+          turn_range_deg: 128.6
+          pitch_deg: -22.65
+          roll_deg: 11.19
+    detected:
+      j16:
+        free_template:
+          f_px: 1031.9
+          boundary: false
+          rms_px: 2.05
+          plane_tilt_median_deg: 39.4
+        flat:
+          f_px: 672.0
+          boundary: true
+          rms_px: 4.28
+          desk_tilt_deg: 38.9
+          turn_range_deg: 122.2
+        ramp_fixed:
+          f_px: 826.1
+          boundary: false
+          rms_px: 4.05
+          desk_tilt_deg: 37.1
+          turn_range_deg: 122.1
+        ramp_free:
+          f_px: 883.6
+          boundary: false
+          rms_px: 3.62
+          desk_tilt_deg: 41.8
+          turn_range_deg: 125.4
+          pitch_deg: 7.03
+          roll_deg: -7.58
+      j21:
+        free_template:
+          f_px: 3072.0
+          boundary: true
+          rms_px: 7.59
+          plane_tilt_median_deg: 57.3
+        flat:
+          f_px: 3072.0
+          boundary: true
+          rms_px: 29.46
+          desk_tilt_deg: 44.0
+          turn_range_deg: 482.4
+        ramp_fixed:
+          f_px: 1528.2
+          boundary: false
+          rms_px: 26.23
+          desk_tilt_deg: 43.2
+          turn_range_deg: 127.3
+        ramp_free:
+          f_px: 2074.5
+          boundary: false
+          rms_px: 18.56
+          desk_tilt_deg: 50.5
+          turn_range_deg: 141.0
+          pitch_deg: 9.69
+          roll_deg: -16.66
+  IMG_7356.MOV:
+    distance_cm: 75
+    hand: right
+    tracked:
+      j16:
+        free_template:
+          f_px: 3072.0
+          boundary: true
+          rms_px: 0.57
+          plane_tilt_median_deg: 66.7
+        flat:
+          f_px: 991.0
+          boundary: false
+          rms_px: 3.5
+          desk_tilt_deg: 44.5
+          turn_range_deg: 126.3
+        ramp_fixed:
+          f_px: 1492.5
+          boundary: false
+          rms_px: 3.56
+          desk_tilt_deg: 42.0
+          turn_range_deg: 124.7
+        ramp_free:
+          f_px: 1756.9
+          boundary: false
+          rms_px: 2.45
+          desk_tilt_deg: 46.8
+          turn_range_deg: 129.4
+          pitch_deg: 6.34
+          roll_deg: -8.78
+      j21:
+        free_template:
+          f_px: 3072.0
+          boundary: true
+          rms_px: 1.13
+          plane_tilt_median_deg: 67.5
+        flat:
+          f_px: 891.7
+          boundary: false
+          rms_px: 7.49
+          desk_tilt_deg: 42.3
+          turn_range_deg: 124.0
+        ramp_fixed:
+          f_px: 1582.6
+          boundary: false
+          rms_px: 5.59
+          desk_tilt_deg: 42.0
+          turn_range_deg: 124.6
+        ramp_free:
+          f_px: 2627.8
+          boundary: false
+          rms_px: 3.85
+          desk_tilt_deg: 46.8
+          turn_range_deg: 129.6
+          pitch_deg: 13.84
+          roll_deg: -9.29
+    detected:
+      j16:
+        free_template:
+          f_px: 3010.0
+          boundary: false
+          rms_px: 2.87
+          plane_tilt_median_deg: 68.0
+        flat:
+          f_px: 728.4
+          boundary: false
+          rms_px: 5.3
+          desk_tilt_deg: 43.1
+          turn_range_deg: 15113.2
+        ramp_fixed:
+          f_px: 1174.7
+          boundary: false
+          rms_px: 5.13
+          desk_tilt_deg: 44.9
+          turn_range_deg: 357.6
+        ramp_free:
+          f_px: 1028.4
+          boundary: false
+          rms_px: 5.03
+          desk_tilt_deg: 43.4
+          turn_range_deg: 25919.9
+          pitch_deg: 8.78
+          roll_deg: 2.92
+      j21:
+        free_template:
+          f_px: 743.4
+          boundary: false
+          rms_px: 3.82
+          plane_tilt_median_deg: 42.5
+        flat:
+          f_px: 672.0
+          boundary: true
+          rms_px: 8.02
+          desk_tilt_deg: 39.3
+          turn_range_deg: 122.0
+        ramp_fixed:
+          f_px: 895.1
+          boundary: false
+          rms_px: 7.16
+          desk_tilt_deg: 38.9
+          turn_range_deg: 124.0
+        ramp_free:
+          f_px: 950.7
+          boundary: false
+          rms_px: 6.89
+          desk_tilt_deg: 41.7
+          turn_range_deg: 125.9
+          pitch_deg: 9.26
+          roll_deg: -5.14
+  IMG_7357.MOV:
+    distance_cm: 75
+    hand: left
+    tracked:
+      j16:
+        free_template:
+          f_px: 1797.1
+          boundary: false
+          rms_px: 0.86
+          plane_tilt_median_deg: 54.3
+        flat:
+          f_px: 1010.4
+          boundary: false
+          rms_px: 5.71
+          desk_tilt_deg: 45.3
+          turn_range_deg: 2119.9
+        ramp_fixed:
+          f_px: 1803.2
+          boundary: false
+          rms_px: 3.79
+          desk_tilt_deg: 44.5
+          turn_range_deg: 65200.9
+        ramp_free:
+          f_px: 1777.4
+          boundary: false
+          rms_px: 3.31
+          desk_tilt_deg: 48.4
+          turn_range_deg: 722.0
+          pitch_deg: 8.5
+          roll_deg: -6.24
+      j21:
+        free_template:
+          f_px: 1933.1
+          boundary: false
+          rms_px: 1.36
+          plane_tilt_median_deg: 55.1
+        flat:
+          f_px: 781.4
+          boundary: false
+          rms_px: 8.72
+          desk_tilt_deg: 43.8
+          turn_range_deg: 712.6
+        ramp_fixed:
+          f_px: 1399.7
+          boundary: false
+          rms_px: 7.29
+          desk_tilt_deg: 44.0
+          turn_range_deg: 123.3
+        ramp_free:
+          f_px: 2655.4
+          boundary: false
+          rms_px: 5.46
+          desk_tilt_deg: 48.1
+          turn_range_deg: 129.7
+          pitch_deg: 14.78
+          roll_deg: -8.62
+    detected:
+      j16:
+        free_template:
+          f_px: 1084.9
+          boundary: false
+          rms_px: 1.92
+          plane_tilt_median_deg: 41.6
+        flat:
+          f_px: 672.0
+          boundary: true
+          rms_px: 4.18
+          desk_tilt_deg: 37.2
+          turn_range_deg: 124.5
+        ramp_fixed:
+          f_px: 997.6
+          boundary: false
+          rms_px: 4.04
+          desk_tilt_deg: 37.2
+          turn_range_deg: 125.0
+        ramp_free:
+          f_px: 1057.0
+          boundary: false
+          rms_px: 3.66
+          desk_tilt_deg: 41.4
+          turn_range_deg: 128.1
+          pitch_deg: 8.19
+          roll_deg: -7.09
+      j21:
+        free_template:
+          f_px: 3072.0
+          boundary: true
+          rms_px: 7.41
+          plane_tilt_median_deg: 55.4
+        flat:
+          f_px: 3072.0
+          boundary: true
+          rms_px: 29.12
+          desk_tilt_deg: 41.8
+          turn_range_deg: 124.5
+        ramp_fixed:
+          f_px: 1650.6
+          boundary: false
+          rms_px: 24.92
+          desk_tilt_deg: 42.7
+          turn_range_deg: 127.7
+        ramp_free:
+          f_px: 1864.4
+          boundary: false
+          rms_px: 19.01
+          desk_tilt_deg: 49.3
+          turn_range_deg: 139.5
+          pitch_deg: 8.7
+          roll_deg: -14.65
