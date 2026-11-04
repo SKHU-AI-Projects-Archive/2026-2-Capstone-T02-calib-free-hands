@@ -1,0 +1,538 @@
+experiment: 65_hand_deformation
+run: runs/65_hand_deformation/20261104T015332Z
+code_commit: b0ca466
+git_dirty_at_run: false
+note: 실제 영상에서 손이 '평평하고 단단한 판'에서 얼마나 벗어나는지 잰 기록용 실험이다(판정 없음). 멈춤 구간마다 MediaPipe 관절
+  16점의 중앙값을 내고, 기준 멈춤 구간에서 각 멈춤 구간으로 가는 가장 잘 맞는 호모그래피를 맞춘 뒤 남는 차이를 쟀다. 평평하고 단단한 손이
+  책상 위에서 움직이면 그 차이는 0이므로(f와 무관), 남는 값은 손 모양 변화와 손 경사에 따른 시차, 검출기 오차의 합이다. 같은 측정을 실험
+  64의 잡음 없는 합성 장면(경사·변형을 넣은 것)에 해서 환산 기준으로 삼았다. 실험 56의 추적점은 호모그래피로 옮긴 점이라 이 값이 늘 0이어서
+  쓰지 않았다.
+pauses_rule:
+  gap_frames: 15
+  min_frames: 5
+calibration:
+  setting:
+    turn_range_deg: 90
+    n_frames: 60
+    step: 6
+    move_pct_xy:
+    - 4.5
+    - 34.6
+    seeds:
+    - 0
+    - 1
+    - 2
+    - 3
+    - 4
+    - 5
+    - 6
+    - 7
+    - 8
+    - 9
+  values:
+    flat:
+      label: 평평하고 단단한 손
+      res_pct_median: 0.0
+      res_pct_max: 0.0
+      deform_px_median: 0.0
+    A5:
+      label: 경사 5°
+      res_pct_median: 0.514
+      res_pct_max: 0.669
+      deform_px_median: 0.0
+    A11:
+      label: 경사 11°
+      res_pct_median: 1.282
+      res_pct_max: 1.657
+      deform_px_median: 0.0
+    A15:
+      label: 경사 15°
+      res_pct_median: 1.914
+      res_pct_max: 2.485
+      deform_px_median: 0.0
+    B1:
+      label: 변형 1%
+      res_pct_median: 0.286
+      res_pct_max: 0.446
+      deform_px_median: 4.909
+    B2:
+      label: 변형 2%
+      res_pct_median: 0.576
+      res_pct_max: 0.95
+      deform_px_median: 9.818
+    B4:
+      label: 변형 4%
+      res_pct_median: 1.087
+      res_pct_max: 2.028
+      deform_px_median: 19.636
+    B8:
+      label: 변형 8%
+      res_pct_median: 2.179
+      res_pct_max: 4.167
+      deform_px_median: 39.272
+    A11B2:
+      label: 경사 11° + 변형 2%
+      res_pct_median: 1.289
+      res_pct_max: 2.004
+      deform_px_median: 9.818
+    A11B4:
+      label: 경사 11° + 변형 4%
+      res_pct_median: 1.641
+      res_pct_max: 2.836
+      deform_px_median: 19.636
+    A11B8:
+      label: 경사 11° + 변형 8%
+      res_pct_median: 2.421
+      res_pct_max: 4.796
+      deform_px_median: 39.272
+rendered_video: IMG_7350_points.mp4 (run folder, not committed)
+videos:
+  IMG_7346.MOV:
+    distance_cm: 50
+    hand: right
+    n_pauses: 4
+    box_long_px: 371.4
+    res_pct_median: 1.973
+    res_pct_max: 2.222
+    res_cor_pct_median: 1.97
+    res_cor_pct_max: 2.221
+    pauses:
+    - start_s: 0.0
+      end_s: 2.63
+      n: 78
+      ref: false
+      res_pct: 1.817
+      res_cor_pct: 1.815
+      floor_px: 0.235
+    - start_s: 4.37
+      end_s: 9.07
+      n: 110
+      ref: false
+      res_pct: 2.222
+      res_cor_pct: 2.221
+      floor_px: 0.247
+    - start_s: 13.9
+      end_s: 19.0
+      n: 146
+      ref: true
+      res_pct: null
+      res_cor_pct: null
+      floor_px: 0.277
+    - start_s: 20.5
+      end_s: 22.57
+      n: 61
+      ref: false
+      res_pct: 1.973
+      res_cor_pct: 1.97
+      floor_px: 0.388
+  IMG_7347.MOV:
+    distance_cm: 50
+    hand: left
+    n_pauses: 4
+    box_long_px: 348.8
+    res_pct_median: 0.978
+    res_pct_max: 1.649
+    res_cor_pct_median: 0.965
+    res_cor_pct_max: 1.641
+    pauses:
+    - start_s: 0.0
+      end_s: 2.77
+      n: 84
+      ref: false
+      res_pct: 0.927
+      res_cor_pct: 0.918
+      floor_px: 0.207
+    - start_s: 5.37
+      end_s: 5.97
+      n: 11
+      ref: false
+      res_pct: 1.649
+      res_cor_pct: 1.641
+      floor_px: 0.496
+    - start_s: 12.1
+      end_s: 17.47
+      n: 144
+      ref: true
+      res_pct: null
+      res_cor_pct: null
+      floor_px: 0.451
+    - start_s: 18.9
+      end_s: 21.9
+      n: 91
+      ref: false
+      res_pct: 0.978
+      res_cor_pct: 0.965
+      floor_px: 0.444
+  IMG_7348.MOV:
+    distance_cm: 50
+    hand: right
+    n_pauses: 3
+    box_long_px: 333.1
+    res_pct_median: 2.066
+    res_pct_max: 2.424
+    res_cor_pct_median: 2.049
+    res_cor_pct_max: 2.41
+    pauses:
+    - start_s: 0.0
+      end_s: 3.7
+      n: 109
+      ref: false
+      res_pct: 1.708
+      res_cor_pct: 1.687
+      floor_px: 0.283
+    - start_s: 5.57
+      end_s: 10.3
+      n: 122
+      ref: false
+      res_pct: 2.424
+      res_cor_pct: 2.41
+      floor_px: 0.217
+    - start_s: 13.77
+      end_s: 20.57
+      n: 186
+      ref: true
+      res_pct: null
+      res_cor_pct: null
+      floor_px: 0.968
+  IMG_7349.MOV:
+    distance_cm: 50
+    hand: left
+    n_pauses: 3
+    box_long_px: 337.2
+    res_pct_median: 1.16
+    res_pct_max: 1.243
+    res_cor_pct_median: 1.15
+    res_cor_pct_max: 1.237
+    pauses:
+    - start_s: 0.0
+      end_s: 3.57
+      n: 104
+      ref: false
+      res_pct: 1.077
+      res_cor_pct: 1.064
+      floor_px: 0.559
+    - start_s: 12.63
+      end_s: 18.17
+      n: 154
+      ref: true
+      res_pct: null
+      res_cor_pct: null
+      floor_px: 0.333
+    - start_s: 19.3
+      end_s: 22.73
+      n: 100
+      ref: false
+      res_pct: 1.243
+      res_cor_pct: 1.237
+      floor_px: 0.33
+  IMG_7350.MOV:
+    distance_cm: 60
+    hand: right
+    n_pauses: 5
+    box_long_px: 308.9
+    res_pct_median: 1.986
+    res_pct_max: 2.245
+    res_cor_pct_median: 1.982
+    res_cor_pct_max: 2.241
+    pauses:
+    - start_s: 0.0
+      end_s: 3.27
+      n: 94
+      ref: false
+      res_pct: 1.846
+      res_cor_pct: 1.842
+      floor_px: 0.215
+    - start_s: 3.93
+      end_s: 4.47
+      n: 11
+      ref: false
+      res_pct: 1.586
+      res_cor_pct: 1.243
+      floor_px: 3.486
+    - start_s: 5.13
+      end_s: 9.67
+      n: 123
+      ref: false
+      res_pct: 2.127
+      res_cor_pct: 2.123
+      floor_px: 0.217
+    - start_s: 13.03
+      end_s: 18.77
+      n: 164
+      ref: true
+      res_pct: null
+      res_cor_pct: null
+      floor_px: 0.396
+    - start_s: 20.13
+      end_s: 23.3
+      n: 93
+      ref: false
+      res_pct: 2.245
+      res_cor_pct: 2.241
+      floor_px: 0.268
+  IMG_7351.MOV:
+    distance_cm: 60
+    hand: left
+    n_pauses: 4
+    box_long_px: 276.8
+    res_pct_median: 1.233
+    res_pct_max: 1.628
+    res_cor_pct_median: 1.224
+    res_cor_pct_max: 1.62
+    pauses:
+    - start_s: 0.0
+      end_s: 3.47
+      n: 105
+      ref: false
+      res_pct: 1.11
+      res_cor_pct: 1.107
+      floor_px: 0.189
+    - start_s: 5.4
+      end_s: 9.43
+      n: 62
+      ref: false
+      res_pct: 1.628
+      res_cor_pct: 1.62
+      floor_px: 0.492
+    - start_s: 12.23
+      end_s: 16.8
+      n: 136
+      ref: true
+      res_pct: null
+      res_cor_pct: null
+      floor_px: 0.156
+    - start_s: 18.13
+      end_s: 21.47
+      n: 90
+      ref: false
+      res_pct: 1.233
+      res_cor_pct: 1.224
+      floor_px: 0.441
+  IMG_7352.MOV:
+    distance_cm: 60
+    hand: right
+    n_pauses: 4
+    box_long_px: 324.6
+    res_pct_median: 1.864
+    res_pct_max: 2.269
+    res_cor_pct_median: 1.861
+    res_cor_pct_max: 2.268
+    pauses:
+    - start_s: 0.0
+      end_s: 3.77
+      n: 114
+      ref: false
+      res_pct: 1.864
+      res_cor_pct: 1.861
+      floor_px: 0.29
+    - start_s: 5.57
+      end_s: 11.1
+      n: 111
+      ref: false
+      res_pct: 1.831
+      res_cor_pct: 1.828
+      floor_px: 0.32
+    - start_s: 14.37
+      end_s: 19.0
+      n: 137
+      ref: true
+      res_pct: null
+      res_cor_pct: null
+      floor_px: 0.223
+    - start_s: 20.7
+      end_s: 23.53
+      n: 84
+      ref: false
+      res_pct: 2.269
+      res_cor_pct: 2.268
+      floor_px: 0.238
+  IMG_7353.MOV:
+    distance_cm: 60
+    hand: left
+    n_pauses: 4
+    box_long_px: 279.7
+    res_pct_median: 1.233
+    res_pct_max: 1.798
+    res_cor_pct_median: 1.227
+    res_cor_pct_max: 1.794
+    pauses:
+    - start_s: 0.0
+      end_s: 4.07
+      n: 121
+      ref: false
+      res_pct: 1.233
+      res_cor_pct: 1.227
+      floor_px: 0.202
+    - start_s: 5.9
+      end_s: 10.47
+      n: 71
+      ref: false
+      res_pct: 1.798
+      res_cor_pct: 1.794
+      floor_px: 0.259
+    - start_s: 13.2
+      end_s: 17.5
+      n: 127
+      ref: true
+      res_pct: null
+      res_cor_pct: null
+      floor_px: 0.33
+    - start_s: 18.9
+      end_s: 22.67
+      n: 114
+      ref: false
+      res_pct: 1.145
+      res_cor_pct: 1.136
+      floor_px: 0.329
+  IMG_7354.MOV:
+    distance_cm: 75
+    hand: right
+    n_pauses: 4
+    box_long_px: 216.3
+    res_pct_median: 3.379
+    res_pct_max: 4.07
+    res_cor_pct_median: 3.371
+    res_cor_pct_max: 4.063
+    pauses:
+    - start_s: 0.0
+      end_s: 4.07
+      n: 104
+      ref: true
+      res_pct: null
+      res_cor_pct: null
+      floor_px: 0.576
+    - start_s: 5.83
+      end_s: 9.7
+      n: 101
+      ref: false
+      res_pct: 3.379
+      res_cor_pct: 3.371
+      floor_px: 0.193
+    - start_s: 13.23
+      end_s: 16.4
+      n: 96
+      ref: false
+      res_pct: 4.07
+      res_cor_pct: 4.063
+      floor_px: 0.157
+    - start_s: 17.9
+      end_s: 20.77
+      n: 83
+      ref: false
+      res_pct: 0.715
+      res_cor_pct: 0.671
+      floor_px: 0.211
+  IMG_7355.MOV:
+    distance_cm: 75
+    hand: left
+    n_pauses: 4
+    box_long_px: 221.7
+    res_pct_median: 1.472
+    res_pct_max: 2.243
+    res_cor_pct_median: 1.468
+    res_cor_pct_max: 2.239
+    pauses:
+    - start_s: 0.0
+      end_s: 3.33
+      n: 101
+      ref: false
+      res_pct: 1.471
+      res_cor_pct: 1.468
+      floor_px: 0.232
+    - start_s: 6.6
+      end_s: 9.23
+      n: 29
+      ref: false
+      res_pct: 2.243
+      res_cor_pct: 2.239
+      floor_px: 0.315
+    - start_s: 12.1
+      end_s: 15.67
+      n: 106
+      ref: true
+      res_pct: null
+      res_cor_pct: null
+      floor_px: 0.113
+    - start_s: 17.13
+      end_s: 20.27
+      n: 89
+      ref: false
+      res_pct: 1.472
+      res_cor_pct: 1.466
+      floor_px: 0.33
+  IMG_7356.MOV:
+    distance_cm: 75
+    hand: right
+    n_pauses: 4
+    box_long_px: 244.1
+    res_pct_median: 1.715
+    res_pct_max: 2.647
+    res_cor_pct_median: 1.692
+    res_cor_pct_max: 2.645
+    pauses:
+    - start_s: 0.0
+      end_s: 3.8
+      n: 90
+      ref: false
+      res_pct: 1.715
+      res_cor_pct: 1.677
+      floor_px: 0.992
+    - start_s: 4.97
+      end_s: 8.57
+      n: 77
+      ref: false
+      res_pct: 2.647
+      res_cor_pct: 2.645
+      floor_px: 0.184
+    - start_s: 11.43
+      end_s: 15.77
+      n: 131
+      ref: true
+      res_pct: null
+      res_cor_pct: null
+      floor_px: 0.169
+    - start_s: 17.23
+      end_s: 20.87
+      n: 103
+      ref: false
+      res_pct: 1.699
+      res_cor_pct: 1.692
+      floor_px: 0.383
+  IMG_7357.MOV:
+    distance_cm: 75
+    hand: left
+    n_pauses: 4
+    box_long_px: 219.7
+    res_pct_median: 1.568
+    res_pct_max: 2.05
+    res_cor_pct_median: 1.563
+    res_cor_pct_max: 2.039
+    pauses:
+    - start_s: 0.0
+      end_s: 3.1
+      n: 92
+      ref: false
+      res_pct: 1.53
+      res_cor_pct: 1.526
+      floor_px: 0.26
+    - start_s: 7.7
+      end_s: 8.53
+      n: 12
+      ref: false
+      res_pct: 2.05
+      res_cor_pct: 2.039
+      floor_px: 0.537
+    - start_s: 11.73
+      end_s: 15.5
+      n: 112
+      ref: true
+      res_pct: null
+      res_cor_pct: null
+      floor_px: 0.133
+    - start_s: 17.17
+      end_s: 20.0
+      n: 81
+      ref: false
+      res_pct: 1.568
+      res_cor_pct: 1.563
+      floor_px: 0.275
