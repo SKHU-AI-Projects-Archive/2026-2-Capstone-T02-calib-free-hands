@@ -1,0 +1,849 @@
+experiment: 71_wilor_ramp
+run: runs/71_wilor_ramp/20261104T092811Z
+code_commit: ccfc3b6
+git_dirty_at_run: false
+note: 3차원 손 모델(WiLoR, AnyHand 체크포인트; /public/hand-demo의 예측기를 읽기 전용으로 사용)로 프레임마다 손
+  메시를 복원해, 메시가 놓이는 면(볼록 껍질에서 손바닥 쪽 면)을 책상으로 보고 관절 위 손등 피부 높이와 관절 중심 높이로 경사를 낸 기록이다(판정
+  없음). 영상마다 프레임 중앙값 경사를 실험 67의 책상 제약 추정기(경사 고정)에 넣어 f를 냈다. 종이나 자 없이 영상만으로 경사를 정하는
+  방법이다.
+videos:
+  IMG_7346.MOV:
+    person: self
+    distance_cm: 50
+    hand: right
+    wilor_ramp_deg:
+      j16:
+        dorsal: 9.68
+        center: 3.33
+      j21:
+        dorsal: 7.28
+        center: 0.25
+    wilor_frames:
+    - 226
+    - 226
+    tracked:
+      j16:
+        ramp_dorsal:
+          f_px: 1438.4
+          boundary: false
+          rms_px: 3.66
+          desk_tilt_deg: 46.2
+        ramp_center:
+          f_px: 1245.7
+          boundary: false
+          rms_px: 4.18
+          desk_tilt_deg: 49.0
+      j21:
+        ramp_dorsal:
+          f_px: 1394.4
+          boundary: false
+          rms_px: 7.97
+          desk_tilt_deg: 45.1
+        ramp_center:
+          f_px: 1192.6
+          boundary: false
+          rms_px: 10.36
+          desk_tilt_deg: 48.5
+    detected:
+      j16:
+        ramp_dorsal:
+          f_px: 1354.6
+          boundary: false
+          rms_px: 8.33
+          desk_tilt_deg: 50.3
+        ramp_center:
+          f_px: 1192.2
+          boundary: false
+          rms_px: 7.66
+          desk_tilt_deg: 48.4
+      j21:
+        ramp_dorsal:
+          f_px: 1152.0
+          boundary: false
+          rms_px: 10.18
+          desk_tilt_deg: 40.6
+        ramp_center:
+          f_px: 1026.3
+          boundary: false
+          rms_px: 12.02
+          desk_tilt_deg: 44.2
+  IMG_7347.MOV:
+    person: self
+    distance_cm: 50
+    hand: left
+    wilor_ramp_deg:
+      j16:
+        dorsal: 5.62
+        center: -0.57
+      j21:
+        dorsal: 6.85
+        center: 0.53
+    wilor_frames:
+    - 220
+    - 220
+    tracked:
+      j16:
+        ramp_dorsal:
+          f_px: 1786.9
+          boundary: false
+          rms_px: 20.98
+          desk_tilt_deg: 47.8
+        ramp_center:
+          f_px: 1117.4
+          boundary: false
+          rms_px: 6.13
+          desk_tilt_deg: 49.7
+      j21:
+        ramp_dorsal:
+          f_px: 1522.5
+          boundary: false
+          rms_px: 11.62
+          desk_tilt_deg: 47.4
+        ramp_center:
+          f_px: 1213.3
+          boundary: false
+          rms_px: 15.64
+          desk_tilt_deg: 49.7
+    detected:
+      j16:
+        ramp_dorsal:
+          f_px: 1021.4
+          boundary: false
+          rms_px: 5.08
+          desk_tilt_deg: 41.3
+        ramp_center:
+          f_px: 869.7
+          boundary: false
+          rms_px: 5.77
+          desk_tilt_deg: 43.0
+      j21:
+        ramp_dorsal:
+          f_px: 1680.1
+          boundary: false
+          rms_px: 23.61
+          desk_tilt_deg: 45.5
+        ramp_center:
+          f_px: 1302.8
+          boundary: false
+          rms_px: 25.44
+          desk_tilt_deg: 45.5
+  IMG_7348.MOV:
+    person: self
+    distance_cm: 50
+    hand: right
+    wilor_ramp_deg:
+      j16:
+        dorsal: 11.04
+        center: 4.86
+      j21:
+        dorsal: 6.61
+        center: 0.27
+    wilor_frames:
+    - 206
+    - 206
+    tracked:
+      j16:
+        ramp_dorsal:
+          f_px: 1446.2
+          boundary: false
+          rms_px: 4.66
+          desk_tilt_deg: 45.1
+        ramp_center:
+          f_px: 1165.2
+          boundary: false
+          rms_px: 5.16
+          desk_tilt_deg: 47.4
+      j21:
+        ramp_dorsal:
+          f_px: 1328.6
+          boundary: false
+          rms_px: 9.83
+          desk_tilt_deg: 44.7
+        ramp_center:
+          f_px: 1078.5
+          boundary: false
+          rms_px: 13.45
+          desk_tilt_deg: 47.4
+    detected:
+      j16:
+        ramp_dorsal:
+          f_px: 1445.5
+          boundary: false
+          rms_px: 6.68
+          desk_tilt_deg: 45.7
+        ramp_center:
+          f_px: 1155.0
+          boundary: false
+          rms_px: 7.42
+          desk_tilt_deg: 47.7
+      j21:
+        ramp_dorsal:
+          f_px: 1109.2
+          boundary: false
+          rms_px: 10.28
+          desk_tilt_deg: 41.1
+        ramp_center:
+          f_px: 946.9
+          boundary: false
+          rms_px: 12.45
+          desk_tilt_deg: 43.7
+  IMG_7349.MOV:
+    person: self
+    distance_cm: 50
+    hand: left
+    wilor_ramp_deg:
+      j16:
+        dorsal: 7.44
+        center: 0.89
+      j21:
+        dorsal: 7.49
+        center: 0.66
+    wilor_frames:
+    - 228
+    - 228
+    tracked:
+      j16:
+        ramp_dorsal:
+          f_px: 1416.0
+          boundary: false
+          rms_px: 8.64
+          desk_tilt_deg: 45.6
+        ramp_center:
+          f_px: 760.8
+          boundary: false
+          rms_px: 127.72
+          desk_tilt_deg: 89.3
+      j21:
+        ramp_dorsal:
+          f_px: 1437.4
+          boundary: false
+          rms_px: 20.6
+          desk_tilt_deg: 45.8
+        ramp_center:
+          f_px: 3072.0
+          boundary: true
+          rms_px: 30.27
+          desk_tilt_deg: 41.3
+    detected:
+      j16:
+        ramp_dorsal:
+          f_px: 1111.9
+          boundary: false
+          rms_px: 4.86
+          desk_tilt_deg: 38.8
+        ramp_center:
+          f_px: 961.1
+          boundary: false
+          rms_px: 5.34
+          desk_tilt_deg: 39.1
+      j21:
+        ramp_dorsal:
+          f_px: 1718.6
+          boundary: false
+          rms_px: 9.88
+          desk_tilt_deg: 45.2
+        ramp_center:
+          f_px: 1282.1
+          boundary: false
+          rms_px: 11.03
+          desk_tilt_deg: 44.1
+  IMG_7350.MOV:
+    person: self
+    distance_cm: 60
+    hand: right
+    wilor_ramp_deg:
+      j16:
+        dorsal: 10.2
+        center: 4.37
+      j21:
+        dorsal: 7.17
+        center: 0.2
+    wilor_frames:
+    - 234
+    - 234
+    tracked:
+      j16:
+        ramp_dorsal:
+          f_px: 1513.2
+          boundary: false
+          rms_px: 3.15
+          desk_tilt_deg: 46.0
+        ramp_center:
+          f_px: 1238.4
+          boundary: false
+          rms_px: 3.44
+          desk_tilt_deg: 47.2
+      j21:
+        ramp_dorsal:
+          f_px: 1305.9
+          boundary: false
+          rms_px: 6.98
+          desk_tilt_deg: 44.1
+        ramp_center:
+          f_px: 1064.8
+          boundary: false
+          rms_px: 8.63
+          desk_tilt_deg: 46.1
+    detected:
+      j16:
+        ramp_dorsal:
+          f_px: 1289.2
+          boundary: false
+          rms_px: 5.86
+          desk_tilt_deg: 46.7
+        ramp_center:
+          f_px: 1079.6
+          boundary: false
+          rms_px: 6.25
+          desk_tilt_deg: 47.6
+      j21:
+        ramp_dorsal:
+          f_px: 1037.8
+          boundary: false
+          rms_px: 8.26
+          desk_tilt_deg: 41.3
+        ramp_center:
+          f_px: 884.6
+          boundary: false
+          rms_px: 9.49
+          desk_tilt_deg: 43.2
+  IMG_7351.MOV:
+    person: self
+    distance_cm: 60
+    hand: left
+    wilor_ramp_deg:
+      j16:
+        dorsal: 5.39
+        center: -0.97
+      j21:
+        dorsal: 6.48
+        center: -0.12
+    wilor_frames:
+    - 215
+    - 215
+    tracked:
+      j16:
+        ramp_dorsal:
+          f_px: 1403.6
+          boundary: false
+          rms_px: 4.5
+          desk_tilt_deg: 47.1
+        ramp_center:
+          f_px: 1139.6
+          boundary: false
+          rms_px: 5.02
+          desk_tilt_deg: 48.6
+      j21:
+        ramp_dorsal:
+          f_px: 1276.1
+          boundary: false
+          rms_px: 8.86
+          desk_tilt_deg: 47.0
+        ramp_center:
+          f_px: 1012.8
+          boundary: false
+          rms_px: 10.82
+          desk_tilt_deg: 48.6
+    detected:
+      j16:
+        ramp_dorsal:
+          f_px: 974.4
+          boundary: false
+          rms_px: 5.16
+          desk_tilt_deg: 43.1
+        ramp_center:
+          f_px: 844.9
+          boundary: false
+          rms_px: 5.57
+          desk_tilt_deg: 44.3
+      j21:
+        ramp_dorsal:
+          f_px: 1353.8
+          boundary: false
+          rms_px: 32.58
+          desk_tilt_deg: 45.7
+        ramp_center:
+          f_px: 1027.8
+          boundary: false
+          rms_px: 33.41
+          desk_tilt_deg: 47.1
+  IMG_7352.MOV:
+    person: self
+    distance_cm: 60
+    hand: right
+    wilor_ramp_deg:
+      j16:
+        dorsal: 8.98
+        center: 2.7
+      j21:
+        dorsal: 6.81
+        center: -0.2
+    wilor_frames:
+    - 236
+    - 236
+    tracked:
+      j16:
+        ramp_dorsal:
+          f_px: 1453.1
+          boundary: false
+          rms_px: 3.32
+          desk_tilt_deg: 45.5
+        ramp_center:
+          f_px: 1192.4
+          boundary: false
+          rms_px: 3.57
+          desk_tilt_deg: 47.7
+      j21:
+        ramp_dorsal:
+          f_px: 1319.8
+          boundary: false
+          rms_px: 7.72
+          desk_tilt_deg: 43.9
+        ramp_center:
+          f_px: 1080.7
+          boundary: false
+          rms_px: 9.58
+          desk_tilt_deg: 46.4
+    detected:
+      j16:
+        ramp_dorsal:
+          f_px: 1207.9
+          boundary: false
+          rms_px: 6.21
+          desk_tilt_deg: 46.5
+        ramp_center:
+          f_px: 885.9
+          boundary: false
+          rms_px: 6.98
+          desk_tilt_deg: 48.7
+      j21:
+        ramp_dorsal:
+          f_px: 1010.8
+          boundary: false
+          rms_px: 8.25
+          desk_tilt_deg: 41.8
+        ramp_center:
+          f_px: 872.0
+          boundary: false
+          rms_px: 9.36
+          desk_tilt_deg: 44.1
+  IMG_7353.MOV:
+    person: self
+    distance_cm: 60
+    hand: left
+    wilor_ramp_deg:
+      j16:
+        dorsal: 5.4
+        center: -1.05
+      j21:
+        dorsal: 6.67
+        center: 0.44
+    wilor_frames:
+    - 227
+    - 227
+    tracked:
+      j16:
+        ramp_dorsal:
+          f_px: 1272.8
+          boundary: false
+          rms_px: 4.36
+          desk_tilt_deg: 46.9
+        ramp_center:
+          f_px: 995.0
+          boundary: false
+          rms_px: 5.12
+          desk_tilt_deg: 48.7
+      j21:
+        ramp_dorsal:
+          f_px: 1363.7
+          boundary: false
+          rms_px: 8.18
+          desk_tilt_deg: 46.7
+        ramp_center:
+          f_px: 1037.5
+          boundary: false
+          rms_px: 10.73
+          desk_tilt_deg: 48.7
+    detected:
+      j16:
+        ramp_dorsal:
+          f_px: 726.5
+          boundary: false
+          rms_px: 6.08
+          desk_tilt_deg: 42.8
+        ramp_center:
+          f_px: 771.3
+          boundary: false
+          rms_px: 5.57
+          desk_tilt_deg: 45.1
+      j21:
+        ramp_dorsal:
+          f_px: 1456.4
+          boundary: false
+          rms_px: 20.91
+          desk_tilt_deg: 46.0
+        ramp_center:
+          f_px: 1028.3
+          boundary: false
+          rms_px: 22.6
+          desk_tilt_deg: 47.2
+  IMG_7354.MOV:
+    person: self
+    distance_cm: 75
+    hand: right
+    wilor_ramp_deg:
+      j16:
+        dorsal: 9.46
+        center: 3.09
+      j21:
+        dorsal: 7.29
+        center: 0.56
+    wilor_frames:
+    - 208
+    - 208
+    tracked:
+      j16:
+        ramp_dorsal:
+          f_px: 1455.2
+          boundary: false
+          rms_px: 2.61
+          desk_tilt_deg: 44.9
+        ramp_center:
+          f_px: 965.7
+          boundary: false
+          rms_px: 3.12
+          desk_tilt_deg: 45.0
+      j21:
+        ramp_dorsal:
+          f_px: 1236.3
+          boundary: false
+          rms_px: 6.67
+          desk_tilt_deg: 43.6
+        ramp_center:
+          f_px: 854.3
+          boundary: false
+          rms_px: 8.88
+          desk_tilt_deg: 44.1
+    detected:
+      j16:
+        ramp_dorsal:
+          f_px: 937.6
+          boundary: false
+          rms_px: 5.21
+          desk_tilt_deg: 41.5
+        ramp_center:
+          f_px: 728.2
+          boundary: false
+          rms_px: 5.75
+          desk_tilt_deg: 44.1
+      j21:
+        ramp_dorsal:
+          f_px: 860.1
+          boundary: false
+          rms_px: 6.91
+          desk_tilt_deg: 38.3
+        ramp_center:
+          f_px: 672.0
+          boundary: true
+          rms_px: 7.71
+          desk_tilt_deg: 39.4
+  IMG_7355.MOV:
+    person: self
+    distance_cm: 75
+    hand: left
+    wilor_ramp_deg:
+      j16:
+        dorsal: 4.98
+        center: -1.8
+      j21:
+        dorsal: 6.99
+        center: 0.12
+    wilor_frames:
+    - 203
+    - 203
+    tracked:
+      j16:
+        ramp_dorsal:
+          f_px: 1220.9
+          boundary: false
+          rms_px: 4.44
+          desk_tilt_deg: 45.5
+        ramp_center:
+          f_px: 875.1
+          boundary: false
+          rms_px: 5.12
+          desk_tilt_deg: 45.7
+      j21:
+        ramp_dorsal:
+          f_px: 3072.0
+          boundary: true
+          rms_px: 22.18
+          desk_tilt_deg: 51.3
+        ramp_center:
+          f_px: 3072.0
+          boundary: true
+          rms_px: 17.96
+          desk_tilt_deg: 50.0
+    detected:
+      j16:
+        ramp_dorsal:
+          f_px: 672.0
+          boundary: true
+          rms_px: 3.98
+          desk_tilt_deg: 37.4
+        ramp_center:
+          f_px: 672.0
+          boundary: true
+          rms_px: 4.49
+          desk_tilt_deg: 39.4
+      j21:
+        ramp_dorsal:
+          f_px: 3072.0
+          boundary: true
+          rms_px: 30.88
+          desk_tilt_deg: 43.7
+        ramp_center:
+          f_px: 3072.0
+          boundary: true
+          rms_px: 29.48
+          desk_tilt_deg: 44.0
+  IMG_7356.MOV:
+    person: self
+    distance_cm: 75
+    hand: right
+    wilor_ramp_deg:
+      j16:
+        dorsal: 9.68
+        center: 2.98
+      j21:
+        dorsal: 7.76
+        center: 1.05
+    wilor_frames:
+    - 209
+    - 209
+    tracked:
+      j16:
+        ramp_dorsal:
+          f_px: 1398.8
+          boundary: false
+          rms_px: 3.52
+          desk_tilt_deg: 42.3
+        ramp_center:
+          f_px: 928.0
+          boundary: false
+          rms_px: 22.72
+          desk_tilt_deg: 43.7
+      j21:
+        ramp_dorsal:
+          f_px: 1291.6
+          boundary: false
+          rms_px: 5.97
+          desk_tilt_deg: 42.2
+        ramp_center:
+          f_px: 931.4
+          boundary: false
+          rms_px: 7.25
+          desk_tilt_deg: 42.3
+    detected:
+      j16:
+        ramp_dorsal:
+          f_px: 1099.2
+          boundary: false
+          rms_px: 5.1
+          desk_tilt_deg: 44.8
+        ramp_center:
+          f_px: 818.8
+          boundary: false
+          rms_px: 5.17
+          desk_tilt_deg: 43.8
+      j21:
+        ramp_dorsal:
+          f_px: 783.3
+          boundary: false
+          rms_px: 7.24
+          desk_tilt_deg: 38.9
+        ramp_center:
+          f_px: 672.0
+          boundary: true
+          rms_px: 7.85
+          desk_tilt_deg: 39.2
+  IMG_7357.MOV:
+    person: self
+    distance_cm: 75
+    hand: left
+    wilor_ramp_deg:
+      j16:
+        dorsal: 4.92
+        center: -1.8
+      j21:
+        dorsal: 6.8
+        center: 0.06
+    wilor_frames:
+    - 201
+    - 201
+    tracked:
+      j16:
+        ramp_dorsal:
+          f_px: 2472.1
+          boundary: false
+          rms_px: 47.2
+          desk_tilt_deg: 88.0
+        ramp_center:
+          f_px: 934.8
+          boundary: false
+          rms_px: 4.1
+          desk_tilt_deg: 45.2
+      j21:
+        ramp_dorsal:
+          f_px: 2114.5
+          boundary: false
+          rms_px: 51.22
+          desk_tilt_deg: 85.7
+        ramp_center:
+          f_px: 783.2
+          boundary: false
+          rms_px: 8.71
+          desk_tilt_deg: 43.8
+    detected:
+      j16:
+        ramp_dorsal:
+          f_px: 786.4
+          boundary: false
+          rms_px: 4.05
+          desk_tilt_deg: 37.4
+        ramp_center:
+          f_px: 672.0
+          boundary: true
+          rms_px: 4.3
+          desk_tilt_deg: 37.7
+      j21:
+        ramp_dorsal:
+          f_px: 1191.9
+          boundary: false
+          rms_px: 25.25
+          desk_tilt_deg: 42.7
+        ramp_center:
+          f_px: 3072.0
+          boundary: true
+          rms_px: 29.13
+          desk_tilt_deg: 41.8
+  IMG_7351 - 복사본.MOV:
+    person: teammate
+    distance_cm: 60
+    hand: right
+    wilor_ramp_deg:
+      j16:
+        dorsal: 8.23
+        center: 1.12
+      j21:
+        dorsal: 7.89
+        center: 0.81
+    wilor_frames:
+    - 129
+    - 129
+    tracked:
+      j16:
+        ramp_dorsal:
+          f_px: 998.9
+          boundary: false
+          rms_px: 3.33
+          desk_tilt_deg: 49.3
+        ramp_center:
+          f_px: 755.5
+          boundary: false
+          rms_px: 4.13
+          desk_tilt_deg: 52.4
+      j21:
+        ramp_dorsal:
+          f_px: 1026.7
+          boundary: false
+          rms_px: 7.83
+          desk_tilt_deg: 48.6
+        ramp_center:
+          f_px: 782.2
+          boundary: false
+          rms_px: 10.24
+          desk_tilt_deg: 52.5
+    detected:
+      j16:
+        ramp_dorsal:
+          f_px: 1200.2
+          boundary: false
+          rms_px: 5.6
+          desk_tilt_deg: 49.1
+        ramp_center:
+          f_px: 3072.0
+          boundary: true
+          rms_px: 15.74
+          desk_tilt_deg: 47.3
+      j21:
+        ramp_dorsal:
+          f_px: 1000.6
+          boundary: false
+          rms_px: 9.12
+          desk_tilt_deg: 45.3
+        ramp_center:
+          f_px: 771.2
+          boundary: false
+          rms_px: 10.18
+          desk_tilt_deg: 49.1
+  IMG_7352 - 복사본.MOV:
+    person: teammate
+    distance_cm: 60
+    hand: right
+    wilor_ramp_deg:
+      j16:
+        dorsal: 9.01
+        center: 2.07
+      j21:
+        dorsal: 8.24
+        center: 1.14
+    wilor_frames:
+    - 123
+    - 123
+    tracked:
+      j16:
+        ramp_dorsal:
+          f_px: 881.3
+          boundary: false
+          rms_px: 3.98
+          desk_tilt_deg: 47.6
+        ramp_center:
+          f_px: 676.2
+          boundary: false
+          rms_px: 4.85
+          desk_tilt_deg: 49.8
+      j21:
+        ramp_dorsal:
+          f_px: 950.6
+          boundary: false
+          rms_px: 8.7
+          desk_tilt_deg: 47.2
+        ramp_center:
+          f_px: 706.5
+          boundary: false
+          rms_px: 11.72
+          desk_tilt_deg: 50.0
+    detected:
+      j16:
+        ramp_dorsal:
+          f_px: 1264.1
+          boundary: false
+          rms_px: 4.91
+          desk_tilt_deg: 48.9
+        ramp_center:
+          f_px: 3072.0
+          boundary: true
+          rms_px: 15.0
+          desk_tilt_deg: 47.7
+      j21:
+        ramp_dorsal:
+          f_px: 1011.3
+          boundary: false
+          rms_px: 8.1
+          desk_tilt_deg: 45.6
+        ramp_center:
+          f_px: 757.4
+          boundary: false
+          rms_px: 9.76
+          desk_tilt_deg: 48.1
