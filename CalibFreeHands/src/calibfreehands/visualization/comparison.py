@@ -40,9 +40,9 @@ class _ModeSwitch(QAbstractButton):
         self.setCheckable(True)
         self.setFixedSize(42, 22)
         self.setFocusPolicy(Qt.FocusPolicy.StrongFocus)
-        self.setAccessibleName("Layout")
-        self.setAccessibleDescription("Toggle between Overlay and Split layouts")
-        self.setToolTip("Layout: Overlay")
+        self.setAccessibleName("View mode")
+        self.setAccessibleDescription("Toggle between Overlay and Split views")
+        self.setToolTip("View: Overlay")
         self._thumb_position = 0.0
         self._animation = QVariantAnimation(self)
         self._animation.setDuration(120)
@@ -120,26 +120,27 @@ class _PinButton(QAbstractButton):
 
     def paintEvent(self, _event):
         palette = self.palette()
-        surface = palette.color(QPalette.ColorRole.Midlight if self.isChecked()
-                                else QPalette.ColorRole.Button)
+        window = palette.color(QPalette.ColorRole.Window)
+        luminance = 0.2126 * window.redF() + 0.7152 * window.greenF() + 0.0722 * window.blueF()
+        dark = luminance < 0.45
+        if dark:
+            surface = QColor("#51575f" if self.isChecked() else "#34383d")
+            border = QColor("#858b93" if self.isChecked() else "#5a6068")
+            ink = QColor("#f2f3f4" if self.isChecked() else "#aab0b7")
+        else:
+            surface = QColor("#d7dadd" if self.isChecked() else "#f0f1f2")
+            border = QColor("#9299a1" if self.isChecked() else "#c4c8ce")
+            ink = QColor("#353a40" if self.isChecked() else "#666c74")
         if self.underMouse():
-            surface = surface.lighter(112)
+            surface = surface.lighter(108) if dark or not self.isChecked() else surface.darker(108)
         if self.isDown():
             surface = surface.darker(112)
-        ink = palette.color(QPalette.ColorRole.ButtonText)
-        if not self.isChecked():
-            ink.setAlpha(175)
 
         painter = QPainter(self)
         painter.setRenderHint(QPainter.RenderHint.Antialiasing)
-        if self.isChecked() or self.underMouse() or self.isDown():
-            painter.setPen(Qt.PenStyle.NoPen)
-            painter.setBrush(surface)
-            painter.drawRoundedRect(QRectF(1, 1, 26, 26), 5, 5)
-        if self.isChecked():
-            painter.setPen(QPen(palette.color(QPalette.ColorRole.Mid), 1))
-            painter.setBrush(Qt.BrushStyle.NoBrush)
-            painter.drawRoundedRect(QRectF(1.5, 1.5, 25, 25), 5, 5)
+        painter.setPen(QPen(border, 1))
+        painter.setBrush(surface)
+        painter.drawRoundedRect(QRectF(1, 1, 26, 26), 5, 5)
 
         icon = QPainterPath()
         icon.moveTo(10, 7)
@@ -160,7 +161,7 @@ class _PinButton(QAbstractButton):
         painter.drawLine(14, 20, 14, 24)
         if self.hasFocus():
             painter.setBrush(Qt.BrushStyle.NoBrush)
-            painter.setPen(QPen(palette.color(QPalette.ColorRole.Midlight), 1,
+            painter.setPen(QPen(palette.color(QPalette.ColorRole.Highlight), 1,
                                 Qt.PenStyle.DashLine))
             painter.drawRoundedRect(QRectF(0.5, 0.5, 27, 27), 5, 5)
         painter.end()
@@ -739,7 +740,7 @@ class ComparisonViewer(QWidget):
         mode_layout = QHBoxLayout(self.mode_selector)
         mode_layout.setContentsMargins(0, 0, 0, 0)
         mode_layout.setSpacing(6)
-        self.mode_label = QLabel("Layout")
+        self.mode_label = QLabel("View")
         self.mode_switch = _ModeSwitch()
         self.pin_controls_button = _PinButton()
         mode_layout.addWidget(self.mode_label)
@@ -1523,7 +1524,7 @@ class ComparisonViewer(QWidget):
         self.mode = mode
         self.views.setCurrentIndex(0 if mode == "overlay" else 1)
         self.mode_switch.setChecked(mode == "split")
-        self.mode_switch.setToolTip("Layout: Split" if mode == "split" else "Layout: Overlay")
+        self.mode_switch.setToolTip("View: Split" if mode == "split" else "View: Overlay")
         self._render_active_frame()
         self._refresh_metric_panels()
         self._refresh_annotations()

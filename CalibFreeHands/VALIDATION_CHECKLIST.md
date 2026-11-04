@@ -346,6 +346,15 @@ All entries below are pending implementation and validation. No acceptance item 
 - [ ] Fresh AnyCalib/WiLoR inference and first-user reruns remain pending.
 
 
+## View/Pin Final Micro-Polish (2026-11-04)
+
+- [x] Rename the visible group label to `View`; the switch's accessible name is `View mode`, its description explains Overlay/Split views, and its tooltip reports `View: Overlay` or `View: Split`.
+- [x] Pin remains a 28-by-28 checkable custom vector control; OFF and ON now always render a distinct neutral surface and border plus theme-appropriate monochrome icon colors.
+- [x] Offscreen dark/light assertions cover OFF/ON background, border, and icon colors. Tests cover button click, keyboard Space, accessible name, toolbar order/gap, auto-hide pin behavior, and global Space playback.
+- [ ] Native Windows dark/light visual and interaction review remains pending because the desktop is at the Windows lock screen; inspecting the app requires unlocking the user's session.
+- [ ] Fresh AnyCalib/WiLoR inference and original/second first-user reruns remain pending.
+
+
 ## Final Viewer Control Styling (2026-11-04)
 
 - [x] Custom checkable QAbstractButton mode switch is 42-by-22 device-independent pixels, uses a neutral rounded track and circular near-white thumb, animates over 120 ms, and retains strong keyboard focus/accessibility.
