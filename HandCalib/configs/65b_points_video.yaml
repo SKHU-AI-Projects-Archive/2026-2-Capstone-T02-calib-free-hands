@@ -1,0 +1,15 @@
+# 65b: 65's point video again (user 2026-11-04: remove "기준 손을 호모그래피로 옮긴 위치에서 벗어난 양" and "이 프레임의 벗어남" from the video, then "영상 밑의 그래프도 그냥 빼줘";
+# "손바닥 영상으로도 같은 형식의 영상 만들어줘"). Points only: blue = 56's tracked joints (the continuous KLT chain), orange = mediapipe joints; header with time, frame and pause state.
+# Each video's points as its experiment made them (rules_config: 56 for the back-of-hand video, 57 for the palm video; 65's dm_video_job unchanged). The palm video is IMG_7300 (57's list,
+# session 46, 60 cm like IMG_7350; the first 60 cm video of that list, chosen by me). Videos written to the run folder (runs/ is not committed), metadata dropped by ffmpeg.
+experiment:
+  name: 65b_points_video
+  seed: 42
+video_config: configs/65_hand_deformation.yaml
+videos:
+  - {file: IMG_7350.MOV, rules_config: configs/56_continuous_klt.yaml}
+  - {file: IMG_7300.MOV, rules_config: configs/57_continuous_klt_palm.yaml}
+code_65b: {branch: exp/65b-points-video, base_commit: d673217, commit: 77b7770, modules: [HandCalib/run.py]}
+n_workers: 4
+output:
+  root: runs/65b_points_video
