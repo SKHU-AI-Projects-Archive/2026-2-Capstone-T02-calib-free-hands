@@ -5026,5 +5026,21 @@ class DMDeformation(unittest.TestCase):
         self.assertGreater(hf.dm_measure(d["kp"], np.ones(30, bool), [np.array([i, i, i]) for i in range(0, 30, 5)], list(range(5, 21)))["res_pct_median"], 0.3)
 
 
+class FCJointCombos(unittest.TestCase):
+    def test_combos_loo_and_scene(self):
+        cfg = {"combos": {"fixed": [{"name": "palm6", "ids": [0, 1, 5, 9, 13, 17]}], "ranked_sizes": [5], "random": {"seed": 42, "sizes": [6, 8]}}}
+        c = run.fc_combos(cfg, list(range(20, -1, -1)))
+        self.assertEqual(c["rank5"], [16, 17, 18, 19, 20])
+        self.assertEqual([len(c["rand1_6"]), len(c["rand2_8"])], [6, 8])
+        self.assertEqual(c, run.fc_combos(cfg, list(range(20, -1, -1))))
+        s = hf.fc_scene(90.0, [4.5, 34.6], n=30, seed=0, noise_rel=0.0)
+        self.assertLess(np.abs(s["kp"] - hf.ec_scene(90.0, [4.5, 34.6], n=30, seed=0, noise_rel=0.0)["kp"]).max(), 1e-6)
+        m = hf.fc_joint_loo(s["kp"], np.ones(30, bool), [np.array([i, i, i]) for i in range(0, 28, 7)])
+        self.assertLess(max(m["joint_pct"]), 1e-3)
+        d = hf.fc_scene(90.0, [4.5, 34.6], n=30, seed=0, noise_rel=0.0, finger_deg=2.0)
+        m = hf.fc_joint_loo(d["kp"], np.ones(30, bool), [np.array([i, i, i]) for i in range(0, 28, 7)])
+        self.assertLess(np.mean([m["joint_pct"][j] for j in (0, 5, 9, 13, 17)]), np.mean([m["joint_pct"][j] for j in (8, 12, 16, 20)]))
+
+
 if __name__ == "__main__":
     unittest.main()

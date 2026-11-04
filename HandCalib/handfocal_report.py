@@ -6142,6 +6142,122 @@ def dm_synthetic(args) -> dict:
     return {"key": key, "res_pct_median": m["res_pct_median"], "res_pct_max": m["res_pct_max"], "deform_px_median": s["deform_px_median"]}
 
 
+FC_FINGERS = {"thumb": [1, 2, 3, 4], "index": [5, 6, 7, 8], "middle": [9, 10, 11, 12], "ring": [13, 14, 15, 16], "pinky": [17, 18, 19, 20]}
+
+
+def fc_joint_loo(kp: np.ndarray, use: np.ndarray, pauses: list, n_mc: int = 200) -> dict:
+    """Experiment 66: per joint, how far it leaves a rigid flat hand between pauses - per pause the median of the 21 joints (used frames with all 21 visible, at least 3), reference = the pause
+    with most frames; for each other pause and each joint the best homography reference -> pause fitted on the other 20 joints predicts it, and the miss (px) is that joint's departure.
+    The miss of an edge joint is enlarged by the geometry alone (it is extrapolated from the others), so the same leave-one-out miss is also computed for independent unit Gaussian noise on
+    the reference shape (n_mc draws, seed fixed) - the joint's leverage - and the miss divided by it is reported too (a geometry-free departure in noise-equivalent px).
+    Returns per joint the median over pauses in % of the reference's 21-point box long side and the leverage-divided value (None with fewer than two pauses)."""
+    P = []
+    for fr in pauses:
+        f = [int(i) for i in fr if use[i] and np.isfinite(kp[i]).all()]
+        if len(f) >= 3:
+            P.append((len(f), np.median(kp[f], 0)))
+    if len(P) < 2:
+        return {"n_pauses": len(P), "joint_pct": None, "joint_lev": None}
+    r = int(np.argmax([p[0] for p in P]))
+    ref = P[r][1]
+    box = float((ref.max(0) - ref.min(0)).max())
+
+    def loo(A, B):
+        m = np.zeros(21)
+        for j in range(21):
+            o = [q for q in range(21) if q != j]
+            Hm, _ = cv2.findHomography(A[o].astype(np.float64), B[o].astype(np.float64), 0)
+            y = np.r_[A[j], 1.0] @ Hm.T
+            m[j] = float(np.linalg.norm(B[j] - y[:2] / y[2]))
+        return m
+    miss = np.array([loo(ref, X) for i, (_, X) in enumerate(P) if i != r])
+    g = np.random.default_rng(0)
+    lev = np.median([loo(ref + g.normal(size=ref.shape), ref + g.normal(size=ref.shape)) for _ in range(int(n_mc))], 0)
+    med = np.median(miss, 0)
+    return {"n_pauses": len(P), "joint_pct": (100 * med / box).tolist(), "joint_lev": (med / lev).tolist(), "leverage": lev.tolist()}
+
+
+def fc_scene(turn_range_deg: float, move_pct_xy, n: int = 60, f: float = 1655.0, seed: int = 0, noise_rel: float = 0.005, slope_deg: float = 0.0, finger_deg: float = 0.0,
+             tilt_deg: float = 45.0, dist_cm: float = 60.0, size_wh=(1920, 1080)) -> dict:
+    """Experiment 66: 53c's scene (od2_synthetic's camera, hand, turn, translation) with a rigid palm and moving fingers: every finger turns in the hand plane about its base (MCP; the thumb about
+    its CMC) and curls (the joints beyond the base and beyond the PIP lift out of the plane), each angle a slow random curve (two sinusoids) with RMS finger_deg; the hand ramp of ec_scene
+    (slope_deg); independent Gaussian joint noise of noise_rel x the hand box long side (a detector). seed sets every random number. Returns kp, mask, box, size and box_long_median_px."""
+    W, H = size_wh
+    a = np.radians(tilt_deg)
+    C = np.array([0.0, -dist_cm * np.sin(a), dist_cm * np.cos(a)])
+    zc = -C / np.linalg.norm(C)
+    x = np.array([1.0, 0.0, 0.0])
+    R = np.array([x, np.cross(zc, x), zc])
+    ax, ay = od2_synthetic(turn_range_deg, move_pct_xy, 0.0, f=f, n=n)["translation_cm"]
+    s = np.linspace(0, 1, n)
+    turn = np.radians(turn_range_deg / 2.0) * np.sin(2 * np.pi * s)
+    ux, uy = np.sin(2 * np.pi * 1.5 * s + 0.4), np.cos(2 * np.pi * s)
+    mean = OD_HAND_CM.mean(0)
+    y_tip = float(OD_HAND_CM[[4, 8, 12, 16, 20], 1].mean())
+    h0 = np.tan(np.radians(slope_deg)) * np.clip(y_tip - OD_HAND_CM[:, 1], 0.0, None)
+    g = np.random.default_rng([int(seed), 11])
+
+    def curve():
+        c = sum(g.normal() * np.sin(2 * np.pi * m * s + g.uniform(0, 2 * np.pi)) for m in (1, 2))
+        r = np.sqrt(np.mean(c ** 2))
+        return np.radians(finger_deg) * c / r if finger_deg > 0 and r > 0 else np.zeros(n)
+    angles = {k: (curve(), curve(), curve()) for k in FC_FINGERS}       # in-plane turn about the base, curl at the base, curl at the PIP
+    kp0 = np.zeros((n, 21, 2))
+    for i in range(n):
+        P = np.c_[OD_HAND_CM, h0].astype(float)
+        for k, ch in FC_FINGERS.items():
+            ab, c1, c2 = (v[i] for v in angles[k])
+            b = P[ch[0], :2].copy()
+            cs, sn = np.cos(ab), np.sin(ab)
+            for j in ch[1:]:
+                d = P[j, :2] - b
+                P[j, :2] = b + [cs * d[0] - sn * d[1], sn * d[0] + cs * d[1]]
+            for piv, cc in ((ch[0], c1), (ch[1], c2)):
+                u = P[ch[-1], :2] - P[ch[0], :2]
+                u = u / np.linalg.norm(u)
+                for j in ch[ch.index(piv) + 1:]:
+                    d = P[j] - P[piv]
+                    along = float(d[:2] @ u)
+                    P[j, :2] += u * along * (np.cos(cc) - 1.0)
+                    P[j, 2] += along * np.sin(cc)
+        c, sn = np.cos(turn[i]), np.sin(turn[i])
+        Q = (P[:, :2] - mean) @ np.array([[c, sn], [-sn, c]]) + [ax * ux[i], ay * uy[i]]
+        Xc = (np.c_[Q, P[:, 2]] - C) @ R.T
+        kp0[i] = f * Xc[:, :2] / Xc[:, 2:3] + [W / 2.0, H / 2.0]
+    bl = (kp0.max(1) - kp0.min(1)).max(1)
+    kp = kp0 + np.random.default_rng([int(seed), 12]).normal(size=kp0.shape) * (noise_rel * bl)[:, None, None]
+    return {"kp": kp, "kp_clean": kp0, "mask": np.ones((n, 21), bool), "box": np.c_[kp.min(1) - 20.0, kp.max(1) + 20.0], "size": [W, H], "box_long_median_px": float(np.median(bl))}
+
+
+def fc_synth_job(args) -> dict:
+    """Experiment 66, one synthetic case: args = (key, cond, turn, move, n, f, seed, ecfg, combos {name: ids}, dm_step). fc_scene, then wd_job (free_template unchanged) for every combo,
+    and the departure of experiment 65 (dm_measure on the noise-free j16, every dm_step-th frame as a pause) to place the case on 65's scale."""
+    key, cond, turn, move, n, f, seed, ecfg, combos, step = args
+    s = fc_scene(turn, move, n=n, f=f, seed=seed, **cond)
+    out = {"key": key, "est": {}}
+    for name, ids in combos.items():
+        r = wd_job((name, s["kp"], s["mask"], np.arange(n), s["box"], tuple(s["size"]), ecfg, ids, None))
+        out["est"][name] = {"f": r.get("f"), "boundary": r.get("boundary"), "failed": r.get("failed")}
+    m = dm_measure(s["kp_clean"], np.ones(n, bool), [np.array([i, i, i]) for i in range(0, n, int(step))], list(range(5, 21)))
+    out["departure_pct"] = m.get("res_pct_median")
+    return out
+
+
+def fc_real_job(args) -> dict:
+    """Experiment 66, one real estimate: od_job unchanged (free_template and free_shape3d on the combo's joints), reduced to f, boundary and, with diag, the median tilt of each method's poses."""
+    r = od_job(args)
+    out = {"kind": r["kind"], "rep": r["rep"]}
+    if "failed" in r:
+        out["failed"] = r["failed"]
+        return out
+    for m in ("free_template", "free_shape3d"):
+        x = r[m]
+        out[m] = {"f": x["f"], "boundary": x["boundary"]}
+        if "poses" in x:
+            out[m]["tilt_median_deg"] = float(np.nanmedian(x["poses"]["tilt_deg"]))
+    return out
+
+
 def od_fix_lines(path=None) -> list:
     """Where the six corrections to the supervisor's code sit in handfocal_estimate.py (line numbers of the corrected spellings inside section 5)."""
     p = Path(path) if path else Path(__file__).resolve().parent / "handfocal_estimate.py"

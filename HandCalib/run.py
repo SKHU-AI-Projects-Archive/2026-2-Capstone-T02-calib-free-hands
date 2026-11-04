@@ -11938,7 +11938,315 @@ def dm_results_yaml(run_dir: Path, cfg: dict):
     return p
 
 
-COMMANDS = {"protocol": protocol_main, "frame-filter": ff_main, "same-session": session_main, "overlay": overlay_main, "phase-segmentation": pseg_main, "guide-revision": grev_main, "f-response": fresp_main, "error-factors": ferr_main, "long-video-check": long_main, "generalization": gen_main, "main-camera-extension": ext_main, "wide-60cm": wide_main, "jointset-sets": jset_main, "verdict-calibration": cal_main, "printed-hand": pr_main, "hand-markers": mk_main, "markers-only": mo_main, "free-template": ft_main, "free-shape3d": s3_main, "free-shape3d-hand": h3_main, "free-shape3d-27": e3_main, "free-shape3d-new": e4_main, "mmpose-hand": mm_main, "mmpose-hand-46": mm2_main, "free-shape3d-new2": e5_main, "mmpose-hand-src": mm3_main, "free-shape3d-detectors": fs_main, "free-shape3d-hand-sets": h4_main, "free-shape3d-hand-sets-42track": h4b_main, "oblique-desk": od_main, "oblique-synthetic": sy_main, "oblique-fixed-template": fx_main, "oblique-desk-videos": om_main, "pause-stabilized": ps_main, "continuous-klt": kt_main, "continuous-klt-palm": kp_main, "klt-paper-dorsum": pp_main, "paper-parallax": hp_main, "segment-template": sg_main, "turn-synthetic": tr_main, "window-f": wd_main, "anycalib-videos": ac_main, "error-sources": ec_main, "hand-deformation": dm_main}
+# ====================================================================================================
+# fc  (experiment 66: joint combinations - per-joint departure from a rigid flat hand on 54's 12 videos, a synthetic check of every combination with a rigid palm and moving fingers, and
+#      the supervisor's free_template / free_shape3d on every combination of the mediapipe joints (bootstrap) and 56's tracked joints (record); combinations chosen without the reference f)
+#     python HandCalib/run.py joint-combos --config HandCalib/configs/66_joint_combos.yaml [--out DIR]
+#     python HandCalib/run.py joint-combos --config ... results-yaml --run runs/66_joint_combos/<UTC>
+# ====================================================================================================
+FC_NOTE = ("손 관절 중 어떤 점들을 써야 f가 잘 나오는지 여러 조합으로 본 실험이다(판정 없음). 1) 실험 65처럼 멈춤 구간 사이에서 관절마다 '나머지 20점으로 맞춘 호모그래피'에서 벗어나는 양을 재서 "
+           "덜 변하는 관절 순위를 냈다. 2) 실험 53c 합성 장면에 손바닥은 단단하고 손가락만 움직이는 변형과 손 경사를 넣어 조합마다 f를 냈다. 3) 실제 영상 12개에서 MediaPipe 관절(부트스트랩 포함)과 "
+           "실험 56 추적점(기록)으로 조합마다 교수님 free_template·free_shape3d를 돌렸다. 조합은 실행 전에 고정했고(관절 순위 조합과 무작위 조합은 규칙만 고정), 조합 고르기는 기준 f를 쓰지 않는 "
+           "방법(영상 하나 빼고 고르기, 부트스트랩 구간이 가장 좁은 조합, 조합들의 중앙값)으로 하고, 영상마다 정답에 가장 가까운 조합은 실제로는 쓸 수 없는 참고값으로만 적었다. 기준 f와의 비교는 summary.md에만 있다.")
+FC_METHODS = ("free_template", "free_shape3d")
+
+
+def fc_combos(cfg: dict, ranking: list, ranking_lev: list | None = None) -> dict:
+    """The combinations of the run: the fixed ones, the joint-ranking ones (the first k joints of ranking, least departing first; lrank from the leverage-divided ranking), the random ones
+    (sizes from the config, rng seeded)."""
+    cc = cfg["combos"]
+    out = {c["name"]: [int(j) for j in c["ids"]] for c in cc["fixed"]}
+    for k in cc["ranked_sizes"]:
+        out[f"rank{k}"] = sorted(int(j) for j in ranking[:int(k)])
+    for k in (cc["ranked_sizes"] if ranking_lev is not None else []):
+        out[f"lrank{k}"] = sorted(int(j) for j in ranking_lev[:int(k)])
+    g = np.random.default_rng(int(cc["random"]["seed"]))
+    for i, k in enumerate(cc["random"]["sizes"]):
+        out[f"rand{i + 1}_{k}"] = sorted(int(j) for j in g.choice(21, int(k), replace=False))
+    return out
+
+
+def fc_err_table(res: dict, combos: dict, videos: list, src: str, m: str, ref: float) -> dict:
+    """{combo: {video: (err, boundary)}} from the main estimates (err = f / ref - 1)."""
+    out = {}
+    for c in combos:
+        out[c] = {}
+        for v in videos:
+            x = (res.get((v, src, c)) or {}).get("main") or {}
+            y = x.get(m)
+            out[c][v] = None if not y else (y["f"] / ref - 1, y["boundary"])
+    return out
+
+
+def fc_selection(res: dict, combos: dict, videos: list, m: str, ref: float, lvl: float) -> dict:
+    """The ways of choosing a combination without the reference f on the held-out video, on the mediapipe joints: leave one video out (the combination with the smallest median |log f / ref| over
+    the other videos), the narrowest bootstrap interval (non-boundary main estimates), the median f over the combinations (non-boundary; all if none), and the oracle (closest to ref, not usable)."""
+    E = fc_err_table(res, combos, videos, "detected", m, ref)
+    sc = lambda c, vs: float(np.median([abs(np.log1p(E[c][v][0])) for v in vs if E[c][v] is not None])) if any(E[c][v] is not None for v in vs) else np.inf      # noqa: E731
+    out = {"loo": {}, "narrowest_ci": {}, "median_of_combos": {}, "oracle": {}}
+    for v in videos:
+        rest = [w for w in videos if w != v]
+        cands = [c for c in combos if E[c][v] is not None]
+        if not cands:
+            continue
+        c1 = min(cands, key=lambda c: sc(c, rest))
+        out["loo"][v] = {"combo": c1, "err": E[c1][v][0], "boundary": E[c1][v][1]}
+        wid = {}
+        for c in cands:
+            r = res[(v, "detected", c)]
+            fb = [b[m]["f"] for b in r["boot"] if m in b]
+            ci = hf.od_ci(fb, lvl)
+            if ci and not E[c][v][1]:
+                wid[c] = ci[1] / ci[0]
+        if wid:
+            c2 = min(wid, key=wid.get)
+            out["narrowest_ci"][v] = {"combo": c2, "err": E[c2][v][0], "boundary": False, "ci_ratio": wid[c2]}
+        fs = [E[c][v][0] for c in cands if not E[c][v][1]] or [E[c][v][0] for c in cands]
+        out["median_of_combos"][v] = {"combo": "median", "err": float(np.median(fs)), "boundary": False}
+        c4 = min(cands, key=lambda c: abs(E[c][v][0]))
+        out["oracle"][v] = {"combo": c4, "err": E[c4][v][0], "boundary": E[c4][v][1]}
+    return out
+
+
+def fc_figure(path: Path, res: dict, combos: dict, order: list, videos: list, ref: float):
+    plt = _plt()
+    E = fc_err_table(res, combos, videos, "detected", "free_template", ref)
+    fig, ax = plt.subplots(figsize=(12, 0.28 * len(order) + 1.5))
+    for i, c in enumerate(order):
+        xs = [100 * E[c][v][0] for v in videos if E[c][v] is not None]
+        col = "#999999" if c.startswith("rand") else "#0072B2"
+        ax.scatter(xs, [i] * len(xs), s=14, color=col, alpha=0.8, zorder=2)
+        if xs:
+            ax.plot([np.median(xs)], [i], "|", color="#D55E00", ms=12, mew=2, zorder=3)
+    ax.axvspan(-10, 10, color="#e8f2e8", zorder=0)
+    ax.axvline(0, color="#555", lw=1)
+    ax.set_yticks(range(len(order)))
+    ax.set_yticklabels(order, fontsize=8)
+    ax.invert_yaxis()
+    ax.set_xlabel("기준 f 대비 오차 (%), 영상 12개 (MediaPipe 관절, free_template); 주황 막대 = 중앙값, 회색 = 무작위 조합, 초록 띠 = ±10%")
+    ax.set_xlim(-60, 100)
+    ax.grid(alpha=0.3, axis="x")
+    fig.tight_layout()
+    fig.savefig(path, dpi=100)
+    plt.close(fig)
+
+
+def fc_summary(path: Path, res: dict, combos: dict, loo_rank: dict, syn: list, sel: dict, cfg: dict, videos: list):
+    ref = float(cfg["ref_f"]["value"])
+    lvl = float(cfg["bootstrap"].get("level", 0.95))
+    tf = float(cfg["synthetic"]["true_f"])
+    names = ["손목", "엄지 CMC", "엄지 MCP", "엄지 IP", "엄지 끝", "검지 MCP", "검지 PIP", "검지 DIP", "검지 끝", "중지 MCP", "중지 PIP", "중지 DIP", "중지 끝",
+             "약지 MCP", "약지 PIP", "약지 DIP", "약지 끝", "새끼 MCP", "새끼 PIP", "새끼 DIP", "새끼 끝"]
+    L = ["# 실험 66 summary", "", f"**{FC_NOTE}**", "", f"- 기준 f: {ref:g} px ({cfg['ref_f']['source']}). 오차는 기준 f 대비.", ""]
+    nv = sum(x is not None for x in loo_rank["per_video"].values())
+    L += ["## 1. 관절별 벗어남 (멈춤 구간 사이, 나머지 20점 호모그래피로 예측한 위치와의 차이)", "",
+          "- 손 가장자리 관절은 나머지 점들 바깥으로 외삽되어 점 배치만으로도 차이가 커진다. 같은 손 모양에 독립 잡음을 넣었을 때의 차이(기하 증폭)로 나눈 값을 함께 적었다(잡음 1 px 상당 단위).", "",
+          f"| 순위 (원래) | 관절 | 번호 | 영상 {nv}개 중앙값 (21점 박스 %) | 최소 ~ 최대 | 기하 증폭으로 나눈 값 | 그 값의 순위 |", "|---|---|---|---|---|---|---|"]
+    rl = {j: i + 1 for i, j in enumerate(loo_rank["order_lev"])}
+    for i, j in enumerate(loo_rank["order"]):
+        v = [x[j] for x in loo_rank["per_video"].values() if x is not None]
+        L.append(f"| {i + 1} | {names[j]} | {j} | {np.median(v):.2f}% | {min(v):.2f} ~ {max(v):.2f}% | {loo_rank['median_lev'][j]:.2f} | {rl[j]} |")
+    L += ["", "## 2. 조합 목록", "", "| 조합 | 점 수 | 관절 번호 |", "|---|---|---|"]
+    for c, ids in combos.items():
+        L.append(f"| {c} | {len(ids)} | {', '.join(map(str, ids))} |")
+    sc = cfg["synthetic"]
+    L += ["", f"## 3. 합성 (참 f {tf:g} px, MediaPipe 수준 잡음 {100 * sc['noise_rel']:g}%, 시드 {len(sc['seeds'])}개, free_template)", ""]
+    for cond in sc["conditions"]:
+        for t in sc["turn_ranges_deg"]:
+            rs = [r for r in syn if r["cond"] == cond["name"] and r["turn"] == t]
+            dep = np.median([r["departure_pct"] for r in rs])
+            L += [f"### {cond['label']}, 회전 {t}° (실험 65 방식 벗어남 {dep:.2f}%)", "", "| 조합 | f 중앙값 (참값 대비) | ±10% 안 | 범위 끝 |", "|---|---|---|---|"]
+            rows = []
+            for c in combos:
+                fv = [r["est"][c]["f"] for r in rs if r["est"][c].get("f") is not None]
+                bd = sum(bool(r["est"][c].get("boundary")) for r in rs)
+                if fv:
+                    rows.append((abs(np.median(fv) / tf - 1), c, np.median(fv), int(np.sum(np.abs(np.array(fv) / tf - 1) <= 0.1)), bd, len(fv)))
+            for _, c, fm, w, bd, nn in sorted(rows):
+                L.append(f"| {c} | {fm:.0f} ({100 * (fm / tf - 1):+.1f}%) | {w} / {nn} | {bd} / {nn} |")
+            L.append("")
+    for m in FC_METHODS:
+        for src, nm in (("detected", "MediaPipe 관절 (부트스트랩)"), ("tracked", "실험 56 추적점 (기록, 부트스트랩 없음)")):
+            E = fc_err_table(res, combos, videos, src, m, ref)
+            rows = []
+            for c in combos:
+                e = [x for x in E[c].values() if x is not None]
+                if not e:
+                    continue
+                ae = np.abs([x[0] for x in e])
+                tilt = [((res[(v, src, c)]["main"] or {}).get(m) or {}).get("tilt_median_deg") for v in videos]
+                tilt = [x for x in tilt if x is not None]
+                wid = []
+                if src == "detected":
+                    for v in videos:
+                        fb = [b[m]["f"] for b in res[(v, src, c)]["boot"] if m in b]
+                        ci = hf.od_ci(fb, lvl)
+                        if ci:
+                            wid.append(100 * (ci[1] / ci[0] - 1))
+                rows.append((float(np.median(ae)), c, int(np.sum(ae <= 0.10)), int(np.sum(ae <= 0.25)), sum(x[1] for x in e), len(e), float(np.median([x[0] for x in e])),
+                             float(np.median(tilt)) if tilt else None, float(np.median(wid)) if wid else None))
+            L += [f"## 4. 실제 영상, {nm}, {m} (절대 오차 중앙값 순)", "", "| 조합 | ±10% 안 | ±25% 안 | 범위 끝 | 오차 중앙값 | 절대 오차 중앙값 | 기울기 중앙값 | 구간 폭 중앙값 |", "|---|---|---|---|---|---|---|---|"]
+            for ae, c, w10, w25, bd, nn, em, tm, wd in sorted(rows):
+                L.append(f"| {c} | {w10} / {nn} | {w25} / {nn} | {bd} / {nn} | {100 * em:+.1f}% | {100 * ae:.1f}% | " + ("-" if tm is None else f"{tm:.1f}°") + " | " + ("-" if wd is None else f"{wd:.0f}%") + " |")
+            L.append("")
+    for m in FC_METHODS:
+        S = sel[m]
+        L += [f"## 5. 조합 고르기 (MediaPipe 관절, {m}; 영상마다 기준 f 없이 고름)", "", "| 방법 | ±10% 안 | ±25% 안 | 범위 끝 | 절대 오차 중앙값 | 고른 조합 (영상 순) |", "|---|---|---|---|---|---|"]
+        for k, nm in (("loo", "영상 하나 빼고 나머지에서 가장 좋은 조합"), ("narrowest_ci", "부트스트랩 구간이 가장 좁은 조합"), ("median_of_combos", "조합들의 f 중앙값"), ("oracle", "참고: 정답에 가장 가까운 조합 (실제로는 불가)")):
+            d = S[k]
+            if not d:
+                continue
+            ae = np.abs([x["err"] for x in d.values()])
+            L.append(f"| {nm} | {int(np.sum(ae <= 0.1))} / {len(d)} | {int(np.sum(ae <= 0.25))} / {len(d)} | {sum(bool(x['boundary']) for x in d.values())} / {len(d)} | {100 * np.median(ae):.1f}% | "
+                     + ", ".join(f"{Path(v).stem[4:]}:{x['combo']} ({100 * x['err']:+.0f}%)" for v, x in d.items()) + " |")
+        L.append("")
+    L += ["![조합별 영상 오차](figures/combo_errors.png)", "",
+          "- 조합 수가 많으면 우연히 좋아 보이는 조합이 생긴다. 무작위 조합(rand)의 결과가 그 우연의 크기를 보여 준다. '영상 하나 빼고 고르기'의 성적이 실제로 기대할 수 있는 값에 가장 가깝다.", ""]
+    path.write_text("\n".join(L) + "\n")
+
+
+def fc_main(argv=None):
+    ap = argparse.ArgumentParser()
+    ap.add_argument("--config", default=str(hf.PROJECT_ROOT / "configs/66_joint_combos.yaml"))
+    sub = ap.add_subparsers(dest="cmd")
+    ry = sub.add_parser("results-yaml")
+    ry.add_argument("--run", required=True)
+    ap.add_argument("--out", default=None)
+    a = ap.parse_args(argv)
+    text = Path(a.config).read_text()
+    own = yaml.safe_load(text)
+    r56 = yaml.safe_load(hf.resolve(own["rules_config"]).read_text())
+    r60 = yaml.safe_load(hf.resolve(own["segments_config"]).read_text())
+    r65 = yaml.safe_load(hf.resolve(own["pauses_config"]).read_text())
+    base = od_load(yaml.safe_load(hf.resolve(r56["base_config"]).read_text()))
+    cfg = {**base, "videos": r56["videos"], "tracking": r56["tracking"], "segments": r60["segments"], "pauses": r65["pauses"],
+           "bootstrap": {**base["bootstrap"], **r56.get("bootstrap", {})},
+           **{k: own[k] for k in ("experiment", "combos", "synthetic", "workers", "n_workers", "video_workers", "output") if k in own}}
+    if a.cmd == "results-yaml":
+        print(fc_results_yaml(hf.resolve(a.run), cfg))
+        return None
+    missing = [e["file"] for e in cfg["videos"] if not (Path(cfg["input_dir"]).expanduser() / e["file"]).exists()]
+    if missing:
+        raise SystemExit(f"영상이 없습니다: {missing}")
+    run_root = Path(a.out).expanduser() if a.out else hf.resolve(cfg["output"]["root"]) / utc_stamp()
+    run_root.mkdir(parents=True)
+    (run_root / "figures").mkdir()
+    log = Log(run_root / "log.txt")
+    log(f"66 관절 조합: 영상 {len(cfg['videos'])}개 → {run_root}")
+    t0 = time.time()
+    for k in ("OMP_NUM_THREADS", "OPENBLAS_NUM_THREADS", "MKL_NUM_THREADS"):
+        os.environ[k] = "1"
+    import multiprocessing as mp
+    from concurrent.futures import ProcessPoolExecutor
+    vid = {}
+    with ProcessPoolExecutor(max_workers=int(cfg["video_workers"]), mp_context=mp.get_context("spawn")) as ex:
+        for e, (x, lines) in zip(cfg["videos"], ex.map(dm_video_job, [(e, cfg, str(run_root)) for e in cfg["videos"]])):
+            vid[e["file"]] = x
+            for s in lines:
+                log(s)
+    log(f"  영상 처리: {time.time() - t0:.0f} s")
+    videos = [e["file"] for e in cfg["videos"]]
+    per_video, per_lev = {}, {}
+    for v in videos:
+        d = vid[v]["detected"]
+        pz = hf.dm_pauses(vid[v]["still"] & d["use"], int(cfg["pauses"]["gap_frames"]), int(cfg["pauses"]["min_frames"]))
+        jl = hf.fc_joint_loo(d["kp"], d["use"], pz)
+        per_video[v], per_lev[v] = jl["joint_pct"], jl["joint_lev"]
+    med = np.median([x for x in per_video.values() if x is not None], 0)
+    medl = np.median([x for x in per_lev.values() if x is not None], 0)
+    order = [int(j) for j in np.argsort(med)]
+    order_l = [int(j) for j in np.argsort(medl)]
+    loo_rank = {"order": order, "median_pct": med.tolist(), "per_video": per_video, "order_lev": order_l, "median_lev": medl.tolist(), "per_video_lev": per_lev}
+    log("  관절 순위 (덜 변하는 순): " + ", ".join(f"{j}({med[j]:.2f}%)" for j in order))
+    log("  관절 순위 (기하 증폭으로 나눈 값): " + ", ".join(f"{j}({medl[j]:.2f})" for j in order_l))
+    combos = fc_combos(cfg, order, order_l)
+    log(f"  조합 {len(combos)}개: " + ", ".join(combos))
+    sc = cfg["synthetic"]
+    ecfg, bc = cfg["pipeline"]["estimate"], cfg["bootstrap"]
+    sjobs = [((cd["name"], float(t), int(sd)), {**cd["errors"], "noise_rel": float(sc["noise_rel"])}, float(t), sc["move_pct_xy"], int(sc["n_frames"]), float(sc["true_f"]), int(sd), ecfg, combos, int(sc["dm_step"]))
+             for cd in sc["conditions"] for t in sc["turn_ranges_deg"] for sd in sc["seeds"]]
+    rjobs, rkeys = [], []
+    for v in videos:
+        x = vid[v]
+        for src in ("detected", "tracked"):
+            y = x[src]
+            ui = np.flatnonzero(y["use"])
+            mask = np.isfinite(y["kp"]).all(2)
+            for c, ids in combos.items():
+                rjobs.append(("main", 0, y["kp"], mask, ui, y["box"], tuple(x["size"]), ecfg, ids, cfg["free_shape3d"], True))
+                rkeys.append((v, src, c))
+                if src == "detected":
+                    for rep in range(int(bc["n"])):
+                        rjobs.append(("boot", rep, y["kp"], mask, ui[hf.od_blocks(len(ui), int(bc["block"]), rep, int(bc["seed"]))], y["box"], tuple(x["size"]), ecfg, ids, cfg["free_shape3d"], False))
+                        rkeys.append((v, src, c))
+    log(f"  합성 {len(sjobs)}건, 실제 추정 {len(rjobs)}건")
+    t1 = time.time()
+    syn = []
+    with ProcessPoolExecutor(max_workers=int(cfg["workers"]), mp_context=mp.get_context("spawn")) as ex:
+        for i, r in enumerate(ex.map(hf.fc_synth_job, sjobs, chunksize=1)):
+            cn, t, sd = r.pop("key")
+            syn.append({"cond": cn, "turn": t, "seed": sd, **r})
+            if (i + 1) % 50 == 0 or i + 1 == len(sjobs):
+                log(f"  합성 진행 {i + 1} / {len(sjobs)} ({time.time() - t1:.0f} s)")
+        t2 = time.time()
+        res = {}
+        for i, (k, o) in enumerate(zip(rkeys, ex.map(hf.fc_real_job, rjobs, chunksize=4))):
+            r = res.setdefault(k, {"main": None, "boot": []})
+            if o["kind"] == "main":
+                r["main"] = o if "failed" not in o else {"failed": o["failed"]}
+            elif "failed" not in o:
+                r["boot"].append(o)
+            if (i + 1) % 2000 == 0 or i + 1 == len(rjobs):
+                el = time.time() - t2
+                log(f"  실제 추정 진행 {i + 1} / {len(rjobs)} ({el:.0f} s, 남은 시간 약 {el / (i + 1) * (len(rjobs) - i - 1) / 60:.0f}분)")
+    ref = float(cfg["ref_f"]["value"])
+    lvl = float(bc.get("level", 0.95))
+    sel = {m: fc_selection(res, combos, videos, m, ref, lvl) for m in FC_METHODS}
+    E = fc_err_table(res, combos, videos, "detected", "free_template", ref)
+    order_c = sorted(combos, key=lambda c: np.median([abs(x[0]) for x in E[c].values() if x is not None]) if any(x is not None for x in E[c].values()) else np.inf)
+    fc_figure(run_root / "figures" / "combo_errors.png", res, combos, order_c, videos, ref)
+    fc_summary(run_root / "summary.md", res, combos, loo_rank, syn, sel, cfg, videos)
+    ci = {f"{v}|{s}|{c}": hf.od_ci([b[m]["f"] for b in r["boot"] if m in b], lvl) for (v, s, c), r in res.items() for m in ("free_template",) if s == "detected"}
+    out = {"joint_ranking": loo_rank, "combos": combos, "synthetic": syn,
+           "real": {f"{v}|{s}|{c}": {"main": r["main"], "n_boot_ok": len(r["boot"]),
+                                     "ci95": {m: hf.od_ci([b[m]["f"] for b in r["boot"] if m in b], lvl) for m in FC_METHODS} if s == "detected" else None} for (v, s, c), r in res.items()},
+           "selection": {m: {k: {v: {kk: x[kk] for kk in ("combo",)} for v, x in d.items()} for k, d in sel[m].items() if k != "oracle"} for m in FC_METHODS}}
+    (run_root / "results.json").write_text(json.dumps(hf.jsonable(out), ensure_ascii=False, indent=1))
+    meta = hf.provenance_build(text, a.config, {"code_66": own.get("code_66"), "rules_config": own["rules_config"], "elapsed_s": time.time() - t0})
+    (run_root / "metadata.json").write_text(json.dumps(hf.jsonable(meta), ensure_ascii=False, indent=1))
+    log(f"완료 {time.time() - t0:.0f} s → {run_root}")
+    log.close()
+    return run_root, res
+
+
+def fc_results_yaml(run_dir: Path, cfg: dict):
+    """Values only (record experiment, no verdict, no reference f or errors); written to output.results_yaml."""
+    r = json.loads((run_dir / "results.json").read_text())
+    m = json.loads((run_dir / "metadata.json").read_text())
+    try:
+        run_name = str(run_dir.resolve().relative_to(hf.PROJECT_ROOT))
+    except ValueError:
+        run_name = str(run_dir)
+    rd = lambda x, n=1: None if x is None or (isinstance(x, float) and not np.isfinite(x)) else round(x, n)      # noqa: E731
+    out = {"experiment": cfg["experiment"]["name"], "run": run_name, "code_commit": m["git"]["commit"][:7], "git_dirty_at_run": m["git"]["git_dirty"], "note": FC_NOTE,
+           "joint_ranking": {"order": r["joint_ranking"]["order"], "median_pct": [rd(x, 3) for x in r["joint_ranking"]["median_pct"]]},
+           "combos": r["combos"], "selection_choices": r["selection"], "videos": {}}
+    for e in cfg["videos"]:
+        v = e["file"]
+        o = out["videos"][v] = {"distance_cm": e["distance_cm"], "hand": e["hand"], "detected": {}, "tracked": {}}
+        for src in ("detected", "tracked"):
+            for c in r["combos"]:
+                x = r["real"].get(f"{v}|{src}|{c}") or {}
+                mm = x.get("main") or {}
+                o[src][c] = {mt: (None if mt not in mm else {"f_px": rd(mm[mt]["f"]), "boundary": mm[mt]["boundary"], "tilt_median_deg": rd(mm[mt].get("tilt_median_deg")),
+                                                             **({"ci95_px": [rd(q) for q in x["ci95"][mt]] if x.get("ci95") and x["ci95"].get(mt) else None} if src == "detected" else {})})
+                             for mt in FC_METHODS}
+    p = hf.resolve(cfg["output"]["results_yaml"])
+    p.write_text(yaml.safe_dump(hf.jsonable(out), allow_unicode=True, sort_keys=False))
+    return p
+
+
+COMMANDS = {"protocol": protocol_main, "frame-filter": ff_main, "same-session": session_main, "overlay": overlay_main, "phase-segmentation": pseg_main, "guide-revision": grev_main, "f-response": fresp_main, "error-factors": ferr_main, "long-video-check": long_main, "generalization": gen_main, "main-camera-extension": ext_main, "wide-60cm": wide_main, "jointset-sets": jset_main, "verdict-calibration": cal_main, "printed-hand": pr_main, "hand-markers": mk_main, "markers-only": mo_main, "free-template": ft_main, "free-shape3d": s3_main, "free-shape3d-hand": h3_main, "free-shape3d-27": e3_main, "free-shape3d-new": e4_main, "mmpose-hand": mm_main, "mmpose-hand-46": mm2_main, "free-shape3d-new2": e5_main, "mmpose-hand-src": mm3_main, "free-shape3d-detectors": fs_main, "free-shape3d-hand-sets": h4_main, "free-shape3d-hand-sets-42track": h4b_main, "oblique-desk": od_main, "oblique-synthetic": sy_main, "oblique-fixed-template": fx_main, "oblique-desk-videos": om_main, "pause-stabilized": ps_main, "continuous-klt": kt_main, "continuous-klt-palm": kp_main, "klt-paper-dorsum": pp_main, "paper-parallax": hp_main, "segment-template": sg_main, "turn-synthetic": tr_main, "window-f": wd_main, "anycalib-videos": ac_main, "error-sources": ec_main, "hand-deformation": dm_main, "joint-combos": fc_main}
 
 
 def main(argv=None):
