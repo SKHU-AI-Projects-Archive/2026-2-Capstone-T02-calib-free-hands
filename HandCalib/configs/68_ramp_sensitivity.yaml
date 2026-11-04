@@ -1,0 +1,18 @@
+# 68: sensitivity of 67's desk-motion estimator to the fixed ramp (user 2026-11-04: "민감도 확인을 먼저 해보자", after my proposal: the ramp 7 / 9 / 11 / 13 / 15 deg on the same 12 videos,
+# main estimates only, to know how far the ramp may be wrong - not to choose a ramp; 11 deg stays for the new hands), record only, no verdict.
+# 67's estimator and points unchanged (estimator_config -> 67's rules_config, segments_config and joint sets; hf.dk_job with the ramp_fixed mode only, one job per ramp).
+# Choices made by me before the run (no result of this run seen; a 1-video dry run into the scratchpad checked only that it runs): ramps 7-15 deg in 2-deg steps around 11 (59's +-35 mm wrist
+# over a hand of 16-20 cm gives about 10-12 deg; 67's ramp_free on the tracked j16 right hands gave 6-11 deg); per video the change of f per degree = slope of log f over the ramps (limits left
+# out); the ramp of lowest RMS per video is recorded only. Reference f only in summary.md. Fixed before the run.
+experiment:
+  name: 68_ramp_sensitivity
+  seed: 42
+estimator_config: configs/67_desk_motion.yaml
+code_68: {branch: exp/68-ramp-sensitivity, base_commit: 1cf9a71, commit: 6aecebe, modules: [HandCalib/handfocal_report.py, HandCalib/run.py]}
+ramps_deg: [7, 9, 11, 13, 15]
+workers: 56
+n_workers: 4
+video_workers: 12
+output:
+  root: runs/68_ramp_sensitivity
+  results_yaml: results/68_ramp_sensitivity.yaml
