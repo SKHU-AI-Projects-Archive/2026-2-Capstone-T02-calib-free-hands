@@ -609,22 +609,17 @@ class ComparisonViewer(QWidget):
         self.mode_switch = QSlider(Qt.Orientation.Horizontal)
         self.mode_switch.setRange(0, 1)
         self.mode_switch.setPageStep(1)
-        self.mode_switch.setFixedSize(38, 22)
+        self.mode_switch.setFixedSize(42, 22)
         self.mode_switch.setAccessibleName("View mode")
         self.mode_switch.setAccessibleDescription("Off: Overlay; On: Split")
         self.mode_switch.setToolTip("Overlay / Split")
-        self.mode_switch.setStyleSheet(
-            "QSlider::groove:horizontal { height: 18px; border-radius: 9px; background: palette(mid); }"
-            "QSlider::sub-page:horizontal { border-radius: 9px; background: palette(highlight); }"
-            "QSlider::add-page:horizontal { border-radius: 9px; background: palette(mid); }"
-            "QSlider::handle:horizontal { width: 14px; margin: 2px; border-radius: 7px; "
-            "background: palette(button); border: 1px solid palette(midlight); }"
-        )
+        self._apply_mode_switch_style()
         self.split_mode_label = QLabel("Split")
         mode_layout.addWidget(self.overlay_mode_label)
         mode_layout.addWidget(self.mode_switch)
         mode_layout.addWidget(self.split_mode_label)
-        self.mode_switch.valueChanged.connect(lambda value: self.set_mode("split" if value else "overlay"))
+        self.mode_switch.valueChanged.connect(self._set_mode_from_switch)
+        self._update_mode_labels()
 
         self.results_menu = QMenu(self)
         self.visibility_checks = []
@@ -1391,9 +1386,44 @@ class ComparisonViewer(QWidget):
             blocker = QSignalBlocker(self.mode_switch)
             self.mode_switch.setValue(target)
             del blocker
+        self._update_mode_labels()
         self._render_active_frame()
         self._refresh_metric_panels()
         self._refresh_annotations()
+
+    def _set_mode_from_switch(self, value):
+        self.set_mode("split" if value else "overlay")
+
+    def _update_mode_labels(self):
+        selected_color = self.palette().color(QPalette.ColorRole.WindowText)
+        muted_color = self.palette().color(QPalette.ColorRole.Mid)
+        for label, selected in ((self.overlay_mode_label, self.mode == "overlay"),
+                                (self.split_mode_label, self.mode == "split")):
+            font = label.font()
+            font.setBold(selected)
+            label.setFont(font)
+            palette = label.palette()
+            palette.setColor(QPalette.ColorRole.WindowText, selected_color if selected else muted_color)
+            label.setPalette(palette)
+
+    def _apply_mode_switch_style(self):
+        palette = self.palette()
+        window = palette.color(QPalette.ColorRole.Window)
+        app_style = QApplication.instance().styleSheet().lower()
+        dark_theme = ((0.2126 * window.redF() + 0.7152 * window.greenF()
+                       + 0.0722 * window.blueF()) < 0.45
+                      or "#202124" in app_style)
+        track = "#555b63" if dark_theme else "#c6cbd1"
+        border = "#858b93" if dark_theme else "#8c9299"
+        thumb = "#f2f3f4" if dark_theme else "#343a40"
+        self.mode_switch.setStyleSheet(
+            "QSlider::groove:horizontal { height: 18px; border-radius: 9px; "
+            f"background: {track}; border: 1px solid {border}; }}"
+            "QSlider::sub-page:horizontal, QSlider::add-page:horizontal { "
+            f"border-radius: 8px; background: {track}; }}"
+            "QSlider::handle:horizontal { width: 14px; margin: 2px; border-radius: 7px; "
+            f"background: {thumb}; border: 1px solid {border}; }}"
+        )
 
     def _set_configuration_visible(self, index, visible):
         self.overlay_view.set_configuration_visible(index, visible)
@@ -1604,6 +1634,9 @@ class ComparisonViewer(QWidget):
             disabled = self.palette().color(QPalette.ColorGroup.Disabled, QPalette.ColorRole.ButtonText)
             for index, button in enumerate(self.playback_buttons):
                 button.setIcon(self._make_playback_icon(self.playback_icon_kinds[index], foreground, disabled))
+            if hasattr(self, "mode_switch"):
+                self._apply_mode_switch_style()
+                self._update_mode_labels()
 
     def _set_performance_stats(self, enabled):
         self.performance_stats_label.setVisible(enabled)

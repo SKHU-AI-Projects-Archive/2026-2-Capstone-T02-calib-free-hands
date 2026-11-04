@@ -759,6 +759,70 @@ def test_presentation_pin_and_annotation_density_modes(tmp_path, qapp):
     viewer.close()
 
 
+def test_detection_bar_off_reflows_hud_before_any_pointer_event(tmp_path, qapp):
+    from PySide6.QtCore import QEvent
+    from PySide6.QtWidgets import QApplication
+    from calibfreehands.visualization.comparison import ComparisonViewer
+
+    viewer = ComparisonViewer(_session(tmp_path, 3))
+    viewer.resize(1280, 800)
+    viewer.show()
+    viewer.confidence_numeric_checkbox.setChecked(True)
+    viewer.confidence_bar_checkbox.setChecked(True)
+    qapp.processEvents()
+    panel = viewer.overlay_panel
+    bar_height = panel.card.height()
+    assert panel.confidence_bars
+
+    viewer.confidence_bar_checkbox.setChecked(False)
+    qapp.processEvents()
+    off_height = panel.card.height()
+    assert not panel.confidence_bars
+    assert off_height < bar_height, "HUD retained its Bar-on geometry until a later pointer event"
+
+    QApplication.sendEvent(panel.card, QEvent(QEvent.Type.Leave))
+    qapp.processEvents()
+    assert panel.card.height() == off_height
+    for _ in range(10):
+        viewer.confidence_bar_checkbox.setChecked(True)
+        qapp.processEvents()
+        on_height = panel.card.height()
+        assert on_height == bar_height
+        viewer.confidence_bar_checkbox.setChecked(False)
+        qapp.processEvents()
+        assert panel.card.height() == off_height
+    viewer.close()
+
+
+def test_mode_switch_has_compact_neutral_track_and_selected_labels(tmp_path, qapp):
+    from PySide6.QtGui import QColor, QPalette
+    from calibfreehands.visualization.comparison import ComparisonViewer
+
+    viewer = ComparisonViewer(_session(tmp_path, 2))
+    assert 36 <= viewer.mode_switch.width() <= 44
+    assert 18 <= viewer.mode_switch.height() <= 24
+    switch_style = viewer.mode_switch.styleSheet().lower()
+    assert "palette(highlight)" not in switch_style
+    assert viewer.overlay_mode_label.font().bold()
+    assert not viewer.split_mode_label.font().bold()
+    for background, foreground, muted, expected_thumb in (
+            (QColor("#202020"), QColor("#f2f2f2"), QColor("#777777"), "#f2f3f4"),
+            (QColor("#f8f8f8"), QColor("#202020"), QColor("#aaaaaa"), "#343a40")):
+        palette = QPalette(viewer.palette())
+        palette.setColor(QPalette.ColorRole.Window, background)
+        palette.setColor(QPalette.ColorRole.WindowText, foreground)
+        palette.setColor(QPalette.ColorRole.Mid, muted)
+        viewer.setPalette(palette)
+        switch_style = viewer.mode_switch.styleSheet().lower()
+        assert expected_thumb in switch_style
+        assert viewer.overlay_mode_label.palette().color(QPalette.ColorRole.WindowText) == foreground
+        assert viewer.split_mode_label.palette().color(QPalette.ColorRole.WindowText) == muted
+    viewer.mode_switch.setValue(1)
+    assert not viewer.overlay_mode_label.font().bold()
+    assert viewer.split_mode_label.font().bold()
+    viewer.close()
+
+
 def test_viewer_playback_controls_are_accessible_steppers_and_exclusive_modes(tmp_path, qapp):
     from calibfreehands.visualization.comparison import ComparisonViewer
 

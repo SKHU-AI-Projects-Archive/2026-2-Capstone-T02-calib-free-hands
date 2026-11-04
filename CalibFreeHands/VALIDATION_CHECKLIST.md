@@ -322,3 +322,15 @@ All entries below are pending implementation and validation. No acceptance item 
 - [x] Windows saved-result Viewer review: dark-theme frame/playback icons remained visible; Overlay/Split switch toggled 20 times; Large HUD, Results visibility, Detection Numeric/Bar, Key-joint and Worst-5 annotations rendered without the previously reported transient shrink.
 - [ ] Reference and metric popup changes, Hovered/All annotation modes, light-theme native GUI, constrained viewport HUD recovery, and 1x/2x playback performance remain for user/manual follow-up.
 - [ ] Fresh AnyCalib/WiLoR inference and original/second first-user rerun remain pending.
+
+
+## Final Viewer Micro-Polish (2026-11-04)
+
+- [x] Single Overlay/Split switch retains OFF=Overlay and ON=Split; compact neutral track/thumb colors adapt to light/dark palette and selected mode label is emphasized.
+- [x] HUD stable update invalidates card/body/nested row layouts and updates geometry before layout activation, font fitting, final card sizing, and repaint.
+- [x] No-pointer Bar ON/OFF test verifies immediate HUD size reflow, no change after a later Leave event, and ten repeated toggle cycles without geometry drift.
+- [x] Focused viewer regression tests pass for switch mode/theme presentation and Detection Bar reflow.
+- [x] Windows dark-theme switch screenshot visually confirms a neutral track and high-contrast thumb.
+- [x] Windows Qt runtime smoke with three saved `.cfh` results: Detection Bar ON measured 316 px HUD height; OFF immediately measured 268 px without pointer movement; a later Leave event retained 268 px. No inference ran.
+- [ ] Light-theme switch visual review remains pending.
+- [ ] Fresh AnyCalib/WiLoR inference and first-user reruns remain pending.

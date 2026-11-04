@@ -165,14 +165,25 @@ class _ViewportPanel(QWidget):
     def _schedule_stable_update(self):
         self._fit_generation += 1
         self.card.setUpdatesEnabled(False)
+        for widget in (self.card, self.body, *self.body.findChildren(QWidget)):
+            widget_layout = widget.layout()
+            if widget_layout is not None:
+                widget_layout.invalidate()
+                widget.updateGeometry()
         self._fit_timer.start(0)
 
     def _apply_stable_update(self, generation):
         if generation != self._fit_generation:
             return
+        self.body_layout.invalidate()
+        self.card.layout().invalidate()
         self.body_layout.activate()
         self.card.layout().activate()
         self._fit_content()
+        self.body_layout.invalidate()
+        self.card.layout().invalidate()
+        self.body_layout.activate()
+        self.card.layout().activate()
         self._position(schedule_fit=False)
         self.card.setUpdatesEnabled(True)
         self.card.update()
