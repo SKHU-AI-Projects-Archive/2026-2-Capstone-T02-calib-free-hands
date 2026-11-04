@@ -1,0 +1,26 @@
+# 62: f over time inside each video (user 2026-11-04: "진행해줘" on my proposal: cut each video into time windows and give f per window with that window's turn, tilt and hand shape change),
+# record only, no verdict.
+# 56's rules, read from rules_config: 54's 12 videos, 30 fps frames, mediapipe track, 56's hand chain (kt_chain, reference = the middle detected frame) and its moved joints, frames used =
+# tracked frames off the border (mediapipe joints: detected frames whose box is off the border), j16; points made by 60's sg_video_job unchanged (its pause labels, from segments_config, are not used).
+# Choices made by me before the run (no result of this experiment seen; a smoke test on a synthetic scene checked only that the job runs):
+#  - windows of length_frames (5 s) moved by step_frames (1 s), the last one ending at the video's end; a window with fewer than min_frames used frames is left out;
+#  - per window the supervisor's free_template unchanged (its defaults: alt_iters 3, refine, at most 120 frames spread over the window, coarse 8-point grid); at its f: median tilt, turn range of
+#    the template's poses, reprojection RMS (px); the f-free image turn range of wrist -> middle MCP; the template's shape difference to the whole video's free_template template (2-D similarity
+#    Procrustes, RMS in % of the whole template's RMS size);
+#  - the whole video's free_template once per source (all used frames) as the reference template; no bootstrap;
+#  - summary: windows binned by image turn range (0-60 / 60-120 / 120-150 / 150+ deg), and among non-boundary windows with image turn >= big_turn_deg the Spearman rank correlation of the error with
+#    shape change, tilt, residual and turn.
+# Reference f only in summary.md. Fixed before the run.
+experiment:
+  name: 62_window_f
+  seed: 42
+rules_config: configs/56_continuous_klt.yaml
+segments_config: configs/60_segment_template.yaml
+windows: {length_frames: 150, step_frames: 30, min_frames: 60, big_turn_deg: 120}
+code_62: {branch: exp/62-window-f, base_commit: 0f0c26e, commit: 726981e, modules: [HandCalib/handfocal_report.py, HandCalib/run.py]}
+workers: 24
+n_workers: 4
+video_workers: 12
+output:
+  root: runs/62_window_f
+  results_yaml: results/62_window_f.yaml
