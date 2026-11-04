@@ -1,0 +1,42 @@
+# 65: the real hand's deformation (user 2026-11-04: "실제 손 변형의 크기를 직접 재주고, 한 영상을 정해서 그 영상에 점들이 어떻게 찍히는지 시각화한 영상을 하나 만들어줘"), record only, no verdict.
+# 56's points on 54's 12 videos by 60's sg_video_job unchanged (56's rules from rules_config; 60's pause labels from segments_config are not used).
+# Choices made by me before the run (no result of this run seen; a dry run on IMG_7350 alone into the scratchpad checked the measure and the video's look - arrows were made larger after it):
+#  - the paper is not used (58: its sides fit within 1 px in few frames on most videos); the departure from a rigid flat hand is measured between pauses on the mediapipe j16: still frames by
+#    53's rule on the mediapipe joints, pauses = runs with steps <= gap_frames of at least min_frames used frames, the per-joint median per pause, reference = the pause with most frames, the RMS
+#    residual of the best homography reference -> pause (% of the 16-point box long side), with the noise floor (scatter / sqrt(frames)) removed; 56's tracked points are homography-moved and
+#    always 0 here, so they are only drawn;
+#  - scale: the same measure on experiment 64's noise-free scenes (hf.ec_scene; 90 deg turn like the real videos, every 6th frame as one pause), ramp and deformation alone and together, 10 seeds;
+#  - video: IMG_7350 (its paper gave f within 0.1 % in 58 and its heights were measured in 59; its hand f is on the upper limit), 30 fps, whole frame + the hand enlarged + the departure over time;
+#    blue = 56's tracked joints, orange = mediapipe joints, red arrows = departure x arrow_gain; written to the run folder (runs/ is not committed), metadata dropped by ffmpeg.
+experiment:
+  name: 65_hand_deformation
+  seed: 42
+rules_config: configs/56_continuous_klt.yaml
+segments_config: configs/60_segment_template.yaml
+pauses: {gap_frames: 15, min_frames: 5}
+calibration:
+  turn_range_deg: 90
+  n_frames: 60
+  step: 6
+  move_pct_xy: [4.5, 34.6]
+  seeds: [0, 1, 2, 3, 4, 5, 6, 7, 8, 9]
+  conditions:
+    - {name: flat, label: "평평하고 단단한 손", errors: {}}
+    - {name: A5, label: "경사 5°", errors: {slope_deg: 5}}
+    - {name: A11, label: "경사 11°", errors: {slope_deg: 11}}
+    - {name: A15, label: "경사 15°", errors: {slope_deg: 15}}
+    - {name: B1, label: "변형 1%", errors: {deform_rel: 0.01}}
+    - {name: B2, label: "변형 2%", errors: {deform_rel: 0.02}}
+    - {name: B4, label: "변형 4%", errors: {deform_rel: 0.04}}
+    - {name: B8, label: "변형 8%", errors: {deform_rel: 0.08}}
+    - {name: A11B2, label: "경사 11° + 변형 2%", errors: {slope_deg: 11, deform_rel: 0.02}}
+    - {name: A11B4, label: "경사 11° + 변형 4%", errors: {slope_deg: 11, deform_rel: 0.04}}
+    - {name: A11B8, label: "경사 11° + 변형 8%", errors: {slope_deg: 11, deform_rel: 0.08}}
+render: {video: IMG_7350.MOV, arrow_gain: 10, crop_margin: 1.35, graph_ymin_max: 3.0, font: /usr/share/fonts/opentype/noto/NotoSansCJK-Regular.ttc, font_index: 1}
+code_65: {branch: exp/65-hand-deformation, base_commit: 187d5e3, commit: 9ac3a49, modules: [HandCalib/handfocal_report.py, HandCalib/run.py]}
+workers: 24
+n_workers: 4
+video_workers: 12
+output:
+  root: runs/65_hand_deformation
+  results_yaml: results/65_hand_deformation.yaml
