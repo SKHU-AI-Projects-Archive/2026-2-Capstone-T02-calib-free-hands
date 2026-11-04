@@ -1,0 +1,4532 @@
+experiment: 62_window_f
+run: runs/62_window_f/20261104T011332Z
+code_commit: 448a7a8
+git_dirty_at_run: false
+note: 실험 56의 추적점(과 MediaPipe 검출 관절) 16점을 영상마다 겹치는 시간 창으로 잘라, 창마다 교수님 free_template를
+  그대로 돌려 f를 낸 기록용 실험이다(판정 없음). 창마다 책상 위 회전 범위(그 창의 f에서 본 자세, 그리고 f와 무관한 영상 속 손 방향),
+  손 기울기, 재투영 잔차, 영상 전체 템플릿 대비 손 모양 변화를 함께 기록해 f가 어느 순간에 틀어지는지, 회전·기울기·손 모양 변화 중 무엇과
+  함께 움직이는지 본다. 추적과 사용 프레임은 실험 56·60과 같다. 기준 f와의 비교는 summary.md에만 있다.
+windows_rule:
+  length_frames: 150
+  step_frames: 30
+  min_frames: 60
+  big_turn_deg: 120
+videos:
+  IMG_7346.MOV:
+    distance_cm: 50
+    hand: right
+    tracked:
+      whole_video:
+        f_px: 1864.7
+        boundary: false
+        tilt_median_deg: 56.4
+        turn_range_deg: 103.0
+        image_turn_range_deg: 92.0
+      windows:
+      - start_s: 0.0
+        end_s: 5.0
+        n_frames: 150
+        f_px: 1622.6
+        boundary: false
+        turn_range_deg: 56.0
+        image_turn_range_deg: 43.0
+        tilt_median_deg: 50.4
+        rms_px: 0.1
+        shape_diff_pct: 11.46
+      - start_s: 1.0
+        end_s: 6.0
+        n_frames: 150
+        f_px: 1629.5
+        boundary: false
+        turn_range_deg: 56.0
+        image_turn_range_deg: 44.0
+        tilt_median_deg: 50.6
+        rms_px: 0.12
+        shape_diff_pct: 11.28
+      - start_s: 2.0
+        end_s: 7.0
+        n_frames: 150
+        f_px: 1759.9
+        boundary: false
+        turn_range_deg: 56.0
+        image_turn_range_deg: 44.0
+        tilt_median_deg: 49.2
+        rms_px: 0.16
+        shape_diff_pct: 11.93
+      - start_s: 3.0
+        end_s: 8.0
+        n_frames: 150
+        f_px: 3072.0
+        boundary: true
+        turn_range_deg: 41.0
+        image_turn_range_deg: 32.0
+        tilt_median_deg: 9.8
+        rms_px: 0.12
+        shape_diff_pct: 30.79
+      - start_s: 4.0
+        end_s: 9.0
+        n_frames: 150
+        f_px: 3072.0
+        boundary: true
+        turn_range_deg: 8.0
+        image_turn_range_deg: 6.0
+        tilt_median_deg: 6.9
+        rms_px: 0.08
+        shape_diff_pct: 30.56
+      - start_s: 5.0
+        end_s: 10.0
+        n_frames: 150
+        f_px: 3072.0
+        boundary: true
+        turn_range_deg: 5.0
+        image_turn_range_deg: 14.0
+        tilt_median_deg: 10.2
+        rms_px: 0.16
+        shape_diff_pct: 30.37
+      - start_s: 6.0
+        end_s: 11.0
+        n_frames: 150
+        f_px: 3072.0
+        boundary: true
+        turn_range_deg: 10.0
+        image_turn_range_deg: 34.0
+        tilt_median_deg: 24.3
+        rms_px: 0.32
+        shape_diff_pct: 29.57
+      - start_s: 7.0
+        end_s: 12.0
+        n_frames: 150
+        f_px: 3072.0
+        boundary: true
+        turn_range_deg: 65.0
+        image_turn_range_deg: 51.0
+        tilt_median_deg: 50.1
+        rms_px: 0.25
+        shape_diff_pct: 11.25
+      - start_s: 8.0
+        end_s: 13.0
+        n_frames: 150
+        f_px: 3072.0
+        boundary: true
+        turn_range_deg: 89.0
+        image_turn_range_deg: 70.0
+        tilt_median_deg: 52.1
+        rms_px: 0.5
+        shape_diff_pct: 13.59
+      - start_s: 9.0
+        end_s: 14.0
+        n_frames: 150
+        f_px: 2100.4
+        boundary: false
+        turn_range_deg: 107.0
+        image_turn_range_deg: 88.0
+        tilt_median_deg: 53.0
+        rms_px: 0.95
+        shape_diff_pct: 5.29
+      - start_s: 10.0
+        end_s: 15.0
+        n_frames: 150
+        f_px: 2164.8
+        boundary: false
+        turn_range_deg: 85.0
+        image_turn_range_deg: 77.0
+        tilt_median_deg: 49.5
+        rms_px: 1.13
+        shape_diff_pct: 1.61
+      - start_s: 11.0
+        end_s: 16.0
+        n_frames: 150
+        f_px: 2270.4
+        boundary: false
+        turn_range_deg: 62.0
+        image_turn_range_deg: 57.0
+        tilt_median_deg: 29.9
+        rms_px: 1.06
+        shape_diff_pct: 1.38
+      - start_s: 12.0
+        end_s: 17.0
+        n_frames: 150
+        f_px: 1479.1
+        boundary: false
+        turn_range_deg: 48.0
+        image_turn_range_deg: 41.0
+        tilt_median_deg: 18.6
+        rms_px: 0.74
+        shape_diff_pct: 5.52
+      - start_s: 13.0
+        end_s: 18.0
+        n_frames: 150
+        f_px: 1633.2
+        boundary: false
+        turn_range_deg: 27.0
+        image_turn_range_deg: 21.0
+        tilt_median_deg: 19.7
+        rms_px: 0.3
+        shape_diff_pct: 5.92
+      - start_s: 14.0
+        end_s: 19.0
+        n_frames: 150
+        f_px: 2956.8
+        boundary: false
+        turn_range_deg: 3.0
+        image_turn_range_deg: 3.0
+        tilt_median_deg: 14.2
+        rms_px: 0.25
+        shape_diff_pct: 5.85
+      - start_s: 15.0
+        end_s: 20.0
+        n_frames: 150
+        f_px: 1802.6
+        boundary: false
+        turn_range_deg: 38.0
+        image_turn_range_deg: 34.0
+        tilt_median_deg: 11.3
+        rms_px: 0.56
+        shape_diff_pct: 5.08
+      - start_s: 16.0
+        end_s: 21.0
+        n_frames: 150
+        f_px: 1592.8
+        boundary: false
+        turn_range_deg: 61.0
+        image_turn_range_deg: 49.0
+        tilt_median_deg: 10.3
+        rms_px: 0.66
+        shape_diff_pct: 3.99
+      - start_s: 17.0
+        end_s: 22.0
+        n_frames: 150
+        f_px: 2234.1
+        boundary: false
+        turn_range_deg: 86.0
+        image_turn_range_deg: 49.0
+        tilt_median_deg: 43.3
+        rms_px: 0.82
+        shape_diff_pct: 1.46
+      - start_s: 17.6
+        end_s: 22.6
+        n_frames: 150
+        f_px: 2592.6
+        boundary: false
+        turn_range_deg: 102.0
+        image_turn_range_deg: 48.0
+        tilt_median_deg: 56.6
+        rms_px: 0.86
+        shape_diff_pct: 3.17
+    detected:
+      whole_video:
+        f_px: 3072.0
+        boundary: true
+        tilt_median_deg: 56.9
+        turn_range_deg: 86.0
+        image_turn_range_deg: 106.0
+      windows:
+      - start_s: 0.0
+        end_s: 5.0
+        n_frames: 150
+        f_px: 3072.0
+        boundary: true
+        turn_range_deg: 77.0
+        image_turn_range_deg: 45.0
+        tilt_median_deg: 41.2
+        rms_px: 5.34
+        shape_diff_pct: 18.19
+      - start_s: 1.0
+        end_s: 6.0
+        n_frames: 150
+        f_px: 3072.0
+        boundary: true
+        turn_range_deg: 76.0
+        image_turn_range_deg: 47.0
+        tilt_median_deg: 54.1
+        rms_px: 5.94
+        shape_diff_pct: 8.39
+      - start_s: 2.0
+        end_s: 7.0
+        n_frames: 150
+        f_px: 3072.0
+        boundary: true
+        turn_range_deg: 63.0
+        image_turn_range_deg: 48.0
+        tilt_median_deg: 60.4
+        rms_px: 5.58
+        shape_diff_pct: 5.95
+      - start_s: 3.0
+        end_s: 8.0
+        n_frames: 150
+        f_px: 1769.4
+        boundary: false
+        turn_range_deg: 41.0
+        image_turn_range_deg: 33.0
+        tilt_median_deg: 43.2
+        rms_px: 3.6
+        shape_diff_pct: 19.91
+      - start_s: 4.0
+        end_s: 9.0
+        n_frames: 150
+        f_px: 2379.1
+        boundary: false
+        turn_range_deg: 15.0
+        image_turn_range_deg: 6.0
+        tilt_median_deg: 14.9
+        rms_px: 1.26
+        shape_diff_pct: 28.54
+      - start_s: 5.0
+        end_s: 10.0
+        n_frames: 150
+        f_px: 1667.1
+        boundary: false
+        turn_range_deg: 18.0
+        image_turn_range_deg: 16.0
+        tilt_median_deg: 25.0
+        rms_px: 1.51
+        shape_diff_pct: 27.03
+      - start_s: 6.0
+        end_s: 11.0
+        n_frames: 150
+        f_px: 1755.8
+        boundary: false
+        turn_range_deg: 41.0
+        image_turn_range_deg: 39.0
+        tilt_median_deg: 36.2
+        rms_px: 3.61
+        shape_diff_pct: 23.84
+      - start_s: 7.0
+        end_s: 12.0
+        n_frames: 150
+        f_px: 3072.0
+        boundary: true
+        turn_range_deg: 60.0
+        image_turn_range_deg: 57.0
+        tilt_median_deg: 49.5
+        rms_px: 5.53
+        shape_diff_pct: 18.41
+      - start_s: 8.0
+        end_s: 13.0
+        n_frames: 150
+        f_px: 3072.0
+        boundary: true
+        turn_range_deg: 67.0
+        image_turn_range_deg: 77.0
+        tilt_median_deg: 47.7
+        rms_px: 5.96
+        shape_diff_pct: 14.64
+      - start_s: 9.0
+        end_s: 14.0
+        n_frames: 150
+        f_px: 3072.0
+        boundary: true
+        turn_range_deg: 170.0
+        image_turn_range_deg: 101.0
+        tilt_median_deg: 43.9
+        rms_px: 5.52
+        shape_diff_pct: 16.8
+      - start_s: 10.0
+        end_s: 15.0
+        n_frames: 150
+        f_px: 2377.0
+        boundary: false
+        turn_range_deg: 97.0
+        image_turn_range_deg: 88.0
+        tilt_median_deg: 50.5
+        rms_px: 4.53
+        shape_diff_pct: 9.32
+      - start_s: 11.0
+        end_s: 16.0
+        n_frames: 150
+        f_px: 1962.8
+        boundary: false
+        turn_range_deg: 60.0
+        image_turn_range_deg: 68.0
+        tilt_median_deg: 35.3
+        rms_px: 3.31
+        shape_diff_pct: 11.21
+      - start_s: 12.0
+        end_s: 17.0
+        n_frames: 150
+        f_px: 2665.6
+        boundary: false
+        turn_range_deg: 46.0
+        image_turn_range_deg: 49.0
+        tilt_median_deg: 20.8
+        rms_px: 2.5
+        shape_diff_pct: 9.25
+      - start_s: 13.0
+        end_s: 18.0
+        n_frames: 150
+        f_px: 3072.0
+        boundary: true
+        turn_range_deg: 34.0
+        image_turn_range_deg: 29.0
+        tilt_median_deg: 16.6
+        rms_px: 1.5
+        shape_diff_pct: 10.74
+      - start_s: 14.0
+        end_s: 19.0
+        n_frames: 150
+        f_px: 3072.0
+        boundary: true
+        turn_range_deg: 7.0
+        image_turn_range_deg: 3.0
+        tilt_median_deg: 14.9
+        rms_px: 1.25
+        shape_diff_pct: 13.27
+      - start_s: 15.0
+        end_s: 20.0
+        n_frames: 150
+        f_px: 3072.0
+        boundary: true
+        turn_range_deg: 18.0
+        image_turn_range_deg: 41.0
+        tilt_median_deg: 23.2
+        rms_px: 2.18
+        shape_diff_pct: 8.6
+      - start_s: 16.0
+        end_s: 21.0
+        n_frames: 150
+        f_px: 2865.3
+        boundary: false
+        turn_range_deg: 175.0
+        image_turn_range_deg: 58.0
+        tilt_median_deg: 37.6
+        rms_px: 3.4
+        shape_diff_pct: 5.23
+      - start_s: 17.0
+        end_s: 22.0
+        n_frames: 150
+        f_px: 3072.0
+        boundary: true
+        turn_range_deg: 193.0
+        image_turn_range_deg: 58.0
+        tilt_median_deg: 49.5
+        rms_px: 4.0
+        shape_diff_pct: 7.17
+      - start_s: 17.6
+        end_s: 22.6
+        n_frames: 150
+        f_px: 3072.0
+        boundary: true
+        turn_range_deg: 172.0
+        image_turn_range_deg: 58.0
+        tilt_median_deg: 62.3
+        rms_px: 4.18
+        shape_diff_pct: 6.56
+  IMG_7347.MOV:
+    distance_cm: 50
+    hand: left
+    tracked:
+      whole_video:
+        f_px: 2215.9
+        boundary: false
+        tilt_median_deg: 55.3
+        turn_range_deg: 80.0
+        image_turn_range_deg: 106.0
+      windows:
+      - start_s: 0.0
+        end_s: 5.0
+        n_frames: 150
+        f_px: 1315.4
+        boundary: false
+        turn_range_deg: 30.0
+        image_turn_range_deg: 59.0
+        tilt_median_deg: 39.6
+        rms_px: 1.17
+        shape_diff_pct: 19.44
+      - start_s: 1.0
+        end_s: 6.0
+        n_frames: 150
+        f_px: 1689.6
+        boundary: false
+        turn_range_deg: 56.0
+        image_turn_range_deg: 59.0
+        tilt_median_deg: 50.2
+        rms_px: 1.16
+        shape_diff_pct: 10.04
+      - start_s: 2.0
+        end_s: 7.0
+        n_frames: 150
+        f_px: 3072.0
+        boundary: true
+        turn_range_deg: 106.0
+        image_turn_range_deg: 59.0
+        tilt_median_deg: 62.8
+        rms_px: 1.18
+        shape_diff_pct: 9.7
+      - start_s: 3.0
+        end_s: 8.0
+        n_frames: 150
+        f_px: 3072.0
+        boundary: true
+        turn_range_deg: 64.0
+        image_turn_range_deg: 55.0
+        tilt_median_deg: 51.7
+        rms_px: 0.93
+        shape_diff_pct: 5.94
+      - start_s: 4.0
+        end_s: 9.0
+        n_frames: 150
+        f_px: 3072.0
+        boundary: true
+        turn_range_deg: 29.0
+        image_turn_range_deg: 23.0
+        tilt_median_deg: 15.5
+        rms_px: 0.46
+        shape_diff_pct: 27.13
+      - start_s: 5.0
+        end_s: 10.0
+        n_frames: 150
+        f_px: 3072.0
+        boundary: true
+        turn_range_deg: 14.0
+        image_turn_range_deg: 34.0
+        tilt_median_deg: 11.6
+        rms_px: 0.79
+        shape_diff_pct: 26.97
+      - start_s: 6.0
+        end_s: 11.0
+        n_frames: 150
+        f_px: 3072.0
+        boundary: true
+        turn_range_deg: 19.0
+        image_turn_range_deg: 68.0
+        tilt_median_deg: 60.9
+        rms_px: 0.99
+        shape_diff_pct: 11.97
+      - start_s: 7.0
+        end_s: 12.0
+        n_frames: 150
+        f_px: 2714.4
+        boundary: false
+        turn_range_deg: 99.0
+        image_turn_range_deg: 93.0
+        tilt_median_deg: 59.6
+        rms_px: 1.07
+        shape_diff_pct: 13.72
+      - start_s: 8.0
+        end_s: 13.0
+        n_frames: 150
+        f_px: 2122.8
+        boundary: false
+        turn_range_deg: 169.0
+        image_turn_range_deg: 106.0
+        tilt_median_deg: 53.4
+        rms_px: 1.21
+        shape_diff_pct: 4.38
+      - start_s: 9.0
+        end_s: 14.0
+        n_frames: 150
+        f_px: 2304.0
+        boundary: false
+        turn_range_deg: 175.0
+        image_turn_range_deg: 105.0
+        tilt_median_deg: 47.0
+        rms_px: 1.35
+        shape_diff_pct: 4.33
+      - start_s: 10.0
+        end_s: 15.0
+        n_frames: 150
+        f_px: 3072.0
+        boundary: true
+        turn_range_deg: 50.0
+        image_turn_range_deg: 70.0
+        tilt_median_deg: 19.7
+        rms_px: 1.07
+        shape_diff_pct: 7.85
+      - start_s: 11.0
+        end_s: 16.0
+        n_frames: 150
+        f_px: 1586.0
+        boundary: false
+        turn_range_deg: 41.0
+        image_turn_range_deg: 38.0
+        tilt_median_deg: 13.6
+        rms_px: 0.27
+        shape_diff_pct: 7.98
+      - start_s: 12.0
+        end_s: 17.0
+        n_frames: 150
+        f_px: 2064.4
+        boundary: false
+        turn_range_deg: 15.0
+        image_turn_range_deg: 12.0
+        tilt_median_deg: 12.9
+        rms_px: 0.18
+        shape_diff_pct: 7.25
+      - start_s: 13.0
+        end_s: 18.0
+        n_frames: 150
+        f_px: 1884.7
+        boundary: false
+        turn_range_deg: 18.0
+        image_turn_range_deg: 17.0
+        tilt_median_deg: 12.0
+        rms_px: 0.2
+        shape_diff_pct: 7.37
+      - start_s: 14.0
+        end_s: 19.0
+        n_frames: 150
+        f_px: 2564.4
+        boundary: false
+        turn_range_deg: 45.0
+        image_turn_range_deg: 40.0
+        tilt_median_deg: 6.2
+        rms_px: 0.32
+        shape_diff_pct: 6.79
+      - start_s: 15.0
+        end_s: 20.0
+        n_frames: 150
+        f_px: 3033.0
+        boundary: false
+        turn_range_deg: 56.0
+        image_turn_range_deg: 43.0
+        tilt_median_deg: 15.3
+        rms_px: 0.44
+        shape_diff_pct: 6.8
+      - start_s: 16.0
+        end_s: 21.0
+        n_frames: 150
+        f_px: 3072.0
+        boundary: true
+        turn_range_deg: 57.0
+        image_turn_range_deg: 44.0
+        tilt_median_deg: 46.9
+        rms_px: 0.53
+        shape_diff_pct: 7.06
+      - start_s: 16.93
+        end_s: 21.93
+        n_frames: 150
+        f_px: 3072.0
+        boundary: true
+        turn_range_deg: 60.0
+        image_turn_range_deg: 45.0
+        tilt_median_deg: 47.2
+        rms_px: 0.81
+        shape_diff_pct: 6.3
+    detected:
+      whole_video:
+        f_px: 1567.1
+        boundary: false
+        tilt_median_deg: 43.9
+        turn_range_deg: 115.0
+        image_turn_range_deg: 149.0
+      windows:
+      - start_s: 0.0
+        end_s: 5.0
+        n_frames: 142
+        f_px: 3072.0
+        boundary: true
+        turn_range_deg: 68.0
+        image_turn_range_deg: 85.0
+        tilt_median_deg: 43.6
+        rms_px: 2.11
+        shape_diff_pct: 16.78
+      - start_s: 1.0
+        end_s: 6.0
+        n_frames: 128
+        f_px: 2907.4
+        boundary: false
+        turn_range_deg: 69.0
+        image_turn_range_deg: 100.0
+        tilt_median_deg: 41.3
+        rms_px: 2.72
+        shape_diff_pct: 19.77
+      - start_s: 2.0
+        end_s: 7.0
+        n_frames: 99
+        f_px: 2451.7
+        boundary: false
+        turn_range_deg: 67.0
+        image_turn_range_deg: 100.0
+        tilt_median_deg: 27.5
+        rms_px: 2.92
+        shape_diff_pct: 20.57
+      - start_s: 3.0
+        end_s: 8.0
+        n_frames: 69
+        f_px: 2378.8
+        boundary: false
+        turn_range_deg: 67.0
+        image_turn_range_deg: 96.0
+        tilt_median_deg: 25.7
+        rms_px: 2.95
+        shape_diff_pct: 20.84
+      - start_s: 7.0
+        end_s: 12.0
+        n_frames: 80
+        f_px: 2045.2
+        boundary: false
+        turn_range_deg: 104.0
+        image_turn_range_deg: 116.0
+        tilt_median_deg: 44.5
+        rms_px: 2.74
+        shape_diff_pct: 3.98
+      - start_s: 8.0
+        end_s: 13.0
+        n_frames: 110
+        f_px: 1900.8
+        boundary: false
+        turn_range_deg: 124.0
+        image_turn_range_deg: 134.0
+        tilt_median_deg: 40.5
+        rms_px: 2.88
+        shape_diff_pct: 1.88
+      - start_s: 9.0
+        end_s: 14.0
+        n_frames: 140
+        f_px: 2041.9
+        boundary: false
+        turn_range_deg: 125.0
+        image_turn_range_deg: 134.0
+        tilt_median_deg: 24.1
+        rms_px: 2.79
+        shape_diff_pct: 1.84
+      - start_s: 10.0
+        end_s: 15.0
+        n_frames: 150
+        f_px: 2061.0
+        boundary: false
+        turn_range_deg: 88.0
+        image_turn_range_deg: 83.0
+        tilt_median_deg: 22.4
+        rms_px: 2.32
+        shape_diff_pct: 2.14
+      - start_s: 11.0
+        end_s: 16.0
+        n_frames: 150
+        f_px: 2723.0
+        boundary: false
+        turn_range_deg: 61.0
+        image_turn_range_deg: 42.0
+        tilt_median_deg: 26.0
+        rms_px: 1.65
+        shape_diff_pct: 3.2
+      - start_s: 12.0
+        end_s: 17.0
+        n_frames: 150
+        f_px: 3072.0
+        boundary: true
+        turn_range_deg: 16.0
+        image_turn_range_deg: 16.0
+        tilt_median_deg: 14.3
+        rms_px: 1.04
+        shape_diff_pct: 2.26
+      - start_s: 13.0
+        end_s: 18.0
+        n_frames: 150
+        f_px: 3072.0
+        boundary: true
+        turn_range_deg: 19.0
+        image_turn_range_deg: 23.0
+        tilt_median_deg: 10.3
+        rms_px: 1.04
+        shape_diff_pct: 2.71
+      - start_s: 14.0
+        end_s: 19.0
+        n_frames: 150
+        f_px: 1719.7
+        boundary: false
+        turn_range_deg: 57.0
+        image_turn_range_deg: 41.0
+        tilt_median_deg: 23.9
+        rms_px: 1.82
+        shape_diff_pct: 2.39
+      - start_s: 15.0
+        end_s: 20.0
+        n_frames: 150
+        f_px: 1230.8
+        boundary: false
+        turn_range_deg: 55.0
+        image_turn_range_deg: 45.0
+        tilt_median_deg: 20.0
+        rms_px: 2.34
+        shape_diff_pct: 1.59
+      - start_s: 16.0
+        end_s: 21.0
+        n_frames: 150
+        f_px: 1245.7
+        boundary: false
+        turn_range_deg: 58.0
+        image_turn_range_deg: 45.0
+        tilt_median_deg: 42.2
+        rms_px: 2.41
+        shape_diff_pct: 1.1
+      - start_s: 16.93
+        end_s: 21.93
+        n_frames: 150
+        f_px: 1715.0
+        boundary: false
+        turn_range_deg: 66.0
+        image_turn_range_deg: 46.0
+        tilt_median_deg: 42.9
+        rms_px: 2.12
+        shape_diff_pct: 1.24
+  IMG_7348.MOV:
+    distance_cm: 50
+    hand: right
+    tracked:
+      whole_video:
+        f_px: 1853.0
+        boundary: false
+        tilt_median_deg: 55.2
+        turn_range_deg: 97.0
+        image_turn_range_deg: 94.0
+      windows:
+      - start_s: 0.0
+        end_s: 5.0
+        n_frames: 150
+        f_px: 3072.0
+        boundary: true
+        turn_range_deg: 50.0
+        image_turn_range_deg: 28.0
+        tilt_median_deg: 29.1
+        rms_px: 0.05
+        shape_diff_pct: 22.74
+      - start_s: 1.0
+        end_s: 6.0
+        n_frames: 150
+        f_px: 3072.0
+        boundary: true
+        turn_range_deg: 66.0
+        image_turn_range_deg: 40.0
+        tilt_median_deg: 34.1
+        rms_px: 0.11
+        shape_diff_pct: 21.72
+      - start_s: 2.0
+        end_s: 7.0
+        n_frames: 150
+        f_px: 3072.0
+        boundary: true
+        turn_range_deg: 66.0
+        image_turn_range_deg: 41.0
+        tilt_median_deg: 40.1
+        rms_px: 0.21
+        shape_diff_pct: 20.45
+      - start_s: 3.0
+        end_s: 8.0
+        n_frames: 150
+        f_px: 3072.0
+        boundary: true
+        turn_range_deg: 69.0
+        image_turn_range_deg: 41.0
+        tilt_median_deg: 39.9
+        rms_px: 0.48
+        shape_diff_pct: 23.38
+      - start_s: 4.0
+        end_s: 9.0
+        n_frames: 150
+        f_px: 3072.0
+        boundary: true
+        turn_range_deg: 56.0
+        image_turn_range_deg: 32.0
+        tilt_median_deg: 28.3
+        rms_px: 0.49
+        shape_diff_pct: 25.45
+      - start_s: 5.0
+        end_s: 10.0
+        n_frames: 150
+        f_px: 3072.0
+        boundary: true
+        turn_range_deg: 19.0
+        image_turn_range_deg: 12.0
+        tilt_median_deg: 6.3
+        rms_px: 0.16
+        shape_diff_pct: 28.23
+      - start_s: 6.0
+        end_s: 11.0
+        n_frames: 150
+        f_px: 3072.0
+        boundary: true
+        turn_range_deg: 7.0
+        image_turn_range_deg: 18.0
+        tilt_median_deg: 12.7
+        rms_px: 0.23
+        shape_diff_pct: 28.15
+      - start_s: 7.0
+        end_s: 12.0
+        n_frames: 150
+        f_px: 3072.0
+        boundary: true
+        turn_range_deg: 9.0
+        image_turn_range_deg: 38.0
+        tilt_median_deg: 27.1
+        rms_px: 0.43
+        shape_diff_pct: 27.67
+      - start_s: 8.0
+        end_s: 13.0
+        n_frames: 150
+        f_px: 3072.0
+        boundary: true
+        turn_range_deg: 72.0
+        image_turn_range_deg: 57.0
+        tilt_median_deg: 51.8
+        rms_px: 0.45
+        shape_diff_pct: 10.25
+      - start_s: 9.0
+        end_s: 14.0
+        n_frames: 150
+        f_px: 3072.0
+        boundary: true
+        turn_range_deg: 104.0
+        image_turn_range_deg: 81.0
+        tilt_median_deg: 53.7
+        rms_px: 0.85
+        shape_diff_pct: 11.57
+      - start_s: 10.0
+        end_s: 15.0
+        n_frames: 150
+        f_px: 1927.5
+        boundary: false
+        turn_range_deg: 102.0
+        image_turn_range_deg: 85.0
+        tilt_median_deg: 52.6
+        rms_px: 0.88
+        shape_diff_pct: 5.37
+      - start_s: 11.0
+        end_s: 16.0
+        n_frames: 150
+        f_px: 1819.5
+        boundary: false
+        turn_range_deg: 70.0
+        image_turn_range_deg: 68.0
+        tilt_median_deg: 38.7
+        rms_px: 0.8
+        shape_diff_pct: 5.47
+      - start_s: 12.0
+        end_s: 17.0
+        n_frames: 150
+        f_px: 2080.0
+        boundary: false
+        turn_range_deg: 59.0
+        image_turn_range_deg: 55.0
+        tilt_median_deg: 17.3
+        rms_px: 0.83
+        shape_diff_pct: 4.37
+      - start_s: 13.0
+        end_s: 18.0
+        n_frames: 150
+        f_px: 1022.6
+        boundary: false
+        turn_range_deg: 36.0
+        image_turn_range_deg: 36.0
+        tilt_median_deg: 30.2
+        rms_px: 0.39
+        shape_diff_pct: 5.26
+      - start_s: 14.0
+        end_s: 19.0
+        n_frames: 150
+        f_px: 2358.3
+        boundary: false
+        turn_range_deg: 15.0
+        image_turn_range_deg: 11.0
+        tilt_median_deg: 15.9
+        rms_px: 0.17
+        shape_diff_pct: 5.23
+      - start_s: 15.0
+        end_s: 20.0
+        n_frames: 150
+        f_px: 1948.6
+        boundary: false
+        turn_range_deg: 8.0
+        image_turn_range_deg: 7.0
+        tilt_median_deg: 18.1
+        rms_px: 0.08
+        shape_diff_pct: 5.13
+      - start_s: 15.6
+        end_s: 20.6
+        n_frames: 150
+        f_px: 2463.9
+        boundary: false
+        turn_range_deg: 8.0
+        image_turn_range_deg: 7.0
+        tilt_median_deg: 16.1
+        rms_px: 0.09
+        shape_diff_pct: 5.2
+    detected:
+      whole_video:
+        f_px: 3072.0
+        boundary: true
+        tilt_median_deg: 60.6
+        turn_range_deg: 80.0
+        image_turn_range_deg: 100.0
+      windows:
+      - start_s: 0.0
+        end_s: 5.0
+        n_frames: 150
+        f_px: 3072.0
+        boundary: true
+        turn_range_deg: 50.0
+        image_turn_range_deg: 29.0
+        tilt_median_deg: 13.4
+        rms_px: 2.79
+        shape_diff_pct: 33.34
+      - start_s: 1.0
+        end_s: 6.0
+        n_frames: 150
+        f_px: 3072.0
+        boundary: true
+        turn_range_deg: 67.0
+        image_turn_range_deg: 43.0
+        tilt_median_deg: 40.6
+        rms_px: 4.28
+        shape_diff_pct: 30.34
+      - start_s: 2.0
+        end_s: 7.0
+        n_frames: 150
+        f_px: 3072.0
+        boundary: true
+        turn_range_deg: 81.0
+        image_turn_range_deg: 43.0
+        tilt_median_deg: 46.7
+        rms_px: 4.94
+        shape_diff_pct: 24.73
+      - start_s: 3.0
+        end_s: 8.0
+        n_frames: 150
+        f_px: 3072.0
+        boundary: true
+        turn_range_deg: 56.0
+        image_turn_range_deg: 43.0
+        tilt_median_deg: 49.0
+        rms_px: 4.79
+        shape_diff_pct: 15.93
+      - start_s: 4.0
+        end_s: 9.0
+        n_frames: 150
+        f_px: 2650.1
+        boundary: false
+        turn_range_deg: 42.0
+        image_turn_range_deg: 32.0
+        tilt_median_deg: 50.0
+        rms_px: 2.88
+        shape_diff_pct: 16.38
+      - start_s: 5.0
+        end_s: 10.0
+        n_frames: 150
+        f_px: 2811.9
+        boundary: false
+        turn_range_deg: 32.0
+        image_turn_range_deg: 14.0
+        tilt_median_deg: 41.7
+        rms_px: 1.33
+        shape_diff_pct: 21.41
+      - start_s: 6.0
+        end_s: 11.0
+        n_frames: 150
+        f_px: 1609.0
+        boundary: false
+        turn_range_deg: 34.0
+        image_turn_range_deg: 18.0
+        tilt_median_deg: 29.1
+        rms_px: 1.47
+        shape_diff_pct: 27.32
+      - start_s: 7.0
+        end_s: 12.0
+        n_frames: 150
+        f_px: 3072.0
+        boundary: true
+        turn_range_deg: 95.0
+        image_turn_range_deg: 38.0
+        tilt_median_deg: 46.7
+        rms_px: 3.4
+        shape_diff_pct: 17.81
+      - start_s: 8.0
+        end_s: 13.0
+        n_frames: 150
+        f_px: 3072.0
+        boundary: true
+        turn_range_deg: 45.0
+        image_turn_range_deg: 58.0
+        tilt_median_deg: 47.6
+        rms_px: 5.14
+        shape_diff_pct: 22.15
+      - start_s: 9.0
+        end_s: 14.0
+        n_frames: 150
+        f_px: 3072.0
+        boundary: true
+        turn_range_deg: 113.0
+        image_turn_range_deg: 85.0
+        tilt_median_deg: 46.5
+        rms_px: 5.34
+        shape_diff_pct: 22.87
+      - start_s: 10.0
+        end_s: 15.0
+        n_frames: 150
+        f_px: 3072.0
+        boundary: true
+        turn_range_deg: 147.0
+        image_turn_range_deg: 90.0
+        tilt_median_deg: 57.1
+        rms_px: 4.66
+        shape_diff_pct: 9.15
+      - start_s: 11.0
+        end_s: 16.0
+        n_frames: 150
+        f_px: 3072.0
+        boundary: true
+        turn_range_deg: 54.0
+        image_turn_range_deg: 73.0
+        tilt_median_deg: 47.0
+        rms_px: 3.39
+        shape_diff_pct: 9.33
+      - start_s: 12.0
+        end_s: 17.0
+        n_frames: 150
+        f_px: 2641.0
+        boundary: false
+        turn_range_deg: 53.0
+        image_turn_range_deg: 60.0
+        tilt_median_deg: 29.0
+        rms_px: 2.47
+        shape_diff_pct: 12.69
+      - start_s: 13.0
+        end_s: 18.0
+        n_frames: 150
+        f_px: 2327.2
+        boundary: false
+        turn_range_deg: 44.0
+        image_turn_range_deg: 41.0
+        tilt_median_deg: 13.1
+        rms_px: 2.0
+        shape_diff_pct: 17.64
+      - start_s: 14.0
+        end_s: 19.0
+        n_frames: 150
+        f_px: 3072.0
+        boundary: true
+        turn_range_deg: 15.0
+        image_turn_range_deg: 14.0
+        tilt_median_deg: 12.1
+        rms_px: 1.65
+        shape_diff_pct: 18.92
+      - start_s: 15.0
+        end_s: 20.0
+        n_frames: 150
+        f_px: 3072.0
+        boundary: true
+        turn_range_deg: 9.0
+        image_turn_range_deg: 8.0
+        tilt_median_deg: 11.7
+        rms_px: 1.58
+        shape_diff_pct: 19.02
+      - start_s: 15.6
+        end_s: 20.6
+        n_frames: 150
+        f_px: 3072.0
+        boundary: true
+        turn_range_deg: 11.0
+        image_turn_range_deg: 8.0
+        tilt_median_deg: 12.3
+        rms_px: 1.52
+        shape_diff_pct: 18.73
+  IMG_7349.MOV:
+    distance_cm: 50
+    hand: left
+    tracked:
+      whole_video:
+        f_px: 2916.7
+        boundary: false
+        tilt_median_deg: 55.8
+        turn_range_deg: 84.0
+        image_turn_range_deg: 113.0
+      windows:
+      - start_s: 0.0
+        end_s: 5.0
+        n_frames: 150
+        f_px: 2545.8
+        boundary: false
+        turn_range_deg: 69.0
+        image_turn_range_deg: 47.0
+        tilt_median_deg: 12.5
+        rms_px: 1.49
+        shape_diff_pct: 23.72
+      - start_s: 1.0
+        end_s: 6.0
+        n_frames: 150
+        f_px: 672.0
+        boundary: true
+        turn_range_deg: 8.0
+        image_turn_range_deg: 66.0
+        tilt_median_deg: 39.6
+        rms_px: 1.11
+        shape_diff_pct: 34.61
+      - start_s: 2.0
+        end_s: 7.0
+        n_frames: 150
+        f_px: 2046.9
+        boundary: false
+        turn_range_deg: 74.0
+        image_turn_range_deg: 66.0
+        tilt_median_deg: 53.6
+        rms_px: 1.68
+        shape_diff_pct: 12.78
+      - start_s: 3.0
+        end_s: 8.0
+        n_frames: 150
+        f_px: 1442.4
+        boundary: false
+        turn_range_deg: 41.0
+        image_turn_range_deg: 66.0
+        tilt_median_deg: 53.9
+        rms_px: 1.6
+        shape_diff_pct: 21.54
+      - start_s: 4.0
+        end_s: 9.0
+        n_frames: 150
+        f_px: 3072.0
+        boundary: true
+        turn_range_deg: 96.0
+        image_turn_range_deg: 54.0
+        tilt_median_deg: 47.2
+        rms_px: 1.71
+        shape_diff_pct: 41.22
+      - start_s: 5.0
+        end_s: 10.0
+        n_frames: 150
+        f_px: 2397.5
+        boundary: false
+        turn_range_deg: 51.0
+        image_turn_range_deg: 21.0
+        tilt_median_deg: 42.1
+        rms_px: 0.47
+        shape_diff_pct: 34.83
+      - start_s: 6.0
+        end_s: 11.0
+        n_frames: 150
+        f_px: 738.7
+        boundary: false
+        turn_range_deg: 46.0
+        image_turn_range_deg: 58.0
+        tilt_median_deg: 55.6
+        rms_px: 0.78
+        shape_diff_pct: 20.18
+      - start_s: 7.0
+        end_s: 12.0
+        n_frames: 150
+        f_px: 2600.4
+        boundary: false
+        turn_range_deg: 96.0
+        image_turn_range_deg: 86.0
+        tilt_median_deg: 58.2
+        rms_px: 1.42
+        shape_diff_pct: 15.63
+      - start_s: 8.0
+        end_s: 13.0
+        n_frames: 150
+        f_px: 3072.0
+        boundary: true
+        turn_range_deg: 123.0
+        image_turn_range_deg: 105.0
+        tilt_median_deg: 45.5
+        rms_px: 1.81
+        shape_diff_pct: 15.8
+      - start_s: 9.0
+        end_s: 14.0
+        n_frames: 150
+        f_px: 3072.0
+        boundary: true
+        turn_range_deg: 179.0
+        image_turn_range_deg: 108.0
+        tilt_median_deg: 49.8
+        rms_px: 1.55
+        shape_diff_pct: 8.43
+      - start_s: 10.0
+        end_s: 15.0
+        n_frames: 150
+        f_px: 3072.0
+        boundary: true
+        turn_range_deg: 148.0
+        image_turn_range_deg: 96.0
+        tilt_median_deg: 24.9
+        rms_px: 1.21
+        shape_diff_pct: 3.05
+      - start_s: 11.0
+        end_s: 16.0
+        n_frames: 150
+        f_px: 2245.9
+        boundary: false
+        turn_range_deg: 53.0
+        image_turn_range_deg: 49.0
+        tilt_median_deg: 8.3
+        rms_px: 0.47
+        shape_diff_pct: 2.37
+      - start_s: 12.0
+        end_s: 17.0
+        n_frames: 150
+        f_px: 1966.8
+        boundary: false
+        turn_range_deg: 32.0
+        image_turn_range_deg: 22.0
+        tilt_median_deg: 8.5
+        rms_px: 0.4
+        shape_diff_pct: 2.07
+      - start_s: 13.0
+        end_s: 18.0
+        n_frames: 150
+        f_px: 3072.0
+        boundary: true
+        turn_range_deg: 5.0
+        image_turn_range_deg: 2.0
+        tilt_median_deg: 7.8
+        rms_px: 0.2
+        shape_diff_pct: 1.96
+      - start_s: 14.0
+        end_s: 19.0
+        n_frames: 150
+        f_px: 1478.0
+        boundary: false
+        turn_range_deg: 28.0
+        image_turn_range_deg: 27.0
+        tilt_median_deg: 15.4
+        rms_px: 0.25
+        shape_diff_pct: 2.61
+      - start_s: 15.0
+        end_s: 20.0
+        n_frames: 150
+        f_px: 2756.8
+        boundary: false
+        turn_range_deg: 55.0
+        image_turn_range_deg: 41.0
+        tilt_median_deg: 8.3
+        rms_px: 0.33
+        shape_diff_pct: 2.16
+      - start_s: 16.0
+        end_s: 21.0
+        n_frames: 150
+        f_px: 2689.9
+        boundary: false
+        turn_range_deg: 58.0
+        image_turn_range_deg: 43.0
+        tilt_median_deg: 33.4
+        rms_px: 0.38
+        shape_diff_pct: 1.83
+      - start_s: 17.0
+        end_s: 22.0
+        n_frames: 150
+        f_px: 2616.2
+        boundary: false
+        turn_range_deg: 60.0
+        image_turn_range_deg: 44.0
+        tilt_median_deg: 52.3
+        rms_px: 0.53
+        shape_diff_pct: 1.41
+      - start_s: 17.77
+        end_s: 22.77
+        n_frames: 150
+        f_px: 3072.0
+        boundary: true
+        turn_range_deg: 64.0
+        image_turn_range_deg: 44.0
+        tilt_median_deg: 46.6
+        rms_px: 0.69
+        shape_diff_pct: 4.82
+    detected:
+      whole_video:
+        f_px: 1482.4
+        boundary: false
+        tilt_median_deg: 46.8
+        turn_range_deg: 98.0
+        image_turn_range_deg: 109.0
+      windows:
+      - start_s: 0.0
+        end_s: 5.0
+        n_frames: 150
+        f_px: 3072.0
+        boundary: true
+        turn_range_deg: 64.0
+        image_turn_range_deg: 61.0
+        tilt_median_deg: 28.0
+        rms_px: 2.66
+        shape_diff_pct: 13.83
+      - start_s: 1.0
+        end_s: 6.0
+        n_frames: 122
+        f_px: 3072.0
+        boundary: true
+        turn_range_deg: 62.0
+        image_turn_range_deg: 66.0
+        tilt_median_deg: 27.0
+        rms_px: 2.03
+        shape_diff_pct: 13.7
+      - start_s: 2.0
+        end_s: 7.0
+        n_frames: 92
+        f_px: 3072.0
+        boundary: true
+        turn_range_deg: 61.0
+        image_turn_range_deg: 66.0
+        tilt_median_deg: 31.4
+        rms_px: 2.12
+        shape_diff_pct: 13.07
+      - start_s: 3.0
+        end_s: 8.0
+        n_frames: 62
+        f_px: 3072.0
+        boundary: true
+        turn_range_deg: 60.0
+        image_turn_range_deg: 66.0
+        tilt_median_deg: 36.5
+        rms_px: 2.11
+        shape_diff_pct: 16.1
+      - start_s: 8.0
+        end_s: 13.0
+        n_frames: 81
+        f_px: 1671.2
+        boundary: false
+        turn_range_deg: 90.0
+        image_turn_range_deg: 90.0
+        tilt_median_deg: 40.9
+        rms_px: 2.76
+        shape_diff_pct: 4.64
+      - start_s: 9.0
+        end_s: 14.0
+        n_frames: 111
+        f_px: 1618.9
+        boundary: false
+        turn_range_deg: 94.0
+        image_turn_range_deg: 94.0
+        tilt_median_deg: 37.9
+        rms_px: 2.78
+        shape_diff_pct: 2.65
+      - start_s: 10.0
+        end_s: 15.0
+        n_frames: 141
+        f_px: 1686.5
+        boundary: false
+        turn_range_deg: 93.0
+        image_turn_range_deg: 94.0
+        tilt_median_deg: 16.7
+        rms_px: 2.63
+        shape_diff_pct: 2.35
+      - start_s: 11.0
+        end_s: 16.0
+        n_frames: 150
+        f_px: 1305.5
+        boundary: false
+        turn_range_deg: 65.0
+        image_turn_range_deg: 56.0
+        tilt_median_deg: 22.1
+        rms_px: 2.19
+        shape_diff_pct: 4.3
+      - start_s: 12.0
+        end_s: 17.0
+        n_frames: 150
+        f_px: 3072.0
+        boundary: true
+        turn_range_deg: 34.0
+        image_turn_range_deg: 27.0
+        tilt_median_deg: 12.9
+        rms_px: 1.34
+        shape_diff_pct: 3.59
+      - start_s: 13.0
+        end_s: 18.0
+        n_frames: 150
+        f_px: 3072.0
+        boundary: true
+        turn_range_deg: 5.0
+        image_turn_range_deg: 6.0
+        tilt_median_deg: 9.0
+        rms_px: 1.03
+        shape_diff_pct: 3.48
+      - start_s: 14.0
+        end_s: 19.0
+        n_frames: 150
+        f_px: 2434.0
+        boundary: false
+        turn_range_deg: 34.0
+        image_turn_range_deg: 30.0
+        tilt_median_deg: 8.0
+        rms_px: 1.66
+        shape_diff_pct: 3.2
+      - start_s: 15.0
+        end_s: 20.0
+        n_frames: 150
+        f_px: 967.2
+        boundary: false
+        turn_range_deg: 56.0
+        image_turn_range_deg: 44.0
+        tilt_median_deg: 13.6
+        rms_px: 2.65
+        shape_diff_pct: 4.13
+      - start_s: 16.0
+        end_s: 21.0
+        n_frames: 150
+        f_px: 1062.3
+        boundary: false
+        turn_range_deg: 51.0
+        image_turn_range_deg: 44.0
+        tilt_median_deg: 18.5
+        rms_px: 2.91
+        shape_diff_pct: 2.86
+      - start_s: 17.0
+        end_s: 22.0
+        n_frames: 150
+        f_px: 1475.4
+        boundary: false
+        turn_range_deg: 56.0
+        image_turn_range_deg: 43.0
+        tilt_median_deg: 46.7
+        rms_px: 2.84
+        shape_diff_pct: 0.61
+      - start_s: 17.77
+        end_s: 22.77
+        n_frames: 150
+        f_px: 3072.0
+        boundary: true
+        turn_range_deg: 121.0
+        image_turn_range_deg: 43.0
+        tilt_median_deg: 55.8
+        rms_px: 2.4
+        shape_diff_pct: 9.3
+  IMG_7350.MOV:
+    distance_cm: 60
+    hand: right
+    tracked:
+      whole_video:
+        f_px: 3072.0
+        boundary: true
+        tilt_median_deg: 61.4
+        turn_range_deg: 86.0
+        image_turn_range_deg: 96.0
+      windows:
+      - start_s: 0.0
+        end_s: 5.0
+        n_frames: 150
+        f_px: 3072.0
+        boundary: true
+        turn_range_deg: 57.0
+        image_turn_range_deg: 36.0
+        tilt_median_deg: 23.4
+        rms_px: 0.04
+        shape_diff_pct: 35.95
+      - start_s: 1.0
+        end_s: 6.0
+        n_frames: 150
+        f_px: 3072.0
+        boundary: true
+        turn_range_deg: 59.0
+        image_turn_range_deg: 40.0
+        tilt_median_deg: 28.4
+        rms_px: 0.07
+        shape_diff_pct: 35.93
+      - start_s: 2.0
+        end_s: 7.0
+        n_frames: 150
+        f_px: 3072.0
+        boundary: true
+        turn_range_deg: 59.0
+        image_turn_range_deg: 40.0
+        tilt_median_deg: 42.7
+        rms_px: 0.11
+        shape_diff_pct: 33.81
+      - start_s: 3.0
+        end_s: 8.0
+        n_frames: 150
+        f_px: 3072.0
+        boundary: true
+        turn_range_deg: 63.0
+        image_turn_range_deg: 40.0
+        tilt_median_deg: 32.5
+        rms_px: 0.43
+        shape_diff_pct: 33.33
+      - start_s: 4.0
+        end_s: 9.0
+        n_frames: 150
+        f_px: 3072.0
+        boundary: true
+        turn_range_deg: 40.0
+        image_turn_range_deg: 22.0
+        tilt_median_deg: 16.4
+        rms_px: 0.22
+        shape_diff_pct: 34.09
+      - start_s: 5.0
+        end_s: 10.0
+        n_frames: 150
+        f_px: 2014.2
+        boundary: false
+        turn_range_deg: 5.0
+        image_turn_range_deg: 9.0
+        tilt_median_deg: 11.2
+        rms_px: 0.16
+        shape_diff_pct: 33.45
+      - start_s: 6.0
+        end_s: 11.0
+        n_frames: 150
+        f_px: 3072.0
+        boundary: true
+        turn_range_deg: 17.0
+        image_turn_range_deg: 35.0
+        tilt_median_deg: 22.9
+        rms_px: 0.34
+        shape_diff_pct: 33.57
+      - start_s: 7.0
+        end_s: 12.0
+        n_frames: 150
+        f_px: 3072.0
+        boundary: true
+        turn_range_deg: 19.0
+        image_turn_range_deg: 60.0
+        tilt_median_deg: 32.7
+        rms_px: 0.74
+        shape_diff_pct: 33.5
+      - start_s: 8.0
+        end_s: 13.0
+        n_frames: 150
+        f_px: 3072.0
+        boundary: true
+        turn_range_deg: 102.0
+        image_turn_range_deg: 87.0
+        tilt_median_deg: 54.1
+        rms_px: 0.98
+        shape_diff_pct: 18.16
+      - start_s: 9.0
+        end_s: 14.0
+        n_frames: 150
+        f_px: 1924.5
+        boundary: false
+        turn_range_deg: 115.0
+        image_turn_range_deg: 95.0
+        tilt_median_deg: 54.8
+        rms_px: 0.89
+        shape_diff_pct: 16.1
+      - start_s: 10.0
+        end_s: 15.0
+        n_frames: 150
+        f_px: 1879.9
+        boundary: false
+        turn_range_deg: 94.0
+        image_turn_range_deg: 86.0
+        tilt_median_deg: 43.5
+        rms_px: 0.84
+        shape_diff_pct: 15.81
+      - start_s: 11.0
+        end_s: 16.0
+        n_frames: 150
+        f_px: 1618.0
+        boundary: false
+        turn_range_deg: 60.0
+        image_turn_range_deg: 60.0
+        tilt_median_deg: 21.0
+        rms_px: 0.7
+        shape_diff_pct: 19.16
+      - start_s: 12.0
+        end_s: 17.0
+        n_frames: 150
+        f_px: 1393.4
+        boundary: false
+        turn_range_deg: 43.0
+        image_turn_range_deg: 35.0
+        tilt_median_deg: 17.4
+        rms_px: 0.45
+        shape_diff_pct: 21.72
+      - start_s: 13.0
+        end_s: 18.0
+        n_frames: 150
+        f_px: 3072.0
+        boundary: true
+        turn_range_deg: 9.0
+        image_turn_range_deg: 8.0
+        tilt_median_deg: 10.4
+        rms_px: 0.15
+        shape_diff_pct: 22.19
+      - start_s: 14.0
+        end_s: 19.0
+        n_frames: 150
+        f_px: 2377.0
+        boundary: false
+        turn_range_deg: 14.0
+        image_turn_range_deg: 16.0
+        tilt_median_deg: 15.0
+        rms_px: 0.17
+        shape_diff_pct: 22.12
+      - start_s: 15.0
+        end_s: 20.0
+        n_frames: 150
+        f_px: 1491.5
+        boundary: false
+        turn_range_deg: 63.0
+        image_turn_range_deg: 51.0
+        tilt_median_deg: 18.1
+        rms_px: 0.53
+        shape_diff_pct: 19.58
+      - start_s: 16.0
+        end_s: 21.0
+        n_frames: 150
+        f_px: 1690.3
+        boundary: false
+        turn_range_deg: 94.0
+        image_turn_range_deg: 56.0
+        tilt_median_deg: 28.8
+        rms_px: 0.67
+        shape_diff_pct: 16.26
+      - start_s: 17.0
+        end_s: 22.0
+        n_frames: 150
+        f_px: 3072.0
+        boundary: true
+        turn_range_deg: 205.0
+        image_turn_range_deg: 56.0
+        tilt_median_deg: 64.0
+        rms_px: 0.78
+        shape_diff_pct: 3.44
+      - start_s: 18.0
+        end_s: 23.0
+        n_frames: 150
+        f_px: 3072.0
+        boundary: true
+        turn_range_deg: 223.0
+        image_turn_range_deg: 55.0
+        tilt_median_deg: 63.2
+        rms_px: 0.86
+        shape_diff_pct: 7.98
+      - start_s: 18.33
+        end_s: 23.33
+        n_frames: 150
+        f_px: 3072.0
+        boundary: true
+        turn_range_deg: 135.0
+        image_turn_range_deg: 55.0
+        tilt_median_deg: 60.2
+        rms_px: 0.89
+        shape_diff_pct: 12.24
+    detected:
+      whole_video:
+        f_px: 3072.0
+        boundary: true
+        tilt_median_deg: 64.4
+        turn_range_deg: 74.0
+        image_turn_range_deg: 102.0
+      windows:
+      - start_s: 0.0
+        end_s: 5.0
+        n_frames: 150
+        f_px: 3072.0
+        boundary: true
+        turn_range_deg: 61.0
+        image_turn_range_deg: 41.0
+        tilt_median_deg: 31.3
+        rms_px: 2.7
+        shape_diff_pct: 39.94
+      - start_s: 1.0
+        end_s: 6.0
+        n_frames: 150
+        f_px: 3072.0
+        boundary: true
+        turn_range_deg: 65.0
+        image_turn_range_deg: 44.0
+        tilt_median_deg: 42.0
+        rms_px: 4.19
+        shape_diff_pct: 36.06
+      - start_s: 2.0
+        end_s: 7.0
+        n_frames: 150
+        f_px: 3072.0
+        boundary: true
+        turn_range_deg: 70.0
+        image_turn_range_deg: 45.0
+        tilt_median_deg: 46.9
+        rms_px: 4.59
+        shape_diff_pct: 35.58
+      - start_s: 3.0
+        end_s: 8.0
+        n_frames: 150
+        f_px: 3072.0
+        boundary: true
+        turn_range_deg: 64.0
+        image_turn_range_deg: 44.0
+        tilt_median_deg: 36.1
+        rms_px: 4.33
+        shape_diff_pct: 35.16
+      - start_s: 4.0
+        end_s: 9.0
+        n_frames: 150
+        f_px: 3072.0
+        boundary: true
+        turn_range_deg: 43.0
+        image_turn_range_deg: 23.0
+        tilt_median_deg: 31.0
+        rms_px: 2.59
+        shape_diff_pct: 34.53
+      - start_s: 5.0
+        end_s: 10.0
+        n_frames: 150
+        f_px: 3072.0
+        boundary: true
+        turn_range_deg: 21.0
+        image_turn_range_deg: 9.0
+        tilt_median_deg: 27.1
+        rms_px: 1.5
+        shape_diff_pct: 34.13
+      - start_s: 6.0
+        end_s: 11.0
+        n_frames: 150
+        f_px: 3072.0
+        boundary: true
+        turn_range_deg: 57.0
+        image_turn_range_deg: 38.0
+        tilt_median_deg: 39.5
+        rms_px: 3.09
+        shape_diff_pct: 30.25
+      - start_s: 7.0
+        end_s: 12.0
+        n_frames: 150
+        f_px: 3072.0
+        boundary: true
+        turn_range_deg: 47.0
+        image_turn_range_deg: 63.0
+        tilt_median_deg: 49.1
+        rms_px: 4.69
+        shape_diff_pct: 29.16
+      - start_s: 8.0
+        end_s: 13.0
+        n_frames: 150
+        f_px: 3072.0
+        boundary: true
+        turn_range_deg: 248.0
+        image_turn_range_deg: 90.0
+        tilt_median_deg: 50.4
+        rms_px: 4.61
+        shape_diff_pct: 21.85
+      - start_s: 9.0
+        end_s: 14.0
+        n_frames: 150
+        f_px: 3072.0
+        boundary: true
+        turn_range_deg: 253.0
+        image_turn_range_deg: 99.0
+        tilt_median_deg: 61.4
+        rms_px: 4.07
+        shape_diff_pct: 6.32
+      - start_s: 10.0
+        end_s: 15.0
+        n_frames: 150
+        f_px: 3072.0
+        boundary: true
+        turn_range_deg: 255.0
+        image_turn_range_deg: 92.0
+        tilt_median_deg: 59.4
+        rms_px: 3.23
+        shape_diff_pct: 4.76
+      - start_s: 11.0
+        end_s: 16.0
+        n_frames: 150
+        f_px: 2099.3
+        boundary: false
+        turn_range_deg: 54.0
+        image_turn_range_deg: 63.0
+        tilt_median_deg: 36.1
+        rms_px: 2.33
+        shape_diff_pct: 22.73
+      - start_s: 12.0
+        end_s: 17.0
+        n_frames: 150
+        f_px: 2713.5
+        boundary: false
+        turn_range_deg: 50.0
+        image_turn_range_deg: 38.0
+        tilt_median_deg: 25.8
+        rms_px: 1.37
+        shape_diff_pct: 27.95
+      - start_s: 13.0
+        end_s: 18.0
+        n_frames: 150
+        f_px: 3072.0
+        boundary: true
+        turn_range_deg: 12.0
+        image_turn_range_deg: 10.0
+        tilt_median_deg: 9.4
+        rms_px: 0.94
+        shape_diff_pct: 32.2
+      - start_s: 14.0
+        end_s: 19.0
+        n_frames: 150
+        f_px: 3072.0
+        boundary: true
+        turn_range_deg: 13.0
+        image_turn_range_deg: 15.0
+        tilt_median_deg: 9.4
+        rms_px: 1.07
+        shape_diff_pct: 32.23
+      - start_s: 15.0
+        end_s: 20.0
+        n_frames: 150
+        f_px: 2147.7
+        boundary: false
+        turn_range_deg: 180.0
+        image_turn_range_deg: 53.0
+        tilt_median_deg: 41.2
+        rms_px: 2.31
+        shape_diff_pct: 19.24
+      - start_s: 16.0
+        end_s: 21.0
+        n_frames: 150
+        f_px: 2978.8
+        boundary: false
+        turn_range_deg: 167.0
+        image_turn_range_deg: 58.0
+        tilt_median_deg: 60.4
+        rms_px: 3.42
+        shape_diff_pct: 3.62
+      - start_s: 17.0
+        end_s: 22.0
+        n_frames: 150
+        f_px: 3072.0
+        boundary: true
+        turn_range_deg: 168.0
+        image_turn_range_deg: 58.0
+        tilt_median_deg: 71.0
+        rms_px: 3.85
+        shape_diff_pct: 5.28
+      - start_s: 18.0
+        end_s: 23.0
+        n_frames: 150
+        f_px: 3072.0
+        boundary: true
+        turn_range_deg: 183.0
+        image_turn_range_deg: 57.0
+        tilt_median_deg: 68.5
+        rms_px: 3.71
+        shape_diff_pct: 7.08
+      - start_s: 18.33
+        end_s: 23.33
+        n_frames: 150
+        f_px: 3072.0
+        boundary: true
+        turn_range_deg: 202.0
+        image_turn_range_deg: 57.0
+        tilt_median_deg: 65.3
+        rms_px: 3.48
+        shape_diff_pct: 12.57
+  IMG_7351.MOV:
+    distance_cm: 60
+    hand: left
+    tracked:
+      whole_video:
+        f_px: 2103.7
+        boundary: false
+        tilt_median_deg: 54.1
+        turn_range_deg: 91.0
+        image_turn_range_deg: 113.0
+      windows:
+      - start_s: 0.0
+        end_s: 5.0
+        n_frames: 150
+        f_px: 728.6
+        boundary: false
+        turn_range_deg: 14.0
+        image_turn_range_deg: 58.0
+        tilt_median_deg: 42.3
+        rms_px: 1.09
+        shape_diff_pct: 23.26
+      - start_s: 1.0
+        end_s: 6.0
+        n_frames: 150
+        f_px: 3072.0
+        boundary: true
+        turn_range_deg: 123.0
+        image_turn_range_deg: 61.0
+        tilt_median_deg: 70.7
+        rms_px: 1.07
+        shape_diff_pct: 21.08
+      - start_s: 2.0
+        end_s: 7.0
+        n_frames: 150
+        f_px: 672.0
+        boundary: true
+        turn_range_deg: 52.0
+        image_turn_range_deg: 61.0
+        tilt_median_deg: 48.0
+        rms_px: 1.67
+        shape_diff_pct: 18.77
+      - start_s: 3.0
+        end_s: 8.0
+        n_frames: 150
+        f_px: 3058.2
+        boundary: true
+        turn_range_deg: 57.0
+        image_turn_range_deg: 60.0
+        tilt_median_deg: 64.7
+        rms_px: 1.03
+        shape_diff_pct: 33.8
+      - start_s: 4.0
+        end_s: 9.0
+        n_frames: 150
+        f_px: 826.1
+        boundary: false
+        turn_range_deg: 36.0
+        image_turn_range_deg: 47.0
+        tilt_median_deg: 21.6
+        rms_px: 0.77
+        shape_diff_pct: 25.98
+      - start_s: 5.0
+        end_s: 10.0
+        n_frames: 150
+        f_px: 1605.1
+        boundary: false
+        turn_range_deg: 8.0
+        image_turn_range_deg: 21.0
+        tilt_median_deg: 9.7
+        rms_px: 0.27
+        shape_diff_pct: 27.04
+      - start_s: 6.0
+        end_s: 11.0
+        n_frames: 150
+        f_px: 3071.5
+        boundary: true
+        turn_range_deg: 59.0
+        image_turn_range_deg: 71.0
+        tilt_median_deg: 61.8
+        rms_px: 0.8
+        shape_diff_pct: 27.51
+      - start_s: 7.0
+        end_s: 12.0
+        n_frames: 150
+        f_px: 2712.0
+        boundary: false
+        turn_range_deg: 149.0
+        image_turn_range_deg: 103.0
+        tilt_median_deg: 58.5
+        rms_px: 0.84
+        shape_diff_pct: 24.39
+      - start_s: 8.0
+        end_s: 13.0
+        n_frames: 150
+        f_px: 1799.1
+        boundary: false
+        turn_range_deg: 157.0
+        image_turn_range_deg: 111.0
+        tilt_median_deg: 50.4
+        rms_px: 1.27
+        shape_diff_pct: 6.89
+      - start_s: 9.0
+        end_s: 14.0
+        n_frames: 150
+        f_px: 3072.0
+        boundary: true
+        turn_range_deg: 280.0
+        image_turn_range_deg: 111.0
+        tilt_median_deg: 47.6
+        rms_px: 1.27
+        shape_diff_pct: 1.67
+      - start_s: 10.0
+        end_s: 15.0
+        n_frames: 150
+        f_px: 3072.0
+        boundary: true
+        turn_range_deg: 97.0
+        image_turn_range_deg: 89.0
+        tilt_median_deg: 33.7
+        rms_px: 0.77
+        shape_diff_pct: 1.37
+      - start_s: 11.0
+        end_s: 16.0
+        n_frames: 150
+        f_px: 1646.8
+        boundary: false
+        turn_range_deg: 50.0
+        image_turn_range_deg: 40.0
+        tilt_median_deg: 9.8
+        rms_px: 0.49
+        shape_diff_pct: 6.47
+      - start_s: 12.0
+        end_s: 17.0
+        n_frames: 150
+        f_px: 3035.5
+        boundary: false
+        turn_range_deg: 11.0
+        image_turn_range_deg: 8.0
+        tilt_median_deg: 7.5
+        rms_px: 0.14
+        shape_diff_pct: 7.5
+      - start_s: 13.0
+        end_s: 18.0
+        n_frames: 150
+        f_px: 2101.9
+        boundary: false
+        turn_range_deg: 54.0
+        image_turn_range_deg: 41.0
+        tilt_median_deg: 14.8
+        rms_px: 0.28
+        shape_diff_pct: 5.63
+      - start_s: 14.0
+        end_s: 19.0
+        n_frames: 150
+        f_px: 3072.0
+        boundary: true
+        turn_range_deg: 134.0
+        image_turn_range_deg: 52.0
+        tilt_median_deg: 31.5
+        rms_px: 0.41
+        shape_diff_pct: 1.28
+      - start_s: 15.0
+        end_s: 20.0
+        n_frames: 150
+        f_px: 2390.9
+        boundary: false
+        turn_range_deg: 87.0
+        image_turn_range_deg: 52.0
+        tilt_median_deg: 37.0
+        rms_px: 0.37
+        shape_diff_pct: 4.88
+      - start_s: 16.0
+        end_s: 21.0
+        n_frames: 150
+        f_px: 3072.0
+        boundary: true
+        turn_range_deg: 71.0
+        image_turn_range_deg: 53.0
+        tilt_median_deg: 43.7
+        rms_px: 0.95
+        shape_diff_pct: 8.56
+      - start_s: 16.5
+        end_s: 21.5
+        n_frames: 150
+        f_px: 3072.0
+        boundary: true
+        turn_range_deg: 68.0
+        image_turn_range_deg: 53.0
+        tilt_median_deg: 39.6
+        rms_px: 0.92
+        shape_diff_pct: 10.3
+    detected:
+      whole_video:
+        f_px: 3072.0
+        boundary: true
+        tilt_median_deg: 50.8
+        turn_range_deg: 118.0
+        image_turn_range_deg: 161.0
+      windows:
+      - start_s: 0.0
+        end_s: 5.0
+        n_frames: 150
+        f_px: 3072.0
+        boundary: true
+        turn_range_deg: 60.0
+        image_turn_range_deg: 96.0
+        tilt_median_deg: 22.2
+        rms_px: 1.8
+        shape_diff_pct: 17.51
+      - start_s: 1.0
+        end_s: 6.0
+        n_frames: 150
+        f_px: 3072.0
+        boundary: true
+        turn_range_deg: 71.0
+        image_turn_range_deg: 106.0
+        tilt_median_deg: 31.5
+        rms_px: 2.55
+        shape_diff_pct: 17.23
+      - start_s: 2.0
+        end_s: 7.0
+        n_frames: 150
+        f_px: 3072.0
+        boundary: true
+        turn_range_deg: 71.0
+        image_turn_range_deg: 106.0
+        tilt_median_deg: 33.2
+        rms_px: 2.75
+        shape_diff_pct: 20.22
+      - start_s: 3.0
+        end_s: 8.0
+        n_frames: 150
+        f_px: 2440.1
+        boundary: false
+        turn_range_deg: 64.0
+        image_turn_range_deg: 106.0
+        tilt_median_deg: 26.4
+        rms_px: 2.45
+        shape_diff_pct: 21.94
+      - start_s: 4.0
+        end_s: 9.0
+        n_frames: 150
+        f_px: 2375.3
+        boundary: false
+        turn_range_deg: 53.0
+        image_turn_range_deg: 91.0
+        tilt_median_deg: 19.6
+        rms_px: 1.93
+        shape_diff_pct: 22.53
+      - start_s: 5.0
+        end_s: 10.0
+        n_frames: 150
+        f_px: 1529.7
+        boundary: false
+        turn_range_deg: 18.0
+        image_turn_range_deg: 51.0
+        tilt_median_deg: 19.5
+        rms_px: 1.79
+        shape_diff_pct: 22.35
+      - start_s: 6.0
+        end_s: 11.0
+        n_frames: 150
+        f_px: 3068.5
+        boundary: true
+        turn_range_deg: 27.0
+        image_turn_range_deg: 106.0
+        tilt_median_deg: 35.0
+        rms_px: 2.22
+        shape_diff_pct: 18.51
+      - start_s: 7.0
+        end_s: 12.0
+        n_frames: 150
+        f_px: 3072.0
+        boundary: true
+        turn_range_deg: 42.0
+        image_turn_range_deg: 130.0
+        tilt_median_deg: 40.3
+        rms_px: 2.89
+        shape_diff_pct: 21.49
+      - start_s: 8.0
+        end_s: 13.0
+        n_frames: 150
+        f_px: 3072.0
+        boundary: true
+        turn_range_deg: 172.0
+        image_turn_range_deg: 142.0
+        tilt_median_deg: 46.2
+        rms_px: 3.15
+        shape_diff_pct: 16.1
+      - start_s: 9.0
+        end_s: 14.0
+        n_frames: 150
+        f_px: 1946.8
+        boundary: false
+        turn_range_deg: 129.0
+        image_turn_range_deg: 142.0
+        tilt_median_deg: 31.8
+        rms_px: 2.81
+        shape_diff_pct: 8.94
+      - start_s: 10.0
+        end_s: 15.0
+        n_frames: 150
+        f_px: 1336.3
+        boundary: false
+        turn_range_deg: 103.0
+        image_turn_range_deg: 111.0
+        tilt_median_deg: 20.8
+        rms_px: 2.07
+        shape_diff_pct: 9.6
+      - start_s: 11.0
+        end_s: 16.0
+        n_frames: 150
+        f_px: 1967.1
+        boundary: false
+        turn_range_deg: 50.0
+        image_turn_range_deg: 46.0
+        tilt_median_deg: 11.6
+        rms_px: 1.49
+        shape_diff_pct: 10.17
+      - start_s: 12.0
+        end_s: 17.0
+        n_frames: 150
+        f_px: 3072.0
+        boundary: true
+        turn_range_deg: 12.0
+        image_turn_range_deg: 10.0
+        tilt_median_deg: 9.3
+        rms_px: 0.91
+        shape_diff_pct: 10.47
+      - start_s: 13.0
+        end_s: 18.0
+        n_frames: 150
+        f_px: 1735.2
+        boundary: false
+        turn_range_deg: 54.0
+        image_turn_range_deg: 45.0
+        tilt_median_deg: 14.0
+        rms_px: 1.55
+        shape_diff_pct: 10.09
+      - start_s: 14.0
+        end_s: 19.0
+        n_frames: 150
+        f_px: 1190.6
+        boundary: false
+        turn_range_deg: 59.0
+        image_turn_range_deg: 53.0
+        tilt_median_deg: 13.3
+        rms_px: 2.01
+        shape_diff_pct: 9.35
+      - start_s: 15.0
+        end_s: 20.0
+        n_frames: 150
+        f_px: 1013.7
+        boundary: false
+        turn_range_deg: 59.0
+        image_turn_range_deg: 55.0
+        tilt_median_deg: 33.8
+        rms_px: 2.15
+        shape_diff_pct: 9.23
+      - start_s: 16.0
+        end_s: 21.0
+        n_frames: 150
+        f_px: 1668.3
+        boundary: false
+        turn_range_deg: 76.0
+        image_turn_range_deg: 57.0
+        tilt_median_deg: 42.1
+        rms_px: 2.08
+        shape_diff_pct: 7.19
+      - start_s: 16.5
+        end_s: 21.5
+        n_frames: 150
+        f_px: 1472.7
+        boundary: false
+        turn_range_deg: 72.0
+        image_turn_range_deg: 56.0
+        tilt_median_deg: 40.4
+        rms_px: 1.98
+        shape_diff_pct: 8.46
+  IMG_7352.MOV:
+    distance_cm: 60
+    hand: right
+    tracked:
+      whole_video:
+        f_px: 1915.7
+        boundary: false
+        tilt_median_deg: 52.3
+        turn_range_deg: 110.0
+        image_turn_range_deg: 113.0
+      windows:
+      - start_s: 0.0
+        end_s: 5.0
+        n_frames: 150
+        f_px: 2730.7
+        boundary: false
+        turn_range_deg: 54.0
+        image_turn_range_deg: 32.0
+        tilt_median_deg: 23.9
+        rms_px: 0.08
+        shape_diff_pct: 26.07
+      - start_s: 1.0
+        end_s: 6.0
+        n_frames: 150
+        f_px: 2770.1
+        boundary: false
+        turn_range_deg: 74.0
+        image_turn_range_deg: 49.0
+        tilt_median_deg: 25.6
+        rms_px: 0.07
+        shape_diff_pct: 26.06
+      - start_s: 2.0
+        end_s: 7.0
+        n_frames: 150
+        f_px: 2964.1
+        boundary: false
+        turn_range_deg: 76.0
+        image_turn_range_deg: 49.0
+        tilt_median_deg: 33.9
+        rms_px: 0.09
+        shape_diff_pct: 26.28
+      - start_s: 3.0
+        end_s: 8.0
+        n_frames: 150
+        f_px: 3072.0
+        boundary: true
+        turn_range_deg: 75.0
+        image_turn_range_deg: 49.0
+        tilt_median_deg: 48.3
+        rms_px: 0.15
+        shape_diff_pct: 24.47
+      - start_s: 4.0
+        end_s: 9.0
+        n_frames: 150
+        f_px: 3072.0
+        boundary: true
+        turn_range_deg: 56.0
+        image_turn_range_deg: 45.0
+        tilt_median_deg: 32.5
+        rms_px: 0.19
+        shape_diff_pct: 17.38
+      - start_s: 5.0
+        end_s: 10.0
+        n_frames: 150
+        f_px: 3072.0
+        boundary: true
+        turn_range_deg: 20.0
+        image_turn_range_deg: 16.0
+        tilt_median_deg: 9.3
+        rms_px: 0.09
+        shape_diff_pct: 20.96
+      - start_s: 6.0
+        end_s: 11.0
+        n_frames: 150
+        f_px: 3072.0
+        boundary: true
+        turn_range_deg: 4.0
+        image_turn_range_deg: 4.0
+        tilt_median_deg: 9.5
+        rms_px: 0.09
+        shape_diff_pct: 20.97
+      - start_s: 7.0
+        end_s: 12.0
+        n_frames: 150
+        f_px: 3072.0
+        boundary: true
+        turn_range_deg: 18.0
+        image_turn_range_deg: 31.0
+        tilt_median_deg: 15.5
+        rms_px: 0.23
+        shape_diff_pct: 21.44
+      - start_s: 8.0
+        end_s: 13.0
+        n_frames: 150
+        f_px: 3072.0
+        boundary: true
+        turn_range_deg: 79.0
+        image_turn_range_deg: 63.0
+        tilt_median_deg: 43.9
+        rms_px: 0.35
+        shape_diff_pct: 16.57
+      - start_s: 9.0
+        end_s: 14.0
+        n_frames: 150
+        f_px: 3072.0
+        boundary: true
+        turn_range_deg: 120.0
+        image_turn_range_deg: 101.0
+        tilt_median_deg: 55.6
+        rms_px: 0.86
+        shape_diff_pct: 8.86
+      - start_s: 10.0
+        end_s: 15.0
+        n_frames: 150
+        f_px: 3072.0
+        boundary: true
+        turn_range_deg: 143.0
+        image_turn_range_deg: 112.0
+        tilt_median_deg: 60.8
+        rms_px: 1.25
+        shape_diff_pct: 11.96
+      - start_s: 11.0
+        end_s: 16.0
+        n_frames: 150
+        f_px: 1553.6
+        boundary: false
+        turn_range_deg: 130.0
+        image_turn_range_deg: 108.0
+        tilt_median_deg: 44.8
+        rms_px: 0.89
+        shape_diff_pct: 5.75
+      - start_s: 12.0
+        end_s: 17.0
+        n_frames: 150
+        f_px: 1458.2
+        boundary: false
+        turn_range_deg: 84.0
+        image_turn_range_deg: 81.0
+        tilt_median_deg: 27.5
+        rms_px: 0.78
+        shape_diff_pct: 7.57
+      - start_s: 13.0
+        end_s: 18.0
+        n_frames: 150
+        f_px: 2127.2
+        boundary: false
+        turn_range_deg: 62.0
+        image_turn_range_deg: 48.0
+        tilt_median_deg: 28.2
+        rms_px: 0.51
+        shape_diff_pct: 8.0
+      - start_s: 14.0
+        end_s: 19.0
+        n_frames: 150
+        f_px: 3072.0
+        boundary: true
+        turn_range_deg: 11.0
+        image_turn_range_deg: 11.0
+        tilt_median_deg: 7.1
+        rms_px: 0.23
+        shape_diff_pct: 12.69
+      - start_s: 15.0
+        end_s: 20.0
+        n_frames: 150
+        f_px: 1773.7
+        boundary: false
+        turn_range_deg: 59.0
+        image_turn_range_deg: 40.0
+        tilt_median_deg: 23.0
+        rms_px: 0.38
+        shape_diff_pct: 9.27
+      - start_s: 16.0
+        end_s: 21.0
+        n_frames: 150
+        f_px: 1482.2
+        boundary: false
+        turn_range_deg: 98.0
+        image_turn_range_deg: 61.0
+        tilt_median_deg: 26.1
+        rms_px: 0.6
+        shape_diff_pct: 7.97
+      - start_s: 17.0
+        end_s: 22.0
+        n_frames: 150
+        f_px: 1451.7
+        boundary: false
+        turn_range_deg: 100.0
+        image_turn_range_deg: 61.0
+        tilt_median_deg: 43.1
+        rms_px: 0.69
+        shape_diff_pct: 7.41
+      - start_s: 18.0
+        end_s: 23.0
+        n_frames: 150
+        f_px: 3072.0
+        boundary: true
+        turn_range_deg: 163.0
+        image_turn_range_deg: 61.0
+        tilt_median_deg: 65.8
+        rms_px: 0.96
+        shape_diff_pct: 7.43
+      - start_s: 18.57
+        end_s: 23.57
+        n_frames: 150
+        f_px: 3072.0
+        boundary: true
+        turn_range_deg: 143.0
+        image_turn_range_deg: 61.0
+        tilt_median_deg: 62.3
+        rms_px: 0.91
+        shape_diff_pct: 2.45
+    detected:
+      whole_video:
+        f_px: 2666.6
+        boundary: false
+        tilt_median_deg: 59.9
+        turn_range_deg: 100.0
+        image_turn_range_deg: 124.0
+      windows:
+      - start_s: 0.0
+        end_s: 5.0
+        n_frames: 150
+        f_px: 2666.2
+        boundary: false
+        turn_range_deg: 62.0
+        image_turn_range_deg: 35.0
+        tilt_median_deg: 17.4
+        rms_px: 2.35
+        shape_diff_pct: 39.04
+      - start_s: 1.0
+        end_s: 6.0
+        n_frames: 150
+        f_px: 3072.0
+        boundary: true
+        turn_range_deg: 75.0
+        image_turn_range_deg: 54.0
+        tilt_median_deg: 56.5
+        rms_px: 3.71
+        shape_diff_pct: 28.75
+      - start_s: 2.0
+        end_s: 7.0
+        n_frames: 150
+        f_px: 2769.6
+        boundary: false
+        turn_range_deg: 64.0
+        image_turn_range_deg: 55.0
+        tilt_median_deg: 53.2
+        rms_px: 4.53
+        shape_diff_pct: 24.5
+      - start_s: 3.0
+        end_s: 8.0
+        n_frames: 150
+        f_px: 3072.0
+        boundary: true
+        turn_range_deg: 72.0
+        image_turn_range_deg: 56.0
+        tilt_median_deg: 35.2
+        rms_px: 4.64
+        shape_diff_pct: 26.22
+      - start_s: 4.0
+        end_s: 9.0
+        n_frames: 150
+        f_px: 2545.6
+        boundary: false
+        turn_range_deg: 60.0
+        image_turn_range_deg: 49.0
+        tilt_median_deg: 22.3
+        rms_px: 3.59
+        shape_diff_pct: 28.37
+      - start_s: 5.0
+        end_s: 10.0
+        n_frames: 150
+        f_px: 3004.4
+        boundary: false
+        turn_range_deg: 38.0
+        image_turn_range_deg: 19.0
+        tilt_median_deg: 18.6
+        rms_px: 1.55
+        shape_diff_pct: 30.4
+      - start_s: 6.0
+        end_s: 11.0
+        n_frames: 150
+        f_px: 2265.7
+        boundary: false
+        turn_range_deg: 13.0
+        image_turn_range_deg: 8.0
+        tilt_median_deg: 14.9
+        rms_px: 1.25
+        shape_diff_pct: 30.37
+      - start_s: 7.0
+        end_s: 12.0
+        n_frames: 150
+        f_px: 2970.1
+        boundary: false
+        turn_range_deg: 52.0
+        image_turn_range_deg: 33.0
+        tilt_median_deg: 22.7
+        rms_px: 1.86
+        shape_diff_pct: 29.5
+      - start_s: 8.0
+        end_s: 13.0
+        n_frames: 150
+        f_px: 3072.0
+        boundary: true
+        turn_range_deg: 86.0
+        image_turn_range_deg: 68.0
+        tilt_median_deg: 35.1
+        rms_px: 3.87
+        shape_diff_pct: 27.13
+      - start_s: 9.0
+        end_s: 14.0
+        n_frames: 150
+        f_px: 3072.0
+        boundary: true
+        turn_range_deg: 174.0
+        image_turn_range_deg: 108.0
+        tilt_median_deg: 54.9
+        rms_px: 4.32
+        shape_diff_pct: 9.87
+      - start_s: 10.0
+        end_s: 15.0
+        n_frames: 150
+        f_px: 3072.0
+        boundary: true
+        turn_range_deg: 246.0
+        image_turn_range_deg: 122.0
+        tilt_median_deg: 59.0
+        rms_px: 4.36
+        shape_diff_pct: 1.62
+      - start_s: 11.0
+        end_s: 16.0
+        n_frames: 150
+        f_px: 3072.0
+        boundary: true
+        turn_range_deg: 347.0
+        image_turn_range_deg: 114.0
+        tilt_median_deg: 61.5
+        rms_px: 3.79
+        shape_diff_pct: 6.23
+      - start_s: 12.0
+        end_s: 17.0
+        n_frames: 150
+        f_px: 2790.9
+        boundary: false
+        turn_range_deg: 85.0
+        image_turn_range_deg: 89.0
+        tilt_median_deg: 50.3
+        rms_px: 2.79
+        shape_diff_pct: 5.61
+      - start_s: 13.0
+        end_s: 18.0
+        n_frames: 150
+        f_px: 1905.6
+        boundary: false
+        turn_range_deg: 55.0
+        image_turn_range_deg: 53.0
+        tilt_median_deg: 13.8
+        rms_px: 1.8
+        shape_diff_pct: 24.08
+      - start_s: 14.0
+        end_s: 19.0
+        n_frames: 150
+        f_px: 3072.0
+        boundary: true
+        turn_range_deg: 15.0
+        image_turn_range_deg: 11.0
+        tilt_median_deg: 12.6
+        rms_px: 1.12
+        shape_diff_pct: 24.84
+      - start_s: 15.0
+        end_s: 20.0
+        n_frames: 150
+        f_px: 1614.7
+        boundary: false
+        turn_range_deg: 39.0
+        image_turn_range_deg: 44.0
+        tilt_median_deg: 12.8
+        rms_px: 1.89
+        shape_diff_pct: 24.34
+      - start_s: 16.0
+        end_s: 21.0
+        n_frames: 150
+        f_px: 2922.1
+        boundary: false
+        turn_range_deg: 217.0
+        image_turn_range_deg: 67.0
+        tilt_median_deg: 51.1
+        rms_px: 2.95
+        shape_diff_pct: 5.62
+      - start_s: 17.0
+        end_s: 22.0
+        n_frames: 150
+        f_px: 3071.9
+        boundary: true
+        turn_range_deg: 203.0
+        image_turn_range_deg: 67.0
+        tilt_median_deg: 59.4
+        rms_px: 3.63
+        shape_diff_pct: 4.56
+      - start_s: 18.0
+        end_s: 23.0
+        n_frames: 150
+        f_px: 3072.0
+        boundary: true
+        turn_range_deg: 205.0
+        image_turn_range_deg: 67.0
+        tilt_median_deg: 68.8
+        rms_px: 3.85
+        shape_diff_pct: 4.87
+      - start_s: 18.57
+        end_s: 23.57
+        n_frames: 150
+        f_px: 3072.0
+        boundary: true
+        turn_range_deg: 179.0
+        image_turn_range_deg: 65.0
+        tilt_median_deg: 66.0
+        rms_px: 3.61
+        shape_diff_pct: 6.58
+  IMG_7353.MOV:
+    distance_cm: 60
+    hand: left
+    tracked:
+      whole_video:
+        f_px: 1569.6
+        boundary: false
+        tilt_median_deg: 54.0
+        turn_range_deg: 75.0
+        image_turn_range_deg: 117.0
+      windows:
+      - start_s: 0.0
+        end_s: 5.0
+        n_frames: 150
+        f_px: 1843.2
+        boundary: false
+        turn_range_deg: 11.0
+        image_turn_range_deg: 35.0
+        tilt_median_deg: 26.2
+        rms_px: 0.47
+        shape_diff_pct: 19.54
+      - start_s: 1.0
+        end_s: 6.0
+        n_frames: 150
+        f_px: 672.0
+        boundary: true
+        turn_range_deg: 15.0
+        image_turn_range_deg: 68.0
+        tilt_median_deg: 47.6
+        rms_px: 1.31
+        shape_diff_pct: 21.57
+      - start_s: 2.0
+        end_s: 7.0
+        n_frames: 150
+        f_px: 3072.0
+        boundary: true
+        turn_range_deg: 116.0
+        image_turn_range_deg: 68.0
+        tilt_median_deg: 69.9
+        rms_px: 1.1
+        shape_diff_pct: 22.06
+      - start_s: 3.0
+        end_s: 8.0
+        n_frames: 150
+        f_px: 3072.0
+        boundary: true
+        turn_range_deg: 111.0
+        image_turn_range_deg: 68.0
+        tilt_median_deg: 62.7
+        rms_px: 1.11
+        shape_diff_pct: 27.57
+      - start_s: 4.0
+        end_s: 9.0
+        n_frames: 150
+        f_px: 2399.8
+        boundary: false
+        turn_range_deg: 55.0
+        image_turn_range_deg: 66.0
+        tilt_median_deg: 44.5
+        rms_px: 1.11
+        shape_diff_pct: 21.01
+      - start_s: 5.0
+        end_s: 10.0
+        n_frames: 150
+        f_px: 1671.1
+        boundary: false
+        turn_range_deg: 40.0
+        image_turn_range_deg: 33.0
+        tilt_median_deg: 22.1
+        rms_px: 0.47
+        shape_diff_pct: 16.02
+      - start_s: 6.0
+        end_s: 11.0
+        n_frames: 150
+        f_px: 1401.8
+        boundary: false
+        turn_range_deg: 7.0
+        image_turn_range_deg: 25.0
+        tilt_median_deg: 11.8
+        rms_px: 0.5
+        shape_diff_pct: 14.62
+      - start_s: 7.0
+        end_s: 12.0
+        n_frames: 150
+        f_px: 3072.0
+        boundary: true
+        turn_range_deg: 70.0
+        image_turn_range_deg: 79.0
+        tilt_median_deg: 54.2
+        rms_px: 0.83
+        shape_diff_pct: 31.63
+      - start_s: 8.0
+        end_s: 13.0
+        n_frames: 150
+        f_px: 3072.0
+        boundary: true
+        turn_range_deg: 179.0
+        image_turn_range_deg: 110.0
+        tilt_median_deg: 52.6
+        rms_px: 0.89
+        shape_diff_pct: 26.56
+      - start_s: 9.0
+        end_s: 14.0
+        n_frames: 150
+        f_px: 2279.6
+        boundary: false
+        turn_range_deg: 185.0
+        image_turn_range_deg: 116.0
+        tilt_median_deg: 56.3
+        rms_px: 1.13
+        shape_diff_pct: 8.21
+      - start_s: 10.0
+        end_s: 15.0
+        n_frames: 150
+        f_px: 3072.0
+        boundary: true
+        turn_range_deg: 164.0
+        image_turn_range_deg: 117.0
+        tilt_median_deg: 43.1
+        rms_px: 1.19
+        shape_diff_pct: 8.4
+      - start_s: 11.0
+        end_s: 16.0
+        n_frames: 150
+        f_px: 3072.0
+        boundary: true
+        turn_range_deg: 93.0
+        image_turn_range_deg: 88.0
+        tilt_median_deg: 34.1
+        rms_px: 0.65
+        shape_diff_pct: 7.65
+      - start_s: 12.0
+        end_s: 17.0
+        n_frames: 150
+        f_px: 2256.5
+        boundary: false
+        turn_range_deg: 44.0
+        image_turn_range_deg: 36.0
+        tilt_median_deg: 15.2
+        rms_px: 0.33
+        shape_diff_pct: 13.45
+      - start_s: 13.0
+        end_s: 18.0
+        n_frames: 150
+        f_px: 2310.0
+        boundary: false
+        turn_range_deg: 23.0
+        image_turn_range_deg: 17.0
+        tilt_median_deg: 6.2
+        rms_px: 0.27
+        shape_diff_pct: 14.93
+      - start_s: 14.0
+        end_s: 19.0
+        n_frames: 150
+        f_px: 3072.0
+        boundary: true
+        turn_range_deg: 95.0
+        image_turn_range_deg: 44.0
+        tilt_median_deg: 28.6
+        rms_px: 0.33
+        shape_diff_pct: 10.33
+      - start_s: 15.0
+        end_s: 20.0
+        n_frames: 150
+        f_px: 3072.0
+        boundary: true
+        turn_range_deg: 95.0
+        image_turn_range_deg: 47.0
+        tilt_median_deg: 31.1
+        rms_px: 0.49
+        shape_diff_pct: 8.87
+      - start_s: 16.0
+        end_s: 21.0
+        n_frames: 150
+        f_px: 3072.0
+        boundary: true
+        turn_range_deg: 57.0
+        image_turn_range_deg: 48.0
+        tilt_median_deg: 41.9
+        rms_px: 0.79
+        shape_diff_pct: 13.03
+      - start_s: 17.0
+        end_s: 22.0
+        n_frames: 150
+        f_px: 3072.0
+        boundary: true
+        turn_range_deg: 59.0
+        image_turn_range_deg: 50.0
+        tilt_median_deg: 42.1
+        rms_px: 0.85
+        shape_diff_pct: 10.06
+      - start_s: 17.7
+        end_s: 22.7
+        n_frames: 150
+        f_px: 3072.0
+        boundary: true
+        turn_range_deg: 44.0
+        image_turn_range_deg: 41.0
+        tilt_median_deg: 16.1
+        rms_px: 0.63
+        shape_diff_pct: 19.74
+    detected:
+      whole_video:
+        f_px: 3072.0
+        boundary: true
+        tilt_median_deg: 53.8
+        turn_range_deg: 114.0
+        image_turn_range_deg: 146.0
+      windows:
+      - start_s: 0.0
+        end_s: 5.0
+        n_frames: 150
+        f_px: 3072.0
+        boundary: true
+        turn_range_deg: 43.0
+        image_turn_range_deg: 47.0
+        tilt_median_deg: 21.6
+        rms_px: 1.29
+        shape_diff_pct: 21.33
+      - start_s: 1.0
+        end_s: 6.0
+        n_frames: 150
+        f_px: 3072.0
+        boundary: true
+        turn_range_deg: 68.0
+        image_turn_range_deg: 88.0
+        tilt_median_deg: 26.7
+        rms_px: 1.85
+        shape_diff_pct: 20.39
+      - start_s: 2.0
+        end_s: 7.0
+        n_frames: 150
+        f_px: 3072.0
+        boundary: true
+        turn_range_deg: 44.0
+        image_turn_range_deg: 88.0
+        tilt_median_deg: 38.9
+        rms_px: 2.32
+        shape_diff_pct: 20.57
+      - start_s: 3.0
+        end_s: 8.0
+        n_frames: 150
+        f_px: 2703.1
+        boundary: false
+        turn_range_deg: 61.0
+        image_turn_range_deg: 88.0
+        tilt_median_deg: 31.7
+        rms_px: 2.44
+        shape_diff_pct: 15.18
+      - start_s: 4.0
+        end_s: 9.0
+        n_frames: 150
+        f_px: 2485.1
+        boundary: false
+        turn_range_deg: 44.0
+        image_turn_range_deg: 87.0
+        tilt_median_deg: 34.7
+        rms_px: 1.95
+        shape_diff_pct: 20.79
+      - start_s: 5.0
+        end_s: 10.0
+        n_frames: 150
+        f_px: 1463.1
+        boundary: false
+        turn_range_deg: 40.0
+        image_turn_range_deg: 56.0
+        tilt_median_deg: 19.0
+        rms_px: 1.54
+        shape_diff_pct: 19.56
+      - start_s: 6.0
+        end_s: 11.0
+        n_frames: 138
+        f_px: 1700.3
+        boundary: false
+        turn_range_deg: 26.0
+        image_turn_range_deg: 39.0
+        tilt_median_deg: 16.0
+        rms_px: 1.54
+        shape_diff_pct: 18.14
+      - start_s: 7.0
+        end_s: 12.0
+        n_frames: 138
+        f_px: 3072.0
+        boundary: true
+        turn_range_deg: 76.0
+        image_turn_range_deg: 106.0
+        tilt_median_deg: 27.7
+        rms_px: 2.2
+        shape_diff_pct: 13.99
+      - start_s: 8.0
+        end_s: 13.0
+        n_frames: 138
+        f_px: 2306.8
+        boundary: false
+        turn_range_deg: 104.0
+        image_turn_range_deg: 137.0
+        tilt_median_deg: 30.8
+        rms_px: 2.88
+        shape_diff_pct: 14.01
+      - start_s: 9.0
+        end_s: 14.0
+        n_frames: 138
+        f_px: 2154.3
+        boundary: false
+        turn_range_deg: 127.0
+        image_turn_range_deg: 145.0
+        tilt_median_deg: 43.8
+        rms_px: 2.89
+        shape_diff_pct: 12.84
+      - start_s: 10.0
+        end_s: 15.0
+        n_frames: 138
+        f_px: 1695.2
+        boundary: false
+        turn_range_deg: 132.0
+        image_turn_range_deg: 145.0
+        tilt_median_deg: 19.5
+        rms_px: 2.52
+        shape_diff_pct: 14.78
+      - start_s: 11.0
+        end_s: 16.0
+        n_frames: 150
+        f_px: 1527.5
+        boundary: false
+        turn_range_deg: 96.0
+        image_turn_range_deg: 104.0
+        tilt_median_deg: 15.7
+        rms_px: 1.98
+        shape_diff_pct: 14.75
+      - start_s: 12.0
+        end_s: 17.0
+        n_frames: 150
+        f_px: 1836.5
+        boundary: false
+        turn_range_deg: 47.0
+        image_turn_range_deg: 40.0
+        tilt_median_deg: 12.9
+        rms_px: 1.33
+        shape_diff_pct: 15.65
+      - start_s: 13.0
+        end_s: 18.0
+        n_frames: 150
+        f_px: 3072.0
+        boundary: true
+        turn_range_deg: 18.0
+        image_turn_range_deg: 22.0
+        tilt_median_deg: 12.0
+        rms_px: 1.03
+        shape_diff_pct: 15.91
+      - start_s: 14.0
+        end_s: 19.0
+        n_frames: 150
+        f_px: 1578.9
+        boundary: false
+        turn_range_deg: 58.0
+        image_turn_range_deg: 45.0
+        tilt_median_deg: 18.1
+        rms_px: 1.6
+        shape_diff_pct: 15.4
+      - start_s: 15.0
+        end_s: 20.0
+        n_frames: 150
+        f_px: 1554.4
+        boundary: false
+        turn_range_deg: 68.0
+        image_turn_range_deg: 46.0
+        tilt_median_deg: 22.2
+        rms_px: 1.99
+        shape_diff_pct: 12.94
+      - start_s: 16.0
+        end_s: 21.0
+        n_frames: 150
+        f_px: 1472.7
+        boundary: false
+        turn_range_deg: 70.0
+        image_turn_range_deg: 46.0
+        tilt_median_deg: 42.3
+        rms_px: 2.14
+        shape_diff_pct: 12.69
+      - start_s: 17.0
+        end_s: 22.0
+        n_frames: 150
+        f_px: 3072.0
+        boundary: true
+        turn_range_deg: 120.0
+        image_turn_range_deg: 48.0
+        tilt_median_deg: 52.4
+        rms_px: 2.08
+        shape_diff_pct: 4.26
+      - start_s: 17.7
+        end_s: 22.7
+        n_frames: 150
+        f_px: 3072.0
+        boundary: true
+        turn_range_deg: 55.0
+        image_turn_range_deg: 40.0
+        tilt_median_deg: 19.7
+        rms_px: 1.93
+        shape_diff_pct: 22.3
+  IMG_7354.MOV:
+    distance_cm: 75
+    hand: right
+    tracked:
+      whole_video:
+        f_px: 3072.0
+        boundary: true
+        tilt_median_deg: 64.5
+        turn_range_deg: 78.0
+        image_turn_range_deg: 106.0
+      windows:
+      - start_s: 0.0
+        end_s: 5.0
+        n_frames: 150
+        f_px: 3072.0
+        boundary: true
+        turn_range_deg: 57.0
+        image_turn_range_deg: 36.0
+        tilt_median_deg: 32.0
+        rms_px: 0.13
+        shape_diff_pct: 38.65
+      - start_s: 1.0
+        end_s: 6.0
+        n_frames: 150
+        f_px: 1940.9
+        boundary: false
+        turn_range_deg: 58.0
+        image_turn_range_deg: 53.0
+        tilt_median_deg: 49.7
+        rms_px: 0.09
+        shape_diff_pct: 29.04
+      - start_s: 2.0
+        end_s: 7.0
+        n_frames: 150
+        f_px: 1909.3
+        boundary: false
+        turn_range_deg: 57.0
+        image_turn_range_deg: 53.0
+        tilt_median_deg: 51.5
+        rms_px: 0.1
+        shape_diff_pct: 25.62
+      - start_s: 3.0
+        end_s: 8.0
+        n_frames: 150
+        f_px: 2051.7
+        boundary: false
+        turn_range_deg: 58.0
+        image_turn_range_deg: 53.0
+        tilt_median_deg: 44.0
+        rms_px: 0.1
+        shape_diff_pct: 22.82
+      - start_s: 4.0
+        end_s: 9.0
+        n_frames: 150
+        f_px: 2700.7
+        boundary: false
+        turn_range_deg: 34.0
+        image_turn_range_deg: 39.0
+        tilt_median_deg: 17.7
+        rms_px: 0.06
+        shape_diff_pct: 23.66
+      - start_s: 5.0
+        end_s: 10.0
+        n_frames: 150
+        f_px: 3072.0
+        boundary: true
+        turn_range_deg: 22.0
+        image_turn_range_deg: 16.0
+        tilt_median_deg: 11.2
+        rms_px: 0.06
+        shape_diff_pct: 26.23
+      - start_s: 6.0
+        end_s: 11.0
+        n_frames: 150
+        f_px: 3072.0
+        boundary: true
+        turn_range_deg: 15.0
+        image_turn_range_deg: 42.0
+        tilt_median_deg: 18.7
+        rms_px: 0.06
+        shape_diff_pct: 27.17
+      - start_s: 7.0
+        end_s: 12.0
+        n_frames: 150
+        f_px: 3072.0
+        boundary: true
+        turn_range_deg: 75.0
+        image_turn_range_deg: 71.0
+        tilt_median_deg: 47.6
+        rms_px: 0.25
+        shape_diff_pct: 24.48
+      - start_s: 8.0
+        end_s: 13.0
+        n_frames: 150
+        f_px: 3072.0
+        boundary: true
+        turn_range_deg: 141.0
+        image_turn_range_deg: 98.0
+        tilt_median_deg: 51.2
+        rms_px: 0.47
+        shape_diff_pct: 17.43
+      - start_s: 9.0
+        end_s: 14.0
+        n_frames: 150
+        f_px: 3072.0
+        boundary: true
+        turn_range_deg: 177.0
+        image_turn_range_deg: 105.0
+        tilt_median_deg: 59.8
+        rms_px: 0.76
+        shape_diff_pct: 6.69
+      - start_s: 10.0
+        end_s: 15.0
+        n_frames: 150
+        f_px: 3071.1
+        boundary: true
+        turn_range_deg: 255.0
+        image_turn_range_deg: 96.0
+        tilt_median_deg: 62.7
+        rms_px: 0.68
+        shape_diff_pct: 5.07
+      - start_s: 11.0
+        end_s: 16.0
+        n_frames: 150
+        f_px: 1728.3
+        boundary: false
+        turn_range_deg: 61.0
+        image_turn_range_deg: 63.0
+        tilt_median_deg: 36.9
+        rms_px: 0.54
+        shape_diff_pct: 18.66
+      - start_s: 12.0
+        end_s: 17.0
+        n_frames: 150
+        f_px: 1466.2
+        boundary: false
+        turn_range_deg: 48.0
+        image_turn_range_deg: 33.0
+        tilt_median_deg: 16.6
+        rms_px: 0.32
+        shape_diff_pct: 26.06
+      - start_s: 13.0
+        end_s: 18.0
+        n_frames: 150
+        f_px: 1045.8
+        boundary: false
+        turn_range_deg: 53.0
+        image_turn_range_deg: 51.0
+        tilt_median_deg: 17.5
+        rms_px: 0.41
+        shape_diff_pct: 26.08
+      - start_s: 14.0
+        end_s: 19.0
+        n_frames: 150
+        f_px: 1109.2
+        boundary: false
+        turn_range_deg: 79.0
+        image_turn_range_deg: 52.0
+        tilt_median_deg: 26.6
+        rms_px: 0.44
+        shape_diff_pct: 24.81
+      - start_s: 15.0
+        end_s: 20.0
+        n_frames: 150
+        f_px: 3072.0
+        boundary: true
+        turn_range_deg: 176.0
+        image_turn_range_deg: 52.0
+        tilt_median_deg: 64.8
+        rms_px: 0.72
+        shape_diff_pct: 6.5
+      - start_s: 15.8
+        end_s: 20.8
+        n_frames: 150
+        f_px: 3072.0
+        boundary: true
+        turn_range_deg: 75.0
+        image_turn_range_deg: 52.0
+        tilt_median_deg: 47.1
+        rms_px: 1.21
+        shape_diff_pct: 31.82
+    detected:
+      whole_video:
+        f_px: 2365.1
+        boundary: false
+        tilt_median_deg: 64.5
+        turn_range_deg: 67.0
+        image_turn_range_deg: 111.0
+      windows:
+      - start_s: 0.0
+        end_s: 5.0
+        n_frames: 150
+        f_px: 2658.9
+        boundary: false
+        turn_range_deg: 79.0
+        image_turn_range_deg: 35.0
+        tilt_median_deg: 37.1
+        rms_px: 1.89
+        shape_diff_pct: 41.04
+      - start_s: 1.0
+        end_s: 6.0
+        n_frames: 150
+        f_px: 3072.0
+        boundary: true
+        turn_range_deg: 104.0
+        image_turn_range_deg: 54.0
+        tilt_median_deg: 39.0
+        rms_px: 3.15
+        shape_diff_pct: 39.55
+      - start_s: 2.0
+        end_s: 7.0
+        n_frames: 150
+        f_px: 3072.0
+        boundary: true
+        turn_range_deg: 106.0
+        image_turn_range_deg: 54.0
+        tilt_median_deg: 50.2
+        rms_px: 3.71
+        shape_diff_pct: 35.81
+      - start_s: 3.0
+        end_s: 8.0
+        n_frames: 150
+        f_px: 3072.0
+        boundary: true
+        turn_range_deg: 90.0
+        image_turn_range_deg: 54.0
+        tilt_median_deg: 39.8
+        rms_px: 3.63
+        shape_diff_pct: 31.99
+      - start_s: 4.0
+        end_s: 9.0
+        n_frames: 150
+        f_px: 2667.9
+        boundary: false
+        turn_range_deg: 59.0
+        image_turn_range_deg: 38.0
+        tilt_median_deg: 37.2
+        rms_px: 2.49
+        shape_diff_pct: 26.7
+      - start_s: 5.0
+        end_s: 10.0
+        n_frames: 150
+        f_px: 995.3
+        boundary: false
+        turn_range_deg: 26.0
+        image_turn_range_deg: 17.0
+        tilt_median_deg: 27.6
+        rms_px: 1.33
+        shape_diff_pct: 27.1
+      - start_s: 6.0
+        end_s: 11.0
+        n_frames: 150
+        f_px: 1337.7
+        boundary: false
+        turn_range_deg: 18.0
+        image_turn_range_deg: 39.0
+        tilt_median_deg: 31.7
+        rms_px: 2.27
+        shape_diff_pct: 25.9
+      - start_s: 7.0
+        end_s: 12.0
+        n_frames: 150
+        f_px: 2750.5
+        boundary: false
+        turn_range_deg: 93.0
+        image_turn_range_deg: 71.0
+        tilt_median_deg: 47.7
+        rms_px: 4.03
+        shape_diff_pct: 25.55
+      - start_s: 8.0
+        end_s: 13.0
+        n_frames: 150
+        f_px: 3072.0
+        boundary: true
+        turn_range_deg: 224.0
+        image_turn_range_deg: 101.0
+        tilt_median_deg: 62.1
+        rms_px: 4.47
+        shape_diff_pct: 12.18
+      - start_s: 9.0
+        end_s: 14.0
+        n_frames: 150
+        f_px: 2101.7
+        boundary: false
+        turn_range_deg: 286.0
+        image_turn_range_deg: 109.0
+        tilt_median_deg: 59.9
+        rms_px: 4.32
+        shape_diff_pct: 12.09
+      - start_s: 10.0
+        end_s: 15.0
+        n_frames: 150
+        f_px: 2985.6
+        boundary: false
+        turn_range_deg: 224.0
+        image_turn_range_deg: 101.0
+        tilt_median_deg: 67.9
+        rms_px: 3.27
+        shape_diff_pct: 15.46
+      - start_s: 11.0
+        end_s: 16.0
+        n_frames: 150
+        f_px: 2219.0
+        boundary: false
+        turn_range_deg: 38.0
+        image_turn_range_deg: 70.0
+        tilt_median_deg: 53.4
+        rms_px: 2.12
+        shape_diff_pct: 10.11
+      - start_s: 12.0
+        end_s: 17.0
+        n_frames: 150
+        f_px: 1200.8
+        boundary: false
+        turn_range_deg: 48.0
+        image_turn_range_deg: 39.0
+        tilt_median_deg: 15.9
+        rms_px: 1.45
+        shape_diff_pct: 28.73
+      - start_s: 13.0
+        end_s: 18.0
+        n_frames: 150
+        f_px: 970.1
+        boundary: false
+        turn_range_deg: 73.0
+        image_turn_range_deg: 56.0
+        tilt_median_deg: 24.7
+        rms_px: 2.19
+        shape_diff_pct: 26.71
+      - start_s: 14.0
+        end_s: 19.0
+        n_frames: 150
+        f_px: 2551.2
+        boundary: false
+        turn_range_deg: 135.0
+        image_turn_range_deg: 58.0
+        tilt_median_deg: 64.6
+        rms_px: 2.91
+        shape_diff_pct: 10.0
+      - start_s: 15.0
+        end_s: 20.0
+        n_frames: 150
+        f_px: 3072.0
+        boundary: true
+        turn_range_deg: 107.0
+        image_turn_range_deg: 57.0
+        tilt_median_deg: 73.8
+        rms_px: 3.36
+        shape_diff_pct: 15.54
+      - start_s: 15.8
+        end_s: 20.8
+        n_frames: 150
+        f_px: 3072.0
+        boundary: true
+        turn_range_deg: 111.0
+        image_turn_range_deg: 57.0
+        tilt_median_deg: 72.7
+        rms_px: 3.36
+        shape_diff_pct: 10.2
+  IMG_7355.MOV:
+    distance_cm: 75
+    hand: left
+    tracked:
+      whole_video:
+        f_px: 1559.4
+        boundary: false
+        tilt_median_deg: 48.7
+        turn_range_deg: 110.0
+        image_turn_range_deg: 121.0
+      windows:
+      - start_s: 0.0
+        end_s: 5.0
+        n_frames: 150
+        f_px: 723.0
+        boundary: false
+        turn_range_deg: 11.0
+        image_turn_range_deg: 57.0
+        tilt_median_deg: 32.9
+        rms_px: 0.88
+        shape_diff_pct: 19.48
+      - start_s: 1.0
+        end_s: 6.0
+        n_frames: 150
+        f_px: 699.5
+        boundary: false
+        turn_range_deg: 46.0
+        image_turn_range_deg: 76.0
+        tilt_median_deg: 38.0
+        rms_px: 1.2
+        shape_diff_pct: 17.07
+      - start_s: 2.0
+        end_s: 7.0
+        n_frames: 150
+        f_px: 3072.0
+        boundary: true
+        turn_range_deg: 148.0
+        image_turn_range_deg: 76.0
+        tilt_median_deg: 71.7
+        rms_px: 0.99
+        shape_diff_pct: 19.41
+      - start_s: 3.0
+        end_s: 8.0
+        n_frames: 150
+        f_px: 3072.0
+        boundary: true
+        turn_range_deg: 145.0
+        image_turn_range_deg: 75.0
+        tilt_median_deg: 70.5
+        rms_px: 0.91
+        shape_diff_pct: 19.03
+      - start_s: 4.0
+        end_s: 9.0
+        n_frames: 150
+        f_px: 672.1
+        boundary: true
+        turn_range_deg: 21.0
+        image_turn_range_deg: 56.0
+        tilt_median_deg: 60.4
+        rms_px: 0.39
+        shape_diff_pct: 32.47
+      - start_s: 5.0
+        end_s: 10.0
+        n_frames: 150
+        f_px: 3072.0
+        boundary: true
+        turn_range_deg: 29.0
+        image_turn_range_deg: 23.0
+        tilt_median_deg: 17.0
+        rms_px: 0.21
+        shape_diff_pct: 30.07
+      - start_s: 6.0
+        end_s: 11.0
+        n_frames: 150
+        f_px: 3072.0
+        boundary: true
+        turn_range_deg: 16.0
+        image_turn_range_deg: 87.0
+        tilt_median_deg: 71.2
+        rms_px: 0.69
+        shape_diff_pct: 20.0
+      - start_s: 7.0
+        end_s: 12.0
+        n_frames: 150
+        f_px: 2717.6
+        boundary: false
+        turn_range_deg: 158.0
+        image_turn_range_deg: 117.0
+        tilt_median_deg: 71.5
+        rms_px: 0.8
+        shape_diff_pct: 15.07
+      - start_s: 8.0
+        end_s: 13.0
+        n_frames: 150
+        f_px: 1606.2
+        boundary: false
+        turn_range_deg: 274.0
+        image_turn_range_deg: 119.0
+        tilt_median_deg: 54.9
+        rms_px: 1.03
+        shape_diff_pct: 2.31
+      - start_s: 9.0
+        end_s: 14.0
+        n_frames: 150
+        f_px: 1673.3
+        boundary: false
+        turn_range_deg: 280.0
+        image_turn_range_deg: 119.0
+        tilt_median_deg: 36.3
+        rms_px: 0.95
+        shape_diff_pct: 2.6
+      - start_s: 10.0
+        end_s: 15.0
+        n_frames: 150
+        f_px: 2367.8
+        boundary: false
+        turn_range_deg: 100.0
+        image_turn_range_deg: 96.0
+        tilt_median_deg: 31.1
+        rms_px: 0.66
+        shape_diff_pct: 5.98
+      - start_s: 11.0
+        end_s: 16.0
+        n_frames: 150
+        f_px: 1656.2
+        boundary: false
+        turn_range_deg: 46.0
+        image_turn_range_deg: 32.0
+        tilt_median_deg: 15.6
+        rms_px: 0.36
+        shape_diff_pct: 4.82
+      - start_s: 12.0
+        end_s: 17.0
+        n_frames: 150
+        f_px: 2049.5
+        boundary: false
+        turn_range_deg: 90.0
+        image_turn_range_deg: 41.0
+        tilt_median_deg: 29.5
+        rms_px: 0.39
+        shape_diff_pct: 5.85
+      - start_s: 13.0
+        end_s: 18.0
+        n_frames: 150
+        f_px: 3072.0
+        boundary: true
+        turn_range_deg: 76.0
+        image_turn_range_deg: 47.0
+        tilt_median_deg: 16.8
+        rms_px: 0.89
+        shape_diff_pct: 4.74
+      - start_s: 14.0
+        end_s: 19.0
+        n_frames: 150
+        f_px: 3072.0
+        boundary: true
+        turn_range_deg: 74.0
+        image_turn_range_deg: 47.0
+        tilt_median_deg: 39.0
+        rms_px: 1.08
+        shape_diff_pct: 2.49
+      - start_s: 15.0
+        end_s: 20.0
+        n_frames: 150
+        f_px: 3072.0
+        boundary: true
+        turn_range_deg: 71.0
+        image_turn_range_deg: 49.0
+        tilt_median_deg: 37.4
+        rms_px: 0.98
+        shape_diff_pct: 7.1
+      - start_s: 15.3
+        end_s: 20.3
+        n_frames: 150
+        f_px: 3072.0
+        boundary: true
+        turn_range_deg: 70.0
+        image_turn_range_deg: 48.0
+        tilt_median_deg: 35.2
+        rms_px: 0.89
+        shape_diff_pct: 8.21
+    detected:
+      whole_video:
+        f_px: 1031.9
+        boundary: false
+        tilt_median_deg: 39.1
+        turn_range_deg: 121.0
+        image_turn_range_deg: 175.0
+      windows:
+      - start_s: 0.0
+        end_s: 5.0
+        n_frames: 150
+        f_px: 3072.0
+        boundary: true
+        turn_range_deg: 62.0
+        image_turn_range_deg: 80.0
+        tilt_median_deg: 23.9
+        rms_px: 1.54
+        shape_diff_pct: 11.74
+      - start_s: 1.0
+        end_s: 6.0
+        n_frames: 150
+        f_px: 2756.1
+        boundary: false
+        turn_range_deg: 90.0
+        image_turn_range_deg: 128.0
+        tilt_median_deg: 36.3
+        rms_px: 2.61
+        shape_diff_pct: 17.27
+      - start_s: 2.0
+        end_s: 7.0
+        n_frames: 150
+        f_px: 1424.9
+        boundary: false
+        turn_range_deg: 79.0
+        image_turn_range_deg: 128.0
+        tilt_median_deg: 37.0
+        rms_px: 3.09
+        shape_diff_pct: 16.01
+      - start_s: 3.0
+        end_s: 8.0
+        n_frames: 150
+        f_px: 889.2
+        boundary: false
+        turn_range_deg: 79.0
+        image_turn_range_deg: 127.0
+        tilt_median_deg: 28.6
+        rms_px: 3.2
+        shape_diff_pct: 21.22
+      - start_s: 4.0
+        end_s: 9.0
+        n_frames: 150
+        f_px: 672.0
+        boundary: true
+        turn_range_deg: 66.0
+        image_turn_range_deg: 99.0
+        tilt_median_deg: 19.3
+        rms_px: 2.62
+        shape_diff_pct: 23.86
+      - start_s: 5.0
+        end_s: 10.0
+        n_frames: 150
+        f_px: 968.7
+        boundary: false
+        turn_range_deg: 29.0
+        image_turn_range_deg: 65.0
+        tilt_median_deg: 9.0
+        rms_px: 1.72
+        shape_diff_pct: 24.72
+      - start_s: 6.0
+        end_s: 11.0
+        n_frames: 150
+        f_px: 1026.7
+        boundary: false
+        turn_range_deg: 113.0
+        image_turn_range_deg: 118.0
+        tilt_median_deg: 31.6
+        rms_px: 2.71
+        shape_diff_pct: 25.75
+      - start_s: 7.0
+        end_s: 12.0
+        n_frames: 150
+        f_px: 681.7
+        boundary: false
+        turn_range_deg: 116.0
+        image_turn_range_deg: 153.0
+        tilt_median_deg: 39.0
+        rms_px: 3.09
+        shape_diff_pct: 5.84
+      - start_s: 8.0
+        end_s: 13.0
+        n_frames: 150
+        f_px: 779.4
+        boundary: false
+        turn_range_deg: 122.0
+        image_turn_range_deg: 158.0
+        tilt_median_deg: 40.2
+        rms_px: 2.98
+        shape_diff_pct: 1.94
+      - start_s: 9.0
+        end_s: 14.0
+        n_frames: 150
+        f_px: 882.0
+        boundary: false
+        turn_range_deg: 123.0
+        image_turn_range_deg: 154.0
+        tilt_median_deg: 32.2
+        rms_px: 2.62
+        shape_diff_pct: 1.98
+      - start_s: 10.0
+        end_s: 15.0
+        n_frames: 150
+        f_px: 1044.2
+        boundary: false
+        turn_range_deg: 106.0
+        image_turn_range_deg: 110.0
+        tilt_median_deg: 20.0
+        rms_px: 1.85
+        shape_diff_pct: 2.36
+      - start_s: 11.0
+        end_s: 16.0
+        n_frames: 150
+        f_px: 1857.3
+        boundary: false
+        turn_range_deg: 50.0
+        image_turn_range_deg: 40.0
+        tilt_median_deg: 17.4
+        rms_px: 1.19
+        shape_diff_pct: 2.94
+      - start_s: 12.0
+        end_s: 17.0
+        n_frames: 150
+        f_px: 675.7
+        boundary: false
+        turn_range_deg: 50.0
+        image_turn_range_deg: 52.0
+        tilt_median_deg: 29.7
+        rms_px: 1.38
+        shape_diff_pct: 5.48
+      - start_s: 13.0
+        end_s: 18.0
+        n_frames: 150
+        f_px: 672.0
+        boundary: true
+        turn_range_deg: 59.0
+        image_turn_range_deg: 51.0
+        tilt_median_deg: 25.3
+        rms_px: 1.91
+        shape_diff_pct: 3.44
+      - start_s: 14.0
+        end_s: 19.0
+        n_frames: 150
+        f_px: 672.0
+        boundary: true
+        turn_range_deg: 60.0
+        image_turn_range_deg: 52.0
+        tilt_median_deg: 34.1
+        rms_px: 2.04
+        shape_diff_pct: 2.65
+      - start_s: 15.0
+        end_s: 20.0
+        n_frames: 150
+        f_px: 764.5
+        boundary: false
+        turn_range_deg: 63.0
+        image_turn_range_deg: 51.0
+        tilt_median_deg: 36.1
+        rms_px: 1.91
+        shape_diff_pct: 1.67
+      - start_s: 15.3
+        end_s: 20.3
+        n_frames: 150
+        f_px: 1185.5
+        boundary: false
+        turn_range_deg: 71.0
+        image_turn_range_deg: 51.0
+        tilt_median_deg: 38.8
+        rms_px: 1.81
+        shape_diff_pct: 2.11
+  IMG_7356.MOV:
+    distance_cm: 75
+    hand: right
+    tracked:
+      whole_video:
+        f_px: 3072.0
+        boundary: true
+        tilt_median_deg: 67.2
+        turn_range_deg: 50.0
+        image_turn_range_deg: 107.0
+      windows:
+      - start_s: 0.0
+        end_s: 5.0
+        n_frames: 150
+        f_px: 2563.4
+        boundary: false
+        turn_range_deg: 47.0
+        image_turn_range_deg: 49.0
+        tilt_median_deg: 50.1
+        rms_px: 0.16
+        shape_diff_pct: 40.24
+      - start_s: 1.0
+        end_s: 6.0
+        n_frames: 150
+        f_px: 3072.0
+        boundary: true
+        turn_range_deg: 64.0
+        image_turn_range_deg: 50.0
+        tilt_median_deg: 55.7
+        rms_px: 0.21
+        shape_diff_pct: 26.57
+      - start_s: 2.0
+        end_s: 7.0
+        n_frames: 150
+        f_px: 3072.0
+        boundary: true
+        turn_range_deg: 53.0
+        image_turn_range_deg: 50.0
+        tilt_median_deg: 40.4
+        rms_px: 0.23
+        shape_diff_pct: 36.0
+      - start_s: 3.0
+        end_s: 8.0
+        n_frames: 150
+        f_px: 2786.5
+        boundary: false
+        turn_range_deg: 29.0
+        image_turn_range_deg: 47.0
+        tilt_median_deg: 61.2
+        rms_px: 0.15
+        shape_diff_pct: 10.93
+      - start_s: 4.0
+        end_s: 9.0
+        n_frames: 150
+        f_px: 2614.8
+        boundary: false
+        turn_range_deg: 20.0
+        image_turn_range_deg: 26.0
+        tilt_median_deg: 26.2
+        rms_px: 0.08
+        shape_diff_pct: 31.55
+      - start_s: 5.0
+        end_s: 10.0
+        n_frames: 150
+        f_px: 3072.0
+        boundary: true
+        turn_range_deg: 13.0
+        image_turn_range_deg: 52.0
+        tilt_median_deg: 36.1
+        rms_px: 0.17
+        shape_diff_pct: 31.32
+      - start_s: 6.0
+        end_s: 11.0
+        n_frames: 150
+        f_px: 3072.0
+        boundary: true
+        turn_range_deg: 98.0
+        image_turn_range_deg: 90.0
+        tilt_median_deg: 47.0
+        rms_px: 0.53
+        shape_diff_pct: 24.99
+      - start_s: 7.0
+        end_s: 12.0
+        n_frames: 150
+        f_px: 3072.0
+        boundary: true
+        turn_range_deg: 242.0
+        image_turn_range_deg: 106.0
+        tilt_median_deg: 58.0
+        rms_px: 0.86
+        shape_diff_pct: 6.36
+      - start_s: 8.0
+        end_s: 13.0
+        n_frames: 150
+        f_px: 3072.0
+        boundary: true
+        turn_range_deg: 238.0
+        image_turn_range_deg: 105.0
+        tilt_median_deg: 62.9
+        rms_px: 0.83
+        shape_diff_pct: 4.92
+      - start_s: 9.0
+        end_s: 14.0
+        n_frames: 150
+        f_px: 2873.1
+        boundary: false
+        turn_range_deg: 241.0
+        image_turn_range_deg: 92.0
+        tilt_median_deg: 60.3
+        rms_px: 0.75
+        shape_diff_pct: 7.12
+      - start_s: 10.0
+        end_s: 15.0
+        n_frames: 150
+        f_px: 1521.3
+        boundary: false
+        turn_range_deg: 55.0
+        image_turn_range_deg: 53.0
+        tilt_median_deg: 29.2
+        rms_px: 0.49
+        shape_diff_pct: 29.57
+      - start_s: 11.0
+        end_s: 16.0
+        n_frames: 150
+        f_px: 2043.0
+        boundary: false
+        turn_range_deg: 19.0
+        image_turn_range_deg: 15.0
+        tilt_median_deg: 15.0
+        rms_px: 0.17
+        shape_diff_pct: 34.43
+      - start_s: 12.0
+        end_s: 17.0
+        n_frames: 150
+        f_px: 1308.9
+        boundary: false
+        turn_range_deg: 67.0
+        image_turn_range_deg: 45.0
+        tilt_median_deg: 23.3
+        rms_px: 0.45
+        shape_diff_pct: 31.58
+      - start_s: 13.0
+        end_s: 18.0
+        n_frames: 150
+        f_px: 2366.5
+        boundary: false
+        turn_range_deg: 179.0
+        image_turn_range_deg: 56.0
+        tilt_median_deg: 54.6
+        rms_px: 0.66
+        shape_diff_pct: 12.02
+      - start_s: 14.0
+        end_s: 19.0
+        n_frames: 150
+        f_px: 3072.0
+        boundary: true
+        turn_range_deg: 156.0
+        image_turn_range_deg: 56.0
+        tilt_median_deg: 67.7
+        rms_px: 0.7
+        shape_diff_pct: 4.74
+      - start_s: 15.0
+        end_s: 20.0
+        n_frames: 150
+        f_px: 3072.0
+        boundary: true
+        turn_range_deg: 156.0
+        image_turn_range_deg: 56.0
+        tilt_median_deg: 68.0
+        rms_px: 0.78
+        shape_diff_pct: 8.18
+      - start_s: 15.9
+        end_s: 20.9
+        n_frames: 150
+        f_px: 3072.0
+        boundary: true
+        turn_range_deg: 72.0
+        image_turn_range_deg: 51.0
+        tilt_median_deg: 56.6
+        rms_px: 0.61
+        shape_diff_pct: 27.01
+    detected:
+      whole_video:
+        f_px: 3010.0
+        boundary: false
+        tilt_median_deg: 68.4
+        turn_range_deg: 72.0
+        image_turn_range_deg: 114.0
+      windows:
+      - start_s: 0.0
+        end_s: 5.0
+        n_frames: 150
+        f_px: 2659.8
+        boundary: false
+        turn_range_deg: 128.0
+        image_turn_range_deg: 49.0
+        tilt_median_deg: 60.1
+        rms_px: 2.72
+        shape_diff_pct: 33.37
+      - start_s: 1.0
+        end_s: 6.0
+        n_frames: 150
+        f_px: 3072.0
+        boundary: true
+        turn_range_deg: 89.0
+        image_turn_range_deg: 51.0
+        tilt_median_deg: 64.1
+        rms_px: 3.77
+        shape_diff_pct: 22.87
+      - start_s: 2.0
+        end_s: 7.0
+        n_frames: 150
+        f_px: 3072.0
+        boundary: true
+        turn_range_deg: 81.0
+        image_turn_range_deg: 50.0
+        tilt_median_deg: 67.3
+        rms_px: 4.12
+        shape_diff_pct: 18.1
+      - start_s: 3.0
+        end_s: 8.0
+        n_frames: 150
+        f_px: 3072.0
+        boundary: true
+        turn_range_deg: 78.0
+        image_turn_range_deg: 48.0
+        tilt_median_deg: 56.2
+        rms_px: 3.64
+        shape_diff_pct: 27.18
+      - start_s: 4.0
+        end_s: 9.0
+        n_frames: 150
+        f_px: 1574.6
+        boundary: false
+        turn_range_deg: 42.0
+        image_turn_range_deg: 23.0
+        tilt_median_deg: 31.0
+        rms_px: 2.14
+        shape_diff_pct: 36.14
+      - start_s: 5.0
+        end_s: 10.0
+        n_frames: 150
+        f_px: 3072.0
+        boundary: true
+        turn_range_deg: 41.0
+        image_turn_range_deg: 53.0
+        tilt_median_deg: 43.7
+        rms_px: 2.83
+        shape_diff_pct: 34.34
+      - start_s: 6.0
+        end_s: 11.0
+        n_frames: 150
+        f_px: 3072.0
+        boundary: true
+        turn_range_deg: 198.0
+        image_turn_range_deg: 96.0
+        tilt_median_deg: 60.3
+        rms_px: 4.34
+        shape_diff_pct: 16.74
+      - start_s: 7.0
+        end_s: 12.0
+        n_frames: 150
+        f_px: 3072.0
+        boundary: true
+        turn_range_deg: 198.0
+        image_turn_range_deg: 114.0
+        tilt_median_deg: 69.7
+        rms_px: 4.15
+        shape_diff_pct: 13.11
+      - start_s: 8.0
+        end_s: 13.0
+        n_frames: 150
+        f_px: 3072.0
+        boundary: true
+        turn_range_deg: 222.0
+        image_turn_range_deg: 114.0
+        tilt_median_deg: 67.4
+        rms_px: 3.73
+        shape_diff_pct: 7.25
+      - start_s: 9.0
+        end_s: 14.0
+        n_frames: 150
+        f_px: 2811.1
+        boundary: false
+        turn_range_deg: 221.0
+        image_turn_range_deg: 98.0
+        tilt_median_deg: 63.4
+        rms_px: 2.68
+        shape_diff_pct: 3.54
+      - start_s: 10.0
+        end_s: 15.0
+        n_frames: 150
+        f_px: 1517.6
+        boundary: false
+        turn_range_deg: 54.0
+        image_turn_range_deg: 60.0
+        tilt_median_deg: 27.7
+        rms_px: 1.38
+        shape_diff_pct: 30.19
+      - start_s: 11.0
+        end_s: 16.0
+        n_frames: 150
+        f_px: 2605.8
+        boundary: false
+        turn_range_deg: 24.0
+        image_turn_range_deg: 16.0
+        tilt_median_deg: 11.8
+        rms_px: 0.9
+        shape_diff_pct: 34.04
+      - start_s: 12.0
+        end_s: 17.0
+        n_frames: 150
+        f_px: 1223.0
+        boundary: false
+        turn_range_deg: 49.0
+        image_turn_range_deg: 50.0
+        tilt_median_deg: 20.1
+        rms_px: 1.57
+        shape_diff_pct: 33.48
+      - start_s: 13.0
+        end_s: 18.0
+        n_frames: 150
+        f_px: 2496.0
+        boundary: false
+        turn_range_deg: 187.0
+        image_turn_range_deg: 60.0
+        tilt_median_deg: 58.4
+        rms_px: 2.29
+        shape_diff_pct: 7.79
+      - start_s: 14.0
+        end_s: 19.0
+        n_frames: 150
+        f_px: 3072.0
+        boundary: true
+        turn_range_deg: 166.0
+        image_turn_range_deg: 60.0
+        tilt_median_deg: 70.6
+        rms_px: 2.61
+        shape_diff_pct: 4.65
+      - start_s: 15.0
+        end_s: 20.0
+        n_frames: 150
+        f_px: 3072.0
+        boundary: true
+        turn_range_deg: 155.0
+        image_turn_range_deg: 61.0
+        tilt_median_deg: 72.5
+        rms_px: 2.75
+        shape_diff_pct: 4.71
+      - start_s: 15.9
+        end_s: 20.9
+        n_frames: 150
+        f_px: 3072.0
+        boundary: true
+        turn_range_deg: 136.0
+        image_turn_range_deg: 56.0
+        tilt_median_deg: 60.1
+        rms_px: 2.55
+        shape_diff_pct: 26.35
+  IMG_7357.MOV:
+    distance_cm: 75
+    hand: left
+    tracked:
+      whole_video:
+        f_px: 1797.1
+        boundary: false
+        tilt_median_deg: 54.2
+        turn_range_deg: 102.0
+        image_turn_range_deg: 116.0
+      windows:
+      - start_s: 0.0
+        end_s: 5.0
+        n_frames: 150
+        f_px: 736.7
+        boundary: false
+        turn_range_deg: 24.0
+        image_turn_range_deg: 66.0
+        tilt_median_deg: 33.5
+        rms_px: 1.13
+        shape_diff_pct: 23.01
+      - start_s: 1.0
+        end_s: 6.0
+        n_frames: 150
+        f_px: 2131.6
+        boundary: false
+        turn_range_deg: 129.0
+        image_turn_range_deg: 68.0
+        tilt_median_deg: 62.1
+        rms_px: 0.99
+        shape_diff_pct: 6.86
+      - start_s: 2.0
+        end_s: 7.0
+        n_frames: 150
+        f_px: 3072.0
+        boundary: true
+        turn_range_deg: 138.0
+        image_turn_range_deg: 68.0
+        tilt_median_deg: 71.8
+        rms_px: 0.88
+        shape_diff_pct: 21.98
+      - start_s: 3.0
+        end_s: 8.0
+        n_frames: 150
+        f_px: 3072.0
+        boundary: true
+        turn_range_deg: 129.0
+        image_turn_range_deg: 67.0
+        tilt_median_deg: 68.9
+        rms_px: 0.79
+        shape_diff_pct: 19.0
+      - start_s: 4.0
+        end_s: 9.0
+        n_frames: 150
+        f_px: 3072.0
+        boundary: true
+        turn_range_deg: 41.0
+        image_turn_range_deg: 42.0
+        tilt_median_deg: 35.3
+        rms_px: 0.39
+        shape_diff_pct: 19.48
+      - start_s: 5.0
+        end_s: 10.0
+        n_frames: 150
+        f_px: 3072.0
+        boundary: true
+        turn_range_deg: 20.0
+        image_turn_range_deg: 58.0
+        tilt_median_deg: 18.1
+        rms_px: 0.42
+        shape_diff_pct: 26.68
+      - start_s: 6.0
+        end_s: 11.0
+        n_frames: 150
+        f_px: 3072.0
+        boundary: true
+        turn_range_deg: 49.0
+        image_turn_range_deg: 92.0
+        tilt_median_deg: 56.7
+        rms_px: 0.43
+        shape_diff_pct: 8.22
+      - start_s: 7.0
+        end_s: 12.0
+        n_frames: 150
+        f_px: 2904.3
+        boundary: false
+        turn_range_deg: 180.0
+        image_turn_range_deg: 112.0
+        tilt_median_deg: 57.1
+        rms_px: 0.53
+        shape_diff_pct: 3.48
+      - start_s: 8.0
+        end_s: 13.0
+        n_frames: 150
+        f_px: 2802.2
+        boundary: false
+        turn_range_deg: 187.0
+        image_turn_range_deg: 112.0
+        tilt_median_deg: 51.7
+        rms_px: 0.55
+        shape_diff_pct: 5.77
+      - start_s: 9.0
+        end_s: 14.0
+        n_frames: 150
+        f_px: 3072.0
+        boundary: true
+        turn_range_deg: 175.0
+        image_turn_range_deg: 110.0
+        tilt_median_deg: 48.6
+        rms_px: 0.53
+        shape_diff_pct: 9.47
+      - start_s: 10.0
+        end_s: 15.0
+        n_frames: 150
+        f_px: 3072.0
+        boundary: true
+        turn_range_deg: 49.0
+        image_turn_range_deg: 56.0
+        tilt_median_deg: 44.2
+        rms_px: 0.41
+        shape_diff_pct: 8.44
+      - start_s: 11.0
+        end_s: 16.0
+        n_frames: 150
+        f_px: 2062.6
+        boundary: false
+        turn_range_deg: 31.0
+        image_turn_range_deg: 19.0
+        tilt_median_deg: 7.8
+        rms_px: 0.23
+        shape_diff_pct: 5.06
+      - start_s: 12.0
+        end_s: 17.0
+        n_frames: 150
+        f_px: 2701.4
+        boundary: false
+        turn_range_deg: 183.0
+        image_turn_range_deg: 43.0
+        tilt_median_deg: 37.9
+        rms_px: 0.36
+        shape_diff_pct: 4.45
+      - start_s: 13.0
+        end_s: 18.0
+        n_frames: 150
+        f_px: 3072.0
+        boundary: true
+        turn_range_deg: 177.0
+        image_turn_range_deg: 48.0
+        tilt_median_deg: 48.1
+        rms_px: 0.51
+        shape_diff_pct: 10.83
+      - start_s: 14.0
+        end_s: 19.0
+        n_frames: 150
+        f_px: 3072.0
+        boundary: true
+        turn_range_deg: 177.0
+        image_turn_range_deg: 50.0
+        tilt_median_deg: 52.7
+        rms_px: 0.61
+        shape_diff_pct: 8.6
+      - start_s: 15.0
+        end_s: 20.0
+        n_frames: 150
+        f_px: 3072.0
+        boundary: true
+        turn_range_deg: 72.0
+        image_turn_range_deg: 51.0
+        tilt_median_deg: 38.5
+        rms_px: 0.91
+        shape_diff_pct: 11.92
+      - start_s: 15.03
+        end_s: 20.03
+        n_frames: 150
+        f_px: 3072.0
+        boundary: true
+        turn_range_deg: 71.0
+        image_turn_range_deg: 51.0
+        tilt_median_deg: 37.8
+        rms_px: 0.92
+        shape_diff_pct: 12.45
+    detected:
+      whole_video:
+        f_px: 1084.9
+        boundary: false
+        tilt_median_deg: 41.4
+        turn_range_deg: 138.0
+        image_turn_range_deg: 179.0
+      windows:
+      - start_s: 0.0
+        end_s: 5.0
+        n_frames: 148
+        f_px: 3072.0
+        boundary: true
+        turn_range_deg: 60.0
+        image_turn_range_deg: 129.0
+        tilt_median_deg: 24.4
+        rms_px: 1.94
+        shape_diff_pct: 12.89
+      - start_s: 1.0
+        end_s: 6.0
+        n_frames: 142
+        f_px: 2276.6
+        boundary: false
+        turn_range_deg: 74.0
+        image_turn_range_deg: 129.0
+        tilt_median_deg: 24.5
+        rms_px: 2.46
+        shape_diff_pct: 13.62
+      - start_s: 2.0
+        end_s: 7.0
+        n_frames: 142
+        f_px: 1478.4
+        boundary: false
+        turn_range_deg: 88.0
+        image_turn_range_deg: 129.0
+        tilt_median_deg: 41.2
+        rms_px: 2.69
+        shape_diff_pct: 18.84
+      - start_s: 3.0
+        end_s: 8.0
+        n_frames: 142
+        f_px: 968.8
+        boundary: false
+        turn_range_deg: 91.0
+        image_turn_range_deg: 129.0
+        tilt_median_deg: 32.3
+        rms_px: 2.65
+        shape_diff_pct: 21.37
+      - start_s: 4.0
+        end_s: 9.0
+        n_frames: 142
+        f_px: 912.1
+        boundary: false
+        turn_range_deg: 52.0
+        image_turn_range_deg: 124.0
+        tilt_median_deg: 30.2
+        rms_px: 2.26
+        shape_diff_pct: 24.2
+      - start_s: 5.0
+        end_s: 10.0
+        n_frames: 140
+        f_px: 802.2
+        boundary: false
+        turn_range_deg: 52.0
+        image_turn_range_deg: 98.0
+        tilt_median_deg: 21.8
+        rms_px: 2.13
+        shape_diff_pct: 23.25
+      - start_s: 6.0
+        end_s: 11.0
+        n_frames: 146
+        f_px: 750.8
+        boundary: false
+        turn_range_deg: 103.0
+        image_turn_range_deg: 132.0
+        tilt_median_deg: 35.1
+        rms_px: 2.49
+        shape_diff_pct: 10.04
+      - start_s: 7.0
+        end_s: 12.0
+        n_frames: 146
+        f_px: 909.4
+        boundary: false
+        turn_range_deg: 123.0
+        image_turn_range_deg: 154.0
+        tilt_median_deg: 42.8
+        rms_px: 2.86
+        shape_diff_pct: 3.84
+      - start_s: 8.0
+        end_s: 13.0
+        n_frames: 146
+        f_px: 772.4
+        boundary: false
+        turn_range_deg: 128.0
+        image_turn_range_deg: 154.0
+        tilt_median_deg: 36.3
+        rms_px: 2.68
+        shape_diff_pct: 1.52
+      - start_s: 9.0
+        end_s: 14.0
+        n_frames: 146
+        f_px: 902.6
+        boundary: false
+        turn_range_deg: 128.0
+        image_turn_range_deg: 141.0
+        tilt_median_deg: 19.6
+        rms_px: 2.1
+        shape_diff_pct: 2.08
+      - start_s: 10.0
+        end_s: 15.0
+        n_frames: 150
+        f_px: 897.4
+        boundary: false
+        turn_range_deg: 68.0
+        image_turn_range_deg: 65.0
+        tilt_median_deg: 13.7
+        rms_px: 1.49
+        shape_diff_pct: 2.56
+      - start_s: 11.0
+        end_s: 16.0
+        n_frames: 150
+        f_px: 1867.3
+        boundary: false
+        turn_range_deg: 26.0
+        image_turn_range_deg: 24.0
+        tilt_median_deg: 13.7
+        rms_px: 0.99
+        shape_diff_pct: 3.28
+      - start_s: 12.0
+        end_s: 17.0
+        n_frames: 150
+        f_px: 801.9
+        boundary: false
+        turn_range_deg: 54.0
+        image_turn_range_deg: 49.0
+        tilt_median_deg: 13.7
+        rms_px: 1.54
+        shape_diff_pct: 2.4
+      - start_s: 13.0
+        end_s: 18.0
+        n_frames: 150
+        f_px: 710.0
+        boundary: false
+        turn_range_deg: 58.0
+        image_turn_range_deg: 54.0
+        tilt_median_deg: 14.3
+        rms_px: 1.91
+        shape_diff_pct: 1.89
+      - start_s: 14.0
+        end_s: 19.0
+        n_frames: 150
+        f_px: 672.0
+        boundary: true
+        turn_range_deg: 57.0
+        image_turn_range_deg: 55.0
+        tilt_median_deg: 34.3
+        rms_px: 2.0
+        shape_diff_pct: 1.57
+      - start_s: 15.0
+        end_s: 20.0
+        n_frames: 150
+        f_px: 1960.0
+        boundary: false
+        turn_range_deg: 102.0
+        image_turn_range_deg: 54.0
+        tilt_median_deg: 49.2
+        rms_px: 1.79
+        shape_diff_pct: 6.1
+      - start_s: 15.03
+        end_s: 20.03
+        n_frames: 150
+        f_px: 2007.3
+        boundary: false
+        turn_range_deg: 103.0
+        image_turn_range_deg: 54.0
+        tilt_median_deg: 49.7
+        rms_px: 1.79
+        shape_diff_pct: 6.52
