@@ -292,7 +292,7 @@ All entries below are pending implementation and validation. No acceptance item 
 - [x] `git diff --check` completed successfully
 - [x] Speed stepper endpoints/sequence and timestamp-clock continuity are covered by viewer/playback tests
 - [x] HUD animation duration, all four nearest-corner destinations, final anchor position, and retained requested size are covered by offscreen Qt tests
-- [x] Single/comparison mode controls, Pin labels, icon state, annotations wording, and vectors state transitions are covered by offscreen Qt tests
+- [x] Single/comparison mode controls, Pin icon state, annotations wording, and vectors state transitions are covered by offscreen Qt tests
 
 ### Windows GUI observations
 
@@ -333,6 +333,16 @@ All entries below are pending implementation and validation. No acceptance item 
 - [x] Windows dark-theme switch screenshot visually confirms a neutral track and high-contrast thumb.
 - [x] Windows Qt runtime smoke with three saved `.cfh` results: Detection Bar ON measured 316 px HUD height; OFF immediately measured 268 px without pointer movement; a later Leave event retained 268 px. No inference ran.
 - [ ] Light-theme switch visual review remains pending.
+- [ ] Fresh AnyCalib/WiLoR inference and first-user reruns remain pending.
+
+
+## Final Toolbar Simplification (2026-11-04)
+
+- [x] Replace visible Overlay/Split labels with a stable `Layout` label; switch remains OFF=Overlay and ON=Split, with current mode in its tooltip and accessible description.
+- [x] Move Pin beside the mode switch as a 28-by-28 icon-only control; palette-aware OFF/ON appearance, hover/pressed feedback, focus, tooltip, accessibility state, and Space toggling are covered.
+- [x] Offscreen toolbar geometry confirms Layout, switch, and Pin are one compact group before Results; regression confirms Pin preserves the existing auto-hide behavior.
+- [x] Focused viewer tests: 4 passed; full pytest: 243 passed.
+- [ ] Native Windows GUI review of dark/light Pin states, toolbar composition, auto-hide, and keyboard behavior is pending; the desktop is currently at the Windows lock screen, so the running app cannot be visually inspected without unlocking the user's session.
 - [ ] Fresh AnyCalib/WiLoR inference and first-user reruns remain pending.
 
 

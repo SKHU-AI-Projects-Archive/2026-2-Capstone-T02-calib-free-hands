@@ -40,9 +40,9 @@ class _ModeSwitch(QAbstractButton):
         self.setCheckable(True)
         self.setFixedSize(42, 22)
         self.setFocusPolicy(Qt.FocusPolicy.StrongFocus)
-        self.setAccessibleName("Overlay / Split view mode")
-        self.setAccessibleDescription("Unchecked: Overlay; checked: Split")
-        self.setToolTip("Overlay / Split view mode")
+        self.setAccessibleName("Layout")
+        self.setAccessibleDescription("Toggle between Overlay and Split layouts")
+        self.setToolTip("Layout: Overlay")
         self._thumb_position = 0.0
         self._animation = QVariantAnimation(self)
         self._animation.setDuration(120)
@@ -100,6 +100,69 @@ class _ModeSwitch(QAbstractButton):
             painter.setPen(QPen(focus_color, 1, Qt.PenStyle.DashLine))
             painter.setBrush(Qt.BrushStyle.NoBrush)
             painter.drawRoundedRect(QRectF(0.5, 0.5, self.width() - 1, self.height() - 1), 10, 10)
+        painter.end()
+
+
+class _PinButton(QAbstractButton):
+    """Compact, palette-aware icon toggle for keeping viewer controls visible."""
+
+    def __init__(self, parent=None):
+        super().__init__(parent)
+        self.setCheckable(True)
+        self.setFixedSize(28, 28)
+        self.setFocusPolicy(Qt.FocusPolicy.StrongFocus)
+        self.setAccessibleName("Pin controls")
+        self.setToolTip("Keep controls visible")
+        self.setAccessibleDescription("Not pinned: controls may hide during playback")
+
+    def sizeHint(self):
+        return QSize(28, 28)
+
+    def paintEvent(self, _event):
+        palette = self.palette()
+        surface = palette.color(QPalette.ColorRole.Midlight if self.isChecked()
+                                else QPalette.ColorRole.Button)
+        if self.underMouse():
+            surface = surface.lighter(112)
+        if self.isDown():
+            surface = surface.darker(112)
+        ink = palette.color(QPalette.ColorRole.ButtonText)
+        if not self.isChecked():
+            ink.setAlpha(175)
+
+        painter = QPainter(self)
+        painter.setRenderHint(QPainter.RenderHint.Antialiasing)
+        if self.isChecked() or self.underMouse() or self.isDown():
+            painter.setPen(Qt.PenStyle.NoPen)
+            painter.setBrush(surface)
+            painter.drawRoundedRect(QRectF(1, 1, 26, 26), 5, 5)
+        if self.isChecked():
+            painter.setPen(QPen(palette.color(QPalette.ColorRole.Mid), 1))
+            painter.setBrush(Qt.BrushStyle.NoBrush)
+            painter.drawRoundedRect(QRectF(1.5, 1.5, 25, 25), 5, 5)
+
+        icon = QPainterPath()
+        icon.moveTo(10, 7)
+        icon.lineTo(18, 7)
+        icon.lineTo(17, 10)
+        icon.lineTo(15, 12)
+        icon.lineTo(15, 17)
+        icon.lineTo(18, 20)
+        icon.lineTo(10, 20)
+        icon.lineTo(13, 17)
+        icon.lineTo(13, 12)
+        icon.lineTo(11, 10)
+        icon.closeSubpath()
+        painter.setPen(QPen(ink, 1.5, Qt.PenStyle.SolidLine,
+                            Qt.PenCapStyle.RoundCap, Qt.PenJoinStyle.RoundJoin))
+        painter.setBrush(ink)
+        painter.drawPath(icon)
+        painter.drawLine(14, 20, 14, 24)
+        if self.hasFocus():
+            painter.setBrush(Qt.BrushStyle.NoBrush)
+            painter.setPen(QPen(palette.color(QPalette.ColorRole.Midlight), 1,
+                                Qt.PenStyle.DashLine))
+            painter.drawRoundedRect(QRectF(0.5, 0.5, 27, 27), 5, 5)
         painter.end()
 
 
@@ -675,15 +738,14 @@ class ComparisonViewer(QWidget):
         self.mode_selector = QWidget()
         mode_layout = QHBoxLayout(self.mode_selector)
         mode_layout.setContentsMargins(0, 0, 0, 0)
-        mode_layout.setSpacing(5)
-        self.overlay_mode_label = QLabel("Overlay")
+        mode_layout.setSpacing(6)
+        self.mode_label = QLabel("Layout")
         self.mode_switch = _ModeSwitch()
-        self.split_mode_label = QLabel("Split")
-        mode_layout.addWidget(self.overlay_mode_label)
+        self.pin_controls_button = _PinButton()
+        mode_layout.addWidget(self.mode_label)
         mode_layout.addWidget(self.mode_switch)
-        mode_layout.addWidget(self.split_mode_label)
+        mode_layout.addWidget(self.pin_controls_button)
         self.mode_switch.toggled.connect(self._set_mode_from_switch)
-        self._update_mode_labels()
 
         self.results_menu = QMenu(self)
         self.visibility_checks = []
@@ -873,6 +935,7 @@ class ComparisonViewer(QWidget):
         toolbar.setContentsMargins(14, 8, 14, 6)
         toolbar.setSpacing(7)
         toolbar.addWidget(self.mode_selector)
+        toolbar.addSpacing(5)
         toolbar.addWidget(self.results_menu_button)
         toolbar.addWidget(self.reference_label); toolbar.addWidget(self.reference_selector)
         toolbar.addWidget(self.metric_menu_button)
@@ -882,10 +945,7 @@ class ComparisonViewer(QWidget):
         self.error_vectors_button.setText("Vectors: Off")
         self.error_vectors_button.setToolTip("Show selected Reference → Candidate error vectors")
         toolbar.addWidget(self.annotation_button); toolbar.addWidget(self.hud_button)
-        self.pin_controls_button = QToolButton(); self.pin_controls_button.setText("Pin: Off")
-        self.pin_controls_button.setCheckable(True); self.pin_controls_button.setToolTip("Keep controls visible")
-        self.pin_controls_button.setStyleSheet("QToolButton:checked { background: palette(highlight); color: palette(highlighted-text); }")
-        toolbar.addWidget(self.pin_controls_button); toolbar.addWidget(self.more_button)
+        toolbar.addWidget(self.more_button)
         toolbar.addStretch(1)
 
         self.joint_checkbox = QCheckBox("Joint")
@@ -1136,8 +1196,9 @@ class ComparisonViewer(QWidget):
         if self.timer.isActive() and self.auto_hide_action.isChecked(): self.auto_hide_timer.start()
 
     def _set_pin_label(self, pinned):
-        self.pin_controls_button.setText("Pin: On" if pinned else "Pin: Off")
-        self.pin_controls_button.setToolTip("Controls stay visible while pinned" if pinned else "Controls may hide during playback")
+        self.pin_controls_button.setToolTip("Controls pinned" if pinned else "Keep controls visible")
+        self.pin_controls_button.setAccessibleDescription(
+            "Pinned: controls remain visible" if pinned else "Not pinned: controls may hide during playback")
 
     def _menu_about_to_show(self, menu):
         if not self._opening_menu_by_hover and menu is getattr(self._hover_menu_target, "menu", lambda: None)():
@@ -1462,7 +1523,7 @@ class ComparisonViewer(QWidget):
         self.mode = mode
         self.views.setCurrentIndex(0 if mode == "overlay" else 1)
         self.mode_switch.setChecked(mode == "split")
-        self._update_mode_labels()
+        self.mode_switch.setToolTip("Layout: Split" if mode == "split" else "Layout: Overlay")
         self._render_active_frame()
         self._refresh_metric_panels()
         self._refresh_annotations()
@@ -1471,13 +1532,6 @@ class ComparisonViewer(QWidget):
         target = "split" if value else "overlay"
         if target != self.mode:
             self.set_mode(target)
-
-    def _update_mode_labels(self):
-        for label, selected in ((self.overlay_mode_label, self.mode == "overlay"),
-                                (self.split_mode_label, self.mode == "split")):
-            font = label.font()
-            font.setBold(selected)
-            label.setFont(font)
 
     def _set_configuration_visible(self, index, visible):
         self.overlay_view.set_configuration_visible(index, visible)
@@ -1874,7 +1928,7 @@ class ComparisonViewer(QWidget):
                     self._hide_hover_popup(self._hover_menu_target)
                     event.accept(); return True
             if event.key() == Qt.Key.Key_Space:
-                if watched is self.mode_switch:
+                if watched in (self.mode_switch, self.pin_controls_button):
                     return super().eventFilter(watched, event)
                 self._play(); event.accept(); return True
             if self._arrow_mode == "frame" and event.key() == Qt.Key.Key_Left: self._previous(); event.accept(); return True

@@ -744,15 +744,27 @@ def test_presentation_controls_overlay_without_changing_viewport_geometry(tmp_pa
 
 
 def test_presentation_pin_and_annotation_density_modes(tmp_path, qapp):
+    from PySide6.QtWidgets import QAbstractButton
     from calibfreehands.visualization.comparison import ComparisonViewer
 
     viewer = ComparisonViewer(_session(tmp_path, 2))
     assert hasattr(viewer, "pin_controls_button")
+    assert isinstance(viewer.pin_controls_button, QAbstractButton)
+    assert viewer.pin_controls_button.text() == ""
+    assert viewer.pin_controls_button.accessibleName() == "Pin controls"
     viewer.pin_controls_button.setChecked(True)
-    assert viewer.pin_controls_button.text() in {"Pinned", "Pin: On"}
+    assert viewer.pin_controls_button.toolTip() == "Controls pinned"
+    assert viewer.pin_controls_button.accessibleDescription() == "Pinned: controls remain visible"
     viewer.timer.start()
     viewer._auto_hide_controls()
     assert not viewer.chrome.isHidden()
+    viewer.pin_controls_button.setChecked(False)
+    assert viewer.pin_controls_button.toolTip() == "Keep controls visible"
+    from PySide6.QtTest import QTest
+    from PySide6.QtCore import Qt
+    viewer.pin_controls_button.setFocus()
+    QTest.keyClick(viewer.pin_controls_button, Qt.Key.Key_Space)
+    assert viewer.pin_controls_button.isChecked()
     assert {"off", "hovered", "key_joints", "worst5", "all"} <= set(viewer.annotation_actions)
     viewer.set_annotation_mode("worst5")
     assert viewer.annotation_mode == "worst5"
@@ -794,7 +806,7 @@ def test_detection_bar_off_reflows_hud_before_any_pointer_event(tmp_path, qapp):
     viewer.close()
 
 
-def test_mode_switch_has_compact_neutral_track_and_selected_labels(tmp_path, qapp):
+def test_mode_switch_has_compact_neutral_track_and_single_layout_label(tmp_path, qapp):
     from PySide6.QtGui import QColor, QPalette
     from calibfreehands.visualization.comparison import ComparisonViewer
 
@@ -804,10 +816,17 @@ def test_mode_switch_has_compact_neutral_track_and_selected_labels(tmp_path, qap
     assert 38 <= viewer.mode_switch.width() <= 44
     assert 20 <= viewer.mode_switch.height() <= 24
     assert viewer.mode_switch.isCheckable()
-    assert viewer.mode_switch.accessibleName() == "Overlay / Split view mode"
+    assert viewer.mode_switch.accessibleName() == "Layout"
+    assert viewer.mode_switch.accessibleDescription() == "Toggle between Overlay and Split layouts"
+    assert viewer.mode_switch.toolTip() == "Layout: Overlay"
+    assert viewer.mode_label.text() == "Layout"
+    assert not hasattr(viewer, "overlay_mode_label")
+    assert not hasattr(viewer, "split_mode_label")
     assert viewer.mode_switch.focusPolicy().name == "StrongFocus"
-    assert viewer.overlay_mode_label.font().bold()
-    assert not viewer.split_mode_label.font().bold()
+    assert viewer.mode_selector.layout().indexOf(viewer.mode_label) < viewer.mode_selector.layout().indexOf(viewer.mode_switch)
+    assert viewer.mode_selector.layout().indexOf(viewer.mode_switch) < viewer.mode_selector.layout().indexOf(viewer.pin_controls_button)
+    assert 26 <= viewer.pin_controls_button.width() <= 30
+    assert viewer.pin_controls_button.focusPolicy().name == "StrongFocus"
     for background, foreground, muted in (
             (QColor("#202020"), QColor("#f2f2f2"), QColor("#777777")),
             (QColor("#f8f8f8"), QColor("#202020"), QColor("#aaaaaa"))):
@@ -817,17 +836,15 @@ def test_mode_switch_has_compact_neutral_track_and_selected_labels(tmp_path, qap
         palette.setColor(QPalette.ColorRole.Mid, muted)
         viewer.setPalette(palette)
         assert viewer.mode_switch.palette().color(QPalette.ColorRole.Window) == background
-        assert viewer.overlay_mode_label.palette().color(QPalette.ColorRole.WindowText) == foreground
-        assert viewer.split_mode_label.palette().color(QPalette.ColorRole.WindowText) == foreground
     for _ in range(4):
         viewer.mode_switch.click()
         assert viewer.mode == "split"
         assert viewer.views.currentIndex() == 1
-        assert viewer.split_mode_label.font().bold()
+        assert viewer.mode_switch.toolTip() == "Layout: Split"
         viewer.mode_switch.click()
         assert viewer.mode == "overlay"
         assert viewer.views.currentIndex() == 0
-        assert viewer.overlay_mode_label.font().bold()
+        assert viewer.mode_switch.toolTip() == "Layout: Overlay"
     viewer.show()
     qapp.processEvents()
     track_levels = []
@@ -852,6 +869,40 @@ def test_mode_switch_has_compact_neutral_track_and_selected_labels(tmp_path, qap
     center = image.pixelColor(31, 11)
     assert abs(center.red() - 242) <= 4
     assert viewer.mode == "split"
+    assert viewer.mode_switch.toolTip() == "Layout: Split"
+    viewer.close()
+
+
+def test_pin_button_icon_is_palette_aware_and_layout_precedes_results(tmp_path, qapp):
+    from PySide6.QtGui import QColor, QPalette
+    from PySide6.QtTest import QTest
+    from PySide6.QtCore import Qt
+    from calibfreehands.visualization.comparison import ComparisonViewer
+
+    viewer = ComparisonViewer(_session(tmp_path, 2))
+    viewer.resize(1280, 720)
+    viewer.show()
+    qapp.processEvents()
+    assert viewer.mode_selector.geometry().left() < viewer.results_menu_button.geometry().left()
+    group_gap = viewer.results_menu_button.geometry().left() - viewer.mode_selector.geometry().right() - 1
+    assert 10 <= group_gap <= 14
+
+    palette = QPalette(viewer.palette())
+    palette.setColor(QPalette.ColorRole.ButtonText, QColor("#e8e8e8"))
+    palette.setColor(QPalette.ColorRole.Button, QColor("#303030"))
+    palette.setColor(QPalette.ColorRole.Midlight, QColor("#676767"))
+    palette.setColor(QPalette.ColorRole.Mid, QColor("#909090"))
+    viewer.pin_controls_button.setPalette(palette)
+    off = viewer.pin_controls_button.grab().toImage()
+    viewer.pin_controls_button.setChecked(True)
+    qapp.processEvents()
+    on = viewer.pin_controls_button.grab().toImage()
+    assert off != on
+    icon_pixels = [on.pixelColor(x, y) for y in range(6, 25) for x in range(8, 20)]
+    assert any(color.alpha() and color.red() > 150 for color in icon_pixels)
+    viewer.pin_controls_button.setFocus()
+    QTest.keyClick(viewer.pin_controls_button, Qt.Key.Key_Space)
+    assert not viewer.pin_controls_button.isChecked()
     viewer.close()
 
 
@@ -893,12 +944,13 @@ def test_viewer_playback_controls_are_accessible_steppers_and_exclusive_modes(tm
     assert viewer.speed_up_button.isEnabled()
     assert viewer.mode_switch.isCheckable()
     assert not viewer.mode_switch.isChecked()
-    assert viewer.mode_switch.accessibleName() == "Overlay / Split view mode"
+    assert viewer.mode_switch.accessibleName() == "Layout"
     viewer.mode_switch.click()
     assert viewer.mode == "split"
     assert viewer.mode_switch.isChecked()
     assert viewer.views.currentIndex() == 1
-    assert viewer.mode_switch.accessibleDescription() == "Unchecked: Overlay; checked: Split"
+    assert viewer.mode_switch.accessibleDescription() == "Toggle between Overlay and Split layouts"
+    assert viewer.mode_switch.toolTip() == "Layout: Split"
     assert viewer.annotation_button.text() == "Annotations"
     assert viewer.playback_buttons[0].accessibleName() == "Previous frame"
     assert viewer.playback_buttons[2].accessibleName() == "Next frame"
