@@ -1,0 +1,67 @@
+# 66: joint combinations (user 2026-11-04: use the palm-side joints that deform less; "여러 점들의 조합으로 가장 잘 나온 걸 선택 ... 시간이 오래 걸려도 괜찮으니까 여러가지 조합도 같이 실험"),
+# record only, no verdict.
+# 56's points on 54's 12 videos by 65's dm_video_job unchanged (56's rules from rules_config, 65's pauses from pauses_config); 56's frames and bootstrap (30-frame blocks x 100, seed 42) for the
+# mediapipe joints, 56's tracked joints main estimate only (record: they are moved by the whole-hand chain, a subset does not remove the finger motion).
+# Choices made by me before the run (no result of this run seen; a 2-video dry run with 3 bootstrap samples into the scratchpad checked only that it runs - it showed that edge joints get a large
+# leave-one-out miss from the geometry alone, so the leverage-divided ranking was added):
+#  - per-joint departure: hf.fc_joint_loo on the mediapipe pause medians (each joint predicted by the best homography of the other 20), raw and divided by the geometric leverage (unit noise,
+#    200 draws); rankings = median over the videos; combinations rank<k> / lrank<k> = the first k joints of each ranking;
+#  - fixed combinations below; random ones from rng(seed) with the sizes below (the chance level of picking a combination);
+#  - synthetic: 53c's scene with a rigid palm and moving fingers (hf.fc_scene), the ramp, mediapipe-like noise 0.5 %, finger angle RMS 0 / 0.5 / 1 / 2 deg (0.5-1 deg give 65's departure of the real
+#    videos with the 11-deg ramp: 1.44 / 1.74 % vs real median 1.63 %), 90 / 180 deg, 20 seeds, free_template on every combination;
+#  - choosing without the reference f of the video: leave one video out (smallest median |log f / ref| on the other 11), the narrowest bootstrap interval among non-boundary main estimates,
+#    the median f over the combinations; the per-video oracle is reported only as an unusable upper bound;
+#  - reading fixed now: the leave-one-out choice counts as better than j16 if it has more videos within 25 % and fewer on the limits (mediapipe joints, free_template); a combination looks better
+#    than chance only if it beats the best random combination.
+# Reference f only in summary.md. Fixed before the run.
+experiment:
+  name: 66_joint_combos
+  seed: 42
+rules_config: configs/56_continuous_klt.yaml
+segments_config: configs/60_segment_template.yaml
+pauses_config: configs/65_hand_deformation.yaml
+combos:
+  fixed:
+    - {name: j16, ids: [5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20]}
+    - {name: j17, ids: [0, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20]}
+    - {name: j21, ids: [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20]}
+    - {name: j20_no_wrist, ids: [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20]}
+    - {name: mcp4, ids: [5, 9, 13, 17]}
+    - {name: palm5, ids: [0, 5, 9, 13, 17]}
+    - {name: palm6, ids: [0, 1, 5, 9, 13, 17]}
+    - {name: mcp_pip, ids: [5, 6, 9, 10, 13, 14, 17, 18]}
+    - {name: palm5_pip, ids: [0, 5, 6, 9, 10, 13, 14, 17, 18]}
+    - {name: palm6_pip, ids: [0, 1, 5, 6, 9, 10, 13, 14, 17, 18]}
+    - {name: mcp_pip_dip, ids: [5, 6, 7, 9, 10, 11, 13, 14, 15, 17, 18, 19]}
+    - {name: palm5_pip_dip, ids: [0, 5, 6, 7, 9, 10, 11, 13, 14, 15, 17, 18, 19]}
+    - {name: fingers_no_mcp, ids: [6, 7, 8, 10, 11, 12, 14, 15, 16, 18, 19, 20]}
+    - {name: j17_no_index, ids: [0, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20]}
+    - {name: j17_no_middle, ids: [0, 5, 6, 7, 8, 13, 14, 15, 16, 17, 18, 19, 20]}
+    - {name: j17_no_ring, ids: [0, 5, 6, 7, 8, 9, 10, 11, 12, 17, 18, 19, 20]}
+    - {name: j17_no_pinky, ids: [0, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16]}
+    - {name: three_fingers, ids: [0, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16]}
+    - {name: palm6_thumb, ids: [0, 1, 2, 3, 5, 9, 13, 17]}
+  ranked_sizes: [5, 6, 8, 10, 12, 16]
+  random: {seed: 42, sizes: [6, 6, 8, 8, 10, 10, 12, 12, 16, 16]}
+synthetic:
+  true_f: 1655.0
+  n_frames: 60
+  move_pct_xy: [4.5, 34.6]
+  noise_rel: 0.005
+  dm_step: 6
+  turn_ranges_deg: [90, 180]
+  seeds: [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19]
+  conditions:
+    - {name: flat, label: "평평하고 단단한 손", errors: {}}
+    - {name: S11, label: "경사 11°", errors: {slope_deg: 11}}
+    - {name: F1, label: "손가락 1°", errors: {finger_deg: 1.0}}
+    - {name: S11F05, label: "경사 11° + 손가락 0.5°", errors: {slope_deg: 11, finger_deg: 0.5}}
+    - {name: S11F1, label: "경사 11° + 손가락 1°", errors: {slope_deg: 11, finger_deg: 1.0}}
+    - {name: S11F2, label: "경사 11° + 손가락 2°", errors: {slope_deg: 11, finger_deg: 2.0}}
+code_66: {branch: exp/66-joint-combos, base_commit: 893246d, commit: 1b87b34, modules: [HandCalib/handfocal_report.py, HandCalib/run.py]}
+workers: 56
+n_workers: 4
+video_workers: 12
+output:
+  root: runs/66_joint_combos
+  results_yaml: results/66_joint_combos.yaml
