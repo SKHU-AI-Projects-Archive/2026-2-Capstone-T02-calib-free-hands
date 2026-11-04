@@ -154,6 +154,7 @@
 - [x] Make Pin a clear ON/OFF toggle with explicit auto-hide semantics
 - [x] Simplify comparison toolbar start to `Layout [switch] [pin icon]`, with state tooltip and palette-aware icon-only Pin
 - [x] Rename the comparison toolbar group to `View`; give the icon-only Pin a visible neutral button surface and border in OFF/ON states
+- [x] Reduce the Pin button to 26-by-26 px; use a subdued green ON surface with a white vector pin while retaining the gray OFF state
 - [x] Support HUD drag, pointer ownership, nearest-corner snap, and non-blocking 120–180 ms snap animation
 - [x] Keep HUD visual settings available; remove corner menu actions if drag becomes the primary position control
 - [x] Rename annotation menu Joints to Annotations while retaining the separate Joint geometry checkbox

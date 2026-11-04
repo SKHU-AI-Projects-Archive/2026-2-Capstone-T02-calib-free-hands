@@ -109,14 +109,14 @@ class _PinButton(QAbstractButton):
     def __init__(self, parent=None):
         super().__init__(parent)
         self.setCheckable(True)
-        self.setFixedSize(28, 28)
+        self.setFixedSize(26, 26)
         self.setFocusPolicy(Qt.FocusPolicy.StrongFocus)
         self.setAccessibleName("Pin controls")
         self.setToolTip("Keep controls visible")
         self.setAccessibleDescription("Not pinned: controls may hide during playback")
 
     def sizeHint(self):
-        return QSize(28, 28)
+        return QSize(26, 26)
 
     def paintEvent(self, _event):
         palette = self.palette()
@@ -124,15 +124,15 @@ class _PinButton(QAbstractButton):
         luminance = 0.2126 * window.redF() + 0.7152 * window.greenF() + 0.0722 * window.blueF()
         dark = luminance < 0.45
         if dark:
-            surface = QColor("#51575f" if self.isChecked() else "#34383d")
-            border = QColor("#858b93" if self.isChecked() else "#5a6068")
-            ink = QColor("#f2f3f4" if self.isChecked() else "#aab0b7")
+            surface = QColor("#5b7925" if self.isChecked() else "#34383d")
+            border = QColor("#45621d" if self.isChecked() else "#5a6068")
+            ink = QColor("#ffffff" if self.isChecked() else "#aab0b7")
         else:
-            surface = QColor("#d7dadd" if self.isChecked() else "#f0f1f2")
-            border = QColor("#9299a1" if self.isChecked() else "#c4c8ce")
-            ink = QColor("#353a40" if self.isChecked() else "#666c74")
+            surface = QColor("#5b7925" if self.isChecked() else "#f0f1f2")
+            border = QColor("#45621d" if self.isChecked() else "#c4c8ce")
+            ink = QColor("#ffffff" if self.isChecked() else "#666c74")
         if self.underMouse():
-            surface = surface.lighter(108) if dark or not self.isChecked() else surface.darker(108)
+            surface = surface.darker(108) if self.isChecked() else surface.lighter(108)
         if self.isDown():
             surface = surface.darker(112)
 
@@ -140,8 +140,12 @@ class _PinButton(QAbstractButton):
         painter.setRenderHint(QPainter.RenderHint.Antialiasing)
         painter.setPen(QPen(border, 1))
         painter.setBrush(surface)
-        painter.drawRoundedRect(QRectF(1, 1, 26, 26), 5, 5)
+        painter.drawRoundedRect(QRectF(1, 1, 24, 24), 5, 5)
 
+        painter.save()
+        painter.translate(self.width() / 2, self.height() / 2)
+        painter.scale(0.82, 0.82)
+        painter.translate(-14, -14)
         icon = QPainterPath()
         icon.moveTo(10, 7)
         icon.lineTo(18, 7)
@@ -159,11 +163,12 @@ class _PinButton(QAbstractButton):
         painter.setBrush(ink)
         painter.drawPath(icon)
         painter.drawLine(14, 20, 14, 24)
+        painter.restore()
         if self.hasFocus():
             painter.setBrush(Qt.BrushStyle.NoBrush)
             painter.setPen(QPen(palette.color(QPalette.ColorRole.Highlight), 1,
                                 Qt.PenStyle.DashLine))
-            painter.drawRoundedRect(QRectF(0.5, 0.5, 27, 27), 5, 5)
+            painter.drawRoundedRect(QRectF(0.5, 0.5, 25, 25), 5, 5)
         painter.end()
 
 

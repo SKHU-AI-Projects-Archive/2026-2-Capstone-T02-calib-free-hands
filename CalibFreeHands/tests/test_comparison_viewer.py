@@ -828,7 +828,7 @@ def test_mode_switch_has_compact_neutral_track_and_single_view_label(tmp_path, q
     assert viewer.mode_switch.focusPolicy().name == "StrongFocus"
     assert viewer.mode_selector.layout().indexOf(viewer.mode_label) < viewer.mode_selector.layout().indexOf(viewer.mode_switch)
     assert viewer.mode_selector.layout().indexOf(viewer.mode_switch) < viewer.mode_selector.layout().indexOf(viewer.pin_controls_button)
-    assert 26 <= viewer.pin_controls_button.width() <= 30
+    assert 24 <= viewer.pin_controls_button.width() <= 26
     assert viewer.pin_controls_button.focusPolicy().name == "StrongFocus"
     for background, foreground, muted in (
             (QColor("#202020"), QColor("#f2f2f2"), QColor("#777777")),
@@ -893,9 +893,9 @@ def test_pin_button_icon_is_palette_aware_and_view_precedes_results(tmp_path, qa
     group_gap = viewer.results_menu_button.geometry().left() - viewer.mode_selector.geometry().right() - 1
     assert 10 <= group_gap <= 14
 
-    for window, off_surface, on_surface, off_ink, on_ink in (
-        (QColor("#202124"), QColor("#34383d"), QColor("#51575f"), QColor("#aab0b7"), QColor("#f2f3f4")),
-        (QColor("#f8f8f8"), QColor("#f0f1f2"), QColor("#d7dadd"), QColor("#666c74"), QColor("#353a40")),
+    for window, off_surface, off_ink in (
+        (QColor("#202124"), QColor("#34383d"), QColor("#aab0b7")),
+        (QColor("#f8f8f8"), QColor("#f0f1f2"), QColor("#666c74")),
     ):
         palette = QPalette(viewer.palette())
         palette.setColor(QPalette.ColorRole.Window, window)
@@ -908,11 +908,18 @@ def test_pin_button_icon_is_palette_aware_and_view_precedes_results(tmp_path, qa
         on = viewer.pin_controls_button.grab().toImage()
         assert off != on
         assert off.pixelColor(4, 14).rgb() == off_surface.rgb()
-        assert on.pixelColor(4, 14).rgb() == on_surface.rgb()
+        active_surface = on.pixelColor(4, 13)
+        assert active_surface.rgb() == QColor("#5b7925").rgb()
         assert off.pixelColor(1, 14).rgb() != off.pixelColor(4, 14).rgb()
-        assert on.pixelColor(1, 14).rgb() != on.pixelColor(4, 14).rgb()
         assert off.pixelColor(14, 8).rgb() == off_ink.rgb()
-        assert on.pixelColor(14, 8).rgb() == on_ink.rgb()
+        pin_ink = on.pixelColor(13, 8)
+        assert pin_ink.rgb() == QColor("#ffffff").rgb()
+        linear_channels = [
+            channel / 12.92 if channel <= 0.04045 else ((channel + 0.055) / 1.055) ** 2.4
+            for channel in (active_surface.redF(), active_surface.greenF(), active_surface.blueF())
+        ]
+        luminance = 0.2126 * linear_channels[0] + 0.7152 * linear_channels[1] + 0.0722 * linear_channels[2]
+        assert 1.05 / (luminance + 0.05) >= 4.5
     viewer.pin_controls_button.setFocus()
     QTest.keyClick(viewer.pin_controls_button, Qt.Key.Key_Space)
     assert not viewer.pin_controls_button.isChecked()

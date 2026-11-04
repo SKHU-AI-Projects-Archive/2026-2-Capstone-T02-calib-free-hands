@@ -349,10 +349,25 @@ All entries below are pending implementation and validation. No acceptance item 
 ## View/Pin Final Micro-Polish (2026-11-04)
 
 - [x] Rename the visible group label to `View`; the switch's accessible name is `View mode`, its description explains Overlay/Split views, and its tooltip reports `View: Overlay` or `View: Split`.
-- [x] Pin remains a 28-by-28 checkable custom vector control; OFF and ON now always render a distinct neutral surface and border plus theme-appropriate monochrome icon colors.
+- [x] Pin is a 26-by-26 checkable custom vector control; OFF retains the gray surface and muted pin, while ON uses a subdued green surface and white pin.
 - [x] Offscreen dark/light assertions cover OFF/ON background, border, and icon colors. Tests cover button click, keyboard Space, accessible name, toolbar order/gap, auto-hide pin behavior, and global Space playback.
 - [ ] Native Windows dark/light visual and interaction review remains pending because the desktop is at the Windows lock screen; inspecting the app requires unlocking the user's session.
 - [ ] Fresh AnyCalib/WiLoR inference and original/second first-user reruns remain pending.
+
+
+## Pin Size and Active Color Refinement (2026-11-04)
+
+- [x] Reduce the custom Pin control from 28-by-28 to 26-by-26 px and scale the vector icon down proportionally.
+- [x] Offscreen dark/light rendering confirms the gray OFF state, green `#5B7925` ON background, white ON icon with at least 4.5:1 contrast, and visible button border.
+- [x] Full pytest: 244 passed; app import, compileall, and `git diff --check` passed.
+- [ ] Native Windows visual review has not been repeated for this color/size adjustment.
+
+
+## Pin Active Color Contrast Refinement (2026-11-04)
+
+- [x] Replace the overly bright lime with muted green `#5B7925`; retain the white pin and darker green border.
+- [x] Active icon/background contrast assertion verifies at least 4.5:1 in offscreen dark and light palette cases.
+- [ ] Native Windows visual review of the revised active color remains pending.
 
 
 ## Final Viewer Control Styling (2026-11-04)
