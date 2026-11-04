@@ -11658,7 +11658,287 @@ def ec_results_yaml(run_dir: Path, cfg: dict):
     return p
 
 
-COMMANDS = {"protocol": protocol_main, "frame-filter": ff_main, "same-session": session_main, "overlay": overlay_main, "phase-segmentation": pseg_main, "guide-revision": grev_main, "f-response": fresp_main, "error-factors": ferr_main, "long-video-check": long_main, "generalization": gen_main, "main-camera-extension": ext_main, "wide-60cm": wide_main, "jointset-sets": jset_main, "verdict-calibration": cal_main, "printed-hand": pr_main, "hand-markers": mk_main, "markers-only": mo_main, "free-template": ft_main, "free-shape3d": s3_main, "free-shape3d-hand": h3_main, "free-shape3d-27": e3_main, "free-shape3d-new": e4_main, "mmpose-hand": mm_main, "mmpose-hand-46": mm2_main, "free-shape3d-new2": e5_main, "mmpose-hand-src": mm3_main, "free-shape3d-detectors": fs_main, "free-shape3d-hand-sets": h4_main, "free-shape3d-hand-sets-42track": h4b_main, "oblique-desk": od_main, "oblique-synthetic": sy_main, "oblique-fixed-template": fx_main, "oblique-desk-videos": om_main, "pause-stabilized": ps_main, "continuous-klt": kt_main, "continuous-klt-palm": kp_main, "klt-paper-dorsum": pp_main, "paper-parallax": hp_main, "segment-template": sg_main, "turn-synthetic": tr_main, "window-f": wd_main, "anycalib-videos": ac_main, "error-sources": ec_main}
+# ====================================================================================================
+# dm  (experiment 65: the real hand's departure from a rigid flat hand, measured between pauses with the best homography on the mediapipe joints (free of f and of the paper) on 54's 12 videos;
+#      the same measure on experiment 64's noise-free synthetic scenes as the scale; one video rendered with its points; record only)
+#     python HandCalib/run.py hand-deformation --config HandCalib/configs/65_hand_deformation.yaml [--out DIR]
+#     python HandCalib/run.py hand-deformation --config ... results-yaml --run runs/65_hand_deformation/<UTC>
+# ====================================================================================================
+DM_NOTE = ("실제 영상에서 손이 '평평하고 단단한 판'에서 얼마나 벗어나는지 잰 기록용 실험이다(판정 없음). 멈춤 구간마다 MediaPipe 관절 16점의 중앙값을 내고, 기준 멈춤 구간에서 각 멈춤 구간으로 가는 "
+           "가장 잘 맞는 호모그래피를 맞춘 뒤 남는 차이를 쟀다. 평평하고 단단한 손이 책상 위에서 움직이면 그 차이는 0이므로(f와 무관), 남는 값은 손 모양 변화와 손 경사에 따른 시차, "
+           "검출기 오차의 합이다. 같은 측정을 실험 64의 잡음 없는 합성 장면(경사·변형을 넣은 것)에 해서 환산 기준으로 삼았다. 실험 56의 추적점은 호모그래피로 옮긴 점이라 이 값이 늘 0이어서 쓰지 않았다.")
+DM_BLUE, DM_ORANGE, DM_RED = (178, 114, 0), (0, 159, 230), (0, 94, 213)      # BGR of Okabe-Ito blue, orange, vermillion
+
+
+def dm_video_job(args):
+    """56's points by 60's sg_video_job (unchanged), then the still frames of 53's rule on the mediapipe joints, the pauses and the measure. Returns (result, log lines)."""
+    e, cfg, run_root = args
+    x, lines = sg_video_job((e, cfg, run_root))
+    d = x["detected"]
+    W, H = x["size"]
+    mask = np.isfinite(d["kp"]).all(2)
+    motion = hf.od_select(d["kp"], mask, mask.any(1), d["box"], (W, H), cfg["selection"])["motion"]
+    still = np.isfinite(motion) & (motion < float(cfg["selection"]["still_frac"]))
+    pc = cfg["pauses"]
+    pauses = hf.dm_pauses(still & d["use"], int(pc["gap_frames"]), int(pc["min_frames"]))
+    m = hf.dm_measure(d["kp"], d["use"], pauses, cfg["joint_sets"]["main"]["ids"])
+    lines.append(f"  {e['file']}: 멈춤 구간 {m['n_pauses']}개" + (f", 변화 중앙값 {m['res_pct_median']:.2f}% (바닥 잡음 제거 {m['res_cor_pct_median']:.2f}%)" if m.get("pauses") else ""))
+    return {"size": (W, H), "n_frames": x["n_frames"], "still": still, "tracked": x["tracked"], "detected": d, "measure": m}, lines
+
+
+def dm_render(path: Path, e: dict, x: dict, cfg: dict, run_root: Path, log):
+    """The chosen video with its points: left the whole frame, right the hand enlarged; blue = 56's tracked joints, orange = mediapipe joints, red arrows = each mediapipe joint's departure from the
+    reference pause's hand moved by the frame's best homography (x rc.arrow_gain); below the frame's departure over time with the pauses shaded. Frames are written to a temporary folder,
+    encoded with ffmpeg (metadata dropped) and removed."""
+    from PIL import Image, ImageDraw, ImageFont
+    rc = cfg["render"]
+    pc = copy.deepcopy(cfg["pipeline"])
+    pc["frames"]["detect_fps"] = int(cfg["tracking"]["fps"])
+    v = e["file"]
+    tmp_root = run_root / f"_render_{Path(v).stem}"
+    tmp_root.mkdir(exist_ok=True)
+    out_dir = tmp_root / "out"
+    out_dir.mkdir()
+    font = lambda s: ImageFont.truetype(rc["font"], s, index=int(rc.get("font_index", 0)))      # noqa: E731
+    f1, f2 = font(22), font(18)
+    ids = cfg["joint_sets"]["main"]["ids"]
+    m = x["measure"]
+    ref = m["ref_median"]
+    fps = float(cfg["tracking"]["fps"])
+    try:
+        prep = hf.fresp_prepare((v, cfg["input_dir"], pc, {}, str(tmp_root)))
+        frames = prep["frames"]
+        n = len(frames)
+        if n != x["n_frames"]:
+            raise RuntimeError(f"프레임 수가 다릅니다: {n} vs {x['n_frames']}")
+        LW, LH, RS, GH = 960, 540, 540, 190
+        cw = LW + RS
+        fr_pct = m["frame_res_pct"]
+        ymax = float(max(rc["graph_ymin_max"], np.nanpercentile(fr_pct, 99) * 1.15)) if np.isfinite(fr_pct).any() else 3.0
+        gx0, gx1, gy0, gy1 = 70, cw - 20, LH + 40, LH + GH - 30
+        tx = lambda i: gx0 + (gx1 - gx0) * i / max(n - 1, 1)      # noqa: E731
+        ty = lambda y: gy1 - (gy1 - gy0) * min(y, ymax) / ymax      # noqa: E731
+        bg = np.full((LH + GH, cw, 3), 255, np.uint8)
+        pause_of = np.full(n, -1)
+        for k, p in enumerate(m["pauses"]):
+            pause_of[p["start"]:p["end"] + 1] = k
+            cv2.rectangle(bg, (int(tx(p["start"])), gy0), (int(tx(p["end"])), gy1), (235, 215, 190) if p["ref"] else (225, 225, 225), -1)
+        yt = np.arange(0, ymax + 1e-9, 1.0 if ymax <= 6 else 2.0)
+        for yv in yt:
+            cv2.line(bg, (gx0, int(ty(yv))), (gx1, int(ty(yv))), (200, 200, 200), 1)
+        ok = np.flatnonzero(np.isfinite(fr_pct))
+        for seg in np.split(ok, np.flatnonzero(np.diff(ok) > 1) + 1):
+            if len(seg) > 1:
+                cv2.polylines(bg, [np.c_[[tx(i) for i in seg], [ty(fr_pct[i]) for i in seg]].round().astype(np.int32)], False, DM_ORANGE, 2, cv2.LINE_AA)
+        for p in m["pauses"]:
+            if not p["ref"]:
+                cv2.circle(bg, (int(tx((p["start"] + p["end"]) / 2)), int(ty(p["res_pct"]))), 6, DM_RED, -1, cv2.LINE_AA)
+        bones = hf.MM_SKELETON
+        for i, r in enumerate(frames):
+            img = cv2.imread(str(r["png"]))
+            kd, kt = x["detected"]["kp"][i], x["tracked"]["kp"][i]
+            arrows = None
+            if np.isfinite(fr_pct[i]):
+                _, p, dvec = hf.dm_homography_res(ref, kd[ids])
+                arrows = (p, p + float(rc["arrow_gain"]) * dvec)
+            pts = [q for q in (kd, kt) if np.isfinite(q).all()]
+            if pts:
+                allp = np.concatenate(pts)
+                c = (allp.min(0) + allp.max(0)) / 2
+                side = float(max(allp.max(0) - allp.min(0)) * rc["crop_margin"])
+            else:
+                c, side = np.array([960.0, 540.0]), 600.0
+            x0, y0 = c - side / 2
+            views = [(cv2.resize(img, (LW, LH), interpolation=cv2.INTER_AREA), lambda q: q * (LW / img.shape[1]), 1.0)]
+            M = np.array([[RS / side, 0, -x0 * RS / side], [0, RS / side, -y0 * RS / side]])
+            views.append((cv2.warpAffine(img, M, (RS, RS), flags=cv2.INTER_LINEAR, borderValue=(40, 40, 40)), lambda q: q * (RS / side) - [x0 * RS / side, y0 * RS / side], 1.6))
+            panels = []
+            for im, T, s in views:
+                for kp, col in ((kt, DM_BLUE), (kd, DM_ORANGE)):
+                    if not np.isfinite(kp).any():
+                        continue
+                    q = T(kp)
+                    for a_, b_ in bones:
+                        if np.isfinite(q[[a_, b_]]).all():
+                            cv2.line(im, tuple(q[a_].round().astype(int)), tuple(q[b_].round().astype(int)), col, max(1, int(round(s))), cv2.LINE_AA)
+                    for j in range(21):
+                        if np.isfinite(q[j]).all():
+                            cv2.circle(im, tuple(q[j].round().astype(int)), int(round(3 * s)), col, -1, cv2.LINE_AA)
+                if arrows is not None:
+                    a0, a1 = T(arrows[0]), T(arrows[1])
+                    for u, w in zip(a0, a1):
+                        cv2.arrowedLine(im, tuple(u.round().astype(int)), tuple(w.round().astype(int)), DM_RED, max(2, int(round(1.6 * s))), cv2.LINE_AA, tipLength=0.3)
+                panels.append(im)
+            canvas = bg.copy()
+            canvas[:LH, :LW] = panels[0]
+            canvas[:LH, LW:] = panels[1]
+            cv2.line(canvas, (int(tx(i)), gy0 - 5), (int(tx(i)), gy1 + 5), (40, 40, 40), 2)
+            pil = Image.fromarray(cv2.cvtColor(canvas, cv2.COLOR_BGR2RGB))
+            dr = ImageDraw.Draw(pil)
+            k = pause_of[i]
+            state = "움직임" if k < 0 else (f"멈춤 {k + 1}" + (" (기준)" if m["pauses"][k]["ref"] else ""))
+            cur = "-" if not np.isfinite(fr_pct[i]) else f"{fr_pct[i]:.2f}% ({fr_pct[i] / 100 * m['box_long_px']:.1f} px)"
+            dr.rectangle([8, 8, 600, 128], fill=(255, 255, 255))
+            dr.text((16, 12), f"{Path(v).stem}   {i / fps:5.2f} s   프레임 {i}   {state}", font=f1, fill=(20, 20, 20))
+            dr.text((16, 44), "● 추적점 (실험 56)", font=f2, fill=(0, 114, 178))
+            dr.text((200, 44), "● MediaPipe 검출 관절", font=f2, fill=(230, 159, 0))
+            dr.text((16, 70), f"→ 기준 손을 호모그래피로 옮긴 위치에서 벗어난 양 (×{rc['arrow_gain']:g})", font=f2, fill=(213, 94, 0))
+            dr.text((16, 96), f"이 프레임의 벗어남 (16점 RMS, 16점 박스 대비): {cur}", font=f2, fill=(20, 20, 20))
+            for yv in yt:
+                dr.text((gx0 - 40, ty(yv) - 10), f"{yv:g}%", font=f2, fill=(90, 90, 90))
+            dr.text((gx0, gy0 - 30), f"프레임별 벗어남 (%), 회색 = 멈춤 구간, 푸른 회색 = 기준 멈춤, 빨간 점 = 멈춤 구간 중앙값끼리 잰 값, 세로축 0~{ymax:.1f}%", font=f2, fill=(60, 60, 60))
+            pil.save(out_dir / f"{i:06d}.png")
+            if (i + 1) % 200 == 0 or i + 1 == n:
+                log(f"  영상 그리기 {i + 1} / {n}")
+        overlay_encode(out_dir, "%06d.png", fps, path)
+    finally:
+        shutil.rmtree(tmp_root, ignore_errors=True)
+
+
+def dm_figure(path: Path, res: dict, cfg: dict):
+    plt = _plt()
+    fig, axs = plt.subplots(4, 3, figsize=(13, 10), squeeze=False)
+    fps = float(cfg["tracking"]["fps"])
+    for ax, e in zip(axs.ravel(), cfg["videos"]):
+        m = res[e["file"]]["measure"]
+        if not m.get("pauses"):
+            ax.set_title(f"{Path(e['file']).stem}: 멈춤 구간 부족", fontsize=9)
+            continue
+        y = m["frame_res_pct"]
+        ax.plot(np.arange(len(y)) / fps, y, color="#E69F00", lw=0.8)
+        for p in m["pauses"]:
+            ax.axvspan(p["start"] / fps, p["end"] / fps, color="#cfe0f0" if p["ref"] else "#e6e6e6", lw=0)
+            if not p["ref"]:
+                ax.plot((p["start"] + p["end"]) / 2 / fps, p["res_pct"], "o", color="#D55E00", ms=5)
+        ax.set_title(Path(e["file"]).stem, fontsize=9)
+        ax.set_xlabel("시간 (s)", fontsize=8)
+        ax.set_ylabel("벗어남 (손 박스 %)", fontsize=8)
+        ax.set_ylim(0, max(3.0, float(np.nanpercentile(y, 99)) * 1.1))
+        ax.grid(alpha=0.3)
+    fig.tight_layout()
+    fig.savefig(path, dpi=100)
+    plt.close(fig)
+
+
+def dm_summary(path: Path, res: dict, cal: dict, cfg: dict, video_name):
+    L = ["# 실험 65 summary", "", f"**{DM_NOTE}**", "",
+         f"- 멈춤 구간: 실험 53 규칙의 정지 프레임(MediaPipe 관절 움직임이 손 박스의 {100 * float(cfg['selection']['still_frac']):g}% 미만)을 간격 {cfg['pauses']['gap_frames']}프레임 이하로 묶고 {cfg['pauses']['min_frames']}프레임 이상인 것. "
+         "구간 중앙값은 16점이 모두 보이는 사용 프레임(테두리에 닿지 않음)으로 낸다. 기준 = 프레임이 가장 많은 멈춤 구간.",
+         "- 벗어남 = 기준 구간 → 각 구간의 최소제곱 호모그래피 뒤 남는 16점 RMS(손 박스 긴 변 대비 %). 바닥 잡음 = 구간 안 프레임 흩어짐 / √프레임 수; '잡음 제거'는 그만큼을 뺀 값.",
+         "- 합성 환산: 실험 64의 장면(45°, 60 cm, 회전 " + f"{cfg['calibration']['turn_range_deg']}°, 프레임 {cfg['calibration']['n_frames']}장, 잡음 없음)에서 {cfg['calibration']['step']}프레임마다 한 장을 멈춤 구간으로 보고 같은 값을 쟀다.", "",
+         "## 1. 영상별", "", "| 영상 | 거리(cm) | 멈춤 구간 | 손 박스 (px) | 벗어남 중앙값 | 벗어남 최대 | 잡음 제거 중앙값 | 잡음 제거 최대 | 바닥 잡음 중앙값 (px) |", "|---|---|---|---|---|---|---|---|---|"]
+    allv = []
+    for e in cfg["videos"]:
+        m = res[e["file"]]["measure"]
+        if not m.get("pauses"):
+            L.append(f"| {Path(e['file']).stem} | {e['distance_cm']} | {m['n_pauses']} | - | - | - | - | - | - |")
+            continue
+        bpx = m["box_long_px"]
+        allv.append(m["res_cor_pct_median"])
+        L.append(f"| {Path(e['file']).stem} | {e['distance_cm']} | {m['n_pauses']} | {bpx:.0f} | {m['res_pct_median']:.2f}% ({m['res_pct_median'] / 100 * bpx:.1f} px) | {m['res_pct_max']:.2f}% | "
+                 f"{m['res_cor_pct_median']:.2f}% ({m['res_cor_pct_median'] / 100 * bpx:.1f} px) | {m['res_cor_pct_max']:.2f}% | {np.median([p['floor_px'] for p in m['pauses']]):.2f} |")
+    L += ["", f"- 12개 영상의 잡음 제거 벗어남 중앙값: {np.median(allv):.2f}% (범위 {min(allv):.2f} ~ {max(allv):.2f}%).", "",
+          "## 2. 합성 환산 기준 (같은 측정, 잡음 없음, 시드 중앙값)", "", "| 합성 조건 | 벗어남 중앙값 | 벗어남 최대 |", "|---|---|---|"]
+    for c in cfg["calibration"]["conditions"]:
+        x = cal[c["name"]]
+        L.append(f"| {c['label']} | {x['res_pct_median']:.2f}% | {x['res_pct_max']:.2f}% |")
+    L += ["", "## 3. 영상별 멈춤 구간 (" + Path(video_name).stem + ")", "", "| 구간 | 시간 (s) | 프레임 | 벗어남 | 잡음 제거 | 바닥 잡음 (px) |", "|---|---|---|---|---|---|"]
+    fps = float(cfg["tracking"]["fps"])
+    for k, p in enumerate(res[video_name]["measure"]["pauses"]):
+        L.append(f"| {k + 1}{' (기준)' if p['ref'] else ''} | {p['start'] / fps:.1f} ~ {p['end'] / fps:.1f} | {p['n']} | " + ("-" if p["ref"] else f"{p['res_pct']:.2f}%") + " | "
+                 + ("-" if p["ref"] else f"{p['res_cor_pct']:.2f}%") + f" | {p['floor_px']:.2f} |")
+    L += ["", "![프레임별 벗어남](figures/departure_over_time.png)", "",
+          f"- 시각화 영상: {Path(video_name).stem}_points.mp4 (이 폴더, 커밋하지 않음). 파랑 = 실험 56 추적점, 주황 = MediaPipe 관절, 빨간 화살표 = 벗어남 ×{cfg['render']['arrow_gain']:g}.",
+          "- 이 값에는 손 모양 변화, 손 경사에 따른 시차, 손 방향에 따라 달라지는 검출기의 체계적 오차가 함께 들어 있다. 합성 환산은 경사와 변형만 넣은 것이라 실제 값이 더 크면 그 차이는 둘 중 무엇인지 가리지 못한다.", ""]
+    path.write_text("\n".join(L) + "\n")
+
+
+def dm_main(argv=None):
+    ap = argparse.ArgumentParser()
+    ap.add_argument("--config", default=str(hf.PROJECT_ROOT / "configs/65_hand_deformation.yaml"))
+    sub = ap.add_subparsers(dest="cmd")
+    ry = sub.add_parser("results-yaml")
+    ry.add_argument("--run", required=True)
+    ap.add_argument("--out", default=None)
+    a = ap.parse_args(argv)
+    text = Path(a.config).read_text()
+    own = yaml.safe_load(text)
+    r56 = yaml.safe_load(hf.resolve(own["rules_config"]).read_text())
+    r60 = yaml.safe_load(hf.resolve(own["segments_config"]).read_text())
+    base = od_load(yaml.safe_load(hf.resolve(r56["base_config"]).read_text()))
+    cfg = {**base, "videos": r56["videos"], "tracking": r56["tracking"], "segments": r60["segments"],
+           **{k: own[k] for k in ("experiment", "pauses", "calibration", "render", "workers", "n_workers", "video_workers", "output") if k in own}}
+    if a.cmd == "results-yaml":
+        print(dm_results_yaml(hf.resolve(a.run), cfg))
+        return None
+    missing = [e["file"] for e in cfg["videos"] if not (Path(cfg["input_dir"]).expanduser() / e["file"]).exists()]
+    if missing:
+        raise SystemExit(f"영상이 없습니다: {missing}")
+    run_root = Path(a.out).expanduser() if a.out else hf.resolve(cfg["output"]["root"]) / utc_stamp()
+    run_root.mkdir(parents=True)
+    (run_root / "figures").mkdir()
+    log = Log(run_root / "log.txt")
+    log(f"65 손 변형: 영상 {len(cfg['videos'])}개, 그릴 영상 {cfg['render']['video']} → {run_root}")
+    t0 = time.time()
+    for k in ("OMP_NUM_THREADS", "OPENBLAS_NUM_THREADS", "MKL_NUM_THREADS"):
+        os.environ[k] = "1"
+    import multiprocessing as mp
+    from concurrent.futures import ProcessPoolExecutor
+    cc = cfg["calibration"]
+    cjobs = [(c["name"], c["errors"], float(cc["turn_range_deg"]), cc["move_pct_xy"], int(cc["n_frames"]), int(sd), int(cc["step"]), cfg["joint_sets"]["main"]["ids"])
+             for c in cc["conditions"] for sd in cc["seeds"]]
+    res = {}
+    with ProcessPoolExecutor(max_workers=int(cfg["workers"]), mp_context=mp.get_context("spawn")) as ex:
+        cres = list(ex.map(hf.dm_synthetic, cjobs, chunksize=1))
+    cal = {c["name"]: {k: float(np.median([r[k] for r in cres if r["key"] == c["name"]])) for k in ("res_pct_median", "res_pct_max", "deform_px_median")} for c in cc["conditions"]}
+    log("  합성 환산: " + ", ".join(f"{n} {x['res_pct_median']:.2f}%" for n, x in cal.items()))
+    with ProcessPoolExecutor(max_workers=int(cfg["video_workers"]), mp_context=mp.get_context("spawn")) as ex:
+        for e, (x, lines) in zip(cfg["videos"], ex.map(dm_video_job, [(e, cfg, str(run_root)) for e in cfg["videos"]])):
+            res[e["file"]] = x
+            for s in lines:
+                log(s)
+    log(f"  영상 처리: {time.time() - t0:.0f} s")
+    dm_figure(run_root / "figures" / "departure_over_time.png", res, cfg)
+    vname = cfg["render"]["video"]
+    dm_summary(run_root / "summary.md", res, cal, cfg, vname)
+    out = {"calibration": cal, "videos": {v: {"n_frames": x["n_frames"], "measure": {k: w for k, w in x["measure"].items() if k not in ("ref_median", "frame_res_pct")},
+                                              "frame_res_pct": x["measure"].get("frame_res_pct")} for v, x in res.items()}}
+    (run_root / "results.json").write_text(json.dumps(hf.jsonable(out), ensure_ascii=False, indent=1))
+    e = next(e for e in cfg["videos"] if e["file"] == vname)
+    dm_render(run_root / f"{Path(vname).stem}_points.mp4", e, res[vname], cfg, run_root, log)
+    meta = hf.provenance_build(text, a.config, {"code_65": own.get("code_65"), "rules_config": own["rules_config"], "elapsed_s": time.time() - t0})
+    (run_root / "metadata.json").write_text(json.dumps(hf.jsonable(meta), ensure_ascii=False, indent=1))
+    log(f"완료 {time.time() - t0:.0f} s → {run_root}")
+    log.close()
+    return run_root, res
+
+
+def dm_results_yaml(run_dir: Path, cfg: dict):
+    """Values only (record experiment, no verdict, no reference f); written to output.results_yaml."""
+    r = json.loads((run_dir / "results.json").read_text())
+    m = json.loads((run_dir / "metadata.json").read_text())
+    try:
+        run_name = str(run_dir.resolve().relative_to(hf.PROJECT_ROOT))
+    except ValueError:
+        run_name = str(run_dir)
+    rd = lambda x, n=3: None if x is None or (isinstance(x, float) and not np.isfinite(x)) else round(x, n)      # noqa: E731
+    fps = float(cfg["tracking"]["fps"])
+    out = {"experiment": cfg["experiment"]["name"], "run": run_name, "code_commit": m["git"]["commit"][:7], "git_dirty_at_run": m["git"]["git_dirty"], "note": DM_NOTE,
+           "pauses_rule": cfg["pauses"], "calibration": {"setting": {k: v for k, v in cfg["calibration"].items() if k != "conditions"},
+                                                          "values": {c["name"]: {"label": c["label"], **{k: rd(x) for k, x in r["calibration"][c["name"]].items()}} for c in cfg["calibration"]["conditions"]}},
+           "rendered_video": f"{Path(cfg['render']['video']).stem}_points.mp4 (run folder, not committed)", "videos": {}}
+    for e in cfg["videos"]:
+        x = r["videos"][e["file"]]["measure"]
+        out["videos"][e["file"]] = {"distance_cm": e["distance_cm"], "hand": e["hand"], "n_pauses": x["n_pauses"], "box_long_px": rd(x.get("box_long_px"), 1),
+                                    **{k: rd(x.get(k)) for k in ("res_pct_median", "res_pct_max", "res_cor_pct_median", "res_cor_pct_max")},
+                                    "pauses": [{"start_s": rd(p["start"] / fps, 2), "end_s": rd(p["end"] / fps, 2), "n": p["n"], "ref": p["ref"], "res_pct": rd(p.get("res_pct")),
+                                                "res_cor_pct": rd(p.get("res_cor_pct")), "floor_px": rd(p["floor_px"])} for p in x.get("pauses", [])]}
+    p = hf.resolve(cfg["output"]["results_yaml"])
+    p.write_text(yaml.safe_dump(hf.jsonable(out), allow_unicode=True, sort_keys=False))
+    return p
+
+
+COMMANDS = {"protocol": protocol_main, "frame-filter": ff_main, "same-session": session_main, "overlay": overlay_main, "phase-segmentation": pseg_main, "guide-revision": grev_main, "f-response": fresp_main, "error-factors": ferr_main, "long-video-check": long_main, "generalization": gen_main, "main-camera-extension": ext_main, "wide-60cm": wide_main, "jointset-sets": jset_main, "verdict-calibration": cal_main, "printed-hand": pr_main, "hand-markers": mk_main, "markers-only": mo_main, "free-template": ft_main, "free-shape3d": s3_main, "free-shape3d-hand": h3_main, "free-shape3d-27": e3_main, "free-shape3d-new": e4_main, "mmpose-hand": mm_main, "mmpose-hand-46": mm2_main, "free-shape3d-new2": e5_main, "mmpose-hand-src": mm3_main, "free-shape3d-detectors": fs_main, "free-shape3d-hand-sets": h4_main, "free-shape3d-hand-sets-42track": h4b_main, "oblique-desk": od_main, "oblique-synthetic": sy_main, "oblique-fixed-template": fx_main, "oblique-desk-videos": om_main, "pause-stabilized": ps_main, "continuous-klt": kt_main, "continuous-klt-palm": kp_main, "klt-paper-dorsum": pp_main, "paper-parallax": hp_main, "segment-template": sg_main, "turn-synthetic": tr_main, "window-f": wd_main, "anycalib-videos": ac_main, "error-sources": ec_main, "hand-deformation": dm_main}
 
 
 def main(argv=None):

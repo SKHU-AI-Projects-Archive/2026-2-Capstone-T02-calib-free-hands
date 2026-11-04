@@ -5013,5 +5013,18 @@ class ECErrorSources(unittest.TestCase):
         self.assertGreater(np.abs(e["kp"] - a["kp"]).max(), 1.0)
 
 
+class DMDeformation(unittest.TestCase):
+    def test_pauses_and_rigid_flat_hand_has_no_departure(self):
+        still = np.zeros(100, bool)
+        still[[*range(5, 15), *range(20, 22), *range(50, 70), 72, 73]] = True
+        P = hf.dm_pauses(still, 3, 5)
+        self.assertEqual([(int(p[0]), int(p[-1])) for p in P], [(5, 14), (50, 73)])
+        s = hf.ec_scene(90.0, [4.5, 34.6], n=30, seed=0, noise_rel=0.0)
+        m = hf.dm_measure(s["kp"], np.ones(30, bool), [np.array([i, i, i]) for i in range(0, 30, 5)], list(range(5, 21)))
+        self.assertLess(m["res_pct_max"], 1e-3)
+        d = hf.ec_scene(90.0, [4.5, 34.6], n=30, seed=0, noise_rel=0.0, deform_rel=0.03)
+        self.assertGreater(hf.dm_measure(d["kp"], np.ones(30, bool), [np.array([i, i, i]) for i in range(0, 30, 5)], list(range(5, 21)))["res_pct_median"], 0.3)
+
+
 if __name__ == "__main__":
     unittest.main()

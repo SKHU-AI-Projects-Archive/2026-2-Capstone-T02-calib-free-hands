@@ -6075,6 +6075,73 @@ def ec_job(args) -> dict:
     return r
 
 
+def dm_pauses(still: np.ndarray, gap: int, min_len: int) -> list:
+    """Experiment 65: pauses = runs of still frames whose steps are <= gap frames, with at least min_len still frames. Returns [array of still frame indices]."""
+    idx = np.flatnonzero(still)
+    if not len(idx):
+        return []
+    runs = np.split(idx, np.flatnonzero(np.diff(idx) > int(gap)) + 1)
+    return [r for r in runs if len(r) >= int(min_len)]
+
+
+def dm_homography_res(src: np.ndarray, dst: np.ndarray):
+    """Least-squares homography src -> dst (cv2.findHomography, method 0) and the RMS of dst minus the mapped src (px) with the per-point residual vectors."""
+    Hm, _ = cv2.findHomography(src.astype(np.float64), dst.astype(np.float64), 0)
+    q = np.c_[src, np.ones(len(src))] @ Hm.T
+    p = q[:, :2] / q[:, 2:3]
+    d = dst - p
+    return float(np.sqrt(np.mean(np.sum(d ** 2, 1)))), p, d
+
+
+def dm_measure(kp: np.ndarray, use: np.ndarray, pauses: list, ids) -> dict:
+    """Shape change of the hand between pauses, free of f and of rigid motion: per pause the median of each joint over its used frames with all ids visible (at least 3 frames); the reference
+    pause = the one with most such frames; per other pause the RMS residual (px and % of the reference's hand box long side) of the best homography reference -> pause (a rigid flat hand moving
+    on the desk is exactly a homography), and the noise floor = RMS over joints of the frame scatter / sqrt(frames) of the two pauses, and the residual with the floor removed
+    (sqrt(max(res^2 - 0.75 (floor_ref^2 + floor^2), 0)); 0.75 = (32 - 8) / 32, the share of noise a homography leaves on 16 points). Per frame also the residual of the frame's joints against the
+    reference median (for the plot / video)."""
+    ids = [int(j) for j in ids]
+    P = []
+    for fr in pauses:
+        f = [int(i) for i in fr if use[i] and np.isfinite(kp[i, ids]).all()]
+        if len(f) < 3:
+            continue
+        X = kp[f][:, ids]
+        P.append({"start": int(fr[0]), "end": int(fr[-1]), "n": len(f), "median": np.median(X, 0),
+                  "floor_px": float(np.sqrt(np.mean(np.sum(X.std(0) ** 2, 1)) / len(f)))})
+    if len(P) < 2:
+        return {"pauses": [], "n_pauses": len(P)}
+    r = int(np.argmax([p["n"] for p in P]))
+    ref = P[r]["median"]
+    box = float((ref.max(0) - ref.min(0)).max())
+    out = []
+    for k, p in enumerate(P):
+        if k == r:
+            out.append({"start": p["start"], "end": p["end"], "n": p["n"], "ref": True, "floor_px": p["floor_px"]})
+            continue
+        res, _, _ = dm_homography_res(ref, p["median"])
+        cor = float(np.sqrt(max(res ** 2 - 0.75 * (P[r]["floor_px"] ** 2 + p["floor_px"] ** 2), 0.0)))
+        out.append({"start": p["start"], "end": p["end"], "n": p["n"], "ref": False, "res_px": res, "res_pct": 100 * res / box, "floor_px": p["floor_px"],
+                    "res_cor_px": cor, "res_cor_pct": 100 * cor / box})
+    frame = np.full(len(kp), np.nan)
+    for i in range(len(kp)):
+        if use[i] and np.isfinite(kp[i, ids]).all():
+            frame[i] = 100 * dm_homography_res(ref, kp[i, ids])[0] / box
+    o = [x for x in out if not x["ref"]]
+    return {"pauses": out, "n_pauses": len(P), "ref_index": r, "ref_median": ref, "box_long_px": box, "frame_res_pct": frame,
+            "res_pct_median": float(np.median([x["res_pct"] for x in o])), "res_pct_max": float(np.max([x["res_pct"] for x in o])),
+            "res_cor_pct_median": float(np.median([x["res_cor_pct"] for x in o])), "res_cor_pct_max": float(np.max([x["res_cor_pct"] for x in o]))}
+
+
+def dm_synthetic(args) -> dict:
+    """The same measure on a noise-free scene of experiment 64 (ec_scene): every step-th frame stands for one pause (single frame, no floor), reference = the middle one of them.
+    args = (key, cond, turn_range_deg, move_pct_xy, n, seed, step, ids)."""
+    key, cond, turn, move, n, seed, step, ids = args
+    s = ec_scene(turn, move, n=n, seed=seed, noise_rel=0.0, **cond)
+    fr = list(range(0, n, int(step)))
+    m = dm_measure(s["kp"], np.ones(n, bool), [np.array([i, i, i]) for i in fr], ids)
+    return {"key": key, "res_pct_median": m["res_pct_median"], "res_pct_max": m["res_pct_max"], "deform_px_median": s["deform_px_median"]}
+
+
 def od_fix_lines(path=None) -> list:
     """Where the six corrections to the supervisor's code sit in handfocal_estimate.py (line numbers of the corrected spellings inside section 5)."""
     p = Path(path) if path else Path(__file__).resolve().parent / "handfocal_estimate.py"
