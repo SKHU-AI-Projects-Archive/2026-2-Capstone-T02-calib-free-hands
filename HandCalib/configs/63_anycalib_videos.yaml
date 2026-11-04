@@ -1,0 +1,19 @@
+# 63: AnyCalib on 54's 12 videos (user 2026-11-04: "지금 하는 실험과 별개로 AnyCalib 추정값도 내어줘"), apart from the hand method, record only, no verdict.
+# hf.anycalib_run unchanged (01's adapter models/anycalib.py, predict() default, f = (fx + fy) / 2 per frame; models anycalib_pinhole and anycalib_gen, cam_id pinhole, from the base pipeline's
+# anycalib block), on every frame at the base pipeline's frame rate (15 fps), weights from the local torch hub, offline (downloads blocked, hub listed before and after).
+# This worktree's AnyCalib submodule is not checked out, so the code is read from the main checkout's submodule (anycalib_code; its commit is checked before the run). No install, no download.
+# Choices made by me before the run (a 3-frame smoke test from the scratchpad checked only that the model loads offline): one GPU per video (gpus, round robin), the thermal guard before each
+# video (pause >= 70 C, resume < 65 C); summary per video: median, quartiles, 10-90th percentile, coefficient of variation; 56's free_template j16 beside it.
+# Reference f only in summary.md. Fixed before the run.
+experiment:
+  name: 63_anycalib_videos
+  seed: 42
+rules_config: configs/56_continuous_klt.yaml
+anycalib_code: {path: /home/juson/project/2026-2-Capstone-T02-calib-free-hands/HandCalib/AnyCalib, commit: 027a849}
+compare_56: runs/56_continuous_klt/20261102T073343Z
+gpus: [0, 1, 2, 3]
+gpu_guard: {pause_c: 70, resume_c: 65}
+code_63: {branch: exp/63-anycalib-videos, base_commit: baa6974, commit: 69c03e9, modules: [HandCalib/run.py]}
+output:
+  root: runs/63_anycalib_videos
+  results_yaml: results/63_anycalib_videos.yaml
