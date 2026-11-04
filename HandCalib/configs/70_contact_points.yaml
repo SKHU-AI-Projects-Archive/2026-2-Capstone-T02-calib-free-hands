@@ -1,0 +1,24 @@
+# 70: only the points that touch the desk (user 2026-11-04: "3개 다 해줘" - my option 1: the fingertips and the thumb tip rest on the paper, so they lie on one plane parallel to the desk and
+# need no ramp), record only, no verdict.
+# 67's desk model with no ramp (hf.ct_job: od_bridge + the supervisor's free_template, then ct_estimate = dk_estimate's flat mode; the hand axis that dk_solve asks for is unused at ramp 0, so
+# one joint is relabelled for it alone) on 56's points (sg_video_job unchanged) of 54's 12 videos and the teammate's 2 videos of 69 (their reference f from 69's config).
+# Choices made by me before the run (no real result of this experiment seen; noise-free synthetic check only: f 1655 exactly for every set): joint sets tips5 (thumb tip + 4 fingertips, main),
+# tips4 (4 fingertips), tips_dips9 (+ the 4 DIPs, which sat within ~3 mm of the paper in 59); main = tracked tips5; main estimates only (as 67-69). Reference f only in summary.md.
+code_70: {branch: exp/70-72-ramp-handling, base_commit: 6d88cfd, commit: 1665f45, modules: [HandCalib/handfocal_report.py, HandCalib/run.py, HandCalib/wilor3d_worker.py]}
+experiment:
+  name: 70_contact_points
+  seed: 42
+rules_config: configs/56_continuous_klt.yaml
+segments_config: configs/60_segment_template.yaml
+teammate_config: configs/69_teammate_hands.yaml
+joint_sets:
+  tips5: [4, 8, 12, 16, 20]
+  tips4: [8, 12, 16, 20]
+  tips_dips9: [4, 7, 8, 11, 12, 15, 16, 19, 20]
+main: {source: tracked, joint_set: tips5}
+workers: 24
+n_workers: 4
+video_workers: 14
+output:
+  root: runs/70_contact_points
+  results_yaml: results/70_contact_points.yaml

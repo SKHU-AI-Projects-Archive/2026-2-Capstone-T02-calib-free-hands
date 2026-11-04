@@ -1,0 +1,26 @@
+# 72: can f and the ramp be told apart from the video alone? (user 2026-11-04: "3개 다 해줘" - my option 3), synthetic, record only, no verdict.
+# hf.dk_scene: 64's scene with the hand an exact plane ramped against the desk as 67's model says; detector-like noise. 1) one video: 67's estimator with the ramp fixed at each of ramps_deg
+# (cost profile over the ramp) and with the ramp free (started at free_start_deg, not the true ramp); 2) two camera tilts: the ramp where the two videos' f-by-ramp curves cross.
+# Choices made by me before the run (no result seen; noise-free check only: the true ramp gives f 1655 and RMS 0, ramp 7 deg gives f 1721): turns 120 (the real videos) / 180 / 360 deg,
+# tilts 30 / 45 / 60 deg, noise 0.2 % (tracked-like, 61) and 0.5 %, 5 seeds, j16.
+code_72: {branch: exp/70-72-ramp-handling, base_commit: 6d88cfd, commit: 1665f45, modules: [HandCalib/handfocal_report.py, HandCalib/run.py, HandCalib/wilor3d_worker.py]}
+experiment:
+  name: 72_ramp_identifiability
+  seed: 42
+rules_config: configs/56_continuous_klt.yaml
+joint_ids: [5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20]
+synthetic:
+  true_f: 1655.0
+  true_ramp_deg: 11.0
+  dist_cm: 60.0
+  n_frames: 60
+  turns_deg: [120, 180, 360]
+  tilts_deg: [30, 45, 60]
+  noise_rel: [0.002, 0.005]
+  seeds: [0, 1, 2, 3, 4]
+  ramps_deg: [5, 7, 9, 11, 13, 15, 17]
+  free_start_deg: 5.0
+workers: 24
+output:
+  root: runs/72_ramp_identifiability
+  results_yaml: results/72_ramp_identifiability.yaml

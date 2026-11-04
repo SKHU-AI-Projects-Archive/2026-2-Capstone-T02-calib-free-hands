@@ -1,0 +1,25 @@
+# 71: the ramp from a 3-D hand model (user 2026-11-04: "3개 다 해줘" - my option 2), record only, no verdict.
+# WiLoR (AnyHand checkpoint) through /public/hand-demo's predictor, read-only, in its own venv (no install, no download), one GPU per video with the thermal guard (pause >= 70 C, resume < 65 C);
+# every step-th frame at 30 fps. Per frame hf.wl_geometry: the desk = the palm-side face of the mesh's convex hull; heights of the joint centres and of the back-of-hand skin over each joint;
+# ramp = pitch of a plane fitted to the joint set's heights along the hand axis. Per video the median over the frames, then 67's estimator (ramp_fixed) at that ramp on 56's points.
+# Videos: 54's 12 and the teammate's 2 (reference f from 69's config). Joint sets of 67 (j16, j21). Main estimates only.
+# Choices made by me before the run (no f of this experiment seen): main = tracked j16 with the back-of-hand skin height - chosen after one frame of IMG_7350 (a worker test) gave skin heights
+# above the fingertips of ~17 mm at the middle MCP and ~41 mm at the wrist, as 59 measured on this video (joint centres: ~6 / ~17 mm); the joint-centre ramp is recorded too.
+# Reference f only in summary.md.
+code_71: {branch: exp/70-72-ramp-handling, base_commit: 6d88cfd, commit: 1665f45, modules: [HandCalib/handfocal_report.py, HandCalib/run.py, HandCalib/wilor3d_worker.py]}
+experiment:
+  name: 71_wilor_ramp
+  seed: 42
+rules_config: configs/56_continuous_klt.yaml
+segments_config: configs/60_segment_template.yaml
+teammate_config: configs/69_teammate_hands.yaml
+estimator_config: configs/67_desk_motion.yaml
+heights: [dorsal, center]
+main: {source: tracked, joint_set: j16, height: dorsal}
+wilor: {python: /public/hand-demo/.venv/bin/python, repo: /public/hand-demo, step: 3, gpus: [0, 1, 2, 3], pause_c: 70, resume_c: 65}
+workers: 16
+n_workers: 4
+video_workers: 14
+output:
+  root: runs/71_wilor_ramp
+  results_yaml: results/71_wilor_ramp.yaml
