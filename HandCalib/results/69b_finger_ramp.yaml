@@ -1,0 +1,73 @@
+experiment: 69b_finger_ramp
+run: runs/69b_finger_ramp/20261104T085619Z
+code_commit: 06b3a4b
+git_dirty_at_run: false
+note: 다른 팀원의 손으로(다른 카메라로) 찍은 영상에 실험 67의 책상 제약 추정기(경사 고정)를 실험 68의 경사들과 팀원이 자로 잰 경사로
+  적용한 기록이다(판정 없음). 자로 잰 경사 = arctan(책상에서 손목까지 높이 / 손목에서 가운데 손가락 끝까지 길이).
+measured:
+  finger:
+    mcp_height_mm: 30
+    tip_to_mcp_mm: 95
+    tip_to_mcp_source: 가정(손 길이 170 mm의 약 56 %), 측정 안 함
+measured_ramp_deg: 17.5
+ramps_deg:
+- 17.5
+videos:
+  IMG_7351 - 복사본.MOV:
+    distance_cm: 60
+    hand: right
+    tracked:
+      j16:
+        '17.5':
+          f_px: 1655.9
+          boundary: false
+          rms_px: 3.37
+          desk_tilt_deg: 44.7
+      j21:
+        '17.5':
+          f_px: 1615.2
+          boundary: false
+          rms_px: 8.51
+          desk_tilt_deg: 42.4
+    detected:
+      j16:
+        '17.5':
+          f_px: 2129.8
+          boundary: false
+          rms_px: 5.1
+          desk_tilt_deg: 44.6
+      j21:
+        '17.5':
+          f_px: 1703.9
+          boundary: false
+          rms_px: 8.63
+          desk_tilt_deg: 40.0
+  IMG_7352 - 복사본.MOV:
+    distance_cm: 60
+    hand: right
+    tracked:
+      j16:
+        '17.5':
+          f_px: 1384.1
+          boundary: false
+          rms_px: 3.91
+          desk_tilt_deg: 44.2
+      j21:
+        '17.5':
+          f_px: 1468.2
+          boundary: false
+          rms_px: 7.95
+          desk_tilt_deg: 42.8
+    detected:
+      j16:
+        '17.5':
+          f_px: 2549.5
+          boundary: false
+          rms_px: 4.22
+          desk_tilt_deg: 45.8
+      j21:
+        '17.5':
+          f_px: 1831.1
+          boundary: false
+          rms_px: 7.53
+          desk_tilt_deg: 41.8
