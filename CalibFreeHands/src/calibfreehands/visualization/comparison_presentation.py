@@ -1,8 +1,8 @@
 from __future__ import annotations
 
 import numpy as np
-from PySide6.QtCore import QEvent, Qt, QPropertyAnimation, QEasingCurve, QPoint
-from PySide6.QtGui import QColor, QFont, QPainter, QPen, QVector4D
+from PySide6.QtCore import QEvent, Qt, QPropertyAnimation, QEasingCurve, QPoint, QTimer, QRectF
+from PySide6.QtGui import QColor, QFont, QFontMetrics, QPainter, QPen, QVector4D
 from PySide6.QtWidgets import QCheckBox, QFrame, QGraphicsOpacityEffect, QHBoxLayout, QLabel, QProgressBar, QPushButton, QSizePolicy, QToolButton, QVBoxLayout, QWidget
 
 from calibfreehands.joint_schema import JOINT_NAMES
@@ -22,6 +22,10 @@ class _ViewportPanel(QWidget):
         self.background = "none"
         self._drop_active = False
         self._fit_signature = None
+        self._fit_generation = 0
+        self._fit_timer = QTimer(self)
+        self._fit_timer.setSingleShot(True)
+        self._fit_timer.timeout.connect(lambda: self._apply_stable_update(self._fit_generation))
         self.effective_point_size = 0.0
         self.card.setStyleSheet("QFrame#metricOverlay { background: transparent; color: white; border: none; }")
         self.card.setMaximumWidth(330)
@@ -129,7 +133,7 @@ class _ViewportPanel(QWidget):
         self.card.setStyleSheet(
             f"QFrame#metricOverlay {{ background-color: {background}; color: white; border: {border}; }}")
         self._fit_signature = None
-        self._fit_content()
+        self._schedule_stable_update()
 
     def set_background(self, style):
         if style not in ("none", "subtle"):
@@ -138,10 +142,12 @@ class _ViewportPanel(QWidget):
             self.background = style
             self._apply_style()
 
-    def _position(self):
+    def _position(self, *, schedule_fit=True):
         self.setGeometry(self.view.rect())
         for child in self.card.findChildren(QWidget):
             child.installEventFilter(self)
+        self.body_layout.activate()
+        self.card.layout().activate()
         content_width = self.body_layout.sizeHint().width() + 20
         content_height = self.body_layout.sizeHint().height() + 12
         width = min(330, max(200, self.view.width() - 24), max(240, content_width + 60))
@@ -153,17 +159,34 @@ class _ViewportPanel(QWidget):
             self.card.move(x, y)
         self.opacity_effect.setOpacity(self.opacity)
         self.raise_()
+        if schedule_fit:
+            self._schedule_stable_update()
+
+    def _schedule_stable_update(self):
+        self._fit_generation += 1
+        self.card.setUpdatesEnabled(False)
+        self._fit_timer.start(0)
+
+    def _apply_stable_update(self, generation):
+        if generation != self._fit_generation:
+            return
+        self.body_layout.activate()
+        self.card.layout().activate()
         self._fit_content()
+        self._position(schedule_fit=False)
+        self.card.setUpdatesEnabled(True)
+        self.card.update()
 
     def _fit_content(self):
         viewport = self.view.contentsRect()
-        signature = (viewport.size(), self.body_layout.count(), len(self.body.findChildren(QLabel)), self.scale)
+        labels = self.body.findChildren(QLabel)
+        content = tuple((label.text(), label.isVisible(), label.wordWrap()) for label in labels)
+        signature = (viewport.size(), self.body_layout.count(), content, self.scale)
         if signature == self._fit_signature:
             return
         self._fit_signature = signature
         base = {"small": 8.0, "medium": 9.0, "large": 10.0}[self.scale]
         available = max(24, min(viewport.height() - 36, 220) - 12)
-        labels = self.body.findChildren(QLabel)
         size = base
         while True:
             font = QFont()
@@ -189,6 +212,7 @@ class _ViewportPanel(QWidget):
         self._position()
 
     def refresh(self, viewer):
+        self.card.setUpdatesEnabled(False)
         self._clear_layout(self.body_layout)
         self.metric_rows.clear()
         self.details_buttons.clear()
@@ -202,7 +226,6 @@ class _ViewportPanel(QWidget):
             self._add_result_group(viewer, config_index, config)
         if not self.body_layout.count():
             self.body_layout.addWidget(QLabel("No visible results"))
-        self.body_layout.activate()
         self._fit_signature = None
         self._position()
 
@@ -328,7 +351,6 @@ class _ViewportPanel(QWidget):
                 row_layout.addStretch(1)
                 self.body_layout.addWidget(row)
                 self.confidence_rows[(config["id"], hand)] = value_label
-        self._position()
 
 
 class _ResultDragHandle(QToolButton):
@@ -446,6 +468,7 @@ class _JointAnnotationLayer(QWidget):
         frame = int(viewer.loaded_results[0].result.frame_indices[viewer.slider.value()])
         matrix = view.projectionMatrix((0, 0, max(1, view.width()), max(1, view.height())), view.getViewport()) * view.viewMatrix()
         labels = []
+        occupied = []
         for config_index in self.configuration_indices:
             config = viewer.configurations[config_index]
             if config["id"] == viewer.reference_id: continue
@@ -461,7 +484,6 @@ class _JointAnnotationLayer(QWidget):
                 pair = viewer._metric_cache.get(config["id"], {}).get((frame, hand_name))
                 if pair is None and not (viewer.single_mode and viewer.annotation_content == "name"):
                     continue
-                occupied = []
                 candidates = []
                 errors = pair.joint_errors_mm if pair is not None else np.full(len(JOINT_NAMES), np.nan)
                 for joint, (point, error) in enumerate(zip(result.keypoints_3d[position, hand], errors)):
@@ -487,15 +509,27 @@ class _JointAnnotationLayer(QWidget):
                         candidates = [min(candidates, key=lambda item: (item[2] - mx) ** 2 + (item[3] - my) ** 2)]
                 for joint, error, px, base_y in candidates:
                     label = f"{error:.1f}" if viewer.annotation_content == "error" else JOINT_NAMES[joint]
-                    width = max(18, len(label) * 8)
+                    width = max(18, QFontMetrics(self.font()).horizontalAdvance(label))
+                    horizontal_direction = 1 if px < self.width() / 2 else -1
+                    proposed_x = px + horizontal_direction * config_index * 10 + (4 if hand else 0)
+                    label_x = min(max(4, proposed_x), max(4, self.width() - width - 4))
                     offsets = [0] + [offset for step in range(1, 22) for offset in (-15 * step, 15 * step)]
-                    py = next((base_y + offset for offset in offsets
-                               if 14 <= base_y + offset <= self.height() - 4
-                               and not any(px < old[0] + old[2] and px + width > old[0]
-                                           and base_y + offset - 12 < old[1] + old[3]
-                                           and base_y + offset + 2 > old[1] for old in occupied)), base_y)
-                    occupied.append((px, py - 12, width, 14))
-                    labels.append((config["id"], hand_name, joint, label, px, py))
+                    baseline = min(max(14, base_y), max(14, self.height() - 4))
+                    config_offset = config_index * 4
+                    if baseline + config_offset > self.height() - 4:
+                        config_offset = -config_offset
+                    baseline = min(max(14, baseline + config_offset), max(14, self.height() - 4))
+                    if viewer.annotation_mode in {"hovered", "key_joints", "worst5"}:
+                        label_y = next((baseline + offset for offset in offsets
+                                        if 14 <= baseline + offset <= self.height() - 4
+                                        and not any(label_x < old[0] + old[2] and label_x + width > old[0]
+                                                    and baseline + offset - 12 < old[1] + old[3]
+                                                    and baseline + offset + 2 > old[1] for old in occupied)),
+                                       baseline)
+                        occupied.append((label_x, label_y - 12, width, 14))
+                    else:
+                        label_y = baseline
+                    labels.append((config["id"], hand_name, joint, label, label_x, label_y))
         return labels
 
     def paintEvent(self, _event):
@@ -504,10 +538,16 @@ class _JointAnnotationLayer(QWidget):
         painter = QPainter(self)
         font = self.font(); font.setPointSize(max(9, font.pointSize())); font.setBold(True)
         painter.setFont(font)
+        metrics = painter.fontMetrics()
         try:
             for config_id, hand_name, joint, label, x, y in self.projected_annotations():
                 index = next(i for i, config in enumerate(viewer.configurations) if config["id"] == config_id)
                 color = QColor(*(round(channel * 255) for channel in viewer.configuration_colors[index]))
+                label_rect = QRectF(x - 3, y - metrics.ascent() - 2,
+                                    metrics.horizontalAdvance(label) + 6, metrics.height() + 4)
+                painter.setPen(Qt.PenStyle.NoPen)
+                painter.setBrush(QColor(16, 20, 28, 205))
+                painter.drawRoundedRect(label_rect, 3, 3)
                 painter.setPen(QPen(QColor(0, 0, 0, 220), 3)); painter.drawText(int(x), int(y), label)
                 painter.setPen(color); painter.drawText(int(x), int(y), label)
         finally:

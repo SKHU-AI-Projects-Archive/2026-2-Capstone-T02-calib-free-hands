@@ -9,12 +9,12 @@ from time import monotonic
 
 import numpy as np
 import pyqtgraph.opengl as gl
-from PySide6.QtCore import QEvent, QObject, QPoint, Qt, QTimer, QSignalBlocker
-from PySide6.QtGui import QAction, QActionGroup, QImage, QWindow
+from PySide6.QtCore import QEvent, QObject, QPoint, Qt, QTimer, QSignalBlocker, QRectF
+from PySide6.QtGui import QAction, QActionGroup, QImage, QWindow, QIcon, QPainter, QPainterPath, QPen, QPixmap, QPalette
 from PySide6.QtWidgets import (
     QApplication, QCheckBox, QColorDialog, QComboBox, QDialog, QFileDialog, QGridLayout,
     QHBoxLayout, QLabel, QMainWindow, QMenu, QPushButton, QScrollArea, QSizePolicy,
-    QSlider, QSplitter, QStackedWidget, QStyle, QTableWidget, QTableWidgetItem, QToolButton, QButtonGroup,
+    QSlider, QSplitter, QStackedWidget, QTableWidget, QTableWidgetItem, QToolButton,
     QVBoxLayout, QWidget, QWidgetAction,
 )
 
@@ -602,17 +602,29 @@ class ComparisonViewer(QWidget):
         self.metric_status.setToolTip("Camera-space differences from the selected Reference; these are not ground-truth errors.")
 
         self.mode_selector = QWidget()
-        mode_layout = QHBoxLayout(self.mode_selector); mode_layout.setContentsMargins(0, 0, 0, 0); mode_layout.setSpacing(2)
-        self.mode_button_group = QButtonGroup(self); self.mode_button_group.setExclusive(True)
-        self.mode_buttons = {}
-        for text, mode in (("Overlay", "overlay"), ("Split", "split")):
-            button = QToolButton(); button.setText(text); button.setCheckable(True)
-            button.setSizePolicy(QSizePolicy.Policy.Fixed, QSizePolicy.Policy.Fixed)
-            button.setAutoExclusive(True)
-            button.clicked.connect(lambda checked=False, value=mode: self.set_mode(value))
-            self.mode_button_group.addButton(button)
-            mode_layout.addWidget(button); self.mode_buttons[mode] = button
-        self.mode_buttons["overlay"].setChecked(True)
+        mode_layout = QHBoxLayout(self.mode_selector)
+        mode_layout.setContentsMargins(0, 0, 0, 0)
+        mode_layout.setSpacing(5)
+        self.overlay_mode_label = QLabel("Overlay")
+        self.mode_switch = QSlider(Qt.Orientation.Horizontal)
+        self.mode_switch.setRange(0, 1)
+        self.mode_switch.setPageStep(1)
+        self.mode_switch.setFixedSize(38, 22)
+        self.mode_switch.setAccessibleName("View mode")
+        self.mode_switch.setAccessibleDescription("Off: Overlay; On: Split")
+        self.mode_switch.setToolTip("Overlay / Split")
+        self.mode_switch.setStyleSheet(
+            "QSlider::groove:horizontal { height: 18px; border-radius: 9px; background: palette(mid); }"
+            "QSlider::sub-page:horizontal { border-radius: 9px; background: palette(highlight); }"
+            "QSlider::add-page:horizontal { border-radius: 9px; background: palette(mid); }"
+            "QSlider::handle:horizontal { width: 14px; margin: 2px; border-radius: 7px; "
+            "background: palette(button); border: 1px solid palette(midlight); }"
+        )
+        self.split_mode_label = QLabel("Split")
+        mode_layout.addWidget(self.overlay_mode_label)
+        mode_layout.addWidget(self.mode_switch)
+        mode_layout.addWidget(self.split_mode_label)
+        self.mode_switch.valueChanged.connect(lambda value: self.set_mode("split" if value else "overlay"))
 
         self.results_menu = QMenu(self)
         self.visibility_checks = []
@@ -924,12 +936,15 @@ class ComparisonViewer(QWidget):
         self.playback_buttons = []
         playback = QHBoxLayout()
         playback.addWidget(QLabel("Playback"))
-        icons = (QStyle.StandardPixmap.SP_MediaSkipBackward, QStyle.StandardPixmap.SP_MediaPlay,
-                 QStyle.StandardPixmap.SP_MediaSkipForward)
+        self.playback_icon_kinds = ["previous_frame", "play", "next_frame"]
         accessible_names = ("Previous frame", "Play", "Next frame")
-        for callback, icon_kind, accessible_name in zip((self._previous, self._play, self._next_frame), icons, accessible_names):
+        foreground = self.palette().color(QPalette.ColorRole.ButtonText)
+        disabled = self.palette().color(QPalette.ColorGroup.Disabled, QPalette.ColorRole.ButtonText)
+        self.playback_icons = [self._make_playback_icon(kind, foreground, disabled)
+                               for kind in self.playback_icon_kinds]
+        for callback, icon, accessible_name in zip((self._previous, self._play, self._next_frame), self.playback_icons, accessible_names):
             button = QToolButton()
-            button.setIcon(self.style().standardIcon(icon_kind))
+            button.setIcon(icon)
             button.setAccessibleName(accessible_name)
             button.setToolTip(accessible_name)
             button.setFixedSize(36, 32)
@@ -1371,7 +1386,11 @@ class ComparisonViewer(QWidget):
             raise ValueError(f"unknown comparison view mode: {mode}")
         self.mode = mode
         self.views.setCurrentIndex(0 if mode == "overlay" else 1)
-        self.mode_buttons[mode].setChecked(True)
+        target = 1 if mode == "split" else 0
+        if self.mode_switch.value() != target:
+            blocker = QSignalBlocker(self.mode_switch)
+            self.mode_switch.setValue(target)
+            del blocker
         self._render_active_frame()
         self._refresh_metric_panels()
         self._refresh_annotations()
@@ -1540,10 +1559,51 @@ class ComparisonViewer(QWidget):
     def _sync_play_icon(self):
         playing = self.timer.isActive()
         button = self.playback_buttons[1]
-        button.setIcon(self.style().standardIcon(
-            QStyle.StandardPixmap.SP_MediaPause if playing else QStyle.StandardPixmap.SP_MediaPlay))
+        self.playback_icon_kinds[1] = "pause" if playing else "play"
+        button.setIcon(self._make_playback_icon(
+            self.playback_icon_kinds[1], self.palette().color(QPalette.ColorRole.ButtonText),
+            self.palette().color(QPalette.ColorGroup.Disabled, QPalette.ColorRole.ButtonText)))
         button.setAccessibleName("Pause" if playing else "Play")
         button.setToolTip("Pause" if playing else "Play")
+
+    @staticmethod
+    def _make_playback_icon(kind, foreground, disabled_foreground=None):
+        icon = QIcon()
+        colors = ((QIcon.Mode.Normal, foreground),
+                  (QIcon.Mode.Disabled, disabled_foreground or foreground))
+        for mode, color in colors:
+            pixmap = QPixmap(32, 32)
+            pixmap.fill(Qt.GlobalColor.transparent)
+            painter = QPainter(pixmap)
+            painter.setRenderHint(QPainter.RenderHint.Antialiasing)
+            painter.setPen(QPen(color, 2.5, Qt.PenStyle.SolidLine, Qt.PenCapStyle.RoundCap,
+                                Qt.PenJoinStyle.RoundJoin))
+            painter.setBrush(color)
+            if kind == "previous_frame":
+                painter.drawLine(20, 8, 11, 16)
+                painter.drawLine(11, 16, 20, 24)
+            elif kind == "next_frame":
+                painter.drawLine(12, 8, 21, 16)
+                painter.drawLine(21, 16, 12, 24)
+            elif kind == "play":
+                path = QPainterPath()
+                path.moveTo(11, 7); path.lineTo(24, 16); path.lineTo(11, 25); path.closeSubpath()
+                painter.drawPath(path)
+            elif kind == "pause":
+                painter.drawRoundedRect(QRectF(9, 7, 5, 18), 1.5, 1.5)
+                painter.drawRoundedRect(QRectF(18, 7, 5, 18), 1.5, 1.5)
+            painter.end()
+            icon.addPixmap(pixmap, mode, QIcon.State.Off)
+        return icon
+
+    def changeEvent(self, event):
+        super().changeEvent(event)
+        if event.type() in (QEvent.Type.PaletteChange, QEvent.Type.ApplicationPaletteChange,
+                            QEvent.Type.StyleChange) and hasattr(self, "playback_buttons"):
+            foreground = self.palette().color(QPalette.ColorRole.ButtonText)
+            disabled = self.palette().color(QPalette.ColorGroup.Disabled, QPalette.ColorRole.ButtonText)
+            for index, button in enumerate(self.playback_buttons):
+                button.setIcon(self._make_playback_icon(self.playback_icon_kinds[index], foreground, disabled))
 
     def _set_performance_stats(self, enabled):
         self.performance_stats_label.setVisible(enabled)

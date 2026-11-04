@@ -296,6 +296,8 @@ All entries below are pending implementation and validation. No acceptance item 
 
 ### Windows GUI observations
 
+- [x] User-reported manual validation at the starting checkpoint: Windows native media picker, Main Window first-user layout, provider A/B/C lifetime and RAM behavior, and console cleanliness.
+
 - [x] Refreshed Main Window displayed the revised column order, `+ Add` below the row, processing/settings/output hierarchy, and path/Browse/Collision row. Added a second configuration, selected Manual Focal and saw its enabled focal field, then removed the temporary row.
 - [x] Native Common Item Dialog opened normally with C: as its initial location; navigated to D:, selected one MP4, observed it enter the queue, cancelled and reopened the picker, and cancelled again. No `0x80004002` failure appeared in this exercised single-file path.
 - [x] Opened a historical single `.cfh` through View Results without running inference. The Viewer presented `Manual Focal 1500 px`, source video, 2D overlay, 3D skeleton, Overlay/Split, media icons, and speed stepper.
@@ -312,3 +314,11 @@ All entries below are pending implementation and validation. No acceptance item 
 - [ ] Source A/B/C provider registry, worker, cache-byte, and RSS measurements; application console review during a complete close/shutdown cycle
 - [ ] Original feedback provider and second first-time user repeat the complete flow without coaching
 - [ ] Fresh AnyCalib/WiLoR inference smoke; existing saved results were used for Viewer inspection
+
+
+### Viewer Final Polish & HUD Stabilization (2026-11-04)
+
+- [x] Offscreen regression tests cover the single Overlay/Split switch, theme-aware playback icons, coalesced HUD fitting across result/Detection/reference/metric changes, requested Large size retention, and same-joint annotation staggering.
+- [x] Windows saved-result Viewer review: dark-theme frame/playback icons remained visible; Overlay/Split switch toggled 20 times; Large HUD, Results visibility, Detection Numeric/Bar, Key-joint and Worst-5 annotations rendered without the previously reported transient shrink.
+- [ ] Reference and metric popup changes, Hovered/All annotation modes, light-theme native GUI, constrained viewport HUD recovery, and 1x/2x playback performance remain for user/manual follow-up.
+- [ ] Fresh AnyCalib/WiLoR inference and original/second first-user rerun remain pending.

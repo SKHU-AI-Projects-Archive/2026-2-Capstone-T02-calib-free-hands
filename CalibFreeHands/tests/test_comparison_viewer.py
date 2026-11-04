@@ -504,6 +504,11 @@ def test_hud_requested_size_recovers_after_constrained_viewport_and_popup(tmp_pa
     view.show()
     panel.show()
     qapp.processEvents()
+    for requested, expected_points in (("small", 8.0), ("medium", 9.0), ("large", 10.0)):
+        panel.set_presentation(scale=requested)
+        qapp.processEvents()
+        assert panel.requested_scale == requested
+        assert panel.effective_point_size == expected_points
     requested = getattr(panel, "requested_scale", None)
     effective = getattr(panel, "effective_point_size", None)
     assert requested == "large", "HUD requested size is not stored independently"
@@ -598,7 +603,7 @@ def test_comparison_dashboard_uses_viewport_overlays_and_compact_menus(tmp_path,
     assert len(viewer.split_panels) == 5
     assert viewer.split_views[1].minimumWidth() >= 320
     assert viewer.split_views[1].minimumHeight() >= 240
-    assert set(viewer.mode_buttons) == {"overlay", "split"}
+    assert viewer.mode_switch.minimum() == 0 and viewer.mode_switch.maximum() == 1
     assert viewer.results_menu_button.text().startswith("Results")
     assert viewer.confidence_menu_button.text() == "Detection"
     assert len(viewer.visibility_checks) == 5
@@ -761,17 +766,101 @@ def test_viewer_playback_controls_are_accessible_steppers_and_exclusive_modes(tm
     assert viewer.speed_value_label.text() == "1.0×"
     assert viewer.speed_down_button.isEnabled()
     assert viewer.speed_up_button.isEnabled()
-    assert viewer.mode_buttons["overlay"].isChecked()
-    viewer.mode_buttons["split"].click()
-    assert viewer.mode_buttons["split"].isChecked()
-    assert not viewer.mode_buttons["overlay"].isChecked()
+    assert viewer.mode_switch.minimum() == 0
+    assert viewer.mode_switch.maximum() == 1
+    assert viewer.mode_switch.value() == 0
+    assert viewer.mode_switch.accessibleName() == "View mode"
+    viewer.mode_switch.setValue(1)
+    assert viewer.mode == "split"
+    assert viewer.mode_switch.value() == 1
+    assert viewer.mode_switch.accessibleDescription() == "Off: Overlay; On: Split"
     assert viewer.annotation_button.text() == "Annotations"
     assert viewer.playback_buttons[0].accessibleName() == "Previous frame"
+    assert viewer.playback_buttons[2].accessibleName() == "Next frame"
+    assert "mode_buttons" not in viewer.__dict__
+    viewer.close()
+
+
+def test_playback_icons_follow_palette_and_use_single_frame_arrows(tmp_path, qapp):
+    from PySide6.QtGui import QColor, QIcon, QPalette
+    from calibfreehands.visualization.comparison import ComparisonViewer
+
+    viewer = ComparisonViewer(_session(tmp_path, 2))
+    for color in (QColor("#f4f4f4"), QColor("#202020")):
+        palette = QPalette(viewer.palette())
+        palette.setColor(QPalette.ColorRole.ButtonText, color)
+        disabled_color = QColor("#858585") if color.red() > 128 else QColor("#a0a0a0")
+        palette.setColor(QPalette.ColorGroup.Disabled, QPalette.ColorRole.ButtonText, disabled_color)
+        viewer.setPalette(palette)
+        qapp.processEvents()
+        for button in viewer.playback_buttons:
+            image = button.icon().pixmap(32, 32).toImage()
+            matching = sum(
+                1 for y in range(image.height()) for x in range(image.width())
+                if image.pixelColor(x, y).alpha() > 0
+                and image.pixelColor(x, y).red() == color.red()
+                and image.pixelColor(x, y).green() == color.green()
+                and image.pixelColor(x, y).blue() == color.blue()
+            )
+            assert matching > 0
+        disabled_image = viewer.playback_buttons[0].icon().pixmap(32, 32, QIcon.Mode.Disabled).toImage()
+        assert any(disabled_image.pixelColor(x, y) == disabled_color
+                   for y in range(disabled_image.height()) for x in range(disabled_image.width()))
+    assert viewer.playback_buttons[0].accessibleName() == "Previous frame"
+    assert viewer.playback_buttons[2].accessibleName() == "Next frame"
+    assert viewer.playback_icon_kinds == ["previous_frame", "play", "next_frame"]
+    viewer.close()
+
+
+def test_hud_layout_updates_are_coalesced_after_content_and_viewport_settle(tmp_path, qapp):
+    from calibfreehands.visualization.comparison import ComparisonViewer
+
+    viewer = ComparisonViewer(_session(tmp_path, 3))
+    viewer.resize(1280, 800)
+    viewer.show()
+    viewer._set_hud(scale="large")
+    qapp.processEvents()
+    panels = [viewer.overlay_panel, *viewer.split_panels]
+    calls = {panel: 0 for panel in panels}
+    for panel in panels:
+        fit = panel._fit_content
+        panel._fit_content = lambda fit=fit, panel=panel: (calls.__setitem__(panel, calls[panel] + 1), fit())[-1]
+
+    changes = [
+        lambda: viewer.set_mode("split"),
+        lambda: viewer.set_mode("overlay"),
+        lambda: viewer.confidence_numeric_checkbox.setChecked(True),
+        lambda: viewer.confidence_bar_checkbox.setChecked(True),
+        lambda: viewer.visibility_checks[1].setChecked(False),
+        lambda: viewer.visibility_checks[1].setChecked(True),
+        lambda: viewer.reference_selector.setCurrentIndex(1),
+        lambda: next(check for check in viewer.metric_checks.values() if check.isEnabled()).setChecked(True),
+    ]
+    for change in changes:
+        before = dict(calls)
+        change()
+        assert all(not panel.card.updatesEnabled() for panel in panels)
+        assert calls == before
+        qapp.processEvents()
+        assert all(panel.card.updatesEnabled() for panel in panels)
+        assert all(calls[panel] - before[panel] <= 1 for panel in panels)
+        assert all(panel.requested_scale == "large" for panel in panels)
+        assert all(panel.effective_point_size >= 7.0 for panel in panels)
+    before = dict(calls)
+    viewer.set_mode("split")
+    viewer.confidence_numeric_checkbox.setChecked(False)
+    viewer.set_mode("overlay")
+    viewer.confidence_numeric_checkbox.setChecked(True)
+    viewer.reference_selector.setCurrentIndex(2)
+    assert calls == before
+    qapp.processEvents()
+    assert all(calls[panel] - before[panel] <= 1 for panel in panels)
+    assert all(panel.card.updatesEnabled() for panel in panels)
+    assert all(panel.requested_scale == "large" for panel in panels)
     viewer.close()
 
 
 def test_viewer_speed_stepper_bounds_and_play_state_icon(tmp_path, qapp):
-    from PySide6.QtWidgets import QStyle
     from calibfreehands.visualization.comparison import ComparisonViewer
     from calibfreehands.visualization.playback import PlaybackClock
 
@@ -788,10 +877,10 @@ def test_viewer_speed_stepper_bounds_and_play_state_icon(tmp_path, qapp):
     assert not viewer.speed_up_button.isEnabled()
     viewer._play()
     assert viewer.playback_buttons[1].accessibleName() == "Pause"
-    assert viewer.playback_buttons[1].icon().pixmap(32, 32).toImage() == viewer.style().standardIcon(QStyle.StandardPixmap.SP_MediaPause).pixmap(32, 32).toImage()
+    assert viewer.playback_icon_kinds[1] == "pause"
     viewer._play()
     assert viewer.playback_buttons[1].accessibleName() == "Play"
-    assert viewer.playback_buttons[1].icon().pixmap(32, 32).toImage() == viewer.style().standardIcon(QStyle.StandardPixmap.SP_MediaPlay).pixmap(32, 32).toImage()
+    assert viewer.playback_icon_kinds[1] == "play"
     viewer.close()
 
 
@@ -962,7 +1051,7 @@ def test_joint_annotation_density_and_label_content_use_joint_errors(tmp_path, q
 
     viewer = ComparisonViewer(_session(tmp_path, 2))
     layer = viewer.split_annotations[1]
-    viewer.set_mode("split")
+    viewer.set_mode("overlay")
     viewer.set_annotation_mode("all")
     all_rows = layer.projected_annotations()
     assert len(all_rows) == 42
@@ -979,6 +1068,24 @@ def test_joint_annotation_density_and_label_content_use_joint_errors(tmp_path, q
     viewer._set_annotation_content("name")
     named = layer.projected_annotations()
     assert all(row[3] in JOINT_NAMES for row in named)
+    viewer.close()
+
+
+def test_identical_candidate_joint_labels_are_deterministically_staggered(tmp_path, qapp):
+    from calibfreehands.visualization.comparison import ComparisonViewer
+
+    viewer = ComparisonViewer(_session(tmp_path, 3))
+    viewer.set_mode("overlay")
+    viewer._set_annotation_content("error")
+    first, second = viewer.loaded_results[1].result, viewer.loaded_results[2].result
+    second.keypoints_3d[:] = first.keypoints_3d
+    layer = viewer.overlay_annotations
+    for mode in ("key_joints", "worst5", "all"):
+        viewer.set_annotation_mode(mode)
+        labels = layer.projected_annotations()
+        same_joint = [item for item in labels if item[1] == "left" and item[2] == 0]
+        assert len(same_joint) == 2
+        assert same_joint[0][4:] != same_joint[1][4:]
     viewer.close()
 
 
