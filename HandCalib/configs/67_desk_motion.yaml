@@ -1,0 +1,33 @@
+# 67: the desk-motion estimator on the real videos (user 2026-11-04: "손의 기울기를 보정할 방법은 없을까? 11도 정도면 보정할 수 있을 것 같은데?"; after my design: "손을 책상에 붙여서 촬영 ...
+# 옆으로 구르거나 할 일은 없고 ... 종이 위에서 회전 ... 손가락이 크게 움직이지는 않을 것 ... 합성 실험은 진행하지 않아도 좋고, 실제 영상으로 먼저 진행해줘."), record only, no verdict.
+# Why a new estimator: a ramp that is linear keeps the hand a plane, which free_template already fits (its free 6-DoF pose per frame absorbs the tilt of the plane); the ramp matters only once the
+# motion is tied to the desk. Mine, not the supervisor's (as 60): hf.dk_job = od_bridge + the supervisor's free_template unchanged, then the desk model from its result.
+# Model (hf.dk_solve): x_cam = Rd (Rz(theta_i) Rh(pitch, roll) [T, 0] + [x_i, y_i, 0]) + td; one desk pose (Rd, td) for the video, per frame the turn theta_i and slide (x_i, y_i) on the desk
+# (the middle frame 0), the planar template T (two anchor joints fixed as ba_refine), f; Rh: the hand plane against the desk - pitch about the axis across the hand (+ = wrist side raised towards
+# the camera; hand axis = mean MCP -> mean fingertip), roll about the hand axis. Modes: flat (0, 0), ramp_fixed (ramp_deg, 0), ramp_free (pitch, roll free from ramp_deg, 0).
+# Start at each f: frame_fit poses of free_template's template, desk normal = angle-weighted mean rotation axis relative to the middle frame. f as free_template: coarse profile on 8 grid values
+# (each solved at fixed f), parabola on log f, then all free (scipy least_squares trf, exact steps, Huber f_scale = median Huber width as ba_refine, f within the grid range). Frames: _restrict
+# (max 120) as free_template.
+# Choices made by me before the run (no real result seen): ramp_deg 11 from 59 (IMG_7350: fingertips ~0, MCPs +15-20 mm, wrist ~+35 mm); points and frames = 56's (rules_config, sg_video_job
+# unchanged: tracked = 56's chain joints with its edge rule, detected = mediapipe off the border); joint sets j16 (56's main) and j21; main estimates only - no bootstrap (user 2026-11-04:
+# "일단 주 추정만 돌리고, 부트스트랩은 내가 나중에 필요하다고 판단되면 요청할게"; a 2-video dry run into the scratchpad timed the jobs at 80-385 s, it only checked that the run works). Code check only (not recorded as a result): 64's scene, flat hand, no noise -> f 1655 exactly in flat and ramp_free.
+# Reading fixed now: on the main points (tracked, j16) a desk mode counts as better than free_template if it has more videos within 25 % and fewer on the f limits; the RMS rise over free_template
+# is read as how well "turns and slides on the desk as a rigid plane" holds. Reference f only in summary.md. Fixed before the run.
+experiment:
+  name: 67_desk_motion
+  seed: 42
+rules_config: configs/56_continuous_klt.yaml
+segments_config: configs/60_segment_template.yaml
+code_67: {branch: exp/67-desk-motion, base_commit: e1245f1, commit: fc5064c, modules: [HandCalib/handfocal_report.py, HandCalib/run.py]}
+ramp_deg: 11.0
+joint_sets:
+  j16: [5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20]
+  j21: [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20]
+bootstrap_sets: []
+main: {source: tracked, joint_set: j16}
+workers: 56
+n_workers: 4
+video_workers: 12
+output:
+  root: runs/67_desk_motion
+  results_yaml: results/67_desk_motion.yaml
