@@ -12779,7 +12779,125 @@ def rs_results_yaml(run_dir: Path, cfg: dict):
     return p
 
 
-COMMANDS = {"protocol": protocol_main, "frame-filter": ff_main, "same-session": session_main, "overlay": overlay_main, "phase-segmentation": pseg_main, "guide-revision": grev_main, "f-response": fresp_main, "error-factors": ferr_main, "long-video-check": long_main, "generalization": gen_main, "main-camera-extension": ext_main, "wide-60cm": wide_main, "jointset-sets": jset_main, "verdict-calibration": cal_main, "printed-hand": pr_main, "hand-markers": mk_main, "markers-only": mo_main, "free-template": ft_main, "free-shape3d": s3_main, "free-shape3d-hand": h3_main, "free-shape3d-27": e3_main, "free-shape3d-new": e4_main, "mmpose-hand": mm_main, "mmpose-hand-46": mm2_main, "free-shape3d-new2": e5_main, "mmpose-hand-src": mm3_main, "free-shape3d-detectors": fs_main, "free-shape3d-hand-sets": h4_main, "free-shape3d-hand-sets-42track": h4b_main, "oblique-desk": od_main, "oblique-synthetic": sy_main, "oblique-fixed-template": fx_main, "oblique-desk-videos": om_main, "pause-stabilized": ps_main, "continuous-klt": kt_main, "continuous-klt-palm": kp_main, "klt-paper-dorsum": pp_main, "paper-parallax": hp_main, "segment-template": sg_main, "turn-synthetic": tr_main, "window-f": wd_main, "anycalib-videos": ac_main, "error-sources": ec_main, "hand-deformation": dm_main, "joint-combos": fc_main, "points-video": pv_main, "desk-motion": dk_main, "ramp-sensitivity": rs_main}
+# ====================================================================================================
+# tm  (experiment 69: a teammate's hand, another camera - 67's estimator (ramp_fixed) at 68's ramps and at the ramp the teammate measured with a ruler)
+#     python HandCalib/run.py teammate-hands --config HandCalib/configs/69_teammate_hands.yaml [--out DIR]
+# ====================================================================================================
+TM_NOTE = ("다른 팀원의 손으로(다른 카메라로) 찍은 영상에 실험 67의 책상 제약 추정기(경사 고정)를 실험 68의 경사들과 팀원이 자로 잰 경사로 적용한 기록이다(판정 없음). "
+           "자로 잰 경사 = arctan(책상에서 손목까지 높이 / 손목에서 가운데 손가락 끝까지 길이).")
+
+
+def tm_ramp_deg(m: dict) -> float:
+    """The ramp from the ruler: atan(wrist height / hand length), rounded to 0.1 deg."""
+    return round(float(np.degrees(np.arctan(float(m["wrist_height_mm"]) / float(m["hand_length_mm"])))), 1)
+
+
+def tm_main(argv=None):
+    ap = argparse.ArgumentParser()
+    ap.add_argument("--config", default=str(hf.PROJECT_ROOT / "configs/69_teammate_hands.yaml"))
+    sub = ap.add_subparsers(dest="cmd")
+    ry = sub.add_parser("results-yaml")
+    ry.add_argument("--run", required=True)
+    ap.add_argument("--out", default=None)
+    a = ap.parse_args(argv)
+    text = Path(a.config).read_text()
+    own = yaml.safe_load(text)
+    r67 = yaml.safe_load(hf.resolve(own["estimator_config"]).read_text())
+    r68 = yaml.safe_load(hf.resolve(own["ramps_config"]).read_text())
+    r56 = yaml.safe_load(hf.resolve(r67["rules_config"]).read_text())
+    r60 = yaml.safe_load(hf.resolve(r67["segments_config"]).read_text())
+    base = od_load(yaml.safe_load(hf.resolve(r56["base_config"]).read_text()))
+    mr = tm_ramp_deg(own["measured"])
+    cfg = {**base, "videos": own["videos"], "tracking": r56["tracking"], "segments": r60["segments"], "joint_sets": r67["joint_sets"],
+           "ramps_deg": sorted(set([float(r) for r in r68["ramps_deg"]] + [mr])), "ref_f": own["ref_f"],
+           **{k: own[k] for k in ("experiment", "workers", "n_workers", "video_workers", "output") if k in own}}
+    if a.cmd == "results-yaml":
+        print(tm_results_yaml(hf.resolve(a.run), cfg, own["measured"], mr))
+        return None
+    missing = [e["file"] for e in cfg["videos"] if not (Path(cfg["input_dir"]).expanduser() / e["file"]).exists()]
+    if missing:
+        raise SystemExit(f"영상이 없습니다: {missing}")
+    run_root = Path(a.out).expanduser() if a.out else hf.resolve(cfg["output"]["root"]) / utc_stamp()
+    run_root.mkdir(parents=True)
+    (run_root / "figures").mkdir()
+    log = Log(run_root / "log.txt")
+    log(f"69 팀원 손: 영상 {len(cfg['videos'])}개, 경사 {cfg['ramps_deg']} (자로 잰 경사 {mr:g}°) → {run_root}")
+    t0 = time.time()
+    for k in ("OMP_NUM_THREADS", "OPENBLAS_NUM_THREADS", "MKL_NUM_THREADS"):
+        os.environ[k] = "1"
+    import multiprocessing as mp
+    from concurrent.futures import ProcessPoolExecutor
+    vid = {}
+    with ProcessPoolExecutor(max_workers=int(cfg["video_workers"]), mp_context=mp.get_context("spawn")) as ex:
+        for e, (x, lines) in zip(cfg["videos"], ex.map(sg_video_job, [(e, cfg, str(run_root)) for e in cfg["videos"]])):
+            vid[e["file"]] = x
+            for s in lines:
+                log(s)
+    log(f"  영상 처리: {time.time() - t0:.0f} s")
+    ecfg = cfg["pipeline"]["estimate"]
+    jobs, keys = [], []
+    for e in cfg["videos"]:
+        v = e["file"]
+        x = vid[v]
+        for src in DK_SOURCES:
+            y = x[src]
+            ui = np.flatnonzero(y["use"])
+            mask = np.isfinite(y["kp"]).all(2)
+            for js, ids in cfg["joint_sets"].items():
+                for r in cfg["ramps_deg"]:
+                    jobs.append(("main", 0, y["kp"], mask, ui, y["box"], tuple(x["size"]), ecfg, ids, ("ramp_fixed",), float(r)))
+                    keys.append((v, src, js, float(r)))
+    log(f"  추정 {len(jobs)}건")
+    t1 = time.time()
+    res = {}
+    with ProcessPoolExecutor(max_workers=int(cfg["workers"]), mp_context=mp.get_context("spawn")) as ex:
+        for (k, o) in zip(keys, ex.map(hf.dk_job, jobs, chunksize=1)):
+            res[k] = o
+    log(f"  추정: {time.time() - t1:.0f} s")
+    ref = float(cfg["ref_f"]["value"])
+    rs_figure(run_root / "figures" / "f_vs_ramp.png", res, cfg, ref)
+    rs_summary(run_root / "summary.md", res, cfg)
+    s = (run_root / "summary.md").read_text()
+    s = s.replace("# 실험 68 summary", "# 실험 69 summary").replace(f"**{RS_NOTE}**", f"**{TM_NOTE}**\n\n- 자로 잰 값(사용자 제공): 손목 높이 {own['measured']['wrist_height_mm']} mm, "
+                                                                   f"손 길이 {own['measured']['hand_length_mm']} mm → 경사 {mr:g}°. 촬영 거리 약 60 cm. 다른 카메라.")
+    s = s.replace("- 11° 행은 실험 67의 경사 11° 고정과 같은 계산이다(같은 코드·설정이면 같은 값).", f"- {mr:g}° 행이 자로 잰 경사로 낸 f다. 11° 행은 기존 손에서 쓴 고정값이다.")
+    (run_root / "summary.md").write_text(s)
+    out = {"real": {f"{v}|{s_}|{js}|{r:g}": o for (v, s_, js, r), o in res.items()}, "measured_ramp_deg": mr}
+    (run_root / "results.json").write_text(json.dumps(hf.jsonable(out), ensure_ascii=False, indent=1))
+    meta = hf.provenance_build(text, a.config, {"code_69": own.get("code_69"), "elapsed_s": time.time() - t0})
+    (run_root / "metadata.json").write_text(json.dumps(hf.jsonable(meta), ensure_ascii=False, indent=1))
+    log(f"완료 {time.time() - t0:.0f} s → {run_root}")
+    log.close()
+    return run_root, res
+
+
+def tm_results_yaml(run_dir: Path, cfg: dict, measured: dict, mr: float):
+    """Values only (record experiment, no verdict, no reference f or errors); rs_results_yaml's layout with 69's note and the ruler values; written to output.results_yaml."""
+    r = json.loads((run_dir / "results.json").read_text())
+    m = json.loads((run_dir / "metadata.json").read_text())
+    try:
+        run_name = str(run_dir.resolve().relative_to(hf.PROJECT_ROOT))
+    except ValueError:
+        run_name = str(run_dir)
+    rd = lambda x, n=1: None if x is None or (isinstance(x, float) and not np.isfinite(x)) else round(x, n)      # noqa: E731
+    out = {"experiment": cfg["experiment"]["name"], "run": run_name, "code_commit": m["git"]["commit"][:7], "git_dirty_at_run": m["git"]["git_dirty"], "note": TM_NOTE,
+           "measured": measured, "measured_ramp_deg": mr, "ramps_deg": cfg["ramps_deg"], "videos": {}}
+    for e in cfg["videos"]:
+        v = e["file"]
+        o = out["videos"][v] = {"distance_cm": e["distance_cm"], "hand": e["hand"]}
+        for src in DK_SOURCES:
+            for js in cfg["joint_sets"]:
+                d = o.setdefault(src, {})[js] = {}
+                for rr in cfg["ramps_deg"]:
+                    y = ((r["real"].get(f"{v}|{src}|{js}|{float(rr):g}") or {}).get("ramp_fixed")) or {}
+                    d[f"{float(rr):g}"] = ({"failed": y.get("failed")} if y else None) if "f" not in y else {
+                        "f_px": rd(y["f"]), "boundary": y["boundary"], "rms_px": rd(y["rms_px"], 2), "desk_tilt_deg": rd(y["desk_tilt_deg"])}
+    p = hf.resolve(cfg["output"]["results_yaml"])
+    p.write_text(yaml.safe_dump(hf.jsonable(out), allow_unicode=True, sort_keys=False))
+    return p
+
+
+COMMANDS = {"protocol": protocol_main, "frame-filter": ff_main, "same-session": session_main, "overlay": overlay_main, "phase-segmentation": pseg_main, "guide-revision": grev_main, "f-response": fresp_main, "error-factors": ferr_main, "long-video-check": long_main, "generalization": gen_main, "main-camera-extension": ext_main, "wide-60cm": wide_main, "jointset-sets": jset_main, "verdict-calibration": cal_main, "printed-hand": pr_main, "hand-markers": mk_main, "markers-only": mo_main, "free-template": ft_main, "free-shape3d": s3_main, "free-shape3d-hand": h3_main, "free-shape3d-27": e3_main, "free-shape3d-new": e4_main, "mmpose-hand": mm_main, "mmpose-hand-46": mm2_main, "free-shape3d-new2": e5_main, "mmpose-hand-src": mm3_main, "free-shape3d-detectors": fs_main, "free-shape3d-hand-sets": h4_main, "free-shape3d-hand-sets-42track": h4b_main, "oblique-desk": od_main, "oblique-synthetic": sy_main, "oblique-fixed-template": fx_main, "oblique-desk-videos": om_main, "pause-stabilized": ps_main, "continuous-klt": kt_main, "continuous-klt-palm": kp_main, "klt-paper-dorsum": pp_main, "paper-parallax": hp_main, "segment-template": sg_main, "turn-synthetic": tr_main, "window-f": wd_main, "anycalib-videos": ac_main, "error-sources": ec_main, "hand-deformation": dm_main, "joint-combos": fc_main, "points-video": pv_main, "desk-motion": dk_main, "ramp-sensitivity": rs_main, "teammate-hands": tm_main}
 
 
 def main(argv=None):
