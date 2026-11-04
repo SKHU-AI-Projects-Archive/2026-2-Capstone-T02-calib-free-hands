@@ -9,10 +9,10 @@ from time import monotonic
 
 import numpy as np
 import pyqtgraph.opengl as gl
-from PySide6.QtCore import QEvent, QObject, QPoint, Qt, QTimer, QSignalBlocker, QRectF
-from PySide6.QtGui import QAction, QActionGroup, QImage, QWindow, QIcon, QPainter, QPainterPath, QPen, QPixmap, QPalette
+from PySide6.QtCore import QEvent, QObject, QPoint, Qt, QTimer, QSignalBlocker, QRectF, QSize, QVariantAnimation
+from PySide6.QtGui import QAction, QActionGroup, QImage, QWindow, QIcon, QPainter, QPainterPath, QPen, QPixmap, QPalette, QColor
 from PySide6.QtWidgets import (
-    QApplication, QCheckBox, QColorDialog, QComboBox, QDialog, QFileDialog, QGridLayout,
+    QApplication, QAbstractButton, QCheckBox, QColorDialog, QComboBox, QDialog, QFileDialog, QGridLayout,
     QHBoxLayout, QLabel, QMainWindow, QMenu, QPushButton, QScrollArea, QSizePolicy,
     QSlider, QSplitter, QStackedWidget, QTableWidget, QTableWidgetItem, QToolButton,
     QVBoxLayout, QWidget, QWidgetAction,
@@ -30,6 +30,77 @@ from .playback import PlaybackClock
 METRIC_FIELDS = ("source_identity", "reference_result_id", "candidate_result_id", "candidate_name", "metric_id",
                  "metric_name", "category", "protocol_version", "frame_index", "timestamp_s", "hand",
                  "joint_index", "joint_name", "value", "unit", "valid_status")
+
+
+class _ModeSwitch(QAbstractButton):
+    """Compact accessible Overlay/Split toggle with a neutral painted track."""
+
+    def __init__(self, parent=None):
+        super().__init__(parent)
+        self.setCheckable(True)
+        self.setFixedSize(42, 22)
+        self.setFocusPolicy(Qt.FocusPolicy.StrongFocus)
+        self.setAccessibleName("Overlay / Split view mode")
+        self.setAccessibleDescription("Unchecked: Overlay; checked: Split")
+        self.setToolTip("Overlay / Split view mode")
+        self._thumb_position = 0.0
+        self._animation = QVariantAnimation(self)
+        self._animation.setDuration(120)
+        self._animation.valueChanged.connect(self._set_thumb_position)
+        self.toggled.connect(self._animate_thumb)
+
+    def sizeHint(self):
+        return QSize(42, 22)
+
+    def _animate_thumb(self, checked):
+        self._animation.stop()
+        self._animation.setStartValue(self._thumb_position)
+        self._animation.setEndValue(1.0 if checked else 0.0)
+        self._animation.start()
+
+    def _set_thumb_position(self, value):
+        self._thumb_position = float(value)
+        self.update()
+
+    def _dark_palette(self):
+        window = self.palette().color(QPalette.ColorRole.Window)
+        luminance = 0.2126 * window.redF() + 0.7152 * window.greenF() + 0.0722 * window.blueF()
+        app_style = QApplication.instance().styleSheet().lower()
+        return luminance < 0.45 or "#202124" in app_style
+
+    def paintEvent(self, _event):
+        dark = self._dark_palette()
+        track = QColor("#555b63" if dark else "#b9bec5")
+        border = QColor("#858b93" if dark else "#9299a1")
+        thumb = QColor("#f2f3f4")
+        thumb_border = QColor("#c7cbd0" if dark else "#59616a")
+        if self.isDown():
+            track = track.darker(108)
+        elif self.underMouse():
+            track = track.lighter(112)
+
+        painter = QPainter(self)
+        painter.setRenderHint(QPainter.RenderHint.Antialiasing)
+        track_rect = QRectF(2, 2, self.width() - 4, self.height() - 4)
+        painter.setPen(QPen(border, 1))
+        painter.setBrush(track)
+        painter.drawRoundedRect(track_rect, track_rect.height() / 2, track_rect.height() / 2)
+
+        diameter = 16
+        margin = 3
+        travel = max(0, self.width() - 2 * margin - diameter)
+        x = margin + travel * self._thumb_position
+        thumb_rect = QRectF(x, (self.height() - diameter) / 2, diameter, diameter)
+        painter.setPen(QPen(thumb_border, 1))
+        painter.setBrush(thumb)
+        painter.drawEllipse(thumb_rect)
+
+        if self.hasFocus():
+            focus_color = self.palette().color(QPalette.ColorRole.Midlight)
+            painter.setPen(QPen(focus_color, 1, Qt.PenStyle.DashLine))
+            painter.setBrush(Qt.BrushStyle.NoBrush)
+            painter.drawRoundedRect(QRectF(0.5, 0.5, self.width() - 1, self.height() - 1), 10, 10)
+        painter.end()
 
 
 def _finite(value):
@@ -606,19 +677,12 @@ class ComparisonViewer(QWidget):
         mode_layout.setContentsMargins(0, 0, 0, 0)
         mode_layout.setSpacing(5)
         self.overlay_mode_label = QLabel("Overlay")
-        self.mode_switch = QSlider(Qt.Orientation.Horizontal)
-        self.mode_switch.setRange(0, 1)
-        self.mode_switch.setPageStep(1)
-        self.mode_switch.setFixedSize(42, 22)
-        self.mode_switch.setAccessibleName("View mode")
-        self.mode_switch.setAccessibleDescription("Off: Overlay; On: Split")
-        self.mode_switch.setToolTip("Overlay / Split")
-        self._apply_mode_switch_style()
+        self.mode_switch = _ModeSwitch()
         self.split_mode_label = QLabel("Split")
         mode_layout.addWidget(self.overlay_mode_label)
         mode_layout.addWidget(self.mode_switch)
         mode_layout.addWidget(self.split_mode_label)
-        self.mode_switch.valueChanged.connect(self._set_mode_from_switch)
+        self.mode_switch.toggled.connect(self._set_mode_from_switch)
         self._update_mode_labels()
 
         self.results_menu = QMenu(self)
@@ -929,8 +993,12 @@ class ComparisonViewer(QWidget):
         self.timer.setInterval(16)
         self.timer.timeout.connect(self._advance)
         self.playback_buttons = []
-        playback = QHBoxLayout()
-        playback.addWidget(QLabel("Playback"))
+        self.playback_group = QWidget()
+        self.playback_group.setSizePolicy(QSizePolicy.Policy.Fixed, QSizePolicy.Policy.Fixed)
+        playback_group_layout = QHBoxLayout(self.playback_group)
+        playback_group_layout.setContentsMargins(0, 0, 0, 0)
+        playback_group_layout.setSpacing(3)
+        playback_group_layout.addWidget(QLabel("Playback"))
         self.playback_icon_kinds = ["previous_frame", "play", "next_frame"]
         accessible_names = ("Previous frame", "Play", "Next frame")
         foreground = self.palette().color(QPalette.ColorRole.ButtonText)
@@ -945,24 +1013,30 @@ class ComparisonViewer(QWidget):
             button.setFixedSize(36, 32)
             button.setSizePolicy(QSizePolicy.Policy.Fixed, QSizePolicy.Policy.Fixed)
             button.clicked.connect(callback)
-            playback.addWidget(button)
+            playback_group_layout.addWidget(button)
             self.playback_buttons.append(button)
-        playback.addWidget(QLabel("Speed"))
+        self.speed_group = QWidget()
+        self.speed_group.setSizePolicy(QSizePolicy.Policy.Fixed, QSizePolicy.Policy.Fixed)
+        speed_group_layout = QHBoxLayout(self.speed_group)
+        speed_group_layout.setContentsMargins(0, 0, 0, 0)
+        speed_group_layout.setSpacing(3)
+        self.speed_label = QLabel("Speed")
+        speed_group_layout.addWidget(self.speed_label)
         self.speed_down_button = QToolButton(); self.speed_down_button.setText("▼")
+        self.speed_down_button.setFixedSize(28, 32)
         self.speed_down_button.setAccessibleName("Decrease playback speed")
         self.speed_down_button.setToolTip("Decrease playback speed")
         self.speed_down_button.clicked.connect(lambda: self._step_playback_speed(-1))
         self.speed_value_label = QLabel("1.0×")
-        self.speed_value_label.setMinimumWidth(self.speed_value_label.fontMetrics().horizontalAdvance("1.25×"))
+        self.speed_value_label.setFixedWidth(self.speed_value_label.fontMetrics().horizontalAdvance("1.25×") + 4)
         self.speed_value_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
         self.speed_up_button = QToolButton(); self.speed_up_button.setText("▲")
+        self.speed_up_button.setFixedSize(28, 32)
         self.speed_up_button.setAccessibleName("Increase playback speed")
         self.speed_up_button.setToolTip("Increase playback speed")
         self.speed_up_button.clicked.connect(lambda: self._step_playback_speed(1))
-        playback.addStretch(1)
-        playback.addWidget(self.speed_down_button)
-        playback.addWidget(self.speed_value_label)
-        playback.addWidget(self.speed_up_button)
+        for control in (self.speed_down_button, self.speed_value_label, self.speed_up_button):
+            speed_group_layout.addWidget(control)
         self.performance_stats_label = QLabel()
         self.performance_stats_label.hide()
         self.performance_stats_timer = QTimer(self)
@@ -978,6 +1052,12 @@ class ComparisonViewer(QWidget):
         layout.addWidget(self.views, 0, 0)
         self.chrome = QWidget(); chrome_layout = QVBoxLayout(self.chrome); chrome_layout.setContentsMargins(14, 8, 14, 12); chrome_layout.setSpacing(6)
         chrome_layout.addLayout(toolbar); chrome_layout.addWidget(self.slider)
+        playback = QHBoxLayout()
+        self.playback_controls_layout = playback
+        playback.addWidget(self.playback_group)
+        playback.addSpacing(12)
+        playback.addWidget(self.speed_group)
+        playback.addStretch(1)
         playback.addWidget(self.status)
         playback.addWidget(self.metric_status, 1)
         chrome_layout.addLayout(playback); chrome_layout.addWidget(self.performance_stats_label)
@@ -1381,49 +1461,23 @@ class ComparisonViewer(QWidget):
             raise ValueError(f"unknown comparison view mode: {mode}")
         self.mode = mode
         self.views.setCurrentIndex(0 if mode == "overlay" else 1)
-        target = 1 if mode == "split" else 0
-        if self.mode_switch.value() != target:
-            blocker = QSignalBlocker(self.mode_switch)
-            self.mode_switch.setValue(target)
-            del blocker
+        self.mode_switch.setChecked(mode == "split")
         self._update_mode_labels()
         self._render_active_frame()
         self._refresh_metric_panels()
         self._refresh_annotations()
 
     def _set_mode_from_switch(self, value):
-        self.set_mode("split" if value else "overlay")
+        target = "split" if value else "overlay"
+        if target != self.mode:
+            self.set_mode(target)
 
     def _update_mode_labels(self):
-        selected_color = self.palette().color(QPalette.ColorRole.WindowText)
-        muted_color = self.palette().color(QPalette.ColorRole.Mid)
         for label, selected in ((self.overlay_mode_label, self.mode == "overlay"),
                                 (self.split_mode_label, self.mode == "split")):
             font = label.font()
             font.setBold(selected)
             label.setFont(font)
-            palette = label.palette()
-            palette.setColor(QPalette.ColorRole.WindowText, selected_color if selected else muted_color)
-            label.setPalette(palette)
-
-    def _apply_mode_switch_style(self):
-        palette = self.palette()
-        window = palette.color(QPalette.ColorRole.Window)
-        app_style = QApplication.instance().styleSheet().lower()
-        dark_theme = ((0.2126 * window.redF() + 0.7152 * window.greenF()
-                       + 0.0722 * window.blueF()) < 0.45
-                      or "#202124" in app_style)
-        track = "#555b63" if dark_theme else "#c6cbd1"
-        border = "#858b93" if dark_theme else "#8c9299"
-        thumb = "#f2f3f4" if dark_theme else "#343a40"
-        self.mode_switch.setStyleSheet(
-            "QSlider::groove:horizontal { height: 18px; border-radius: 9px; "
-            f"background: {track}; border: 1px solid {border}; }}"
-            "QSlider::sub-page:horizontal, QSlider::add-page:horizontal { "
-            f"border-radius: 8px; background: {track}; }}"
-            "QSlider::handle:horizontal { width: 14px; margin: 2px; border-radius: 7px; "
-            f"background: {thumb}; border: 1px solid {border}; }}"
-        )
 
     def _set_configuration_visible(self, index, visible):
         self.overlay_view.set_configuration_visible(index, visible)
@@ -1634,9 +1688,6 @@ class ComparisonViewer(QWidget):
             disabled = self.palette().color(QPalette.ColorGroup.Disabled, QPalette.ColorRole.ButtonText)
             for index, button in enumerate(self.playback_buttons):
                 button.setIcon(self._make_playback_icon(self.playback_icon_kinds[index], foreground, disabled))
-            if hasattr(self, "mode_switch"):
-                self._apply_mode_switch_style()
-                self._update_mode_labels()
 
     def _set_performance_stats(self, enabled):
         self.performance_stats_label.setVisible(enabled)
@@ -1823,6 +1874,8 @@ class ComparisonViewer(QWidget):
                     self._hide_hover_popup(self._hover_menu_target)
                     event.accept(); return True
             if event.key() == Qt.Key.Key_Space:
+                if watched is self.mode_switch:
+                    return super().eventFilter(watched, event)
                 self._play(); event.accept(); return True
             if self._arrow_mode == "frame" and event.key() == Qt.Key.Key_Left: self._previous(); event.accept(); return True
             if self._arrow_mode == "frame" and event.key() == Qt.Key.Key_Right: self._next_frame(); event.accept(); return True

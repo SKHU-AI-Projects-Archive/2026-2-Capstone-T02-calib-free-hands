@@ -334,3 +334,14 @@ All entries below are pending implementation and validation. No acceptance item 
 - [x] Windows Qt runtime smoke with three saved `.cfh` results: Detection Bar ON measured 316 px HUD height; OFF immediately measured 268 px without pointer movement; a later Leave event retained 268 px. No inference ran.
 - [ ] Light-theme switch visual review remains pending.
 - [ ] Fresh AnyCalib/WiLoR inference and first-user reruns remain pending.
+
+
+## Final Viewer Control Styling (2026-11-04)
+
+- [x] Custom checkable QAbstractButton mode switch is 42-by-22 device-independent pixels, uses a neutral rounded track and circular near-white thumb, animates over 120 ms, and retains strong keyboard focus/accessibility.
+- [x] Overlay/Split labels share the same palette foreground; selected mode uses font weight only. Light/dark palette rendering and thumb travel are covered by offscreen image assertions.
+- [x] Speed label, decrement, fixed-width value, and increment are grouped with fixed sizing and compact spacing; playback group is separate, and the stretch follows both groups.
+- [x] Offscreen geometry and playback tests pass at 1280-by-720; speed value width accommodates the widest preset without moving the arrows.
+- [x] Windows saved-result comparison Viewer inspected at 1280-by-720: switch toggled Overlay/Split; the speed controls displayed 0.75x and 1.25x in place with no clipping or large gap.
+- [ ] Light-theme native Windows visual review remains pending; palette rendering is covered offscreen.
+- [ ] Fresh AnyCalib/WiLoR inference and first-user reruns remain pending.

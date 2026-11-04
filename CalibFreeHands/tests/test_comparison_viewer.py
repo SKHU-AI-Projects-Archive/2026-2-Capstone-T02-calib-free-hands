@@ -603,7 +603,7 @@ def test_comparison_dashboard_uses_viewport_overlays_and_compact_menus(tmp_path,
     assert len(viewer.split_panels) == 5
     assert viewer.split_views[1].minimumWidth() >= 320
     assert viewer.split_views[1].minimumHeight() >= 240
-    assert viewer.mode_switch.minimum() == 0 and viewer.mode_switch.maximum() == 1
+    assert viewer.mode_switch.isCheckable()
     assert viewer.results_menu_button.text().startswith("Results")
     assert viewer.confidence_menu_button.text() == "Detection"
     assert len(viewer.visibility_checks) == 5
@@ -799,27 +799,88 @@ def test_mode_switch_has_compact_neutral_track_and_selected_labels(tmp_path, qap
     from calibfreehands.visualization.comparison import ComparisonViewer
 
     viewer = ComparisonViewer(_session(tmp_path, 2))
-    assert 36 <= viewer.mode_switch.width() <= 44
-    assert 18 <= viewer.mode_switch.height() <= 24
-    switch_style = viewer.mode_switch.styleSheet().lower()
-    assert "palette(highlight)" not in switch_style
+    from PySide6.QtWidgets import QAbstractButton
+    assert isinstance(viewer.mode_switch, QAbstractButton)
+    assert 38 <= viewer.mode_switch.width() <= 44
+    assert 20 <= viewer.mode_switch.height() <= 24
+    assert viewer.mode_switch.isCheckable()
+    assert viewer.mode_switch.accessibleName() == "Overlay / Split view mode"
+    assert viewer.mode_switch.focusPolicy().name == "StrongFocus"
     assert viewer.overlay_mode_label.font().bold()
     assert not viewer.split_mode_label.font().bold()
-    for background, foreground, muted, expected_thumb in (
-            (QColor("#202020"), QColor("#f2f2f2"), QColor("#777777"), "#f2f3f4"),
-            (QColor("#f8f8f8"), QColor("#202020"), QColor("#aaaaaa"), "#343a40")):
+    for background, foreground, muted in (
+            (QColor("#202020"), QColor("#f2f2f2"), QColor("#777777")),
+            (QColor("#f8f8f8"), QColor("#202020"), QColor("#aaaaaa"))):
         palette = QPalette(viewer.palette())
         palette.setColor(QPalette.ColorRole.Window, background)
         palette.setColor(QPalette.ColorRole.WindowText, foreground)
         palette.setColor(QPalette.ColorRole.Mid, muted)
         viewer.setPalette(palette)
-        switch_style = viewer.mode_switch.styleSheet().lower()
-        assert expected_thumb in switch_style
+        assert viewer.mode_switch.palette().color(QPalette.ColorRole.Window) == background
         assert viewer.overlay_mode_label.palette().color(QPalette.ColorRole.WindowText) == foreground
-        assert viewer.split_mode_label.palette().color(QPalette.ColorRole.WindowText) == muted
-    viewer.mode_switch.setValue(1)
-    assert not viewer.overlay_mode_label.font().bold()
-    assert viewer.split_mode_label.font().bold()
+        assert viewer.split_mode_label.palette().color(QPalette.ColorRole.WindowText) == foreground
+    for _ in range(4):
+        viewer.mode_switch.click()
+        assert viewer.mode == "split"
+        assert viewer.views.currentIndex() == 1
+        assert viewer.split_mode_label.font().bold()
+        viewer.mode_switch.click()
+        assert viewer.mode == "overlay"
+        assert viewer.views.currentIndex() == 0
+        assert viewer.overlay_mode_label.font().bold()
+    viewer.show()
+    qapp.processEvents()
+    track_levels = []
+    for background, expected_thumb in ((QColor("#202020"), QColor("#f2f3f4")),
+                                       (QColor("#f8f8f8"), QColor("#f2f3f4"))):
+        palette = QPalette(viewer.palette())
+        palette.setColor(QPalette.ColorRole.Window, background)
+        viewer.setPalette(palette)
+        qapp.processEvents()
+        image = viewer.mode_switch.grab().toImage()
+        center = image.pixelColor(11, 11)
+        assert abs(center.red() - expected_thumb.red()) <= 4
+        track = image.pixelColor(21, 11)
+        assert abs(track.red() - track.green()) < 12
+        track_levels.append(track.red())
+    assert track_levels[0] < track_levels[1]
+    from PySide6.QtTest import QTest
+    viewer.mode_switch.click()
+    QTest.qWait(150)
+    qapp.processEvents()
+    image = viewer.mode_switch.grab().toImage()
+    center = image.pixelColor(31, 11)
+    assert abs(center.red() - 242) <= 4
+    assert viewer.mode == "split"
+    viewer.close()
+
+
+def test_speed_controls_form_a_compact_group_before_footer_stretch(tmp_path, qapp):
+    from PySide6.QtWidgets import QSizePolicy
+    from calibfreehands.visualization.comparison import ComparisonViewer
+
+    viewer = ComparisonViewer(_session(tmp_path, 2))
+    viewer.resize(1280, 720)
+    viewer.show()
+    qapp.processEvents()
+    group = viewer.speed_group
+    assert group.sizePolicy().horizontalPolicy() in (QSizePolicy.Policy.Fixed, QSizePolicy.Policy.Minimum)
+    assert group.width() < 190
+    gap_after_playback = group.geometry().left() - viewer.playback_group.geometry().right() - 1
+    assert 12 <= gap_after_playback <= 18
+    widgets = (viewer.speed_label, viewer.speed_down_button,
+               viewer.speed_value_label, viewer.speed_up_button)
+    for left, right in zip(widgets, widgets[1:]):
+        gap = right.geometry().left() - left.geometry().right() - 1
+        assert 0 <= gap <= 6
+    assert viewer.playback_controls_layout.indexOf(group) < viewer.playback_controls_layout.count() - 1
+    widest_value_width = viewer.speed_value_label.fontMetrics().horizontalAdvance("1.25" + chr(0xD7)) + 4
+    assert viewer.speed_value_label.minimumWidth() == widest_value_width
+    assert viewer.speed_value_label.maximumWidth() == widest_value_width
+    viewer._step_playback_speed(1)
+    assert viewer.speed_value_label.text() == "1.25" + chr(0xD7)
+    viewer._step_playback_speed(-1)
+    assert viewer.speed_value_label.text() == "1.0" + chr(0xD7)
     viewer.close()
 
 
@@ -830,14 +891,14 @@ def test_viewer_playback_controls_are_accessible_steppers_and_exclusive_modes(tm
     assert viewer.speed_value_label.text() == "1.0×"
     assert viewer.speed_down_button.isEnabled()
     assert viewer.speed_up_button.isEnabled()
-    assert viewer.mode_switch.minimum() == 0
-    assert viewer.mode_switch.maximum() == 1
-    assert viewer.mode_switch.value() == 0
-    assert viewer.mode_switch.accessibleName() == "View mode"
-    viewer.mode_switch.setValue(1)
+    assert viewer.mode_switch.isCheckable()
+    assert not viewer.mode_switch.isChecked()
+    assert viewer.mode_switch.accessibleName() == "Overlay / Split view mode"
+    viewer.mode_switch.click()
     assert viewer.mode == "split"
-    assert viewer.mode_switch.value() == 1
-    assert viewer.mode_switch.accessibleDescription() == "Off: Overlay; On: Split"
+    assert viewer.mode_switch.isChecked()
+    assert viewer.views.currentIndex() == 1
+    assert viewer.mode_switch.accessibleDescription() == "Unchecked: Overlay; checked: Split"
     assert viewer.annotation_button.text() == "Annotations"
     assert viewer.playback_buttons[0].accessibleName() == "Previous frame"
     assert viewer.playback_buttons[2].accessibleName() == "Next frame"
