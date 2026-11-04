@@ -1,0 +1,311 @@
+experiment: 63_anycalib_videos
+run: runs/63_anycalib_videos/20261104T011807Z
+code_commit: 466fa73
+git_dirty_at_run: false
+note: 실험 54~62에서 쓴 비스듬한 책상 영상 12개에 AnyCalib(이미지 한 장에서 카메라 내부 변수를 내는 학습 모델)를 손 방식과
+  별개로 돌린 기록용 실험이다(판정 없음). 기존 anycalib_run을 그대로 써서 프레임마다 f = (fx + fy) / 2를 내고, 영상별
+  중앙값·사분위·10~90 백분위를 적었다. 모델은 anycalib_pinhole과 anycalib_gen 두 가지이고, 가중치는 로컬 torch
+  hub에 있던 것을 오프라인으로 썼다(다운로드 없음). 기준 f와의 비교는 summary.md에만 있다.
+frames_fps: 15
+cam_id: pinhole
+videos:
+  IMG_7346.MOV:
+    distance_cm: 50
+    hand: right
+    n_frames: 339
+    models:
+      anycalib_pinhole:
+        f_median_px: 1638.1
+        iqr_px:
+        - 1558.9
+        - 1668.4
+        p10_p90_px:
+        - 1521.4
+        - 1695.2
+        cv: 0.0407
+        weight_sha256: e73b174563bcb90d
+      anycalib_gen:
+        f_median_px: 1646.9
+        iqr_px:
+        - 1598.1
+        - 1680.7
+        p10_p90_px:
+        - 1553.4
+        - 1704.9
+        cv: 0.0342
+        weight_sha256: 65d375de971456d0
+  IMG_7347.MOV:
+    distance_cm: 50
+    hand: left
+    n_frames: 329
+    models:
+      anycalib_pinhole:
+        f_median_px: 1637.0
+        iqr_px:
+        - 1512.7
+        - 1648.3
+        p10_p90_px:
+        - 1456.0
+        - 1654.2
+        cv: 0.0511
+        weight_sha256: e73b174563bcb90d
+      anycalib_gen:
+        f_median_px: 1656.8
+        iqr_px:
+        - 1555.2
+        - 1666.4
+        p10_p90_px:
+        - 1499.3
+        - 1676.1
+        cv: 0.0453
+        weight_sha256: 65d375de971456d0
+  IMG_7348.MOV:
+    distance_cm: 50
+    hand: right
+    n_frames: 309
+    models:
+      anycalib_pinhole:
+        f_median_px: 1583.4
+        iqr_px:
+        - 1518.0
+        - 1601.4
+        p10_p90_px:
+        - 1429.1
+        - 1630.7
+        cv: 0.0504
+        weight_sha256: e73b174563bcb90d
+      anycalib_gen:
+        f_median_px: 1576.4
+        iqr_px:
+        - 1556.6
+        - 1588.0
+        p10_p90_px:
+        - 1454.4
+        - 1603.5
+        cv: 0.0369
+        weight_sha256: 65d375de971456d0
+  IMG_7349.MOV:
+    distance_cm: 50
+    hand: left
+    n_frames: 342
+    models:
+      anycalib_pinhole:
+        f_median_px: 1608.5
+        iqr_px:
+        - 1476.1
+        - 1634.7
+        p10_p90_px:
+        - 1434.4
+        - 1641.8
+        cv: 0.0548
+        weight_sha256: e73b174563bcb90d
+      anycalib_gen:
+        f_median_px: 1622.8
+        iqr_px:
+        - 1527.1
+        - 1634.6
+        p10_p90_px:
+        - 1504.0
+        - 1646.4
+        cv: 0.0393
+        weight_sha256: 65d375de971456d0
+  IMG_7350.MOV:
+    distance_cm: 60
+    hand: right
+    n_frames: 350
+    models:
+      anycalib_pinhole:
+        f_median_px: 1614.0
+        iqr_px:
+        - 1516.3
+        - 1691.2
+        p10_p90_px:
+        - 1444.6
+        - 1705.3
+        cv: 0.0597
+        weight_sha256: e73b174563bcb90d
+      anycalib_gen:
+        f_median_px: 1511.9
+        iqr_px:
+        - 1428.0
+        - 1596.6
+        p10_p90_px:
+        - 1400.8
+        - 1611.0
+        cv: 0.0515
+        weight_sha256: 65d375de971456d0
+  IMG_7351.MOV:
+    distance_cm: 60
+    hand: left
+    n_frames: 323
+    models:
+      anycalib_pinhole:
+        f_median_px: 1680.0
+        iqr_px:
+        - 1491.9
+        - 1737.0
+        p10_p90_px:
+        - 1455.3
+        - 1757.3
+        cv: 0.076
+        weight_sha256: e73b174563bcb90d
+      anycalib_gen:
+        f_median_px: 1631.1
+        iqr_px:
+        - 1450.9
+        - 1678.1
+        p10_p90_px:
+        - 1402.0
+        - 1690.2
+        cv: 0.0733
+        weight_sha256: 65d375de971456d0
+  IMG_7352.MOV:
+    distance_cm: 60
+    hand: right
+    n_frames: 354
+    models:
+      anycalib_pinhole:
+        f_median_px: 1612.9
+        iqr_px:
+        - 1491.9
+        - 1704.3
+        p10_p90_px:
+        - 1461.9
+        - 1735.7
+        cv: 0.0631
+        weight_sha256: e73b174563bcb90d
+      anycalib_gen:
+        f_median_px: 1510.9
+        iqr_px:
+        - 1418.8
+        - 1619.1
+        p10_p90_px:
+        - 1385.9
+        - 1647.0
+        cv: 0.0638
+        weight_sha256: 65d375de971456d0
+  IMG_7353.MOV:
+    distance_cm: 60
+    hand: left
+    n_frames: 341
+    models:
+      anycalib_pinhole:
+        f_median_px: 1655.0
+        iqr_px:
+        - 1478.1
+        - 1743.5
+        p10_p90_px:
+        - 1450.7
+        - 1773.2
+        cv: 0.0788
+        weight_sha256: e73b174563bcb90d
+      anycalib_gen:
+        f_median_px: 1629.0
+        iqr_px:
+        - 1441.2
+        - 1687.1
+        p10_p90_px:
+        - 1411.6
+        - 1716.5
+        cv: 0.0771
+        weight_sha256: 65d375de971456d0
+  IMG_7354.MOV:
+    distance_cm: 75
+    hand: right
+    n_frames: 312
+    models:
+      anycalib_pinhole:
+        f_median_px: 1772.3
+        iqr_px:
+        - 1591.8
+        - 1834.8
+        p10_p90_px:
+        - 1577.6
+        - 1860.1
+        cv: 0.0642
+        weight_sha256: e73b174563bcb90d
+      anycalib_gen:
+        f_median_px: 1645.0
+        iqr_px:
+        - 1536.5
+        - 1691.6
+        p10_p90_px:
+        - 1508.2
+        - 1744.2
+        cv: 0.0522
+        weight_sha256: 65d375de971456d0
+  IMG_7355.MOV:
+    distance_cm: 75
+    hand: left
+    n_frames: 305
+    models:
+      anycalib_pinhole:
+        f_median_px: 1808.8
+        iqr_px:
+        - 1661.6
+        - 1842.4
+        p10_p90_px:
+        - 1615.9
+        - 1877.2
+        cv: 0.0601
+        weight_sha256: e73b174563bcb90d
+      anycalib_gen:
+        f_median_px: 1711.0
+        iqr_px:
+        - 1606.1
+        - 1760.3
+        p10_p90_px:
+        - 1578.3
+        - 1773.3
+        cv: 0.0497
+        weight_sha256: 65d375de971456d0
+  IMG_7356.MOV:
+    distance_cm: 75
+    hand: right
+    n_frames: 314
+    models:
+      anycalib_pinhole:
+        f_median_px: 1746.5
+        iqr_px:
+        - 1669.6
+        - 1792.3
+        p10_p90_px:
+        - 1654.5
+        - 1842.5
+        cv: 0.0409
+        weight_sha256: e73b174563bcb90d
+      anycalib_gen:
+        f_median_px: 1665.8
+        iqr_px:
+        - 1612.2
+        - 1710.1
+        p10_p90_px:
+        - 1594.4
+        - 1733.7
+        cv: 0.0343
+        weight_sha256: 65d375de971456d0
+  IMG_7357.MOV:
+    distance_cm: 75
+    hand: left
+    n_frames: 301
+    models:
+      anycalib_pinhole:
+        f_median_px: 1794.0
+        iqr_px:
+        - 1684.7
+        - 1822.7
+        p10_p90_px:
+        - 1614.0
+        - 1847.3
+        cv: 0.0527
+        weight_sha256: e73b174563bcb90d
+      anycalib_gen:
+        f_median_px: 1723.8
+        iqr_px:
+        - 1635.4
+        - 1766.4
+        p10_p90_px:
+        - 1596.9
+        - 1786.1
+        cv: 0.0426
+        weight_sha256: 65d375de971456d0
