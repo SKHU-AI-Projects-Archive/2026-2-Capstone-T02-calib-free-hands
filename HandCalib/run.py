@@ -12246,7 +12246,115 @@ def fc_results_yaml(run_dir: Path, cfg: dict):
     return p
 
 
-COMMANDS = {"protocol": protocol_main, "frame-filter": ff_main, "same-session": session_main, "overlay": overlay_main, "phase-segmentation": pseg_main, "guide-revision": grev_main, "f-response": fresp_main, "error-factors": ferr_main, "long-video-check": long_main, "generalization": gen_main, "main-camera-extension": ext_main, "wide-60cm": wide_main, "jointset-sets": jset_main, "verdict-calibration": cal_main, "printed-hand": pr_main, "hand-markers": mk_main, "markers-only": mo_main, "free-template": ft_main, "free-shape3d": s3_main, "free-shape3d-hand": h3_main, "free-shape3d-27": e3_main, "free-shape3d-new": e4_main, "mmpose-hand": mm_main, "mmpose-hand-46": mm2_main, "free-shape3d-new2": e5_main, "mmpose-hand-src": mm3_main, "free-shape3d-detectors": fs_main, "free-shape3d-hand-sets": h4_main, "free-shape3d-hand-sets-42track": h4b_main, "oblique-desk": od_main, "oblique-synthetic": sy_main, "oblique-fixed-template": fx_main, "oblique-desk-videos": om_main, "pause-stabilized": ps_main, "continuous-klt": kt_main, "continuous-klt-palm": kp_main, "klt-paper-dorsum": pp_main, "paper-parallax": hp_main, "segment-template": sg_main, "turn-synthetic": tr_main, "window-f": wd_main, "anycalib-videos": ac_main, "error-sources": ec_main, "hand-deformation": dm_main, "joint-combos": fc_main}
+# ====================================================================================================
+# pv  (experiment 65b: 65's video again with the points only - no departure arrows, no departure lines, no graph - at the user's request; IMG_7350 (back of the hand) and a palm video)
+#     python HandCalib/run.py points-video --config HandCalib/configs/65b_points_video.yaml [--out DIR]
+# ====================================================================================================
+def pv_render(path: Path, e: dict, x: dict, cfg: dict, run_root: Path, log):
+    """The video with its points only: left the whole frame, right the hand enlarged; blue = 56's tracked joints, orange = mediapipe joints; a header with the time, frame and pause state.
+    Frames go to a temporary folder, are encoded with ffmpeg (metadata dropped) and removed."""
+    from PIL import Image, ImageDraw, ImageFont
+    rc = cfg["render"]
+    pc = copy.deepcopy(cfg["pipeline"])
+    pc["frames"]["detect_fps"] = int(cfg["tracking"]["fps"])
+    v = e["file"]
+    tmp_root = run_root / f"_render_{Path(v).stem}"
+    tmp_root.mkdir(exist_ok=True)
+    out_dir = tmp_root / "out"
+    out_dir.mkdir()
+    font = lambda s: ImageFont.truetype(rc["font"], s, index=int(rc.get("font_index", 0)))      # noqa: E731
+    f1, f2 = font(22), font(18)
+    m = x["measure"]
+    fps = float(cfg["tracking"]["fps"])
+    try:
+        prep = hf.fresp_prepare((v, cfg["input_dir"], pc, {}, str(tmp_root)))
+        frames = prep["frames"]
+        n = len(frames)
+        if n != x["n_frames"]:
+            raise RuntimeError(f"프레임 수가 다릅니다: {n} vs {x['n_frames']}")
+        LW, LH, RS = 960, 540, 540
+        pause_of = np.full(n, -1)
+        for k, p in enumerate(m.get("pauses", [])):
+            pause_of[p["start"]:p["end"] + 1] = k
+        for i, r in enumerate(frames):
+            img = cv2.imread(str(r["png"]))
+            kd, kt = x["detected"]["kp"][i], x["tracked"]["kp"][i]
+            pts = [q for q in (kd, kt) if np.isfinite(q).all()]
+            if pts:
+                allp = np.concatenate(pts)
+                c = (allp.min(0) + allp.max(0)) / 2
+                side = float(max(allp.max(0) - allp.min(0)) * rc["crop_margin"])
+            else:
+                c, side = np.array([960.0, 540.0]), 600.0
+            x0, y0 = c - side / 2
+            views = [(cv2.resize(img, (LW, LH), interpolation=cv2.INTER_AREA), lambda q: q * (LW / img.shape[1]), 1.0)]
+            M = np.array([[RS / side, 0, -x0 * RS / side], [0, RS / side, -y0 * RS / side]])
+            views.append((cv2.warpAffine(img, M, (RS, RS), flags=cv2.INTER_LINEAR, borderValue=(40, 40, 40)), lambda q: q * (RS / side) - [x0 * RS / side, y0 * RS / side], 1.6))
+            panels = []
+            for im, T, s in views:
+                for kp, col in ((kt, DM_BLUE), (kd, DM_ORANGE)):
+                    if not np.isfinite(kp).any():
+                        continue
+                    q = T(kp)
+                    for a_, b_ in hf.MM_SKELETON:
+                        if np.isfinite(q[[a_, b_]]).all():
+                            cv2.line(im, tuple(q[a_].round().astype(int)), tuple(q[b_].round().astype(int)), col, max(1, int(round(s))), cv2.LINE_AA)
+                    for j in range(21):
+                        if np.isfinite(q[j]).all():
+                            cv2.circle(im, tuple(q[j].round().astype(int)), int(round(3 * s)), col, -1, cv2.LINE_AA)
+                panels.append(im)
+            canvas = np.concatenate(panels, 1)
+            pil = Image.fromarray(cv2.cvtColor(canvas, cv2.COLOR_BGR2RGB))
+            dr = ImageDraw.Draw(pil)
+            k = pause_of[i]
+            state = "움직임" if k < 0 else f"멈춤 {k + 1}"
+            dr.rectangle([8, 8, 470, 74], fill=(255, 255, 255))
+            dr.text((16, 12), f"{Path(v).stem}   {i / fps:5.2f} s   프레임 {i}   {state}", font=f1, fill=(20, 20, 20))
+            dr.text((16, 44), "● 추적점 (실험 56)", font=f2, fill=(0, 114, 178))
+            dr.text((200, 44), "● MediaPipe 검출 관절", font=f2, fill=(230, 159, 0))
+            pil.save(out_dir / f"{i:06d}.png")
+            if (i + 1) % 200 == 0 or i + 1 == n:
+                log(f"  영상 그리기 {i + 1} / {n}")
+        overlay_encode(out_dir, "%06d.png", fps, path)
+    finally:
+        shutil.rmtree(tmp_root, ignore_errors=True)
+
+
+def pv_main(argv=None):
+    ap = argparse.ArgumentParser()
+    ap.add_argument("--config", default=str(hf.PROJECT_ROOT / "configs/65b_points_video.yaml"))
+    ap.add_argument("--out", default=None)
+    a = ap.parse_args(argv)
+    text = Path(a.config).read_text()
+    own = yaml.safe_load(text)
+    r65 = yaml.safe_load(hf.resolve(own["video_config"]).read_text())
+    r60 = yaml.safe_load(hf.resolve(r65["segments_config"]).read_text())
+    run_root = Path(a.out).expanduser() if a.out else hf.resolve(own["output"]["root"]) / utc_stamp()
+    run_root.mkdir(parents=True)
+    log = Log(run_root / "log.txt")
+    t0 = time.time()
+    outs = []
+    for item in own["videos"]:
+        rv = yaml.safe_load(hf.resolve(item["rules_config"]).read_text())
+        base = od_load(yaml.safe_load(hf.resolve(rv["base_config"]).read_text()))
+        cfg = {**base, "videos": rv["videos"], "tracking": rv["tracking"], "segments": r60["segments"], "pauses": r65["pauses"],
+               "render": {**r65["render"], **own.get("render", {})}, "n_workers": own["n_workers"]}
+        e = next(e for e in cfg["videos"] if e["file"] == item["file"])
+        log(f"65b 점 영상: {e['file']} ({item['rules_config']}) → {run_root}")
+        x, lines = dm_video_job((e, cfg, str(run_root)))
+        for s in lines:
+            log(s)
+        out = run_root / f"{Path(e['file']).stem}_points.mp4"
+        pv_render(out, e, x, cfg, run_root, log)
+        outs.append(out)
+    meta = hf.provenance_build(text, a.config, {"code_65b": own.get("code_65b"), "video_config": own["video_config"], "elapsed_s": time.time() - t0})
+    (run_root / "metadata.json").write_text(json.dumps(hf.jsonable(meta), ensure_ascii=False, indent=1))
+    log(f"완료 {time.time() - t0:.0f} s → " + ", ".join(o.name for o in outs))
+    log.close()
+    return outs
+
+
+COMMANDS = {"protocol": protocol_main, "frame-filter": ff_main, "same-session": session_main, "overlay": overlay_main, "phase-segmentation": pseg_main, "guide-revision": grev_main, "f-response": fresp_main, "error-factors": ferr_main, "long-video-check": long_main, "generalization": gen_main, "main-camera-extension": ext_main, "wide-60cm": wide_main, "jointset-sets": jset_main, "verdict-calibration": cal_main, "printed-hand": pr_main, "hand-markers": mk_main, "markers-only": mo_main, "free-template": ft_main, "free-shape3d": s3_main, "free-shape3d-hand": h3_main, "free-shape3d-27": e3_main, "free-shape3d-new": e4_main, "mmpose-hand": mm_main, "mmpose-hand-46": mm2_main, "free-shape3d-new2": e5_main, "mmpose-hand-src": mm3_main, "free-shape3d-detectors": fs_main, "free-shape3d-hand-sets": h4_main, "free-shape3d-hand-sets-42track": h4b_main, "oblique-desk": od_main, "oblique-synthetic": sy_main, "oblique-fixed-template": fx_main, "oblique-desk-videos": om_main, "pause-stabilized": ps_main, "continuous-klt": kt_main, "continuous-klt-palm": kp_main, "klt-paper-dorsum": pp_main, "paper-parallax": hp_main, "segment-template": sg_main, "turn-synthetic": tr_main, "window-f": wd_main, "anycalib-videos": ac_main, "error-sources": ec_main, "hand-deformation": dm_main, "joint-combos": fc_main, "points-video": pv_main}
 
 
 def main(argv=None):
