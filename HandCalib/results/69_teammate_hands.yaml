@@ -1,0 +1,276 @@
+experiment: 69_teammate_hands
+run: runs/69_teammate_hands/20261104T084401Z
+code_commit: f4781ce
+git_dirty_at_run: false
+note: 다른 팀원의 손으로(다른 카메라로) 찍은 영상에 실험 67의 책상 제약 추정기(경사 고정)를 실험 68의 경사들과 팀원이 자로 잰 경사로
+  적용한 기록이다(판정 없음). 자로 잰 경사 = arctan(책상에서 손목까지 높이 / 손목에서 가운데 손가락 끝까지 길이).
+measured:
+  wrist_height_mm: 35
+  hand_length_mm: 170
+measured_ramp_deg: 11.6
+ramps_deg:
+- 7.0
+- 9.0
+- 11.0
+- 11.6
+- 13.0
+- 15.0
+videos:
+  IMG_7351 - 복사본.MOV:
+    distance_cm: 60
+    hand: right
+    tracked:
+      j16:
+        '7':
+          f_px: 946.6
+          boundary: false
+          rms_px: 3.41
+          desk_tilt_deg: 49.9
+        '9':
+          f_px: 1034.0
+          boundary: false
+          rms_px: 3.29
+          desk_tilt_deg: 48.9
+        '11':
+          f_px: 1136.8
+          boundary: false
+          rms_px: 3.24
+          desk_tilt_deg: 48.0
+        '11.6':
+          f_px: 1172.7
+          boundary: false
+          rms_px: 3.22
+          desk_tilt_deg: 47.7
+        '13':
+          f_px: 1261.3
+          boundary: false
+          rms_px: 3.23
+          desk_tilt_deg: 47.0
+        '15':
+          f_px: 1411.5
+          boundary: false
+          rms_px: 3.27
+          desk_tilt_deg: 45.9
+      j21:
+        '7':
+          f_px: 989.6
+          boundary: false
+          rms_px: 8.01
+          desk_tilt_deg: 49.1
+        '9':
+          f_px: 1075.9
+          boundary: false
+          rms_px: 7.69
+          desk_tilt_deg: 48.0
+        '11':
+          f_px: 1174.0
+          boundary: false
+          rms_px: 7.63
+          desk_tilt_deg: 46.9
+        '11.6':
+          f_px: 1206.4
+          boundary: false
+          rms_px: 7.65
+          desk_tilt_deg: 46.5
+        '13':
+          f_px: 1287.4
+          boundary: false
+          rms_px: 7.76
+          desk_tilt_deg: 45.5
+        '15':
+          f_px: 1418.2
+          boundary: false
+          rms_px: 8.05
+          desk_tilt_deg: 44.1
+    detected:
+      j16:
+        '7':
+          f_px: 1131.6
+          boundary: false
+          rms_px: 5.71
+          desk_tilt_deg: 49.7
+        '9':
+          f_px: 1246.7
+          boundary: false
+          rms_px: 5.53
+          desk_tilt_deg: 48.8
+        '11':
+          f_px: 1385.5
+          boundary: false
+          rms_px: 5.39
+          desk_tilt_deg: 47.8
+        '11.6':
+          f_px: 1432.9
+          boundary: false
+          rms_px: 5.35
+          desk_tilt_deg: 47.5
+        '13':
+          f_px: 1556.1
+          boundary: false
+          rms_px: 5.27
+          desk_tilt_deg: 46.8
+        '15':
+          f_px: 1769.8
+          boundary: false
+          rms_px: 5.17
+          desk_tilt_deg: 45.9
+      j21:
+        '7':
+          f_px: 964.5
+          boundary: false
+          rms_px: 9.21
+          desk_tilt_deg: 45.8
+        '9':
+          f_px: 1052.0
+          boundary: false
+          rms_px: 9.0
+          desk_tilt_deg: 44.7
+        '11':
+          f_px: 1154.4
+          boundary: false
+          rms_px: 8.87
+          desk_tilt_deg: 43.6
+        '11.6':
+          f_px: 1187.3
+          boundary: false
+          rms_px: 8.85
+          desk_tilt_deg: 43.2
+        '13':
+          f_px: 1277.8
+          boundary: false
+          rms_px: 8.78
+          desk_tilt_deg: 42.5
+        '15':
+          f_px: 1439.8
+          boundary: false
+          rms_px: 8.69
+          desk_tilt_deg: 41.4
+  IMG_7352 - 복사본.MOV:
+    distance_cm: 60
+    hand: right
+    tracked:
+      j16:
+        '7':
+          f_px: 810.8
+          boundary: false
+          rms_px: 4.15
+          desk_tilt_deg: 48.3
+        '9':
+          f_px: 880.7
+          boundary: false
+          rms_px: 3.98
+          desk_tilt_deg: 47.6
+        '11':
+          f_px: 962.2
+          boundary: false
+          rms_px: 3.87
+          desk_tilt_deg: 46.9
+        '11.6':
+          f_px: 990.9
+          boundary: false
+          rms_px: 3.85
+          desk_tilt_deg: 46.7
+        '13':
+          f_px: 1064.6
+          boundary: false
+          rms_px: 3.82
+          desk_tilt_deg: 46.2
+        '15':
+          f_px: 1188.3
+          boundary: false
+          rms_px: 3.83
+          desk_tilt_deg: 45.3
+      j21:
+        '7':
+          f_px: 899.8
+          boundary: false
+          rms_px: 9.05
+          desk_tilt_deg: 47.7
+        '9':
+          f_px: 984.2
+          boundary: false
+          rms_px: 8.52
+          desk_tilt_deg: 46.9
+        '11':
+          f_px: 1079.0
+          boundary: false
+          rms_px: 8.19
+          desk_tilt_deg: 46.1
+        '11.6':
+          f_px: 1107.8
+          boundary: false
+          rms_px: 8.1
+          desk_tilt_deg: 45.8
+        '13':
+          f_px: 1177.5
+          boundary: false
+          rms_px: 7.91
+          desk_tilt_deg: 45.2
+        '15':
+          f_px: 1290.8
+          boundary: false
+          rms_px: 7.81
+          desk_tilt_deg: 44.2
+    detected:
+      j16:
+        '7':
+          f_px: 1124.9
+          boundary: false
+          rms_px: 5.16
+          desk_tilt_deg: 49.6
+        '9':
+          f_px: 1263.0
+          boundary: false
+          rms_px: 4.91
+          desk_tilt_deg: 48.9
+        '11':
+          f_px: 1436.7
+          boundary: false
+          rms_px: 4.7
+          desk_tilt_deg: 48.3
+        '11.6':
+          f_px: 1497.9
+          boundary: false
+          rms_px: 4.64
+          desk_tilt_deg: 48.1
+        '13':
+          f_px: 1662.0
+          boundary: false
+          rms_px: 4.51
+          desk_tilt_deg: 47.6
+        '15':
+          f_px: 1967.3
+          boundary: false
+          rms_px: 4.36
+          desk_tilt_deg: 46.8
+      j21:
+        '7':
+          f_px: 954.4
+          boundary: false
+          rms_px: 8.31
+          desk_tilt_deg: 46.0
+        '9':
+          f_px: 1049.9
+          boundary: false
+          rms_px: 7.99
+          desk_tilt_deg: 45.3
+        '11':
+          f_px: 1168.8
+          boundary: false
+          rms_px: 7.75
+          desk_tilt_deg: 44.5
+        '11.6':
+          f_px: 1205.7
+          boundary: false
+          rms_px: 7.71
+          desk_tilt_deg: 44.2
+        '13':
+          f_px: 1308.9
+          boundary: false
+          rms_px: 7.63
+          desk_tilt_deg: 43.6
+        '15':
+          f_px: 1502.8
+          boundary: false
+          rms_px: 7.53
+          desk_tilt_deg: 42.9
