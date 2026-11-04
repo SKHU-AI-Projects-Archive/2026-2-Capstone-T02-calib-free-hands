@@ -1,0 +1,40 @@
+# 64: which error source pushes f (user 2026-11-04: "일단 이 설계대로 진행해줘" on my design), record only, no verdict; real videos are not recomputed.
+# 53c's scene (45-degree desk, 60 cm, true f 1655 px, 53b's translation, the turn a sinusoid -range / 2 .. +range / 2), errors added by hf.ec_scene, estimate by hf.wd_job (the supervisor's
+# free_template unchanged, 16 points, all frames; its median tilt and residual at its f).
+# Choices made by me before the run (no result of this experiment seen; a 7-case smoke test with one seed at 180 deg checked only that each condition runs):
+#  - sizes near what the real videos showed: ramp 11 deg (59: fingertips ~0, wrist ~+35 mm), deformation 1 % of the hand length (59: ~6 px hand-vs-paper offset on a ~530 px hand box), chain
+#    drift 2 px (56: loop error median 0.6-1.9 px, max ~4 px); detector-like conditions get 0.2 % independent joint noise (56's tracked residual), chain conditions 0.3 px KLT noise on 200
+#    surface points and 0.2 % on the middle frame's joints; 60 frames as 53c / 61; 20 seeds;
+#  - reading fixed now: main cause = a real-level condition whose median f error at 90 deg is >= +20 %; it reproduces the real pattern if its median tilt is 50-60 deg (real hand ~55 deg vs
+#    paper 45.6 deg); the turn fixes it if D (all together) has >= 10 of 20 seeds within 10 % at 180 deg.
+experiment:
+  name: 64_error_sources
+  seed: 42
+base_config: configs/49_free_shape3d_7312.yaml   # read only: pipeline.estimate (as 53c / 61)
+true_f: 1655.0
+scene: {tilt_deg: 45, dist_cm: 60, n_frames: 60, move_pct_xy: [4.5, 34.6]}
+turn_ranges_deg: [90, 180]
+seeds: [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19]
+ids: [5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20]
+conditions:
+  - {name: base, label: "잡음만 (검출점 방식)", errors: {}}
+  - {name: A5, label: "경사 5°", errors: {slope_deg: 5}}
+  - {name: A11, label: "경사 11°", errors: {slope_deg: 11}}
+  - {name: A15, label: "경사 15°", errors: {slope_deg: 15}}
+  - {name: T0, label: "추적 방식, 평평한 손", errors: {chain: true}}
+  - {name: T5, label: "추적 방식, 경사 5°", errors: {chain: true, slope_deg: 5}}
+  - {name: T11, label: "추적 방식, 경사 11°", errors: {chain: true, slope_deg: 11}}
+  - {name: T15, label: "추적 방식, 경사 15°", errors: {chain: true, slope_deg: 15}}
+  - {name: B1, label: "변형 1%", errors: {deform_rel: 0.01}}
+  - {name: B2, label: "변형 2%", errors: {deform_rel: 0.02}}
+  - {name: B4, label: "변형 4%", errors: {deform_rel: 0.04}}
+  - {name: C1, label: "추적 방식, 누적 1 px", errors: {chain: true, drift_px: 1}}
+  - {name: C2, label: "추적 방식, 누적 2 px", errors: {chain: true, drift_px: 2}}
+  - {name: C4, label: "추적 방식, 누적 4 px", errors: {chain: true, drift_px: 4}}
+  - {name: D, label: "추적 방식, 경사 11° + 변형 1% + 누적 2 px", errors: {chain: true, slope_deg: 11, deform_rel: 0.01, drift_px: 2}}
+reading: {real_level: [A11, T11, B1, C2, D], main_cause_err: 0.20, tilt_like_real_deg: [50, 60], all_name: D}
+code_64: {branch: exp/64-error-sources, base_commit: 5a62b4c, commit: 3d221fd, modules: [HandCalib/handfocal_report.py, HandCalib/run.py]}
+workers: 24
+output:
+  root: runs/64_error_sources
+  results_yaml: results/64_error_sources.yaml
