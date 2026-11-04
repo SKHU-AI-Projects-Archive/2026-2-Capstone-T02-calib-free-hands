@@ -11373,7 +11373,158 @@ def wd_results_yaml(run_dir: Path, cfg: dict):
     return p
 
 
-COMMANDS = {"protocol": protocol_main, "frame-filter": ff_main, "same-session": session_main, "overlay": overlay_main, "phase-segmentation": pseg_main, "guide-revision": grev_main, "f-response": fresp_main, "error-factors": ferr_main, "long-video-check": long_main, "generalization": gen_main, "main-camera-extension": ext_main, "wide-60cm": wide_main, "jointset-sets": jset_main, "verdict-calibration": cal_main, "printed-hand": pr_main, "hand-markers": mk_main, "markers-only": mo_main, "free-template": ft_main, "free-shape3d": s3_main, "free-shape3d-hand": h3_main, "free-shape3d-27": e3_main, "free-shape3d-new": e4_main, "mmpose-hand": mm_main, "mmpose-hand-46": mm2_main, "free-shape3d-new2": e5_main, "mmpose-hand-src": mm3_main, "free-shape3d-detectors": fs_main, "free-shape3d-hand-sets": h4_main, "free-shape3d-hand-sets-42track": h4b_main, "oblique-desk": od_main, "oblique-synthetic": sy_main, "oblique-fixed-template": fx_main, "oblique-desk-videos": om_main, "pause-stabilized": ps_main, "continuous-klt": kt_main, "continuous-klt-palm": kp_main, "klt-paper-dorsum": pp_main, "paper-parallax": hp_main, "segment-template": sg_main, "turn-synthetic": tr_main, "window-f": wd_main}
+# ====================================================================================================
+# ac  (experiment 63: AnyCalib on 54's 12 videos, apart from the hand method; hf.anycalib_run unchanged (01's adapter, pinhole and gen weights from the local torch hub, offline); record only)
+#     python HandCalib/run.py anycalib-videos --config HandCalib/configs/63_anycalib_videos.yaml [--out DIR]
+#     python HandCalib/run.py anycalib-videos --config ... results-yaml --run runs/63_anycalib_videos/<UTC>
+# ====================================================================================================
+AC_NOTE = ("실험 54~62에서 쓴 비스듬한 책상 영상 12개에 AnyCalib(이미지 한 장에서 카메라 내부 변수를 내는 학습 모델)를 손 방식과 별개로 돌린 기록용 실험이다(판정 없음). "
+           "기존 anycalib_run을 그대로 써서 프레임마다 f = (fx + fy) / 2를 내고, 영상별 중앙값·사분위·10~90 백분위를 적었다. 모델은 anycalib_pinhole과 anycalib_gen 두 가지이고, "
+           "가중치는 로컬 torch hub에 있던 것을 오프라인으로 썼다(다운로드 없음). 기준 f와의 비교는 summary.md에만 있다.")
+
+
+def ac_video_job(args):
+    """Frames (the base pipeline's frame rate) and AnyCalib on them for one video on one GPU, after the thermal guard; the frames are removed afterwards. Returns (result, log lines)."""
+    e, cfg, run_root, gpu = args
+    lines = []
+    log = lines.append
+    v = e["file"]
+    pc = copy.deepcopy(cfg["pipeline"])
+    tmp_root = Path(run_root) / f"_frames_{Path(v).stem}"
+    tmp_root.mkdir(exist_ok=True)
+    acfg = {**copy.deepcopy(pc["anycalib"]), "device": f"cuda:{gpu}"}
+    code = str(Path(cfg["anycalib_code"]["path"]).expanduser())
+    if code not in sys.path:
+        sys.path.insert(0, code)
+    try:
+        prep = hf.fresp_prepare((v, cfg["input_dir"], pc, {}, str(tmp_root)))
+        g = cfg["gpu_guard"]
+        w = hf.fresp_thermal_wait(float(g["pause_c"]), float(g["resume_c"]), log=log)
+        t0 = time.time()
+        ac = hf.anycalib_run(prep["frames"], acfg, float("inf"), log)
+    finally:
+        shutil.rmtree(tmp_root, ignore_errors=True)
+    log(f"  {v}: 프레임 {len(prep['frames'])}장, GPU {gpu}, 대기 {w:.0f} s, AnyCalib {time.time() - t0:.0f} s")
+    return {"size": prep["size"], "gpu": gpu, "thermal_wait_s": w, **ac}, lines
+
+
+def ac_figure(path: Path, res: dict, cfg: dict):
+    plt = _plt()
+    fig, axs = plt.subplots(4, 3, figsize=(13, 11), squeeze=False)
+    colors = ("#2b6cb0", "#c05621")
+    for ax, e in zip(axs.ravel(), cfg["videos"]):
+        r = res[e["file"]]
+        for (m, d), c in zip(r["models"].items(), colors):
+            ax.plot(r["times"], d["f"], ".-", ms=2, lw=0.8, color=c, label=m)
+        ax.set_title(Path(e["file"]).stem, fontsize=9)
+        ax.set_xlabel("시간 (s)", fontsize=8)
+        ax.set_ylabel("f (px)", fontsize=8)
+        ax.grid(alpha=0.3)
+        ax.legend(fontsize=7)
+    fig.tight_layout()
+    fig.savefig(path, dpi=100)
+    plt.close(fig)
+
+
+def ac_summary(path: Path, res: dict, cfg: dict, prior: dict):
+    ref = float(cfg["ref_f"]["value"])
+    pe = lambda f: "-" if f is None else f"{f:.1f} ({100 * (f / ref - 1):+.1f}%)"      # noqa: E731
+    models = list(next(iter(res.values()))["models"])
+    L = ["# 실험 63 summary", "", f"**{AC_NOTE}**", "", f"- 기준 f: {ref:g} px ({cfg['ref_f']['source']}). 오차는 기준 f 대비.",
+         f"- 프레임: 기본 파이프라인의 {cfg['pipeline']['frames']['detect_fps']} fps, 모든 프레임(손 위치와 무관). 카메라 모델 {cfg['pipeline']['anycalib']['cam_id']}.", ""]
+    for m in models:
+        L += [f"## {m}", "", "| 영상 | 거리(cm) | 프레임 | f 중앙값 (기준 대비) | 사분위 | 10~90 백분위 | 변동계수 | 실험 56 손 방식 free_template |", "|---|---|---|---|---|---|---|---|"]
+        errs = []
+        for e in cfg["videos"]:
+            v = e["file"]
+            s = res[v]["models"][m]["summary"]
+            errs.append(s["median"] / ref - 1)
+            p = prior.get(v) or {}
+            L.append(f"| {Path(v).stem} | {e['distance_cm']} | {s['n']} | {pe(s['median'])} | {s['iqr'][0]:.0f} ~ {s['iqr'][1]:.0f} | {s['p10_p90'][0]:.0f} ~ {s['p10_p90'][1]:.0f} | {100 * s['cv']:.1f}% | "
+                     + (pe(p.get("f")) + (" (경계)" if p.get("boundary") else "")) + " |")
+        er = np.abs(errs)
+        L += ["", f"- 영상 {len(er)}개 중 기준 ±10% 안 {int(np.sum(er <= 0.10))}개, ±25% 안 {int(np.sum(er <= 0.25))}개; 오차 중앙값 {100 * np.median(errs):+.1f}%.", ""]
+    L += ["![프레임별 AnyCalib f](figures/anycalib_f_time.png)", ""]
+    path.write_text("\n".join(L) + "\n")
+
+
+def ac_main(argv=None):
+    ap = argparse.ArgumentParser()
+    ap.add_argument("--config", default=str(hf.PROJECT_ROOT / "configs/63_anycalib_videos.yaml"))
+    sub = ap.add_subparsers(dest="cmd")
+    ry = sub.add_parser("results-yaml")
+    ry.add_argument("--run", required=True)
+    ap.add_argument("--out", default=None)
+    a = ap.parse_args(argv)
+    text = Path(a.config).read_text()
+    own = yaml.safe_load(text)
+    r56 = yaml.safe_load(hf.resolve(own["rules_config"]).read_text())
+    base = od_load(yaml.safe_load(hf.resolve(r56["base_config"]).read_text()))
+    cfg = {**base, "videos": r56["videos"], **{k: own[k] for k in ("experiment", "anycalib_code", "compare_56", "gpus", "gpu_guard", "output") if k in own}}
+    if a.cmd == "results-yaml":
+        print(ac_results_yaml(hf.resolve(a.run), cfg))
+        return None
+    missing = [e["file"] for e in cfg["videos"] if not (Path(cfg["input_dir"]).expanduser() / e["file"]).exists()]
+    if missing:
+        raise SystemExit(f"영상이 없습니다: {missing}")
+    acc = cfg["anycalib_code"]
+    head = subprocess.run(["git", "-C", str(Path(acc["path"]).expanduser()), "rev-parse", "HEAD"], capture_output=True, text=True).stdout.strip()
+    if not head.startswith(str(acc["commit"])):
+        raise SystemExit(f"AnyCalib 코드 커밋이 다릅니다: {head} (설정 {acc['commit']})")
+    run_root = Path(a.out).expanduser() if a.out else hf.resolve(cfg["output"]["root"]) / utc_stamp()
+    run_root.mkdir(parents=True)
+    (run_root / "figures").mkdir()
+    log = Log(run_root / "log.txt")
+    gpus = [int(g) for g in cfg["gpus"]]
+    log(f"63 AnyCalib: 영상 {len(cfg['videos'])}개, GPU {gpus} → {run_root}")
+    t0 = time.time()
+    import multiprocessing as mp
+    from concurrent.futures import ProcessPoolExecutor
+    res = {}
+    jobs = [(e, cfg, str(run_root), gpus[i % len(gpus)]) for i, e in enumerate(cfg["videos"])]
+    with ProcessPoolExecutor(max_workers=len(gpus), mp_context=mp.get_context("spawn")) as ex:
+        for e, (x, lines) in zip(cfg["videos"], ex.map(ac_video_job, jobs)):
+            res[e["file"]] = x
+            for s in lines:
+                log(s)
+    prior = {}
+    p56 = hf.resolve(cfg["compare_56"]) / "results.json"
+    if p56.exists():
+        r = json.loads(p56.read_text())["analysis"]
+        prior = {v: r[v]["by"]["j16"]["free_template"] for v in r if "by" in r[v]}
+    ac_figure(run_root / "figures" / "anycalib_f_time.png", res, cfg)
+    ac_summary(run_root / "summary.md", res, cfg, prior)
+    (run_root / "results.json").write_text(json.dumps(hf.jsonable({"videos": res}), ensure_ascii=False, indent=1))
+    meta = hf.provenance_build(text, a.config, {"code_63": own.get("code_63"), "anycalib_code": {**acc, "head": head}, "rules_config": own["rules_config"], "elapsed_s": time.time() - t0})
+    (run_root / "metadata.json").write_text(json.dumps(hf.jsonable(meta), ensure_ascii=False, indent=1))
+    log(f"완료 {time.time() - t0:.0f} s → {run_root}")
+    log.close()
+    return run_root, res
+
+
+def ac_results_yaml(run_dir: Path, cfg: dict):
+    """Values only (record experiment, no verdict, no reference f); written to output.results_yaml."""
+    r = json.loads((run_dir / "results.json").read_text())
+    m = json.loads((run_dir / "metadata.json").read_text())
+    try:
+        run_name = str(run_dir.resolve().relative_to(hf.PROJECT_ROOT))
+    except ValueError:
+        run_name = str(run_dir)
+    rd = lambda x, n=1: None if x is None or (isinstance(x, float) and not np.isfinite(x)) else round(x, n)      # noqa: E731
+    out = {"experiment": cfg["experiment"]["name"], "run": run_name, "code_commit": m["git"]["commit"][:7], "git_dirty_at_run": m["git"]["git_dirty"], "note": AC_NOTE,
+           "frames_fps": cfg["pipeline"]["frames"]["detect_fps"], "cam_id": cfg["pipeline"]["anycalib"]["cam_id"], "videos": {}}
+    for e in cfg["videos"]:
+        v = e["file"]
+        x = r["videos"][v]
+        out["videos"][v] = {"distance_cm": e["distance_cm"], "hand": e["hand"], "n_frames": len(x["frames"]),
+                            "models": {mm: {"f_median_px": rd(d["summary"]["median"]), "iqr_px": [rd(q) for q in d["summary"]["iqr"]], "p10_p90_px": [rd(q) for q in d["summary"]["p10_p90"]],
+                                            "cv": rd(d["summary"]["cv"], 4), "weight_sha256": d["weight_sha256"][:16]} for mm, d in x["models"].items()}}
+    p = hf.resolve(cfg["output"]["results_yaml"])
+    p.write_text(yaml.safe_dump(hf.jsonable(out), allow_unicode=True, sort_keys=False))
+    return p
+
+
+COMMANDS = {"protocol": protocol_main, "frame-filter": ff_main, "same-session": session_main, "overlay": overlay_main, "phase-segmentation": pseg_main, "guide-revision": grev_main, "f-response": fresp_main, "error-factors": ferr_main, "long-video-check": long_main, "generalization": gen_main, "main-camera-extension": ext_main, "wide-60cm": wide_main, "jointset-sets": jset_main, "verdict-calibration": cal_main, "printed-hand": pr_main, "hand-markers": mk_main, "markers-only": mo_main, "free-template": ft_main, "free-shape3d": s3_main, "free-shape3d-hand": h3_main, "free-shape3d-27": e3_main, "free-shape3d-new": e4_main, "mmpose-hand": mm_main, "mmpose-hand-46": mm2_main, "free-shape3d-new2": e5_main, "mmpose-hand-src": mm3_main, "free-shape3d-detectors": fs_main, "free-shape3d-hand-sets": h4_main, "free-shape3d-hand-sets-42track": h4b_main, "oblique-desk": od_main, "oblique-synthetic": sy_main, "oblique-fixed-template": fx_main, "oblique-desk-videos": om_main, "pause-stabilized": ps_main, "continuous-klt": kt_main, "continuous-klt-palm": kp_main, "klt-paper-dorsum": pp_main, "paper-parallax": hp_main, "segment-template": sg_main, "turn-synthetic": tr_main, "window-f": wd_main, "anycalib-videos": ac_main}
 
 
 def main(argv=None):
