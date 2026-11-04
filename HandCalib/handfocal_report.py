@@ -6471,6 +6471,139 @@ def dk_job(args) -> dict:
     return out
 
 
+# ----------------------------------------------------------------------------------------------------
+# 70-72 (user 2026-11-04: "3개 다 해줘" - three ways around the ramp that differs between hands: 70 only the points that touch the desk, 71 the ramp from a 3-D hand model, 72 whether f and
+# the ramp can be told apart at all (synthetic)).
+# ----------------------------------------------------------------------------------------------------
+def ct_estimate(pb, grid: np.ndarray, A: dict, coarse_n: int = 8, max_frames: int = 120) -> dict:
+    """Experiment 70: 67's desk model with no ramp (dk_estimate's 'flat' mode) on joint sets without an MCP (fingertips): dk_solve needs a hand axis (dk_axes) only for the ramp, which is 0
+    here (dk_hand_rot is then the identity whatever the axis), so one joint is relabelled for dk_axes alone. Same profile and refinement as dk_estimate."""
+    pr, ids = _restrict(pb, max_frames=max_frames)
+    if list(ids) != list(A["joint_ids"]):
+        raise ValueError("free_template result was computed on different joints")
+    jid = [int(j) for j in A["joint_ids"]]
+    ax = list(jid)
+    if not any(j in DK_MCPS for j in ax):
+        ax[0] = DK_MCPS[0] if ax[0] not in DK_TIPS or sum(j in DK_TIPS for j in ax) > 1 else ax[0]
+    if not any(j in DK_TIPS for j in ax) or not any(j in DK_MCPS for j in ax):
+        raise ValueError("joint set too small for the axis stand-in")
+    T2 = np.asarray(A["template"], float)
+    g = grid[np.unique(np.linspace(0, len(grid) - 1, coarse_n).round().astype(int))] if len(grid) > coarse_n else grid
+    prof = [dk_solve(pr, float(f), T2, ax, 0.0, 0.0, False, False, (grid[0], grid[-1])) for f in g]
+    c = np.array([x["cost"] for x in prof])
+    k = int(np.argmin(c))
+    fg = float(np.exp(np.clip(_parabola(np.log(g), c, k), np.log(grid[0]), np.log(grid[-1]))))
+    st = dict(prof[k]["state"], f=fg)
+    B = dk_solve(pr, fg, T2, ax, 0.0, 0.0, True, False, (grid[0], grid[-1]), init=st)
+    B.pop("state")
+    B.update({"f_grid": fg, "at_grid_edge": bool(k in (0, len(g) - 1)), "profile_f": g.tolist(), "profile_cost": c.tolist(), "joint_ids": jid})
+    return B
+
+
+def ct_job(args) -> dict:
+    """Experiment 70, one estimate: args = (kind, rep, kp, mask, frames, box, size_wh, ecfg, ids). od_bridge and the supervisor's free_template (as dk_job), then ct_estimate."""
+    kind, rep, kp, mask, frames, box, size_wh, ecfg, ids = args
+    os.environ.setdefault("OMP_NUM_THREADS", "1")
+    cv2.setNumThreads(1)
+    W, H = size_wh
+    grid = f_grid(ecfg, max(W, H))
+    out = {"kind": kind, "rep": rep}
+    try:
+        pb = od_bridge(kp, mask, frames, box, size_wh, ecfg, ids)
+        A = free_template(pb, grid)
+    except Exception as e:                                            # a failure is a result
+        out["failed"] = f"{type(e).__name__}: {e}"
+        return out
+    out["free_template"] = {"f": float(A["f"]), "boundary": od_boundary(float(A["f"]), grid)}
+    try:
+        B = ct_estimate(pb, grid, A)
+        out["flat"] = {kk: B[kk] for kk in ("f", "desk_tilt_deg", "turn_range_deg", "rms_px", "cost", "success", "at_grid_edge")}
+        out["flat"]["boundary"] = bool(B["at_bound"]) or od_boundary(float(B["f"]), grid)
+    except Exception as e:
+        out["flat"] = {"failed": f"{type(e).__name__}: {e}"}
+    return out
+
+
+def wl_plane_ramp(P2: np.ndarray, h: np.ndarray, ids, axis_T: np.ndarray) -> float | None:
+    """Pitch (deg, + = wrist side higher) of a plane h = a + b x + c y fitted to the joints ids, along the hand axis of axis_T (dk_axes on the 21 joints' plane coordinates)."""
+    ids = [int(j) for j in ids]
+    ok = [j for j in ids if np.isfinite(P2[j]).all() and np.isfinite(h[j])]
+    if len(ok) < 4:
+        return None
+    A = np.c_[np.ones(len(ok)), P2[ok]]
+    coef = np.linalg.lstsq(A, h[ok], rcond=None)[0]
+    u, _ = dk_axes(axis_T, list(range(21)))
+    return float(np.degrees(np.arctan(-(coef[1:] @ u))))
+
+
+def wl_geometry(kp3: np.ndarray, ver: np.ndarray, joint_sets: dict, dorsal_r: float = 0.010) -> dict:
+    """Experiment 71, one frame of WiLoR's 3-D hand (metres, relative positions only): the desk = the face of the mesh's convex hull whose outward normal is closest to the palm side (minus the
+    joints' plane normal turned towards the camera, which sees the back of the hand) - the plane the resting hand lies on. Heights above it: of the joint centres (keypoints_3d) and of the
+    back-of-hand skin over each joint (the highest vertex within dorsal_r in the desk plane). Per joint set the ramp (wl_plane_ramp) from both, the middle MCP and wrist heights (mm)."""
+    from scipy.spatial import ConvexHull
+    if not (np.isfinite(kp3).all() and np.isfinite(ver).all()):
+        return {"failed": "no hand"}
+    c = kp3 - kp3.mean(0)
+    n0 = np.linalg.svd(c)[2][-1]
+    if n0 @ kp3.mean(0) > 0:                                          # towards the camera (at the origin)
+        n0 = -n0
+    hull = ConvexHull(ver.astype(float))
+    eq = hull.equations                                               # outward normal (a, b, c), offset d: n.x + d <= 0 inside
+    k = int(np.argmax(eq[:, :3] @ (-n0)))
+    n, d = -eq[k, :3], -eq[k, 3]                                      # up = away from the desk, towards the back of the hand; height = -(outward n . x + offset) = n . x + d
+    hj = kp3 @ n + d
+    hv = ver @ n + d
+    e1 = np.cross(n, [1.0, 0.0, 0.0])
+    e1 = e1 if np.linalg.norm(e1) > 0.1 else np.cross(n, [0.0, 1.0, 0.0])
+    e1 /= np.linalg.norm(e1)
+    e2 = np.cross(n, e1)
+    Pj = np.c_[kp3 @ e1, kp3 @ e2]
+    Pv = np.c_[ver @ e1, ver @ e2]
+    hd = np.array([hv[np.linalg.norm(Pv - Pj[j], axis=1) <= dorsal_r].max() if (np.linalg.norm(Pv - Pj[j], axis=1) <= dorsal_r).any() else np.nan for j in range(21)])
+    out = {"hull_normal_vs_joints_deg": float(np.degrees(np.arccos(np.clip(abs(n @ n0), 0, 1)))), "center_mm": (1000 * hj).tolist(), "dorsal_mm": (1000 * hd).tolist(), "ramp": {}}
+    for js, ids in joint_sets.items():
+        out["ramp"][js] = {"center": wl_plane_ramp(Pj, hj, ids, Pj), "dorsal": wl_plane_ramp(Pj, hd, ids, Pj)}
+    return out
+
+
+def dk_scene(turn_range_deg: float, tilt_deg: float, ramp_deg: float, n: int = 60, f: float = 1655.0, seed: int = 0, noise_rel: float = 0.005, dist_cm: float = 60.0,
+             move_pct_xy=(4.5, 34.6), size_wh=(1920, 1080)) -> dict:
+    """Experiment 72: 64's scene (ec_scene's camera, hand, turn and slide) with the hand as an exact plane ramped against the desk as 67's model says (dk_hand_rot about the hand axis of the
+    hand's MCPs and fingertips, + = wrist side up), no fingertip cut-off; detector-like Gaussian noise of noise_rel x the hand box long side. Returns kp, mask, box, size."""
+    W, H = size_wh
+    a = np.radians(tilt_deg)
+    C = np.array([0.0, -dist_cm * np.sin(a), dist_cm * np.cos(a)])
+    z = -C / np.linalg.norm(C)
+    x = np.array([1.0, 0.0, 0.0])
+    R = np.array([x, np.cross(z, x), z])
+    ax, ay = od2_synthetic(turn_range_deg, list(move_pct_xy), 0.0, f=f, n=n)["translation_cm"]
+    s = np.linspace(0, 1, n)
+    turn = np.radians(turn_range_deg / 2.0) * np.sin(2 * np.pi * s)
+    ux, uy = np.sin(2 * np.pi * 1.5 * s + 0.4), np.cos(2 * np.pi * s)
+    P0 = OD_HAND_CM - OD_HAND_CM.mean(0)
+    u, w = dk_axes(P0, list(range(21)))
+    Hd = np.c_[P0, np.zeros(21)] @ dk_hand_rot(u, w, np.radians(ramp_deg), 0.0).T
+    Hd[:, 2] -= Hd[:, 2].min()
+    img = np.zeros((n, 21, 2))
+    for i in range(n):
+        cc, sn = np.cos(turn[i]), np.sin(turn[i])
+        P = np.c_[Hd[:, :2] @ np.array([[cc, sn], [-sn, cc]]) + [ax * ux[i], ay * uy[i]], Hd[:, 2]]
+        Xc = (P - C) @ R.T
+        img[i] = f * Xc[:, :2] / Xc[:, 2:3] + [W / 2.0, H / 2.0]
+    bl = (img.max(1) - img.min(1)).max(1)
+    kp = img + np.random.default_rng([int(seed), 72]).normal(size=img.shape) * (noise_rel * bl)[:, None, None]
+    return {"kp": kp, "mask": np.ones((n, 21), bool), "box": np.c_[kp.min(1) - 20.0, kp.max(1) + 20.0], "size": [W, H]}
+
+
+def id_job(args) -> dict:
+    """Experiment 72, one fit: args = (key, scene kwargs, ecfg, ids, modes, ramp). dk_scene, then dk_job on all its frames."""
+    key, sk, ecfg, ids, modes, ramp = args
+    s = dk_scene(**sk)
+    o = dk_job(("main", 0, s["kp"], s["mask"], np.arange(len(s["kp"])), s["box"], tuple(s["size"]), ecfg, ids, tuple(modes), float(ramp)))
+    o["key"] = key
+    return o
+
+
 def od_fix_lines(path=None) -> list:
     """Where the six corrections to the supervisor's code sit in handfocal_estimate.py (line numbers of the corrected spellings inside section 5)."""
     p = Path(path) if path else Path(__file__).resolve().parent / "handfocal_estimate.py"
