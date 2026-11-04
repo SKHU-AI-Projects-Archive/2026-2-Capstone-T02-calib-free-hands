@@ -12354,7 +12354,250 @@ def pv_main(argv=None):
     return outs
 
 
-COMMANDS = {"protocol": protocol_main, "frame-filter": ff_main, "same-session": session_main, "overlay": overlay_main, "phase-segmentation": pseg_main, "guide-revision": grev_main, "f-response": fresp_main, "error-factors": ferr_main, "long-video-check": long_main, "generalization": gen_main, "main-camera-extension": ext_main, "wide-60cm": wide_main, "jointset-sets": jset_main, "verdict-calibration": cal_main, "printed-hand": pr_main, "hand-markers": mk_main, "markers-only": mo_main, "free-template": ft_main, "free-shape3d": s3_main, "free-shape3d-hand": h3_main, "free-shape3d-27": e3_main, "free-shape3d-new": e4_main, "mmpose-hand": mm_main, "mmpose-hand-46": mm2_main, "free-shape3d-new2": e5_main, "mmpose-hand-src": mm3_main, "free-shape3d-detectors": fs_main, "free-shape3d-hand-sets": h4_main, "free-shape3d-hand-sets-42track": h4b_main, "oblique-desk": od_main, "oblique-synthetic": sy_main, "oblique-fixed-template": fx_main, "oblique-desk-videos": om_main, "pause-stabilized": ps_main, "continuous-klt": kt_main, "continuous-klt-palm": kp_main, "klt-paper-dorsum": pp_main, "paper-parallax": hp_main, "segment-template": sg_main, "turn-synthetic": tr_main, "window-f": wd_main, "anycalib-videos": ac_main, "error-sources": ec_main, "hand-deformation": dm_main, "joint-combos": fc_main, "points-video": pv_main}
+# ====================================================================================================
+# dk  (experiment 67: the desk-motion estimator - the hand turns and slides on the desk, a rigid plane ramped against it - on 56's points of 54's 12 videos; mine, not the supervisor's)
+#     python HandCalib/run.py desk-motion --config HandCalib/configs/67_desk_motion.yaml [--out DIR]
+# ====================================================================================================
+DK_METHODS = ("free_template",) + hf.DK_MODES
+DK_LABEL = {"free_template": "free_template (교수님)", "flat": "책상 제약, 경사 0°", "ramp_fixed": "책상 제약, 경사 11° 고정", "ramp_free": "책상 제약, 경사 추정"}
+DK_COLOR = {"free_template": "#999999", "flat": "#56B4E9", "ramp_fixed": "#E69F00", "ramp_free": "#0072B2"}
+DK_NOTE = ("손이 책상(종이) 위에서 돌고 미끄러지기만 한다는 제약을 넣은 추정기(내가 만든 것, 교수님 코드 아님)를 실험 56의 점들에 적용한 기록이다(판정 없음). 모형: 손은 단단한 평면이고 "
+           "손가락 끝 쪽이 낮고 손목 쪽이 높게 책상에 대해 기울어 있다(경사). 영상 전체에 책상 자세 하나, 프레임마다 책상 위 회전각 1개와 이동 2개, f, 손 평면 모양을 함께 푼다. "
+           "경사는 0°(손이 책상에 평평), 11° 고정(실험 59), f와 함께 추정 세 가지. 시작값은 교수님 free_template 결과에서 얻고, f는 free_template처럼 거친 격자 8점의 프로파일에서 고른 뒤 다듬는다.")
+
+
+def dk_figure(path: Path, res: dict, cfg: dict, ref: float):
+    plt = _plt()
+    videos = [e["file"] for e in cfg["videos"]]
+    rows = [(src, js) for src in DK_SOURCES for js in cfg["joint_sets"]]
+    fig, axes = plt.subplots(1, len(rows), figsize=(4.2 * len(rows), 5.5), sharey=True)
+    for ax, (src, js) in zip(np.atleast_1d(axes), rows):
+        for k, m in enumerate(DK_METHODS):
+            for i, v in enumerate(videos):
+                x = ((res.get((v, src, js)) or {}).get("main") or {}).get(m) or {}
+                if "f" not in x:
+                    continue
+                e = 100 * (x["f"] / ref - 1)
+                ax.scatter([np.clip(e, -60, 120)], [i + (k - 1.5) * 0.18], s=22, color=DK_COLOR[m], marker="s" if x.get("boundary") else "o", zorder=3,
+                           label=DK_LABEL[m] if i == 0 else None)
+        ax.axvspan(-10, 10, color="#e8f2e8", zorder=0)
+        ax.axvline(0, color="#555", lw=1)
+        ax.set_title(f"{DK_SRC_KO[src]}, {js}", fontsize=10)
+        ax.set_xlim(-62, 122)
+        ax.grid(alpha=0.3, axis="x")
+        ax.set_xlabel("기준 f 대비 오차 (%)")
+    ax0 = np.atleast_1d(axes)[0]
+    ax0.set_yticks(range(len(videos)))
+    ax0.set_yticklabels([Path(v).stem for v in videos], fontsize=8)
+    ax0.invert_yaxis()
+    ax0.legend(fontsize=7, loc="lower right")
+    fig.suptitle("영상별 f 오차 (네모 = f 범위 끝, ±60~120% 밖은 가장자리에 표시, 초록 띠 = ±10%)", fontsize=10)
+    fig.tight_layout()
+    fig.savefig(path, dpi=100)
+    plt.close(fig)
+
+
+DK_SOURCES = ("tracked", "detected")
+DK_SRC_KO = {"tracked": "실험 56 추적점", "detected": "MediaPipe 관절"}
+
+
+def dk_counts(res: dict, videos: list, src: str, js: str, m: str, ref: float) -> dict:
+    e, b, n = [], 0, 0
+    for v in videos:
+        x = ((res.get((v, src, js)) or {}).get("main") or {}).get(m) or {}
+        if "f" not in x:
+            continue
+        n += 1
+        e.append(abs(x["f"] / ref - 1))
+        b += int(bool(x.get("boundary")))
+    e = np.asarray(e)
+    return {"n": n, "in10": int((e <= 0.10).sum()), "in25": int((e <= 0.25).sum()), "boundary": b, "abs_median_pct": float(100 * np.median(e)) if n else None}
+
+
+def dk_summary(path: Path, res: dict, cfg: dict, ci: dict):
+    ref = float(cfg["ref_f"]["value"])
+    videos = [e["file"] for e in cfg["videos"]]
+    pe = lambda f: "-" if f is None else f"{f:.0f} ({100 * (f / ref - 1):+.1f}%)"      # noqa: E731
+    fx = lambda x: "실패" if not x or "f" not in x else pe(x["f"]) + (" 경계" if x.get("boundary") else "")      # noqa: E731
+    cs = lambda c: "-" if not c else f"{c[0]:.0f} ~ {c[1]:.0f}"      # noqa: E731
+    main = (cfg["main"]["source"], cfg["main"]["joint_set"])
+    L = ["# 실험 67 summary", "", f"**{DK_NOTE}**", "", f"- 기준 f: {ref:g} px ({cfg['ref_f']['source']}). 카메라 각도 약 45°(수평계). 기준 f는 이 파일에만 적는다.",
+         f"- 주 비교: {DK_SRC_KO[main[0]]}, {main[1]}. 미리 정한 읽기: 책상 제약 방식이 free_template보다 ±25% 안 영상이 많고 범위 끝이 적으면 '나아짐'으로 적는다(판정 아님).", "",
+         "## 1. 요약 (영상 12개)", "", "| 점 | 관절 | 방식 | ±10% 안 | ±25% 안 | 범위 끝 | 오차 절댓값 중앙값 |", "|---|---|---|---|---|---|---|"]
+    for src in DK_SOURCES:
+        for js in cfg["joint_sets"]:
+            for m in DK_METHODS:
+                c = dk_counts(res, videos, src, js, m, ref)
+                L.append(f"| {DK_SRC_KO[src]} | {js} | {DK_LABEL[m]} | {c['in10']}/{c['n']} | {c['in25']}/{c['n']} | {c['boundary']} | " + ("-" if c["abs_median_pct"] is None else f"{c['abs_median_pct']:.1f}%") + " |")
+    L.append("")
+    k = 2
+    for src in DK_SOURCES:
+        for js in cfg["joint_sets"]:
+            boot = js in cfg["bootstrap_sets"]
+            L += [f"## {k}. {DK_SRC_KO[src]}, {js}", "",
+                  "| 영상 | 거리(cm) | 손 | " + " | ".join(DK_LABEL[m] for m in DK_METHODS) + " | " + ("95% 구간 (free_template / 경사 0° / 11° / 추정) | " if boot else "") +
+                  "추정 경사 (앞뒤, 옆) | 책상 기울기 (0° / 11° / 추정) | free_template 손 평면 기울기 | 재투영 RMS px (free_template / 0° / 11° / 추정) | 책상 위 회전 범위 (추정) |",
+                  "|---|---|---|" + "---|" * len(DK_METHODS) + ("---|" if boot else "") + "---|---|---|---|---|"]
+            for e in cfg["videos"]:
+                v = e["file"]
+                r = (res.get((v, src, js)) or {}).get("main") or {}
+                if "failed" in r or not r:
+                    L.append(f"| {v} | {e['distance_cm']:g} | {e['hand']} | 실패: {r.get('failed', '-')} |")
+                    continue
+                cells = [v, f"{e['distance_cm']:g}", e["hand"]] + [fx(r.get(m)) for m in DK_METHODS]
+                if boot:
+                    cells.append(" / ".join(cs(ci.get((v, src, js, m))) for m in DK_METHODS))
+                fr = r.get("ramp_free") or {}
+                cells.append("-" if "f" not in fr else f"{fr['pitch_deg']:.1f}°, {fr['roll_deg']:.1f}°")
+                cells.append(" / ".join("-" if "f" not in (r.get(m) or {}) else f"{r[m]['desk_tilt_deg']:.1f}°" for m in hf.DK_MODES))
+                ft = r.get("free_template") or {}
+                cells.append("-" if ft.get("tilt_median_deg") is None else f"{ft['tilt_median_deg']:.1f}°")
+                cells.append(" / ".join("-" if not np.isfinite((r.get(m) or {}).get("rms_px", np.nan)) else f"{r[m]['rms_px']:.2f}" for m in DK_METHODS))
+                cells.append("-" if "f" not in fr else f"{fr['turn_range_deg']:.0f}°")
+                L.append("| " + " | ".join(cells) + " |")
+            L.append("")
+            k += 1
+    L += ["## 읽는 법과 한계", "",
+          "- 재투영 RMS: 책상 제약은 프레임마다 자유도를 6에서 3으로 줄이므로 free_template보다 RMS가 커진다. 많이 커지면 '책상 위에서만 움직인다' 또는 '단단한 평면' 가정이 맞지 않는다는 뜻이다.",
+          "- 책상 기울기: 책상 법선과 카메라 광축 사이 각도. free_template의 기울기는 손 평면의 기울기라서 경사가 있으면 둘이 다르다.",
+          "- 경사 방향: 손 축(MCP 평균 → 손가락 끝 평균) 방향으로 손목 쪽이 카메라 쪽으로 들린 것이 +. '옆'은 손 축을 중심으로 한 기울기.",
+          "- 이 추정기는 실험 64 장면으로 코드가 맞는지만 확인했다(평평한 손, 잡음 없음에서 f 1655 그대로; 결과로 기록하지 않음). 합성 실험은 하지 않았다(사용자 결정).",
+          "- 손바닥 쪽 MediaPipe 계통 오차(실험 66)와 손가락 움직임은 이 모형에 없다.", ""]
+    path.write_text("\n".join(L) + "\n")
+
+
+def dk_main(argv=None):
+    ap = argparse.ArgumentParser()
+    ap.add_argument("--config", default=str(hf.PROJECT_ROOT / "configs/67_desk_motion.yaml"))
+    sub = ap.add_subparsers(dest="cmd")
+    ry = sub.add_parser("results-yaml")
+    ry.add_argument("--run", required=True)
+    ap.add_argument("--out", default=None)
+    ap.add_argument("--videos", type=int, default=None, help="dry run: first N videos only")
+    ap.add_argument("--boot", type=int, default=None, help="dry run: bootstrap samples")
+    a = ap.parse_args(argv)
+    text = Path(a.config).read_text()
+    own = yaml.safe_load(text)
+    r56 = yaml.safe_load(hf.resolve(own["rules_config"]).read_text())
+    r60 = yaml.safe_load(hf.resolve(own["segments_config"]).read_text())
+    base = od_load(yaml.safe_load(hf.resolve(r56["base_config"]).read_text()))
+    cfg = {**base, "videos": r56["videos"], "tracking": r56["tracking"], "segments": r60["segments"], "bootstrap": {**base["bootstrap"], **r56.get("bootstrap", {})},
+           **{k: own[k] for k in ("experiment", "joint_sets", "bootstrap_sets", "main", "ramp_deg", "workers", "n_workers", "video_workers", "output") if k in own}}
+    if a.cmd == "results-yaml":
+        print(dk_results_yaml(hf.resolve(a.run), cfg))
+        return None
+    if a.videos:
+        cfg["videos"] = cfg["videos"][:a.videos]
+    if a.boot is not None:
+        cfg["bootstrap"]["n"] = a.boot
+    missing = [e["file"] for e in cfg["videos"] if not (Path(cfg["input_dir"]).expanduser() / e["file"]).exists()]
+    if missing:
+        raise SystemExit(f"영상이 없습니다: {missing}")
+    run_root = Path(a.out).expanduser() if a.out else hf.resolve(cfg["output"]["root"]) / utc_stamp()
+    run_root.mkdir(parents=True)
+    (run_root / "figures").mkdir()
+    log = Log(run_root / "log.txt")
+    log(f"67 책상 제약 추정기: 영상 {len(cfg['videos'])}개 → {run_root}")
+    t0 = time.time()
+    for k in ("OMP_NUM_THREADS", "OPENBLAS_NUM_THREADS", "MKL_NUM_THREADS"):
+        os.environ[k] = "1"
+    import multiprocessing as mp
+    from concurrent.futures import ProcessPoolExecutor
+    vid = {}
+    with ProcessPoolExecutor(max_workers=int(cfg["video_workers"]), mp_context=mp.get_context("spawn")) as ex:
+        for e, (x, lines) in zip(cfg["videos"], ex.map(sg_video_job, [(e, cfg, str(run_root)) for e in cfg["videos"]])):
+            vid[e["file"]] = x
+            for s in lines:
+                log(s)
+    log(f"  영상 처리: {time.time() - t0:.0f} s")
+    ecfg, bc = cfg["pipeline"]["estimate"], cfg["bootstrap"]
+    modes, ramp = tuple(hf.DK_MODES), float(cfg["ramp_deg"])
+    jobs, keys = [], []
+    for e in cfg["videos"]:
+        v = e["file"]
+        x = vid[v]
+        for src in DK_SOURCES:
+            y = x[src]
+            ui = np.flatnonzero(y["use"])
+            mask = np.isfinite(y["kp"]).all(2)
+            for js, ids in cfg["joint_sets"].items():
+                jobs.append(("main", 0, y["kp"], mask, ui, y["box"], tuple(x["size"]), ecfg, ids, modes, ramp))
+                keys.append((v, src, js))
+                if js in cfg["bootstrap_sets"]:
+                    for rep in range(int(bc["n"])):
+                        jobs.append(("boot", rep, y["kp"], mask, ui[hf.od_blocks(len(ui), int(bc["block"]), rep, int(bc["seed"]))], y["box"], tuple(x["size"]), ecfg, ids, modes, ramp))
+                        keys.append((v, src, js))
+    order = sorted(range(len(jobs)), key=lambda i: jobs[i][0] != "main")
+    log(f"  추정 {len(jobs)}건 (주 추정 {sum(j[0] == 'main' for j in jobs)}건 먼저)")
+    t1 = time.time()
+    res = {}
+    with ProcessPoolExecutor(max_workers=int(cfg["workers"]), mp_context=mp.get_context("spawn")) as ex:
+        for i, (k, o) in enumerate(zip([keys[q] for q in order], ex.map(hf.dk_job, [jobs[q] for q in order], chunksize=1))):
+            r = res.setdefault(k, {"main": None, "boot": []})
+            if o["kind"] == "main":
+                r["main"] = o
+            elif "failed" not in o:
+                r["boot"].append(o)
+            if (i + 1) % 100 == 0 or i + 1 == len(jobs):
+                el = time.time() - t1
+                log(f"  추정 진행 {i + 1} / {len(jobs)} ({el:.0f} s, 남은 시간 약 {el / (i + 1) * (len(jobs) - i - 1) / 60:.0f}분)")
+    lvl = float(bc.get("level", 0.95))
+    ci = {(v, s, js, m): hf.od_ci([b[m]["f"] for b in r["boot"] if "f" in (b.get(m) or {})], lvl) for (v, s, js), r in res.items() for m in DK_METHODS if js in cfg["bootstrap_sets"]}
+    ref = float(cfg["ref_f"]["value"])
+    dk_figure(run_root / "figures" / "f_errors.png", res, cfg, ref)
+    dk_summary(run_root / "summary.md", res, cfg, ci)
+    out = {"real": {f"{v}|{s}|{js}": {"main": r["main"], "n_boot_ok": len(r["boot"]),
+                                      "ci95": {m: ci.get((v, s, js, m)) for m in DK_METHODS} if js in cfg["bootstrap_sets"] else None,
+                                      "boot_f": {m: [b[m]["f"] for b in r["boot"] if "f" in (b.get(m) or {})] for m in DK_METHODS},
+                                      "boot_pitch_deg": [b["ramp_free"]["pitch_deg"] for b in r["boot"] if "f" in (b.get("ramp_free") or {})]} for (v, s, js), r in res.items()}}
+    (run_root / "results.json").write_text(json.dumps(hf.jsonable(out), ensure_ascii=False, indent=1))
+    meta = hf.provenance_build(text, a.config, {"code_67": own.get("code_67"), "rules_config": own["rules_config"], "elapsed_s": time.time() - t0, "dry_run": bool(a.videos or a.boot is not None)})
+    (run_root / "metadata.json").write_text(json.dumps(hf.jsonable(meta), ensure_ascii=False, indent=1))
+    log(f"완료 {time.time() - t0:.0f} s → {run_root}")
+    log.close()
+    return run_root, res
+
+
+def dk_results_yaml(run_dir: Path, cfg: dict):
+    """Values only (record experiment, no verdict, no reference f or errors); written to output.results_yaml."""
+    r = json.loads((run_dir / "results.json").read_text())
+    m = json.loads((run_dir / "metadata.json").read_text())
+    try:
+        run_name = str(run_dir.resolve().relative_to(hf.PROJECT_ROOT))
+    except ValueError:
+        run_name = str(run_dir)
+    rd = lambda x, n=1: None if x is None or (isinstance(x, float) and not np.isfinite(x)) else round(x, n)      # noqa: E731
+    out = {"experiment": cfg["experiment"]["name"], "run": run_name, "code_commit": m["git"]["commit"][:7], "git_dirty_at_run": m["git"]["git_dirty"], "note": DK_NOTE, "ramp_deg_fixed": cfg["ramp_deg"],
+           "videos": {}}
+    for e in cfg["videos"]:
+        v = e["file"]
+        o = out["videos"][v] = {"distance_cm": e["distance_cm"], "hand": e["hand"]}
+        for src in DK_SOURCES:
+            for js in cfg["joint_sets"]:
+                x = r["real"].get(f"{v}|{src}|{js}") or {}
+                mm = x.get("main") or {}
+                d = o.setdefault(src, {})[js] = {}
+                for mt in DK_METHODS:
+                    y = mm.get(mt) or {}
+                    if "f" not in y:
+                        d[mt] = None if not y else {"failed": y.get("failed")}
+                        continue
+                    z = {"f_px": rd(y["f"]), "boundary": y["boundary"], "rms_px": rd(y.get("rms_px"), 2)}
+                    if mt == "free_template":
+                        z["plane_tilt_median_deg"] = rd(y.get("tilt_median_deg"))
+                    else:
+                        z.update({"desk_tilt_deg": rd(y["desk_tilt_deg"]), "turn_range_deg": rd(y["turn_range_deg"])})
+                        if mt == "ramp_free":
+                            z.update({"pitch_deg": rd(y["pitch_deg"], 2), "roll_deg": rd(y["roll_deg"], 2)})
+                    if x.get("ci95") and x["ci95"].get(mt):
+                        z["ci95_px"] = [rd(q) for q in x["ci95"][mt]]
+                    d[mt] = z
+    p = hf.resolve(cfg["output"]["results_yaml"])
+    p.write_text(yaml.safe_dump(hf.jsonable(out), allow_unicode=True, sort_keys=False))
+    return p
+
+
+COMMANDS = {"protocol": protocol_main, "frame-filter": ff_main, "same-session": session_main, "overlay": overlay_main, "phase-segmentation": pseg_main, "guide-revision": grev_main, "f-response": fresp_main, "error-factors": ferr_main, "long-video-check": long_main, "generalization": gen_main, "main-camera-extension": ext_main, "wide-60cm": wide_main, "jointset-sets": jset_main, "verdict-calibration": cal_main, "printed-hand": pr_main, "hand-markers": mk_main, "markers-only": mo_main, "free-template": ft_main, "free-shape3d": s3_main, "free-shape3d-hand": h3_main, "free-shape3d-27": e3_main, "free-shape3d-new": e4_main, "mmpose-hand": mm_main, "mmpose-hand-46": mm2_main, "free-shape3d-new2": e5_main, "mmpose-hand-src": mm3_main, "free-shape3d-detectors": fs_main, "free-shape3d-hand-sets": h4_main, "free-shape3d-hand-sets-42track": h4b_main, "oblique-desk": od_main, "oblique-synthetic": sy_main, "oblique-fixed-template": fx_main, "oblique-desk-videos": om_main, "pause-stabilized": ps_main, "continuous-klt": kt_main, "continuous-klt-palm": kp_main, "klt-paper-dorsum": pp_main, "paper-parallax": hp_main, "segment-template": sg_main, "turn-synthetic": tr_main, "window-f": wd_main, "anycalib-videos": ac_main, "error-sources": ec_main, "hand-deformation": dm_main, "joint-combos": fc_main, "points-video": pv_main, "desk-motion": dk_main}
 
 
 def main(argv=None):

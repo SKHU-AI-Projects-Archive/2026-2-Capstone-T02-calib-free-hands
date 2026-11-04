@@ -5026,6 +5026,22 @@ class DMDeformation(unittest.TestCase):
         self.assertGreater(hf.dm_measure(d["kp"], np.ones(30, bool), [np.array([i, i, i]) for i in range(0, 30, 5)], list(range(5, 21)))["res_pct_median"], 0.3)
 
 
+class DKDeskMotion(unittest.TestCase):
+    def test_ramp_sign_and_flat_scene(self):
+        u, w = np.array([0.0, 1.0]), np.array([-1.0, 0.0])
+        R = hf.dk_hand_rot(u, w, np.radians(11.0), 0.0)
+        self.assertAlmostEqual((R @ np.r_[u, 0.0])[2], -np.sin(np.radians(11.0)), places=9)
+        s = hf.ec_scene(120.0, [4.5, 34.6], n=24, seed=1, noise_rel=0.0)
+        ecfg = {"f_ratio_range": [0.5, 2.0], "f_grid_n": 25, "huber_rel": 0.02, "principal_point": "center", "undistort": None}
+        pb = hf.od_bridge(s["kp"], s["mask"], np.arange(24), s["box"], tuple(s["size"]), ecfg, list(range(5, 21)))
+        pr, ids = hf._restrict(pb)
+        A = hf.free_template(pb, hf.f_grid(ecfg, 1920))
+        B = hf.dk_solve(pr, 1655.0, np.asarray(A["template"]), ids, 0.0, 0.0, True, True, (900.0, 3000.0))
+        self.assertLess(abs(B["f"] / 1655.0 - 1), 1e-3)
+        self.assertLess(abs(B["desk_tilt_deg"] - 45.0), 0.1)
+        self.assertLess(B["rms_px"], 1e-3)
+
+
 class FCJointCombos(unittest.TestCase):
     def test_combos_loo_and_scene(self):
         cfg = {"combos": {"fixed": [{"name": "palm6", "ids": [0, 1, 5, 9, 13, 17]}], "ranked_sizes": [5], "random": {"seed": 42, "sizes": [6, 8]}}}
