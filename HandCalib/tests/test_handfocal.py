@@ -4983,5 +4983,21 @@ class TRTurnSynthetic(unittest.TestCase):
         self.assertAlmostEqual(x["err_median"], 0.14)
 
 
+class WDWindows(unittest.TestCase):
+    def test_windows_and_shape_diff(self):
+        use = np.ones(400, bool)
+        use[100:200] = False
+        w = hf.wd_windows(400, use, 150, 30, 60)
+        self.assertEqual([(a, b) for a, b, _ in w][:2], [(0, 150), (30, 180)])
+        self.assertEqual(w[-1][1], 400)
+        self.assertTrue(all(len(fr) >= 60 for _, _, fr in w))
+        self.assertNotIn(90, [a for a, _, _ in w])
+        rng = np.random.default_rng(0)
+        T = rng.normal(size=(16, 2))
+        R = np.array([[np.cos(0.7), -np.sin(0.7)], [np.sin(0.7), np.cos(0.7)]])
+        self.assertLess(hf.wd_shape_diff(2.5 * T @ R.T + [3, -1], T), 1e-6)
+        self.assertGreater(hf.wd_shape_diff(T * [1.2, 0.9], T), 5.0)
+
+
 if __name__ == "__main__":
     unittest.main()

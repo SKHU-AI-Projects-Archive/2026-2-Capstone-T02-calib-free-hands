@@ -11164,7 +11164,216 @@ def tr_results_yaml(run_dir: Path, cfg: dict):
     return p
 
 
-COMMANDS = {"protocol": protocol_main, "frame-filter": ff_main, "same-session": session_main, "overlay": overlay_main, "phase-segmentation": pseg_main, "guide-revision": grev_main, "f-response": fresp_main, "error-factors": ferr_main, "long-video-check": long_main, "generalization": gen_main, "main-camera-extension": ext_main, "wide-60cm": wide_main, "jointset-sets": jset_main, "verdict-calibration": cal_main, "printed-hand": pr_main, "hand-markers": mk_main, "markers-only": mo_main, "free-template": ft_main, "free-shape3d": s3_main, "free-shape3d-hand": h3_main, "free-shape3d-27": e3_main, "free-shape3d-new": e4_main, "mmpose-hand": mm_main, "mmpose-hand-46": mm2_main, "free-shape3d-new2": e5_main, "mmpose-hand-src": mm3_main, "free-shape3d-detectors": fs_main, "free-shape3d-hand-sets": h4_main, "free-shape3d-hand-sets-42track": h4b_main, "oblique-desk": od_main, "oblique-synthetic": sy_main, "oblique-fixed-template": fx_main, "oblique-desk-videos": om_main, "pause-stabilized": ps_main, "continuous-klt": kt_main, "continuous-klt-palm": kp_main, "klt-paper-dorsum": pp_main, "paper-parallax": hp_main, "segment-template": sg_main, "turn-synthetic": tr_main}
+# ====================================================================================================
+# wd  (experiment 62: f over time inside each video - 56's tracked points (and the mediapipe joints) on 54's 12 videos cut into overlapping time windows, the supervisor's free_template on each
+#      window; per window turn, tilt, residual and the change of the hand template against the whole video's; record only, no verdict)
+#     python HandCalib/run.py window-f --config HandCalib/configs/62_window_f.yaml [--out DIR]
+#     python HandCalib/run.py window-f --config ... results-yaml --run runs/62_window_f/<UTC>
+# ====================================================================================================
+WD_NOTE = ("실험 56의 추적점(과 MediaPipe 검출 관절) 16점을 영상마다 겹치는 시간 창으로 잘라, 창마다 교수님 free_template를 그대로 돌려 f를 낸 기록용 실험이다(판정 없음). "
+           "창마다 책상 위 회전 범위(그 창의 f에서 본 자세, 그리고 f와 무관한 영상 속 손 방향), 손 기울기, 재투영 잔차, 영상 전체 템플릿 대비 손 모양 변화를 함께 기록해 "
+           "f가 어느 순간에 틀어지는지, 회전·기울기·손 모양 변화 중 무엇과 함께 움직이는지 본다. 추적과 사용 프레임은 실험 56·60과 같다. 기준 f와의 비교는 summary.md에만 있다.")
+WD_TURN_BINS = ((0, 60), (60, 120), (120, 150), (150, 1e9))
+
+
+def wd_figure(path: Path, ana: dict, cfg: dict, s: str, field: str, ylabel: str, logy: bool):
+    plt = _plt()
+    vs = [e["file"] for e in cfg["videos"]]
+    fig, axs = plt.subplots(4, 3, figsize=(13, 11), squeeze=False)
+    fps = float(cfg["tracking"]["fps"])
+    for ax, v in zip(axs.ravel(), vs):
+        w = [x for x in ana[v][s]["windows"] if x.get(field) is not None]
+        t = [(x["start"] + x["end"]) / 2 / fps for x in w]
+        y = [x[field] for x in w]
+        c = [x["image_turn_range_deg"] or 0 for x in w]
+        ax.plot(t, y, "-", color="#999", lw=1, zorder=1)
+        sc = ax.scatter(t, y, c=c, cmap="Blues", vmin=0, vmax=200, edgecolors="#333", linewidths=0.5, s=36, zorder=2)
+        bd = [(tt, yy) for tt, yy, x in zip(t, y, w) if x.get("boundary")]
+        if bd:
+            ax.scatter(*zip(*bd), marker="x", color="#c0392b", s=40, zorder=3, label="범위 끝")
+            ax.legend(fontsize=7, loc="best")
+        al = ana[v][s]["all"]
+        if field == "f" and al.get("f"):
+            ax.axhline(al["f"], color="#555", ls="--", lw=1)
+        if logy:
+            ax.set_yscale("log")
+        ax.set_title(f"{Path(v).stem}", fontsize=9)
+        ax.set_xlabel("창 가운데 시간 (s)", fontsize=8)
+        ax.set_ylabel(ylabel, fontsize=8)
+        ax.grid(alpha=0.3, which="both")
+    fig.colorbar(sc, ax=axs, shrink=0.5, label="창 안 영상 속 손 방향 변화 (°)")
+    fig.savefig(path, dpi=100)
+    plt.close(fig)
+
+
+def wd_summary(path: Path, ana: dict, vid: dict, cfg: dict):
+    from scipy.stats import spearmanr
+    ref = float(cfg["ref_f"]["value"])
+    wc = cfg["windows"]
+    fps = float(cfg["tracking"]["fps"])
+    pe = lambda f: "-" if f is None else f"{f:.0f} ({100 * (f / ref - 1):+.0f}%)"      # noqa: E731
+    r0 = lambda x, d=0: "-" if x is None else f"{x:.{d}f}"      # noqa: E731
+    L = ["# 실험 62 summary", "", f"**{WD_NOTE}**", "",
+         f"- 기준 f: {ref:g} px ({cfg['ref_f']['source']}). 오차는 기준 f 대비.",
+         f"- 창: {wc['length_frames']}프레임({wc['length_frames'] / fps:g} s), {wc['step_frames']}프레임({wc['step_frames'] / fps:g} s)씩 이동, 창 안 사용 프레임 {wc['min_frames']}장 미만이면 뺌. free_template는 창 안에서 최대 120프레임을 고르게 씀(교수님 기본값).",
+         "- 회전(자세) = 그 창의 f에서 템플릿 자세로 본 책상 위 회전 범위(f가 틀리면 함께 틀림). 영상 속 손 방향 = 손목 → 가운뎃손가락 MCP 방향의 화면 속 변화 범위(f와 무관, 기울어진 책상에서는 실제 회전과 조금 다름).",
+         "- 손 모양 변화 = 창의 템플릿을 영상 전체 템플릿에 닮음 변환(이동·회전·크기)으로 맞춘 뒤 남는 차이(RMS, 전체 템플릿 크기 대비 %).", ""]
+    for si, (s, nm) in enumerate((("tracked", "실험 56 추적점 16점"), ("detected", "MediaPipe 검출 관절 16점"))):
+        allw = [(v, x) for v in ana for x in ana[v][s]["windows"] if x.get("f") is not None]
+        L += [f"## {si + 1}. {nm}", "", f"### {si + 1}-1. 회전 구간별 창 f (영상 속 손 방향 변화 기준, 창 {len(allw)}개)", "",
+              "| 손 방향 변화 | 창 수 | 범위 끝 | 기준 ±10% 안 | 기준 ±25% 안 | 오차 중앙값 (범위 끝 제외) | 오차 10~90 백분위 (범위 끝 제외) | 손 모양 변화 중앙값 (%) |", "|---|---|---|---|---|---|---|---|"]
+        for lo, hi in WD_TURN_BINS:
+            g = [x for _, x in allw if x["image_turn_range_deg"] is not None and lo <= x["image_turn_range_deg"] < hi]
+            if not g:
+                L.append(f"| {lo}° ~ {'' if hi > 1e8 else f'{hi}°'} | 0 | - | - | - | - | - | - |")
+                continue
+            er = np.array([x["f"] / ref - 1 for x in g])
+            nb = np.array([x for x, y in zip(er, g) if not y["boundary"]])
+            sd = [x["shape_diff_pct"] for x in g if x.get("shape_diff_pct") is not None]
+            L.append(f"| {lo}° ~ {'' if hi > 1e8 else f'{hi}°'} | {len(g)} | {sum(x['boundary'] for x in g)} | {int(np.sum(np.abs(er) <= 0.10))} | {int(np.sum(np.abs(er) <= 0.25))} | "
+                     + ("-" if not len(nb) else f"{100 * np.median(nb):+.1f}%") + " | " + ("-" if not len(nb) else f"{100 * np.percentile(nb, 10):+.0f}% ~ {100 * np.percentile(nb, 90):+.0f}%")
+                     + f" | {r0(float(np.median(sd)) if sd else None, 1)} |")
+        big = [x for _, x in allw if not x["boundary"] and (x["image_turn_range_deg"] or 0) >= float(wc["big_turn_deg"])]
+        L += ["", f"### {si + 1}-2. 회전이 큰 창(손 방향 변화 {wc['big_turn_deg']}° 이상, 범위 끝 제외, {len(big)}개)에서 오차와 함께 움직이는 값 (스피어만 순위 상관)", "",
+              "| 값 | 부호 있는 오차와 상관 | 절대 오차와 상관 |", "|---|---|---|"]
+        for k, nm2 in (("shape_diff_pct", "손 모양 변화"), ("tilt_median_deg", "기울기 중앙값"), ("rms_px", "재투영 잔차"), ("image_turn_range_deg", "손 방향 변화"), ("turn_range_deg", "회전(자세)")):
+            pr = [(x[k], x["f"] / ref - 1) for x in big if x.get(k) is not None]
+            if len(pr) < 5:
+                L.append(f"| {nm2} | - | - |")
+                continue
+            a, b = np.array(pr).T
+            L.append(f"| {nm2} | {spearmanr(a, b)[0]:+.2f} | {spearmanr(a, np.abs(b))[0]:+.2f} |")
+        L += ["", f"### {si + 1}-3. 영상별 창", ""]
+        for e in cfg["videos"]:
+            v = e["file"]
+            al = ana[v][s]["all"]
+            L += [f"**{Path(v).stem}** (영상 전체 free_template {pe(al.get('f'))}{' (경계)' if al.get('boundary') else ''}, 창 {len(ana[v][s]['windows'])}개)", "",
+                  "| 창 (s) | 프레임 | 초점 거리 | 회전 (자세, °) | 손 방향 변화 (°) | 기울기 (°) | 잔차 (px) | 손 모양 변화 (%) |", "|---|---|---|---|---|---|---|---|"]
+            for x in ana[v][s]["windows"]:
+                if "f" not in x:
+                    L.append(f"| {x['start'] / fps:.0f} ~ {x['end'] / fps:.0f} | {x['n_frames']} | 실패: {x.get('failed')} | - | {r0(x.get('image_turn_range_deg'))} | - | - | - |")
+                    continue
+                L.append(f"| {x['start'] / fps:.0f} ~ {x['end'] / fps:.0f} | {x['n_frames']} | {pe(x['f'])}{' (경계)' if x['boundary'] else ''} | {r0(x['turn_range_deg'])} | {r0(x['image_turn_range_deg'])} | "
+                         f"{r0(x['tilt_median_deg'])} | {r0(x['rms_px'], 2)} | {r0(x.get('shape_diff_pct'), 1)} |")
+            L.append("")
+        L += [f"![창별 f]({'figures/f_' + s + '.png'})", "", f"![창별 손 모양 변화]({'figures/shape_' + s + '.png'})", ""]
+    L += ["## 참고", "", "- 그림: 점 색이 진할수록 창 안 손 방향 변화가 큼, 빨간 x는 범위 끝, 점선은 영상 전체 free_template f.",
+          "- 창들은 겹치므로(5초 창, 1초 이동) 이웃한 창의 값은 독립이 아니다. 순위 상관은 경향을 보는 용도다.", ""]
+    path.write_text("\n".join(L) + "\n")
+
+
+def wd_main(argv=None):
+    ap = argparse.ArgumentParser()
+    ap.add_argument("--config", default=str(hf.PROJECT_ROOT / "configs/62_window_f.yaml"))
+    sub = ap.add_subparsers(dest="cmd")
+    ry = sub.add_parser("results-yaml")
+    ry.add_argument("--run", required=True)
+    ap.add_argument("--out", default=None)
+    a = ap.parse_args(argv)
+    text = Path(a.config).read_text()
+    own = yaml.safe_load(text)
+    r56 = yaml.safe_load(hf.resolve(own["rules_config"]).read_text())
+    r60 = yaml.safe_load(hf.resolve(own["segments_config"]).read_text())
+    base = od_load(yaml.safe_load(hf.resolve(r56["base_config"]).read_text()))
+    cfg = {**base, "videos": r56["videos"], "tracking": r56["tracking"], "segments": r60["segments"],
+           **{k: own[k] for k in ("experiment", "windows", "workers", "n_workers", "video_workers", "output") if k in own}}
+    if a.cmd == "results-yaml":
+        print(wd_results_yaml(hf.resolve(a.run), cfg))
+        return None
+    missing = [e["file"] for e in cfg["videos"] if not (Path(cfg["input_dir"]).expanduser() / e["file"]).exists()]
+    if missing:
+        raise SystemExit(f"영상이 없습니다: {missing}")
+    run_root = Path(a.out).expanduser() if a.out else hf.resolve(cfg["output"]["root"]) / utc_stamp()
+    run_root.mkdir(parents=True)
+    (run_root / "figures").mkdir()
+    log = Log(run_root / "log.txt")
+    wc = cfg["windows"]
+    log(f"62 창별 f: 영상 {len(cfg['videos'])}개, 창 {wc['length_frames']}프레임 / 이동 {wc['step_frames']}프레임 → {run_root}")
+    t0 = time.time()
+    for k in ("OMP_NUM_THREADS", "OPENBLAS_NUM_THREADS", "MKL_NUM_THREADS"):
+        os.environ[k] = "1"
+    import multiprocessing as mp
+    from concurrent.futures import ProcessPoolExecutor
+    vid = {}
+    with ProcessPoolExecutor(max_workers=int(cfg["video_workers"]), mp_context=mp.get_context("spawn")) as ex:
+        for e, (x, lines) in zip(cfg["videos"], ex.map(sg_video_job, [(e, cfg, str(run_root)) for e in cfg["videos"]])):
+            vid[e["file"]] = x
+            for s in lines:
+                log(s)
+    log(f"  영상 처리: {time.time() - t0:.0f} s")
+    ecfg = cfg["pipeline"]["estimate"]
+    j16 = cfg["joint_sets"]["main"]["ids"]
+
+    def run_jobs(jobs, what):
+        out, t1 = [], time.time()
+        with ProcessPoolExecutor(max_workers=int(cfg["workers"]), mp_context=mp.get_context("spawn")) as ex:
+            for i, o in enumerate(ex.map(hf.wd_job, jobs, chunksize=1)):
+                out.append(o)
+                if (i + 1) % 25 == 0 or i + 1 == len(jobs):
+                    log(f"  {what} 진행 {i + 1} / {len(jobs)} ({time.time() - t1:.0f} s)")
+        return out
+
+    mask = {(v, s): np.isfinite(vid[v][s]["kp"]).all(2) for v in vid for s in SG_SOURCES}
+    keys = [(e["file"], s) for e in cfg["videos"] for s in SG_SOURCES]
+    whole = run_jobs([((v, s, "all"), vid[v][s]["kp"], mask[(v, s)], np.flatnonzero(vid[v][s]["use"]), vid[v][s]["box"], tuple(vid[v]["size"]), ecfg, j16, None) for v, s in keys], "영상 전체")
+    ana = {v: {} for v in vid}
+    jobs = []
+    for (v, s), w in zip(keys, whole):
+        y = vid[v][s]
+        ana[v][s] = {"all": {k: w.get(k) for k in ("f", "boundary", "tilt_median_deg", "turn_range_deg", "image_turn_range_deg", "rms_px", "n_frames", "failed")}, "windows": []}
+        T_ref = w.get("template")
+        for st, en, fr in hf.wd_windows(len(y["use"]), y["use"], int(wc["length_frames"]), int(wc["step_frames"]), int(wc["min_frames"])):
+            jobs.append(((v, s, st, en), y["kp"], mask[(v, s)], fr, y["box"], tuple(vid[v]["size"]), ecfg, j16, T_ref))
+    log(f"  창 {len(jobs)}개")
+    for o in run_jobs(jobs, "창"):
+        v, s, st, en = o.pop("key")
+        o.pop("template", None)
+        ana[v][s]["windows"].append({"start": st, "end": en, **o})
+    for v in ana:
+        for s in SG_SOURCES:
+            ws = [x for x in ana[v][s]["windows"] if "f" in x]
+            log(f"  {v} {s}: 전체 {long_fmt(ana[v][s]['all'].get('f'), 1)} px, 창 {len(ana[v][s]['windows'])}개, 창 f " + ", ".join(f"{x['f']:.0f}" for x in ws))
+    for s in SG_SOURCES:
+        wd_figure(run_root / "figures" / f"f_{s}.png", ana, cfg, s, "f", "f (px)", True)
+        wd_figure(run_root / "figures" / f"shape_{s}.png", ana, cfg, s, "shape_diff_pct", "손 모양 변화 (%)", False)
+    wd_summary(run_root / "summary.md", ana, vid, cfg)
+    vid_out = {v: {"n_frames": x["n_frames"], "ref": x["ref"], "breaks": x["breaks"], **{s: {"n_use": x[s]["n_use"]} for s in SG_SOURCES}} for v, x in vid.items()}
+    (run_root / "results.json").write_text(json.dumps(hf.jsonable({"videos": vid_out, "analysis": ana}), ensure_ascii=False, indent=1))
+    meta = hf.provenance_build(text, a.config, {"code_62": own.get("code_62"), "rules_config": own["rules_config"], "elapsed_s": time.time() - t0})
+    (run_root / "metadata.json").write_text(json.dumps(hf.jsonable(meta), ensure_ascii=False, indent=1))
+    log(f"완료 {time.time() - t0:.0f} s → {run_root}")
+    log.close()
+    return run_root, ana
+
+
+def wd_results_yaml(run_dir: Path, cfg: dict):
+    """Values only (record experiment, no verdict, no reference f); written to output.results_yaml."""
+    r = json.loads((run_dir / "results.json").read_text())
+    m = json.loads((run_dir / "metadata.json").read_text())
+    try:
+        run_name = str(run_dir.resolve().relative_to(hf.PROJECT_ROOT))
+    except ValueError:
+        run_name = str(run_dir)
+    rd = lambda x, n=1: None if x is None or (isinstance(x, float) and not np.isfinite(x)) else round(x, n)      # noqa: E731
+    fps = float(cfg["tracking"]["fps"])
+    out = {"experiment": cfg["experiment"]["name"], "run": run_name, "code_commit": m["git"]["commit"][:7], "git_dirty_at_run": m["git"]["git_dirty"], "note": WD_NOTE,
+           "windows_rule": cfg["windows"], "videos": {}}
+    for e in cfg["videos"]:
+        v = e["file"]
+        o = out["videos"][v] = {"distance_cm": e["distance_cm"], "hand": e["hand"]}
+        for s in SG_SOURCES:
+            a = r["analysis"][v][s]
+            o[s] = {"whole_video": {"f_px": rd(a["all"].get("f")), "boundary": a["all"].get("boundary"), "tilt_median_deg": rd(a["all"].get("tilt_median_deg")),
+                                    "turn_range_deg": rd(a["all"].get("turn_range_deg"), 0), "image_turn_range_deg": rd(a["all"].get("image_turn_range_deg"), 0)},
+                    "windows": [{"start_s": rd(x["start"] / fps, 2), "end_s": rd(x["end"] / fps, 2), "n_frames": x["n_frames"], "f_px": rd(x.get("f")), "boundary": x.get("boundary"),
+                                 "turn_range_deg": rd(x.get("turn_range_deg"), 0), "image_turn_range_deg": rd(x.get("image_turn_range_deg"), 0), "tilt_median_deg": rd(x.get("tilt_median_deg")),
+                                 "rms_px": rd(x.get("rms_px"), 2), "shape_diff_pct": rd(x.get("shape_diff_pct"), 2), **({"failed": x["failed"]} if "failed" in x else {})} for x in a["windows"]]}
+    p = hf.resolve(cfg["output"]["results_yaml"])
+    p.write_text(yaml.safe_dump(hf.jsonable(out), allow_unicode=True, sort_keys=False))
+    return p
+
+
+COMMANDS = {"protocol": protocol_main, "frame-filter": ff_main, "same-session": session_main, "overlay": overlay_main, "phase-segmentation": pseg_main, "guide-revision": grev_main, "f-response": fresp_main, "error-factors": ferr_main, "long-video-check": long_main, "generalization": gen_main, "main-camera-extension": ext_main, "wide-60cm": wide_main, "jointset-sets": jset_main, "verdict-calibration": cal_main, "printed-hand": pr_main, "hand-markers": mk_main, "markers-only": mo_main, "free-template": ft_main, "free-shape3d": s3_main, "free-shape3d-hand": h3_main, "free-shape3d-27": e3_main, "free-shape3d-new": e4_main, "mmpose-hand": mm_main, "mmpose-hand-46": mm2_main, "free-shape3d-new2": e5_main, "mmpose-hand-src": mm3_main, "free-shape3d-detectors": fs_main, "free-shape3d-hand-sets": h4_main, "free-shape3d-hand-sets-42track": h4b_main, "oblique-desk": od_main, "oblique-synthetic": sy_main, "oblique-fixed-template": fx_main, "oblique-desk-videos": om_main, "pause-stabilized": ps_main, "continuous-klt": kt_main, "continuous-klt-palm": kp_main, "klt-paper-dorsum": pp_main, "paper-parallax": hp_main, "segment-template": sg_main, "turn-synthetic": tr_main, "window-f": wd_main}
 
 
 def main(argv=None):

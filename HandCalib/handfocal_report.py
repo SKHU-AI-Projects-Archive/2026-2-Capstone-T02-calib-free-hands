@@ -5912,6 +5912,65 @@ def sg_job(args) -> dict:
     return out
 
 
+def wd_windows(n: int, use: np.ndarray, win: int, step: int, min_frames: int) -> list:
+    """Experiment 62: windows [s, s + win) every step frames over 0..n (the last one ends at n); the used frames inside each; windows with fewer than min_frames used frames are left out.
+    Returns [(start, end, frames)]."""
+    starts = list(range(0, max(n - win, 0) + 1, int(step)))
+    if starts[-1] + win < n:
+        starts.append(n - win)
+    out = []
+    for s in starts:
+        e = min(s + int(win), n)
+        fr = np.flatnonzero(use[s:e]) + s
+        if len(fr) >= int(min_frames):
+            out.append((int(s), int(e), fr))
+    return out
+
+
+def wd_shape_diff(T: np.ndarray, T_ref: np.ndarray) -> float:
+    """Shape difference of two planar templates (J, 2) after the best 2-D similarity (translation, rotation, scale; no reflection): RMS of the aligned difference in % of the reference's RMS size."""
+    A = np.asarray(T, float) - np.mean(T, 0)
+    B = np.asarray(T_ref, float) - np.mean(T_ref, 0)
+    U, S, Vt = np.linalg.svd(A.T @ B)
+    D = np.diag([1.0, np.sign(np.linalg.det(U @ Vt))])
+    R = U @ D @ Vt
+    s = float(np.trace(np.diag(S) @ D) / np.sum(A ** 2))
+    d = s * A @ R - B
+    return float(100.0 * np.sqrt(np.mean(np.sum(d ** 2, 1))) / np.sqrt(np.mean(np.sum(B ** 2, 1))))
+
+
+def wd_job(args) -> dict:
+    """Experiment 62, one free_template estimate: args = (key, kp, mask, frames, box, size_wh, ecfg, ids, T_ref). The supervisor's free_template unchanged on the frames listed (od_bridge), then at its f
+    the poses of its template on its restricted frames (od_poses): median tilt, turn range, reprojection RMS (px); the image turn range of wrist -> middle MCP (f-free); with T_ref the shape difference
+    of the template to T_ref (wd_shape_diff). A failure is a result."""
+    key, kp, mask, frames, box, size_wh, ecfg, ids, T_ref = args
+    os.environ.setdefault("OMP_NUM_THREADS", "1")
+    cv2.setNumThreads(1)
+    W, H = size_wh
+    grid = f_grid(ecfg, max(W, H))
+    fr = np.asarray(frames, int)
+    out = {"key": key, "n_frames": int(len(fr))}
+    it = od_image_turn(kp, mask, fr)
+    it = it[np.isfinite(it)]
+    out["image_turn_range_deg"] = float(it.max() - it.min()) if len(it) else None
+    try:
+        pb = od_bridge(kp, mask, fr, box, size_wh, ecfg, ids)
+        A = free_template(pb, grid)
+    except Exception as e:                                            # a failure is a result, not a crash of the run
+        out["failed"] = f"{type(e).__name__}: {e}"
+        return out
+    f = float(A["f"])
+    T = np.asarray(A["template"], float)
+    q, _ = _restrict(pb, max_frames=120)
+    p = od_poses(q, f, T, list(range(len(T))), box_long(box[fr]))
+    tk = np.array([x for k, x in enumerate(p["turn_deg"]) if k in q.keep], float)
+    tk = tk[np.isfinite(tk)]
+    out.update({"f": f, "boundary": od_boundary(f, grid), "template": T, "tilt_median_deg": float(np.nanmedian([p["tilt_deg"][k] for k in q.keep])),
+                "turn_range_deg": float(tk.max() - tk.min()) if len(tk) else None, "rms_px": float(np.sqrt(np.mean(sg_rms(q, f, T) ** 2))),
+                "shape_diff_pct": None if T_ref is None else wd_shape_diff(T, T_ref)})
+    return out
+
+
 def od_fix_lines(path=None) -> list:
     """Where the six corrections to the supervisor's code sit in handfocal_estimate.py (line numbers of the corrected spellings inside section 5)."""
     p = Path(path) if path else Path(__file__).resolve().parent / "handfocal_estimate.py"
