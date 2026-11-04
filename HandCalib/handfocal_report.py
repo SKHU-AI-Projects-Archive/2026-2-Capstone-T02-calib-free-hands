@@ -5971,6 +5971,110 @@ def wd_job(args) -> dict:
     return out
 
 
+def ec_scene(turn_range_deg: float, move_pct_xy, n: int = 60, f: float = 1655.0, seed: int = 0, noise_rel: float = 0.002, slope_deg: float = 0.0, deform_rel: float = 0.0,
+             chain: bool = False, drift_px: float = 0.0, n_surface: int = 200, klt_px: float = 0.3, tilt_deg: float = 45.0, dist_cm: float = 60.0, size_wh=(1920, 1080)) -> dict:
+    """Experiment 64: 53c's scene (od2_synthetic's camera, hand, turn and translation) with error sources added.
+    slope_deg: the hand as a rigid ramp - height tan(slope) x (mean fingertip y - y) above the desk (0 at the fingertips and beyond, highest at the wrist), + towards the camera.
+    deform_rel: a slow non-rigid change of the hand in its plane - a displacement field of low-order polynomials (x, y, x^2, xy, y^2 of the hand coordinates) whose coefficients vary as two random
+      sinusoids over the sequence, scaled so its RMS over the joints and frames is deform_rel x the hand length (the same field moves the surface points).
+    chain=False: the joints are projected directly and get independent Gaussian noise of noise_rel x the hand box long side (a detector). chain=True (56's way): n_surface points spread over the hand
+      (heights by the same ramp) are projected with klt_px Gaussian noise, a homography is fitted between neighbouring frames (cv2.findHomography, least squares), chained from the middle frame
+      forwards and backwards, and the middle frame's joints (+ noise_rel noise) are moved by it. drift_px: each step's homography is followed by a random perturbation of the hand box corners
+      (one scale for the scene), set so that the median over frames of the joints' RMS shift against the drift-free chain (same random numbers) is drift_px.
+    seed sets every random number. Returns kp (n, 21, 2), mask, box, size and the achieved {deform_px_median, drift_px_median, box_long_median_px}."""
+    W, H = size_wh
+    a = np.radians(tilt_deg)
+    C = np.array([0.0, -dist_cm * np.sin(a), dist_cm * np.cos(a)])
+    z = -C / np.linalg.norm(C)
+    x = np.array([1.0, 0.0, 0.0])
+    R = np.array([x, np.cross(z, x), z])
+    ax, ay = od2_synthetic(turn_range_deg, move_pct_xy, 0.0, f=f, n=n)["translation_cm"]
+    s = np.linspace(0, 1, n)
+    turn = np.radians(turn_range_deg / 2.0) * np.sin(2 * np.pi * s)
+    ux, uy = np.sin(2 * np.pi * 1.5 * s + 0.4), np.cos(2 * np.pi * s)
+    mean = OD_HAND_CM.mean(0)
+    L = float(np.ptp(OD_HAND_CM[:, 1]))
+    y_tip = float(OD_HAND_CM[[4, 8, 12, 16, 20], 1].mean())
+    rng = lambda tag: np.random.default_rng([int(seed), tag])      # noqa: E731
+
+    def height(P):
+        return np.tan(np.radians(slope_deg)) * np.clip(y_tip - P[:, 1], 0.0, None)
+
+    surf = np.zeros((0, 2))
+    if chain:
+        from scipy.spatial import Delaunay
+        tri = Delaunay(OD_HAND_CM)
+        g = rng(1)
+        lo, hi = OD_HAND_CM.min(0), OD_HAND_CM.max(0)
+        while len(surf) < n_surface:
+            p = g.uniform(lo, hi, (4 * n_surface, 2))
+            surf = np.r_[surf, p[tri.find_simplex(p) >= 0]]
+        surf = surf[:n_surface]
+    pts = np.r_[OD_HAND_CM, surf]                                    # joints first, then the surface points (hand coordinates, cm)
+    h = height(pts)
+    u = (pts - mean) / L
+    basis = np.c_[u[:, 0], u[:, 1], u[:, 0] ** 2, u[:, 0] * u[:, 1], u[:, 1] ** 2]
+    g = rng(2)
+    coef = np.zeros((n, 5, 2))
+    for m in (1, 2):
+        coef += g.normal(size=(1, 5, 2)) * np.sin(2 * np.pi * m * s[:, None, None] + g.uniform(0, 2 * np.pi, (1, 5, 2)))
+    disp = np.einsum("pk,nkc->npc", basis, coef)
+    rms = np.sqrt(np.mean(np.sum(disp[:, :21] ** 2, 2)))
+    disp = disp * (deform_rel * L / rms) if deform_rel > 0 and rms > 0 else np.zeros_like(disp)
+    img = np.zeros((n, len(pts), 2))
+    for i in range(n):
+        c, sn = np.cos(turn[i]), np.sin(turn[i])
+        P = (pts + disp[i] - mean) @ np.array([[c, sn], [-sn, c]]) + [ax * ux[i], ay * uy[i]]
+        Xc = (np.c_[P, h] - C) @ R.T
+        img[i] = f * Xc[:, :2] / Xc[:, 2:3] + [W / 2.0, H / 2.0]
+    true_kp = img[:, :21]
+    bl = (true_kp.max(1) - true_kp.min(1)).max(1)
+    out = {"size": [W, H], "box_long_median_px": float(np.median(bl)),
+           "deform_px_median": float(np.median(np.sqrt(np.mean(np.sum((disp[:, :21] * (f / dist_cm)) ** 2, 2), 1))))}
+    if not chain:
+        kp = true_kp + rng(3).normal(size=true_kp.shape) * (noise_rel * bl)[:, None, None]
+        out["drift_px_median"] = 0.0
+    else:
+        obs = img[:, 21:] + rng(4).normal(0.0, klt_px, img[:, 21:].shape)
+        ref = n // 2
+        kp_ref = true_kp[ref] + rng(5).normal(size=(21, 2)) * noise_rel * bl[ref]
+
+        def run(scale):
+            g = rng(6)
+            Hs = {ref: np.eye(3)}
+            for order in (range(ref + 1, n), range(ref - 1, -1, -1)):
+                for k in order:
+                    j = k - 1 if k > ref else k + 1
+                    Hk, _ = cv2.findHomography(obs[j].astype(np.float64), obs[k].astype(np.float64), 0)
+                    cr = np.array([true_kp[k].min(0), [true_kp[k, :, 0].max(), true_kp[k, :, 1].min()], true_kp[k].max(0), [true_kp[k, :, 0].min(), true_kp[k, :, 1].max()]])
+                    E = cv2.getPerspectiveTransform(cr.astype(np.float32), (cr + scale * g.normal(size=(4, 2))).astype(np.float32))
+                    Hs[k] = E @ Hk @ Hs[j]
+            q = np.c_[kp_ref, np.ones(21)]
+            return np.stack([(lambda y: y[:, :2] / y[:, 2:3])(q @ Hs[k].T) for k in range(n)])
+        kp = run(0.0)
+        d = 0.0
+        if drift_px > 0:
+            k1 = run(1.0)
+            d1 = float(np.median(np.sqrt(np.mean(np.sum((k1 - kp) ** 2, 2), 1))))
+            k2 = run(float(drift_px) / d1) if d1 > 0 else kp
+            d = float(np.median(np.sqrt(np.mean(np.sum((k2 - kp) ** 2, 2), 1))))
+            kp = k2
+        out["drift_px_median"] = d
+    out.update({"kp": kp, "mask": np.ones((n, 21), bool), "box": np.c_[kp.min(1) - 20.0, kp.max(1) + 20.0]})
+    return out
+
+
+def ec_job(args) -> dict:
+    """Experiment 64, one case: args = (key, cond, turn_range_deg, move_pct_xy, n, f, seed, ecfg, ids). ec_scene with the condition's errors, then wd_job (the supervisor's free_template
+    unchanged, its tilt, turn, residual) on all frames."""
+    key, cond, turn, move, n, f, seed, ecfg, ids = args
+    s = ec_scene(turn, move, n=n, f=f, seed=seed, **cond)
+    r = wd_job((key, s["kp"], s["mask"], np.arange(n), s["box"], tuple(s["size"]), ecfg, ids, None))
+    r.pop("template", None)
+    r.update({k: s[k] for k in ("box_long_median_px", "deform_px_median", "drift_px_median")})
+    return r
+
+
 def od_fix_lines(path=None) -> list:
     """Where the six corrections to the supervisor's code sit in handfocal_estimate.py (line numbers of the corrected spellings inside section 5)."""
     p = Path(path) if path else Path(__file__).resolve().parent / "handfocal_estimate.py"

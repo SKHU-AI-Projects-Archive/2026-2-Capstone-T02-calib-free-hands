@@ -4999,5 +4999,19 @@ class WDWindows(unittest.TestCase):
         self.assertGreater(hf.wd_shape_diff(T * [1.2, 0.9], T), 5.0)
 
 
+class ECErrorSources(unittest.TestCase):
+    def test_scene_errors(self):
+        mv = [4.5, 34.6]
+        a = hf.ec_scene(120.0, mv, n=40, seed=1, noise_rel=0.0)
+        b = hf.ec_scene(120.0, mv, n=40, seed=1, noise_rel=0.0, chain=True, klt_px=0.0)
+        self.assertLess(np.abs(a["kp"] - b["kp"]).max(), 1e-3)
+        c = hf.ec_scene(120.0, mv, n=40, seed=1, chain=True, drift_px=2.0)
+        self.assertLess(abs(c["drift_px_median"] - 2.0), 0.3)
+        d = hf.ec_scene(120.0, mv, n=40, seed=1, deform_rel=0.02)
+        self.assertGreater(d["deform_px_median"], 1.0)
+        e = hf.ec_scene(120.0, mv, n=40, seed=1, noise_rel=0.0, slope_deg=11.0)
+        self.assertGreater(np.abs(e["kp"] - a["kp"]).max(), 1.0)
+
+
 if __name__ == "__main__":
     unittest.main()
