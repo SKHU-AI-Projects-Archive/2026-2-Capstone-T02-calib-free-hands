@@ -1,0 +1,24 @@
+# 69: a teammate's hand, taken with another camera (user 2026-11-04: "7351-복사본, 7352-복사본 영상이 다른 팀원의 손으로 촬영한 영상이고, 해당 영상에 대해서도 경사별 결과를 출력해주고,
+# 팀원 손의 경사도 측정해줘."; "이 영상은 카메라가 바뀌어서 기준 f를 1672px로 사용해줘"; "촬영거리는 약 60cm 야"; "손 길이는 약 17cm 손목까지의 높이는 약 35mm야."), record only, no verdict.
+# 67's estimator (ramp_fixed, hf.dk_job) on 56's points (sg_video_job unchanged), j16 and j21, main estimates only (as 67/68), at 68's ramps and at the ramp from the ruler
+# (atan(wrist height / hand length), 0.1 deg).
+# The paper (59's way) was tried first for the ramp and dropped before any f of these videos was looked at: a dry run kept only 11 and 0 paper frames within 58's 1 px side rule (54's videos:
+# 0-29 except IMG_7350 354 and IMG_7352 88), so the user measured the hand with a ruler.
+# Choices made by me before the run: the teammate's hand is a right hand (seen on a frame). Reference f (1672 px, user-provided for this camera) only in summary.md. Fixed before the run.
+experiment:
+  name: 69_teammate_hands
+  seed: 42
+estimator_config: configs/67_desk_motion.yaml
+ramps_config: configs/68_ramp_sensitivity.yaml
+code_69: {branch: exp/69-teammate-hands, base_commit: 9805319, commit: b0a9403, modules: [HandCalib/run.py]}
+ref_f: {value: 1672.0, source: "사용자 제공, 팀원 영상의 카메라"}
+measured: {wrist_height_mm: 35, hand_length_mm: 170}
+videos:
+  - {file: "IMG_7351 - 복사본.MOV", distance_cm: 60, hand: right}
+  - {file: "IMG_7352 - 복사본.MOV", distance_cm: 60, hand: right}
+workers: 56
+n_workers: 4
+video_workers: 2
+output:
+  root: runs/69_teammate_hands
+  results_yaml: results/69_teammate_hands.yaml
