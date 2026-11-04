@@ -1,0 +1,17 @@
+# 69b: post-hoc diagnostic after 69 (user 2026-11-04: "MCP는 3cm이고, 손등 쪽 손목 피부 윗면은 4cm였어." then "1번 진행해줘." - my option 1: the teammate's videos at the ramp of the
+# finger part alone), no verdict, not a validation: chosen after 69's results were seen. j16 holds only finger joints (MCP, PIP, DIP, tips), so its ramp should be the finger part's
+# (fingertip 0 -> MCP 30 mm), not the whole hand's (11.6 deg). The fingertip -> MCP distance was not measured: 95 mm assumed by me (about 56 % of the 170 mm hand length).
+# 69's points, estimator, joint sets and reference f unchanged (teammate_config). Reference f only in summary.md.
+experiment:
+  name: 69b_finger_ramp
+  seed: 42
+teammate_config: configs/69_teammate_hands.yaml
+code_69b: {branch: exp/69b-finger-ramp, base_commit: ac2827c, commit: 2d48ec1, modules: [HandCalib/run.py]}
+compare_69: runs/69_teammate_hands/20261104T084401Z
+finger: {mcp_height_mm: 30, tip_to_mcp_mm: 95, tip_to_mcp_source: "가정(손 길이 170 mm의 약 56 %), 측정 안 함"}
+workers: 56
+n_workers: 4
+video_workers: 2
+output:
+  root: runs/69b_finger_ramp
+  results_yaml: results/69b_finger_ramp.yaml
