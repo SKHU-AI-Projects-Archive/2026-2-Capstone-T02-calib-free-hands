@@ -755,6 +755,26 @@ def test_dashboard_checkerboard_default_metric_export_reference_and_detach_sync(
     viewer.close()
 
 
+def test_gt_presentation_wording_and_export_title_keep_internal_schema(tmp_path, qapp, monkeypatch):
+    import calibfreehands.visualization.comparison as comparison
+    viewer = comparison.ComparisonViewer(_session(tmp_path, 2))
+    assert viewer.metric_status.toolTip() == "Camera-space differences from the selected GT."
+    assert "these are not ground-truth errors" not in viewer.metric_status.toolTip()
+    assert any(action.menu() is not None and action.menu().title() == "GT Differences"
+               for action in viewer.metric_menu.actions())
+    assert all(action.menu() is None or action.menu().title() != "Reference Accuracy"
+               for action in viewer.metric_menu.actions())
+
+    dialog_calls = []
+    monkeypatch.setattr(comparison.QFileDialog, "getSaveFileName",
+                        lambda *args: (dialog_calls.append(args) or ("", "")))
+    viewer._export_json()
+    assert dialog_calls[0][1] == "Export GT differences"
+    assert "reference_result_id" in comparison.METRIC_FIELDS
+    assert "candidate_result_id" in comparison.METRIC_FIELDS
+    viewer.close()
+
+
 def test_dashboard_missing_hand_is_na_and_fallback_is_visible(tmp_path, qapp):
     from calibfreehands.visualization.comparison import ComparisonViewer
     path = _session(tmp_path, 2)
@@ -1095,14 +1115,19 @@ def test_pin_button_icon_is_palette_aware_and_view_precedes_results(tmp_path, qa
         assert off.pixelColor(1, 14).rgb() != off.pixelColor(4, 14).rgb()
         assert off.pixelColor(14, 8).rgb() == off_ink.rgb()
         pin_ink = on.pixelColor(13, 8)
-        assert pin_ink.rgb() == QColor("#ffffff").rgb()
+        assert pin_ink.rgb() == QColor("#111111").rgb()
         linear_channels = [
             channel / 12.92 if channel <= 0.04045 else ((channel + 0.055) / 1.055) ** 2.4
             for channel in (active_surface.redF(), active_surface.greenF(), active_surface.blueF())
         ]
         luminance = 0.2126 * linear_channels[0] + 0.7152 * linear_channels[1] + 0.0722 * linear_channels[2]
-        white_contrast = 1.05 / (luminance + 0.05)
-        assert white_contrast < 4.5
+        dark_channels = [
+            channel / 12.92 if channel <= 0.04045 else ((channel + 0.055) / 1.055) ** 2.4
+            for channel in (pin_ink.redF(), pin_ink.greenF(), pin_ink.blueF())
+        ]
+        dark_ink_luminance = 0.2126 * dark_channels[0] + 0.7152 * dark_channels[1] + 0.0722 * dark_channels[2]
+        dark_contrast = (luminance + 0.05) / (dark_ink_luminance + 0.05)
+        assert dark_contrast >= 4.5
     viewer.pin_controls_button.setFocus()
     QTest.keyClick(viewer.pin_controls_button, Qt.Key.Key_Space)
     assert not viewer.pin_controls_button.isChecked()

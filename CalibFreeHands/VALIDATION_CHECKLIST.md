@@ -338,6 +338,17 @@ All entries below are pending implementation and validation. No acceptance item 
 - [ ] Fresh AnyCalib/WiLoR inference and first-user reruns remain pending.
 
 
+## Phase 1.1 GT Terminology and Pin Contrast (2026-11-05)
+
+- [x] The user-facing metric tooltip says `Camera-space differences from the selected GT.` without a contradictory ground-truth disclaimer.
+- [x] The metric menu presents the internal `Reference Accuracy` category as `GT Differences`; metric registry IDs/categories and export field names remain unchanged.
+- [x] The export dialog title is `Export GT differences`; regression coverage verifies the dialog title and the existing reference/candidate result ID fields.
+- [x] Pin stays 26-by-26 px with existing OFF presentation and `#33FF33` ON background/border; the active pin silhouette is `#111111` in both palettes. Offscreen sampling verifies at least 4.5:1 contrast.
+- [x] Native Windows Viewer smoke with saved `.cfh` bundles visually confirmed GT-first HUD, `Differences` / `GT Differences` wording, Pin OFF, and the dark Pin icon against the green active background.
+- [x] Targeted regression selection: 3 passed; full pytest: 250 passed. App import, compileall, `pip check`, and `git diff --check` passed.
+- [ ] Phase 2 grid/camera updates and fresh AnyCalib/WiLoR inference remain deferred.
+
+
 ## Final Toolbar Simplification (2026-11-04)
 
 - [x] Replace visible Overlay/Split labels with a stable `Layout` label; switch remains OFF=Overlay and ON=Split, with current mode in its tooltip and accessible description.

@@ -126,11 +126,11 @@ class _PinButton(QAbstractButton):
         if dark:
             surface = QColor("#33FF33" if self.isChecked() else "#34383d")
             border = QColor("#249924" if self.isChecked() else "#5a6068")
-            ink = QColor("#ffffff" if self.isChecked() else "#aab0b7")
+            ink = QColor("#111111" if self.isChecked() else "#aab0b7")
         else:
             surface = QColor("#33FF33" if self.isChecked() else "#f0f1f2")
             border = QColor("#249924" if self.isChecked() else "#c4c8ce")
-            ink = QColor("#ffffff" if self.isChecked() else "#666c74")
+            ink = QColor("#111111" if self.isChecked() else "#666c74")
         if self.underMouse():
             surface = surface.darker(108) if self.isChecked() else surface.lighter(108)
         if self.isDown():
@@ -737,7 +737,7 @@ class ComparisonViewer(QWidget):
         self.slider.valueChanged.connect(self._set_frame)
         self.status = QLabel()
         self.metric_status = QLabel()
-        self.metric_status.setToolTip("Camera-space differences from selected GT; these are not ground-truth errors.")
+        self.metric_status.setToolTip("Camera-space differences from the selected GT.")
 
         self.mode_selector = QWidget()
         mode_layout = QHBoxLayout(self.mode_selector)
@@ -1297,7 +1297,8 @@ class ComparisonViewer(QWidget):
                 continue
             category = categories.get(definition.category)
             if category is None:
-                category = self.metric_menu.addMenu(definition.category)
+                category_label = "GT Differences" if definition.category == "Reference Accuracy" else definition.category
+                category = self.metric_menu.addMenu(category_label)
                 categories[definition.category] = category
             check = QCheckBox(definition.name)
             check.setChecked(definition.metric_id in self.selected_metric_ids)
@@ -1841,7 +1842,7 @@ class ComparisonViewer(QWidget):
         else:
             source_name = self.bundle_results[0].metadata.get("source_media_name", "comparison")
             initial = Path(self.bundle_results[0].metadata["source_media_path"]).with_name(f"{Path(source_name).stem}-metrics.{kind}")
-        path, _ = QFileDialog.getSaveFileName(self, "Export reference metrics", str(initial), f"{kind.upper()} (*.{kind})")
+        path, _ = QFileDialog.getSaveFileName(self, "Export GT differences", str(initial), f"{kind.upper()} (*.{kind})")
         if not path: return
         try:
             (export_metrics_csv if kind == "csv" else export_metrics_json)(
