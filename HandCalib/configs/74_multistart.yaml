@@ -1,0 +1,25 @@
+# 74: 67's desk model with several starts (user 2026-11-05: "이전에 7355 영상 오차 문제에서 제안했던 실험을 진행해 주고, 경사가 중요해진 것 같은데, 경사를 계산할 만한 방법이 있을까?"),
+# record only, no verdict.
+# 73 showed stuck fits: 7355-복사본 j16 at 9 / 11 deg and at its WiLoR ramp RMS ~27 px (neighbouring ramps ~3 px), f +33%; its coarse f profile had fixed-f solves at cost 500-900 against ~10.
+# hf.dk_job_ms: the coarse profile as before, then every grid f solved again from its neighbour's solution (up, then down; kept when lower), then all free from the 3 lowest profile points and
+# from free_template's f; the lowest cost kept (all starts recorded).
+# Re-done: 11 deg (67, old phone; 73, new phone), the WiLoR dorsal ramp (71 / 73 values, read from their results yamls), the fixed-ramp sweep, and the ramp estimated with f (ramp_free, the
+# video-only way to get the ramp; started at several ramps, lowest cost kept) - on the old phone's 12 videos (54's) and the new phone's 4 (73's), 56's tracked points only, j16 and j21.
+# Choices made by me before the run: suspect fit = RMS > 2x the median RMS over the video's fixed ramps; the ramp where f meets the reference is interpolated without suspect fits.
+# A one-video dry run (7355-복사본 j16, 9 and 11 deg) checked the fix before this config was fixed. Reference f only in summary.md.
+experiment:
+  name: 74_multistart
+  seed: 42
+rules_config: configs/56_continuous_klt.yaml
+segments_config: configs/60_segment_template.yaml
+estimator_config: configs/67_desk_motion.yaml
+new_phone_config: configs/73_new_phone_hands.yaml
+previous: {ramp11_old: results/67_desk_motion.yaml, wilor_old: results/71_wilor_ramp.yaml, new: results/73_new_phone_hands.yaml}
+code_74: {branch: exp/74-multistart, base_commit: ec5c285, commit: 8080f35, modules: [HandCalib/handfocal_report.py, HandCalib/run.py]}
+ramps_deg: [7, 9, 11, 13, 15, 17.5, 20, 22.5]
+free_starts_deg: [5, 12, 19]
+workers: 64
+video_workers: 8
+output:
+  root: runs/74_multistart
+  results_yaml: results/74_multistart.yaml
