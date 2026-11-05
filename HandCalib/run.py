@@ -13705,7 +13705,238 @@ def ms_results_yaml(run_dir: Path, cfg: dict, own: dict):
     return p
 
 
-COMMANDS = {"protocol": protocol_main, "frame-filter": ff_main, "same-session": session_main, "overlay": overlay_main, "phase-segmentation": pseg_main, "guide-revision": grev_main, "f-response": fresp_main, "error-factors": ferr_main, "long-video-check": long_main, "generalization": gen_main, "main-camera-extension": ext_main, "wide-60cm": wide_main, "jointset-sets": jset_main, "verdict-calibration": cal_main, "printed-hand": pr_main, "hand-markers": mk_main, "markers-only": mo_main, "free-template": ft_main, "free-shape3d": s3_main, "free-shape3d-hand": h3_main, "free-shape3d-27": e3_main, "free-shape3d-new": e4_main, "mmpose-hand": mm_main, "mmpose-hand-46": mm2_main, "free-shape3d-new2": e5_main, "mmpose-hand-src": mm3_main, "free-shape3d-detectors": fs_main, "free-shape3d-hand-sets": h4_main, "free-shape3d-hand-sets-42track": h4b_main, "oblique-desk": od_main, "oblique-synthetic": sy_main, "oblique-fixed-template": fx_main, "oblique-desk-videos": om_main, "pause-stabilized": ps_main, "continuous-klt": kt_main, "continuous-klt-palm": kp_main, "klt-paper-dorsum": pp_main, "paper-parallax": hp_main, "segment-template": sg_main, "turn-synthetic": tr_main, "window-f": wd_main, "anycalib-videos": ac_main, "error-sources": ec_main, "hand-deformation": dm_main, "joint-combos": fc_main, "points-video": pv_main, "desk-motion": dk_main, "ramp-sensitivity": rs_main, "teammate-hands": tm_main, "finger-ramp": fr_main, "contact-points": ct_main, "wilor-ramp": wl_main, "ramp-identifiability": id_main, "new-phone-hands": nc_main, "multistart": ms_main}
+def tl_templates(cfg: dict, vid: dict, log) -> dict:
+    """free_template once per (video, joint set) on 56's tracked points (hf.tl_template_job); {key: A or failure}."""
+    import multiprocessing as mp
+    from concurrent.futures import ProcessPoolExecutor
+    ecfg = cfg["pipeline"]["estimate"]
+    jobs, keys = [], []
+    for e in cfg["videos"]:
+        y, x = vid[e["file"]]["tracked"], vid[e["file"]]
+        for js, ids in cfg["joint_sets"].items():
+            jobs.append((y["kp"], np.isfinite(y["kp"]).all(2), np.flatnonzero(y["use"]), y["box"], tuple(x["size"]), ecfg, ids))
+            keys.append(f"{e['file']}|{js}")
+    with ProcessPoolExecutor(max_workers=int(cfg["workers"]), mp_context=mp.get_context("spawn")) as ex:
+        out = dict(zip(keys, ex.map(hf.tl_template_job, jobs, chunksize=1)))
+    log(f"  free_template {len(jobs)}건")
+    return out
+
+
+def tl_args(cfg: dict, vid: dict, e: dict, js: str, A: dict) -> tuple:
+    y, x = vid[e["file"]]["tracked"], vid[e["file"]]
+    return (y["kp"], np.isfinite(y["kp"]).all(2), np.flatnonzero(y["use"]), y["box"], tuple(x["size"]), cfg["pipeline"]["estimate"], cfg["joint_sets"][js], A)
+
+
+def tl_ft_entry(o: dict, ecfg: dict, size) -> dict:
+    """dk_job's free_template entry from a tl_template_job result; cost = inf so that it is never taken for an estimate of the ramp (74's summary stopped there)."""
+    if "A" not in o:
+        return {"failed": o.get("failed")}
+    grid = hf.f_grid(ecfg, max(*size))
+    A = o["A"]
+    return {"f": float(A["f"]), "boundary": hf.od_boundary(float(A["f"]), grid), "rms_px": float((A.get("ba") or {}).get("rms_px", np.nan)), "cost": float("inf")}
+
+
+def ms2_for_summary(res: dict) -> dict:
+    """A copy for ms_summary: free_template's entry with cost = inf and a NaN pitch, so that ms_summary's pick of the lowest-cost free_* entry never takes it (or, with every ramp_free
+    start failed, prints NaN instead of stopping)."""
+    return {k: {m: (dict(x, cost=float("inf"), pitch_deg=float("nan")) if m == "free_template" and x and "f" in x else x) for m, x in d.items()} for k, d in res.items()}
+
+
+def ms2_main(argv=None):
+    """74 again with 74's config: the same estimates (hf.dk_estimate_ms), free_template once per video and joint set, results saved before the summary (74's run stopped in ms_summary)."""
+    ap = argparse.ArgumentParser()
+    ap.add_argument("--config", default=str(hf.PROJECT_ROOT / "configs/74b_multistart_rerun.yaml"))
+    sub = ap.add_subparsers(dest="cmd")
+    ry = sub.add_parser("results-yaml")
+    ry.add_argument("--run", required=True)
+    ap.add_argument("--out", default=None)
+    ap.add_argument("--videos", type=int, default=None, help="dry run: last N videos, j16, two ramps")
+    a = ap.parse_args(argv)
+    text = Path(a.config).read_text()
+    own = yaml.safe_load(text)
+    o74 = yaml.safe_load(hf.resolve(own["settings_config"]).read_text())
+    r56 = yaml.safe_load(hf.resolve(o74["rules_config"]).read_text())
+    r60 = yaml.safe_load(hf.resolve(o74["segments_config"]).read_text())
+    r67 = yaml.safe_load(hf.resolve(o74["estimator_config"]).read_text())
+    base = od_load(yaml.safe_load(hf.resolve(r56["base_config"]).read_text()))
+    cfg = {**base, "videos": ms_videos(o74), "tracking": r56["tracking"], "segments": r60["segments"], "joint_sets": r67["joint_sets"],
+           **{k: o74[k] for k in ("ramps_deg", "free_starts_deg")}, **{k: own[k] for k in ("experiment", "workers", "video_workers", "output")}}
+    if a.cmd == "results-yaml":
+        print(ms_results_yaml(hf.resolve(a.run), cfg, o74))
+        return None
+    ramps = [float(r) for r in cfg["ramps_deg"]]
+    if a.videos:
+        cfg["videos"] = cfg["videos"][-a.videos:]
+        cfg["joint_sets"] = {"j16": cfg["joint_sets"]["j16"]}
+        ramps = [9.0, 11.0]
+    run_root, log = x70_head(None, a.out, cfg, f"74b 시작점 여러 개 (다시): 영상 {len(cfg['videos'])}개, 경사 {ramps}, 함께 추정 시작 {cfg['free_starts_deg']}")
+    t0 = time.time()
+    vid = x70_points(cfg, run_root, log)
+    log(f"  영상 처리: {time.time() - t0:.0f} s")
+    fts = tl_templates(cfg, vid, log)
+    log(f"  free_template: {time.time() - t0:.0f} s")
+    jobs, keys, res = [], [], {}
+    for e in cfg["videos"]:
+        for js in cfg["joint_sets"]:
+            k = f"{e['file']}|{js}"
+            res[k] = {"free_template": tl_ft_entry(fts[k], cfg["pipeline"]["estimate"], vid[e["file"]]["size"])}
+            if "A" not in fts[k]:
+                continue
+            todo = [(f"ramp_{r:g}", "ramp_fixed", r) for r in ramps]
+            if not a.videos:
+                todo += [("wilor", "ramp_fixed", ms_previous(o74, e, js)["wilor_ramp"])] + [(f"free_{r:g}", "ramp_free", r) for r in cfg["free_starts_deg"]]
+            for mk, mode, r in todo:
+                jobs.append(tl_args(cfg, vid, e, js, fts[k]["A"]) + (mode, float(r)))
+                keys.append((k, mk))
+    log(f"  추정 {len(jobs)}건")
+    import multiprocessing as mp
+    from concurrent.futures import ProcessPoolExecutor
+    with ProcessPoolExecutor(max_workers=int(cfg["workers"]), mp_context=mp.get_context("spawn")) as ex:
+        for i, ((k, mk), o) in enumerate(zip(keys, ex.map(hf.ms2_job, jobs, chunksize=1))):
+            res[k][mk] = o
+            if (i + 1) % 32 == 0 or i + 1 == len(jobs):
+                log(f"  진행 {i + 1} / {len(jobs)} ({time.time() - t0:.0f} s)")
+    (run_root / "results.json").write_text(json.dumps(hf.jsonable({"real": res}), ensure_ascii=False, indent=1))
+    if not a.videos:
+        try:
+            (run_root / "summary.md").write_text(ms_summary(ms2_for_summary(res), cfg, o74))
+        except Exception as ex_:                                      # the results are already saved; a summary failure is logged
+            log(f"  summary 실패: {type(ex_).__name__}: {ex_}")
+    x70_finish(run_root, {"real": res}, text, a.config, "code_74b", own, t0, log)
+    return run_root, res
+
+
+TL_NOTE = ("카메라 기울기(책상 법선과 광축 사이 각)를 휴대폰 수평계로 맞춘 45°로 고정하고 f와 경사를 함께 추정한 기록이다(판정 없음). 실제 사용에서는 이 각을 휴대폰 센서가 자동으로 기록한다고 본다. "
+           "추정기는 실험 74의 시작점 여러 개 방식(hf.dk_estimate_tilt = dk_estimate_ms에 기울기 고정), 경사 함께 추정은 시작 경사 여러 개 중 비용 최소. 기울기 ±5°(40°, 50°)로 민감도도 본다. 점은 실험 56 추적점.")
+
+
+def tl_main(argv=None):
+    ap = argparse.ArgumentParser()
+    ap.add_argument("--config", default=str(hf.PROJECT_ROOT / "configs/75_known_tilt.yaml"))
+    sub = ap.add_subparsers(dest="cmd")
+    ry = sub.add_parser("results-yaml")
+    ry.add_argument("--run", required=True)
+    ap.add_argument("--out", default=None)
+    ap.add_argument("--videos", type=int, default=None, help="dry run: last N videos, j16, the main tilt and one start")
+    a = ap.parse_args(argv)
+    text = Path(a.config).read_text()
+    own = yaml.safe_load(text)
+    o74 = yaml.safe_load(hf.resolve(own["settings_config"]).read_text())
+    r56 = yaml.safe_load(hf.resolve(o74["rules_config"]).read_text())
+    r60 = yaml.safe_load(hf.resolve(o74["segments_config"]).read_text())
+    r67 = yaml.safe_load(hf.resolve(o74["estimator_config"]).read_text())
+    base = od_load(yaml.safe_load(hf.resolve(r56["base_config"]).read_text()))
+    cfg = {**base, "videos": ms_videos(o74), "tracking": r56["tracking"], "segments": r60["segments"], "joint_sets": r67["joint_sets"],
+           **{k: own[k] for k in ("experiment", "workers", "video_workers", "output", "tilt_deg", "sensitivity", "free_starts_deg")}}
+    if a.cmd == "results-yaml":
+        print(tl_results_yaml(hf.resolve(a.run), cfg))
+        return None
+    plan = [(js, float(cfg["tilt_deg"]), float(s)) for js in cfg["joint_sets"] for s in cfg["free_starts_deg"]]
+    plan += [(cfg["sensitivity"]["joint_set"], float(t), float(s)) for t in cfg["sensitivity"]["tilts_deg"] for s in cfg["sensitivity"]["free_starts_deg"]]
+    if a.videos:
+        cfg["videos"] = cfg["videos"][-a.videos:]
+        cfg["joint_sets"] = {"j16": cfg["joint_sets"]["j16"]}
+        plan = [("j16", float(cfg["tilt_deg"]), float(cfg["free_starts_deg"][0]))]
+    run_root, log = x70_head(None, a.out, cfg, f"75 카메라 기울기 고정: 영상 {len(cfg['videos'])}개, 기울기 {cfg['tilt_deg']}° (민감도 {cfg['sensitivity']['tilts_deg']})")
+    t0 = time.time()
+    vid = x70_points(cfg, run_root, log)
+    log(f"  영상 처리: {time.time() - t0:.0f} s")
+    fts = tl_templates(cfg, vid, log)
+    log(f"  free_template: {time.time() - t0:.0f} s")
+    jobs, keys, res = [], [], {}
+    for e in cfg["videos"]:
+        for js in cfg["joint_sets"]:
+            k = f"{e['file']}|{js}"
+            res[k] = {"free_template": tl_ft_entry(fts[k], cfg["pipeline"]["estimate"], vid[e["file"]]["size"])}
+        for js, t, s in plan:
+            k = f"{e['file']}|{js}"
+            if "A" not in fts[k]:
+                continue
+            jobs.append(tl_args(cfg, vid, e, js, fts[k]["A"]) + ("ramp_free", s, t))
+            keys.append((k, f"tilt_{t:g}|start_{s:g}"))
+    log(f"  추정 {len(jobs)}건")
+    import multiprocessing as mp
+    from concurrent.futures import ProcessPoolExecutor
+    with ProcessPoolExecutor(max_workers=int(cfg["workers"]), mp_context=mp.get_context("spawn")) as ex:
+        for i, ((k, mk), o) in enumerate(zip(keys, ex.map(hf.tl_job, jobs, chunksize=1))):
+            res[k][mk] = o
+            if (i + 1) % 32 == 0 or i + 1 == len(jobs):
+                log(f"  진행 {i + 1} / {len(jobs)} ({time.time() - t0:.0f} s)")
+    (run_root / "results.json").write_text(json.dumps(hf.jsonable({"real": res}), ensure_ascii=False, indent=1))
+    if not a.videos:
+        try:
+            (run_root / "summary.md").write_text(tl_summary(res, cfg))
+        except Exception as ex_:                                      # the results are already saved; a summary failure is logged
+            log(f"  summary 실패: {type(ex_).__name__}: {ex_}")
+    x70_finish(run_root, {"real": res}, text, a.config, "code_75", own, t0, log)
+    return run_root, res
+
+
+def tl_best(d: dict, tilt: float):
+    """The lowest-cost ramp_free result over the starts at this tilt (None if none)."""
+    xs = [x for k, x in d.items() if k.startswith(f"tilt_{tilt:g}|") and "f" in (x or {}) and np.isfinite(x.get("cost", np.nan))]
+    return min(xs, key=lambda x: x["cost"]) if xs else None
+
+
+def tl_summary(res: dict, cfg: dict) -> str:
+    ref = lambda e: x70_ref(e, cfg)      # noqa: E731
+    err = lambda x, e: None if not x or "f" not in x else 100 * (x["f"] / ref(e) - 1)      # noqa: E731
+    fe = lambda x, e: "-" if err(x, e) is None else f"{err(x, e):+.1f}%" + ("*" if x.get("boundary") else "")      # noqa: E731
+    t0 = float(cfg["tilt_deg"])
+    tilts = [t0] + [float(t) for t in cfg["sensitivity"]["tilts_deg"]]
+    L = ["# 실험 75 summary", "", f"**{TL_NOTE}**", "", f"- 기준 f: 기존 핸드폰 {float(cfg['ref_f']['value']):g} px, 새 핸드폰 " +
+         ", ".join(sorted({f'{ref(e):g} px' for e in cfg["videos"] if e["person"] != "old"})) + ". 기준 f는 이 파일에만 적는다.", "- * = f 탐색 범위 끝.", "",
+         f"## 1. 기울기 {t0:g}° 고정, f와 경사 함께 추정: 묶음별 (추적점)", "",
+         "| 관절 | 방식 | 묶음 | ±10% 안 | ±25% 안 | 오차 절댓값 중앙값 | 중앙값(부호) | 최소 ~ 최대 | 범위 끝 |", "|---|---|---|---|---|---|---|---|---|"]
+    for js in cfg["joint_sets"]:
+        for nm, get in (("free_template (교수님)", lambda d: d.get("free_template")), (f"기울기 {t0:g}° 고정", lambda d: tl_best(d, t0))):
+            for gk in ("old", "self", "teammate"):
+                vs = [e for e in cfg["videos"] if e["person"] == gk]
+                xs = [(get(res.get(f"{e['file']}|{js}") or {}) or {}, e) for e in vs]
+                L.append(f"| {js} | {nm} | {MS_GROUP[gk]} {len(vs)} | {x70_stats([err(x, e) for x, e in xs])} | {sum(bool(x.get('boundary')) for x, _ in xs)} |")
+    sj = cfg["sensitivity"]["joint_set"]
+    L += ["", f"## 2. 영상별 ({sj}, 추적점): 기울기별 함께 추정한 경사와 f 오차", "",
+          "| 영상 | 묶음 | 손 | free_template | " + " | ".join(f"기울기 {t:g}°: 경사, f, RMS" for t in tilts) + " |", "|---|---|---|---|" + "---|" * len(tilts)]
+    for e in cfg["videos"]:
+        d = res.get(f"{e['file']}|{sj}") or {}
+        cells = []
+        for t in tilts:
+            b = tl_best(d, t)
+            cells.append("-" if b is None else f"{b['pitch_deg']:.1f}°, {fe(b, e)}, {b['rms_px']:.2f}")
+        L.append(f"| {e['file']} | {MS_GROUP[e['person']]} | {e['hand']} | {fe(d.get('free_template'), e)} | " + " | ".join(cells) + " |")
+    L += ["", f"## 3. 시작 경사별 (기울기 {t0:g}°, {sj})", "", "| 영상 | 묶음 | " + " | ".join(f"시작 {s:g}°: 경사, f, 비용" for s in cfg["free_starts_deg"]) + " |",
+          "|---|---|" + "---|" * len(cfg["free_starts_deg"])]
+    for e in cfg["videos"]:
+        d = res.get(f"{e['file']}|{sj}") or {}
+        L.append(f"| {e['file']} | {MS_GROUP[e['person']]} | " + " | ".join(
+            "-" if "f" not in (d.get(f"tilt_{t0:g}|start_{s:g}") or {}) else
+            (lambda x: f"{x['pitch_deg']:.1f}°, {fe(x, e)}, {x['cost']:.1f}")(d[f"tilt_{t0:g}|start_{s:g}"]) for s in cfg["free_starts_deg"]) + " |")
+    L += ["", "## 한계", "", "- 수평계 45°는 촬영 때 휴대폰을 놓으며 맞춘 값이다. 촬영 중 움직였거나 앱이 다른 축을 쟀으면 틀린다(민감도 표 참고).",
+          "- 기울기는 책상 법선과 광축 사이 각만 고정한다(카메라의 좌우 기울기와 책상 위 방향은 자유).", ""]
+    return "\n".join(L) + "\n"
+
+
+def tl_results_yaml(run_dir: Path, cfg: dict):
+    """Values only (no reference f or errors)."""
+    r = json.loads((run_dir / "results.json").read_text())["real"]
+    m = json.loads((run_dir / "metadata.json").read_text())
+    rd = lambda x, n=1: None if x is None or (isinstance(x, float) and not np.isfinite(x)) else round(x, n)      # noqa: E731
+    out = {"experiment": cfg["experiment"]["name"], "run": str(run_dir.resolve().relative_to(hf.PROJECT_ROOT)), "code_commit": m["git"]["commit"][:7],
+           "git_dirty_at_run": m["git"]["git_dirty"], "note": TL_NOTE, "tilt_deg": cfg["tilt_deg"], "sensitivity": cfg["sensitivity"], "free_starts_deg": cfg["free_starts_deg"], "videos": {}}
+    for e in cfg["videos"]:
+        o = out["videos"][e["file"]] = {"group": e["person"], "distance_cm": e["distance_cm"], "hand": e["hand"], "tracked": {}}
+        for js in cfg["joint_sets"]:
+            d = r.get(f"{e['file']}|{js}") or {}
+            o["tracked"][js] = {k: (None if not x else {"failed": x.get("failed")} if "f" not in x else
+                                    {kk: rd(x.get(kk), 2 if kk in ("rms_px", "pitch_deg", "roll_deg") else 1) for kk in ("f", "rms_px", "cost", "pitch_deg", "roll_deg", "desk_tilt_deg", "boundary", "start")
+                                     if kk in x and not (kk == "cost" and not np.isfinite(x[kk]))})
+                                for k, x in d.items()}
+    p = hf.resolve(cfg["output"]["results_yaml"])
+    p.write_text(yaml.safe_dump(hf.jsonable(out), allow_unicode=True, sort_keys=False))
+    return p
+
+
+COMMANDS = {"protocol": protocol_main, "frame-filter": ff_main, "same-session": session_main, "overlay": overlay_main, "phase-segmentation": pseg_main, "guide-revision": grev_main, "f-response": fresp_main, "error-factors": ferr_main, "long-video-check": long_main, "generalization": gen_main, "main-camera-extension": ext_main, "wide-60cm": wide_main, "jointset-sets": jset_main, "verdict-calibration": cal_main, "printed-hand": pr_main, "hand-markers": mk_main, "markers-only": mo_main, "free-template": ft_main, "free-shape3d": s3_main, "free-shape3d-hand": h3_main, "free-shape3d-27": e3_main, "free-shape3d-new": e4_main, "mmpose-hand": mm_main, "mmpose-hand-46": mm2_main, "free-shape3d-new2": e5_main, "mmpose-hand-src": mm3_main, "free-shape3d-detectors": fs_main, "free-shape3d-hand-sets": h4_main, "free-shape3d-hand-sets-42track": h4b_main, "oblique-desk": od_main, "oblique-synthetic": sy_main, "oblique-fixed-template": fx_main, "oblique-desk-videos": om_main, "pause-stabilized": ps_main, "continuous-klt": kt_main, "continuous-klt-palm": kp_main, "klt-paper-dorsum": pp_main, "paper-parallax": hp_main, "segment-template": sg_main, "turn-synthetic": tr_main, "window-f": wd_main, "anycalib-videos": ac_main, "error-sources": ec_main, "hand-deformation": dm_main, "joint-combos": fc_main, "points-video": pv_main, "desk-motion": dk_main, "ramp-sensitivity": rs_main, "teammate-hands": tm_main, "finger-ramp": fr_main, "contact-points": ct_main, "wilor-ramp": wl_main, "ramp-identifiability": id_main, "new-phone-hands": nc_main, "multistart": ms_main, "multistart-rerun": ms2_main, "known-tilt": tl_main}
 
 
 def main(argv=None):

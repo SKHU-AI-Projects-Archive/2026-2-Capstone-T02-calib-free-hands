@@ -6683,6 +6683,206 @@ def dk_job_ms(args) -> dict:
     return out
 
 
+# ----------------------------------------------------------------------------------------------------
+# 75 (user 2026-11-05: the camera was set to 45 deg with the phone's level app for every video, old phone and new; "실제 사용할 때 각도를 항상 재면서 사용하기에는 불편"): the desk model
+# with the camera tilt known (in use it would come from the phone's own sensor), f and the ramp estimated together. dk_solve / dk_estimate_ms unchanged; new functions.
+# ----------------------------------------------------------------------------------------------------
+def dk_solve_tilt(pr, f: float, T2: np.ndarray, ids, pitch: float, roll: float, free_f: bool, free_ramp: bool, f_bounds, tilt_deg: float, init=None, max_nfev: int = 200) -> dict:
+    """dk_solve with the camera tilt fixed (75): the desk rotation is Rz(a) Rx(t) Rz(b) with t = tilt_deg (the angle between the desk normal and the optical axis, from the phone's level), a and b
+    free (2 instead of 3). Otherwise as dk_solve:
+    Least squares of the desk model on the restricted problem pr (scipy trf, exact trust-region steps on the Jacobian by sparse finite differences; Huber, f_scale = median Huber width as ba_refine): x_cam = Rd (Rz(theta_i) Rh(pitch, roll) [T, 0] + [x_i, y_i, 0]) + td.
+    Free: desk rotation (3) and position (3), the template except two anchor joints (_anchors: fixes its place, turn and scale), per frame turn and slide (the middle frame fixed at 0),
+    f when free_f, pitch and roll when free_ramp. pitch > 0 = the wrist side raised towards the camera. init = a previous solution (dict) to start from."""
+    from scipy.optimize import least_squares
+    from scipy.optimize._numdiff import approx_derivative, group_columns
+    from scipy.sparse import lil_matrix
+    frames = [pr.frames[i] for i in pr.keep]
+    N, J = len(frames), T2.shape[0]
+    u, w = dk_axes(T2, ids)
+    if init is None:
+        s = dk_init(pr, f, T2, u, w, pitch, roll)
+        init = {"f": f, "T": T2, "pitch": pitch, "roll": roll, "Rd": s["Rd"], "td": s["td"], "theta": s["theta"], "xy": s["xy"], "ref": s["ref"], "up": s["up"]}
+    r, up = int(init["ref"]), float(init["up"])
+    R0 = np.asarray(init["Rd"], float)
+    tt = np.radians(tilt_deg) if R0[2, 2] >= 0 else np.pi - np.radians(tilt_deg)
+    za, zb = np.arctan2(R0[0, 2], -R0[1, 2]), np.arctan2(R0[2, 0], R0[2, 1])
+    rz = lambda c: np.array([[np.cos(c), -np.sin(c), 0.0], [np.sin(c), np.cos(c), 0.0], [0.0, 0.0, 1.0]])      # noqa: E731
+    rx = np.array([[1.0, 0.0, 0.0], [0.0, np.cos(tt), -np.sin(tt)], [0.0, np.sin(tt), np.cos(tt)]])
+    a, b = _anchors(init["T"], frames)
+    tfree = np.array([j for j in range(J) if j not in (a, b)], int)
+    fr_free = np.array([k for k in range(N) if k != r], int)
+    fi = np.concatenate([np.full(v.sum(), k) for k, (o, v) in enumerate(frames)])
+    ji = np.concatenate([np.flatnonzero(v) for o, v in frames])
+    uv = np.concatenate([o[v] for o, v in frames])
+    M = len(ji)
+    ng = int(free_f) + 5 + 2 * int(free_ramp)
+    nt = 2 * len(tfree)
+
+    def unpack(x):
+        k = 0
+        ff = float(np.exp(x[0])) if free_f else float(init["f"])
+        k += int(free_f)
+        Rd = rz(x[k]) @ rx @ rz(x[k + 1])
+        td = x[k + 2:k + 5]
+        k += 5
+        p, q = (x[k], x[k + 1]) if free_ramp else (init["pitch"], init["roll"])
+        k += 2 * int(free_ramp)
+        T = init["T"].copy()
+        T[tfree] = x[k:k + nt].reshape(-1, 2)
+        k += nt
+        P = np.zeros((N, 3))
+        P[fr_free] = x[k:].reshape(-1, 3)
+        return ff, Rd, td, float(p), float(q), T, P
+
+    def proj(x):
+        ff, Rd, td, p, q, T, P = unpack(x)
+        Hd = np.c_[T, np.zeros(J)] @ dk_hand_rot(u, w, up * p, q).T
+        c, s_ = np.cos(P[fi, 0]), np.sin(P[fi, 0])
+        h = Hd[ji]
+        Xd = np.c_[c * h[:, 0] - s_ * h[:, 1] + P[fi, 1], s_ * h[:, 0] + c * h[:, 1] + P[fi, 2], h[:, 2]]
+        X = Xd @ Rd.T + td
+        return np.c_[ff * X[:, 0] / X[:, 2] + pr.cx, ff * X[:, 1] / X[:, 2] + pr.cy], X
+
+    def resid(x):
+        return (proj(x)[0] - uv).ravel()
+
+    x0 = []
+    if free_f:
+        x0.append([np.log(init["f"])])
+    x0 += [[za, zb], np.asarray(init["td"], float)]
+    if free_ramp:
+        x0.append([init["pitch"], init["roll"]])
+    x0.append(init["T"][tfree].ravel())
+    x0.append(np.c_[init["theta"], init["xy"]][fr_free].ravel())
+    x0 = np.concatenate(x0).astype(float)
+    lo, hi = np.full(len(x0), -np.inf), np.full(len(x0), np.inf)
+    if free_f:
+        lo[0], hi[0] = np.log(f_bounds[0]), np.log(f_bounds[1])
+        x0[0] = np.clip(x0[0], lo[0] + 1e-9, hi[0] - 1e-9)
+    S = lil_matrix((2 * M, len(x0)), dtype=int)
+    S[:, :ng] = 1
+    col_t = {int(j): ng + 2 * k for k, j in enumerate(tfree)}
+    pos = {int(k): ng + nt + 3 * m for m, k in enumerate(fr_free)}
+    for m in range(M):
+        if int(ji[m]) in col_t:
+            S[2 * m:2 * m + 2, col_t[int(ji[m])]:col_t[int(ji[m])] + 2] = 1
+        if int(fi[m]) in pos:
+            S[2 * m:2 * m + 2, pos[int(fi[m])]:pos[int(fi[m])] + 3] = 1
+    hp = float(np.median(pr.huber[pr.keep]))
+    S = S.tocsc()
+    grp = group_columns(S)
+
+    def jac(x):
+        return approx_derivative(resid, x, sparsity=(S, grp), bounds=(lo, hi)).toarray()
+    sol = least_squares(resid, x0, jac=jac, bounds=(lo, hi), loss="huber", f_scale=hp, x_scale="jac", max_nfev=max_nfev, method="trf", tr_solver="exact")
+    ff, Rd, td, p, q, T, P = unpack(sol.x)
+    e = np.hypot(*(proj(sol.x)[0] - uv).T)
+    lossv = np.where(e <= hp, e * e, 2 * hp * e - hp * hp)
+    th = P[:, 0]
+    return {"f": ff, "pitch_deg": float(np.degrees(p)), "roll_deg": float(np.degrees(q)), "desk_tilt_deg": float(np.degrees(np.arccos(min(abs(Rd[2, 2]), 1.0)))),
+            "turn_range_deg": float(np.degrees(th.max() - th.min())), "rms_px": float(np.sqrt(np.mean(e ** 2))), "cost": float(lossv.mean()), "success": bool(sol.success), "nfev": int(sol.nfev),
+            "at_bound": bool(free_f and (sol.x[0] <= lo[0] + 1e-6 or sol.x[0] >= hi[0] - 1e-6)),
+            "state": {"f": ff, "T": T, "pitch": p, "roll": q, "Rd": Rd, "td": td, "theta": th, "xy": P[:, 1:], "ref": r, "up": up}}
+
+
+def dk_estimate_tilt(pb, grid: np.ndarray, A: dict, mode: str, ramp_deg: float, tilt_deg: float, coarse_n: int = 8, max_frames: int = 120, n_final: int = 3) -> dict:
+    """dk_estimate_ms with the camera tilt fixed (dk_solve_tilt). As dk_estimate_ms: dk_estimate with several starts. 1) The coarse f profile as dk_estimate (each f from dk_init). 2) Warm sweeps: every grid f solved again from its neighbour's solution, upwards then
+    downwards, kept when its cost is lower (a fixed-f solve that fell into a wrong basin is replaced). 3) All free (f too) from the n_final lowest profile points (parabola on log f at a local
+    minimum) and from free_template's f (the profile solution nearest to it, solved at that f first); the lowest cost is kept. Every start is recorded."""
+    pr, ids = _restrict(pb, max_frames=max_frames)
+    if list(ids) != list(A["joint_ids"]):
+        raise ValueError("free_template result was computed on different joints")
+    jid = [int(j) for j in A["joint_ids"]]
+    T2 = np.asarray(A["template"], float)
+    g = grid[np.unique(np.linspace(0, len(grid) - 1, coarse_n).round().astype(int))] if len(grid) > coarse_n else grid
+    p0 = np.radians(0.0 if mode == "flat" else float(ramp_deg))
+    fr = mode == "ramp_free"
+    fb = (grid[0], grid[-1])
+    prof = [dk_solve_tilt(pr, float(f), T2, jid, p0, 0.0, False, fr, fb, tilt_deg) for f in g]
+    c_first = [x["cost"] for x in prof]
+    n_warm = 0
+    for d, idx in ((-1, range(1, len(g))), (1, range(len(g) - 2, -1, -1))):
+        for i in idx:
+            s = prof[i + d]["state"]
+            x = dk_solve_tilt(pr, float(g[i]), T2, jid, s["pitch"], s["roll"], False, fr, fb, tilt_deg, init=dict(s, f=float(g[i])))
+            if x["cost"] < prof[i]["cost"]:
+                prof[i] = x
+                n_warm += 1
+    c = np.array([x["cost"] for x in prof])
+    starts = []
+    for k in np.argsort(c)[:n_final]:
+        k = int(k)
+        loc = 0 < k < len(g) - 1 and c[k] <= c[k - 1] and c[k] <= c[k + 1]
+        fs = float(np.exp(np.clip(_parabola(np.log(g), c, k), np.log(fb[0]), np.log(fb[1])))) if loc else float(g[k])
+        starts.append((f"profile_{k}", fs, prof[k]["state"]))
+    fa = float(np.clip(A["f"], fb[0], fb[1]))
+    k = int(np.argmin(np.abs(np.log(g) - np.log(fa))))
+    s = prof[k]["state"]
+    xa = dk_solve_tilt(pr, fa, T2, jid, s["pitch"], s["roll"], False, fr, fb, tilt_deg, init=dict(s, f=fa))
+    starts.append(("free_template", fa, xa["state"]))
+    finals = []
+    for name, fs, s in starts:
+        B = dk_solve_tilt(pr, fs, T2, jid, s["pitch"], s["roll"], True, fr, fb, tilt_deg, init=dict(s, f=fs))
+        B.pop("state")
+        finals.append((name, fs, B))
+    best = min(range(len(finals)), key=lambda i: finals[i][2]["cost"])
+    B = dict(finals[best][2])
+    B.update({"start": finals[best][0], "f_start": finals[best][1], "joint_ids": jid, "profile_f": g.tolist(), "profile_cost_first": c_first, "profile_cost": c.tolist(), "n_warm_improved": n_warm,
+              "starts": [{"start": nm, "f_start": fs, "f": b["f"], "cost": b["cost"], "rms_px": b["rms_px"], "pitch_deg": b["pitch_deg"]} for nm, fs, b in finals]})
+    return B
+
+
+def tl_template_job(args) -> dict:
+    """Experiment 75, step 1: od_bridge and free_template once per video and joint set (dk_job's first part). args = (kp, mask, frames, box, size_wh, ecfg, ids)."""
+    kp, mask, frames, box, size_wh, ecfg, ids = args
+    os.environ.setdefault("OMP_NUM_THREADS", "1")
+    cv2.setNumThreads(1)
+    grid = f_grid(ecfg, max(*size_wh))
+    try:
+        pb = od_bridge(kp, mask, frames, box, size_wh, ecfg, ids)
+        return {"A": free_template(pb, grid)}
+    except Exception as e:                                            # a failure is a result, not a crash of the run
+        return {"failed": f"{type(e).__name__}: {e}"}
+
+
+def tl_job(args) -> dict:
+    """Experiment 75, step 2: dk_estimate_tilt from step 1's free_template. args = (kp, mask, frames, box, size_wh, ecfg, ids, A, mode, ramp_deg, tilt_deg)."""
+    kp, mask, frames, box, size_wh, ecfg, ids, A, mode, ramp_deg, tilt_deg = args
+    os.environ.setdefault("OMP_NUM_THREADS", "1")
+    cv2.setNumThreads(1)
+    grid = f_grid(ecfg, max(*size_wh))
+    t0 = time.time()
+    try:
+        pb = od_bridge(kp, mask, frames, box, size_wh, ecfg, ids)
+        B = dk_estimate_tilt(pb, grid, A, mode, ramp_deg, tilt_deg)
+    except Exception as e:
+        return {"failed": f"{type(e).__name__}: {e}"}
+    out = {kk: B[kk] for kk in ("f", "pitch_deg", "roll_deg", "desk_tilt_deg", "turn_range_deg", "rms_px", "cost", "success", "start", "f_start", "n_warm_improved", "starts")}
+    out["boundary"] = bool(B["at_bound"]) or od_boundary(float(B["f"]), grid)
+    out["elapsed_s"] = float(time.time() - t0)
+    return out
+
+
+def ms2_job(args) -> dict:
+    """74 again (74's run stopped in its summary): dk_estimate_ms from a free_template computed once (tl_template_job). args = (kp, mask, frames, box, size_wh, ecfg, ids, A, mode, ramp_deg)."""
+    kp, mask, frames, box, size_wh, ecfg, ids, A, mode, ramp_deg = args
+    os.environ.setdefault("OMP_NUM_THREADS", "1")
+    cv2.setNumThreads(1)
+    grid = f_grid(ecfg, max(*size_wh))
+    t0 = time.time()
+    try:
+        pb = od_bridge(kp, mask, frames, box, size_wh, ecfg, ids)
+        B = dk_estimate_ms(pb, grid, A, mode, ramp_deg)
+    except Exception as e:
+        return {"failed": f"{type(e).__name__}: {e}"}
+    out = {kk: B[kk] for kk in ("f", "pitch_deg", "roll_deg", "desk_tilt_deg", "turn_range_deg", "rms_px", "cost", "success", "start", "f_start", "n_warm_improved", "starts",
+                                 "profile_f", "profile_cost_first", "profile_cost")}
+    out["boundary"] = bool(B["at_bound"]) or od_boundary(float(B["f"]), grid)
+    out["elapsed_s"] = float(time.time() - t0)
+    return out
+
+
+
 def od_fix_lines(path=None) -> list:
     """Where the six corrections to the supervisor's code sit in handfocal_estimate.py (line numbers of the corrected spellings inside section 5)."""
     p = Path(path) if path else Path(__file__).resolve().parent / "handfocal_estimate.py"
