@@ -13422,6 +13422,30 @@ def nc_match_ramp(ramps: list, fs: list, ref: float):
     return None
 
 
+def nc_results_yaml(run_dir: Path, cfg: dict, methods: tuple):
+    """Values only (no reference f or errors), as x70_results_yaml but tolerant of free_template entries (rms without desk tilt); plus the ramp where f meets the reference."""
+    r = json.loads((run_dir / "results.json").read_text())
+    m = json.loads((run_dir / "metadata.json").read_text())
+    rd = lambda x, n=1: None if x is None or (isinstance(x, float) and not np.isfinite(x)) else round(x, n)      # noqa: E731
+    out = {"experiment": cfg["experiment"]["name"], "run": str(run_dir.resolve().relative_to(hf.PROJECT_ROOT)), "code_commit": m["git"]["commit"][:7],
+           "git_dirty_at_run": m["git"]["git_dirty"], "note": NC_NOTE, "ramps_deg": cfg["ramps_deg"], "videos": {}}
+    for e in cfg["videos"]:
+        v = e["file"]
+        g = r["geometry"][v]
+        o = out["videos"][v] = {"person": e["person"], "distance_cm": e["distance_cm"], "hand": e["hand"],
+                                "wilor_ramp_deg": {js: {h: rd(x, 2) for h, x in d.items()} for js, d in g["ramp"].items()}, "wilor_frames": [g["n_frames"], g["n_ok"]]}
+        for src in DK_SOURCES:
+            for js in cfg["joint_sets"]:
+                x = r["real"].get(f"{v}|{src}|{js}") or {}
+                o.setdefault(src, {})[js] = {mt: (None if not x.get(mt) else ({"failed": x[mt].get("failed")} if "f" not in x[mt] else
+                                                  {"f_px": rd(x[mt]["f"]), "boundary": x[mt].get("boundary"), "rms_px": rd(x[mt].get("rms_px"), 2), "desk_tilt_deg": rd(x[mt].get("desk_tilt_deg"))}))
+                                             for mt in methods}
+                o[src][js]["ramp_f_meets_reference_deg"] = rd(r["match_ramp_deg"].get(f"{v}|{src}|{js}"), 2)
+    p = hf.resolve(cfg["output"]["results_yaml"])
+    p.write_text(yaml.safe_dump(hf.jsonable(out), allow_unicode=True, sort_keys=False))
+    return p
+
+
 def nc_main(argv=None):
     ap = argparse.ArgumentParser()
     ap.add_argument("--config", default=str(hf.PROJECT_ROOT / "configs/73_new_phone_hands.yaml"))
@@ -13437,7 +13461,7 @@ def nc_main(argv=None):
     ramps = [float(r) for r in cfg["ramps_deg"]]
     methods = ("free_template",) + tuple(f"ramp_{r:g}" for r in ramps) + tuple(f"wilor_{h}" for h in cfg["heights"])
     if a.cmd == "results-yaml":
-        print(x70_results_yaml(hf.resolve(a.run), cfg, NC_NOTE, methods))
+        print(nc_results_yaml(hf.resolve(a.run), cfg, methods))
         return None
     if a.videos:
         cfg["videos"] = cfg["videos"][:a.videos]
