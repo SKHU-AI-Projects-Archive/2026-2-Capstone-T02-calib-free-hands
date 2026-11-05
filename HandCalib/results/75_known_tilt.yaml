@@ -1,0 +1,1734 @@
+experiment: 75_known_tilt
+run: runs/75_known_tilt/20261105T041819Z
+code_commit: 8028eb4
+git_dirty_at_run: false
+note: 카메라 기울기(책상 법선과 광축 사이 각)를 휴대폰 수평계로 맞춘 45°로 고정하고 f와 경사를 함께 추정한 기록이다(판정 없음). 실제
+  사용에서는 이 각을 휴대폰 센서가 자동으로 기록한다고 본다. 추정기는 실험 74의 시작점 여러 개 방식(hf.dk_estimate_tilt =
+  dk_estimate_ms에 기울기 고정), 경사 함께 추정은 시작 경사 여러 개 중 비용 최소. 기울기 ±5°(40°, 50°)로 민감도도 본다.
+  점은 실험 56 추적점.
+tilt_deg: 45
+sensitivity:
+  joint_set: j16
+  tilts_deg:
+  - 40
+  - 50
+  free_starts_deg:
+  - 8
+  - 16
+free_starts_deg:
+- 5
+- 12
+- 19
+videos:
+  IMG_7346.MOV:
+    group: old
+    distance_cm: 50
+    hand: right
+    tracked:
+      j16:
+        free_template:
+          f: 1864.7
+          rms_px: 0.76
+          cost: null
+          boundary: false
+        tilt_45|start_5:
+          f: 1615.7
+          rms_px: 3.47
+          cost: 12.0
+          pitch_deg: 13.56
+          roll_deg: -2.8
+          desk_tilt_deg: 45.0
+          boundary: false
+          start: profile_4
+        tilt_45|start_12:
+          f: 1615.7
+          rms_px: 3.47
+          cost: 12.0
+          pitch_deg: 13.56
+          roll_deg: -2.8
+          desk_tilt_deg: 45.0
+          boundary: false
+          start: profile_4
+        tilt_45|start_19:
+          f: 1615.7
+          rms_px: 3.47
+          cost: 12.0
+          pitch_deg: 13.56
+          roll_deg: -2.8
+          desk_tilt_deg: 45.0
+          boundary: false
+          start: profile_4
+        tilt_40|start_8:
+          f: 1704.3
+          rms_px: 4.18
+          cost: 17.5
+          pitch_deg: 19.8
+          roll_deg: 0.48
+          desk_tilt_deg: 40.0
+          boundary: false
+          start: free_template
+        tilt_40|start_16:
+          f: 1704.3
+          rms_px: 4.18
+          cost: 17.5
+          pitch_deg: 19.8
+          roll_deg: 0.48
+          desk_tilt_deg: 40.0
+          boundary: false
+          start: free_template
+        tilt_50|start_8:
+          f: 1482.7
+          rms_px: 3.35
+          cost: 11.2
+          pitch_deg: 7.28
+          roll_deg: -5.5
+          desk_tilt_deg: 50.0
+          boundary: false
+          start: profile_5
+        tilt_50|start_16:
+          f: 1482.7
+          rms_px: 3.35
+          cost: 11.2
+          pitch_deg: 7.24
+          roll_deg: -5.56
+          desk_tilt_deg: 50.0
+          boundary: false
+          start: profile_5
+      j21:
+        free_template:
+          f: 1764.2
+          rms_px: 1.89
+          cost: null
+          boundary: false
+        tilt_45|start_5:
+          f: 1882.9
+          rms_px: 5.24
+          cost: 27.1
+          pitch_deg: 15.06
+          roll_deg: -7.97
+          desk_tilt_deg: 45.0
+          boundary: false
+          start: profile_5
+        tilt_45|start_12:
+          f: 1882.9
+          rms_px: 5.24
+          cost: 27.1
+          pitch_deg: 15.06
+          roll_deg: -7.98
+          desk_tilt_deg: 45.0
+          boundary: false
+          start: profile_5
+        tilt_45|start_19:
+          f: 1882.9
+          rms_px: 5.24
+          cost: 27.1
+          pitch_deg: 15.07
+          roll_deg: -7.96
+          desk_tilt_deg: 45.0
+          boundary: false
+          start: profile_5
+  IMG_7347.MOV:
+    group: old
+    distance_cm: 50
+    hand: left
+    tracked:
+      j16:
+        free_template:
+          f: 2215.9
+          rms_px: 0.74
+          cost: null
+          boundary: false
+        tilt_45|start_5:
+          f: 3072.0
+          rms_px: 6.11
+          cost: 35.8
+          pitch_deg: -27.55
+          roll_deg: 9.03
+          desk_tilt_deg: 45.0
+          boundary: true
+          start: free_template
+        tilt_45|start_12:
+          f: 3072.0
+          rms_px: 6.11
+          cost: 35.8
+          pitch_deg: -27.55
+          roll_deg: 9.03
+          desk_tilt_deg: 45.0
+          boundary: true
+          start: free_template
+        tilt_45|start_19:
+          f: 3072.0
+          rms_px: 6.11
+          cost: 35.8
+          pitch_deg: -27.55
+          roll_deg: 9.03
+          desk_tilt_deg: 45.0
+          boundary: true
+          start: free_template
+        tilt_40|start_8:
+          f: 3072.0
+          rms_px: 6.19
+          cost: 36.4
+          pitch_deg: -31.31
+          roll_deg: 5.36
+          desk_tilt_deg: 40.0
+          boundary: true
+          start: profile_5
+        tilt_40|start_16:
+          f: 3072.0
+          rms_px: 6.19
+          cost: 36.4
+          pitch_deg: -31.31
+          roll_deg: 5.36
+          desk_tilt_deg: 40.0
+          boundary: true
+          start: profile_5
+        tilt_50|start_8:
+          f: 3072.0
+          rms_px: 7.2
+          cost: 47.5
+          pitch_deg: -24.7
+          roll_deg: 12.92
+          desk_tilt_deg: 50.0
+          boundary: true
+          start: profile_7
+        tilt_50|start_16:
+          f: 3072.0
+          rms_px: 7.2
+          cost: 47.5
+          pitch_deg: -24.7
+          roll_deg: 12.92
+          desk_tilt_deg: 50.0
+          boundary: true
+          start: profile_7
+      j21:
+        free_template:
+          f: 2285.4
+          rms_px: 1.42
+          cost: null
+          boundary: false
+        tilt_45|start_5:
+          f: 3072.0
+          rms_px: 7.44
+          cost: 43.3
+          pitch_deg: 16.86
+          roll_deg: -4.04
+          desk_tilt_deg: 45.0
+          boundary: true
+          start: profile_7
+        tilt_45|start_12:
+          f: 3072.0
+          rms_px: 8.98
+          cost: 60.8
+          pitch_deg: -24.18
+          roll_deg: 7.57
+          desk_tilt_deg: 45.0
+          boundary: true
+          start: profile_6
+        tilt_45|start_19:
+          f: 3072.0
+          rms_px: 8.98
+          cost: 60.8
+          pitch_deg: -24.18
+          roll_deg: 7.57
+          desk_tilt_deg: 45.0
+          boundary: true
+          start: profile_6
+  IMG_7348.MOV:
+    group: old
+    distance_cm: 50
+    hand: right
+    tracked:
+      j16:
+        free_template:
+          f: 1853.0
+          rms_px: 0.75
+          cost: null
+          boundary: false
+        tilt_45|start_5:
+          f: 1757.9
+          rms_px: 4.19
+          cost: 17.5
+          pitch_deg: 14.22
+          roll_deg: -4.19
+          desk_tilt_deg: 45.0
+          boundary: false
+          start: profile_5
+        tilt_45|start_12:
+          f: 1757.9
+          rms_px: 4.19
+          cost: 17.5
+          pitch_deg: 14.2
+          roll_deg: -4.24
+          desk_tilt_deg: 45.0
+          boundary: false
+          start: profile_5
+        tilt_45|start_19:
+          f: 1757.9
+          rms_px: 4.19
+          cost: 17.5
+          pitch_deg: 14.2
+          roll_deg: -4.24
+          desk_tilt_deg: 45.0
+          boundary: false
+          start: profile_5
+        tilt_40|start_8:
+          f: 1881.4
+          rms_px: 5.18
+          cost: 26.3
+          pitch_deg: 19.6
+          roll_deg: -0.9
+          desk_tilt_deg: 40.0
+          boundary: false
+          start: profile_6
+        tilt_40|start_16:
+          f: 1881.4
+          rms_px: 5.18
+          cost: 26.3
+          pitch_deg: 19.6
+          roll_deg: -0.9
+          desk_tilt_deg: 40.0
+          boundary: false
+          start: profile_6
+        tilt_50|start_8:
+          f: 1567.4
+          rms_px: 4.03
+          cost: 16.2
+          pitch_deg: 8.55
+          roll_deg: -7.51
+          desk_tilt_deg: 50.0
+          boundary: false
+          start: profile_3
+        tilt_50|start_16:
+          f: 1567.4
+          rms_px: 4.03
+          cost: 16.2
+          pitch_deg: 8.55
+          roll_deg: -7.51
+          desk_tilt_deg: 50.0
+          boundary: false
+          start: profile_3
+      j21:
+        free_template:
+          f: 1805.8
+          rms_px: 2.12
+          cost: null
+          boundary: false
+        tilt_45|start_5:
+          f: 2206.7
+          rms_px: 5.83
+          cost: 33.3
+          pitch_deg: 15.1
+          roll_deg: -8.51
+          desk_tilt_deg: 45.0
+          boundary: false
+          start: free_template
+        tilt_45|start_12:
+          f: 2206.7
+          rms_px: 5.83
+          cost: 33.3
+          pitch_deg: 15.09
+          roll_deg: -8.53
+          desk_tilt_deg: 45.0
+          boundary: false
+          start: free_template
+        tilt_45|start_19:
+          f: 2206.7
+          rms_px: 5.83
+          cost: 33.3
+          pitch_deg: 15.09
+          roll_deg: -8.53
+          desk_tilt_deg: 45.0
+          boundary: false
+          start: free_template
+  IMG_7349.MOV:
+    group: old
+    distance_cm: 50
+    hand: left
+    tracked:
+      j16:
+        free_template:
+          f: 2916.7
+          rms_px: 1.07
+          cost: null
+          boundary: false
+        tilt_45|start_5:
+          f: 3072.0
+          rms_px: 10.75
+          cost: 76.1
+          pitch_deg: -24.82
+          roll_deg: 7.84
+          desk_tilt_deg: 45.0
+          boundary: true
+          start: profile_5
+        tilt_45|start_12:
+          f: 3072.0
+          rms_px: 10.75
+          cost: 76.1
+          pitch_deg: -24.82
+          roll_deg: 7.84
+          desk_tilt_deg: 45.0
+          boundary: true
+          start: profile_5
+        tilt_45|start_19:
+          f: 3072.0
+          rms_px: 10.75
+          cost: 76.1
+          pitch_deg: -24.82
+          roll_deg: 7.84
+          desk_tilt_deg: 45.0
+          boundary: true
+          start: profile_5
+        tilt_40|start_8:
+          f: 3072.0
+          rms_px: 11.49
+          cost: 79.3
+          pitch_deg: -28.36
+          roll_deg: 3.88
+          desk_tilt_deg: 40.0
+          boundary: true
+          start: profile_5
+        tilt_40|start_16:
+          f: 3072.0
+          rms_px: 11.49
+          cost: 79.3
+          pitch_deg: -28.36
+          roll_deg: 3.88
+          desk_tilt_deg: 40.0
+          boundary: true
+          start: profile_5
+        tilt_50|start_8:
+          f: 3072.0
+          rms_px: 10.56
+          cost: 80.4
+          pitch_deg: -21.93
+          roll_deg: 11.75
+          desk_tilt_deg: 50.0
+          boundary: true
+          start: profile_5
+        tilt_50|start_16:
+          f: 3072.0
+          rms_px: 10.56
+          cost: 80.4
+          pitch_deg: -21.93
+          roll_deg: 11.75
+          desk_tilt_deg: 50.0
+          boundary: true
+          start: profile_5
+      j21:
+        free_template:
+          f: 2952.3
+          rms_px: 2.31
+          cost: null
+          boundary: false
+        tilt_45|start_5:
+          f: 3072.0
+          rms_px: 16.8
+          cost: 134.9
+          pitch_deg: -15.94
+          roll_deg: -8.94
+          desk_tilt_deg: 45.0
+          boundary: true
+          start: profile_3
+        tilt_45|start_12:
+          f: 3072.0
+          rms_px: 16.8
+          cost: 134.9
+          pitch_deg: -15.94
+          roll_deg: -8.94
+          desk_tilt_deg: 45.0
+          boundary: true
+          start: profile_3
+        tilt_45|start_19:
+          f: 3072.0
+          rms_px: 16.8
+          cost: 134.9
+          pitch_deg: -15.94
+          roll_deg: -8.94
+          desk_tilt_deg: 45.0
+          boundary: true
+          start: profile_3
+  IMG_7350.MOV:
+    group: old
+    distance_cm: 60
+    hand: right
+    tracked:
+      j16:
+        free_template:
+          f: 3072.0
+          rms_px: 0.83
+          cost: null
+          boundary: true
+        tilt_45|start_5:
+          f: 1676.8
+          rms_px: 3.14
+          cost: 9.9
+          pitch_deg: 12.76
+          roll_deg: -0.83
+          desk_tilt_deg: 45.0
+          boundary: false
+          start: free_template
+        tilt_45|start_12:
+          f: 1676.8
+          rms_px: 3.14
+          cost: 9.9
+          pitch_deg: 12.76
+          roll_deg: -0.83
+          desk_tilt_deg: 45.0
+          boundary: false
+          start: free_template
+        tilt_45|start_19:
+          f: 1676.8
+          rms_px: 3.14
+          cost: 9.9
+          pitch_deg: 12.76
+          roll_deg: -0.83
+          desk_tilt_deg: 45.0
+          boundary: false
+          start: free_template
+        tilt_40|start_8:
+          f: 1960.0
+          rms_px: 3.81
+          cost: 14.4
+          pitch_deg: 18.68
+          roll_deg: 3.94
+          desk_tilt_deg: 40.0
+          boundary: false
+          start: profile_5
+        tilt_40|start_16:
+          f: 1960.0
+          rms_px: 3.81
+          cost: 14.4
+          pitch_deg: 18.68
+          roll_deg: 3.94
+          desk_tilt_deg: 40.0
+          boundary: false
+          start: profile_5
+        tilt_50|start_8:
+          f: 1426.6
+          rms_px: 3.23
+          cost: 10.4
+          pitch_deg: 6.95
+          roll_deg: -5.29
+          desk_tilt_deg: 50.0
+          boundary: false
+          start: profile_5
+        tilt_50|start_16:
+          f: 1426.6
+          rms_px: 3.23
+          cost: 10.4
+          pitch_deg: 6.91
+          roll_deg: -5.35
+          desk_tilt_deg: 50.0
+          boundary: false
+          start: profile_5
+      j21:
+        free_template:
+          f: 2584.9
+          rms_px: 1.84
+          cost: null
+          boundary: false
+        tilt_45|start_5:
+          f: 1966.2
+          rms_px: 4.95
+          cost: 24.0
+          pitch_deg: 15.23
+          roll_deg: -7.97
+          desk_tilt_deg: 45.0
+          boundary: false
+          start: profile_6
+        tilt_45|start_12:
+          f: 1966.2
+          rms_px: 4.95
+          cost: 24.0
+          pitch_deg: 15.23
+          roll_deg: -7.97
+          desk_tilt_deg: 45.0
+          boundary: false
+          start: profile_6
+        tilt_45|start_19:
+          f: 1966.2
+          rms_px: 4.95
+          cost: 24.0
+          pitch_deg: 14.83
+          roll_deg: -8.7
+          desk_tilt_deg: 45.0
+          boundary: false
+          start: profile_6
+  IMG_7351.MOV:
+    group: old
+    distance_cm: 60
+    hand: left
+    tracked:
+      j16:
+        free_template:
+          f: 2103.7
+          rms_px: 1.07
+          cost: null
+          boundary: false
+        tilt_45|start_5:
+          f: 3072.0
+          rms_px: 6.63
+          cost: 40.2
+          pitch_deg: -29.44
+          roll_deg: 11.07
+          desk_tilt_deg: 45.0
+          boundary: true
+          start: profile_5
+        tilt_45|start_12:
+          f: 3072.0
+          rms_px: 6.63
+          cost: 40.2
+          pitch_deg: -29.11
+          roll_deg: 11.99
+          desk_tilt_deg: 45.0
+          boundary: true
+          start: profile_6
+        tilt_45|start_19:
+          f: 2343.1
+          rms_px: 4.09
+          cost: 16.4
+          pitch_deg: 15.24
+          roll_deg: -3.16
+          desk_tilt_deg: 45.0
+          boundary: false
+          start: profile_6
+        tilt_40|start_8:
+          f: 3072.0
+          rms_px: 5.7
+          cost: 31.1
+          pitch_deg: -32.17
+          roll_deg: 7.09
+          desk_tilt_deg: 40.0
+          boundary: true
+          start: free_template
+        tilt_40|start_16:
+          f: 3072.0
+          rms_px: 5.7
+          cost: 31.1
+          pitch_deg: -32.24
+          roll_deg: 6.74
+          desk_tilt_deg: 40.0
+          boundary: true
+          start: free_template
+        tilt_50|start_8:
+          f: 1754.8
+          rms_px: 4.36
+          cost: 18.3
+          pitch_deg: 7.75
+          roll_deg: -5.6
+          desk_tilt_deg: 50.0
+          boundary: false
+          start: free_template
+        tilt_50|start_16:
+          f: 1754.8
+          rms_px: 4.36
+          cost: 18.3
+          pitch_deg: 7.78
+          roll_deg: -5.56
+          desk_tilt_deg: 50.0
+          boundary: false
+          start: free_template
+      j21:
+        free_template:
+          f: 2657.5
+          rms_px: 2.43
+          cost: null
+          boundary: false
+        tilt_45|start_5:
+          f: 3072.0
+          rms_px: 9.1
+          cost: 68.9
+          pitch_deg: -26.59
+          roll_deg: 12.03
+          desk_tilt_deg: 45.0
+          boundary: true
+          start: profile_5
+        tilt_45|start_12:
+          f: 3072.0
+          rms_px: 9.1
+          cost: 68.9
+          pitch_deg: -26.59
+          roll_deg: 12.03
+          desk_tilt_deg: 45.0
+          boundary: true
+          start: profile_5
+        tilt_45|start_19:
+          f: 3072.0
+          rms_px: 6.53
+          cost: 37.5
+          pitch_deg: 19.22
+          roll_deg: -4.85
+          desk_tilt_deg: 45.0
+          boundary: true
+          start: profile_7
+  IMG_7352.MOV:
+    group: old
+    distance_cm: 60
+    hand: right
+    tracked:
+      j16:
+        free_template:
+          f: 1915.7
+          rms_px: 0.82
+          cost: null
+          boundary: false
+        tilt_45|start_5:
+          f: 1792.9
+          rms_px: 2.87
+          cost: 8.2
+          pitch_deg: 12.49
+          roll_deg: -5.1
+          desk_tilt_deg: 45.0
+          boundary: false
+          start: profile_2
+        tilt_45|start_12:
+          f: 1792.9
+          rms_px: 2.87
+          cost: 8.2
+          pitch_deg: 12.58
+          roll_deg: -4.88
+          desk_tilt_deg: 45.0
+          boundary: false
+          start: profile_5
+        tilt_45|start_19:
+          f: 1792.9
+          rms_px: 2.87
+          cost: 8.2
+          pitch_deg: 12.58
+          roll_deg: -4.88
+          desk_tilt_deg: 45.0
+          boundary: false
+          start: profile_5
+        tilt_40|start_8:
+          f: 2252.8
+          rms_px: 3.73
+          cost: 13.9
+          pitch_deg: 19.86
+          roll_deg: -2.19
+          desk_tilt_deg: 40.0
+          boundary: false
+          start: profile_6
+        tilt_40|start_16:
+          f: 2252.8
+          rms_px: 3.73
+          cost: 13.9
+          pitch_deg: 19.86
+          roll_deg: -2.2
+          desk_tilt_deg: 40.0
+          boundary: false
+          start: profile_4
+        tilt_50|start_8:
+          f: 1463.0
+          rms_px: 2.79
+          cost: 7.8
+          pitch_deg: 5.86
+          roll_deg: -7.12
+          desk_tilt_deg: 50.0
+          boundary: false
+          start: free_template
+        tilt_50|start_16:
+          f: 1463.0
+          rms_px: 2.79
+          cost: 7.8
+          pitch_deg: 5.8
+          roll_deg: -7.17
+          desk_tilt_deg: 50.0
+          boundary: false
+          start: free_template
+      j21:
+        free_template:
+          f: 1493.4
+          rms_px: 2.05
+          cost: null
+          boundary: false
+        tilt_45|start_5:
+          f: 2047.3
+          rms_px: 4.58
+          cost: 20.6
+          pitch_deg: 13.71
+          roll_deg: -11.01
+          desk_tilt_deg: 45.0
+          boundary: false
+          start: profile_5
+        tilt_45|start_12:
+          f: 2047.3
+          rms_px: 4.58
+          cost: 20.6
+          pitch_deg: 13.63
+          roll_deg: -11.11
+          desk_tilt_deg: 45.0
+          boundary: false
+          start: profile_5
+        tilt_45|start_19:
+          f: 2047.3
+          rms_px: 4.58
+          cost: 20.6
+          pitch_deg: 13.69
+          roll_deg: -11.03
+          desk_tilt_deg: 45.0
+          boundary: false
+          start: profile_5
+  IMG_7353.MOV:
+    group: old
+    distance_cm: 60
+    hand: left
+    tracked:
+      j16:
+        free_template:
+          f: 1569.6
+          rms_px: 0.93
+          cost: null
+          boundary: false
+        tilt_45|start_5:
+          f: 2339.5
+          rms_px: 3.7
+          cost: 13.2
+          pitch_deg: 14.66
+          roll_deg: -3.63
+          desk_tilt_deg: 45.0
+          boundary: false
+          start: profile_4
+        tilt_45|start_12:
+          f: 2339.5
+          rms_px: 3.7
+          cost: 13.2
+          pitch_deg: 14.67
+          roll_deg: -3.56
+          desk_tilt_deg: 45.0
+          boundary: false
+          start: profile_5
+        tilt_45|start_19:
+          f: 2339.5
+          rms_px: 3.7
+          cost: 13.2
+          pitch_deg: 14.67
+          roll_deg: -3.59
+          desk_tilt_deg: 45.0
+          boundary: false
+          start: profile_4
+        tilt_40|start_8:
+          f: 3072.0
+          rms_px: 3.97
+          cost: 15.5
+          pitch_deg: 20.21
+          roll_deg: -0.53
+          desk_tilt_deg: 40.0
+          boundary: true
+          start: profile_5
+        tilt_40|start_16:
+          f: 3072.0
+          rms_px: 3.97
+          cost: 15.5
+          pitch_deg: 20.21
+          roll_deg: -0.48
+          desk_tilt_deg: 40.0
+          boundary: true
+          start: free_template
+        tilt_50|start_8:
+          f: 1673.5
+          rms_px: 4.08
+          cost: 15.7
+          pitch_deg: 8.45
+          roll_deg: -6.39
+          desk_tilt_deg: 50.0
+          boundary: false
+          start: profile_3
+        tilt_50|start_16:
+          f: 1673.5
+          rms_px: 4.08
+          cost: 15.7
+          pitch_deg: 8.43
+          roll_deg: -6.41
+          desk_tilt_deg: 50.0
+          boundary: false
+          start: profile_3
+      j21:
+        free_template:
+          f: 1824.3
+          rms_px: 2.1
+          cost: null
+          boundary: false
+        tilt_45|start_5:
+          f: 3013.9
+          rms_px: 5.82
+          cost: 28.3
+          pitch_deg: 15.93
+          roll_deg: -3.59
+          desk_tilt_deg: 45.0
+          boundary: false
+          start: profile_5
+        tilt_45|start_12:
+          f: 3013.9
+          rms_px: 5.82
+          cost: 28.3
+          pitch_deg: 15.85
+          roll_deg: -3.94
+          desk_tilt_deg: 45.0
+          boundary: false
+          start: profile_6
+        tilt_45|start_19:
+          f: 3013.9
+          rms_px: 5.82
+          cost: 28.3
+          pitch_deg: 15.98
+          roll_deg: -3.36
+          desk_tilt_deg: 45.0
+          boundary: false
+          start: profile_6
+  IMG_7354.MOV:
+    group: old
+    distance_cm: 75
+    hand: right
+    tracked:
+      j16:
+        free_template:
+          f: 3072.0
+          rms_px: 0.58
+          cost: null
+          boundary: true
+        tilt_45|start_5:
+          f: 1823.3
+          rms_px: 2.2
+          cost: 4.8
+          pitch_deg: 12.58
+          roll_deg: -3.99
+          desk_tilt_deg: 45.0
+          boundary: false
+          start: profile_6
+        tilt_45|start_12:
+          f: 1823.3
+          rms_px: 2.2
+          cost: 4.8
+          pitch_deg: 12.46
+          roll_deg: -4.36
+          desk_tilt_deg: 45.0
+          boundary: false
+          start: profile_6
+        tilt_45|start_19:
+          f: 1823.3
+          rms_px: 2.2
+          cost: 4.8
+          pitch_deg: 12.58
+          roll_deg: -3.99
+          desk_tilt_deg: 45.0
+          boundary: false
+          start: profile_6
+        tilt_40|start_8:
+          f: 2639.8
+          rms_px: 3.22
+          cost: 10.0
+          pitch_deg: 18.61
+          roll_deg: 0.92
+          desk_tilt_deg: 40.0
+          boundary: false
+          start: free_template
+        tilt_40|start_16:
+          f: 2639.8
+          rms_px: 3.22
+          cost: 10.0
+          pitch_deg: 18.61
+          roll_deg: 0.92
+          desk_tilt_deg: 40.0
+          boundary: false
+          start: free_template
+        tilt_50|start_8:
+          f: 1660.9
+          rms_px: 2.32
+          cost: 5.3
+          pitch_deg: 8.73
+          roll_deg: -8.45
+          desk_tilt_deg: 50.0
+          boundary: false
+          start: profile_5
+        tilt_50|start_16:
+          f: 1660.9
+          rms_px: 2.32
+          cost: 5.3
+          pitch_deg: 8.73
+          roll_deg: -8.45
+          desk_tilt_deg: 50.0
+          boundary: false
+          start: profile_5
+      j21:
+        free_template:
+          f: 3072.0
+          rms_px: 1.54
+          cost: null
+          boundary: true
+        tilt_45|start_5:
+          f: 2621.1
+          rms_px: 3.87
+          cost: 13.7
+          pitch_deg: 16.56
+          roll_deg: -8.26
+          desk_tilt_deg: 45.0
+          boundary: false
+          start: profile_7
+        tilt_45|start_12:
+          f: 2621.1
+          rms_px: 3.87
+          cost: 13.7
+          pitch_deg: 16.55
+          roll_deg: -8.28
+          desk_tilt_deg: 45.0
+          boundary: false
+          start: profile_7
+        tilt_45|start_19:
+          f: 2621.1
+          rms_px: 3.87
+          cost: 13.7
+          pitch_deg: 16.55
+          roll_deg: -8.28
+          desk_tilt_deg: 45.0
+          boundary: false
+          start: profile_7
+  IMG_7355.MOV:
+    group: old
+    distance_cm: 75
+    hand: left
+    tracked:
+      j16:
+        free_template:
+          f: 1559.4
+          rms_px: 0.73
+          cost: null
+          boundary: false
+        tilt_45|start_5:
+          f: 3072.0
+          rms_px: 4.2
+          cost: 16.8
+          pitch_deg: -25.08
+          roll_deg: 9.18
+          desk_tilt_deg: 45.0
+          boundary: true
+          start: free_template
+        tilt_45|start_12:
+          f: 3072.0
+          rms_px: 4.2
+          cost: 16.8
+          pitch_deg: -25.08
+          roll_deg: 9.18
+          desk_tilt_deg: 45.0
+          boundary: true
+          start: free_template
+        tilt_45|start_19:
+          f: 3072.0
+          rms_px: 4.2
+          cost: 16.8
+          pitch_deg: -25.08
+          roll_deg: 9.18
+          desk_tilt_deg: 45.0
+          boundary: true
+          start: free_template
+        tilt_40|start_8:
+          f: 3072.0
+          rms_px: 4.49
+          cost: 19.1
+          pitch_deg: -29.27
+          roll_deg: 6.45
+          desk_tilt_deg: 40.0
+          boundary: true
+          start: profile_6
+        tilt_40|start_16:
+          f: 3072.0
+          rms_px: 4.49
+          cost: 19.1
+          pitch_deg: -29.27
+          roll_deg: 6.45
+          desk_tilt_deg: 40.0
+          boundary: true
+          start: profile_6
+        tilt_50|start_8:
+          f: 3072.0
+          rms_px: 4.4
+          cost: 18.2
+          pitch_deg: -21.57
+          roll_deg: 12.28
+          desk_tilt_deg: 50.0
+          boundary: true
+          start: profile_7
+        tilt_50|start_16:
+          f: 3072.0
+          rms_px: 4.4
+          cost: 18.2
+          pitch_deg: -21.57
+          roll_deg: 12.28
+          desk_tilt_deg: 50.0
+          boundary: true
+          start: profile_7
+      j21:
+        free_template:
+          f: 1597.6
+          rms_px: 1.23
+          cost: null
+          boundary: false
+        tilt_45|start_5:
+          f: 3072.0
+          rms_px: 6.1
+          cost: 30.4
+          pitch_deg: -25.09
+          roll_deg: 9.79
+          desk_tilt_deg: 45.0
+          boundary: true
+          start: profile_7
+        tilt_45|start_12:
+          f: 3072.0
+          rms_px: 6.1
+          cost: 30.4
+          pitch_deg: -25.09
+          roll_deg: 9.79
+          desk_tilt_deg: 45.0
+          boundary: true
+          start: profile_7
+        tilt_45|start_19:
+          f: 3072.0
+          rms_px: 6.1
+          cost: 30.4
+          pitch_deg: -25.09
+          roll_deg: 9.79
+          desk_tilt_deg: 45.0
+          boundary: true
+          start: profile_7
+  IMG_7356.MOV:
+    group: old
+    distance_cm: 75
+    hand: right
+    tracked:
+      j16:
+        free_template:
+          f: 3072.0
+          rms_px: 0.57
+          cost: null
+          boundary: true
+        tilt_45|start_5:
+          f: 1820.3
+          rms_px: 2.55
+          cost: 6.5
+          pitch_deg: 8.42
+          roll_deg: -8.0
+          desk_tilt_deg: 45.0
+          boundary: false
+          start: free_template
+        tilt_45|start_12:
+          f: 1820.3
+          rms_px: 2.55
+          cost: 6.5
+          pitch_deg: 8.41
+          roll_deg: -8.0
+          desk_tilt_deg: 45.0
+          boundary: false
+          start: profile_6
+        tilt_45|start_19:
+          f: 1820.3
+          rms_px: 2.55
+          cost: 6.5
+          pitch_deg: 8.42
+          roll_deg: -8.0
+          desk_tilt_deg: 45.0
+          boundary: false
+          start: profile_7
+        tilt_40|start_8:
+          f: 2290.2
+          rms_px: 3.44
+          cost: 11.4
+          pitch_deg: 15.69
+          roll_deg: -6.25
+          desk_tilt_deg: 40.0
+          boundary: false
+          start: profile_5
+        tilt_40|start_16:
+          f: 2290.2
+          rms_px: 3.44
+          cost: 11.4
+          pitch_deg: 15.69
+          roll_deg: -6.25
+          desk_tilt_deg: 40.0
+          boundary: false
+          start: profile_5
+        tilt_50|start_8:
+          f: 1686.6
+          rms_px: 2.84
+          cost: 7.8
+          pitch_deg: 2.51
+          roll_deg: -10.16
+          desk_tilt_deg: 50.0
+          boundary: false
+          start: profile_0
+        tilt_50|start_16:
+          f: 1686.6
+          rms_px: 2.84
+          cost: 7.8
+          pitch_deg: 2.95
+          roll_deg: -10.05
+          desk_tilt_deg: 50.0
+          boundary: false
+          start: free_template
+      j21:
+        free_template:
+          f: 3072.0
+          rms_px: 1.13
+          cost: null
+          boundary: true
+        tilt_45|start_5:
+          f: 2669.1
+          rms_px: 3.96
+          cost: 15.1
+          pitch_deg: 15.02
+          roll_deg: -8.16
+          desk_tilt_deg: 45.0
+          boundary: false
+          start: profile_5
+        tilt_45|start_12:
+          f: 2669.1
+          rms_px: 3.96
+          cost: 15.1
+          pitch_deg: 15.02
+          roll_deg: -8.16
+          desk_tilt_deg: 45.0
+          boundary: false
+          start: profile_5
+        tilt_45|start_19:
+          f: 2669.1
+          rms_px: 3.96
+          cost: 15.1
+          pitch_deg: 15.12
+          roll_deg: -7.96
+          desk_tilt_deg: 45.0
+          boundary: false
+          start: profile_5
+  IMG_7357.MOV:
+    group: old
+    distance_cm: 75
+    hand: left
+    tracked:
+      j16:
+        free_template:
+          f: 1797.1
+          rms_px: 0.86
+          cost: null
+          boundary: false
+        tilt_45|start_5:
+          f: 3072.0
+          rms_px: 4.63
+          cost: 18.9
+          pitch_deg: 9.97
+          roll_deg: 26.8
+          desk_tilt_deg: 45.0
+          boundary: true
+          start: profile_4
+        tilt_45|start_12:
+          f: 3072.0
+          rms_px: 4.63
+          cost: 18.9
+          pitch_deg: 9.83
+          roll_deg: 26.85
+          desk_tilt_deg: 45.0
+          boundary: true
+          start: profile_4
+        tilt_45|start_19:
+          f: 3072.0
+          rms_px: 4.63
+          cost: 18.9
+          pitch_deg: 15.09
+          roll_deg: 24.43
+          desk_tilt_deg: 45.0
+          boundary: true
+          start: free_template
+        tilt_40|start_8:
+          f: 3072.0
+          rms_px: 4.87
+          cost: 20.6
+          pitch_deg: 31.42
+          roll_deg: -176.99
+          desk_tilt_deg: 40.0
+          boundary: true
+          start: free_template
+        tilt_40|start_16:
+          f: 3072.0
+          rms_px: 4.87
+          cost: 20.6
+          pitch_deg: 14.55
+          roll_deg: 28.3
+          desk_tilt_deg: 40.0
+          boundary: true
+          start: free_template
+        tilt_50|start_8:
+          f: 3072.0
+          rms_px: 4.91
+          cost: 21.2
+          pitch_deg: 5.01
+          roll_deg: 26.39
+          desk_tilt_deg: 50.0
+          boundary: true
+          start: profile_5
+        tilt_50|start_16:
+          f: 3072.0
+          rms_px: 4.91
+          cost: 21.2
+          pitch_deg: 5.74
+          roll_deg: 26.25
+          desk_tilt_deg: 50.0
+          boundary: true
+          start: profile_5
+      j21:
+        free_template:
+          f: 1933.1
+          rms_px: 1.36
+          cost: null
+          boundary: false
+        tilt_45|start_5:
+          f: 3072.0
+          rms_px: 6.98
+          cost: 34.7
+          pitch_deg: 25.09
+          roll_deg: 13.33
+          desk_tilt_deg: 45.0
+          boundary: true
+          start: profile_5
+        tilt_45|start_12:
+          f: 3072.0
+          rms_px: 6.98
+          cost: 34.7
+          pitch_deg: 25.09
+          roll_deg: 13.33
+          desk_tilt_deg: 45.0
+          boundary: true
+          start: profile_5
+        tilt_45|start_19:
+          f: 3072.0
+          rms_px: 6.98
+          cost: 34.7
+          pitch_deg: 26.8
+          roll_deg: -170.85
+          desk_tilt_deg: 45.0
+          boundary: true
+          start: profile_7
+  IMG_7354 - 복사본.MOV:
+    group: self
+    distance_cm: 60
+    hand: right
+    tracked:
+      j16:
+        free_template:
+          f: 2057.8
+          rms_px: 0.7
+          cost: null
+          boundary: false
+        tilt_45|start_5:
+          f: 3072.0
+          rms_px: 5.46
+          cost: 25.3
+          pitch_deg: 23.96
+          roll_deg: 3.62
+          desk_tilt_deg: 45.0
+          boundary: true
+          start: profile_7
+        tilt_45|start_12:
+          f: 3072.0
+          rms_px: 5.46
+          cost: 25.3
+          pitch_deg: 23.96
+          roll_deg: 3.62
+          desk_tilt_deg: 45.0
+          boundary: true
+          start: profile_7
+        tilt_45|start_19:
+          f: 3072.0
+          rms_px: 5.46
+          cost: 25.3
+          pitch_deg: 23.96
+          roll_deg: 3.62
+          desk_tilt_deg: 45.0
+          boundary: true
+          start: profile_7
+        tilt_40|start_8:
+          f: 3072.0
+          rms_px: 6.79
+          cost: 36.6
+          pitch_deg: 29.14
+          roll_deg: 8.07
+          desk_tilt_deg: 40.0
+          boundary: true
+          start: profile_6
+        tilt_40|start_16:
+          f: 3072.0
+          rms_px: 6.79
+          cost: 36.6
+          pitch_deg: 29.14
+          roll_deg: 8.07
+          desk_tilt_deg: 40.0
+          boundary: true
+          start: profile_6
+        tilt_50|start_8:
+          f: 3072.0
+          rms_px: 4.03
+          cost: 14.9
+          pitch_deg: 19.79
+          roll_deg: -1.01
+          desk_tilt_deg: 50.0
+          boundary: true
+          start: profile_7
+        tilt_50|start_16:
+          f: 3072.0
+          rms_px: 4.03
+          cost: 14.9
+          pitch_deg: 19.79
+          roll_deg: -1.01
+          desk_tilt_deg: 50.0
+          boundary: true
+          start: profile_6
+      j21:
+        free_template:
+          f: 1765.7
+          rms_px: 1.4
+          cost: null
+          boundary: false
+        tilt_45|start_5:
+          f: 3072.0
+          rms_px: 7.68
+          cost: 44.8
+          pitch_deg: 24.05
+          roll_deg: -2.28
+          desk_tilt_deg: 45.0
+          boundary: true
+          start: profile_6
+        tilt_45|start_12:
+          f: 3072.0
+          rms_px: 7.68
+          cost: 44.8
+          pitch_deg: 24.05
+          roll_deg: -2.28
+          desk_tilt_deg: 45.0
+          boundary: true
+          start: profile_6
+        tilt_45|start_19:
+          f: 3072.0
+          rms_px: 7.68
+          cost: 44.8
+          pitch_deg: 24.05
+          roll_deg: -2.28
+          desk_tilt_deg: 45.0
+          boundary: true
+          start: profile_6
+  IMG_7355 - 복사본.MOV:
+    group: self
+    distance_cm: 60
+    hand: right
+    tracked:
+      j16:
+        free_template:
+          f: 2610.0
+          rms_px: 0.65
+          cost: null
+          boundary: false
+        tilt_45|start_5:
+          f: 3072.0
+          rms_px: 4.89
+          cost: 22.1
+          pitch_deg: 23.55
+          roll_deg: 6.36
+          desk_tilt_deg: 45.0
+          boundary: true
+          start: profile_6
+        tilt_45|start_12:
+          f: 3072.0
+          rms_px: 4.89
+          cost: 22.1
+          pitch_deg: 23.54
+          roll_deg: 6.41
+          desk_tilt_deg: 45.0
+          boundary: true
+          start: profile_7
+        tilt_45|start_19:
+          f: 3072.0
+          rms_px: 4.89
+          cost: 22.1
+          pitch_deg: 23.54
+          roll_deg: 6.41
+          desk_tilt_deg: 45.0
+          boundary: true
+          start: profile_7
+        tilt_40|start_8:
+          f: 3072.0
+          rms_px: 6.03
+          cost: 32.2
+          pitch_deg: 28.38
+          roll_deg: 11.71
+          desk_tilt_deg: 40.0
+          boundary: true
+          start: profile_7
+        tilt_40|start_16:
+          f: 3072.0
+          rms_px: 6.03
+          cost: 32.2
+          pitch_deg: 28.4
+          roll_deg: 11.67
+          desk_tilt_deg: 40.0
+          boundary: true
+          start: profile_6
+        tilt_50|start_8:
+          f: 3072.0
+          rms_px: 3.67
+          cost: 12.9
+          pitch_deg: 19.75
+          roll_deg: 1.04
+          desk_tilt_deg: 50.0
+          boundary: true
+          start: profile_7
+        tilt_50|start_16:
+          f: 3072.0
+          rms_px: 3.67
+          cost: 12.9
+          pitch_deg: 19.75
+          roll_deg: 0.94
+          desk_tilt_deg: 50.0
+          boundary: true
+          start: profile_6
+      j21:
+        free_template:
+          f: 1918.3
+          rms_px: 1.6
+          cost: null
+          boundary: false
+        tilt_45|start_5:
+          f: 3072.0
+          rms_px: 7.16
+          cost: 40.1
+          pitch_deg: 23.66
+          roll_deg: -0.68
+          desk_tilt_deg: 45.0
+          boundary: true
+          start: profile_6
+        tilt_45|start_12:
+          f: 3072.0
+          rms_px: 7.16
+          cost: 40.1
+          pitch_deg: 23.66
+          roll_deg: -0.66
+          desk_tilt_deg: 45.0
+          boundary: true
+          start: profile_6
+        tilt_45|start_19:
+          f: 3072.0
+          rms_px: 7.16
+          cost: 40.1
+          pitch_deg: 23.66
+          roll_deg: -0.66
+          desk_tilt_deg: 45.0
+          boundary: true
+          start: profile_6
+  IMG_7351 - 복사본.MOV:
+    group: teammate
+    distance_cm: 60
+    hand: right
+    tracked:
+      j16:
+        free_template:
+          f: 1411.5
+          rms_px: 0.41
+          cost: null
+          boundary: false
+        tilt_45|start_5:
+          f: 2027.6
+          rms_px: 2.74
+          cost: 7.5
+          pitch_deg: 18.13
+          roll_deg: -5.63
+          desk_tilt_deg: 45.0
+          boundary: false
+          start: free_template
+        tilt_45|start_12:
+          f: 2027.6
+          rms_px: 2.74
+          cost: 7.5
+          pitch_deg: 18.1
+          roll_deg: -5.74
+          desk_tilt_deg: 45.0
+          boundary: false
+          start: free_template
+        tilt_45|start_19:
+          f: 2027.6
+          rms_px: 2.74
+          cost: 7.5
+          pitch_deg: 18.13
+          roll_deg: -5.63
+          desk_tilt_deg: 45.0
+          boundary: false
+          start: free_template
+        tilt_40|start_8:
+          f: 3072.0
+          rms_px: 3.69
+          cost: 13.6
+          pitch_deg: 25.07
+          roll_deg: -3.68
+          desk_tilt_deg: 40.0
+          boundary: true
+          start: profile_5
+        tilt_40|start_16:
+          f: 3072.0
+          rms_px: 3.69
+          cost: 13.6
+          pitch_deg: 25.05
+          roll_deg: -3.76
+          desk_tilt_deg: 40.0
+          boundary: true
+          start: profile_5
+        tilt_50|start_8:
+          f: 1358.2
+          rms_px: 1.98
+          cost: 3.9
+          pitch_deg: 10.87
+          roll_deg: -6.76
+          desk_tilt_deg: 50.0
+          boundary: false
+          start: profile_4
+        tilt_50|start_16:
+          f: 1358.2
+          rms_px: 1.98
+          cost: 3.9
+          pitch_deg: 10.9
+          roll_deg: -6.72
+          desk_tilt_deg: 50.0
+          boundary: false
+          start: profile_4
+      j21:
+        free_template:
+          f: 1270.9
+          rms_px: 1.25
+          cost: null
+          boundary: false
+        tilt_45|start_5:
+          f: 1893.7
+          rms_px: 6.15
+          cost: 29.2
+          pitch_deg: 16.79
+          roll_deg: -8.73
+          desk_tilt_deg: 45.0
+          boundary: false
+          start: profile_4
+        tilt_45|start_12:
+          f: 1893.7
+          rms_px: 6.15
+          cost: 29.2
+          pitch_deg: 16.79
+          roll_deg: -8.73
+          desk_tilt_deg: 45.0
+          boundary: false
+          start: profile_4
+        tilt_45|start_19:
+          f: 1893.7
+          rms_px: 6.15
+          cost: 29.2
+          pitch_deg: 16.79
+          roll_deg: -8.73
+          desk_tilt_deg: 45.0
+          boundary: false
+          start: profile_4
+  IMG_7352 - 복사본.MOV:
+    group: teammate
+    distance_cm: 60
+    hand: right
+    tracked:
+      j16:
+        free_template:
+          f: 1674.1
+          rms_px: 0.44
+          cost: null
+          boundary: false
+        tilt_45|start_5:
+          f: 1805.9
+          rms_px: 3.08
+          cost: 9.3
+          pitch_deg: 18.04
+          roll_deg: -6.87
+          desk_tilt_deg: 45.0
+          boundary: false
+          start: free_template
+        tilt_45|start_12:
+          f: 1805.9
+          rms_px: 3.08
+          cost: 9.3
+          pitch_deg: 18.04
+          roll_deg: -6.87
+          desk_tilt_deg: 45.0
+          boundary: false
+          start: free_template
+        tilt_45|start_19:
+          f: 1805.9
+          rms_px: 3.08
+          cost: 9.3
+          pitch_deg: 18.04
+          roll_deg: -6.87
+          desk_tilt_deg: 45.0
+          boundary: false
+          start: free_template
+        tilt_40|start_8:
+          f: 3072.0
+          rms_px: 4.13
+          cost: 16.1
+          pitch_deg: 25.19
+          roll_deg: -5.15
+          desk_tilt_deg: 40.0
+          boundary: true
+          start: profile_5
+        tilt_40|start_16:
+          f: 3072.0
+          rms_px: 4.13
+          cost: 16.1
+          pitch_deg: 25.19
+          roll_deg: -5.15
+          desk_tilt_deg: 40.0
+          boundary: true
+          start: profile_5
+        tilt_50|start_8:
+          f: 1302.1
+          rms_px: 2.47
+          cost: 6.1
+          pitch_deg: 11.49
+          roll_deg: -8.96
+          desk_tilt_deg: 50.0
+          boundary: false
+          start: profile_4
+        tilt_50|start_16:
+          f: 1302.1
+          rms_px: 2.47
+          cost: 6.1
+          pitch_deg: 11.49
+          roll_deg: -8.96
+          desk_tilt_deg: 50.0
+          boundary: false
+          start: profile_4
+      j21:
+        free_template:
+          f: 1424.9
+          rms_px: 1.29
+          cost: null
+          boundary: false
+        tilt_45|start_5:
+          f: 1848.4
+          rms_px: 5.54
+          cost: 27.4
+          pitch_deg: 17.48
+          roll_deg: -9.53
+          desk_tilt_deg: 45.0
+          boundary: false
+          start: profile_5
+        tilt_45|start_12:
+          f: 1848.4
+          rms_px: 5.54
+          cost: 27.4
+          pitch_deg: 17.48
+          roll_deg: -9.53
+          desk_tilt_deg: 45.0
+          boundary: false
+          start: profile_5
+        tilt_45|start_19:
+          f: 1848.4
+          rms_px: 5.54
+          cost: 27.4
+          pitch_deg: 17.48
+          roll_deg: -9.53
+          desk_tilt_deg: 45.0
+          boundary: false
+          start: profile_5
