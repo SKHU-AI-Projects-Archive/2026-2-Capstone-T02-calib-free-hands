@@ -161,3 +161,10 @@
 - [x] Keep Manual Focal identity, focal number/unit, and Reference badge naturally grouped and wrapped (for example, `Manual Focal 1500 px [REFERENCE]`)
 
 All implementation items above are complete. Remaining user and Windows GUI acceptance is tracked in `VALIDATION_CHECKLIST.md`; implementation completion alone does not establish overall readiness.
+
+## Phase 2 Fixed Metric Workspace and Shared Camera
+
+- [x] Keep the three grid planes, positive raw camera-space axes, and major numeric labels fixed to X/Y [-1, 1] m and Z [0, 2] m with 0.1 m minor and 0.5 m major spacing; Grid also controls numeric labels and Axis controls axis names/lines.
+- [x] Initialize every result viewer at the deterministic workspace-centered 20-degree elevation / 45-degree azimuth camera, independent of result geometry; Reset restores that framing.
+- [x] Make Fit All explicit and fit only finite geometry from the current frame and visible hands/results, without moving or scaling workspace references or mutating canonical arrays.
+- [x] Share camera parameters between Overlay, visible Split panels, and detached comparison panels; preserve the active camera pose when switching Overlay/Split.

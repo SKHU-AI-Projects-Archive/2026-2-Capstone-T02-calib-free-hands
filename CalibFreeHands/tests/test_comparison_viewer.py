@@ -134,6 +134,127 @@ def test_overlay_colors_visibility_confidence_and_linked_camera(tmp_path, qapp):
     viewer.close()
 
 
+def test_comparison_camera_is_shared_across_modes_and_fit_all_is_explicit(tmp_path, qapp):
+    from calibfreehands.visualization.comparison import ComparisonViewer
+
+    viewer = ComparisonViewer(_session(tmp_path, 3, mesh=True))
+    default = viewer.overlay_view.cameraParams()
+    assert all(view.cameraParams()["distance"] == pytest.approx(default["distance"])
+               for view in viewer.split_views)
+    for view in viewer.split_views:
+        np.testing.assert_allclose(view.cameraParams()["center"].toTuple(), default["center"].toTuple())
+        for index, grid in enumerate(view.grids):
+            assert grid.size() == pytest.approx(viewer.overlay_view.grids[index].size())
+            assert grid.spacing() == pytest.approx(viewer.overlay_view.grids[index].spacing())
+            assert grid.transform() == viewer.overlay_view.grids[index].transform()
+    camera_menu = next(action.menu() for action in viewer.more_menu.actions()
+                       if action.menu() is not None and action.text() == "Camera")
+    assert "Fit All" in [action.text() for action in camera_menu.actions()]
+    viewer.geometry_checks["show_grid"].setChecked(False)
+    assert not any(label.visible() for label in viewer.overlay_view.numeric_labels)
+    assert all(not any(label.visible() for label in view.numeric_labels) for view in viewer.split_views)
+    viewer.geometry_checks["show_grid"].setChecked(True)
+    assert all(label.visible() for label in viewer.overlay_view.numeric_labels)
+
+    overlay_pose = {"pos": (0.2, -0.6, 0.3), "distance": 7.0, "azimuth": 80.0, "elevation": 15.0}
+    viewer.overlay_view.setCameraPosition(**overlay_pose)
+    viewer.set_mode("split")
+    split_pose = viewer.split_views[0].cameraParams()
+    assert split_pose["distance"] == pytest.approx(overlay_pose["distance"])
+    assert split_pose["azimuth"] == pytest.approx(overlay_pose["azimuth"])
+    assert split_pose["elevation"] == pytest.approx(overlay_pose["elevation"])
+    np.testing.assert_allclose(tuple(split_pose["center"]), overlay_pose["pos"])
+
+    viewer.split_views[1].setCameraPosition(pos=(0.1, -0.4, 0.2), distance=5.0, azimuth=30.0, elevation=25.0)
+    viewer._sync_camera(viewer.split_views[1])
+    viewer.set_mode("overlay")
+    overlay_synced = viewer.overlay_view.cameraParams()
+    assert overlay_synced["distance"] == pytest.approx(5.0)
+    assert overlay_synced["azimuth"] == pytest.approx(30.0)
+    assert overlay_synced["elevation"] == pytest.approx(25.0)
+    np.testing.assert_allclose(tuple(overlay_synced["center"]), (0.1, -0.4, 0.2))
+
+    viewer.close()
+
+
+def test_detached_comparison_views_share_current_pose_and_remain_linked(tmp_path, qapp):
+    from calibfreehands.visualization.comparison import ComparisonViewer
+
+    viewer = ComparisonViewer(_session(tmp_path, 3))
+    viewer.overlay_view.setCameraPosition(pos=(0.2, -0.8, 0.4), distance=6.0, azimuth=72.0, elevation=18.0)
+    viewer.detach_all()
+    window, _source, detached_views = viewer._detached_windows[0]
+    for view in detached_views:
+        params = view.cameraParams()
+        assert params["distance"] == pytest.approx(6.0)
+        assert params["azimuth"] == pytest.approx(72.0)
+        assert params["elevation"] == pytest.approx(18.0)
+        assert tuple(params["center"]) == pytest.approx((0.2, -0.8, 0.4))
+
+    changed = detached_views[1]
+    changed.setCameraPosition(pos=(0.1, -0.3, 0.2), distance=4.0, azimuth=30.0, elevation=25.0)
+    changed.camera_changed(changed)
+    for view in detached_views:
+        params = view.cameraParams()
+        assert params["distance"] == pytest.approx(4.0)
+        assert params["azimuth"] == pytest.approx(30.0)
+        assert params["elevation"] == pytest.approx(25.0)
+        assert tuple(params["center"]) == pytest.approx((0.1, -0.3, 0.2))
+    window.close()
+    viewer.close()
+
+
+def test_fit_all_uses_visible_union_and_leaves_fixed_metric_reference_unchanged(tmp_path, qapp):
+    from calibfreehands.visualization.comparison import ComparisonViewer
+
+    viewer = ComparisonViewer(_session(tmp_path, 3, mesh=True))
+    viewer.loaded_results[2].result.keypoints_3d[..., 2] = 15.0
+    viewer.loaded_results[2].result.mano_vertices[..., 2] = 15.0
+    before = viewer.overlay_view.cameraParams()
+    grid_data = [(grid.transform(), grid.size(), grid.spacing()) for grid in viewer.overlay_view.grids]
+    axis_data = viewer.overlay_view.axis.pos.copy()
+    label_data = [(label.text, label.pos.copy()) for label in viewer.overlay_view.numeric_labels]
+
+    assert viewer.fit_all()
+    all_results_camera = viewer.overlay_view.cameraParams()
+    assert all_results_camera["distance"] > before["distance"]
+    assert all_results_camera["center"].y() < before["center"].y()
+    viewer.visibility_checks[2].setChecked(False)
+    assert viewer.fit_all()
+    visible_camera = viewer.overlay_view.cameraParams()
+    assert visible_camera["distance"] < all_results_camera["distance"]
+
+    for (transform, size, spacing), grid in zip(grid_data, viewer.overlay_view.grids):
+        assert grid.transform() == transform
+        assert grid.size() == pytest.approx(size)
+        assert grid.spacing() == pytest.approx(spacing)
+    np.testing.assert_array_equal(viewer.overlay_view.axis.pos, axis_data)
+    for (text, position), label in zip(label_data, viewer.overlay_view.numeric_labels):
+        assert label.text == text
+        np.testing.assert_array_equal(label.pos, position)
+
+    viewer.set_mode("split")
+    assert viewer.fit_all()
+    split_camera = viewer.split_views[0].cameraParams()
+    for view, check in zip(viewer.split_views, viewer.visibility_checks):
+        if check.isChecked():
+            assert view.cameraParams()["distance"] == pytest.approx(split_camera["distance"])
+            np.testing.assert_allclose(view.cameraParams()["center"].toTuple(), split_camera["center"].toTuple())
+    viewer.set_mode("overlay")
+    viewer.reset_camera()
+    reset = viewer.overlay_view.cameraParams()
+    assert reset["distance"] == pytest.approx(before["distance"])
+    np.testing.assert_allclose(reset["center"].toTuple(), before["center"].toTuple())
+
+    for loaded in viewer.loaded_results:
+        loaded.result.detected[:] = False
+    unchanged = viewer.overlay_view.cameraParams()
+    assert not viewer.fit_all()
+    assert viewer.overlay_view.cameraParams()["distance"] == pytest.approx(unchanged["distance"])
+    np.testing.assert_allclose(viewer.overlay_view.cameraParams()["center"].toTuple(), unchanged["center"].toTuple())
+    viewer.close()
+
+
 def test_comparison_mesh_visibility_remains_exclusive_with_skeleton(tmp_path, qapp):
     from calibfreehands.visualization.comparison import ComparisonViewer
     viewer = ComparisonViewer(_session(tmp_path, mesh=True))

@@ -513,8 +513,9 @@ class _OverlayComparisonView(_GLResultView):
             position = min(frame, loaded.frame_count - 1)
             for hand in range(2):
                 if result.detected[position, hand] and not (hand == 0 and not self.show_left) and not (hand == 1 and not self.show_right):
-                    points.append(result.keypoints_3d[position, hand] @ RAW_TO_VIEW.T)
-                    if loaded.has_mesh_topology and result.mano_vertices is not None:
+                    if self.show_joints or self.show_bones:
+                        points.append(result.keypoints_3d[position, hand] @ RAW_TO_VIEW.T)
+                    if self.show_mesh and loaded.has_mesh_topology and result.mano_vertices is not None:
                         points.append(result.mano_vertices[position, hand] @ RAW_TO_VIEW.T)
         finite = np.concatenate(points) if points else np.empty((0, 3), dtype=np.float32)
         return finite[np.isfinite(finite).all(axis=1)]
@@ -979,7 +980,7 @@ class ComparisonViewer(QWidget):
         view_toolbar = QHBoxLayout()
         view_toolbar.addWidget(QLabel("Camera"))
         for text, method in (("Front", "front_view"), ("Side", "side_view"), ("Top", "top_view"),
-                             ("Fit", "fit_hands"), ("Reset", "reset_camera")):
+                             ("Fit All", "fit_all"), ("Reset", "reset_camera")):
             button = QPushButton(text)
             button.setFixedWidth(64)
             button.setSizePolicy(QSizePolicy.Policy.Fixed, QSizePolicy.Policy.Fixed)
@@ -1006,7 +1007,7 @@ class ComparisonViewer(QWidget):
             widget.hide()
         camera_menu = self.more_menu.addMenu("Camera")
         for text, method in (("Front", "front_view"), ("Side", "side_view"), ("Top", "top_view"),
-                             ("Fit", "fit_hands"), ("Reset", "reset_camera")):
+                             ("Fit All", "fit_all"), ("Reset", "reset_camera")):
             camera_menu.addAction(text, lambda _=False, name=method: self._apply_camera_preset(name))
         self.more_menu.addSeparator()
         self.export_csv_action = self.more_menu.addAction("Export CSV…", self._export_csv)
@@ -1532,6 +1533,9 @@ class ComparisonViewer(QWidget):
         window.setCentralWidget(content)
         detached_views = [_LinkedResultView(loaded, color, lambda *_: None)
                           for loaded, color in zip(self.loaded_results, self.configuration_colors)]
+        camera_source = self.overlay_view if self.mode == "overlay" else self.split_views[0]
+        for view in detached_views:
+            view.setCameraParams(**camera_source.cameraParams())
         for index, (config, view) in enumerate(zip(self.configurations, detached_views), 1):
             cell = QWidget()
             cell_layout = QVBoxLayout(cell)
@@ -1553,6 +1557,9 @@ class ComparisonViewer(QWidget):
     def set_mode(self, mode):
         if mode not in ("overlay", "split"):
             raise ValueError(f"unknown comparison view mode: {mode}")
+        if mode != self.mode:
+            camera_source = self.overlay_view if self.mode == "overlay" else self.split_views[0]
+            self._sync_camera(camera_source)
         self.mode = mode
         self.views.setCurrentIndex(0 if mode == "overlay" else 1)
         self.mode_switch.setChecked(mode == "split")
@@ -1583,6 +1590,7 @@ class ComparisonViewer(QWidget):
         source.update()
         for view in [self.overlay_view, *self.split_views]:
             setattr(view, attr, value)
+            view._update_reference_visibility()
         self._render_active_frame()
 
     def _set_mesh(self, value):
@@ -1794,13 +1802,47 @@ class ComparisonViewer(QWidget):
         self._syncing_camera = True
         try:
             params = source.cameraParams()
-            for view in self.split_views:
+            for view in [self.overlay_view, *self.split_views]:
                 if view is not source: view.setCameraParams(**params)
         finally:
             self._syncing_camera = False
         self._refresh_annotations()
 
+    def fit_all(self):
+        points = self.overlay_view._geometry(self.slider.value())
+        if not len(points):
+            return False
+        if self.mode == "overlay":
+            fitted = self.overlay_view.fit_camera_to_points(points)
+            if fitted:
+                self._refresh_annotations()
+            return fitted
+
+        visible_indices = [index for index, check in enumerate(self.visibility_checks) if check.isChecked()]
+        if not visible_indices:
+            return False
+        visible_views = [self.split_views[index] for index in visible_indices]
+        aspect = max((view.width() / view.height() for view in visible_views if view.height() > 0),
+                     default=4 / 3)
+        source = visible_views[0]
+        if not source.fit_camera_to_points(points, aspect=aspect):
+            return False
+        self._sync_camera(source)
+        return True
+
+    def reset_camera(self):
+        source = self.overlay_view if self.mode == "overlay" else self.split_views[0]
+        source.reset_camera()
+        self._sync_camera(source)
+        self._refresh_annotations()
+
     def _apply_camera_preset(self, method):
+        if method == "fit_all":
+            self.fit_all()
+            return
+        if method == "reset_camera":
+            self.reset_camera()
+            return
         views = [self.overlay_view] if self.mode == "overlay" else self.split_views
         if not views: return
         getattr(views[0], method)()

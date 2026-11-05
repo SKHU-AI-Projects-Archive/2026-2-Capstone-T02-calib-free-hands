@@ -127,12 +127,110 @@ def test_viewer_mesh_grid_axis_and_fit_contract(tmp_path, qapp):
     assert not viewer.gl_view.show_mesh and len(viewer.gl_view.grids) == 3 and len(viewer.gl_view.axis_labels) == 3
     checkboxes["Grid"].setChecked(False)
     assert not any(grid.visible() for grid in viewer.gl_view.grids)
+    assert not any(label.visible() for label in viewer.gl_view.numeric_labels)
+    checkboxes["Grid"].setChecked(True)
+    assert all(label.visible() for label in viewer.gl_view.numeric_labels)
     checkboxes["Axis"].setChecked(False)
     assert not viewer.gl_view.axis.visible() and not any(label.visible() for label in viewer.gl_view.axis_labels)
     viewer.gl_view.fit_hands(); viewer.gl_view.front_view(); viewer.gl_view.side_view(); viewer.gl_view.top_view(); viewer.slider.setValue(1)
     np.testing.assert_array_equal(result.keypoints_3d, before_joints)
     np.testing.assert_array_equal(result.mano_vertices, before_vertices)
     viewer.close()
+
+
+def test_fixed_metric_workspace_planes_axes_and_major_labels(tmp_path, qapp):
+    from PySide6.QtGui import QVector3D
+    from calibfreehands.visualization.viewer import (
+        GRID_MAJOR_SPACING_M, GRID_MINOR_SPACING_M, WORKSPACE_BOUNDS_M,
+        GRID_LABEL_OFFSET_M, ResultViewer, _view_point_from_raw,
+    )
+
+    npz, _ = save_result(_viewer_result(mesh=False), tmp_path, {"schema_version": 1})
+    viewer = ResultViewer(npz)
+    view = viewer.gl_view
+    assert WORKSPACE_BOUNDS_M == ((-1.0, 1.0), (-1.0, 1.0), (0.0, 2.0))
+    assert GRID_MINOR_SPACING_M == pytest.approx(0.1)
+    assert GRID_MAJOR_SPACING_M == pytest.approx(0.5)
+    assert len(view.grids) == 3
+    for grid in view.grids:
+        assert grid.size() == pytest.approx([2.0, 2.0, 1.0])
+        assert grid.spacing() == pytest.approx([0.1, 0.1, 1.0])
+
+    planes = [grid.transform().map(QVector3D(0, 0, 0)) for grid in view.grids]
+    assert [point.toTuple() for point in planes] == pytest.approx([(0, 0, 0), (0, -1, 0), (0, -1, 0)])
+    assert view.grids[0].transform().map(QVector3D(0, 1, 0)).toTuple() == pytest.approx((0, 0, 1))
+    assert view.grids[1].transform().map(QVector3D(0, 1, 0)).toTuple() == pytest.approx((0, 0, 0))
+    assert view.grids[2].transform().map(QVector3D(1, 0, 0)).toTuple() == pytest.approx((0, -1, -1))
+    assert view.axis.pos == pytest.approx(np.asarray((
+        _view_point_from_raw((-1, 0, 0)), _view_point_from_raw((1, 0, 0)),
+        _view_point_from_raw((0, -1, 0)), _view_point_from_raw((0, 1, 0)),
+        _view_point_from_raw((0, 0, 0)), _view_point_from_raw((0, 0, 2)),
+    )))
+
+    assert len(view.numeric_labels) == 13
+    assert sum(label.text == "0" for label in view.numeric_labels) == 1
+    origin_label = next(label for label in view.numeric_labels if label.text == "0")
+    np.testing.assert_allclose(origin_label.pos,
+                               _view_point_from_raw((GRID_LABEL_OFFSET_M, -GRID_LABEL_OFFSET_M,
+                                                     GRID_LABEL_OFFSET_M)))
+    for text, raw_point in (("50 cm", (-GRID_LABEL_OFFSET_M, 0, 0.5)),
+                            ("-50 cm", (GRID_LABEL_OFFSET_M, -0.5, 0)),
+                            ("100 cm", (1, -GRID_LABEL_OFFSET_M, 0)),
+                            ("150 cm", (-GRID_LABEL_OFFSET_M, 0, 1.5))):
+        assert any(label.text == text and np.allclose(label.pos, _view_point_from_raw(raw_point))
+                   for label in view.numeric_labels)
+    assert [label.text for label in view.axis_labels] == ["X", "Y", "Z"]
+    for label, raw_point in zip(view.axis_labels, ((1.3, 0, 0), (0, 1.3, 0), (0, 0, 2.3))):
+        np.testing.assert_allclose(label.pos, _view_point_from_raw(raw_point))
+    assert all(label.color.getRgb() == view.numeric_label_color for label in view.numeric_labels)
+    viewer.close()
+
+
+def test_metric_camera_is_result_independent_and_fit_all_only_moves_camera(qapp):
+    from calibfreehands.visualization.viewer import (
+        LoadedResult, _GLResultView, default_metric_camera_distance,
+        metric_workspace_center_display,
+    )
+
+    first_result = _viewer_result(mesh=True)
+    second_result = _viewer_result(mesh=True)
+    second_result.keypoints_3d[:, 0] = (0.0, 0.0, 15.0)
+    second_result.mano_vertices[:, 0] += (0.0, 0.0, 15.0)
+    raw_before = second_result.keypoints_3d.copy()
+    mesh_before = second_result.mano_vertices.copy()
+    first = _GLResultView(LoadedResult(first_result))
+    second = _GLResultView(LoadedResult(second_result))
+    first_camera = first.cameraParams()
+    second_camera = second.cameraParams()
+    np.testing.assert_allclose(first_camera["center"].toTuple(), metric_workspace_center_display())
+    np.testing.assert_allclose(second_camera["center"].toTuple(), first_camera["center"].toTuple())
+    assert first_camera["distance"] == pytest.approx(default_metric_camera_distance())
+    assert second_camera["distance"] == pytest.approx(first_camera["distance"])
+
+    grid_transforms = [grid.transform() for grid in (second.grids)]
+    grid_positions = second.axis.pos.copy()
+    label_positions = [label.pos.copy() for label in second.numeric_labels]
+    reference_item_ids = (tuple(map(id, second.grids)), tuple(map(id, second.numeric_labels)))
+    second.set_frame(1)
+    assert second.cameraParams()["distance"] == pytest.approx(first_camera["distance"])
+    assert (tuple(map(id, second.grids)), tuple(map(id, second.numeric_labels))) == reference_item_ids
+    assert second.fit_all()
+    fitted = second.cameraParams()
+    assert fitted["distance"] != pytest.approx(first_camera["distance"])
+    np.testing.assert_array_equal(second.axis.pos, grid_positions)
+    for actual, expected in zip(second.grids, grid_transforms):
+        assert actual.transform() == expected
+    for label, position in zip(second.numeric_labels, label_positions):
+        np.testing.assert_array_equal(label.pos, position)
+    np.testing.assert_array_equal(second_result.keypoints_3d, raw_before)
+    np.testing.assert_array_equal(second_result.mano_vertices, mesh_before)
+
+    before_empty = second.cameraParams()
+    second.show_left = False
+    assert not second.fit_all()
+    assert second.cameraParams()["distance"] == pytest.approx(before_empty["distance"])
+    np.testing.assert_allclose(second.cameraParams()["center"].toTuple(), before_empty["center"].toTuple())
+    first.close(); second.close()
 
 
 def test_legacy_result_disables_mesh_checkbox(tmp_path, qapp):
@@ -233,7 +331,7 @@ def test_fit_uses_visible_two_hand_bounds_and_handles_empty_result(qapp):
     from calibfreehands.visualization.viewer import LoadedResult, _GLResultView
     result = _viewer_result(); result.detected[:, 1] = True; result.keypoints_2d[:, 1] = 0; result.keypoints_3d[:, 1] = np.array([[-2., 1., 2.]], dtype=np.float32)
     result.mano_vertices[:, 1] = np.array(((-3., 0., 0.), (-1., 0., 0.), (-3., 2., 0.), (-3., 0., 2.)), dtype=np.float32)
-    view = _GLResultView(LoadedResult(result)); assert view._frame_camera()
+    view = _GLResultView(LoadedResult(result)); view.show_mesh = True; assert view._frame_camera()
     points = np.concatenate((result.keypoints_3d[0].reshape(-1, 3), result.mano_vertices[0].reshape(-1, 3))) @ RAW_TO_VIEW.T
     points = points[np.isfinite(points).all(axis=1)]
     np.testing.assert_allclose(view.fit_center, (points.min(axis=0) + points.max(axis=0)) / 2)
@@ -292,14 +390,16 @@ def test_legacy_result_disables_mesh_opacity(tmp_path, qapp):
     viewer.close()
 
 
-def test_axis_length_is_sixty_five_percent_of_grid_size(qapp):
+def test_axis_ranges_remain_fixed_to_metric_workspace(qapp):
     from calibfreehands.visualization.viewer import LoadedResult, _GLResultView
 
     view = _GLResultView(LoadedResult(_viewer_result()))
-    expected_axis_length = 9.0 * 0.65
-    assert np.isclose(np.linalg.norm(view.axis.pos[1] - view.axis.pos[0]), expected_axis_length)
-    label_position = np.asarray(view.axis_labels[0].pos)
-    assert np.isclose(np.linalg.norm(label_position - view.fit_center), expected_axis_length * 1.08)
+    assert np.linalg.norm(view.axis.pos[1] - view.axis.pos[0]) == pytest.approx(2.0)
+    assert np.linalg.norm(view.axis.pos[3] - view.axis.pos[2]) == pytest.approx(2.0)
+    assert np.linalg.norm(view.axis.pos[5] - view.axis.pos[4]) == pytest.approx(2.0)
+    np.testing.assert_allclose(view.axis_labels[0].pos, (-1.3, 0, 0))
+    np.testing.assert_allclose(view.axis_labels[1].pos, (0, 0, -1.3))
+    np.testing.assert_allclose(view.axis_labels[2].pos, (0, -2.3, 0))
 
 
 def test_click_context_routes_arrows_without_mutating_frame_in_orbit_mode(tmp_path, qapp):

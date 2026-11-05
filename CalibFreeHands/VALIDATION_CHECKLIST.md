@@ -315,7 +315,7 @@ All entries below are pending implementation and validation. No acceptance item 
 - [ ] Manual HUD drag to each of the four corners, size/background/opacity menu review, and constrained-viewport recovery
 - [ ] Source A/B/C provider registry, worker, cache-byte, and RSS measurements; application console review during a complete close/shutdown cycle
 - [ ] Original feedback provider and second first-time user repeat the complete flow without coaching
-- [ ] Fresh AnyCalib/WiLoR inference smoke; existing saved results were used for Viewer inspection
+- [x] The user later confirmed fresh AnyCalib/WiLoR inference; the Viewer checks in this section used existing saved results.
 
 
 ### Viewer Final Polish & HUD Stabilization (2026-11-04)
@@ -323,7 +323,8 @@ All entries below are pending implementation and validation. No acceptance item 
 - [x] Offscreen regression tests cover the single Overlay/Split switch, theme-aware playback icons, coalesced HUD fitting across result/Detection/reference/metric changes, requested Large size retention, and same-joint annotation staggering.
 - [x] Windows saved-result Viewer review: dark-theme frame/playback icons remained visible; Overlay/Split switch toggled 20 times; Large HUD, Results visibility, Detection Numeric/Bar, Key-joint and Worst-5 annotations rendered without the previously reported transient shrink.
 - [ ] Reference and metric popup changes, Hovered/All annotation modes, light-theme native GUI, constrained viewport HUD recovery, and 1x/2x playback performance remain for user/manual follow-up.
-- [ ] Fresh AnyCalib/WiLoR inference and original/second first-user rerun remain pending.
+- [x] Fresh AnyCalib/WiLoR inference was later user-confirmed.
+- [ ] Original/second first-user rerun remains pending until the user selects a date.
 
 
 ## Final Viewer Micro-Polish (2026-11-04)
@@ -335,7 +336,8 @@ All entries below are pending implementation and validation. No acceptance item 
 - [x] Windows dark-theme switch screenshot visually confirms a neutral track and high-contrast thumb.
 - [x] Windows Qt runtime smoke with three saved `.cfh` results: Detection Bar ON measured 316 px HUD height; OFF immediately measured 268 px without pointer movement; a later Leave event retained 268 px. No inference ran.
 - [ ] Light-theme switch visual review remains pending.
-- [ ] Fresh AnyCalib/WiLoR inference and first-user reruns remain pending.
+- [x] Fresh AnyCalib/WiLoR inference was later user-confirmed.
+- [ ] First-user rerun remains pending until the user selects a date.
 
 
 ## Phase 1.1 GT Terminology and Pin Contrast (2026-11-05)
@@ -346,7 +348,7 @@ All entries below are pending implementation and validation. No acceptance item 
 - [x] Pin stays 26-by-26 px with existing OFF presentation and `#33FF33` ON background/border; the active pin silhouette is `#111111` in both palettes. Offscreen sampling verifies at least 4.5:1 contrast.
 - [x] Native Windows Viewer smoke with saved `.cfh` bundles visually confirmed GT-first HUD, `Differences` / `GT Differences` wording, Pin OFF, and the dark Pin icon against the green active background.
 - [x] Targeted regression selection: 3 passed; full pytest: 250 passed. App import, compileall, `pip check`, and `git diff --check` passed.
-- [ ] Phase 2 grid/camera updates and fresh AnyCalib/WiLoR inference remain deferred.
+- [ ] Phase 2 grid/camera implementation remains in progress at this checkpoint; fresh inference was later user-confirmed.
 
 
 ## Final Toolbar Simplification (2026-11-04)
@@ -356,7 +358,18 @@ All entries below are pending implementation and validation. No acceptance item 
 - [x] Offscreen toolbar geometry confirms Layout, switch, and Pin are one compact group before Results; regression confirms Pin preserves the existing auto-hide behavior.
 - [x] Focused viewer tests: 4 passed; full pytest: 243 passed.
 - [ ] Native Windows GUI review of dark/light Pin states, toolbar composition, auto-hide, and keyboard behavior is pending; the desktop is currently at the Windows lock screen, so the running app cannot be visually inspected without unlocking the user's session.
-- [ ] Fresh AnyCalib/WiLoR inference and first-user reruns remain pending.
+- [x] Fresh AnyCalib/WiLoR inference was later user-confirmed.
+- [ ] First-user rerun remains pending until the user selects a date.
+
+
+## Phase 2 Fixed Metric Workspace and Shared Camera (2026-11-05)
+
+- [x] Offscreen tests verify fixed workspace bounds, planes, axis ranges, label values/positions, Grid/Axis visibility, and geometry-independent default camera framing.
+- [x] Offscreen tests verify Fit All uses finite currently visible geometry, leaves metric references and canonical keypoint/MANO arrays unchanged, and leaves the camera unchanged when geometry is empty.
+- [x] Offscreen comparison tests verify shared camera across Overlay/Split and visible Split views, pose retention when switching modes, detached-view camera linking, and fixed reference geometry after fitting.
+- [x] Windows native read-only smoke opened three saved same-source `.cfh` results; the fixed workspace remained in view while the 15000 px prediction extended outside it at default framing.
+- [x] Viewer/comparison tests: 81 passed; full pytest: 255 passed; visualization imports, compileall, `pip check`, and `git diff --check` passed.
+- [ ] Native menu interaction for Fit All/Reset and user first-run rerun remain pending; no new inference was run for this phase.
 
 
 ## View/Pin Final Micro-Polish (2026-11-04)
@@ -365,7 +378,8 @@ All entries below are pending implementation and validation. No acceptance item 
 - [x] Pin is a 26-by-26 checkable custom vector control; OFF retains the gray surface and muted pin, while ON uses a subdued green surface and white pin.
 - [x] Offscreen dark/light assertions cover OFF/ON background, border, and icon colors. Tests cover button click, keyboard Space, accessible name, toolbar order/gap, auto-hide pin behavior, and global Space playback.
 - [ ] Native Windows dark/light visual and interaction review remains pending because the desktop is at the Windows lock screen; inspecting the app requires unlocking the user's session.
-- [ ] Fresh AnyCalib/WiLoR inference and original/second first-user reruns remain pending.
+- [x] Fresh AnyCalib/WiLoR inference was later user-confirmed.
+- [ ] Original/second first-user rerun remains pending until the user selects a date.
 
 
 ## Pin Size and Active Color Refinement (2026-11-04)
@@ -395,7 +409,8 @@ All entries below are pending implementation and validation. No acceptance item 
 - [x] Offscreen Qt regression coverage includes A→B→C GT changes, candidate color restoration, annotation and metric refresh, joint/bone/mesh identity colors, confidence alpha, metric availability pruning, toolbar labels, hidden vectors, and existing Pin behavior.
 - [x] Native Windows smoke with three existing same-source `2_screw` `.cfh` files (Manual Focal 1655, 2500, and 15000 px) verified GT HUD ordering and selection, old-color restoration, refreshed comparison values, Confidence opacity/numeric controls, and Overlay/Split views. No inference ran and the saved files were opened read-only.
 - [x] Focused comparison viewer tests: 59 passed; full pytest: 249 passed; application import, compileall, `pip check`, and `git diff --check` passed.
-- [ ] Fresh AnyCalib/WiLoR inference and first-user reruns remain pending.
+- [x] Fresh AnyCalib/WiLoR inference was later user-confirmed.
+- [ ] First-user rerun remains pending until the user selects a date.
 
 
 ## Final Viewer Control Styling (2026-11-04)
@@ -406,4 +421,5 @@ All entries below are pending implementation and validation. No acceptance item 
 - [x] Offscreen geometry and playback tests pass at 1280-by-720; speed value width accommodates the widest preset without moving the arrows.
 - [x] Windows saved-result comparison Viewer inspected at 1280-by-720: switch toggled Overlay/Split; the speed controls displayed 0.75x and 1.25x in place with no clipping or large gap.
 - [ ] Light-theme native Windows visual review remains pending; palette rendering is covered offscreen.
-- [ ] Fresh AnyCalib/WiLoR inference and first-user reruns remain pending.
+- [x] Fresh AnyCalib/WiLoR inference was later user-confirmed.
+- [ ] First-user rerun remains pending until the user selects a date.

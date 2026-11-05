@@ -11,13 +11,53 @@ from pyqtgraph.opengl import shaders
 from pyqtgraph.opengl.items.GLLinePlotItem import GLLinePlotItem
 from pyqtgraph.opengl.items.GLScatterPlotItem import GLScatterPlotItem
 from PySide6.QtCore import QEvent, Qt, QTimer, QPointF, QLineF, QSignalBlocker
-from PySide6.QtGui import QGuiApplication, QImage, QPainter, QPen
+from PySide6.QtGui import QFont, QGuiApplication, QImage, QPainter, QPen
 from PySide6.QtWidgets import QCheckBox, QHBoxLayout, QLabel, QPushButton, QSizePolicy, QSlider, QSplitter, QVBoxLayout, QWidget
 
 from calibfreehands.media.provider import MediaFrameProvider, release_shared_media_provider, shared_media_provider
 from calibfreehands.pipeline.result import CanonicalResult
 from calibfreehands.pipeline.result_bundle import ResultBundle, load_result_bundle
 from .topology import HAND_CONNECTIONS, RAW_TO_VIEW
+
+WORKSPACE_BOUNDS_M = ((-1.0, 1.0), (-1.0, 1.0), (0.0, 2.0))
+GRID_MINOR_SPACING_M = 0.1
+GRID_MAJOR_SPACING_M = 0.5
+WORKSPACE_CENTER_RAW = (0.0, 0.0, 1.0)
+DEFAULT_WORKSPACE_ASPECT = 4 / 3
+DEFAULT_CAMERA_MARGIN = 1.1
+GRID_LABEL_OFFSET_M = 0.15
+AXIS_LABEL_MARGIN_M = 0.3
+
+
+def _view_point_from_raw(point):
+    return np.asarray(point, dtype=np.float64) @ RAW_TO_VIEW.T
+
+
+def metric_workspace_center_display():
+    return tuple(_view_point_from_raw(WORKSPACE_CENTER_RAW))
+
+
+def _workspace_radius():
+    corners = np.asarray([
+        (x, y, z)
+        for x in WORKSPACE_BOUNDS_M[0]
+        for y in WORKSPACE_BOUNDS_M[1]
+        for z in WORKSPACE_BOUNDS_M[2]
+    ])
+    center = np.asarray(WORKSPACE_CENTER_RAW)
+    return float(np.linalg.norm(corners - center, axis=1).max())
+
+
+def _camera_distance_for_radius(radius, fov_degrees=60.0, aspect=DEFAULT_WORKSPACE_ASPECT, margin=DEFAULT_CAMERA_MARGIN):
+    aspect = max(float(aspect), 1e-6)
+    half_horizontal = np.deg2rad(float(fov_degrees)) / 2
+    half_vertical = np.arctan(np.tan(half_horizontal) / aspect)
+    half_fov = min(half_horizontal, half_vertical)
+    return float(max(radius, 0.05) * margin / np.sin(half_fov))
+
+
+def default_metric_camera_distance(fov_degrees=60.0, aspect=DEFAULT_WORKSPACE_ASPECT):
+    return _camera_distance_for_radius(_workspace_radius(), fov_degrees, aspect)
 
 
 def _reset_gl_shader_cache() -> None:
@@ -176,16 +216,22 @@ class _GLResultView(gl.GLViewWidget):
         for grid in self.grids: self.addItem(grid)
         self.axis = gl.GLLinePlotItem(mode="lines", width=2, antialias=True)
         self.axis_labels = [gl.GLTextItem(text=label) for label in ("X", "Y", "Z")]
+        self.numeric_label_color = (190, 196, 204, 255)
+        self.numeric_labels = []
         self.addItem(self.axis)
         for label in self.axis_labels: self.addItem(label)
-        self.fit_center = None; self.fit_distance = 1.2; self.setCameraPosition(distance=self.fit_distance)
+        self._configure_metric_reference()
+        self.metric_center = np.asarray(metric_workspace_center_display(), dtype=np.float64)
+        self.default_metric_distance = default_metric_camera_distance(self.opts["fov"])
+        self.fit_center = self.metric_center.copy()
+        self.fit_distance = self.default_metric_distance
+        self.setCameraPosition(pos=pg.Vector(*self.metric_center), distance=self.fit_distance, elevation=20, azimuth=45)
         self.joints = [gl.GLScatterPlotItem(), gl.GLScatterPlotItem()]
         self.bones = [gl.GLLinePlotItem(mode="lines", width=2, antialias=True), gl.GLLinePlotItem(mode="lines", width=2, antialias=True)]
         self.meshes = [gl.GLMeshItem(smooth=False, drawEdges=False), gl.GLMeshItem(smooth=False, drawEdges=False)]
         for item in (*self.joints, *self.bones, *self.meshes): self.addItem(item); item.setVisible(False)
         self.set_mesh_opacity(self.mesh_opacity)
         self.set_frame(0)
-        self._frame_camera(self._first_detected_frame(), reset_orientation=True)
     def mousePressEvent(self, event):
         self.setFocus(Qt.FocusReason.MouseFocusReason)
         super().mousePressEvent(event)
@@ -195,46 +241,109 @@ class _GLResultView(gl.GLViewWidget):
         for hand_i, mesh in enumerate(self.meshes):
             mesh.setGLOptions(gl_options); mesh.setColor((*self.hand_colors[hand_i], self.mesh_opacity))
         self.update()
-    def _first_detected_frame(self):
-        detected = self.loaded.result.detected
-        return int(np.flatnonzero(detected.any(axis=1))[0]) if detected.any() else self.frame
     def _geometry(self, frame):
         result = self.loaded.result; points = []
         visible = result.detected[frame]
         for hand_i in range(2):
             if not visible[hand_i] or (hand_i == 0 and not self.show_left) or (hand_i == 1 and not self.show_right): continue
-            points.append(np.asarray(result.keypoints_3d[frame, hand_i]) @ RAW_TO_VIEW.T)
-            if self.loaded.has_mesh_topology and result.mano_vertices is not None:
+            if self.show_joints or self.show_bones:
+                points.append(np.asarray(result.keypoints_3d[frame, hand_i]) @ RAW_TO_VIEW.T)
+            if self.show_mesh and self.loaded.has_mesh_topology and result.mano_vertices is not None:
                 points.append(np.asarray(result.mano_vertices[frame, hand_i]) @ RAW_TO_VIEW.T)
         finite = np.concatenate(points) if points else np.empty((0, 3), dtype=np.float32)
         return finite[np.isfinite(finite).all(axis=1)]
-    def _update_reference(self, center, extent):
-        size = max(extent * 1.5, 0.4); spacing = max(size / 10, 0.05)
-        # Local XY grids become display XY (raw XZ), XZ (raw XY), and YZ (raw YZ).
-        for grid, rotation in zip(self.grids, (None, (90, 1, 0, 0), (90, 0, 1, 0))):
-            grid.resetTransform(); grid.setSize(size, size, 1); grid.setSpacing(spacing, spacing, 1)
-            if rotation: grid.rotate(*rotation)
+
+    def _configure_metric_reference(self):
+        grid_transforms = (
+            ((90, 1, 0, 0), (0, 0, 0)),
+            (None, (0, -1, 0)),
+            ((90, 0, 1, 0), (0, -1, 0)),
+        )
+        for grid, (rotation, center) in zip(self.grids, grid_transforms):
+            grid.resetTransform()
+            grid.setSize(2.0, 2.0, 1.0)
+            grid.setSpacing(GRID_MINOR_SPACING_M, GRID_MINOR_SPACING_M, 1.0)
+            if rotation:
+                grid.rotate(*rotation)
             grid.translate(*center)
-        directions = np.eye(3, dtype=np.float32) @ RAW_TO_VIEW.T
-        axis_size = size * 0.65
-        positions = np.concatenate([np.stack((center, center + direction * axis_size)) for direction in directions])
+
+        raw_segments = np.asarray((
+            ((-1, 0, 0), (1, 0, 0)),
+            ((0, -1, 0), (0, 1, 0)),
+            ((0, 0, 0), (0, 0, 2)),
+        ), dtype=np.float32)
+        positions = (raw_segments @ RAW_TO_VIEW.T).reshape(-1, 3)
         colors = np.repeat(np.asarray(((1, 0.2, 0.2, 1), (0.2, 1, 0.2, 1), (0.3, 0.5, 1, 1)), dtype=np.float32), 2, axis=0)
         self.axis.setData(pos=np.ascontiguousarray(positions, dtype=np.float32), color=colors, mode="lines")
-        for label, direction in zip(self.axis_labels, directions): label.setData(pos=center + direction * axis_size * 1.08)
+
+        raw_positive_endpoints = ((1 + AXIS_LABEL_MARGIN_M, 0, 0),
+                                  (0, 1 + AXIS_LABEL_MARGIN_M, 0),
+                                  (0, 0, 2 + AXIS_LABEL_MARGIN_M))
+        for label, raw_endpoint in zip(self.axis_labels, raw_positive_endpoints):
+            label.setData(pos=_view_point_from_raw(raw_endpoint), color=self.numeric_label_color, font=QFont("Helvetica", 12))
+
+        ticks = []
+        for axis, (lower, upper) in enumerate(WORKSPACE_BOUNDS_M):
+            values = np.arange(lower, upper + GRID_MAJOR_SPACING_M * 0.5, GRID_MAJOR_SPACING_M)
+            for value in values:
+                if np.isclose(value, 0.0):
+                    continue
+                raw_point = [0.0, 0.0, 0.0]
+                raw_point[axis] = value
+                if axis == 0:
+                    raw_point[1] = -GRID_LABEL_OFFSET_M
+                elif axis == 1:
+                    raw_point[0] = GRID_LABEL_OFFSET_M
+                else:
+                    raw_point[0] = -GRID_LABEL_OFFSET_M
+                text = f"{value * 100:g} cm"
+                ticks.append((text, raw_point))
+        ticks.append(("0", (GRID_LABEL_OFFSET_M, -GRID_LABEL_OFFSET_M, GRID_LABEL_OFFSET_M)))
+        for text, raw_point in ticks:
+            label = gl.GLTextItem(text=text, pos=_view_point_from_raw(raw_point), color=self.numeric_label_color,
+                                  font=QFont("Helvetica", 9),
+                                  alignment=Qt.AlignmentFlag.AlignHCenter | Qt.AlignmentFlag.AlignVCenter)
+            self.numeric_labels.append(label)
+            self.addItem(label)
+
     def _frame_camera(self, frame=None, reset_orientation=False):
         finite = self._geometry(self.frame if frame is None else frame)
-        if not len(finite): return False
+        return self.fit_camera_to_points(finite, reset_orientation=reset_orientation)
+
+    def fit_camera_to_points(self, points, aspect=None, reset_orientation=False):
+        points = np.asarray(points)
+        if points.size == 0:
+            return False
+        finite = points[np.isfinite(points).all(axis=1)]
+        if not len(finite):
+            return False
         center = (finite.min(axis=0) + finite.max(axis=0)) / 2
-        extent = max(float(np.ptp(finite, axis=0).max()), 0.1)
-        self.fit_center = center; self.fit_distance = max(0.3, extent * 2.5); self._update_reference(center, extent)
-        options = {"distance": self.fit_distance, "pos": pg.Vector(*center)}
-        if reset_orientation: options.update(elevation=20, azimuth=45)
+        radius = float(np.linalg.norm(finite.max(axis=0) - finite.min(axis=0)) / 2)
+        if aspect is None:
+            aspect = self.width() / self.height() if self.width() > 0 and self.height() > 0 else DEFAULT_WORKSPACE_ASPECT
+        distance = _camera_distance_for_radius(radius, self.opts["fov"], aspect)
+        self.fit_center = center
+        self.fit_distance = distance
+        options = {"distance": distance, "pos": pg.Vector(*center)}
+        if reset_orientation:
+            options.update(elevation=20, azimuth=45)
         self.setCameraPosition(**options)
-        self._update_reference_visibility(); return True
-    def fit_hands(self): self._frame_camera()
-    def reset_camera(self): self._frame_camera(reset_orientation=True); self.update()
+        return True
+
+    def fit_all(self):
+        return self.fit_camera_to_points(self._geometry(self.frame))
+
+    def fit_hands(self):
+        return self.fit_all()
+
+    def reset_camera(self):
+        self.fit_center = self.metric_center.copy()
+        self.fit_distance = self.default_metric_distance
+        self.setCameraPosition(pos=pg.Vector(*self.metric_center), distance=self.default_metric_distance,
+                               elevation=20, azimuth=45)
+        self.update()
     def _preset(self, raw_direction):
-        if self.fit_center is None: self._frame_camera()
+        if self.fit_center is None: self.reset_camera()
         if self.fit_center is None: return
         direction = np.asarray(raw_direction, dtype=np.float32) @ RAW_TO_VIEW.T
         azimuth = float(np.degrees(np.arctan2(direction[1], direction[0])))
@@ -245,6 +354,7 @@ class _GLResultView(gl.GLViewWidget):
     def top_view(self): self._preset((0, -1, 0))
     def _update_reference_visibility(self):
         for grid in self.grids: grid.setVisible(self.show_grid)
+        for label in self.numeric_labels: label.setVisible(self.show_grid)
         self.axis.setVisible(self.show_axis)
         for label in self.axis_labels: label.setVisible(self.show_axis)
     def set_frame(self, frame):
@@ -304,7 +414,7 @@ class ResultViewer(QWidget):
         self.opacity_group.addWidget(opacity_label); self.opacity_group.addWidget(self.mesh_opacity_slider); self.opacity_group.addWidget(self.mesh_opacity_value)
         visibility.addWidget(self.opacity_container)
         previous = QPushButton("Previous"); previous.clicked.connect(self._previous); play = QPushButton("Play / Pause"); play.clicked.connect(self._play); nxt = QPushButton("Next"); nxt.clicked.connect(self._next_frame)
-        for text, callback in (("Front", self.gl_view.front_view), ("Side", self.gl_view.side_view), ("Top", self.gl_view.top_view), ("Fit Hands", self.gl_view.fit_hands), ("Reset View", self.gl_view.reset_camera)):
+        for text, callback in (("Front", self.gl_view.front_view), ("Side", self.gl_view.side_view), ("Top", self.gl_view.top_view), ("Fit All", self.gl_view.fit_all), ("Reset View", self.gl_view.reset_camera)):
             button = QPushButton(text); button.clicked.connect(callback); view.addWidget(button)
         playback.addWidget(previous); playback.addWidget(play); playback.addWidget(nxt)
         layout = QVBoxLayout(self); layout.addWidget(split, 1); layout.addWidget(self.slider); layout.addLayout(visibility); layout.addLayout(view); layout.addLayout(playback); layout.addWidget(self.status); layout.addWidget(self.coordinate_info)
