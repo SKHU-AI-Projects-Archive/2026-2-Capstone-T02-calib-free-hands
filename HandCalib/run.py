@@ -13385,7 +13385,140 @@ def x70_results_yaml(run_dir: Path, cfg: dict, note: str, methods: tuple):
     return p
 
 
-COMMANDS = {"protocol": protocol_main, "frame-filter": ff_main, "same-session": session_main, "overlay": overlay_main, "phase-segmentation": pseg_main, "guide-revision": grev_main, "f-response": fresp_main, "error-factors": ferr_main, "long-video-check": long_main, "generalization": gen_main, "main-camera-extension": ext_main, "wide-60cm": wide_main, "jointset-sets": jset_main, "verdict-calibration": cal_main, "printed-hand": pr_main, "hand-markers": mk_main, "markers-only": mo_main, "free-template": ft_main, "free-shape3d": s3_main, "free-shape3d-hand": h3_main, "free-shape3d-27": e3_main, "free-shape3d-new": e4_main, "mmpose-hand": mm_main, "mmpose-hand-46": mm2_main, "free-shape3d-new2": e5_main, "mmpose-hand-src": mm3_main, "free-shape3d-detectors": fs_main, "free-shape3d-hand-sets": h4_main, "free-shape3d-hand-sets-42track": h4b_main, "oblique-desk": od_main, "oblique-synthetic": sy_main, "oblique-fixed-template": fx_main, "oblique-desk-videos": om_main, "pause-stabilized": ps_main, "continuous-klt": kt_main, "continuous-klt-palm": kp_main, "klt-paper-dorsum": pp_main, "paper-parallax": hp_main, "segment-template": sg_main, "turn-synthetic": tr_main, "window-f": wd_main, "anycalib-videos": ac_main, "error-sources": ec_main, "hand-deformation": dm_main, "joint-combos": fc_main, "points-video": pv_main, "desk-motion": dk_main, "ramp-sensitivity": rs_main, "teammate-hands": tm_main, "finger-ramp": fr_main, "contact-points": ct_main, "wilor-ramp": wl_main, "ramp-identifiability": id_main}
+NC_NOTE = ("같은 새 핸드폰(체커보드 기준 f 하나)으로 찍은 본인 손과 팀원 손을 같은 방식으로 비교한 기록이다(판정 없음). 팀원 영상에서 f가 낮게 나온 원인이 손인지 카메라인지 가르려고, "
+           "실험 67의 책상 제약 추정기(경사 고정)를 여러 경사와 실험 71의 WiLoR 손등 경사로 돌리고 free_template(교수님)을 곁에 둔다. 경사별 f로 'f가 기준 f와 같아지는 경사'도 영상마다 구한다.")
+NC_PERSON = {"self": "본인", "teammate": "팀원"}
+
+
+def nc_cfg(own: dict) -> dict:
+    r56 = yaml.safe_load(hf.resolve(own["rules_config"]).read_text())
+    r60 = yaml.safe_load(hf.resolve(own["segments_config"]).read_text())
+    r67 = yaml.safe_load(hf.resolve(own["estimator_config"]).read_text())
+    r71 = yaml.safe_load(hf.resolve(own["wilor_config"]).read_text())
+    base = od_load(yaml.safe_load(hf.resolve(r56["base_config"]).read_text()))
+    return {**base, "tracking": r56["tracking"], "segments": r60["segments"], "joint_sets": r67["joint_sets"], "wilor": r71["wilor"], "heights": r71["heights"],
+            **{k: v for k, v in own.items() if k not in ("rules_config", "segments_config", "estimator_config", "wilor_config")}}
+
+
+def nc_geometry(npz: str, cfg: dict) -> dict:
+    """71's per-video WiLoR summary (median over frames of hf.wl_geometry)."""
+    z = np.load(npz)
+    per = [hf.wl_geometry(z["keypoints_3d"][k].astype(float), z["vertices"][k].astype(float), cfg["joint_sets"]) for k in range(len(z["frame_index"]))]
+    ok = [g for g in per if "failed" not in g]
+    rv = lambda g, js, h: np.nan if g["ramp"][js][h] is None else g["ramp"][js][h]      # noqa: E731
+    med = lambda f: float(np.nanmedian([f(g) for g in ok])) if ok else None      # noqa: E731
+    return {"n_frames": len(per), "n_ok": len(ok),
+            "ramp": {js: {h: med(lambda g, js=js, h=h: rv(g, js, h)) for h in cfg["heights"]} for js in cfg["joint_sets"]},
+            "ramp_iqr": {js: {h: (None if not ok else [float(q) for q in np.nanpercentile([rv(g, js, h) for g in ok], [25, 75])]) for h in cfg["heights"]} for js in cfg["joint_sets"]},
+            "height_mm": {h: {j: med(lambda g, h=h, j=j: g[f"{h}_mm"][j] - min(g[f"{h}_mm"][t] for t in (8, 12, 16, 20))) for j in (0, 5, 9, 13, 17)} for h in cfg["heights"]}}
+
+
+def nc_match_ramp(ramps: list, fs: list, ref: float):
+    """The ramp where f equals the reference f (linear in log f between neighbouring fixed ramps); None if f never crosses it."""
+    d = [np.nan if x is None else np.log(x / ref) for x in fs]
+    for i in range(len(ramps) - 1):
+        if np.isfinite(d[i]) and np.isfinite(d[i + 1]) and d[i] * d[i + 1] <= 0 and d[i] != d[i + 1]:
+            return float(ramps[i] + d[i] / (d[i] - d[i + 1]) * (ramps[i + 1] - ramps[i]))
+    return None
+
+
+def nc_main(argv=None):
+    ap = argparse.ArgumentParser()
+    ap.add_argument("--config", default=str(hf.PROJECT_ROOT / "configs/73_new_phone_hands.yaml"))
+    sub = ap.add_subparsers(dest="cmd")
+    ry = sub.add_parser("results-yaml")
+    ry.add_argument("--run", required=True)
+    ap.add_argument("--out", default=None)
+    ap.add_argument("--videos", type=int, default=None, help="dry run: first N videos only")
+    a = ap.parse_args(argv)
+    text = Path(a.config).read_text()
+    own = yaml.safe_load(text)
+    cfg = nc_cfg(own)
+    ramps = [float(r) for r in cfg["ramps_deg"]]
+    methods = ("free_template",) + tuple(f"ramp_{r:g}" for r in ramps) + tuple(f"wilor_{h}" for h in cfg["heights"])
+    if a.cmd == "results-yaml":
+        print(x70_results_yaml(hf.resolve(a.run), cfg, NC_NOTE, methods))
+        return None
+    if a.videos:
+        cfg["videos"] = cfg["videos"][:a.videos]
+    missing = [e["file"] for e in cfg["videos"] if not (Path(cfg["input_dir"]).expanduser() / e["file"]).exists()]
+    if missing:
+        raise SystemExit(f"영상이 없습니다: {missing}")
+    run_root, log = x70_head(None, a.out, cfg, f"73 새 핸드폰 본인 손 / 팀원 손: 영상 {len(cfg['videos'])}개, 경사 {ramps}")
+    t0 = time.time()
+    import multiprocessing as mp
+    from concurrent.futures import ProcessPoolExecutor
+    gpus = [int(g) for g in cfg["wilor"]["gpus"]]
+    geo = {}
+    with ProcessPoolExecutor(max_workers=len(gpus), mp_context=mp.get_context("spawn")) as ex:
+        for e, (p, lines) in zip(cfg["videos"], ex.map(wl_video_job, [(e, cfg, str(run_root), gpus[i % len(gpus)]) for i, e in enumerate(cfg["videos"])])):
+            geo[e["file"]] = nc_geometry(p, cfg)
+            for s in lines:
+                log(s)
+            log(f"  {e['file']}: " + ", ".join(f"{js} {h} {geo[e['file']]['ramp'][js][h]:.1f}°" for js in cfg["joint_sets"] for h in cfg["heights"] if geo[e['file']]['ramp'][js][h] is not None))
+    log(f"  WiLoR: {time.time() - t0:.0f} s")
+    vid = x70_points(cfg, run_root, log)
+    log(f"  영상 처리: {time.time() - t0:.0f} s")
+    ecfg = cfg["pipeline"]["estimate"]
+    jobs, keys = [], []
+    for e in cfg["videos"]:
+        x = vid[e["file"]]
+        for src in DK_SOURCES:
+            y = x[src]
+            for js, ids in cfg["joint_sets"].items():
+                rr = [(f"ramp_{r:g}", r) for r in ramps] + [(f"wilor_{h}", geo[e["file"]]["ramp"][js][h]) for h in cfg["heights"] if geo[e["file"]]["ramp"][js][h] is not None]
+                for mk, r in rr:
+                    jobs.append(("main", 0, y["kp"], np.isfinite(y["kp"]).all(2), np.flatnonzero(y["use"]), y["box"], tuple(x["size"]), ecfg, ids, ("ramp_fixed",), float(r)))
+                    keys.append((f"{e['file']}|{src}|{js}", mk))
+    log(f"  추정 {len(jobs)}건")
+    res = {}
+    with ProcessPoolExecutor(max_workers=int(cfg["workers"]), mp_context=mp.get_context("spawn")) as ex:
+        for (k, mk), o in zip(keys, ex.map(hf.dk_job, jobs, chunksize=1)):
+            d = res.setdefault(k, {"free_template": o.get("free_template")})
+            d[mk] = o.get("ramp_fixed") or {"failed": o.get("failed")}
+    log(f"  추정: {time.time() - t0:.0f} s")
+    ref = float(cfg["ref_f"]["value"])
+    err = lambda x: None if not x or "f" not in x else 100 * (x["f"] / ref - 1)      # noqa: E731
+    pe = lambda x: "실패" if not x or "f" not in x else f"{x['f']:.0f} ({err(x):+.1f}%)" + (" 경계" if x.get("boundary") else "")      # noqa: E731
+    match = {k: nc_match_ramp(ramps, [(d.get(f"ramp_{r:g}") or {}).get("f") for r in ramps], ref) for k, d in res.items()}
+    hk = {"dorsal": "손등 피부", "center": "관절 중심"}
+    L = ["# 실험 73 summary", "", f"**{NC_NOTE}**", "", f"- 기준 f: {ref:g} px ({cfg['ref_f']['source']}), 네 영상 공통. 기준 f는 이 파일에만 적는다.",
+         f"- 주 비교(미리 정함): {DK_SRC_KO[cfg['main']['source']]}, {cfg['main']['joint_set']}.", "",
+         "## 1. 영상별 f (주 비교 점)", "",
+         "| 영상 | 손 주인 | free_template (교수님) | " + " | ".join(f"경사 {r:g}°" for r in ramps) + " | WiLoR 손등 경사 | 그 경사로 낸 f | f = 기준 f인 경사 |",
+         "|---|---|---|" + "---|" * len(ramps) + "---|---|---|"]
+    src, js = cfg["main"]["source"], cfg["main"]["joint_set"]
+    for e in cfg["videos"]:
+        k = f"{e['file']}|{src}|{js}"
+        d, g = res.get(k) or {}, geo[e["file"]]["ramp"][js]["dorsal"]
+        L.append(f"| {e['file']} | {NC_PERSON[e['person']]} | {pe(d.get('free_template'))} | " + " | ".join(pe(d.get(f"ramp_{r:g}")) for r in ramps) +
+                 f" | {'-' if g is None else f'{g:.1f}°'} | {pe(d.get('wilor_dorsal'))} | {'범위 밖' if match.get(k) is None else f'{match[k]:.1f}°'} |")
+    L += ["", "## 2. 점·관절별 f 오차 (영상 순서대로, 기준 f 대비)", "", "| 점 | 관절 | 영상 | 손 주인 | free_template | " + " | ".join(f"{r:g}°" for r in ramps) +
+          " | WiLoR 손등 | WiLoR 관절 중심 | f = 기준 f인 경사 |", "|---|---|---|---|---|" + "---|" * len(ramps) + "---|---|---|"]
+    fe = lambda x: "-" if err(x) is None else f"{err(x):+.1f}%" + ("*" if x.get("boundary") else "")      # noqa: E731
+    for s in DK_SOURCES:
+        for j in cfg["joint_sets"]:
+            for e in cfg["videos"]:
+                k = f"{e['file']}|{s}|{j}"
+                d = res.get(k) or {}
+                L.append(f"| {DK_SRC_KO[s]} | {j} | {e['file']} | {NC_PERSON[e['person']]} | {fe(d.get('free_template'))} | " + " | ".join(fe(d.get(f"ramp_{r:g}")) for r in ramps) +
+                         f" | {fe(d.get('wilor_dorsal'))} | {fe(d.get('wilor_center'))} | {'범위 밖' if match.get(k) is None else f'{match[k]:.1f}°'} |")
+    L += ["", "\\* = f 탐색 범위 끝.", "", "## 3. WiLoR 3차원 손 (프레임 중앙값, 괄호 = 사분위 범위)", "",
+          "| 영상 | 손 주인 | 프레임 (손 있음) | j16 손등 피부 | j16 관절 중심 | j21 손등 피부 | j21 관절 중심 | 손가락 끝 대비 중지 MCP 높이 손등/중심 (mm) | 손가락 끝 대비 손목 높이 손등/중심 (mm) |",
+          "|---|---|---|---|---|---|---|---|---|"]
+    for e in cfg["videos"]:
+        g = geo[e["file"]]
+        rr = lambda js, h: "-" if g["ramp"][js][h] is None else f"{g['ramp'][js][h]:.1f}° ({g['ramp_iqr'][js][h][0]:.1f}~{g['ramp_iqr'][js][h][1]:.1f})"      # noqa: E731
+        hh = lambda j: " / ".join("-" if g["height_mm"][h][j] is None else f"{g['height_mm'][h][j]:.0f}" for h in ("dorsal", "center"))      # noqa: E731
+        L.append(f"| {e['file']} | {NC_PERSON[e['person']]} | {g['n_frames']} ({g['n_ok']}) | {rr('j16', 'dorsal')} | {rr('j16', 'center')} | {rr('j21', 'dorsal')} | {rr('j21', 'center')} | {hh(9)} | {hh(0)} |")
+    L += ["", "## 한계", "", "- 사람마다 영상 2개뿐이다. 촬영 날짜가 다르다(팀원 영상이 먼저).",
+          "- 'f = 기준 f인 경사'는 고정한 경사 사이를 log f로 선형 보간한 값이다. 그 사이에서 f가 기준 f를 지나지 않으면 '범위 밖'.", ""]
+    (run_root / "summary.md").write_text("\n".join(L) + "\n")
+    x70_finish(run_root, {"geometry": geo, "real": res, "match_ramp_deg": match}, text, a.config, "code_73", own, t0, log)
+    return run_root, res
+
+
+COMMANDS = {"protocol": protocol_main, "frame-filter": ff_main, "same-session": session_main, "overlay": overlay_main, "phase-segmentation": pseg_main, "guide-revision": grev_main, "f-response": fresp_main, "error-factors": ferr_main, "long-video-check": long_main, "generalization": gen_main, "main-camera-extension": ext_main, "wide-60cm": wide_main, "jointset-sets": jset_main, "verdict-calibration": cal_main, "printed-hand": pr_main, "hand-markers": mk_main, "markers-only": mo_main, "free-template": ft_main, "free-shape3d": s3_main, "free-shape3d-hand": h3_main, "free-shape3d-27": e3_main, "free-shape3d-new": e4_main, "mmpose-hand": mm_main, "mmpose-hand-46": mm2_main, "free-shape3d-new2": e5_main, "mmpose-hand-src": mm3_main, "free-shape3d-detectors": fs_main, "free-shape3d-hand-sets": h4_main, "free-shape3d-hand-sets-42track": h4b_main, "oblique-desk": od_main, "oblique-synthetic": sy_main, "oblique-fixed-template": fx_main, "oblique-desk-videos": om_main, "pause-stabilized": ps_main, "continuous-klt": kt_main, "continuous-klt-palm": kp_main, "klt-paper-dorsum": pp_main, "paper-parallax": hp_main, "segment-template": sg_main, "turn-synthetic": tr_main, "window-f": wd_main, "anycalib-videos": ac_main, "error-sources": ec_main, "hand-deformation": dm_main, "joint-combos": fc_main, "points-video": pv_main, "desk-motion": dk_main, "ramp-sensitivity": rs_main, "teammate-hands": tm_main, "finger-ramp": fr_main, "contact-points": ct_main, "wilor-ramp": wl_main, "ramp-identifiability": id_main, "new-phone-hands": nc_main}
 
 
 def main(argv=None):
