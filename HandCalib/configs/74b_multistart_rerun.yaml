@@ -1,0 +1,14 @@
+# 74b: 74 again (74's run 20261105T030208Z finished all 384 estimates, then stopped in its summary before saving anything: ms_summary took free_template's entry for a ramp_free
+# start - KeyError 'cost'). Same settings, read from 74's config (not copied); the same estimator (hf.dk_estimate_ms). Changes, all in new functions (74's stay as committed):
+# free_template once per video and joint set (hf.tl_template_job; 74 recomputed it in every job), its entry given cost = inf in the results so that no summary takes it for an estimate,
+# results.json saved before the summary. Reference f only in summary.md.
+experiment:
+  name: 74b_multistart_rerun
+  seed: 42
+settings_config: configs/74_multistart.yaml
+code_74b: {branch: exp/74b-75-known-tilt, base_commit: 22fd6f8, commit: c479e8c, modules: [HandCalib/handfocal_report.py, HandCalib/run.py]}
+workers: 64
+video_workers: 8
+output:
+  root: runs/74b_multistart_rerun
+  results_yaml: results/74b_multistart_rerun.yaml

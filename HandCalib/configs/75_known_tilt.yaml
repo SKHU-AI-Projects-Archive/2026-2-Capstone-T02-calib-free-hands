@@ -1,0 +1,20 @@
+# 75: the camera tilt known (user 2026-11-05: every video, old phone and new, was taken with the camera set to 45 deg by the phone's level app; "실제 사용할 때 각도를 항상 재면서 사용하기에는
+# 불편할 것 같아서" - in use the tilt would be logged by the phone's own sensor), record only, no verdict.
+# 67's desk model with the angle between the desk normal and the optical axis fixed (hf.dk_solve_tilt: desk rotation Rz(a) Rx(t) Rz(b), t fixed), f and the ramp estimated together
+# (ramp_free) with 74's several starts (hf.dk_estimate_tilt); starting ramps 5 / 12 / 19, the lowest cost kept. Tilt 45 on j16 and j21; 40 and 50 on j16 (starts 8 / 16) for the
+# sensitivity. Videos and points as 74 (old phone 12, new phone 4, 56's tracked points); free_template once per video and joint set (hf.tl_template_job).
+# Checked before this config on a synthetic scene (dk_scene, tilt 45, ramp 11, f 1655, noise 0.5%): tilt fixed at 45 gave f 1648, ramp 10.9; at 40 gave f 1545, ramp 17.6.
+# Reference f only in summary.md.
+experiment:
+  name: 75_known_tilt
+  seed: 42
+settings_config: configs/74_multistart.yaml
+code_75: {branch: exp/74b-75-known-tilt, base_commit: 22fd6f8, commit: c479e8c, modules: [HandCalib/handfocal_report.py, HandCalib/run.py]}
+tilt_deg: 45
+free_starts_deg: [5, 12, 19]
+sensitivity: {joint_set: j16, tilts_deg: [40, 50], free_starts_deg: [8, 16]}
+workers: 64
+video_workers: 8
+output:
+  root: runs/75_known_tilt
+  results_yaml: results/75_known_tilt.yaml
