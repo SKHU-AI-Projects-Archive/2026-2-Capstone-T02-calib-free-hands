@@ -1,0 +1,18 @@
+# 76: the free ramp started from each fixed-ramp solution (user 2026-11-05: "둘다 해봐라" - after 74b, where some left-hand videos' free ramp ended at a negative ramp), record only, no verdict.
+# Looked at before this config (74b's results.json, no new estimate): IMG_7351 j16 free -35.7 deg cost 29.0 while its 13 deg fixed fit has cost 17.3; IMG_7355 -24.5 deg 16.8 against 11 deg
+# fixed 15.3 - a fixed fit is a special case of the free problem (roll 0), so the free solve fell into a worse basin, the data did not choose the negative ramp.
+# hf.ch_job / dk_free_from_fixed: per (video, joint set, ramp of 74's sweep) the fixed ramp with f free from dk_init at 74b's f for that ramp, then pitch and roll freed from that solution
+# (trf only lowers the cost). Final = the lowest cost over 74b's free starts (5 / 12 / 19 deg) and these. All 16 videos (74's list), 56's tracked points, j16 and j21; free_template once per
+# video and joint set as 74b (tl_template_job). Choices made by me before the run: no new rule; the summary also reports how far the re-solved fixed costs are from 74b's.
+# Reference f only in summary.md. Fixed before the run.
+experiment:
+  name: 76_free_from_fixed
+  seed: 42
+settings_config: configs/74b_multistart_rerun.yaml
+previous_run: runs/74b_multistart_rerun/20261105T044422Z
+code_76: {branch: exp/76-77-chain-features, base_commit: dfef767, commit: f985b8f, modules: [HandCalib/handfocal_report.py, HandCalib/run.py]}
+workers: 64
+video_workers: 8
+output:
+  root: runs/76_free_from_fixed
+  results_yaml: results/76_free_from_fixed.yaml

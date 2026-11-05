@@ -1,0 +1,21 @@
+# 77: where the KLT corners of the hand chain lie and what a dorsum-only chain gives (user 2026-11-05: "둘다 해봐라" - the teammate's new-phone videos stay -25 to -45 % off although the
+# ramp estimated from the video, 8-11 deg, matches the palms-pressed photos, 9-12 deg), record only, no verdict.
+# Per video (74's 16): 56's hand chain and 58's dorsum-body chain (kt_chain settings of 56; dorsum = hull of joints 0, 1, 5, 9, 13, 17, dilate 0 as 58) re-run through hf.kt_chain_log
+# (kt_chain's steps, recording the inlier corners): corner position along wrist (0) -> middle MCP (9) in the previous frame's joints (below the wrist < 0, dorsum 0-1, fingers > 1), shares and
+# median homography residual per region, inliers per step; tracked-vs-detected joint distance (% of the detected box's long side, frame median) per joint group (wrist, MCP, PIP, tip, thumb).
+# f of the dorsum-body chain: free_template once (tl_template_job), then 74b's estimator (ms2_job / dk_estimate_ms) at 11 deg fixed and the ramp free from 5 / 12 / 19 deg (lowest cost), j16;
+# the hand chain's f read from 74b's run (same chain, same estimator). Choices made by me before the run: the region limits 0 and 1; the drift groups. Reference f only in summary.md.
+# Fixed before the run.
+experiment:
+  name: 77_klt_features
+  seed: 42
+settings_config: configs/74b_multistart_rerun.yaml
+previous_run: runs/74b_multistart_rerun/20261105T044422Z
+dorsum: {joints: [0, 1, 5, 9, 13, 17], dilate_frac: 0.0}
+estimates: {joint_sets: [j16], free_starts_deg: [5, 12, 19]}
+code_77: {branch: exp/76-77-chain-features, base_commit: dfef767, commit: f985b8f, modules: [HandCalib/handfocal_report.py, HandCalib/run.py]}
+workers: 64
+video_workers: 8
+output:
+  root: runs/77_klt_features
+  results_yaml: results/77_klt_features.yaml
