@@ -124,12 +124,12 @@ class _PinButton(QAbstractButton):
         luminance = 0.2126 * window.redF() + 0.7152 * window.greenF() + 0.0722 * window.blueF()
         dark = luminance < 0.45
         if dark:
-            surface = QColor("#5b7925" if self.isChecked() else "#34383d")
-            border = QColor("#45621d" if self.isChecked() else "#5a6068")
+            surface = QColor("#33FF33" if self.isChecked() else "#34383d")
+            border = QColor("#249924" if self.isChecked() else "#5a6068")
             ink = QColor("#ffffff" if self.isChecked() else "#aab0b7")
         else:
-            surface = QColor("#5b7925" if self.isChecked() else "#f0f1f2")
-            border = QColor("#45621d" if self.isChecked() else "#c4c8ce")
+            surface = QColor("#33FF33" if self.isChecked() else "#f0f1f2")
+            border = QColor("#249924" if self.isChecked() else "#c4c8ce")
             ink = QColor("#ffffff" if self.isChecked() else "#666c74")
         if self.underMouse():
             surface = surface.darker(108) if self.isChecked() else surface.lighter(108)
@@ -263,21 +263,20 @@ def _comparison_results(source):
 
 
 def _color_for_index(index: int):
-    palette = ((0.91, 0.30, 0.24), (0.20, 0.56, 0.86), (0.20, 0.68, 0.42),
-               (0.63, 0.42, 0.78), (0.93, 0.61, 0.18), (0.17, 0.70, 0.70))
+    palette = ((0x33 / 255, 0x33 / 255, 1.0), (1.0, 0x33 / 255, 1.0),
+               (1.0, 1.0, 0x33 / 255), (0x33 / 255, 1.0, 1.0),
+               (1.0, 0x33 / 255, 0x33 / 255), (0.95, 0.55, 0.12),
+               (0.55, 0.78, 1.0), (0.95, 0.72, 0.86))
     if index < len(palette):
         return palette[index]
-    return colorsys.hsv_to_rgb((index * 0.61803398875) % 1, 0.72, 0.9)
+    hue = (index * 0.61803398875) % 1
+    if 0.20 <= hue <= 0.45:
+        hue = (hue + 0.35) % 1
+    return colorsys.hsv_to_rgb(hue, 0.72, 0.9)
 
 
-def _hand_variant(color, hand):
-    r, g, b = color
-    return tuple(min(1.0, channel * 1.18 + 0.08) for channel in (r, g, b)) if hand == 0 else tuple(channel * 0.78 for channel in (r, g, b))
-
-
-def _confidence_color(confidence):
-    value = float(np.clip(confidence, 0, 1))
-    return (value, 0.25 + 0.55 * (1 - value), 1 - value)
+def _bone_color(color):
+    return tuple(channel * 0.8 for channel in color)
 
 
 def _manual_focal_display_name(model_id: str, saved_name: str, focal_px: float | None) -> str:
@@ -400,10 +399,9 @@ class _LinkedResultView(_GLResultView):
     def __init__(self, loaded, color, changed):
         self.configuration_color = color
         self.camera_changed = changed
-        self.confidence_opacity_enabled = True
-        self.confidence_color_mode = "configuration"
+        self.confidence_opacity_enabled = False
         super().__init__(loaded)
-        self.hand_colors = (_hand_variant(color, 0), _hand_variant(color, 1))
+        self.hand_colors = (color, color)
         self.set_frame(self.frame)
 
     def mouseMoveEvent(self, event):
@@ -446,14 +444,12 @@ class _LinkedResultView(_GLResultView):
         for hand_index in range(2):
             alpha = _confidence_alpha(self.loaded.result, self.frame, hand_index) if self.confidence_opacity_enabled else 1.0
             base = self.hand_colors[hand_index]
-            if self.confidence_color_mode == "confidence" and self.loaded.result.confidence is not None:
-                confidence = self.loaded.result.confidence[self.frame, hand_index]
-                base = _confidence_color(confidence) if np.isfinite(confidence) else (0.55, 0.55, 0.55)
-            color = (*base, alpha)
+            joint_color = (*base, alpha)
+            bone_color = (*_bone_color(base), alpha)
             if self.joints[hand_index].visible():
-                self.joints[hand_index].setData(color=color)
+                self.joints[hand_index].setData(color=joint_color)
             if self.bones[hand_index].visible():
-                self.bones[hand_index].setData(color=color)
+                self.bones[hand_index].setData(color=bone_color)
             if self.meshes[hand_index].visible():
                 _set_mesh_color(self.meshes[hand_index], base, alpha * self.mesh_opacity)
 
@@ -478,8 +474,7 @@ class _OverlayComparisonView(_GLResultView):
         self.loaded_results = loaded_results
         self.configuration_colors = colors
         self.configuration_visible = [True] * len(loaded_results)
-        self.confidence_color_mode = "configuration"
-        self.confidence_opacity_enabled = True
+        self.confidence_opacity_enabled = False
         self.error_vectors_enabled = False
         self.error_candidate = 1 if len(loaded_results) > 1 else 0
         self.reference_index = 0
@@ -491,7 +486,7 @@ class _OverlayComparisonView(_GLResultView):
         for item in self.error_items:
             self.addItem(item)
             item.setVisible(False)
-        self.hand_colors = (_hand_variant(colors[0], 0), _hand_variant(colors[0], 1))
+        self.hand_colors = (colors[0], colors[0])
         for index, loaded in enumerate(loaded_results[1:], 1):
             items = []
             for _hand in range(2):
@@ -542,14 +537,8 @@ class _OverlayComparisonView(_GLResultView):
         for hand in range(2):
             alpha = _confidence_alpha(self.loaded.result, self.frame, hand) if self.confidence_opacity_enabled else 1.0
             base = self.configuration_colors[0]
-            if self.confidence_color_mode == "confidence" and self.loaded.result.confidence is not None:
-                confidence = self.loaded.result.confidence[self.frame, hand]
-                base = _confidence_color(confidence) if np.isfinite(confidence) else (0.55, 0.55, 0.55)
-            else:
-                base = _hand_variant(base, hand)
-            rgba = (*base, alpha)
-            if self.joints[hand].visible(): self.joints[hand].setData(color=rgba)
-            if self.bones[hand].visible(): self.bones[hand].setData(color=rgba)
+            if self.joints[hand].visible(): self.joints[hand].setData(color=(*base, alpha))
+            if self.bones[hand].visible(): self.bones[hand].setData(color=(*_bone_color(base), alpha))
             if self.meshes[hand].visible(): _set_mesh_color(self.meshes[hand], self.configuration_colors[0], alpha * self.mesh_opacity)
         for item in (*self.joints, *self.bones, *self.meshes):
             item.setVisible(item.visible() and self.configuration_visible[0])
@@ -567,10 +556,7 @@ class _OverlayComparisonView(_GLResultView):
                 if not visible or not has_visible_geometry:
                     continue
                 alpha = _confidence_alpha(result, position, hand) if self.confidence_opacity_enabled else 1.0
-                hand_color = _hand_variant(color, hand)
-                if self.confidence_color_mode == "confidence" and result.confidence is not None:
-                    confidence = result.confidence[position, hand]
-                    hand_color = _confidence_color(confidence) if np.isfinite(confidence) else (0.55, 0.55, 0.55)
+                hand_color = color
                 points = np.asarray(result.keypoints_3d[position, hand]) @ RAW_TO_VIEW.T
                 if not np.isfinite(points).all():
                     continue
@@ -580,7 +566,7 @@ class _OverlayComparisonView(_GLResultView):
                     joints.setVisible(True)
                 if self.show_bones:
                     bone_points = np.ascontiguousarray(np.concatenate([points[[a, b]] for a, b in HAND_CONNECTIONS]), dtype=np.float32)
-                    bones.setData(pos=bone_points, color=rgba, mode="lines")
+                    bones.setData(pos=bone_points, color=(*_bone_color(hand_color), alpha), mode="lines")
                     bones.setVisible(True)
                 if self.show_mesh and loaded.has_mesh_topology:
                     vertices = np.asarray(result.mano_vertices[position, hand]) @ RAW_TO_VIEW.T
@@ -625,11 +611,11 @@ class _OverlayComparisonView(_GLResultView):
             return
         for hand in range(2):
             alpha = _confidence_alpha(self.loaded_results[0].result, self.frame, hand) if self.confidence_opacity_enabled else 1.0
-            _set_mesh_color(self.meshes[hand], _hand_variant(self.configuration_colors[0], hand), alpha * self.mesh_opacity)
+            _set_mesh_color(self.meshes[hand], self.configuration_colors[0], alpha * self.mesh_opacity)
         for config_index, (loaded, hands) in enumerate(zip(self.loaded_results[1:], self.extra_items), 1):
             for hand, (_, _, mesh) in enumerate(hands):
                 alpha = _confidence_alpha(loaded.result, min(self.frame, loaded.frame_count - 1), hand) if self.confidence_opacity_enabled else 1.0
-                _set_mesh_color(mesh, _hand_variant(self.configuration_colors[config_index], hand), alpha * self.mesh_opacity)
+                _set_mesh_color(mesh, self.configuration_colors[config_index], alpha * self.mesh_opacity)
 
 
 class ComparisonViewer(QWidget):
@@ -659,7 +645,6 @@ class ComparisonViewer(QWidget):
             if names.count(config["name"]) > 1:
                 ordinal = sum(name == config["name"] for name in names[:index + 1]) + 1
                 self.configurations[index] = dict(config, name=f"{config['name']} ({ordinal})")
-        self.configuration_colors = [_color_for_index(i) for i in range(len(entries))]
         self.mode = "overlay"
         self._syncing_camera = False
         self._arrow_mode = "frame"
@@ -672,6 +657,19 @@ class ComparisonViewer(QWidget):
             raise ValueError("comparison results must have matching frame indices, timestamps, and counts")
         self._reference_fallback = False
         self.reference_id = None if self.single_mode else self._default_reference_id()
+        reference_index = (self._configuration_index(self.reference_id)
+                           if self.reference_id is not None else None)
+        candidate_index = 0
+        self.candidate_colors = []
+        for index in range(len(entries)):
+            if index == reference_index:
+                self.candidate_colors.append(_color_for_index(len(entries) - 1))
+            else:
+                self.candidate_colors.append(_color_for_index(candidate_index))
+                candidate_index += 1
+        self.configuration_colors = list(self.candidate_colors)
+        if self.reference_id is not None:
+            self.configuration_colors[reference_index] = (0x33 / 255, 1.0, 0x33 / 255)
         self.metric_definitions = metric_registry()
         self.selected_metric_ids = {"wrist_error", "mpjpe", "wrist_depth_error"}
         self._metric_cache = {}
@@ -739,7 +737,7 @@ class ComparisonViewer(QWidget):
         self.slider.valueChanged.connect(self._set_frame)
         self.status = QLabel()
         self.metric_status = QLabel()
-        self.metric_status.setToolTip("Camera-space differences from the selected Reference; these are not ground-truth errors.")
+        self.metric_status.setToolTip("Camera-space differences from selected GT; these are not ground-truth errors.")
 
         self.mode_selector = QWidget()
         mode_layout = QHBoxLayout(self.mode_selector)
@@ -767,6 +765,9 @@ class ComparisonViewer(QWidget):
             swatch = QToolButton()
             swatch.setFixedSize(20, 20)
             self._style_swatch(swatch, self.configuration_colors[index])
+            if config["id"] == self.reference_id:
+                swatch.setEnabled(False)
+                swatch.setToolTip("GT color is fixed to #33FF33")
             swatch.clicked.connect(lambda _=False, i=index: self._choose_color(i))
             row_layout.addWidget(check, 1)
             row_layout.addWidget(swatch)
@@ -782,7 +783,7 @@ class ComparisonViewer(QWidget):
         if self.single_mode:
             self.results_menu_button.hide()
 
-        self.reference_label = QLabel("Reference" + (" ? fallback" if self._reference_fallback else ""))
+        self.reference_label = QLabel("GT" + (" (fallback)" if self._reference_fallback else ""))
         self.reference_selector = QComboBox()
         for config in self.configurations:
             self.reference_selector.addItem(config["name"], config["id"])
@@ -798,24 +799,7 @@ class ComparisonViewer(QWidget):
 
         self.metric_menu = QMenu(self)
         self.metric_checks = {}
-        category_menus = {}
-        for definition in self.metric_definitions:
-            category = category_menus.get(definition.category)
-            if category is None:
-                category = self.metric_menu.addMenu(definition.category)
-                category_menus[definition.category] = category
-            check = QCheckBox(definition.name)
-            check.setChecked(definition.metric_id in self.selected_metric_ids)
-            available = self._metric_has_data(definition.metric_id)
-            check.setEnabled(definition.status.value == "READY" and available)
-            if not check.isEnabled():
-                check.setToolTip("Protocol pending: this metric is not defined for this prototype" if definition.status.value != "READY"
-                                 else "Unavailable: compatible result data is missing")
-            check.toggled.connect(lambda value, key=definition.metric_id: self._set_metric_selected(key, value))
-            action = QWidgetAction(category)
-            action.setDefaultWidget(check)
-            category.addAction(action)
-            self.metric_checks[definition.metric_id] = check
+        self._rebuild_metrics_menu()
         self.metric_menu_button = QToolButton()
         self.metric_menu_button.setPopupMode(QToolButton.ToolButtonPopupMode.InstantPopup)
         self.metric_menu_button.setMenu(self.metric_menu)
@@ -824,7 +808,7 @@ class ComparisonViewer(QWidget):
             self.metric_menu_button.hide()
 
         self.confidence_menu = QMenu(self)
-        self.confidence_opacity_checkbox = self._menu_checkbox(self.confidence_menu, "Use as opacity", checked=True)
+        self.confidence_opacity_checkbox = self._menu_checkbox(self.confidence_menu, "Use as opacity")
         self.confidence_numeric_checkbox = self._menu_checkbox(self.confidence_menu, "Numeric value")
         self.confidence_bar_checkbox = self._menu_checkbox(self.confidence_menu, "Bar")
         self.confidence_opacity_checkbox.toggled.connect(self._confidence_opacity_changed)
@@ -833,12 +817,12 @@ class ComparisonViewer(QWidget):
         self.confidence_menu_button = QToolButton()
         self.confidence_menu_button.setPopupMode(QToolButton.ToolButtonPopupMode.InstantPopup)
         self.confidence_menu_button.setMenu(self.confidence_menu)
-        self.confidence_menu_button.setText("Detection")
+        self.confidence_menu_button.setText("Confidence")
+        confidence_description = "YOLO hand detector bounding-box confidence; not joint or reconstruction confidence."
+        self.confidence_menu_button.setToolTip(confidence_description)
+        self.confidence_menu_button.setAccessibleName("Hand Detection Confidence")
+        self.confidence_menu_button.setAccessibleDescription(confidence_description)
         self._update_confidence_button()
-        self.confidence_color_mode = QComboBox()
-        self.confidence_color_mode.addItem("Result", "configuration")
-        self.confidence_color_mode.addItem("Detection", "confidence")
-        self.confidence_color_mode.currentIndexChanged.connect(self._confidence_color_changed)
 
         self.error_vectors_checkbox = QCheckBox("Error vectors")
         self.error_candidate_selector = QComboBox()
@@ -945,14 +929,12 @@ class ComparisonViewer(QWidget):
         toolbar.addWidget(self.results_menu_button)
         toolbar.addWidget(self.reference_label); toolbar.addWidget(self.reference_selector)
         toolbar.addWidget(self.metric_menu_button)
-        toolbar.addWidget(self.confidence_color_mode)
         toolbar.addWidget(self.confidence_menu_button)
-        toolbar.addWidget(self.error_vectors_button)
-        self.error_vectors_button.setText("Vectors: Off")
-        self.error_vectors_button.setToolTip("Show selected Reference → Candidate error vectors")
+        self.error_vectors_button.setToolTip("Show selected GT versus candidate error vectors")
         toolbar.addWidget(self.annotation_button); toolbar.addWidget(self.hud_button)
         toolbar.addWidget(self.more_button)
         toolbar.addStretch(1)
+        self.toolbar = toolbar
 
         self.joint_checkbox = QCheckBox("Joint")
         self.joint_checkbox.setChecked(True)
@@ -1195,7 +1177,7 @@ class ComparisonViewer(QWidget):
         self._set_error_vectors(True)
         name = next(config["name"] for config in self.configurations if config["id"] == candidate_id)
         self.error_vectors_button.setText(f"Vectors: {name}")
-        self.error_vectors_button.setToolTip(f"Show selected Reference → {name} error vectors")
+        self.error_vectors_button.setToolTip(f"Show selected GT versus {name} error vectors")
 
     def _show_controls(self):
         self.chrome.show()
@@ -1249,6 +1231,9 @@ class ComparisonViewer(QWidget):
             check = QCheckBox(config["name"]); check.setChecked(self.overlay_view.configuration_visible[index])
             check.toggled.connect(lambda value, i=index: self._set_configuration_visible(i, value))
             swatch = QToolButton(); swatch.setFixedSize(20, 20); self._style_swatch(swatch, self.configuration_colors[index])
+            is_gt = config["id"] == self.reference_id
+            swatch.setEnabled(not is_gt)
+            swatch.setToolTip("GT color is fixed to #33FF33" if is_gt else "Choose candidate result color")
             swatch.clicked.connect(lambda _=False, i=index: self._choose_color(i))
             row_layout.addWidget(check, 1); row_layout.addWidget(swatch)
             action = QWidgetAction(self.results_menu); action.setDefaultWidget(row); self.results_menu.addAction(action)
@@ -1283,16 +1268,44 @@ class ComparisonViewer(QWidget):
 
     def _update_results_button(self):
         visible = sum(check.isChecked() for check in self.visibility_checks)
-        self.results_menu_button.setText(f"Results ({visible}/{len(self.visibility_checks)})")
+        self.results_menu_button.setText(f"Visible ({visible}/{len(self.visibility_checks)})")
+        self.results_menu_button.setToolTip("Show or hide comparison results")
 
     def _update_metrics_button(self):
-        self.metric_menu_button.setText("Metrics")
+        self.metric_menu_button.setText("Differences")
+        self.metric_menu_button.setToolTip("Differences from selected GT")
 
     def _update_confidence_button(self):
         active = sum(check.isChecked() for check in (self.confidence_opacity_checkbox,
                                                        self.confidence_numeric_checkbox,
                                                        self.confidence_bar_checkbox))
-        self.confidence_menu_button.setText("Detection")
+        self.confidence_menu_button.setText("Confidence")
+
+    def _configuration_index(self, configuration_id):
+        return next(index for index, config in enumerate(self.configurations)
+                    if config["id"] == configuration_id)
+
+    def _rebuild_metrics_menu(self):
+        self.metric_menu.clear()
+        self.metric_checks.clear()
+        categories = {}
+        available_ids = {definition.metric_id for definition in self.metric_definitions
+                         if definition.status.value == "READY" and self._metric_has_data(definition.metric_id)}
+        self.selected_metric_ids.intersection_update(available_ids)
+        for definition in self.metric_definitions:
+            if definition.metric_id not in available_ids:
+                continue
+            category = categories.get(definition.category)
+            if category is None:
+                category = self.metric_menu.addMenu(definition.category)
+                categories[definition.category] = category
+            check = QCheckBox(definition.name)
+            check.setChecked(definition.metric_id in self.selected_metric_ids)
+            check.toggled.connect(lambda value, key=definition.metric_id: self._set_metric_selected(key, value))
+            action = QWidgetAction(category)
+            action.setDefaultWidget(check)
+            category.addAction(action)
+            self.metric_checks[definition.metric_id] = check
 
     def _default_reference_id(self):
         checkerboards = [c for c in self.configurations
@@ -1328,24 +1341,45 @@ class ComparisonViewer(QWidget):
     def _style_swatch(button, color):
         rgb = tuple(round(channel * 255) for channel in color)
         button.setStyleSheet(f"QToolButton {{ background-color: rgb{rgb}; border: 1px solid palette(mid); }}")
-        button.setToolTip("Choose result color")
+        button.setToolTip("Choose candidate result color")
 
     def _choose_color(self, index):
+        if self.configurations[index]["id"] == self.reference_id:
+            return
         from PySide6.QtGui import QColor
-        current = QColor(*(round(channel * 255) for channel in self.configuration_colors[index]))
+        current = QColor(*(round(channel * 255) for channel in self.candidate_colors[index]))
         chosen = QColorDialog.getColor(current, self, "Result color")
         if not chosen.isValid():
             return
         self._apply_configuration_color(index, (chosen.redF(), chosen.greenF(), chosen.blueF()))
 
     def _apply_configuration_color(self, index, color):
-        self.configuration_colors[index] = color
-        self._style_swatch(self.color_buttons[index], color)
-        self.overlay_view.configuration_colors[index] = color
-        self.split_views[index].configuration_color = color
-        self.split_views[index].hand_colors = (_hand_variant(color, 0), _hand_variant(color, 1))
+        if self.configurations[index]["id"] == self.reference_id:
+            return
+        self.candidate_colors[index] = tuple(color)
+        self._refresh_effective_colors()
+
+    def _refresh_effective_colors(self):
+        self.configuration_colors[:] = self.candidate_colors
+        if self.reference_id is not None:
+            self.configuration_colors[self._configuration_index(self.reference_id)] = (0x33 / 255, 1.0, 0x33 / 255)
+        self.overlay_view.configuration_colors[:] = self.configuration_colors
+        for index, (view, color) in enumerate(zip(self.split_views, self.configuration_colors)):
+            view.configuration_color = color
+            view.hand_colors = (color, color)
+            view.set_frame(self.slider.value())
+            swatch = self.color_buttons[index]
+            self._style_swatch(swatch, color)
+            is_gt = self.configurations[index]["id"] == self.reference_id
+            swatch.setEnabled(not is_gt)
+            swatch.setToolTip("GT color is fixed to #33FF33" if is_gt else "Choose candidate result color")
         self.overlay_view.set_frame(self.slider.value())
-        self.split_views[index].set_frame(self.slider.value())
+        for _window, _source, views in self._detached_windows:
+            for view, color in zip(views, self.configuration_colors):
+                view.configuration_color = color
+                view.hand_colors = (color, color)
+                view.set_frame(self.slider.value())
+        self._render_active_frame()
         self._refresh_metric_panels()
 
     def _reference_changed(self, _index):
@@ -1353,11 +1387,9 @@ class ComparisonViewer(QWidget):
             return
         self.reference_id = self.reference_selector.currentData()
         self.reference_selector.setToolTip(self.reference_selector.currentText())
-        self.reference_label.setText("Reference")
-        for definition in self.metric_definitions:
-            if definition.metric_id in self.metric_checks:
-                self.metric_checks[definition.metric_id].setEnabled(
-                    definition.status.value == "READY" and self._metric_has_data(definition.metric_id))
+        self.reference_label.setText("GT")
+        self._rebuild_metrics_menu()
+        self._refresh_effective_colors()
         self.error_candidate_selector.clear()
         for config in self.configurations:
             if config["id"] != self.reference_id:
@@ -1415,30 +1447,24 @@ class ComparisonViewer(QWidget):
             panel.refresh(self)
         self._refresh_annotations()
 
-    def _confidence_color_changed(self, _index):
-        mode = self.confidence_color_mode.currentData()
-        for view in [self.overlay_view, *self.split_views]:
-            view.confidence_color_mode = mode
-        self._render_active_frame()
-        self._refresh_metric_panels()
-
     def _confidence_opacity_changed(self, enabled):
         self._update_confidence_button()
         for view in [self.overlay_view, *self.split_views]:
             view.confidence_opacity_enabled = enabled
         for hand, mesh in enumerate(self.overlay_view.meshes):
             alpha = _confidence_alpha(self.overlay_view.loaded.result, self.overlay_view.frame, hand) if enabled else 1.0
-            _set_mesh_color(mesh, _hand_variant(self.configuration_colors[0], hand), alpha * self.overlay_view.mesh_opacity)
+            _set_mesh_color(mesh, self.configuration_colors[0], alpha * self.overlay_view.mesh_opacity)
         for config_index, hands in enumerate(self.overlay_view.extra_items, 1):
             result = self.loaded_results[config_index].result
             frame = min(self.overlay_view.frame, self.loaded_results[config_index].frame_count - 1)
             for hand, (_, _, mesh) in enumerate(hands):
                 alpha = _confidence_alpha(result, frame, hand) if enabled else 1.0
-                _set_mesh_color(mesh, _hand_variant(self.configuration_colors[config_index], hand), alpha * self.overlay_view.mesh_opacity)
+                _set_mesh_color(mesh, self.configuration_colors[config_index], alpha * self.overlay_view.mesh_opacity)
         for view in self.split_views:
             for hand, mesh in enumerate(view.meshes):
                 alpha = _confidence_alpha(view.loaded.result, view.frame, hand) if enabled else 1.0
                 _set_mesh_color(mesh, view.hand_colors[hand], alpha * view.mesh_opacity)
+        self._render_active_frame()
 
     def _set_error_vectors(self, enabled):
         if self.single_mode:
@@ -1467,12 +1493,12 @@ class ComparisonViewer(QWidget):
             for item in self.overlay_view.error_items:
                 item.setVisible(False)
             self.error_vectors_button.setText("Vectors: Off")
-            self.error_vectors_button.setToolTip("Show selected Reference → Candidate error vectors")
+            self.error_vectors_button.setToolTip("Show selected GT versus candidate error vectors")
         else:
             name = next(config["name"] for config in self.configurations
                         if config["id"] == self.selected_error_candidate_id)
             self.error_vectors_button.setText(f"Vectors: {name}")
-            self.error_vectors_button.setToolTip(f"Show selected Reference → {name} error vectors")
+            self.error_vectors_button.setToolTip(f"Show selected GT versus {name} error vectors")
 
     def _show_joint_table(self, candidate_id):
         candidate_name = next(config["name"] for config in self.configurations if config["id"] == candidate_id)

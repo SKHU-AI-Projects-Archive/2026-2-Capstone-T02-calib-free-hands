@@ -9,7 +9,7 @@ from calibfreehands.pipeline.result_bundle import write_result_bundle
 from calibfreehands.joint_schema import JOINT_NAMES
 
 
-def _session(tmp_path, count=3, mesh=False):
+def _session(tmp_path, count=3, mesh=False, gt_index=None):
     configurations, final_results = [], {}
     for index in range(count):
         config_id = f"cfg-{index}"
@@ -29,7 +29,8 @@ def _session(tmp_path, count=3, mesh=False):
         result_dir = tmp_path / config_id
         npz, run = save_result(result, result_dir, {"input_path": ""})
         configurations.append({"id": config_id, "name": f"Method {index}",
-                               "calibration_model_id": "reference", "reconstruction_model_id": "pose"})
+                               "calibration_model_id": "checkerboard_reference" if index == gt_index else "reference",
+                               "reconstruction_model_id": "pose"})
         final_results[config_id] = {"path": npz.relative_to(tmp_path).as_posix(),
                                     "run_json": run.relative_to(tmp_path).as_posix()}
     manifest = {"schema_version": 1, "session_id": "session", "source_media": "",
@@ -100,9 +101,9 @@ def test_overlay_colors_visibility_confidence_and_linked_camera(tmp_path, qapp):
     missing = viewer.overlay_view.confidence_alpha(0, 1, confidence=np.nan)
     assert missing == pytest.approx(viewer.overlay_view.missing_confidence_alpha)
     base_color = np.asarray(viewer.overlay_view.joints[0].color)
-    from calibfreehands.visualization.comparison import _hand_variant
-    np.testing.assert_allclose(base_color[:3], _hand_variant(viewer.configuration_colors[0], 0))
-    assert base_color[3] == pytest.approx(alpha_low)
+    np.testing.assert_allclose(base_color[:3], viewer.configuration_colors[0])
+    assert base_color[3] == pytest.approx(1.0)
+    assert not viewer.confidence_opacity_checkbox.isChecked()
     checks = [box for box in viewer.findChildren(QCheckBox) if box.text().startswith("Method")]
     checks[1].setChecked(False)
     assert not viewer.overlay_view.configuration_visible[1]
@@ -139,11 +140,130 @@ def test_comparison_mesh_visibility_remains_exclusive_with_skeleton(tmp_path, qa
     viewer.mesh_checkbox.setChecked(True)
     assert viewer.mesh_checkbox.isChecked()
     assert not viewer.joint_checkbox.isChecked() and not viewer.bone_checkbox.isChecked()
-    assert viewer.overlay_view.meshes[0].opts["color"][3] == pytest.approx(0.4)
+    assert viewer.overlay_view.meshes[0].opts["color"][3] == pytest.approx(1.0)
     viewer.joint_checkbox.setChecked(True)
     assert viewer.joint_checkbox.isChecked() and not viewer.mesh_checkbox.isChecked()
     assert viewer.overlay_view.joints[0].visible()
     assert not viewer.overlay_view.meshes[0].visible()
+    viewer.close()
+
+
+def test_gt_switching_recolors_results_and_keeps_candidate_base_colors(tmp_path, qapp):
+    from calibfreehands.visualization.comparison import ComparisonViewer
+
+    viewer = ComparisonViewer(_session(tmp_path, 3, gt_index=0))
+    green = (0x33 / 255, 1.0, 0x33 / 255)
+    original = list(viewer.candidate_colors)
+    assert original[1] == pytest.approx((0x33 / 255, 0x33 / 255, 1.0))
+    assert original[2] == pytest.approx((1.0, 0x33 / 255, 1.0))
+    viewer._apply_configuration_color(0, (0.25, 0.4, 0.8))
+    custom_a = viewer.candidate_colors[0]
+    assert viewer.configuration_colors[0] == pytest.approx(green)
+    assert viewer.reference_label.text() == "GT"
+    assert viewer.overlay_panel.reference_badges["cfg-0"].text() == "GT"
+    assert viewer.overlay_panel.body_layout.itemAt(0).layout().itemAt(2).widget().text() == viewer.configurations[0]["name"]
+    initial_mpjpe = viewer._metric_cache["cfg-2"][(0, "left")].metrics["mpjpe"]
+    viewer.set_annotation_mode("all")
+    viewer._set_annotation_content("error")
+    initial_labels = viewer.split_annotations[2].projected_annotations()
+    initial_gt2_label = next(item[3] for item in initial_labels if item[1] == "left" and item[2] == 0)
+
+    for selected_index, previous_index in ((1, 0), (2, 1), (0, 2)):
+        viewer.reference_selector.setCurrentIndex(selected_index)
+        assert viewer.configuration_colors[selected_index] == pytest.approx(green)
+        assert viewer.configuration_colors[previous_index] == pytest.approx(
+            custom_a if previous_index == 0 else original[previous_index]
+        )
+        assert viewer.overlay_panel.body_layout.itemAt(0).layout().itemAt(2).widget().text() == viewer.configurations[selected_index]["name"]
+        assert list(viewer.overlay_panel.reference_badges) == [f"cfg-{selected_index}"]
+        assert viewer.color_buttons[selected_index].toolTip() == "GT color is fixed to #33FF33"
+        assert not viewer.color_buttons[selected_index].isEnabled()
+        if selected_index == 1:
+            assert viewer._metric_cache["cfg-2"][(0, "left")].metrics["mpjpe"] != initial_mpjpe
+            updated_labels = viewer.split_annotations[2].projected_annotations()
+            updated_gt2_label = next(item[3] for item in updated_labels if item[1] == "left" and item[2] == 0)
+            assert updated_gt2_label != initial_gt2_label
+    assert viewer.candidate_colors[0] == pytest.approx(custom_a)
+    assert viewer.configuration_colors[1] == pytest.approx(original[1])
+    assert viewer.configuration_colors[2] == pytest.approx(original[2])
+    viewer.close()
+
+
+def test_result_colors_are_stable_across_hands_and_confidence_only_changes_alpha(tmp_path, qapp):
+    from calibfreehands.visualization.comparison import ComparisonViewer, _bone_color
+
+    viewer = ComparisonViewer(_session(tmp_path, 2, mesh=True, gt_index=0))
+    viewer.set_mode("overlay")
+    gt_color = viewer.configuration_colors[0]
+    candidate_color = viewer.configuration_colors[1]
+    for hand in range(2):
+        np.testing.assert_allclose(viewer.overlay_view.joints[hand].color[:3], gt_color)
+        np.testing.assert_allclose(viewer.overlay_view.bones[hand].color[:3], _bone_color(gt_color))
+    viewer.mesh_checkbox.setChecked(True)
+    np.testing.assert_allclose(viewer.overlay_view.meshes[0].opts["color"][:3], gt_color)
+    viewer.mesh_checkbox.setChecked(False)
+    viewer.joint_checkbox.setChecked(True)
+    viewer.bone_checkbox.setChecked(True)
+    viewer.set_mode("overlay")
+    viewer.confidence_opacity_checkbox.setChecked(True)
+    high = viewer.overlay_view.extra_items[0][0][0].color
+    low = viewer.overlay_view.joints[0].color
+    np.testing.assert_allclose(high[:3], candidate_color)
+    np.testing.assert_allclose(low[:3], gt_color)
+    assert high[3] > low[3]
+    viewer.confidence_opacity_checkbox.setChecked(False)
+    assert viewer.overlay_view.joints[0].color[3] == pytest.approx(1.0)
+    viewer.set_mode("split")
+    for hand in range(2):
+        np.testing.assert_allclose(viewer.split_views[1].joints[hand].color[:3], candidate_color)
+        np.testing.assert_allclose(viewer.split_views[1].bones[hand].color[:3], _bone_color(candidate_color))
+    viewer.mesh_checkbox.setChecked(True)
+    np.testing.assert_allclose(viewer.split_views[0].meshes[0].opts["color"][:3], gt_color)
+    np.testing.assert_allclose(viewer.split_views[1].meshes[0].opts["color"][:3], candidate_color)
+    viewer.confidence_opacity_checkbox.setChecked(True)
+    gt_mesh = viewer.split_views[0].meshes[0].opts["color"]
+    candidate_mesh = viewer.split_views[1].meshes[0].opts["color"]
+    np.testing.assert_allclose(gt_mesh[:3], gt_color)
+    np.testing.assert_allclose(candidate_mesh[:3], candidate_color)
+    assert candidate_mesh[3] > gt_mesh[3]
+    viewer.confidence_opacity_checkbox.setChecked(False)
+    viewer.close()
+
+
+def test_comparison_toolbar_wording_and_unavailable_metrics(tmp_path, qapp):
+    from calibfreehands.visualization.comparison import ComparisonViewer
+
+    viewer = ComparisonViewer(_session(tmp_path, 3, mesh=True))
+    assert viewer.results_menu_button.text() == "Visible (3/3)"
+    assert viewer.results_menu_button.toolTip() == "Show or hide comparison results"
+    assert viewer.reference_label.text() == "GT"
+    assert viewer.metric_menu_button.text() == "Differences"
+    assert viewer.metric_menu_button.toolTip() == "Differences from selected GT"
+    assert viewer.confidence_menu_button.text() == "Confidence"
+    assert viewer.configuration_colors[1] == pytest.approx((0x33 / 255, 0x33 / 255, 1.0))
+    assert not viewer.confidence_opacity_checkbox.isChecked()
+    assert not viewer.confidence_numeric_checkbox.isChecked()
+    assert not viewer.confidence_bar_checkbox.isChecked()
+    assert viewer.toolbar.indexOf(viewer.error_vectors_button) == -1
+    assert not hasattr(viewer, "confidence_color_mode")
+    assert all(definition.status.value == "READY" for definition in viewer.metric_definitions
+               if definition.metric_id in viewer.metric_checks)
+    assert "f@5" not in viewer.metric_checks
+    viewer.close()
+
+
+def test_gt_default_prefers_unique_checkerboard_and_metric_menu_rebuilds(tmp_path, qapp):
+    from calibfreehands.visualization.comparison import ComparisonViewer
+
+    viewer = ComparisonViewer(_session(tmp_path, 3, mesh=True, gt_index=2))
+    assert viewer.reference_id == "cfg-2"
+    assert "mpvpe" in viewer.metric_checks
+    viewer.metric_checks["mpvpe"].setChecked(True)
+    viewer.loaded_results[1].result.mano_vertices = None
+    viewer.loaded_results[1].result.mano_faces = None
+    viewer.reference_selector.setCurrentIndex(1)
+    assert "mpvpe" not in viewer.metric_checks
+    assert "mpvpe" not in viewer.selected_metric_ids
     viewer.close()
 
 
@@ -438,7 +558,7 @@ def test_dashboard_reference_metrics_source_grid_and_native_visibility(tmp_path,
     assert not hasattr(viewer, "metric_table")
     candidate = viewer.split_panels[1]
     assert "Wrist Error" in candidate.metric_rows[("cfg-1", "wrist_error", "left")].text()
-    assert viewer.overlay_panel.reference_badges["cfg-0"].text() == "REFERENCE"
+    assert viewer.overlay_panel.reference_badges["cfg-0"].text() == "GT"
     assert ("cfg-1", "joint_error_median", "left") not in viewer.overlay_panel.metric_rows
     viewer.metric_checks["joint_error_median"].setChecked(True)
     assert ("cfg-1", "joint_error_median", "left") in viewer.overlay_panel.metric_rows
@@ -448,7 +568,7 @@ def test_dashboard_reference_metrics_source_grid_and_native_visibility(tmp_path,
     assert viewer.reference_selector.currentData() == "cfg-1"
     viewer.slider.setValue(2)
     assert viewer.status.text().startswith("Frame 3")
-    assert viewer.split_panels[1].reference_badges["cfg-1"].text() == "REFERENCE"
+    assert viewer.split_panels[1].reference_badges["cfg-1"].text() == "GT"
     assert all(box.styleSheet() == "" for box in viewer.visibility_checks)
     assert all(viewer.color_buttons)
     viewer.close()
@@ -460,8 +580,8 @@ def test_dashboard_metric_selection_error_vectors_and_confidence_are_runtime_onl
     viewer = ComparisonViewer(_session(tmp_path, 2))
     monkeypatch.setattr(comparison, "compare_results", lambda *args: pytest.fail("metrics recomputed during frame change"))
     assert viewer.selected_metric_ids == {"wrist_error", "mpjpe", "wrist_depth_error"}
-    viewer.metric_checks["mpvpe"].setChecked(True)
-    assert "mpvpe" in viewer.selected_metric_ids
+    viewer.metric_checks["translation_error"].setChecked(True)
+    assert "translation_error" in viewer.selected_metric_ids
     viewer.metric_checks["per_joint_error"].setChecked(True)
     panel = viewer.split_panels[1]
     assert ("cfg-1", "per_joint_error", "left") in panel.details_buttons
@@ -480,11 +600,11 @@ def test_dashboard_metric_selection_error_vectors_and_confidence_are_runtime_onl
     viewer.confidence_opacity_checkbox.setChecked(False)
     assert viewer.overlay_view.confidence_alpha(0, 0) < 1
     assert not viewer.overlay_view.confidence_opacity_enabled
-    viewer.confidence_color_mode.setCurrentIndex(1)
-    assert viewer.overlay_view.confidence_color_mode == "confidence"
+    assert not hasattr(viewer, "confidence_color_mode")
+    assert np.asarray(viewer.overlay_view.joints[0].color)[:3] == pytest.approx(viewer.configuration_colors[0])
     viewer.confidence_opacity_checkbox.setChecked(True)
     assert viewer.confidence_numeric_checkbox and viewer.confidence_bar_checkbox
-    assert viewer.confidence_color_mode.currentData() in ("configuration", "confidence")
+    assert viewer.confidence_numeric_checkbox.isChecked() and viewer.confidence_bar_checkbox.isChecked()
     assert viewer.error_vectors_checkbox
     assert viewer.error_candidate_selector.count() == 1
     before = [loaded.result.keypoints_3d.copy() for loaded in viewer.loaded_results]
@@ -652,7 +772,7 @@ def test_dashboard_missing_hand_is_na_and_fallback_is_visible(tmp_path, qapp):
     assert viewer.reference_id == "cfg-0"
     assert "fallback" in viewer.reference_label.text()
     assert "L N/A" in viewer.split_panels[1].metric_rows[("cfg-1", "wrist_error", "left")].text()
-    assert not viewer.metric_checks["mpvpe"].isEnabled()
+    assert "mpvpe" not in viewer.metric_checks
     viewer.close()
 
 
@@ -665,14 +785,13 @@ def test_comparison_dashboard_uses_viewport_overlays_and_compact_menus(tmp_path,
     assert viewer.split_views[1].minimumWidth() >= 320
     assert viewer.split_views[1].minimumHeight() >= 240
     assert viewer.mode_switch.isCheckable()
-    assert viewer.results_menu_button.text().startswith("Results")
-    assert viewer.confidence_menu_button.text() == "Detection"
+    assert viewer.results_menu_button.text().startswith("Visible")
+    assert viewer.confidence_menu_button.text() == "Confidence"
     assert len(viewer.visibility_checks) == 5
     assert all(check.parentWidget() is not viewer for check in viewer.visibility_checks)
     for button in viewer.view_buttons + viewer.playback_buttons:
         assert button.sizePolicy().horizontalPolicy() != QSizePolicy.Policy.Expanding
-    assert not viewer.metric_checks["f@5"].isEnabled()
-    assert "pending" in viewer.metric_checks["f@5"].toolTip().lower()
+    assert "f@5" not in viewer.metric_checks
     viewer.close()
 
 
@@ -717,7 +836,7 @@ def test_presentation_hud_is_viewport_child_and_reorder_preserves_result_data(tm
 def test_presentation_controls_keep_detection_and_mesh_opacity_distinct(tmp_path, qapp):
     from calibfreehands.visualization.comparison import ComparisonViewer
     viewer = ComparisonViewer(_session(tmp_path, 2, mesh=True))
-    assert viewer.confidence_menu_button.text() == "Detection"
+    assert viewer.confidence_menu_button.text() == "Confidence"
     assert viewer.confidence_opacity_checkbox.text() == "Use as opacity"
     assert viewer.confidence_numeric_checkbox.text() == "Numeric value"
     assert viewer.mesh_opacity_label.text() == "Mesh opacity"
@@ -726,8 +845,10 @@ def test_presentation_controls_keep_detection_and_mesh_opacity_distinct(tmp_path
     assert viewer.mesh_opacity_slider.isEnabled()
     viewer.mesh_opacity_slider.setValue(50)
     mesh_alpha = viewer.split_views[0].meshes[0].opts["color"][3]
+    viewer.confidence_opacity_checkbox.setChecked(True)
+    assert viewer.split_views[0].meshes[0].opts["color"][3] < mesh_alpha
     viewer.confidence_opacity_checkbox.setChecked(False)
-    assert viewer.split_views[0].meshes[0].opts["color"][3] > mesh_alpha
+    assert viewer.split_views[0].meshes[0].opts["color"][3] == pytest.approx(0.5)
     assert not viewer.joint_checkbox.isChecked() and not viewer.bone_checkbox.isChecked()
     assert viewer.more_menu.actions()[0].text() == "Detach panels"
     assert viewer.error_vectors_button.menu() is viewer.error_vectors_menu
@@ -970,7 +1091,7 @@ def test_pin_button_icon_is_palette_aware_and_view_precedes_results(tmp_path, qa
         assert off != on
         assert off.pixelColor(4, 14).rgb() == off_surface.rgb()
         active_surface = on.pixelColor(4, 13)
-        assert active_surface.rgb() == QColor("#5b7925").rgb()
+        assert active_surface.rgb() == QColor("#33FF33").rgb()
         assert off.pixelColor(1, 14).rgb() != off.pixelColor(4, 14).rgb()
         assert off.pixelColor(14, 8).rgb() == off_ink.rgb()
         pin_ink = on.pixelColor(13, 8)
@@ -980,7 +1101,8 @@ def test_pin_button_icon_is_palette_aware_and_view_precedes_results(tmp_path, qa
             for channel in (active_surface.redF(), active_surface.greenF(), active_surface.blueF())
         ]
         luminance = 0.2126 * linear_channels[0] + 0.7152 * linear_channels[1] + 0.0722 * linear_channels[2]
-        assert 1.05 / (luminance + 0.05) >= 4.5
+        white_contrast = 1.05 / (luminance + 0.05)
+        assert white_contrast < 4.5
     viewer.pin_controls_button.setFocus()
     QTest.keyClick(viewer.pin_controls_button, Qt.Key.Key_Space)
     assert not viewer.pin_controls_button.isChecked()
@@ -1371,12 +1493,13 @@ def test_compact_presentation_explains_disabled_options_and_hud_background_defau
     from calibfreehands.visualization.comparison import ComparisonViewer
 
     viewer = ComparisonViewer(_session(tmp_path, 2))
-    assert viewer.metric_checks["f@5"].toolTip().startswith("Protocol pending:")
-    assert viewer.results_menu_button.text() == "Results (2/2)"
-    assert viewer.error_vectors_button.text() == "Vectors: Off"
+    assert "f@5" not in viewer.metric_checks
+    assert viewer.results_menu_button.text() == "Visible (2/2)"
+    assert viewer.error_vectors_button.text() == "Error vectors: Off"
     assert viewer.overlay_panel.background == "none"
     assert "transparent" in viewer.overlay_panel.card.styleSheet()
-    assert viewer.confidence_color_mode.itemText(1) == "Detection"
+    assert viewer.metric_menu_button.text() == "Differences"
+    assert viewer.confidence_menu_button.toolTip().startswith("YOLO hand detector")
     viewer.close()
 
 
@@ -1508,7 +1631,7 @@ def test_pause_discards_pending_playback_frame_but_manual_seek_is_exact(tmp_path
     viewer.close()
 
 
-@pytest.mark.parametrize("selector_name", ["reference_selector", "confidence_color_mode"])
+@pytest.mark.parametrize("selector_name", ["reference_selector"])
 def test_dropdown_combos_open_on_hover_and_click_latches(tmp_path, qapp, selector_name):
     from PySide6.QtCore import QPoint, Qt
     from PySide6.QtTest import QTest

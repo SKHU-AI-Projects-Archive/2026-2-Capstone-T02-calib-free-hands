@@ -230,7 +230,9 @@ class _ViewportPanel(QWidget):
         self.reference_badges.clear()
         self.confidence_rows.clear()
         self.confidence_bars.clear()
-        for config_index in self.configuration_indices:
+        ordered_indices = sorted(self.configuration_indices,
+                                 key=lambda index: viewer.configurations[index]["id"] != viewer.reference_id)
+        for config_index in ordered_indices:
             config = viewer.configurations[config_index]
             if viewer.mode == "overlay" and not viewer.overlay_view.configuration_visible[config_index]:
                 continue
@@ -263,12 +265,12 @@ class _ViewportPanel(QWidget):
             result = viewer.loaded_results[config].result
             value = result.confidence[frame, hand_index] if result.confidence is not None else np.nan
             display = float(value) if np.isfinite(value) else None
-            if label.text() not in ("L detection", "R detection"):
+            if "confidence" not in label.text():
                 label.setText(f"{display:.2f}" if display is not None else "N/A")
             bar = self.confidence_bars.get(key)
             if bar is not None:
                 bar.setValue(round(display * 100) if display is not None else 0)
-                bar.setToolTip("YOLO hand detection score" if display is not None else "Detection score unavailable")
+                bar.setToolTip("YOLO hand detector bounding-box confidence" if display is not None else "Hand detector confidence unavailable")
 
     @classmethod
     def _clear_layout(cls, layout):
@@ -297,8 +299,8 @@ class _ViewportPanel(QWidget):
             handle = _ResultDragHandle(viewer, config["id"], title)
             header.insertWidget(0, handle)
         if not viewer.single_mode and config["id"] == viewer.reference_id:
-            badge = QLabel("REFERENCE")
-            badge.setStyleSheet("font-weight: 700; color: white; border: 1px solid white; padding: 1px 4px;")
+            badge = QLabel("GT")
+            badge.setStyleSheet("font-weight: 700; color: #111111; background-color: #33FF33; border: 1px solid #249924; padding: 1px 4px;")
             header.addWidget(badge)
             self.reference_badges[config["id"]] = badge
         self.body_layout.addLayout(header)
@@ -341,7 +343,7 @@ class _ViewportPanel(QWidget):
                 row_layout = QHBoxLayout(row)
                 row_layout.setContentsMargins(0, 0, 0, 0)
                 row_layout.setSpacing(5)
-                text = QLabel(("L" if hand_index == 0 else "R") + " detection")
+                text = QLabel(("L" if hand_index == 0 else "R") + " hand detection confidence")
                 text.setStyleSheet("color: white;")
                 row_layout.addWidget(text)
                 value_label = text
@@ -356,7 +358,7 @@ class _ViewportPanel(QWidget):
                     bar.setFixedWidth(85)
                     bar.setTextVisible(False)
                     bar.setValue(round(display * 100) if display is not None else 0)
-                    bar.setToolTip("YOLO hand detection score" if display is not None else "Detection score unavailable")
+                    bar.setToolTip("YOLO hand detector bounding-box confidence" if display is not None else "Hand detector confidence unavailable")
                     row_layout.addWidget(bar)
                     self.confidence_bars[(config["id"], hand)] = bar
                 row_layout.addStretch(1)

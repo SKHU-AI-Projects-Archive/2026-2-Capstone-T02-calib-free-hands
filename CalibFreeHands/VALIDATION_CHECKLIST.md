@@ -372,6 +372,21 @@ All entries below are pending implementation and validation. No acceptance item 
 - [ ] Native Windows visual review of the revised active color remains pending.
 
 
+## Phase 1 GT and Confidence Viewer UX (2026-11-05)
+
+- [x] User-facing comparison baseline is labeled `GT`; the internal reference identifiers, saved result metadata, and metric/export schema remain unchanged.
+- [x] A unique checkerboard reference remains the default GT; otherwise the existing saved-id and fallback selection behavior is preserved.
+- [x] GT uses `#33FF33`; the HUD shows GT first without reordering Split panels. Switching GT refreshes result colors, metrics, annotations, and HUD presentation.
+- [x] Candidate base colors remain separate from the effective GT display color; custom candidate colors restore after GT changes. Joints and meshes use result identity color; bones keep the hue at 80% intensity.
+- [x] Confidence color mode is removed. Confidence opacity, numeric value, and bar default off; confidence affects alpha only when requested. Its tooltip identifies the stored YOLO hand detector bounding-box confidence.
+- [x] Comparison controls use `Visible (n/n)` and `Differences`; protocol-pending and currently unavailable metrics are omitted and availability is rebuilt when GT changes. Error vectors remain implemented but are absent from the normal toolbar.
+- [x] Pin remains 26-by-26 px, gray while off, and uses `#33FF33` with a white icon while on. Offscreen sampling shows the white-on-green contrast is about 1.36:1; the requested icon color was retained, and native screenshot review also showed the white pin is difficult to distinguish at this brightness.
+- [x] Offscreen Qt regression coverage includes A→B→C GT changes, candidate color restoration, annotation and metric refresh, joint/bone/mesh identity colors, confidence alpha, metric availability pruning, toolbar labels, hidden vectors, and existing Pin behavior.
+- [x] Native Windows smoke with three existing same-source `2_screw` `.cfh` files (Manual Focal 1655, 2500, and 15000 px) verified GT HUD ordering and selection, old-color restoration, refreshed comparison values, Confidence opacity/numeric controls, and Overlay/Split views. No inference ran and the saved files were opened read-only.
+- [x] Focused comparison viewer tests: 59 passed; full pytest: 249 passed; application import, compileall, `pip check`, and `git diff --check` passed.
+- [ ] Fresh AnyCalib/WiLoR inference and first-user reruns remain pending.
+
+
 ## Final Viewer Control Styling (2026-11-04)
 
 - [x] Custom checkable QAbstractButton mode switch is 42-by-22 device-independent pixels, uses a neutral rounded track and circular near-white thumb, animates over 120 ms, and retains strong keyboard focus/accessibility.
