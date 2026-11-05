@@ -13936,7 +13936,61 @@ def tl_results_yaml(run_dir: Path, cfg: dict):
     return p
 
 
-COMMANDS = {"protocol": protocol_main, "frame-filter": ff_main, "same-session": session_main, "overlay": overlay_main, "phase-segmentation": pseg_main, "guide-revision": grev_main, "f-response": fresp_main, "error-factors": ferr_main, "long-video-check": long_main, "generalization": gen_main, "main-camera-extension": ext_main, "wide-60cm": wide_main, "jointset-sets": jset_main, "verdict-calibration": cal_main, "printed-hand": pr_main, "hand-markers": mk_main, "markers-only": mo_main, "free-template": ft_main, "free-shape3d": s3_main, "free-shape3d-hand": h3_main, "free-shape3d-27": e3_main, "free-shape3d-new": e4_main, "mmpose-hand": mm_main, "mmpose-hand-46": mm2_main, "free-shape3d-new2": e5_main, "mmpose-hand-src": mm3_main, "free-shape3d-detectors": fs_main, "free-shape3d-hand-sets": h4_main, "free-shape3d-hand-sets-42track": h4b_main, "oblique-desk": od_main, "oblique-synthetic": sy_main, "oblique-fixed-template": fx_main, "oblique-desk-videos": om_main, "pause-stabilized": ps_main, "continuous-klt": kt_main, "continuous-klt-palm": kp_main, "klt-paper-dorsum": pp_main, "paper-parallax": hp_main, "segment-template": sg_main, "turn-synthetic": tr_main, "window-f": wd_main, "anycalib-videos": ac_main, "error-sources": ec_main, "hand-deformation": dm_main, "joint-combos": fc_main, "points-video": pv_main, "desk-motion": dk_main, "ramp-sensitivity": rs_main, "teammate-hands": tm_main, "finger-ramp": fr_main, "contact-points": ct_main, "wilor-ramp": wl_main, "ramp-identifiability": id_main, "new-phone-hands": nc_main, "multistart": ms_main, "multistart-rerun": ms2_main, "known-tilt": tl_main}
+
+# 74b / 75 results yamls again (user 2026-11-05): ms_results_yaml rounded the string 'start' and tl_results_yaml tested np.isfinite on a cost saved as null; both left unchanged.
+def ry_value(x, n: int = 1):
+    """A number rounded to n places; None for null or non-finite; anything else (start names, booleans) as it is."""
+    if isinstance(x, bool) or not isinstance(x, (int, float)):
+        return x
+    return round(float(x), n) if np.isfinite(x) else None
+
+
+def ry_cfg(config: str, extra) -> dict:
+    """The run's config as ms2_main / tl_main build it (74's settings through settings_config), with extra = the keys of the experiment's own yaml to keep."""
+    own = yaml.safe_load(Path(config).read_text())
+    o74 = yaml.safe_load(hf.resolve(own["settings_config"]).read_text())
+    r67 = yaml.safe_load(hf.resolve(o74["estimator_config"]).read_text())
+    return {"videos": ms_videos(o74), "joint_sets": r67["joint_sets"], "o74": o74, **{k: o74[k] for k in ("ramps_deg", "free_starts_deg") if k in o74},
+            **{k: own[k] for k in ("experiment", "output", *extra)}}
+
+
+def ry_tracked(d: dict, keys) -> dict:
+    """{estimate: values} of one (video, joint set): failures as {'failed'}, otherwise the listed keys (pitch, roll, RMS to 2 places, the rest to 1)."""
+    return {k: (None if not x else {"failed": x.get("failed")} if "f" not in x else
+                {kk: ry_value(x[kk], 2 if kk in ("rms_px", "pitch_deg", "roll_deg") else 1) for kk in keys if kk in x}) for k, x in d.items()}
+
+
+def ry_main(argv=None):
+    """Results yaml of 74b (multistart-rerun) or 75 (known-tilt): values only (no reference f or errors)."""
+    ap = argparse.ArgumentParser()
+    ap.add_argument("experiment", choices=["74b", "75"])
+    ap.add_argument("--run", required=True)
+    a = ap.parse_args(argv)
+    run_dir = hf.resolve(a.run)
+    if a.experiment == "74b":
+        cfg, note, keys = ry_cfg(str(hf.PROJECT_ROOT / "configs/74b_multistart_rerun.yaml"), ()), MS_NOTE, ("f", "rms_px", "pitch_deg", "desk_tilt_deg", "boundary", "start")
+    else:
+        cfg, note = ry_cfg(str(hf.PROJECT_ROOT / "configs/75_known_tilt.yaml"), ("tilt_deg", "sensitivity", "free_starts_deg")), TL_NOTE
+        keys = ("f", "rms_px", "cost", "pitch_deg", "roll_deg", "desk_tilt_deg", "boundary", "start")
+    r = json.loads((run_dir / "results.json").read_text())["real"]
+    m = json.loads((run_dir / "metadata.json").read_text())
+    out = {"experiment": cfg["experiment"]["name"], "run": str(run_dir.resolve().relative_to(hf.PROJECT_ROOT)), "code_commit": m["git"]["commit"][:7],
+           "git_dirty_at_run": m["git"]["git_dirty"], "note": note, **{k: cfg[k] for k in ("ramps_deg", "tilt_deg", "sensitivity", "free_starts_deg") if k in cfg}, "videos": {}}
+    if a.experiment == "75":
+        out.pop("ramps_deg", None)
+    for e in cfg["videos"]:
+        o = out["videos"][e["file"]] = {"group": e["person"], "distance_cm": e["distance_cm"], "hand": e["hand"], "tracked": {}}
+        for js in cfg["joint_sets"]:
+            d = r.get(f"{e['file']}|{js}") or {}
+            o["tracked"][js] = ry_tracked(d, keys)
+            if a.experiment == "74b" and "wilor" in d:
+                o["tracked"][js]["wilor_ramp_deg"] = ms_previous(cfg["o74"], e, js)["wilor_ramp"]
+    p = hf.resolve(cfg["output"]["results_yaml"])
+    p.write_text(yaml.safe_dump(hf.jsonable(out), allow_unicode=True, sort_keys=False))
+    print(p)
+
+
+COMMANDS = {"protocol": protocol_main, "frame-filter": ff_main, "same-session": session_main, "overlay": overlay_main, "phase-segmentation": pseg_main, "guide-revision": grev_main, "f-response": fresp_main, "error-factors": ferr_main, "long-video-check": long_main, "generalization": gen_main, "main-camera-extension": ext_main, "wide-60cm": wide_main, "jointset-sets": jset_main, "verdict-calibration": cal_main, "printed-hand": pr_main, "hand-markers": mk_main, "markers-only": mo_main, "free-template": ft_main, "free-shape3d": s3_main, "free-shape3d-hand": h3_main, "free-shape3d-27": e3_main, "free-shape3d-new": e4_main, "mmpose-hand": mm_main, "mmpose-hand-46": mm2_main, "free-shape3d-new2": e5_main, "mmpose-hand-src": mm3_main, "free-shape3d-detectors": fs_main, "free-shape3d-hand-sets": h4_main, "free-shape3d-hand-sets-42track": h4b_main, "oblique-desk": od_main, "oblique-synthetic": sy_main, "oblique-fixed-template": fx_main, "oblique-desk-videos": om_main, "pause-stabilized": ps_main, "continuous-klt": kt_main, "continuous-klt-palm": kp_main, "klt-paper-dorsum": pp_main, "paper-parallax": hp_main, "segment-template": sg_main, "turn-synthetic": tr_main, "window-f": wd_main, "anycalib-videos": ac_main, "error-sources": ec_main, "hand-deformation": dm_main, "joint-combos": fc_main, "points-video": pv_main, "desk-motion": dk_main, "ramp-sensitivity": rs_main, "teammate-hands": tm_main, "finger-ramp": fr_main, "contact-points": ct_main, "wilor-ramp": wl_main, "ramp-identifiability": id_main, "new-phone-hands": nc_main, "multistart": ms_main, "multistart-rerun": ms2_main, "known-tilt": tl_main, "results-yaml-74b-75": ry_main}
 
 
 def main(argv=None):
