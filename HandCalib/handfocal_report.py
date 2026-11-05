@@ -6883,6 +6883,127 @@ def ms2_job(args) -> dict:
 
 
 
+# ----------------------------------------------------------------------------------------------------
+# 76 (user 2026-11-05: "둘다 해봐라"): in 74b the free ramp of some left-hand videos ended at a negative ramp whose cost is higher than that of a fixed positive ramp of the same video
+# (IMG_7351 -35.7 deg cost 29.0 against 13 deg fixed 17.3; IMG_7355 -24.5 deg 16.8 against 11 deg 15.3): the free solve fell into a worse basin. Here the free ramp starts from each
+# fixed-ramp solution (pitch, roll 0, desk pose, f), so its cost can only go down from that solution's. dk_solve unchanged; new functions.
+# ----------------------------------------------------------------------------------------------------
+CH_KEYS = ("f", "pitch_deg", "roll_deg", "desk_tilt_deg", "turn_range_deg", "rms_px", "cost", "success", "nfev")
+
+
+def dk_free_from_fixed(pb, grid: np.ndarray, A: dict, ramp_deg: float, f_start: float, max_frames: int = 120) -> dict:
+    """1) The fixed ramp (pitch = ramp_deg, roll 0) with f free from dk_init at f_start (74b's f for that ramp); 2) pitch and roll freed from that solution (f free). trf only lowers the cost,
+    so 2)'s cost is at most 1)'s. Returns {fixed, free} with CH_KEYS and the bound flag."""
+    pr, ids = _restrict(pb, max_frames=max_frames)
+    if list(ids) != list(A["joint_ids"]):
+        raise ValueError("free_template result was computed on different joints")
+    jid = [int(j) for j in A["joint_ids"]]
+    T2 = np.asarray(A["template"], float)
+    fb = (grid[0], grid[-1])
+    S = dk_solve(pr, float(np.clip(f_start, fb[0], fb[1])), T2, jid, np.radians(float(ramp_deg)), 0.0, True, False, fb)
+    st = S.pop("state")
+    C = dk_solve(pr, float(S["f"]), T2, jid, st["pitch"], st["roll"], True, True, fb, init=st)
+    C.pop("state")
+    pick = lambda B: dict({k: B[k] for k in CH_KEYS}, boundary=bool(B["at_bound"]) or od_boundary(float(B["f"]), grid))      # noqa: E731
+    return {"fixed": pick(S), "free": pick(C)}
+
+
+def ch_job(args) -> dict:
+    """Experiment 76, one (video, joint set, ramp): dk_free_from_fixed from a free_template computed once (tl_template_job). args = (kp, mask, frames, box, size_wh, ecfg, ids, A, ramp_deg, f_start)."""
+    kp, mask, frames, box, size_wh, ecfg, ids, A, ramp_deg, f_start = args
+    os.environ.setdefault("OMP_NUM_THREADS", "1")
+    cv2.setNumThreads(1)
+    grid = f_grid(ecfg, max(*size_wh))
+    t0 = time.time()
+    try:
+        pb = od_bridge(kp, mask, frames, box, size_wh, ecfg, ids)
+        out = dk_free_from_fixed(pb, grid, A, ramp_deg, f_start)
+    except Exception as e:                                            # a failure is a result, not a crash of the run
+        return {"failed": f"{type(e).__name__}: {e}"}
+    out["elapsed_s"] = float(time.time() - t0)
+    return out
+
+
+# ----------------------------------------------------------------------------------------------------
+# 77 (user 2026-11-05): where the KLT corners of 56's hand chain lie on the hand, how well one homography fits them per region, and how far the tracked joints drift from the detected
+# joints, per video (the teammate's new-phone videos stay -25 to -45 % off with a ramp that matches the photos). kt_chain unchanged; kt_chain_log repeats it and records the inlier corners.
+# ----------------------------------------------------------------------------------------------------
+def kt_chain_log(pngs: list, kps: np.ndarray, boxes: np.ndarray, order: list, kcfg: dict, mask_kps: np.ndarray = None) -> dict:
+    """kt_chain (same steps and settings) that also records, per step, the inlier corners in the hand frame of the previous frame's joints (kps, carried): s along wrist (0) -> middle MCP (9),
+    0 = wrist, 1 = middle MCP; t across, in the same unit) and their residual to the step homography (px). mask_kps: the joints whose hull is the corner mask (default kps; 58's dorsum body
+    passes NaN for the finger joints). Returns kt_chain's dict plus s, t, res (float32 arrays over every step) and n_ok (corners passing the forward-backward check per step)."""
+    lk = dict(winSize=(int(kcfg["win"]), int(kcfg["win"])), maxLevel=int(kcfg["levels"]), criteria=(cv2.TERM_CRITERIA_EPS | cv2.TERM_CRITERIA_COUNT, 30, 0.01))
+    mk = kps if mask_kps is None else mask_kps
+    Hc = {order[0]: np.eye(3)}
+    inls, n_ok, S, T, R = [], [], [], [], []
+    breaks, broken = 0, False
+    gray = lambda i: cv2.cvtColor(cv2.imread(pngs[i], cv2.IMREAD_COLOR), cv2.COLOR_BGR2GRAY)      # noqa: E731
+    g0 = gray(order[0])
+    for prev, cur in zip(order[:-1], order[1:]):
+        g1 = gray(cur)
+        if broken:
+            Hc[cur] = None
+            g0 = g1
+            continue
+        m = kt_hand_mask(mk[prev], boxes[prev], g0.shape, kcfg["dilate_frac"])
+        c = cv2.goodFeaturesToTrack(g0, int(kcfg["max_corners"]), float(kcfg["quality"]), float(kcfg["min_distance"]), mask=m, blockSize=int(kcfg["block"]))
+        Hs = None
+        if c is not None and len(c) >= 8:
+            p0 = c.reshape(-1, 2).astype(np.float32)
+            p1, s1, _ = cv2.calcOpticalFlowPyrLK(g0, g1, p0.reshape(-1, 1, 2), None, **lk)
+            pb, s2, _ = cv2.calcOpticalFlowPyrLK(g1, g0, p1, None, **lk)
+            ok = (s1.ravel() == 1) & (s2.ravel() == 1) & (np.linalg.norm(pb.reshape(-1, 2) - p0, axis=1) < float(kcfg["fb_px"]))
+            n_ok.append(int(ok.sum()))
+            if ok.sum() >= int(kcfg["min_inliers"]):
+                Hs, inl = cv2.findHomography(p0[ok].astype(np.float64), p1.reshape(-1, 2)[ok].astype(np.float64), cv2.USAC_MAGSAC, float(kcfg["threshold_px"]))
+                if Hs is None or inl is None or int(inl.sum()) < int(kcfg["min_inliers"]):
+                    Hs = None
+                else:
+                    inls.append(int(inl.sum()))
+                    q0 = p0[ok][inl.ravel() > 0].astype(np.float64)
+                    q1 = p1.reshape(-1, 2)[ok][inl.ravel() > 0].astype(np.float64)
+                    R.append(np.linalg.norm(kt_map(q0, Hs) - q1, axis=1))
+                    w0, m9 = np.asarray(kps[prev][0], float), np.asarray(kps[prev][9], float)
+                    ax = m9 - w0
+                    L2 = float(ax @ ax)
+                    d = q0 - w0
+                    S.append(d @ ax / L2 if L2 > 0 else np.full(len(q0), np.nan))
+                    T.append((ax[0] * d[:, 1] - ax[1] * d[:, 0]) / L2 if L2 > 0 else np.full(len(q0), np.nan))
+        if Hs is None:
+            breaks += 1
+            broken = True
+            Hc[cur] = None
+        else:
+            Hc[cur] = Hs @ Hc[prev]
+        g0 = g1
+    cat = lambda X: np.concatenate(X).astype(np.float32) if X else np.zeros(0, np.float32)      # noqa: E731
+    return {"H": Hc, "breaks": breaks, "inl": inls, "n_ok": n_ok, "s": cat(S), "t": cat(T), "res": cat(R)}
+
+
+KF_REGIONS = (("손목 아래", -np.inf, 0.0), ("손등 몸통", 0.0, 1.0), ("손가락", 1.0, np.inf))
+KF_GROUPS = {"wrist": [0], "mcp": [5, 9, 13, 17], "pip": [6, 10, 14, 18], "tip": [4, 8, 12, 16, 20], "thumb": [1, 2, 3]}
+
+
+def kf_corner_stats(s: np.ndarray, res: np.ndarray, inl: list, n_ok: list) -> dict:
+    """Share of inlier corners and their median homography residual (px) per hand region (KF_REGIONS on s), the median s, and the per-step inlier / checked counts."""
+    out = {"n_corners": int(len(s)), "median_s": float(np.nanmedian(s)) if len(s) else None,
+           "inliers_per_step": float(np.median(inl)) if inl else None, "checked_per_step": float(np.median(n_ok)) if n_ok else None, "regions": {}}
+    for nm, lo, hi in KF_REGIONS:
+        k = (s >= lo) & (s < hi)
+        out["regions"][nm] = {"share": float(k.mean()) if len(s) else None, "res_median_px": float(np.median(res[k])) if k.any() else None}
+    return out
+
+
+def kf_drift(kp_t: np.ndarray, kp_d: np.ndarray, box_d: np.ndarray, present: np.ndarray, use: np.ndarray) -> dict:
+    """Median distance between tracked and detected joints over frames with both (detected present, tracked used), as % of the detected hand box's long side, per KF_GROUPS."""
+    k = present & use & np.isfinite(kp_t).all((1, 2)) & np.isfinite(kp_d).all((1, 2))
+    if not k.any():
+        return {"n_frames": 0}
+    L = box_long(np.asarray(box_d, float)[k])
+    d = np.linalg.norm(kp_t[k] - kp_d[k], axis=2) / L[:, None] * 100.0
+    return {"n_frames": int(k.sum()), **{g: float(np.median(d[:, j])) for g, j in KF_GROUPS.items()}}
+
+
 def od_fix_lines(path=None) -> list:
     """Where the six corrections to the supervisor's code sit in handfocal_estimate.py (line numbers of the corrected spellings inside section 5)."""
     p = Path(path) if path else Path(__file__).resolve().parent / "handfocal_estimate.py"
