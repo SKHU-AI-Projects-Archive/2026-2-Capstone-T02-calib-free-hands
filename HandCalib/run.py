@@ -13542,7 +13542,170 @@ def nc_main(argv=None):
     return run_root, res
 
 
-COMMANDS = {"protocol": protocol_main, "frame-filter": ff_main, "same-session": session_main, "overlay": overlay_main, "phase-segmentation": pseg_main, "guide-revision": grev_main, "f-response": fresp_main, "error-factors": ferr_main, "long-video-check": long_main, "generalization": gen_main, "main-camera-extension": ext_main, "wide-60cm": wide_main, "jointset-sets": jset_main, "verdict-calibration": cal_main, "printed-hand": pr_main, "hand-markers": mk_main, "markers-only": mo_main, "free-template": ft_main, "free-shape3d": s3_main, "free-shape3d-hand": h3_main, "free-shape3d-27": e3_main, "free-shape3d-new": e4_main, "mmpose-hand": mm_main, "mmpose-hand-46": mm2_main, "free-shape3d-new2": e5_main, "mmpose-hand-src": mm3_main, "free-shape3d-detectors": fs_main, "free-shape3d-hand-sets": h4_main, "free-shape3d-hand-sets-42track": h4b_main, "oblique-desk": od_main, "oblique-synthetic": sy_main, "oblique-fixed-template": fx_main, "oblique-desk-videos": om_main, "pause-stabilized": ps_main, "continuous-klt": kt_main, "continuous-klt-palm": kp_main, "klt-paper-dorsum": pp_main, "paper-parallax": hp_main, "segment-template": sg_main, "turn-synthetic": tr_main, "window-f": wd_main, "anycalib-videos": ac_main, "error-sources": ec_main, "hand-deformation": dm_main, "joint-combos": fc_main, "points-video": pv_main, "desk-motion": dk_main, "ramp-sensitivity": rs_main, "teammate-hands": tm_main, "finger-ramp": fr_main, "contact-points": ct_main, "wilor-ramp": wl_main, "ramp-identifiability": id_main, "new-phone-hands": nc_main}
+MS_NOTE = ("실험 67의 책상 제약 추정기를 시작점 여러 개로 다시 돌린 기록이다(판정 없음). 실험 73에서 7355-복사본의 일부 경사가 잘못된 해에 갇혀(재투영 RMS 27 px, 이웃 경사 약 3 px) f가 크게 "
+           "빗나갔다. 같은 방식(hf.dk_job_ms: f 고정 풀이를 이웃 f의 해에서 다시 풀기, 비용이 낮은 점 3개와 free_template f에서 f까지 풀기, 비용이 가장 낮은 해)으로 경사 고정 f, WiLoR 손등 경사 f, "
+           "경사 함께 추정(시작 경사 여러 개)을 기존 핸드폰 12개와 새 핸드폰 4개에 다시 낸다. 점은 실험 56 추적점만.")
+MS_GROUP = {"old": "기존 폰 본인", "self": "새 폰 본인", "teammate": "새 폰 팀원"}
+
+
+def ms_videos(own: dict) -> list:
+    r56 = yaml.safe_load(hf.resolve(own["rules_config"]).read_text())
+    r73 = yaml.safe_load(hf.resolve(own["new_phone_config"]).read_text())
+    return [{**e, "person": "old"} for e in r56["videos"]] + [{**e, "ref_f_px": float(r73["ref_f"]["value"])} for e in r73["videos"]]
+
+
+def ms_previous(own: dict, e: dict, js: str) -> dict:
+    """The single-start values this re-runs: 11 deg (67 for the old phone, 73 for the new) and the WiLoR dorsal ramp (71 / 73), tracked points; plus that WiLoR ramp."""
+    src = "tracked"
+    if e["person"] == "old":
+        a = yaml.safe_load(hf.resolve(own["previous"]["ramp11_old"]).read_text())["videos"][e["file"]][src][js]["ramp_fixed"]
+        b = yaml.safe_load(hf.resolve(own["previous"]["wilor_old"]).read_text())["videos"][e["file"]]
+        return {"ramp_11": a and a.get("f_px"), "wilor": (b[src][js].get("ramp_dorsal") or {}).get("f_px"), "wilor_ramp": b["wilor_ramp_deg"][js]["dorsal"]}
+    b = yaml.safe_load(hf.resolve(own["previous"]["new"]).read_text())["videos"][e["file"]]
+    return {"ramp_11": (b[src][js].get("ramp_11") or {}).get("f_px"), "wilor": (b[src][js].get("wilor_dorsal") or {}).get("f_px"), "wilor_ramp": b["wilor_ramp_deg"][js]["dorsal"]}
+
+
+def ms_main(argv=None):
+    ap = argparse.ArgumentParser()
+    ap.add_argument("--config", default=str(hf.PROJECT_ROOT / "configs/74_multistart.yaml"))
+    sub = ap.add_subparsers(dest="cmd")
+    ry = sub.add_parser("results-yaml")
+    ry.add_argument("--run", required=True)
+    ap.add_argument("--out", default=None)
+    ap.add_argument("--only", default=None, help="dry run: file|joint_set|ramp,ramp (fixed ramps only)")
+    a = ap.parse_args(argv)
+    text = Path(a.config).read_text()
+    own = yaml.safe_load(text)
+    r56 = yaml.safe_load(hf.resolve(own["rules_config"]).read_text())
+    r60 = yaml.safe_load(hf.resolve(own["segments_config"]).read_text())
+    r67 = yaml.safe_load(hf.resolve(own["estimator_config"]).read_text())
+    base = od_load(yaml.safe_load(hf.resolve(r56["base_config"]).read_text()))
+    cfg = {**base, "videos": ms_videos(own), "tracking": r56["tracking"], "segments": r60["segments"], "joint_sets": r67["joint_sets"],
+           **{k: own[k] for k in ("experiment", "workers", "video_workers", "output", "ramps_deg", "free_starts_deg")}}
+    ramps = [float(r) for r in cfg["ramps_deg"]]
+    if a.cmd == "results-yaml":
+        print(ms_results_yaml(hf.resolve(a.run), cfg, own))
+        return None
+    plan = None
+    if a.only:
+        v, js, rr = a.only.split("|")
+        cfg["videos"] = [e for e in cfg["videos"] if e["file"] == v]
+        cfg["joint_sets"] = {js: cfg["joint_sets"][js]}
+        plan = [float(x) for x in rr.split(",")]
+    run_root, log = x70_head(None, a.out, cfg, f"74 시작점 여러 개: 영상 {len(cfg['videos'])}개, 경사 {plan or ramps}, 함께 추정 시작 {cfg['free_starts_deg']}")
+    t0 = time.time()
+    vid = x70_points(cfg, run_root, log)
+    log(f"  영상 처리: {time.time() - t0:.0f} s")
+    ecfg = cfg["pipeline"]["estimate"]
+    jobs, keys = [], []
+    for e in cfg["videos"]:
+        y, x = vid[e["file"]]["tracked"], vid[e["file"]]
+        for js, ids in cfg["joint_sets"].items():
+            arg = lambda mode, r: ("main", 0, y["kp"], np.isfinite(y["kp"]).all(2), np.flatnonzero(y["use"]), y["box"], tuple(x["size"]), ecfg, ids, (mode,), float(r))      # noqa: E731
+            todo = [(f"ramp_{r:g}", "ramp_fixed", r) for r in (plan or ramps)]
+            if plan is None:
+                todo += [("wilor", "ramp_fixed", ms_previous(own, e, js)["wilor_ramp"])] + [(f"free_{r:g}", "ramp_free", r) for r in cfg["free_starts_deg"]]
+            for mk, mode, r in todo:
+                jobs.append(arg(mode, r))
+                keys.append((f"{e['file']}|{js}", mk, mode))
+    log(f"  추정 {len(jobs)}건")
+    res = {}
+    import multiprocessing as mp
+    from concurrent.futures import ProcessPoolExecutor
+    with ProcessPoolExecutor(max_workers=int(cfg["workers"]), mp_context=mp.get_context("spawn")) as ex:
+        for i, ((k, mk, mode), o) in enumerate(zip(keys, ex.map(hf.dk_job_ms, jobs, chunksize=1))):
+            d = res.setdefault(k, {"free_template": o.get("free_template")})
+            d[mk] = o.get(mode) or {"failed": o.get("failed")}
+            if (i + 1) % 32 == 0 or i + 1 == len(jobs):
+                log(f"  진행 {i + 1} / {len(jobs)} ({time.time() - t0:.0f} s)")
+    if plan is None:
+        (run_root / "summary.md").write_text(ms_summary(res, cfg, own))
+    x70_finish(run_root, {"real": res}, text, a.config, "code_74", own, t0, log)
+    return run_root, res
+
+
+def ms_needed(ramps: list, d: dict, ref: float):
+    """nc_match_ramp on the fixed ramps whose fit is not suspect (ms_suspect)."""
+    ok = [(r, d.get(f"ramp_{r:g}") or {}) for r in ramps]
+    ok = [(r, x["f"]) for r, x in ok if "f" in x and not ms_suspect(x, d, ramps)]
+    return nc_match_ramp([r for r, _ in ok], [f for _, f in ok], ref) if len(ok) > 1 else None
+
+
+def ms_suspect(x: dict, d: dict, ramps: list) -> bool:
+    """A fit is suspect when its reprojection RMS is more than twice the median RMS over the video's fixed ramps (73: stuck fits had ~9x)."""
+    rs = [(d.get(f"ramp_{r:g}") or {}).get("rms_px") for r in ramps]
+    rs = [r for r in rs if r is not None]
+    return bool(rs) and "rms_px" in x and x["rms_px"] > 2 * float(np.median(rs))
+
+
+def ms_summary(res: dict, cfg: dict, own: dict) -> str:
+    ramps = [float(r) for r in cfg["ramps_deg"]]
+    ref = lambda e: x70_ref(e, cfg)      # noqa: E731
+    err = lambda x, e: None if not x or "f" not in x else 100 * (x["f"] / ref(e) - 1)      # noqa: E731
+    pe = lambda f, e: "-" if f is None else f"{100 * (f / ref(e) - 1):+.1f}%"      # noqa: E731
+    fe = lambda x, e, d: "-" if err(x, e) is None else f"{err(x, e):+.1f}%" + ("*" if x.get("boundary") else "") + ("!" if ms_suspect(x, d, ramps) else "")      # noqa: E731
+    best_free = lambda d: min([d[k] for k in d if k.startswith("free_") and "f" in (d[k] or {})], key=lambda x: x["cost"], default=None)      # noqa: E731
+    L = ["# 실험 74 summary", "", f"**{MS_NOTE}**", "", f"- 기준 f: 기존 핸드폰 {float(cfg['ref_f']['value']):g} px, 새 핸드폰 " +
+         ", ".join(sorted({f'{ref(e):g} px' for e in cfg["videos"] if e["person"] != "old"})) + ". 기준 f는 이 파일에만 적는다.",
+         "- ! = 의심스러운 적합(그 영상의 경사 고정 RMS 중앙값의 2배 초과). * = f 탐색 범위 끝.", "",
+         "## 1. 한 번 시작(실험 67, 71, 73) 대 여러 번 시작 (추적점)", "",
+         "| 관절 | 영상 | 묶음 | 손 | 경사 11° 이전 | 경사 11° 이번 | WiLoR 경사 | WiLoR 이전 | WiLoR 이번 |", "|---|---|---|---|---|---|---|---|---|"]
+    for js in cfg["joint_sets"]:
+        for e in cfg["videos"]:
+            d, p = res.get(f"{e['file']}|{js}") or {}, ms_previous(own, e, js)
+            L.append(f"| {js} | {e['file']} | {MS_GROUP[e['person']]} | {e['hand']} | {pe(p['ramp_11'], e)} | {fe(d.get('ramp_11'), e, d)} | {p['wilor_ramp']:.1f}° | {pe(p['wilor'], e)} | {fe(d.get('wilor'), e, d)} |")
+    L += ["", "## 2. 묶음별 요약 (여러 번 시작, 추적점)", "", "| 관절 | 방식 | 묶음 | ±10% 안 | ±25% 안 | 오차 절댓값 중앙값 | 중앙값(부호) | 최소 ~ 최대 | 범위 끝 |", "|---|---|---|---|---|---|---|---|---|"]
+    for js in cfg["joint_sets"]:
+        for nm, get in (("free_template (교수님)", lambda d: d.get("free_template")), ("경사 11° 고정", lambda d: d.get("ramp_11")), ("WiLoR 손등 경사", lambda d: d.get("wilor")),
+                        ("경사 함께 추정 (비용 최소)", best_free)):
+            for gk in ("old", "self", "teammate"):
+                vs = [e for e in cfg["videos"] if e["person"] == gk]
+                xs = [(get(res.get(f"{e['file']}|{js}") or {}) or {}, e) for e in vs]
+                L.append(f"| {js} | {nm} | {MS_GROUP[gk]} {len(vs)} | {x70_stats([err(x, e) for x, e in xs])} | {sum(bool(x.get('boundary')) for x, _ in xs)} |")
+    L += ["", "## 3. 경사별 f 오차와 'f = 기준 f인 경사' (여러 번 시작, 추적점)", "",
+          "| 관절 | 영상 | 묶음 | 손 | " + " | ".join(f"{r:g}°" for r in ramps) + " | f = 기준 f인 경사 | 경사 함께 추정: 경사, f (시작 경사) | 의심 적합 수 |", "|---|---|---|---|" + "---|" * len(ramps) + "---|---|---|"]
+    for js in cfg["joint_sets"]:
+        for e in cfg["videos"]:
+            d = res.get(f"{e['file']}|{js}") or {}
+            n = ms_needed(ramps, d, ref(e))
+            b = best_free(d)
+            fs = "-" if b is None else f"{b['pitch_deg']:.1f}°, {fe(b, e, d)} ({next(k for k in d if d[k] is b)[5:]}°)"
+            ns = sum(ms_suspect(d.get(f"ramp_{r:g}") or {}, d, ramps) for r in ramps)
+            L.append(f"| {js} | {e['file']} | {MS_GROUP[e['person']]} | {e['hand']} | " + " | ".join(fe(d.get(f"ramp_{r:g}"), e, d) for r in ramps) +
+                     f" | {'범위 밖' if n is None else f'{n:.1f}°'} | {fs} | {ns} |")
+    L += ["", "## 4. 경사 함께 추정: 시작 경사별 (추적점, j16)", "", "| 영상 | 묶음 | " + " | ".join(f"시작 {r:g}°: 경사, f, 비용" for r in cfg["free_starts_deg"]) + " |",
+          "|---|---|" + "---|" * len(cfg["free_starts_deg"])]
+    for e in cfg["videos"]:
+        d = res.get(f"{e['file']}|j16") or {}
+        L.append(f"| {e['file']} | {MS_GROUP[e['person']]} | " + " | ".join(
+            "-" if "f" not in (d.get(f"free_{r:g}") or {}) else f"{d[f'free_{r:g}']['pitch_deg']:.1f}°, {fe(d[f'free_{r:g}'], e, d)}, {d[f'free_{r:g}']['cost']:.1f}" for r in cfg["free_starts_deg"]) + " |")
+    L += ["", "## 한계", "", "- 의심 표시(RMS 2배)는 실행 전에 정한 단순 규칙이다. 'f = 기준 f인 경사'는 의심 적합을 빼고 보간한다.",
+          "- 여러 번 시작은 시작점을 늘린 것일 뿐 전역 최적을 보장하지 않는다.", "- 경사 함께 추정은 실험 67에서 불안정했다(일부 왼손에서 음의 경사, f 범위 끝).", ""]
+    return "\n".join(L) + "\n"
+
+
+def ms_results_yaml(run_dir: Path, cfg: dict, own: dict):
+    """Values only (no reference f or errors)."""
+    r = json.loads((run_dir / "results.json").read_text())["real"]
+    m = json.loads((run_dir / "metadata.json").read_text())
+    rd = lambda x, n=1: None if x is None or (isinstance(x, float) and not np.isfinite(x)) else round(x, n)      # noqa: E731
+    out = {"experiment": cfg["experiment"]["name"], "run": str(run_dir.resolve().relative_to(hf.PROJECT_ROOT)), "code_commit": m["git"]["commit"][:7],
+           "git_dirty_at_run": m["git"]["git_dirty"], "note": MS_NOTE, "ramps_deg": cfg["ramps_deg"], "free_starts_deg": cfg["free_starts_deg"], "videos": {}}
+    for e in cfg["videos"]:
+        o = out["videos"][e["file"]] = {"group": e["person"], "distance_cm": e["distance_cm"], "hand": e["hand"], "tracked": {}}
+        for js in cfg["joint_sets"]:
+            d = r.get(f"{e['file']}|{js}") or {}
+            o["tracked"][js] = {k: (None if not x else {"failed": x.get("failed")} if "f" not in x else
+                                    {kk: rd(x.get(kk), 2 if kk in ("rms_px", "pitch_deg") else 1) for kk in ("f", "rms_px", "pitch_deg", "desk_tilt_deg", "boundary", "start") if kk in x})
+                                for k, x in d.items()}
+            if "wilor" in d:
+                o["tracked"][js]["wilor_ramp_deg"] = ms_previous(own, e, js)["wilor_ramp"]
+    p = hf.resolve(cfg["output"]["results_yaml"])
+    p.write_text(yaml.safe_dump(hf.jsonable(out), allow_unicode=True, sort_keys=False))
+    return p
+
+
+COMMANDS = {"protocol": protocol_main, "frame-filter": ff_main, "same-session": session_main, "overlay": overlay_main, "phase-segmentation": pseg_main, "guide-revision": grev_main, "f-response": fresp_main, "error-factors": ferr_main, "long-video-check": long_main, "generalization": gen_main, "main-camera-extension": ext_main, "wide-60cm": wide_main, "jointset-sets": jset_main, "verdict-calibration": cal_main, "printed-hand": pr_main, "hand-markers": mk_main, "markers-only": mo_main, "free-template": ft_main, "free-shape3d": s3_main, "free-shape3d-hand": h3_main, "free-shape3d-27": e3_main, "free-shape3d-new": e4_main, "mmpose-hand": mm_main, "mmpose-hand-46": mm2_main, "free-shape3d-new2": e5_main, "mmpose-hand-src": mm3_main, "free-shape3d-detectors": fs_main, "free-shape3d-hand-sets": h4_main, "free-shape3d-hand-sets-42track": h4b_main, "oblique-desk": od_main, "oblique-synthetic": sy_main, "oblique-fixed-template": fx_main, "oblique-desk-videos": om_main, "pause-stabilized": ps_main, "continuous-klt": kt_main, "continuous-klt-palm": kp_main, "klt-paper-dorsum": pp_main, "paper-parallax": hp_main, "segment-template": sg_main, "turn-synthetic": tr_main, "window-f": wd_main, "anycalib-videos": ac_main, "error-sources": ec_main, "hand-deformation": dm_main, "joint-combos": fc_main, "points-video": pv_main, "desk-motion": dk_main, "ramp-sensitivity": rs_main, "teammate-hands": tm_main, "finger-ramp": fr_main, "contact-points": ct_main, "wilor-ramp": wl_main, "ramp-identifiability": id_main, "new-phone-hands": nc_main, "multistart": ms_main}
 
 
 def main(argv=None):

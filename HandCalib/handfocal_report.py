@@ -6604,6 +6604,85 @@ def id_job(args) -> dict:
     return o
 
 
+# ----------------------------------------------------------------------------------------------------
+# 74 (user 2026-11-05: 7355-복사본's +33% was a stuck fit - RMS 27 px against ~3 px at the neighbouring ramps; "이전에 7355 영상 오차 문제에서 제안했던 실험을 진행해 주고"): 67's desk
+# model with several starts. dk_estimate and dk_job are unchanged; these are new functions.
+# ----------------------------------------------------------------------------------------------------
+def dk_estimate_ms(pb, grid: np.ndarray, A: dict, mode: str, ramp_deg: float, coarse_n: int = 8, max_frames: int = 120, n_final: int = 3) -> dict:
+    """dk_estimate with several starts. 1) The coarse f profile as dk_estimate (each f from dk_init). 2) Warm sweeps: every grid f solved again from its neighbour's solution, upwards then
+    downwards, kept when its cost is lower (a fixed-f solve that fell into a wrong basin is replaced). 3) All free (f too) from the n_final lowest profile points (parabola on log f at a local
+    minimum) and from free_template's f (the profile solution nearest to it, solved at that f first); the lowest cost is kept. Every start is recorded."""
+    pr, ids = _restrict(pb, max_frames=max_frames)
+    if list(ids) != list(A["joint_ids"]):
+        raise ValueError("free_template result was computed on different joints")
+    jid = [int(j) for j in A["joint_ids"]]
+    T2 = np.asarray(A["template"], float)
+    g = grid[np.unique(np.linspace(0, len(grid) - 1, coarse_n).round().astype(int))] if len(grid) > coarse_n else grid
+    p0 = np.radians(0.0 if mode == "flat" else float(ramp_deg))
+    fr = mode == "ramp_free"
+    fb = (grid[0], grid[-1])
+    prof = [dk_solve(pr, float(f), T2, jid, p0, 0.0, False, fr, fb) for f in g]
+    c_first = [x["cost"] for x in prof]
+    n_warm = 0
+    for d, idx in ((-1, range(1, len(g))), (1, range(len(g) - 2, -1, -1))):
+        for i in idx:
+            s = prof[i + d]["state"]
+            x = dk_solve(pr, float(g[i]), T2, jid, s["pitch"], s["roll"], False, fr, fb, init=dict(s, f=float(g[i])))
+            if x["cost"] < prof[i]["cost"]:
+                prof[i] = x
+                n_warm += 1
+    c = np.array([x["cost"] for x in prof])
+    starts = []
+    for k in np.argsort(c)[:n_final]:
+        k = int(k)
+        loc = 0 < k < len(g) - 1 and c[k] <= c[k - 1] and c[k] <= c[k + 1]
+        fs = float(np.exp(np.clip(_parabola(np.log(g), c, k), np.log(fb[0]), np.log(fb[1])))) if loc else float(g[k])
+        starts.append((f"profile_{k}", fs, prof[k]["state"]))
+    fa = float(np.clip(A["f"], fb[0], fb[1]))
+    k = int(np.argmin(np.abs(np.log(g) - np.log(fa))))
+    s = prof[k]["state"]
+    xa = dk_solve(pr, fa, T2, jid, s["pitch"], s["roll"], False, fr, fb, init=dict(s, f=fa))
+    starts.append(("free_template", fa, xa["state"]))
+    finals = []
+    for name, fs, s in starts:
+        B = dk_solve(pr, fs, T2, jid, s["pitch"], s["roll"], True, fr, fb, init=dict(s, f=fs))
+        B.pop("state")
+        finals.append((name, fs, B))
+    best = min(range(len(finals)), key=lambda i: finals[i][2]["cost"])
+    B = dict(finals[best][2])
+    B.update({"start": finals[best][0], "f_start": finals[best][1], "joint_ids": jid, "profile_f": g.tolist(), "profile_cost_first": c_first, "profile_cost": c.tolist(), "n_warm_improved": n_warm,
+              "starts": [{"start": nm, "f_start": fs, "f": b["f"], "cost": b["cost"], "rms_px": b["rms_px"], "pitch_deg": b["pitch_deg"]} for nm, fs, b in finals]})
+    return B
+
+
+def dk_job_ms(args) -> dict:
+    """Experiment 74, one estimate: args as dk_job; od_bridge and free_template as dk_job, then dk_estimate_ms in each mode. A failure is a result."""
+    kind, rep, kp, mask, frames, box, size_wh, ecfg, ids, modes, ramp_deg = args
+    os.environ.setdefault("OMP_NUM_THREADS", "1")
+    cv2.setNumThreads(1)
+    W, H = size_wh
+    grid = f_grid(ecfg, max(W, H))
+    t0 = time.time()
+    out = {"kind": kind, "rep": rep, "grid_f": [float(grid[0]), float(grid[-1])]}
+    try:
+        pb = od_bridge(kp, mask, frames, box, size_wh, ecfg, ids)
+        A = free_template(pb, grid)
+    except Exception as e:                                            # a failure is a result, not a crash of the run
+        out["failed"] = f"{type(e).__name__}: {e}"
+        return out
+    out["free_template"] = {"f": float(A["f"]), "boundary": od_boundary(float(A["f"]), grid), "rms_px": float((A.get("ba") or {}).get("rms_px", np.nan))}
+    for m in modes:
+        try:
+            B = dk_estimate_ms(pb, grid, A, m, ramp_deg)
+            out[m] = {kk: B[kk] for kk in ("f", "pitch_deg", "roll_deg", "desk_tilt_deg", "turn_range_deg", "rms_px", "cost", "success", "start", "f_start", "n_warm_improved", "starts",
+                                             "profile_f", "profile_cost_first", "profile_cost")}
+            out[m]["boundary"] = bool(B["at_bound"]) or od_boundary(float(B["f"]), grid)
+        except Exception as e:
+            out[m] = {"failed": f"{type(e).__name__}: {e}"}
+    out["elapsed_s"] = float(time.time() - t0)
+    return out
+
+
 def od_fix_lines(path=None) -> list:
     """Where the six corrections to the supervisor's code sit in handfocal_estimate.py (line numbers of the corrected spellings inside section 5)."""
     p = Path(path) if path else Path(__file__).resolve().parent / "handfocal_estimate.py"
