@@ -1,0 +1,28 @@
+# 73: the user's own hand on the new phone (user 2026-11-05: "새 카메라 내 손으로 7354-복사본, 7355-복사본 영상 두 개 촬영했어. 조건은 45도 60cm 야."), record only, no verdict.
+# Purpose: 69/71 gave f 30-50% low on the teammate's videos (new phone). The 1672 px reference is the new phone's checkerboard calibration (user), and the teammate's videos were taken with
+# it, so the user's hand on the same phone separates the hand from the camera.
+# Same pipeline as 71 (56's points, 67's estimator ramp_fixed, 71's WiLoR ramp), on the four new-phone videos; fixed ramps = 68's plus 69b's 17.5 deg; per video the ramp where f equals the
+# reference (log-f interpolation between fixed ramps).
+# Choices made by me before the run (no f of the user's new videos seen): 20 and 22.5 deg added after a one-video dry run on IMG_7352 - 복사본 (f stayed below the reference up to 17.5 deg); both new videos are right hands (seen on a frame); main = tracked j16 (as 67-71). Reference f only in summary.md.
+experiment:
+  name: 73_new_phone_hands
+  seed: 42
+rules_config: configs/56_continuous_klt.yaml
+segments_config: configs/60_segment_template.yaml
+estimator_config: configs/67_desk_motion.yaml
+wilor_config: configs/71_wilor_ramp.yaml
+code_73: {branch: exp/73-new-phone-hands, base_commit: 9bbb427, commit: 311b660, modules: [HandCalib/run.py]}
+ref_f: {value: 1672.0, source: "사용자 제공, 새 핸드폰 체커보드 캘리브레이션"}
+ramps_deg: [7, 9, 11, 13, 15, 17.5, 20, 22.5]
+main: {source: tracked, joint_set: j16}
+videos:
+  - {file: "IMG_7354 - 복사본.MOV", distance_cm: 60, hand: right, person: self}
+  - {file: "IMG_7355 - 복사본.MOV", distance_cm: 60, hand: right, person: self}
+  - {file: "IMG_7351 - 복사본.MOV", distance_cm: 60, hand: right, person: teammate}
+  - {file: "IMG_7352 - 복사본.MOV", distance_cm: 60, hand: right, person: teammate}
+workers: 64
+n_workers: 4
+video_workers: 4
+output:
+  root: runs/73_new_phone_hands
+  results_yaml: results/73_new_phone_hands.yaml
