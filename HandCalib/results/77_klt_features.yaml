@@ -1,0 +1,2026 @@
+experiment: 77_klt_features
+run: runs/77_klt_features/20261105T063157Z
+code_commit: 399ab43
+git_dirty_at_run: false
+note: 팀원 새 폰 영상은 영상에서 추정한 경사(8~11°)가 손바닥 사진(9~12°)과 맞는데도 f가 -25~-45% 빗나간다. 실험 56의
+  손 추적은 손 전체(관절 볼록 껍질)의 KLT 모서리로 호모그래피 하나를 이어 붙여 관절을 옮긴다. 그 모서리가 손의 어디(손목 아래 / 손등
+  몸통 / 손가락)에 몰리는지, 부위별로 호모그래피에 얼마나 맞는지, 옮긴 관절이 검출 관절에서 얼마나 벗어나는지를 16개 영상 모두 기록하고,
+  실험 58의 손등 몸통 추적(손목과 MCP 껍질, 넓힘 없음)으로 옮긴 관절의 f를 74b 추정기로 낸다(경사 11° 고정, 함께 추정 시작 5·12·19°).
+  판정 없음.
+dorsum:
+  joints:
+  - 0
+  - 1
+  - 5
+  - 9
+  - 13
+  - 17
+  dilate_frac: 0.0
+estimates:
+  joint_sets:
+  - j16
+  free_starts_deg:
+  - 5
+  - 12
+  - 19
+videos:
+  IMG_7346.MOV:
+    group: old
+    distance_cm: 50
+    hand:
+      breaks: 0
+      n_use: 678
+      corners:
+        n_corners: 259257
+        median_s: 0.9226018190383911
+        inliers_per_step: 400.0
+        checked_per_step: 400.0
+        regions:
+          손목 아래:
+            share: 0.010603378115152147
+            res_median_px: 0.16801071166992188
+          손등 몸통:
+            share: 0.5201016751717408
+            res_median_px: 0.08549365401268005
+          손가락:
+            share: 0.46929494671310706
+            res_median_px: 0.08786356449127197
+      drift_pct_box:
+        n_frames: 678
+        wrist: 9.16457423907773
+        mcp: 2.7871648369865203
+        pip: 1.2598333780415791
+        tip: 2.543181944938252
+        thumb: 4.680890077546443
+      s_hist_-1_3_16bins:
+      - 0
+      - 0
+      - 0
+      - 2749
+      - 17706
+      - 42443
+      - 47064
+      - 27627
+      - 27812
+      - 33187
+      - 25227
+      - 14650
+      - 12467
+      - 8248
+      - 77
+      - 0
+    dorsum:
+      breaks: 0
+      n_use: 527
+      corners:
+        n_corners: 205999
+        median_s: 0.5608154535293579
+        inliers_per_step: 284.0
+        checked_per_step: 284.0
+        regions:
+          손목 아래:
+            share: 0.00033980747479356695
+            res_median_px: 0.15557049214839935
+          손등 몸통:
+            share: 0.9860242040009903
+            res_median_px: 0.08570677042007446
+          손가락:
+            share: 0.013635988524216137
+            res_median_px: 0.08365214616060257
+      drift_pct_box:
+        n_frames: 527
+        wrist: 3.815238015205195
+        mcp: 2.313392541685312
+        pip: 3.400357368974432
+        tip: 7.452800953910947
+        thumb: 3.0204076734703653
+      s_hist_-1_3_16bins:
+      - 0
+      - 0
+      - 0
+      - 70
+      - 31592
+      - 56605
+      - 61088
+      - 53835
+      - 2809
+      - 0
+      - 0
+      - 0
+      - 0
+      - 0
+      - 0
+      - 0
+      tracked:
+        j16:
+          free_template:
+            f: 3072.0
+            rms_px: 3.4
+            boundary: true
+          ramp_11:
+            f: 1302.1
+            rms_px: 9.83
+            pitch_deg: 11.0
+            roll_deg: 0.0
+            desk_tilt_deg: 51.7
+            boundary: false
+            start: profile_4
+          free_5:
+            f: 1870.6
+            rms_px: 9.09
+            pitch_deg: 29.22
+            roll_deg: 0.32
+            desk_tilt_deg: 41.3
+            boundary: false
+            start: profile_4
+          free_12:
+            f: 1870.6
+            rms_px: 9.09
+            pitch_deg: 29.22
+            roll_deg: 0.32
+            desk_tilt_deg: 41.3
+            boundary: false
+            start: profile_4
+          free_19:
+            f: 1870.6
+            rms_px: 9.09
+            pitch_deg: 29.22
+            roll_deg: 0.32
+            desk_tilt_deg: 41.3
+            boundary: false
+            start: profile_4
+  IMG_7347.MOV:
+    group: old
+    distance_cm: 50
+    hand:
+      breaks: 0
+      n_use: 658
+      corners:
+        n_corners: 231859
+        median_s: 1.1750600337982178
+        inliers_per_step: 398.0
+        checked_per_step: 400.0
+        regions:
+          손목 아래:
+            share: 0.005908763515757421
+            res_median_px: 0.3615001440048218
+          손등 몸통:
+            share: 0.41399298711717036
+            res_median_px: 0.11826495081186295
+          손가락:
+            share: 0.5800982493670722
+            res_median_px: 0.08827827125787735
+      drift_pct_box:
+        n_frames: 537
+        wrist: 6.093978076433124
+        mcp: 2.190003419157769
+        pip: 1.4968140096000908
+        tip: 1.0240333587445927
+        thumb: 5.169627260226396
+      s_hist_-1_3_16bins:
+      - 0
+      - 0
+      - 0
+      - 1370
+      - 15534
+      - 28880
+      - 29628
+      - 21946
+      - 26530
+      - 28720
+      - 26218
+      - 21150
+      - 18725
+      - 10593
+      - 2564
+      - 1
+    dorsum:
+      breaks: 0
+      n_use: 493
+      corners:
+        n_corners: 136729
+        median_s: 0.5768491625785828
+        inliers_per_step: 252.0
+        checked_per_step: 252.0
+        regions:
+          손목 아래:
+            share: 0.00018284343482362922
+            res_median_px: 0.09236657619476318
+          손등 몸통:
+            share: 0.9782928274177387
+            res_median_px: 0.08747052401304245
+          손가락:
+            share: 0.021524329147437633
+            res_median_px: 0.07107432186603546
+      drift_pct_box:
+        n_frames: 493
+        wrist: 4.460944589725188
+        mcp: 1.6420407434823234
+        pip: 1.6614706252721043
+        tip: 4.025732591860436
+        thumb: 4.269291989849519
+      s_hist_-1_3_16bins:
+      - 0
+      - 0
+      - 0
+      - 25
+      - 16635
+      - 37740
+      - 45755
+      - 33631
+      - 2902
+      - 41
+      - 0
+      - 0
+      - 0
+      - 0
+      - 0
+      - 0
+      tracked:
+        j16:
+          free_template:
+            f: 2022.7
+            rms_px: 9.52
+            boundary: false
+          ramp_11:
+            f: 3072.0
+            rms_px: 41.82
+            pitch_deg: 11.0
+            roll_deg: 0.0
+            desk_tilt_deg: 34.4
+            boundary: true
+            start: profile_7
+          free_5:
+            f: 3072.0
+            rms_px: 35.67
+            pitch_deg: -8.07
+            roll_deg: 74.54
+            desk_tilt_deg: 7.1
+            boundary: true
+            start: free_template
+          free_12:
+            f: 3072.0
+            rms_px: 35.67
+            pitch_deg: -8.06
+            roll_deg: 74.53
+            desk_tilt_deg: 7.1
+            boundary: true
+            start: free_template
+          free_19:
+            f: 3072.0
+            rms_px: 35.67
+            pitch_deg: -8.06
+            roll_deg: 74.54
+            desk_tilt_deg: 7.1
+            boundary: true
+            start: free_template
+  IMG_7348.MOV:
+    group: old
+    distance_cm: 50
+    hand:
+      breaks: 0
+      n_use: 618
+      corners:
+        n_corners: 237632
+        median_s: 0.9139481782913208
+        inliers_per_step: 400.0
+        checked_per_step: 400.0
+        regions:
+          손목 아래:
+            share: 0.008719364395367628
+            res_median_px: 0.13401630520820618
+          손등 몸통:
+            share: 0.5305261917586857
+            res_median_px: 0.06895105540752411
+          손가락:
+            share: 0.46075444384594666
+            res_median_px: 0.06259012222290039
+      drift_pct_box:
+        n_frames: 618
+        wrist: 9.7859234969375
+        mcp: 2.974073379314893
+        pip: 1.1873122058612413
+        tip: 2.3347673485134606
+        thumb: 5.6141057366914575
+      s_hist_-1_3_16bins:
+      - 0
+      - 0
+      - 0
+      - 2072
+      - 18670
+      - 41675
+      - 40143
+      - 25582
+      - 26346
+      - 29346
+      - 23398
+      - 13126
+      - 10365
+      - 6467
+      - 442
+      - 0
+    dorsum:
+      breaks: 0
+      n_use: 618
+      corners:
+        n_corners: 167791
+        median_s: 0.5582915544509888
+        inliers_per_step: 272.0
+        checked_per_step: 273.0
+        regions:
+          손목 아래:
+            share: 0.000309909351514682
+            res_median_px: 0.0931665450334549
+          손등 몸통:
+            share: 0.9867632948131903
+            res_median_px: 0.06757991015911102
+          손가락:
+            share: 0.0129267958352951
+            res_median_px: 0.06050274148583412
+      drift_pct_box:
+        n_frames: 618
+        wrist: 8.699636637948986
+        mcp: 3.051606645179044
+        pip: 5.526964196588423
+        tip: 8.57297757108467
+        thumb: 6.524024228971912
+      s_hist_-1_3_16bins:
+      - 0
+      - 0
+      - 0
+      - 52
+      - 26131
+      - 46257
+      - 49374
+      - 43808
+      - 2169
+      - 0
+      - 0
+      - 0
+      - 0
+      - 0
+      - 0
+      - 0
+      tracked:
+        j16:
+          free_template:
+            f: 1118.5
+            rms_px: 4.26
+            boundary: false
+          ramp_11:
+            f: 1032.9
+            rms_px: 15.59
+            pitch_deg: 11.0
+            roll_deg: 0.0
+            desk_tilt_deg: 50.7
+            boundary: false
+            start: free_template
+          free_5:
+            f: 1260.7
+            rms_px: 15.06
+            pitch_deg: 22.93
+            roll_deg: 0.89
+            desk_tilt_deg: 44.2
+            boundary: false
+            start: profile_4
+          free_12:
+            f: 1260.7
+            rms_px: 15.06
+            pitch_deg: 22.93
+            roll_deg: 0.89
+            desk_tilt_deg: 44.2
+            boundary: false
+            start: profile_4
+          free_19:
+            f: 1260.7
+            rms_px: 15.06
+            pitch_deg: 22.93
+            roll_deg: 0.89
+            desk_tilt_deg: 44.2
+            boundary: false
+            start: profile_4
+  IMG_7349.MOV:
+    group: old
+    distance_cm: 50
+    hand:
+      breaks: 0
+      n_use: 683
+      corners:
+        n_corners: 228875
+        median_s: 1.1974012851715088
+        inliers_per_step: 395.5
+        checked_per_step: 400.0
+        regions:
+          손목 아래:
+            share: 0.00743200436919716
+            res_median_px: 0.40098392963409424
+          손등 몸통:
+            share: 0.41128563626433645
+            res_median_px: 0.12849336862564087
+          손가락:
+            share: 0.5812823593664664
+            res_median_px: 0.09136410057544708
+      drift_pct_box:
+        n_frames: 526
+        wrist: 9.383925968667533
+        mcp: 3.580088244063358
+        pip: 1.3322995717583628
+        tip: 2.268695216487103
+        thumb: 8.620068837142199
+      s_hist_-1_3_16bins:
+      - 0
+      - 0
+      - 0
+      - 1701
+      - 17096
+      - 25782
+      - 30742
+      - 20513
+      - 23637
+      - 26911
+      - 30595
+      - 20895
+      - 17260
+      - 9819
+      - 3911
+      - 13
+    dorsum:
+      breaks: 0
+      n_use: 513
+      corners:
+        n_corners: 135972
+        median_s: 0.5753640532493591
+        inliers_per_step: 232.0
+        checked_per_step: 232.0
+        regions:
+          손목 아래:
+            share: 0.0001838613832259583
+            res_median_px: 0.2780683934688568
+          손등 몸통:
+            share: 0.9818197864266173
+            res_median_px: 0.09142409265041351
+          손가락:
+            share: 0.017996352190156797
+            res_median_px: 0.07865900546312332
+      drift_pct_box:
+        n_frames: 500
+        wrist: 9.442620586733138
+        mcp: 3.3193564589781834
+        pip: 2.686714243385235
+        tip: 6.70481372271005
+        thumb: 11.740724638450725
+      s_hist_-1_3_16bins:
+      - 0
+      - 0
+      - 0
+      - 25
+      - 17335
+      - 37583
+      - 45060
+      - 33522
+      - 2447
+      - 0
+      - 0
+      - 0
+      - 0
+      - 0
+      - 0
+      - 0
+      tracked:
+        j16:
+          free_template:
+            f: 3072.0
+            rms_px: 8.83
+            boundary: true
+          ramp_11:
+            f: 672.0
+            rms_px: 38.5
+            pitch_deg: 11.0
+            roll_deg: 0.0
+            desk_tilt_deg: 67.7
+            boundary: true
+            start: profile_0
+          free_5:
+            f: 694.9
+            rms_px: 22.13
+            pitch_deg: -93.26
+            roll_deg: -9.6
+            desk_tilt_deg: 16.0
+            boundary: false
+            start: profile_0
+          free_12:
+            f: 706.7
+            rms_px: 21.91
+            pitch_deg: -94.99
+            roll_deg: 50.67
+            desk_tilt_deg: 15.8
+            boundary: false
+            start: profile_2
+          free_19:
+            f: 699.8
+            rms_px: 22.03
+            pitch_deg: -93.19
+            roll_deg: -0.56
+            desk_tilt_deg: 15.9
+            boundary: false
+            start: profile_0
+  IMG_7350.MOV:
+    group: old
+    distance_cm: 60
+    hand:
+      breaks: 0
+      n_use: 700
+      corners:
+        n_corners: 232635
+        median_s: 0.9350427985191345
+        inliers_per_step: 343.0
+        checked_per_step: 343.0
+        regions:
+          손목 아래:
+            share: 0.007582693919659552
+            res_median_px: 0.13239333033561707
+          손등 몸통:
+            share: 0.5167580114772068
+            res_median_px: 0.07256000488996506
+          손가락:
+            share: 0.47565929460313366
+            res_median_px: 0.0622931607067585
+      drift_pct_box:
+        n_frames: 700
+        wrist: 3.0481684762805297
+        mcp: 1.2902434549900508
+        pip: 1.058854607461182
+        tip: 1.8739816580530144
+        thumb: 2.73063047078025
+      s_hist_-1_3_16bins:
+      - 0
+      - 0
+      - 0
+      - 1764
+      - 21503
+      - 40566
+      - 36103
+      - 22044
+      - 25623
+      - 27592
+      - 22911
+      - 14488
+      - 12283
+      - 7643
+      - 115
+      - 0
+    dorsum:
+      breaks: 0
+      n_use: 700
+      corners:
+        n_corners: 145086
+        median_s: 0.5516340732574463
+        inliers_per_step: 206.0
+        checked_per_step: 207.0
+        regions:
+          손목 아래:
+            share: 0.0004411176819265815
+            res_median_px: 0.11944754421710968
+          손등 몸통:
+            share: 0.9870421680934067
+            res_median_px: 0.0685611292719841
+          손가락:
+            share: 0.012516714224666749
+            res_median_px: 0.07849730551242828
+      drift_pct_box:
+        n_frames: 700
+        wrist: 4.218802604204203
+        mcp: 1.327831156377484
+        pip: 2.4192312244115626
+        tip: 7.702075405154321
+        thumb: 3.5330862702718147
+      s_hist_-1_3_16bins:
+      - 0
+      - 0
+      - 0
+      - 64
+      - 23460
+      - 40579
+      - 41544
+      - 37623
+      - 1816
+      - 0
+      - 0
+      - 0
+      - 0
+      - 0
+      - 0
+      - 0
+      tracked:
+        j16:
+          free_template:
+            f: 3072.0
+            rms_px: 2.93
+            boundary: true
+          ramp_11:
+            f: 1246.6
+            rms_px: 11.26
+            pitch_deg: 11.0
+            roll_deg: 0.0
+            desk_tilt_deg: 50.7
+            boundary: false
+            start: free_template
+          free_5:
+            f: 1496.0
+            rms_px: 8.9
+            pitch_deg: 31.06
+            roll_deg: 22.53
+            desk_tilt_deg: 33.3
+            boundary: false
+            start: profile_3
+          free_12:
+            f: 1496.0
+            rms_px: 8.9
+            pitch_deg: 31.06
+            roll_deg: 22.53
+            desk_tilt_deg: 33.3
+            boundary: false
+            start: profile_3
+          free_19:
+            f: 1496.0
+            rms_px: 8.9
+            pitch_deg: 31.73
+            roll_deg: 21.52
+            desk_tilt_deg: 33.3
+            boundary: false
+            start: profile_3
+  IMG_7351.MOV:
+    group: old
+    distance_cm: 60
+    hand:
+      breaks: 0
+      n_use: 645
+      corners:
+        n_corners: 170966
+        median_s: 1.1919206380844116
+        inliers_per_step: 243.5
+        checked_per_step: 247.5
+        regions:
+          손목 아래:
+            share: 0.010001988699507504
+            res_median_px: 0.28467464447021484
+          손등 몸통:
+            share: 0.4074903782038534
+            res_median_px: 0.10877420008182526
+          손가락:
+            share: 0.5825076330966391
+            res_median_px: 0.08112984150648117
+      drift_pct_box:
+        n_frames: 645
+        wrist: 9.94797373205695
+        mcp: 2.6906613568420736
+        pip: 1.6256484802051652
+        tip: 1.7917876179608585
+        thumb: 7.237050216325428
+      s_hist_-1_3_16bins:
+      - 0
+      - 0
+      - 0
+      - 1710
+      - 11908
+      - 20736
+      - 21302
+      - 15721
+      - 18149
+      - 18622
+      - 20407
+      - 15540
+      - 15205
+      - 9629
+      - 2037
+      - 0
+    dorsum:
+      breaks: 0
+      n_use: 407
+      corners:
+        n_corners: 94553
+        median_s: 0.5740308165550232
+        inliers_per_step: 178.0
+        checked_per_step: 179.0
+        regions:
+          손목 아래:
+            share: 0.0006028365043943608
+            res_median_px: 0.10808981209993362
+          손등 몸통:
+            share: 0.9795458631666896
+            res_median_px: 0.0844436064362526
+          손가락:
+            share: 0.019851300328916056
+            res_median_px: 0.08727816492319107
+      drift_pct_box:
+        n_frames: 407
+        wrist: 6.593985367430252
+        mcp: 2.709808862086347
+        pip: 2.3575664125187314
+        tip: 5.920342065839951
+        thumb: 9.058376406023443
+      s_hist_-1_3_16bins:
+      - 0
+      - 0
+      - 0
+      - 57
+      - 11403
+      - 26433
+      - 32083
+      - 22700
+      - 1865
+      - 12
+      - 0
+      - 0
+      - 0
+      - 0
+      - 0
+      - 0
+      tracked:
+        j16:
+          free_template:
+            f: 973.6
+            rms_px: 2.62
+            boundary: false
+          ramp_11:
+            f: 672.0
+            rms_px: 61.78
+            pitch_deg: 11.0
+            roll_deg: 0.0
+            desk_tilt_deg: 45.2
+            boundary: true
+            start: profile_2
+          free_5:
+            f: 1163.3
+            rms_px: 26.02
+            pitch_deg: -93.58
+            roll_deg: -9.75
+            desk_tilt_deg: 4.5
+            boundary: false
+            start: free_template
+          free_12:
+            f: 1712.7
+            rms_px: 25.89
+            pitch_deg: -85.89
+            roll_deg: 125.67
+            desk_tilt_deg: 3.1
+            boundary: false
+            start: profile_3
+          free_19:
+            f: 3072.0
+            rms_px: 25.53
+            pitch_deg: -96.54
+            roll_deg: -78.01
+            desk_tilt_deg: 1.8
+            boundary: true
+            start: profile_0
+  IMG_7352.MOV:
+    group: old
+    distance_cm: 60
+    hand:
+      breaks: 0
+      n_use: 707
+      corners:
+        n_corners: 215484
+        median_s: 0.9134039878845215
+        inliers_per_step: 290.0
+        checked_per_step: 290.0
+        regions:
+          손목 아래:
+            share: 0.006742960034155668
+            res_median_px: 0.11908615380525589
+          손등 몸통:
+            share: 0.5228508845204284
+            res_median_px: 0.07291845977306366
+          손가락:
+            share: 0.4704061554454159
+            res_median_px: 0.06592325121164322
+      drift_pct_box:
+        n_frames: 707
+        wrist: 7.599259872251086
+        mcp: 2.10429748446232
+        pip: 1.1615642229735035
+        tip: 2.4385975506969264
+        thumb: 2.678679591459399
+      s_hist_-1_3_16bins:
+      - 0
+      - 0
+      - 0
+      - 1453
+      - 17144
+      - 37943
+      - 36485
+      - 21094
+      - 21960
+      - 25975
+      - 21683
+      - 12271
+      - 11591
+      - 6701
+      - 1184
+      - 0
+    dorsum:
+      breaks: 0
+      n_use: 543
+      corners:
+        n_corners: 144938
+        median_s: 0.5551669597625732
+        inliers_per_step: 194.0
+        checked_per_step: 194.5
+        regions:
+          손목 아래:
+            share: 0.00032427658723040197
+            res_median_px: 0.10776764154434204
+          손등 몸통:
+            share: 0.9842760352702535
+            res_median_px: 0.06862287223339081
+          손가락:
+            share: 0.01539968814251611
+            res_median_px: 0.06321998685598373
+      drift_pct_box:
+        n_frames: 543
+        wrist: 6.023206698674247
+        mcp: 1.8539272702093181
+        pip: 5.056451714230018
+        tip: 10.743406936918367
+        thumb: 5.699750812198586
+      s_hist_-1_3_16bins:
+      - 0
+      - 0
+      - 0
+      - 47
+      - 22759
+      - 40462
+      - 42212
+      - 37226
+      - 2232
+      - 0
+      - 0
+      - 0
+      - 0
+      - 0
+      - 0
+      - 0
+      tracked:
+        j16:
+          free_template:
+            f: 2351.1
+            rms_px: 3.62
+            boundary: false
+          ramp_11:
+            f: 1430.1
+            rms_px: 10.93
+            pitch_deg: 11.0
+            roll_deg: 0.0
+            desk_tilt_deg: 50.9
+            boundary: false
+            start: profile_5
+          free_5:
+            f: 3072.0
+            rms_px: 8.95
+            pitch_deg: 53.13
+            roll_deg: 14.53
+            desk_tilt_deg: 23.6
+            boundary: true
+            start: profile_5
+          free_12:
+            f: 3072.0
+            rms_px: 8.95
+            pitch_deg: 53.13
+            roll_deg: 14.53
+            desk_tilt_deg: 23.6
+            boundary: true
+            start: profile_5
+          free_19:
+            f: 3072.0
+            rms_px: 8.95
+            pitch_deg: 53.13
+            roll_deg: 14.53
+            desk_tilt_deg: 23.6
+            boundary: true
+            start: profile_5
+  IMG_7353.MOV:
+    group: old
+    distance_cm: 60
+    hand:
+      breaks: 0
+      n_use: 681
+      corners:
+        n_corners: 217497
+        median_s: 1.1213713884353638
+        inliers_per_step: 398.0
+        checked_per_step: 400.0
+        regions:
+          손목 아래:
+            share: 0.009678294413256275
+            res_median_px: 0.32591351866722107
+          손등 몸통:
+            share: 0.43677384055872037
+            res_median_px: 0.11890576034784317
+          손가락:
+            share: 0.5535478650280233
+            res_median_px: 0.09613749384880066
+      drift_pct_box:
+        n_frames: 669
+        wrist: 7.656600730633015
+        mcp: 2.131779554623746
+        pip: 1.5956061156147
+        tip: 2.0172131204259225
+        thumb: 7.440115661367066
+      s_hist_-1_3_16bins:
+      - 0
+      - 0
+      - 0
+      - 2105
+      - 14291
+      - 28568
+      - 30558
+      - 21580
+      - 24249
+      - 23468
+      - 24951
+      - 19916
+      - 17127
+      - 9084
+      - 1600
+      - 0
+    dorsum:
+      breaks: 1
+      n_use: 364
+      corners:
+        n_corners: 68303
+        median_s: 0.5771756172180176
+        inliers_per_step: 193.0
+        checked_per_step: 193.0
+        regions:
+          손목 아래:
+            share: 0.00023425032575435925
+            res_median_px: 0.34866809844970703
+          손등 몸통:
+            share: 0.9790785177810638
+            res_median_px: 0.08798444271087646
+          손가락:
+            share: 0.020687231893181852
+            res_median_px: 0.0975743755698204
+      drift_pct_box:
+        n_frames: 363
+        wrist: 10.902146732308873
+        mcp: 3.0903331538268737
+        pip: 9.5796220112457
+        tip: 21.00013584203085
+        thumb: 10.083179790015983
+      s_hist_-1_3_16bins:
+      - 0
+      - 0
+      - 0
+      - 16
+      - 7608
+      - 19553
+      - 23226
+      - 16487
+      - 1411
+      - 2
+      - 0
+      - 0
+      - 0
+      - 0
+      - 0
+      - 0
+      tracked:
+        j16:
+          free_template:
+            f: 3072.0
+            rms_px: 4.74
+            boundary: true
+          ramp_11:
+            f: 3072.0
+            rms_px: 34.33
+            pitch_deg: 11.0
+            roll_deg: 0.0
+            desk_tilt_deg: 27.2
+            boundary: true
+            start: free_template
+          free_5:
+            f: 3072.0
+            rms_px: 34.52
+            pitch_deg: 71.06
+            roll_deg: -52.49
+            desk_tilt_deg: 2.0
+            boundary: true
+            start: free_template
+          free_12:
+            f: 3072.0
+            rms_px: 34.57
+            pitch_deg: 72.85
+            roll_deg: -50.42
+            desk_tilt_deg: 1.9
+            boundary: true
+            start: free_template
+          free_19:
+            f: 3072.0
+            rms_px: 34.58
+            pitch_deg: 73.89
+            roll_deg: -49.55
+            desk_tilt_deg: 1.7
+            boundary: true
+            start: free_template
+  IMG_7354.MOV:
+    group: old
+    distance_cm: 75
+    hand:
+      breaks: 0
+      n_use: 624
+      corners:
+        n_corners: 126957
+        median_s: 1.0996475219726562
+        inliers_per_step: 180.0
+        checked_per_step: 180.0
+        regions:
+          손목 아래:
+            share: 0.010546878076829162
+            res_median_px: 0.13833951950073242
+          손등 몸통:
+            share: 0.4466394133446758
+            res_median_px: 0.0868491604924202
+          손가락:
+            share: 0.5428137085784951
+            res_median_px: 0.07537244260311127
+      drift_pct_box:
+        n_frames: 624
+        wrist: 8.974806109060726
+        mcp: 1.84831697827099
+        pip: 1.5589446110305984
+        tip: 2.224042207075552
+        thumb: 3.748925291626655
+      s_hist_-1_3_16bins:
+      - 0
+      - 0
+      - 0
+      - 1339
+      - 8520
+      - 16191
+      - 18121
+      - 13872
+      - 14945
+      - 14568
+      - 15114
+      - 9351
+      - 8632
+      - 5165
+      - 1139
+      - 0
+    dorsum:
+      breaks: 0
+      n_use: 624
+      corners:
+        n_corners: 75725
+        median_s: 0.5573534965515137
+        inliers_per_step: 121.0
+        checked_per_step: 121.0
+        regions:
+          손목 아래:
+            share: 0.000950808847804556
+            res_median_px: 0.13046202063560486
+          손등 몸통:
+            share: 0.9842456256190162
+            res_median_px: 0.08272221684455872
+          손가락:
+            share: 0.014803565533179268
+            res_median_px: 0.0752614215016365
+      drift_pct_box:
+        n_frames: 624
+        wrist: 6.340901372228338
+        mcp: 3.511711234484536
+        pip: 8.699435042917155
+        tip: 16.58007439739871
+        thumb: 5.599214272447911
+      s_hist_-1_3_16bins:
+      - 0
+      - 0
+      - 0
+      - 72
+      - 12360
+      - 20328
+      - 21839
+      - 20005
+      - 1121
+      - 0
+      - 0
+      - 0
+      - 0
+      - 0
+      - 0
+      - 0
+      tracked:
+        j16:
+          free_template:
+            f: 3072.0
+            rms_px: 6.9
+            boundary: true
+          ramp_11:
+            f: 672.0
+            rms_px: 22.36
+            pitch_deg: 11.0
+            roll_deg: 0.0
+            desk_tilt_deg: 50.5
+            boundary: true
+            start: profile_0
+          free_5:
+            f: 672.0
+            rms_px: 22.59
+            pitch_deg: 17.5
+            roll_deg: 1.7
+            desk_tilt_deg: 46.5
+            boundary: true
+            start: profile_0
+          free_12:
+            f: 672.0
+            rms_px: 22.59
+            pitch_deg: 17.48
+            roll_deg: 1.93
+            desk_tilt_deg: 46.5
+            boundary: true
+            start: profile_0
+          free_19:
+            f: 672.0
+            rms_px: 22.59
+            pitch_deg: 17.48
+            roll_deg: 1.93
+            desk_tilt_deg: 46.5
+            boundary: true
+            start: profile_0
+  IMG_7355.MOV:
+    group: old
+    distance_cm: 75
+    hand:
+      breaks: 0
+      n_use: 609
+      corners:
+        n_corners: 143277
+        median_s: 1.1573041677474976
+        inliers_per_step: 229.0
+        checked_per_step: 230.0
+        regions:
+          손목 아래:
+            share: 0.009191984756799765
+            res_median_px: 0.34087392687797546
+          손등 몸통:
+            share: 0.40988434989565664
+            res_median_px: 0.10706574469804764
+          손가락:
+            share: 0.5809236653475436
+            res_median_px: 0.08411066979169846
+      drift_pct_box:
+        n_frames: 609
+        wrist: 7.957823174069134
+        mcp: 5.140181736027717
+        pip: 2.8783200980091266
+        tip: 3.229557010147769
+        thumb: 10.52683047997612
+      s_hist_-1_3_16bins:
+      - 0
+      - 0
+      - 0
+      - 1317
+      - 8644
+      - 15534
+      - 18639
+      - 15910
+      - 18009
+      - 16383
+      - 17332
+      - 12986
+      - 10344
+      - 6761
+      - 1418
+      - 0
+    dorsum:
+      breaks: 2
+      n_use: 54
+      corners:
+        n_corners: 4399
+        median_s: 0.551415741443634
+        inliers_per_step: 29.0
+        checked_per_step: 29.0
+        regions:
+          손목 아래:
+            share: 0.0036371902705160265
+            res_median_px: 0.08774842321872711
+          손등 몸통:
+            share: 0.8772448283700841
+            res_median_px: 0.07564210891723633
+          손가락:
+            share: 0.11911798135939987
+            res_median_px: 0.07604241371154785
+      drift_pct_box:
+        n_frames: 54
+        wrist: 5.201179035653556
+        mcp: 11.046477777794284
+        pip: 13.951448215796175
+        tip: 42.334027620190724
+        thumb: 11.262234784406001
+      s_hist_-1_3_16bins:
+      - 0
+      - 0
+      - 0
+      - 16
+      - 744
+      - 1184
+      - 1090
+      - 841
+      - 377
+      - 146
+      - 1
+      - 0
+      - 0
+      - 0
+      - 0
+      - 0
+      tracked:
+        j16:
+          free_template:
+            f: 672.0
+            rms_px: 3.74
+            boundary: true
+          ramp_11:
+            f: 672.0
+            rms_px: 7.44
+            pitch_deg: 11.0
+            roll_deg: 0.0
+            desk_tilt_deg: 81.2
+            boundary: true
+            start: profile_2
+          free_5:
+            f: 672.0
+            rms_px: 8.74
+            pitch_deg: -1.37
+            roll_deg: 74.39
+            desk_tilt_deg: 86.7
+            boundary: true
+            start: profile_0
+          free_12:
+            f: 672.0
+            rms_px: 8.74
+            pitch_deg: -1.37
+            roll_deg: 74.39
+            desk_tilt_deg: 86.7
+            boundary: true
+            start: profile_0
+          free_19:
+            f: 672.0
+            rms_px: 8.98
+            pitch_deg: -0.47
+            roll_deg: 75.51
+            desk_tilt_deg: 86.2
+            boundary: true
+            start: profile_0
+  IMG_7356.MOV:
+    group: old
+    distance_cm: 75
+    hand:
+      breaks: 0
+      n_use: 627
+      corners:
+        n_corners: 134089
+        median_s: 1.1187732219696045
+        inliers_per_step: 181.0
+        checked_per_step: 181.0
+        regions:
+          손목 아래:
+            share: 0.011358127810633237
+            res_median_px: 0.17040683329105377
+          손등 몸통:
+            share: 0.4411398399570435
+            res_median_px: 0.0854828953742981
+          손가락:
+            share: 0.5475020322323233
+            res_median_px: 0.06780791282653809
+      drift_pct_box:
+        n_frames: 627
+        wrist: 5.421242186406167
+        mcp: 1.4739533740103636
+        pip: 1.2894652070124462
+        tip: 1.6382921185990107
+        thumb: 2.1489138775048957
+      s_hist_-1_3_16bins:
+      - 0
+      - 0
+      - 0
+      - 1523
+      - 10319
+      - 17517
+      - 17455
+      - 13861
+      - 14702
+      - 15266
+      - 15401
+      - 10620
+      - 10447
+      - 6277
+      - 701
+      - 0
+    dorsum:
+      breaks: 0
+      n_use: 627
+      corners:
+        n_corners: 78032
+        median_s: 0.5589950680732727
+        inliers_per_step: 124.0
+        checked_per_step: 124.0
+        regions:
+          손목 아래:
+            share: 0.0009098831248718475
+            res_median_px: 0.09112145751714706
+          손등 몸통:
+            share: 0.9842372360057412
+            res_median_px: 0.07933405041694641
+          손가락:
+            share: 0.014852880869386919
+            res_median_px: 0.08596287667751312
+      drift_pct_box:
+        n_frames: 627
+        wrist: 4.625179208481687
+        mcp: 1.869984903484047
+        pip: 3.4270288126101613
+        tip: 7.077050547728696
+        thumb: 5.252631385535146
+      s_hist_-1_3_16bins:
+      - 0
+      - 0
+      - 0
+      - 71
+      - 12789
+      - 21020
+      - 22203
+      - 20790
+      - 1159
+      - 0
+      - 0
+      - 0
+      - 0
+      - 0
+      - 0
+      - 0
+      tracked:
+        j16:
+          free_template:
+            f: 1181.4
+            rms_px: 3.2
+            boundary: false
+          ramp_11:
+            f: 3072.0
+            rms_px: 25.63
+            pitch_deg: 11.0
+            roll_deg: 0.0
+            desk_tilt_deg: 61.2
+            boundary: true
+            start: profile_6
+          free_5:
+            f: 672.0
+            rms_px: 11.98
+            pitch_deg: 49.38
+            roll_deg: -10.23
+            desk_tilt_deg: 24.0
+            boundary: true
+            start: profile_2
+          free_12:
+            f: 672.0
+            rms_px: 11.98
+            pitch_deg: 49.38
+            roll_deg: -10.24
+            desk_tilt_deg: 24.0
+            boundary: true
+            start: profile_2
+          free_19:
+            f: 672.0
+            rms_px: 11.98
+            pitch_deg: 49.38
+            roll_deg: -10.24
+            desk_tilt_deg: 24.0
+            boundary: true
+            start: profile_2
+  IMG_7357.MOV:
+    group: old
+    distance_cm: 75
+    hand:
+      breaks: 0
+      n_use: 601
+      corners:
+        n_corners: 139987
+        median_s: 1.191451907157898
+        inliers_per_step: 227.0
+        checked_per_step: 228.0
+        regions:
+          손목 아래:
+            share: 0.008065034610356675
+            res_median_px: 0.37298649549484253
+          손등 몸통:
+            share: 0.39665826112424724
+            res_median_px: 0.12195724248886108
+          손가락:
+            share: 0.595276704265396
+            res_median_px: 0.09245898574590683
+      drift_pct_box:
+        n_frames: 589
+        wrist: 8.484376151780396
+        mcp: 4.02761104271354
+        pip: 1.9334295868701177
+        tip: 2.2806739907294498
+        thumb: 5.945014937164688
+      s_hist_-1_3_16bins:
+      - 0
+      - 0
+      - 1
+      - 1128
+      - 8589
+      - 14194
+      - 17032
+      - 15712
+      - 16848
+      - 16153
+      - 16986
+      - 12973
+      - 10758
+      - 7410
+      - 2155
+      - 48
+    dorsum:
+      breaks: 1
+      n_use: 415
+      corners:
+        n_corners: 38718
+        median_s: 0.5693228244781494
+        inliers_per_step: 104.0
+        checked_per_step: 104.5
+        regions:
+          손목 아래:
+            share: 0.0004907278268505605
+            res_median_px: 0.21202336251735687
+          손등 몸통:
+            share: 0.9665013688723592
+            res_median_px: 0.09666786342859268
+          손가락:
+            share: 0.03300790330079033
+            res_median_px: 0.08194659650325775
+      drift_pct_box:
+        n_frames: 411
+        wrist: 7.543709454070792
+        mcp: 3.247715954700879
+        pip: 4.968135102484224
+        tip: 8.642042554849308
+        thumb: 11.618129132973873
+      s_hist_-1_3_16bins:
+      - 0
+      - 0
+      - 0
+      - 19
+      - 4953
+      - 10835
+      - 12932
+      - 8701
+      - 1200
+      - 78
+      - 0
+      - 0
+      - 0
+      - 0
+      - 0
+      - 0
+      tracked:
+        j16:
+          free_template:
+            f: 3072.0
+            rms_px: 9.32
+            boundary: true
+          ramp_11:
+            f: 3072.0
+            rms_px: 22.56
+            pitch_deg: 11.0
+            roll_deg: 0.0
+            desk_tilt_deg: 38.7
+            boundary: true
+            start: free_template
+          free_5:
+            f: 672.0
+            rms_px: 81.72
+            pitch_deg: -19.44
+            roll_deg: -6.76
+            desk_tilt_deg: 39.6
+            boundary: true
+            start: profile_0
+          free_12:
+            f: 3072.0
+            rms_px: 21.59
+            pitch_deg: -18.63
+            roll_deg: 13.31
+            desk_tilt_deg: 29.6
+            boundary: true
+            start: free_template
+          free_19:
+            f: 3072.0
+            rms_px: 22.37
+            pitch_deg: -30.4
+            roll_deg: 62.33
+            desk_tilt_deg: 11.2
+            boundary: true
+            start: free_template
+  IMG_7354 - 복사본.MOV:
+    group: self
+    distance_cm: 60
+    hand:
+      breaks: 0
+      n_use: 564
+      corners:
+        n_corners: 155675
+        median_s: 1.0042768716812134
+        inliers_per_step: 258.0
+        checked_per_step: 260.0
+        regions:
+          손목 아래:
+            share: 0.012693110647181628
+            res_median_px: 0.12271960079669952
+          손등 몸통:
+            share: 0.48547936405973985
+            res_median_px: 0.0791156068444252
+          손가락:
+            share: 0.5018275252930785
+            res_median_px: 0.07460321485996246
+      drift_pct_box:
+        n_frames: 564
+        wrist: 7.990339432309357
+        mcp: 2.3889352725203845
+        pip: 1.3591751607315272
+        tip: 2.6736213735481678
+        thumb: 2.6865066522568886
+      s_hist_-1_3_16bins:
+      - 0
+      - 0
+      - 0
+      - 1976
+      - 15242
+      - 21932
+      - 22593
+      - 15810
+      - 16654
+      - 17931
+      - 16188
+      - 9996
+      - 10167
+      - 6578
+      - 608
+      - 0
+    dorsum:
+      breaks: 0
+      n_use: 446
+      corners:
+        n_corners: 85317
+        median_s: 0.5522048473358154
+        inliers_per_step: 158.0
+        checked_per_step: 158.0
+        regions:
+          손목 아래:
+            share: 0.000386792784556419
+            res_median_px: 0.12841220200061798
+          손등 몸통:
+            share: 0.9866732304230107
+            res_median_px: 0.07286839187145233
+          손가락:
+            share: 0.012939976792432927
+            res_median_px: 0.07765902578830719
+      drift_pct_box:
+        n_frames: 446
+        wrist: 3.5038337339386496
+        mcp: 2.1724008048881034
+        pip: 4.9640902123446775
+        tip: 8.912588182763326
+        thumb: 5.21361183528828
+      s_hist_-1_3_16bins:
+      - 0
+      - 0
+      - 0
+      - 33
+      - 14734
+      - 22866
+      - 24554
+      - 22026
+      - 1104
+      - 0
+      - 0
+      - 0
+      - 0
+      - 0
+      - 0
+      - 0
+      tracked:
+        j16:
+          free_template:
+            f: 3072.0
+            rms_px: 2.75
+            boundary: true
+          ramp_11:
+            f: 1333.2
+            rms_px: 9.57
+            pitch_deg: 11.0
+            roll_deg: 0.0
+            desk_tilt_deg: 61.5
+            boundary: false
+            start: free_template
+          free_5:
+            f: 1770.7
+            rms_px: 7.69
+            pitch_deg: 38.53
+            roll_deg: 17.95
+            desk_tilt_deg: 39.2
+            boundary: false
+            start: free_template
+          free_12:
+            f: 1770.7
+            rms_px: 7.69
+            pitch_deg: 38.36
+            roll_deg: 18.36
+            desk_tilt_deg: 39.2
+            boundary: false
+            start: free_template
+          free_19:
+            f: 1770.7
+            rms_px: 7.69
+            pitch_deg: 38.53
+            roll_deg: 17.95
+            desk_tilt_deg: 39.2
+            boundary: false
+            start: free_template
+  IMG_7355 - 복사본.MOV:
+    group: self
+    distance_cm: 60
+    hand:
+      breaks: 0
+      n_use: 498
+      corners:
+        n_corners: 124980
+        median_s: 0.9766340255737305
+        inliers_per_step: 231.0
+        checked_per_step: 231.0
+        regions:
+          손목 아래:
+            share: 0.01451432229156665
+            res_median_px: 0.13353094458580017
+          손등 몸통:
+            share: 0.4967514802368379
+            res_median_px: 0.08048194646835327
+          손가락:
+            share: 0.48873419747159547
+            res_median_px: 0.07772615551948547
+      drift_pct_box:
+        n_frames: 498
+        wrist: 4.825522734524778
+        mcp: 1.4284880535817108
+        pip: 1.3165818839694872
+        tip: 1.6696740471843354
+        thumb: 2.7939543668756404
+      s_hist_-1_3_16bins:
+      - 0
+      - 0
+      - 0
+      - 1814
+      - 12283
+      - 18650
+      - 18808
+      - 12343
+      - 14076
+      - 13526
+      - 13138
+      - 8543
+      - 7714
+      - 4004
+      - 81
+      - 0
+    dorsum:
+      breaks: 0
+      n_use: 498
+      corners:
+        n_corners: 71886
+        median_s: 0.543673574924469
+        inliers_per_step: 145.0
+        checked_per_step: 146.0
+        regions:
+          손목 아래:
+            share: 0.0008068330412041287
+            res_median_px: 0.08301784098148346
+          손등 몸통:
+            share: 0.9851292323957377
+            res_median_px: 0.07418325543403625
+          손가락:
+            share: 0.014063934563058175
+            res_median_px: 0.07794412225484848
+      drift_pct_box:
+        n_frames: 498
+        wrist: 4.680305597511605
+        mcp: 1.386963306220486
+        pip: 3.3697664090965374
+        tip: 7.426541206508723
+        thumb: 5.688573434224446
+      s_hist_-1_3_16bins:
+      - 0
+      - 0
+      - 0
+      - 58
+      - 12870
+      - 19636
+      - 20156
+      - 18155
+      - 1011
+      - 0
+      - 0
+      - 0
+      - 0
+      - 0
+      - 0
+      - 0
+      tracked:
+        j16:
+          free_template:
+            f: 759.4
+            rms_px: 2.37
+            boundary: false
+          ramp_11:
+            f: 672.0
+            rms_px: 8.2
+            pitch_deg: 11.0
+            roll_deg: 0.0
+            desk_tilt_deg: 67.5
+            boundary: true
+            start: free_template
+          free_5:
+            f: 724.3
+            rms_px: 8.14
+            pitch_deg: 21.02
+            roll_deg: 3.76
+            desk_tilt_deg: 60.8
+            boundary: false
+            start: profile_0
+          free_12:
+            f: 724.3
+            rms_px: 8.14
+            pitch_deg: 21.02
+            roll_deg: 3.76
+            desk_tilt_deg: 60.8
+            boundary: false
+            start: profile_0
+          free_19:
+            f: 724.3
+            rms_px: 8.14
+            pitch_deg: 21.02
+            roll_deg: 3.76
+            desk_tilt_deg: 60.8
+            boundary: false
+            start: profile_0
+  IMG_7351 - 복사본.MOV:
+    group: teammate
+    distance_cm: 60
+    hand:
+      breaks: 0
+      n_use: 386
+      corners:
+        n_corners: 74426
+        median_s: 1.2501895427703857
+        inliers_per_step: 160.0
+        checked_per_step: 161.0
+        regions:
+          손목 아래:
+            share: 0.0001612339773734985
+            res_median_px: 0.4713563919067383
+          손등 몸통:
+            share: 0.3245371241232902
+            res_median_px: 0.07780689001083374
+          손가락:
+            share: 0.6753016418993363
+            res_median_px: 0.05254802852869034
+      drift_pct_box:
+        n_frames: 386
+        wrist: 19.59574828648522
+        mcp: 3.0983851489012326
+        pip: 1.5913303291729646
+        tip: 2.3962893499374642
+        thumb: 7.610808437538083
+      s_hist_-1_3_16bins:
+      - 0
+      - 0
+      - 0
+      - 12
+      - 1289
+      - 3830
+      - 7712
+      - 11323
+      - 13038
+      - 10330
+      - 11424
+      - 7799
+      - 5963
+      - 1694
+      - 12
+      - 0
+    dorsum:
+      breaks: 0
+      n_use: 386
+      corners:
+        n_corners: 44361
+        median_s: 0.579563558101654
+        inliers_per_step: 116.0
+        checked_per_step: 118.0
+        regions:
+          손목 아래:
+            share: 0.0002254232321183021
+            res_median_px: 1.0569076538085938
+          손등 몸통:
+            share: 0.9878046031423998
+            res_median_px: 0.08418138325214386
+          손가락:
+            share: 0.011969973625481842
+            res_median_px: 0.13230082392692566
+      drift_pct_box:
+        n_frames: 386
+        wrist: 9.46755235127794
+        mcp: 8.321333749592345
+        pip: 11.263562645059892
+        tip: 18.272177471968746
+        thumb: 8.702379037951875
+      s_hist_-1_3_16bins:
+      - 0
+      - 0
+      - 0
+      - 10
+      - 6725
+      - 11421
+      - 13413
+      - 12261
+      - 531
+      - 0
+      - 0
+      - 0
+      - 0
+      - 0
+      - 0
+      - 0
+      tracked:
+        j16:
+          free_template:
+            f: 1326.4
+            rms_px: 3.78
+            boundary: false
+          ramp_11:
+            f: 1093.9
+            rms_px: 15.93
+            pitch_deg: 11.0
+            roll_deg: 0.0
+            desk_tilt_deg: 47.0
+            boundary: false
+            start: profile_4
+          free_5:
+            f: 1195.5
+            rms_px: 11.25
+            pitch_deg: -2.3
+            roll_deg: -17.75
+            desk_tilt_deg: 65.8
+            boundary: false
+            start: profile_4
+          free_12:
+            f: 1195.5
+            rms_px: 11.25
+            pitch_deg: -2.3
+            roll_deg: -17.75
+            desk_tilt_deg: 65.8
+            boundary: false
+            start: profile_4
+          free_19:
+            f: 1195.5
+            rms_px: 11.25
+            pitch_deg: -2.3
+            roll_deg: -17.75
+            desk_tilt_deg: 65.8
+            boundary: false
+            start: profile_4
+  IMG_7352 - 복사본.MOV:
+    group: teammate
+    distance_cm: 60
+    hand:
+      breaks: 0
+      n_use: 368
+      corners:
+        n_corners: 81254
+        median_s: 1.2114152908325195
+        inliers_per_step: 181.0
+        checked_per_step: 181.0
+        regions:
+          손목 아래:
+            share: 0.0012184015556157236
+            res_median_px: 0.06635726988315582
+          손등 몸통:
+            share: 0.34654293942452064
+            res_median_px: 0.08044351637363434
+          손가락:
+            share: 0.6522386590198637
+            res_median_px: 0.06703662872314453
+      drift_pct_box:
+        n_frames: 368
+        wrist: 13.590467424992474
+        mcp: 2.325133600603385
+        pip: 1.6275154038075992
+        tip: 2.459002125703867
+        thumb: 5.447845456405046
+      s_hist_-1_3_16bins:
+      - 0
+      - 0
+      - 0
+      - 99
+      - 1600
+      - 4007
+      - 8975
+      - 13576
+      - 14371
+      - 11019
+      - 11206
+      - 7788
+      - 5909
+      - 2590
+      - 114
+      - 0
+    dorsum:
+      breaks: 0
+      n_use: 368
+      corners:
+        n_corners: 40129
+        median_s: 0.5728771686553955
+        inliers_per_step: 107.0
+        checked_per_step: 110.0
+        regions:
+          손목 아래:
+            share: 0.0004983926835954048
+            res_median_px: 0.225475013256073
+          손등 몸통:
+            share: 0.9836776396122505
+            res_median_px: 0.11079059541225433
+          손가락:
+            share: 0.015823967704154104
+            res_median_px: 0.11866863071918488
+      drift_pct_box:
+        n_frames: 368
+        wrist: 7.2153759167705775
+        mcp: 8.34396898683392
+        pip: 10.848866123284953
+        tip: 19.94970461727869
+        thumb: 8.98418629270192
+      s_hist_-1_3_16bins:
+      - 0
+      - 0
+      - 0
+      - 20
+      - 5680
+      - 10914
+      - 12098
+      - 10782
+      - 635
+      - 0
+      - 0
+      - 0
+      - 0
+      - 0
+      - 0
+      - 0
+      tracked:
+        j16:
+          free_template:
+            f: 815.6
+            rms_px: 2.96
+            boundary: false
+          ramp_11:
+            f: 3072.0
+            rms_px: 30.95
+            pitch_deg: 11.0
+            roll_deg: 0.0
+            desk_tilt_deg: 49.1
+            boundary: true
+            start: profile_7
+          free_5:
+            f: 3072.0
+            rms_px: 32.48
+            pitch_deg: 72.01
+            roll_deg: -17.24
+            desk_tilt_deg: 13.7
+            boundary: true
+            start: free_template
+          free_12:
+            f: 3072.0
+            rms_px: 32.48
+            pitch_deg: 71.66
+            roll_deg: -20.38
+            desk_tilt_deg: 13.7
+            boundary: true
+            start: profile_5
+          free_19:
+            f: 3072.0
+            rms_px: 32.48
+            pitch_deg: 71.65
+            roll_deg: -20.36
+            desk_tilt_deg: 13.7
+            boundary: true
+            start: free_template
