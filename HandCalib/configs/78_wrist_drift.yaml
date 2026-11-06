@@ -1,0 +1,20 @@
+# 78: frames whose tracked wrist stays near the detected wrist (user 2026-11-06: "너가 제안하는 확인 해봐" - after 77), record only, no verdict.
+# 77: the wrist moved by 56's hand chain sits 13.6 / 19.6 % of the hand box from the detected wrist in the teammate's videos (own videos 3-10 %) - the hand does not move as one plane there.
+# A wrist bend angle cannot be measured from the 2-D joints (no forearm point), so the per-frame drift itself is used (hf.dr_drift_frames: tracked joint 0 vs detected joint 0, % of the
+# detected box's long side, frames used by 56 with the wrist detected). Per limit, the frames at or under it; 74b's estimator on them (free_template once, then ms2_job: 11 deg fixed and the
+# ramp free from 5 / 12 / 19 deg, lowest cost), j16; all-frame values read from 74b's run. Also recorded: drift median / 90th percentile and its rank correlation with the distance from the
+# chain's reference frame (accumulated chain error would show there). Choices made by me before the run: limits 5 and 10 % (own videos' medians 3-10 %), at least 60 frames.
+# All 16 videos (74's list). Reference f only in summary.md. Fixed before the run.
+experiment:
+  name: 78_wrist_drift
+  seed: 42
+settings_config: configs/74b_multistart_rerun.yaml
+previous_run: runs/74b_multistart_rerun/20261105T044422Z
+joint_set: j16
+drift: {joint: 0, limits_pct: [5, 10], min_frames: 60}
+code_78: {branch: exp/78-79-drift-chain, base_commit: a61672b, commit: 99fe5a5, modules: [HandCalib/handfocal_report.py, HandCalib/run.py]}
+workers: 64
+video_workers: 8
+output:
+  root: runs/78_wrist_drift
+  results_yaml: results/78_wrist_drift.yaml

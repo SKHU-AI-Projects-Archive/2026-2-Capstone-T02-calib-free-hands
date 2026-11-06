@@ -1,0 +1,18 @@
+# 79: 76 again with the fixed fits solved 74b's way (user 2026-11-06: "너가 제안하는 확인 해봐"), record only, no verdict.
+# 76 re-solved each fixed ramp once from dk_init at 74b's f; many of those fell into wrong basins (cost 600-2000 against 74b's 10-20), so its guarantee (free cost <= fixed cost) held only
+# against those bad fits (IMG_7351 stayed unresolved). hf.ch2_job / dk_ms_then_free: the fixed ramp by dk_estimate_ms's steps (coarse profile, warm sweeps, 3 lowest points and free_template's
+# f), the lowest-cost fit kept with its state, then pitch and roll freed from it (f free). Final = the lowest cost over 74b's free starts, 76 and this. All 16 videos, 74's ramp sweep, j16
+# (j21's free ramp was far off in 74b / 76 on the old phone; left out to save time). Reference f only in summary.md. Fixed before the run.
+experiment:
+  name: 79_free_from_multistart
+  seed: 42
+settings_config: configs/74b_multistart_rerun.yaml
+previous_run: runs/74b_multistart_rerun/20261105T044422Z
+run_76: runs/76_free_from_fixed/20261105T062219Z
+joint_set: j16
+code_79: {branch: exp/78-79-drift-chain, base_commit: a61672b, commit: 99fe5a5, modules: [HandCalib/handfocal_report.py, HandCalib/run.py]}
+workers: 64
+video_workers: 8
+output:
+  root: runs/79_free_from_multistart
+  results_yaml: results/79_free_from_multistart.yaml
