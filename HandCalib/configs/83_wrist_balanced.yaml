@@ -1,0 +1,25 @@
+# 83: the teammate's tracked wrist (user 2026-11-06: "개선 방법 다 해봐라" - after the 65c point videos showed the wrist off in the teammate's videos), record only, no verdict.
+# j16 (56's main set, joints 5-20) has no wrist: dropping the wrist (the first proposal) is the state 74b already ran, kept as the control (read from 74b). The other two proposals:
+#  balanced chain (hf.bc_chain): 56's kt_chain with the corners split evenly - max_corners // 2 from the hand body (hull of body_joints = 58's dorsum joints, dilated as the hand mask) and
+#    max_corners // 2 from the rest of the hand mask (the fingers); the rest of 56's tracking settings unchanged.
+#  wrist on its own (hf.wt_track): the corners in a disk around the current wrist (radius_frac x the carried detected box's long side; forearm included), LK with 56's forward-backward
+#    check, a RANSAC similarity at 56's threshold_px, chained from the same reference frame as 56's chain; the chain's other joints kept.
+# The wrist enters the estimate only through j17 = j16 + wrist. Estimates: 74b's (ms2_job) at 11 deg fixed and the ramp free from 5 / 12 / 19 deg (lowest cost); free_template once per
+# combination. Tracked-vs-detected distance per joint group (hf.kf_drift) for every variant. radius_frac 0.15 and min_inliers 8 chosen by me before the run (the wrist disk holds far
+# fewer corners than the hand); no other value tried. All 16 videos (74's list). Reference f only in summary.md. Fixed before the run.
+experiment:
+  name: 83_wrist_balanced
+  seed: 42
+settings_config: configs/74b_multistart_rerun.yaml
+previous_run: runs/74b_multistart_rerun/20261105T044422Z
+joint_sets:
+  j17: [0, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20]
+balanced: {body_joints: [0, 1, 5, 9, 13, 17]}
+wrist: {radius_frac: 0.15, min_inliers: 8}
+combos: [hand|j17, hand_wl|j17, balanced|j16, balanced|j17, balanced_wl|j17]
+code_83: {branch: exp/82-detected-ramp-sweep, base_commit: d9a3c81, commit: 338bea8, modules: [HandCalib/handfocal_report.py, HandCalib/run.py]}
+workers: 64
+video_workers: 8
+output:
+  root: runs/83_wrist_balanced
+  results_yaml: results/83_wrist_balanced.yaml
