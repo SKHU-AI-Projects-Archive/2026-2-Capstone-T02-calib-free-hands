@@ -17,6 +17,7 @@ from PySide6.QtWidgets import QCheckBox, QHBoxLayout, QLabel, QPushButton, QSize
 from calibfreehands.media.provider import MediaFrameProvider, release_shared_media_provider, shared_media_provider
 from calibfreehands.pipeline.result import CanonicalResult
 from calibfreehands.pipeline.result_bundle import ResultBundle, load_result_bundle
+from calibfreehands.joint_schema import JOINT_NAMES
 from .topology import HAND_CONNECTIONS, RAW_TO_VIEW
 
 WORKSPACE_BOUNDS_M = ((-1.0, 1.0), (-1.0, 1.0), (0.0, 2.0))
@@ -25,6 +26,7 @@ GRID_MAJOR_SPACING_M = 0.5
 WORKSPACE_CENTER_RAW = (0.0, 0.0, 1.0)
 DEFAULT_WORKSPACE_ASPECT = 4 / 3
 DEFAULT_CAMERA_MARGIN = 1.1
+MIN_HAND_VIEW_RADIUS_M = 0.15
 GRID_LABEL_OFFSET_M = 0.15
 AXIS_LABEL_MARGIN_M = 0.3
 
@@ -58,6 +60,35 @@ def _camera_distance_for_radius(radius, fov_degrees=60.0, aspect=DEFAULT_WORKSPA
 
 def default_metric_camera_distance(fov_degrees=60.0, aspect=DEFAULT_WORKSPACE_ASPECT):
     return _camera_distance_for_radius(_workspace_radius(), fov_degrees, aspect)
+
+
+def whole_video_hand_framing(keypoints_3d: np.ndarray, detected: np.ndarray,
+                             fov_degrees: float = 60.0,
+                             aspect: float = DEFAULT_WORKSPACE_ASPECT) -> tuple[np.ndarray, float]:
+    """Return a robust whole-sequence hand target and camera distance in display space."""
+    keypoints_3d = np.asarray(keypoints_3d)
+    detected = np.asarray(detected, dtype=bool)
+    wrist_points = keypoints_3d[:, :, JOINT_NAMES.index("wrist"), :]
+    valid_wrists = detected & np.isfinite(wrist_points).all(axis=-1)
+    detected_joints = keypoints_3d[detected]
+    finite_joints = detected_joints[np.isfinite(detected_joints).all(axis=-1)]
+
+    if valid_wrists.any():
+        target_raw = np.median(wrist_points[valid_wrists], axis=0)
+    elif len(finite_joints):
+        target_raw = np.median(finite_joints, axis=0)
+    else:
+        return np.asarray(metric_workspace_center_display()), default_metric_camera_distance(fov_degrees, aspect)
+
+    if not len(finite_joints):
+        radius = MIN_HAND_VIEW_RADIUS_M
+    else:
+        bounds = np.percentile(finite_joints, (2.5, 97.5), axis=0)
+        corners = np.asarray(np.meshgrid(*bounds.T)).T.reshape(-1, 3)
+        radius = float(np.linalg.norm(corners - target_raw, axis=1).max())
+        radius = max(radius, MIN_HAND_VIEW_RADIUS_M)
+    distance = _camera_distance_for_radius(radius, fov_degrees, aspect)
+    return target_raw @ RAW_TO_VIEW.T, distance
 
 
 def _reset_gl_shader_cache() -> None:
@@ -223,9 +254,12 @@ class _GLResultView(gl.GLViewWidget):
         self._configure_metric_reference()
         self.metric_center = np.asarray(metric_workspace_center_display(), dtype=np.float64)
         self.default_metric_distance = default_metric_camera_distance(self.opts["fov"])
-        self.fit_center = self.metric_center.copy()
-        self.fit_distance = self.default_metric_distance
-        self.setCameraPosition(pos=pg.Vector(*self.metric_center), distance=self.fit_distance, elevation=20, azimuth=45)
+        self.hand_view_target, self.hand_view_distance = whole_video_hand_framing(
+            self.loaded.result.keypoints_3d, self.loaded.result.detected, self.opts["fov"]
+        )
+        self.fit_center = np.asarray(self.hand_view_target, dtype=np.float64)
+        self.fit_distance = self.hand_view_distance
+        self.setCameraPosition(pos=pg.Vector(*self.fit_center), distance=self.fit_distance, elevation=20, azimuth=45)
         self.joints = [gl.GLScatterPlotItem(), gl.GLScatterPlotItem()]
         self.bones = [gl.GLLinePlotItem(mode="lines", width=2, antialias=True), gl.GLLinePlotItem(mode="lines", width=2, antialias=True)]
         self.meshes = [gl.GLMeshItem(smooth=False, drawEdges=False), gl.GLMeshItem(smooth=False, drawEdges=False)]
@@ -336,19 +370,34 @@ class _GLResultView(gl.GLViewWidget):
     def fit_hands(self):
         return self.fit_all()
 
-    def reset_camera(self):
+    def apply_hand_view(self, target, distance):
+        self.fit_center = np.asarray(target, dtype=np.float64)
+        self.fit_distance = float(distance)
+        self.setCameraPosition(pos=pg.Vector(*self.fit_center), distance=self.fit_distance,
+                               elevation=20, azimuth=45)
+        self.update()
+
+    def hand_view(self):
+        self.apply_hand_view(self.hand_view_target, self.hand_view_distance)
+
+    def metric_overview(self):
         self.fit_center = self.metric_center.copy()
         self.fit_distance = self.default_metric_distance
         self.setCameraPosition(pos=pg.Vector(*self.metric_center), distance=self.default_metric_distance,
                                elevation=20, azimuth=45)
         self.update()
+
+    def reset_camera(self):
+        self.hand_view()
+
     def _preset(self, raw_direction):
-        if self.fit_center is None: self.reset_camera()
-        if self.fit_center is None: return
         direction = np.asarray(raw_direction, dtype=np.float32) @ RAW_TO_VIEW.T
         azimuth = float(np.degrees(np.arctan2(direction[1], direction[0])))
         elevation = float(np.degrees(np.arctan2(direction[2], np.hypot(direction[0], direction[1]))))
-        self.setCameraPosition(pos=pg.Vector(*self.fit_center), distance=self.fit_distance, azimuth=azimuth, elevation=elevation)
+        current = self.cameraParams()
+        center = np.asarray(tuple(current["center"]), dtype=np.float64)
+        self.setCameraPosition(pos=pg.Vector(*center), distance=current["distance"],
+                               azimuth=azimuth, elevation=elevation)
     def front_view(self): self._preset((0, 0, -1))
     def side_view(self): self._preset((-1, 0, 0))
     def top_view(self): self._preset((0, -1, 0))
@@ -395,7 +444,7 @@ class ResultViewer(QWidget):
         self._arrow_mode = "frame"
         self.overlay = _OverlayCanvas(self.loaded); self.gl_view = _GLResultView(self.loaded); split = QSplitter(Qt.Orientation.Horizontal); split.addWidget(self.overlay); split.addWidget(self.gl_view); split.setSizes([600, 600])
         self.slider = QSlider(Qt.Orientation.Horizontal); self.slider.setRange(0, max(0, self.loaded.frame_count - 1)); self.slider.valueChanged.connect(self._set_frame)
-        self.status = QLabel(); self.coordinate_info = QLabel("Camera space · metres   X: image right   Y: image down   Z: forward   ·   View centered on hands · raw coordinates unchanged")
+        self.status = QLabel(); self.coordinate_info = QLabel("Camera space · metres   X: image right   Y: image down   Z: forward   ·   Fixed metric grid · raw coordinates unchanged")
         self.timer = QTimer(self); self.timer.timeout.connect(self._next); visibility = QHBoxLayout(); view = QHBoxLayout(); playback = QHBoxLayout()
         self.joint_checkbox = QCheckBox("Joint"); self.joint_checkbox.setChecked(self.gl_view.show_joints); self.joint_checkbox.toggled.connect(self._on_joint_toggled); visibility.addWidget(self.joint_checkbox)
         self.bone_checkbox = QCheckBox("Bone"); self.bone_checkbox.setChecked(self.gl_view.show_bones); self.bone_checkbox.toggled.connect(self._on_bone_toggled); visibility.addWidget(self.bone_checkbox)
@@ -414,7 +463,7 @@ class ResultViewer(QWidget):
         self.opacity_group.addWidget(opacity_label); self.opacity_group.addWidget(self.mesh_opacity_slider); self.opacity_group.addWidget(self.mesh_opacity_value)
         visibility.addWidget(self.opacity_container)
         previous = QPushButton("Previous"); previous.clicked.connect(self._previous); play = QPushButton("Play / Pause"); play.clicked.connect(self._play); nxt = QPushButton("Next"); nxt.clicked.connect(self._next_frame)
-        for text, callback in (("Front", self.gl_view.front_view), ("Side", self.gl_view.side_view), ("Top", self.gl_view.top_view), ("Fit All", self.gl_view.fit_all), ("Reset View", self.gl_view.reset_camera)):
+        for text, callback in (("Front", self.gl_view.front_view), ("Side", self.gl_view.side_view), ("Top", self.gl_view.top_view), ("Hand View", self.gl_view.hand_view), ("Metric Overview", self.gl_view.metric_overview), ("Fit All", self.gl_view.fit_all)):
             button = QPushButton(text); button.clicked.connect(callback); view.addWidget(button)
         playback.addWidget(previous); playback.addWidget(play); playback.addWidget(nxt)
         layout = QVBoxLayout(self); layout.addWidget(split, 1); layout.addWidget(self.slider); layout.addLayout(visibility); layout.addLayout(view); layout.addLayout(playback); layout.addWidget(self.status); layout.addWidget(self.coordinate_info)

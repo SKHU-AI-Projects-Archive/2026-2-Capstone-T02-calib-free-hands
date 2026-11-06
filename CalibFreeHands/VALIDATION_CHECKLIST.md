@@ -423,3 +423,13 @@ All entries below are pending implementation and validation. No acceptance item 
 - [ ] Light-theme native Windows visual review remains pending; palette rendering is covered offscreen.
 - [x] Fresh AnyCalib/WiLoR inference was later user-confirmed.
 - [ ] First-user rerun remains pending until the user selects a date.
+
+
+## Phase 2.1 Whole-Video GT Hand Framing (2026-11-06)
+
+- [x] Whole-video framing uses the selected GT's detected finite wrist median; finite detected joints provide the documented fallback and robust 2.5th-97.5th percentile extent, with a minimum camera radius.
+- [x] Candidate configurations do not affect the initial framing. GT changes cache a framing without moving the current camera; Hand View applies it explicitly. Frame changes and playback do not recalculate or recenter the camera.
+- [x] Single-result and comparison viewers provide Hand View, fixed Metric Overview, and Fit All; Overlay and Split share the selected GT framing. Front/Side/Top preserve current camera center and distance.
+- [x] Offscreen read-only smoke opened the existing three same-source `.cfh` results (Manual Focal 1655, 2500, and 15000 px), verified selected-GT Hand View and frame navigation stability, and restored Metric Overview/Hand View. No inference ran and no result files were modified.
+- [x] Viewer/comparison tests: 86 passed; full pytest: 260 passed; application import, compileall, `pip check`, and `git diff --check` passed.
+- [ ] Native Windows visual/menu interaction review remains pending because the Computer Use native pipe was unavailable; first-user inference rerun remains pending until the user selects a date.

@@ -23,7 +23,10 @@ from .topology import HAND_CONNECTIONS, RAW_TO_VIEW
 from calibfreehands.pipeline.result_bundle import ResultBundle
 from calibfreehands.pipeline.metrics import compare_results, metric_registry
 from calibfreehands.joint_schema import JOINT_NAMES
-from .viewer import _GLResultView, _OverlayCanvas, load_bundle_result, load_npz_result
+from .viewer import (
+    _GLResultView, _OverlayCanvas, load_bundle_result, load_npz_result,
+    whole_video_hand_framing,
+)
 from .comparison_presentation import _JointAnnotationLayer, _ViewportPanel
 from .playback import PlaybackClock
 
@@ -658,6 +661,7 @@ class ComparisonViewer(QWidget):
             raise ValueError("comparison results must have matching frame indices, timestamps, and counts")
         self._reference_fallback = False
         self.reference_id = None if self.single_mode else self._default_reference_id()
+        self.hand_view_cache = {}
         reference_index = (self._configuration_index(self.reference_id)
                            if self.reference_id is not None else None)
         candidate_index = 0
@@ -683,6 +687,10 @@ class ComparisonViewer(QWidget):
         self.overlay_view.setMinimumSize(340, 260)
         self.overlay_panel = _ViewportPanel(self.overlay_view, list(range(len(entries))))
         self.overlay_view.hud = self.overlay_panel
+        self.hand_view_cache[self.configurations[0]["id"]] = (
+            tuple(float(value) for value in self.overlay_view.hand_view_target),
+            float(self.overlay_view.hand_view_distance),
+        )
         self.split_views = [_LinkedResultView(loaded, color, self._sync_camera)
                             for loaded, color in zip(self.loaded_results, self.configuration_colors)]
         for index, view in enumerate(self.split_views):
@@ -980,7 +988,8 @@ class ComparisonViewer(QWidget):
         view_toolbar = QHBoxLayout()
         view_toolbar.addWidget(QLabel("Camera"))
         for text, method in (("Front", "front_view"), ("Side", "side_view"), ("Top", "top_view"),
-                             ("Fit All", "fit_all"), ("Reset", "reset_camera")):
+                             ("Hand View", "hand_view"), ("Metric Overview", "metric_overview"),
+                             ("Fit All", "fit_all")):
             button = QPushButton(text)
             button.setFixedWidth(64)
             button.setSizePolicy(QSizePolicy.Policy.Fixed, QSizePolicy.Policy.Fixed)
@@ -1007,7 +1016,8 @@ class ComparisonViewer(QWidget):
             widget.hide()
         camera_menu = self.more_menu.addMenu("Camera")
         for text, method in (("Front", "front_view"), ("Side", "side_view"), ("Top", "top_view"),
-                             ("Fit All", "fit_all"), ("Reset", "reset_camera")):
+                             ("Hand View", "hand_view"), ("Metric Overview", "metric_overview"),
+                             ("Fit All", "fit_all")):
             camera_menu.addAction(text, lambda _=False, name=method: self._apply_camera_preset(name))
         self.more_menu.addSeparator()
         self.export_csv_action = self.more_menu.addAction("Export CSV…", self._export_csv)
@@ -1142,7 +1152,7 @@ class ComparisonViewer(QWidget):
         self._refresh_metric_panels()
         self._refresh_annotations()
         self._set_frame(0)
-        self._sync_camera(self.split_views[0])
+        self.hand_view()
 
     def _refresh_annotations(self):
         if self.annotation_mode != "off":
@@ -1286,6 +1296,20 @@ class ComparisonViewer(QWidget):
         return next(index for index, config in enumerate(self.configurations)
                     if config["id"] == configuration_id)
 
+    def _hand_view_source_id(self):
+        return self.reference_id or self.configurations[0]["id"]
+
+    def _hand_view_for(self, configuration_id):
+        framing = self.hand_view_cache.get(configuration_id)
+        if framing is None:
+            index = self._configuration_index(configuration_id)
+            result = self.loaded_results[index].result
+            framing = whole_video_hand_framing(result.keypoints_3d, result.detected)
+            self.hand_view_cache[configuration_id] = (
+                tuple(float(value) for value in framing[0]), float(framing[1])
+            )
+        return self.hand_view_cache[configuration_id]
+
     def _rebuild_metrics_menu(self):
         self.metric_menu.clear()
         self.metric_checks.clear()
@@ -1388,6 +1412,7 @@ class ComparisonViewer(QWidget):
         if self.single_mode:
             return
         self.reference_id = self.reference_selector.currentData()
+        self._hand_view_for(self.reference_id)
         self.reference_selector.setToolTip(self.reference_selector.currentText())
         self.reference_label.setText("GT")
         self._rebuild_metrics_menu()
@@ -1830,13 +1855,29 @@ class ComparisonViewer(QWidget):
         self._sync_camera(source)
         return True
 
-    def reset_camera(self):
+    def hand_view(self):
+        target, distance = self._hand_view_for(self._hand_view_source_id())
         source = self.overlay_view if self.mode == "overlay" else self.split_views[0]
-        source.reset_camera()
+        source.apply_hand_view(target, distance)
         self._sync_camera(source)
         self._refresh_annotations()
 
+    def metric_overview(self):
+        source = self.overlay_view if self.mode == "overlay" else self.split_views[0]
+        source.metric_overview()
+        self._sync_camera(source)
+        self._refresh_annotations()
+
+    def reset_camera(self):
+        self.hand_view()
+
     def _apply_camera_preset(self, method):
+        if method == "hand_view":
+            self.hand_view()
+            return
+        if method == "metric_overview":
+            self.metric_overview()
+            return
         if method == "fit_all":
             self.fit_all()
             return

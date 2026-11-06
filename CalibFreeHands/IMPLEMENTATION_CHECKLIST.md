@@ -165,6 +165,14 @@ All implementation items above are complete. Remaining user and Windows GUI acce
 ## Phase 2 Fixed Metric Workspace and Shared Camera
 
 - [x] Keep the three grid planes, positive raw camera-space axes, and major numeric labels fixed to X/Y [-1, 1] m and Z [0, 2] m with 0.1 m minor and 0.5 m major spacing; Grid also controls numeric labels and Axis controls axis names/lines.
-- [x] Initialize every result viewer at the deterministic workspace-centered 20-degree elevation / 45-degree azimuth camera, independent of result geometry; Reset restores that framing.
+- [x] Keep Metric Overview and its fixed workspace-centered 20-degree elevation / 45-degree azimuth framing available; Phase 2.1 adds whole-video GT Hand View as the initial camera and Reset behavior.
 - [x] Make Fit All explicit and fit only finite geometry from the current frame and visible hands/results, without moving or scaling workspace references or mutating canonical arrays.
 - [x] Share camera parameters between Overlay, visible Split panels, and detached comparison panels; preserve the active camera pose when switching Overlay/Split.
+
+## Phase 2.1 Whole-Video GT Hand Framing
+
+- [x] Compute the selected GT (or sole result) whole-video detected finite wrist median and robust all-joint 2.5–97.5 percentile extent once per loaded result/GT selection; apply only the camera transform.
+- [x] Use the selected GT framing for initial Hand View; candidate results do not affect the default framing, and playback/seek never recenter the camera.
+- [x] Keep Metric Overview at the fixed Phase 2 workspace camera; Fit All remains based on current-frame visible geometry; Reset restores Hand View.
+- [x] Recompute/cache a new GT framing on selection while preserving current camera pose; apply it only when Hand View is chosen.
+- [x] Keep Front/Side/Top orientation-only relative to current center/distance, and synchronize Hand View / Metric Overview across Overlay and Split.

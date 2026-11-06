@@ -186,7 +186,7 @@ def test_fixed_metric_workspace_planes_axes_and_major_labels(tmp_path, qapp):
     viewer.close()
 
 
-def test_metric_camera_is_result_independent_and_fit_all_only_moves_camera(qapp):
+def test_metric_overview_is_result_independent_and_fit_all_only_moves_camera(qapp):
     from calibfreehands.visualization.viewer import (
         LoadedResult, _GLResultView, default_metric_camera_distance,
         metric_workspace_center_display,
@@ -200,6 +200,8 @@ def test_metric_camera_is_result_independent_and_fit_all_only_moves_camera(qapp)
     mesh_before = second_result.mano_vertices.copy()
     first = _GLResultView(LoadedResult(first_result))
     second = _GLResultView(LoadedResult(second_result))
+    first.metric_overview()
+    second.metric_overview()
     first_camera = first.cameraParams()
     second_camera = second.cameraParams()
     np.testing.assert_allclose(first_camera["center"].toTuple(), metric_workspace_center_display())
@@ -231,6 +233,92 @@ def test_metric_camera_is_result_independent_and_fit_all_only_moves_camera(qapp)
     assert second.cameraParams()["distance"] == pytest.approx(before_empty["distance"])
     np.testing.assert_allclose(second.cameraParams()["center"].toTuple(), before_empty["center"].toTuple())
     first.close(); second.close()
+
+
+def test_whole_video_hand_framing_uses_robust_detected_wrist_and_joint_statistics():
+    from calibfreehands.visualization.viewer import whole_video_hand_framing
+
+    points = np.empty((4, 2, 21, 3), dtype=np.float64)
+    points[:] = (0.11, -0.05, 0.61)
+    detected = np.ones((4, 2), dtype=bool)
+    for frame, wrist in enumerate(((0.10, -0.05, 0.60), (0.12, -0.04, 0.62),
+                                   (0.11, -0.06, 0.61))):
+        points[frame, :, 0] = wrist
+    points[3, 0, 0] = (4.0, 5.0, 12.0)
+    points[0, 0, 0] = np.nan
+    detected[3, 1] = False
+    points[3, 1] = np.nan
+    raw_before = points.copy()
+
+    target, distance = whole_video_hand_framing(points, detected)
+
+    np.testing.assert_allclose(target, (-0.115, -0.615, 0.045), atol=1e-6)
+    assert 0.3 < distance < 1.0
+    np.testing.assert_array_equal(points, raw_before)
+
+    points[:, :, 0] = (0.11, -0.05, 0.61)
+    _, without_outlier_distance = whole_video_hand_framing(points, detected)
+    assert abs(distance - without_outlier_distance) < 0.1
+
+
+def test_whole_video_hand_framing_falls_back_to_joints_then_metric_workspace():
+    from calibfreehands.visualization.viewer import (
+        default_metric_camera_distance, metric_workspace_center_display,
+        whole_video_hand_framing,
+    )
+
+    points = np.full((2, 2, 21, 3), np.nan, dtype=np.float64)
+    detected = np.ones((2, 2), dtype=bool)
+    points[:, :, 1:] = (0.2, -0.1, 0.8)
+    target, distance = whole_video_hand_framing(points, detected)
+    np.testing.assert_allclose(target, (-0.2, -0.8, 0.1), atol=1e-6)
+    assert distance > 0
+
+    detected[:] = False
+    fallback_target, fallback_distance = whole_video_hand_framing(points, detected)
+    np.testing.assert_allclose(fallback_target, metric_workspace_center_display())
+    assert fallback_distance == pytest.approx(default_metric_camera_distance())
+
+
+def test_single_result_viewer_starts_in_hand_view_and_exposes_camera_modes(tmp_path, qapp):
+    from PySide6.QtWidgets import QPushButton
+    from calibfreehands.visualization.viewer import (
+        ResultViewer, whole_video_hand_framing,
+    )
+
+    result = _viewer_result(mesh=True)
+    result.keypoints_3d[0, 0] = (0.1, -0.05, 0.6)
+    result.keypoints_3d[1, 0] = (0.3, -0.15, 1.0)
+    result.camera_translation = np.full((2, 2, 3), 0.25, dtype=np.float32)
+    npz, _ = save_result(result, tmp_path, {"schema_version": 1})
+    expected_target, expected_distance = whole_video_hand_framing(result.keypoints_3d, result.detected)
+    viewer = ResultViewer(npz)
+    raw_joints = viewer.loaded.result.keypoints_3d.copy()
+    raw_vertices = viewer.loaded.result.mano_vertices.copy()
+    raw_translation = viewer.loaded.result.camera_translation.copy()
+    params = viewer.gl_view.cameraParams()
+    np.testing.assert_allclose(params["center"].toTuple(), expected_target)
+    assert params["distance"] == pytest.approx(expected_distance)
+    assert {button.text() for button in viewer.findChildren(QPushButton)} >= {
+        "Hand View", "Metric Overview", "Fit All"
+    }
+    assert "Fixed metric grid" in viewer.coordinate_info.text()
+    assert "View centered on hands" not in viewer.coordinate_info.text()
+    viewer._set_frame(1)
+    frame_camera = viewer.gl_view.cameraParams()
+    np.testing.assert_allclose(tuple(frame_camera["center"]), expected_target)
+    assert frame_camera["distance"] == pytest.approx(expected_distance)
+
+    viewer.gl_view.metric_overview()
+    np.testing.assert_allclose(viewer.gl_view.cameraParams()["center"].toTuple(), (0, -1, 0))
+    viewer.gl_view.hand_view()
+    np.testing.assert_allclose(viewer.gl_view.cameraParams()["center"].toTuple(), expected_target)
+    viewer.gl_view.reset_camera()
+    np.testing.assert_allclose(viewer.gl_view.cameraParams()["center"].toTuple(), expected_target)
+    np.testing.assert_array_equal(viewer.loaded.result.keypoints_3d, raw_joints)
+    np.testing.assert_array_equal(viewer.loaded.result.mano_vertices, raw_vertices)
+    np.testing.assert_array_equal(viewer.loaded.result.camera_translation, raw_translation)
+    viewer.close()
 
 
 def test_legacy_result_disables_mesh_checkbox(tmp_path, qapp):
