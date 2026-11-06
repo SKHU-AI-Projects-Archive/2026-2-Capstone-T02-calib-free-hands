@@ -1,0 +1,1376 @@
+experiment: 78_wrist_drift
+run: runs/78_wrist_drift/20261106T042905Z
+code_commit: 2fa4908
+git_dirty_at_run: false
+note: 실험 77에서 팀원 영상은 실험 56 손 추적으로 옮긴 손목이 검출 손목에서 손 박스의 13.6%, 19.6% 떨어졌다(본인 영상 3~10%).
+  손이 한 평면처럼 움직이지 않았다는 뜻이다(손목 꺾임 또는 손가락 굽힘; 2차원 관절로는 둘을 가르지 못한다). 프레임마다 이 거리를 재고, 한계
+  이하인 프레임만 남겨 74b 추정기로 f를 다시 낸다(free_template, 경사 11° 고정, 함께 추정 시작 5·12·19° 중 비용 최소).
+  전체 프레임 값은 74b에서 읽는다. 점은 실험 56 추적점, j16. 판정 없음.
+drift:
+  joint: 0
+  limits_pct:
+  - 5
+  - 10
+  min_frames: 60
+free_starts_deg:
+- 5
+- 12
+- 19
+videos:
+  IMG_7346.MOV:
+    group: old
+    distance_cm: 50
+    hand: right
+    drift:
+      n_use: 678
+      n_measured: 678
+      drift_median: 9.16457423907773
+      drift_p90: 17.53827606347089
+      rank_corr_with_distance_from_ref: -0.2656239306429312
+      kept:
+        '5': 275
+        '10': 472
+    limit_5:
+      free_template:
+        f: 3072.0
+        rms_px: 0.77
+        boundary: true
+      ramp_11:
+        f: 1482.0
+        rms_px: 1.95
+        pitch_deg: 11.0
+        roll_deg: 0.0
+        desk_tilt_deg: 46.0
+        boundary: false
+        start: free_template
+      free_5:
+        f: 1676.1
+        rms_px: 1.78
+        pitch_deg: 13.03
+        roll_deg: -7.55
+        desk_tilt_deg: 48.4
+        boundary: false
+        start: profile_5
+      free_12:
+        f: 1676.1
+        rms_px: 1.78
+        pitch_deg: 13.03
+        roll_deg: -7.55
+        desk_tilt_deg: 48.4
+        boundary: false
+        start: profile_5
+      free_19:
+        f: 1676.1
+        rms_px: 1.78
+        pitch_deg: 13.03
+        roll_deg: -7.55
+        desk_tilt_deg: 48.4
+        boundary: false
+        start: profile_5
+    limit_10:
+      free_template:
+        f: 2495.8
+        rms_px: 0.85
+        boundary: false
+      ramp_11:
+        f: 1578.7
+        rms_px: 2.91
+        pitch_deg: 11.0
+        roll_deg: 0.0
+        desk_tilt_deg: 47.0
+        boundary: false
+        start: profile_4
+      free_5:
+        f: 1718.3
+        rms_px: 2.86
+        pitch_deg: 14.45
+        roll_deg: -0.42
+        desk_tilt_deg: 46.5
+        boundary: false
+        start: profile_4
+      free_12:
+        f: 1718.3
+        rms_px: 2.86
+        pitch_deg: 14.45
+        roll_deg: -0.42
+        desk_tilt_deg: 46.5
+        boundary: false
+        start: profile_4
+      free_19:
+        f: 1718.3
+        rms_px: 2.86
+        pitch_deg: 14.45
+        roll_deg: -0.42
+        desk_tilt_deg: 46.5
+        boundary: false
+        start: profile_4
+  IMG_7347.MOV:
+    group: old
+    distance_cm: 50
+    hand: left
+    drift:
+      n_use: 658
+      n_measured: 537
+      drift_median: 6.093978076433124
+      drift_p90: 12.350770318814673
+      rank_corr_with_distance_from_ref: -0.5129568301459618
+      kept:
+        '5': 258
+        '10': 327
+    limit_5:
+      free_template:
+        f: 3072.0
+        rms_px: 0.41
+        boundary: true
+      ramp_11:
+        f: 1524.7
+        rms_px: 1.93
+        pitch_deg: 11.0
+        roll_deg: 0.0
+        desk_tilt_deg: 45.3
+        boundary: false
+        start: free_template
+      free_5:
+        f: 1429.3
+        rms_px: 1.85
+        pitch_deg: 6.95
+        roll_deg: 1.21
+        desk_tilt_deg: 46.2
+        boundary: false
+        start: profile_5
+      free_12:
+        f: 1429.3
+        rms_px: 1.85
+        pitch_deg: 6.95
+        roll_deg: 1.21
+        desk_tilt_deg: 46.2
+        boundary: false
+        start: profile_5
+      free_19:
+        f: 1429.3
+        rms_px: 1.85
+        pitch_deg: 6.95
+        roll_deg: 1.21
+        desk_tilt_deg: 46.2
+        boundary: false
+        start: profile_6
+    limit_10:
+      free_template:
+        f: 3072.0
+        rms_px: 0.61
+        boundary: true
+      ramp_11:
+        f: 1770.9
+        rms_px: 2.49
+        pitch_deg: 11.0
+        roll_deg: 0.0
+        desk_tilt_deg: 45.8
+        boundary: false
+        start: free_template
+      free_5:
+        f: 1745.6
+        rms_px: 2.49
+        pitch_deg: 10.5
+        roll_deg: -0.42
+        desk_tilt_deg: 46.2
+        boundary: false
+        start: profile_4
+      free_12:
+        f: 1745.6
+        rms_px: 2.49
+        pitch_deg: 10.5
+        roll_deg: -0.42
+        desk_tilt_deg: 46.2
+        boundary: false
+        start: profile_4
+      free_19:
+        f: 1745.6
+        rms_px: 2.49
+        pitch_deg: 10.5
+        roll_deg: -0.42
+        desk_tilt_deg: 46.2
+        boundary: false
+        start: profile_4
+  IMG_7348.MOV:
+    group: old
+    distance_cm: 50
+    hand: right
+    drift:
+      n_use: 618
+      n_measured: 618
+      drift_median: 9.7859234969375
+      drift_p90: 12.426115350281703
+      rank_corr_with_distance_from_ref: 0.23817119747286014
+      kept:
+        '5': 177
+        '10': 347
+    limit_5:
+      free_template:
+        f: 3072.0
+        rms_px: 0.16
+        boundary: true
+      ramp_11:
+        f: 793.2
+        rms_px: 0.67
+        pitch_deg: 11.0
+        roll_deg: 0.0
+        desk_tilt_deg: 46.7
+        boundary: false
+        start: free_template
+      free_5:
+        f: 1093.8
+        rms_px: 0.35
+        pitch_deg: 44.58
+        roll_deg: -23.73
+        desk_tilt_deg: 23.4
+        boundary: false
+        start: profile_3
+      free_12:
+        f: 1093.8
+        rms_px: 0.35
+        pitch_deg: 45.62
+        roll_deg: -21.21
+        desk_tilt_deg: 23.4
+        boundary: false
+        start: profile_3
+      free_19:
+        f: 1093.8
+        rms_px: 0.35
+        pitch_deg: 45.62
+        roll_deg: -21.21
+        desk_tilt_deg: 23.4
+        boundary: false
+        start: profile_4
+    limit_10:
+      free_template:
+        f: 1442.3
+        rms_px: 0.52
+        boundary: false
+      ramp_11:
+        f: 1515.5
+        rms_px: 4.01
+        pitch_deg: 11.0
+        roll_deg: 0.0
+        desk_tilt_deg: 46.1
+        boundary: false
+        start: profile_3
+      free_5:
+        f: 1566.2
+        rms_px: 2.7
+        pitch_deg: 7.83
+        roll_deg: -7.59
+        desk_tilt_deg: 49.5
+        boundary: false
+        start: profile_3
+      free_12:
+        f: 1566.2
+        rms_px: 2.7
+        pitch_deg: 7.83
+        roll_deg: -7.59
+        desk_tilt_deg: 49.5
+        boundary: false
+        start: profile_3
+      free_19:
+        f: 1566.2
+        rms_px: 2.7
+        pitch_deg: 7.83
+        roll_deg: -7.59
+        desk_tilt_deg: 49.5
+        boundary: false
+        start: profile_3
+  IMG_7349.MOV:
+    group: old
+    distance_cm: 50
+    hand: left
+    drift:
+      n_use: 683
+      n_measured: 526
+      drift_median: 9.383925968667533
+      drift_p90: 11.636870578640645
+      rank_corr_with_distance_from_ref: 0.09269778511183696
+      kept:
+        '5': 191
+        '10': 333
+    limit_5:
+      free_template:
+        f: 3072.0
+        rms_px: 0.65
+        boundary: true
+      ramp_11:
+        f: 1159.9
+        rms_px: 4.12
+        pitch_deg: 11.0
+        roll_deg: 0.0
+        desk_tilt_deg: 38.8
+        boundary: false
+        start: profile_2
+      free_5:
+        f: 3072.0
+        rms_px: 3.69
+        pitch_deg: -47.6
+        roll_deg: -23.21
+        desk_tilt_deg: 21.6
+        boundary: true
+        start: profile_6
+      free_12:
+        f: 3072.0
+        rms_px: 3.69
+        pitch_deg: -47.6
+        roll_deg: -23.21
+        desk_tilt_deg: 21.6
+        boundary: true
+        start: profile_6
+      free_19:
+        f: 3072.0
+        rms_px: 3.69
+        pitch_deg: -47.6
+        roll_deg: -23.21
+        desk_tilt_deg: 21.6
+        boundary: true
+        start: profile_6
+    limit_10:
+      free_template:
+        f: 3072.0
+        rms_px: 0.71
+        boundary: true
+      ramp_11:
+        f: 2022.0
+        rms_px: 4.97
+        pitch_deg: 11.0
+        roll_deg: 0.0
+        desk_tilt_deg: 43.7
+        boundary: false
+        start: profile_5
+      free_5:
+        f: 1777.0
+        rms_px: 4.67
+        pitch_deg: 10.87
+        roll_deg: 9.87
+        desk_tilt_deg: 38.1
+        boundary: false
+        start: profile_4
+      free_12:
+        f: 1777.0
+        rms_px: 4.67
+        pitch_deg: 10.87
+        roll_deg: 9.87
+        desk_tilt_deg: 38.1
+        boundary: false
+        start: profile_4
+      free_19:
+        f: 1777.0
+        rms_px: 4.67
+        pitch_deg: 10.87
+        roll_deg: 9.87
+        desk_tilt_deg: 38.1
+        boundary: false
+        start: profile_4
+  IMG_7350.MOV:
+    group: old
+    distance_cm: 60
+    hand: right
+    drift:
+      n_use: 700
+      n_measured: 700
+      drift_median: 3.0481684762805297
+      drift_p90: 11.730645078862056
+      rank_corr_with_distance_from_ref: -0.34929408893837394
+      kept:
+        '5': 497
+        '10': 553
+    limit_5:
+      free_template:
+        f: 3072.0
+        rms_px: 0.75
+        boundary: true
+      ramp_11:
+        f: 1674.1
+        rms_px: 2.49
+        pitch_deg: 11.0
+        roll_deg: 0.0
+        desk_tilt_deg: 47.2
+        boundary: false
+        start: profile_3
+      free_5:
+        f: 1450.7
+        rms_px: 2.58
+        pitch_deg: 40.97
+        roll_deg: 30.43
+        desk_tilt_deg: 31.9
+        boundary: false
+        start: profile_3
+      free_12:
+        f: 1450.7
+        rms_px: 2.58
+        pitch_deg: 40.97
+        roll_deg: 30.43
+        desk_tilt_deg: 31.9
+        boundary: false
+        start: profile_3
+      free_19:
+        f: 1450.7
+        rms_px: 2.58
+        pitch_deg: 40.97
+        roll_deg: 30.43
+        desk_tilt_deg: 31.9
+        boundary: false
+        start: profile_3
+    limit_10:
+      free_template:
+        f: 3072.0
+        rms_px: 0.76
+        boundary: true
+      ramp_11:
+        f: 1644.6
+        rms_px: 2.65
+        pitch_deg: 11.0
+        roll_deg: 0.0
+        desk_tilt_deg: 46.8
+        boundary: false
+        start: profile_4
+      free_5:
+        f: 1777.2
+        rms_px: 2.62
+        pitch_deg: 13.11
+        roll_deg: 1.27
+        desk_tilt_deg: 46.1
+        boundary: false
+        start: profile_5
+      free_12:
+        f: 1777.2
+        rms_px: 2.62
+        pitch_deg: 13.11
+        roll_deg: 1.27
+        desk_tilt_deg: 46.1
+        boundary: false
+        start: profile_5
+      free_19:
+        f: 1777.2
+        rms_px: 2.62
+        pitch_deg: 13.11
+        roll_deg: 1.27
+        desk_tilt_deg: 46.1
+        boundary: false
+        start: profile_5
+  IMG_7351.MOV:
+    group: old
+    distance_cm: 60
+    hand: left
+    drift:
+      n_use: 645
+      n_measured: 645
+      drift_median: 9.94797373205695
+      drift_p90: 15.851517387245472
+      rank_corr_with_distance_from_ref: -0.58737912705394
+      kept:
+        '5': 267
+        '10': 330
+    limit_5:
+      free_template:
+        f: 3072.0
+        rms_px: 0.48
+        boundary: true
+      ramp_11:
+        f: 1787.1
+        rms_px: 2.54
+        pitch_deg: 11.0
+        roll_deg: 0.0
+        desk_tilt_deg: 44.9
+        boundary: false
+        start: profile_4
+      free_5:
+        f: 3072.0
+        rms_px: 2.08
+        pitch_deg: 65.16
+        roll_deg: 58.02
+        desk_tilt_deg: 9.3
+        boundary: true
+        start: profile_4
+      free_12:
+        f: 3072.0
+        rms_px: 2.08
+        pitch_deg: -240.59
+        roll_deg: -63.06
+        desk_tilt_deg: 9.3
+        boundary: true
+        start: free_template
+      free_19:
+        f: 3072.0
+        rms_px: 2.08
+        pitch_deg: -240.59
+        roll_deg: -63.06
+        desk_tilt_deg: 9.3
+        boundary: true
+        start: free_template
+    limit_10:
+      free_template:
+        f: 2480.4
+        rms_px: 1.19
+        boundary: false
+      ramp_11:
+        f: 1921.0
+        rms_px: 2.92
+        pitch_deg: 11.0
+        roll_deg: 0.0
+        desk_tilt_deg: 44.9
+        boundary: false
+        start: profile_6
+      free_5:
+        f: 2191.1
+        rms_px: 2.89
+        pitch_deg: 12.52
+        roll_deg: -2.86
+        desk_tilt_deg: 45.8
+        boundary: false
+        start: profile_5
+      free_12:
+        f: 2191.1
+        rms_px: 2.89
+        pitch_deg: 12.52
+        roll_deg: -2.86
+        desk_tilt_deg: 45.7
+        boundary: false
+        start: profile_5
+      free_19:
+        f: 2191.1
+        rms_px: 2.89
+        pitch_deg: 12.52
+        roll_deg: -2.86
+        desk_tilt_deg: 45.8
+        boundary: false
+        start: profile_5
+  IMG_7352.MOV:
+    group: old
+    distance_cm: 60
+    hand: right
+    drift:
+      n_use: 707
+      n_measured: 707
+      drift_median: 7.599259872251086
+      drift_p90: 8.967416859813381
+      rank_corr_with_distance_from_ref: -0.32746756145409933
+      kept:
+        '5': 67
+        '10': 689
+    limit_5:
+      free_template:
+        f: 3072.0
+        rms_px: 0.27
+        boundary: true
+      ramp_11:
+        f: 1366.7
+        rms_px: 0.91
+        pitch_deg: 11.0
+        roll_deg: 0.0
+        desk_tilt_deg: 44.0
+        boundary: false
+        start: profile_4
+      free_5:
+        f: 1865.2
+        rms_px: 0.47
+        pitch_deg: 12.33
+        roll_deg: -11.54
+        desk_tilt_deg: 46.3
+        boundary: false
+        start: profile_5
+      free_12:
+        f: 1865.2
+        rms_px: 0.47
+        pitch_deg: 12.33
+        roll_deg: -11.54
+        desk_tilt_deg: 46.3
+        boundary: false
+        start: profile_5
+      free_19:
+        f: 1865.2
+        rms_px: 0.47
+        pitch_deg: 11.91
+        roll_deg: -11.97
+        desk_tilt_deg: 46.3
+        boundary: false
+        start: profile_5
+    limit_10:
+      free_template:
+        f: 1655.3
+        rms_px: 0.74
+        boundary: false
+      ramp_11:
+        f: 1576.4
+        rms_px: 3.29
+        pitch_deg: 11.0
+        roll_deg: 0.0
+        desk_tilt_deg: 44.9
+        boundary: false
+        start: free_template
+      free_5:
+        f: 1579.3
+        rms_px: 2.66
+        pitch_deg: 8.2
+        roll_deg: -6.36
+        desk_tilt_deg: 48.0
+        boundary: false
+        start: profile_6
+      free_12:
+        f: 1579.3
+        rms_px: 2.66
+        pitch_deg: 8.36
+        roll_deg: -6.14
+        desk_tilt_deg: 48.0
+        boundary: false
+        start: profile_6
+      free_19:
+        f: 1579.3
+        rms_px: 2.66
+        pitch_deg: 8.36
+        roll_deg: -6.14
+        desk_tilt_deg: 48.0
+        boundary: false
+        start: profile_0
+  IMG_7353.MOV:
+    group: old
+    distance_cm: 60
+    hand: left
+    drift:
+      n_use: 681
+      n_measured: 669
+      drift_median: 7.656600730633015
+      drift_p90: 16.714543669455036
+      rank_corr_with_distance_from_ref: -0.0991815311883428
+      kept:
+        '5': 129
+        '10': 490
+    limit_5:
+      free_template:
+        f: 2095.2
+        rms_px: 0.72
+        boundary: false
+      ramp_11:
+        f: 1104.5
+        rms_px: 2.83
+        pitch_deg: 11.0
+        roll_deg: 0.0
+        desk_tilt_deg: 45.5
+        boundary: false
+        start: profile_3
+      free_5:
+        f: 1302.5
+        rms_px: 2.78
+        pitch_deg: 3.78
+        roll_deg: -14.26
+        desk_tilt_deg: 53.9
+        boundary: false
+        start: profile_2
+      free_12:
+        f: 1302.5
+        rms_px: 2.78
+        pitch_deg: 3.78
+        roll_deg: -14.26
+        desk_tilt_deg: 53.9
+        boundary: false
+        start: profile_2
+      free_19:
+        f: 1302.5
+        rms_px: 2.78
+        pitch_deg: 3.65
+        roll_deg: -14.3
+        desk_tilt_deg: 53.9
+        boundary: false
+        start: profile_3
+    limit_10:
+      free_template:
+        f: 3072.0
+        rms_px: 0.84
+        boundary: true
+      ramp_11:
+        f: 1199.4
+        rms_px: 3.66
+        pitch_deg: 11.0
+        roll_deg: 0.0
+        desk_tilt_deg: 45.6
+        boundary: false
+        start: free_template
+      free_5:
+        f: 3072.0
+        rms_px: 3.5
+        pitch_deg: 25.75
+        roll_deg: -3.18
+        desk_tilt_deg: 39.4
+        boundary: true
+        start: profile_5
+      free_12:
+        f: 3072.0
+        rms_px: 3.5
+        pitch_deg: 25.76
+        roll_deg: -3.1
+        desk_tilt_deg: 39.4
+        boundary: true
+        start: profile_5
+      free_19:
+        f: 3072.0
+        rms_px: 3.5
+        pitch_deg: 25.74
+        roll_deg: -3.28
+        desk_tilt_deg: 39.4
+        boundary: true
+        start: profile_3
+  IMG_7354.MOV:
+    group: old
+    distance_cm: 75
+    hand: right
+    drift:
+      n_use: 624
+      n_measured: 624
+      drift_median: 8.974806109060726
+      drift_p90: 13.473804994785135
+      rank_corr_with_distance_from_ref: 0.10050371650821088
+      kept:
+        '5': 65
+        '10': 373
+    limit_5:
+      free_template:
+        f: 2757.9
+        rms_px: 0.09
+        boundary: false
+      ramp_11:
+        f: 930.2
+        rms_px: 0.74
+        pitch_deg: 11.0
+        roll_deg: 0.0
+        desk_tilt_deg: 42.0
+        boundary: false
+        start: free_template
+      free_5:
+        f: 2244.2
+        rms_px: 0.35
+        pitch_deg: 11.77
+        roll_deg: -11.34
+        desk_tilt_deg: 46.9
+        boundary: false
+        start: profile_1
+      free_12:
+        f: 2244.2
+        rms_px: 0.35
+        pitch_deg: 10.95
+        roll_deg: -12.13
+        desk_tilt_deg: 46.9
+        boundary: false
+        start: profile_7
+      free_19:
+        f: 2244.2
+        rms_px: 0.35
+        pitch_deg: 10.95
+        roll_deg: -12.13
+        desk_tilt_deg: 46.9
+        boundary: false
+        start: profile_7
+    limit_10:
+      free_template:
+        f: 3072.0
+        rms_px: 0.24
+        boundary: true
+      ramp_11:
+        f: 1023.1
+        rms_px: 1.4
+        pitch_deg: 11.0
+        roll_deg: 0.0
+        desk_tilt_deg: 41.6
+        boundary: false
+        start: profile_3
+      free_5:
+        f: 3072.0
+        rms_px: 0.61
+        pitch_deg: 12.73
+        roll_deg: -11.55
+        desk_tilt_deg: 47.1
+        boundary: true
+        start: profile_5
+      free_12:
+        f: 3072.0
+        rms_px: 0.61
+        pitch_deg: 12.77
+        roll_deg: -11.51
+        desk_tilt_deg: 47.1
+        boundary: true
+        start: profile_6
+      free_19:
+        f: 3072.0
+        rms_px: 0.61
+        pitch_deg: 12.73
+        roll_deg: -11.55
+        desk_tilt_deg: 47.1
+        boundary: true
+        start: profile_5
+  IMG_7355.MOV:
+    group: old
+    distance_cm: 75
+    hand: left
+    drift:
+      n_use: 609
+      n_measured: 609
+      drift_median: 7.957823174069134
+      drift_p90: 21.65007925215304
+      rank_corr_with_distance_from_ref: 0.07989311534914163
+      kept:
+        '5': 79
+        '10': 387
+    limit_5:
+      free_template:
+        f: 3072.0
+        rms_px: 0.81
+        boundary: true
+      ramp_11:
+        f: 3072.0
+        rms_px: 10.87
+        pitch_deg: 11.0
+        roll_deg: 0.0
+        desk_tilt_deg: 71.7
+        boundary: true
+        start: free_template
+      free_5:
+        f: 3072.0
+        rms_px: 3.19
+        pitch_deg: -20.66
+        roll_deg: 24.66
+        desk_tilt_deg: 49.6
+        boundary: true
+        start: profile_7
+      free_12:
+        f: 3072.0
+        rms_px: 3.19
+        pitch_deg: -20.66
+        roll_deg: 24.66
+        desk_tilt_deg: 49.6
+        boundary: true
+        start: profile_7
+      free_19:
+        f: 3072.0
+        rms_px: 3.19
+        pitch_deg: -20.4
+        roll_deg: 24.87
+        desk_tilt_deg: 49.6
+        boundary: true
+        start: free_template
+    limit_10:
+      free_template:
+        f: 3071.8
+        rms_px: 0.63
+        boundary: true
+      ramp_11:
+        f: 3072.0
+        rms_px: 13.08
+        pitch_deg: 11.0
+        roll_deg: 0.0
+        desk_tilt_deg: 64.5
+        boundary: true
+        start: free_template
+      free_5:
+        f: 1734.7
+        rms_px: 3.04
+        pitch_deg: -28.6
+        roll_deg: 30.53
+        desk_tilt_deg: 43.6
+        boundary: false
+        start: free_template
+      free_12:
+        f: 1734.7
+        rms_px: 3.04
+        pitch_deg: -28.32
+        roll_deg: 30.79
+        desk_tilt_deg: 43.6
+        boundary: false
+        start: free_template
+      free_19:
+        f: 1734.8
+        rms_px: 3.04
+        pitch_deg: -28.45
+        roll_deg: 30.66
+        desk_tilt_deg: 43.6
+        boundary: false
+        start: profile_5
+  IMG_7356.MOV:
+    group: old
+    distance_cm: 75
+    hand: right
+    drift:
+      n_use: 627
+      n_measured: 627
+      drift_median: 5.421242186406167
+      drift_p90: 10.99532843967612
+      rank_corr_with_distance_from_ref: -0.4637925006151132
+      kept:
+        '5': 294
+        '10': 518
+    limit_5:
+      free_template:
+        f: 3072.0
+        rms_px: 0.39
+        boundary: true
+      ramp_11:
+        f: 1847.3
+        rms_px: 1.16
+        pitch_deg: 11.0
+        roll_deg: 0.0
+        desk_tilt_deg: 44.0
+        boundary: false
+        start: profile_7
+      free_5:
+        f: 849.5
+        rms_px: 1.43
+        pitch_deg: 59.17
+        roll_deg: 6.45
+        desk_tilt_deg: 24.3
+        boundary: false
+        start: profile_0
+      free_12:
+        f: 849.5
+        rms_px: 1.43
+        pitch_deg: 59.17
+        roll_deg: 6.45
+        desk_tilt_deg: 24.3
+        boundary: false
+        start: profile_0
+      free_19:
+        f: 849.5
+        rms_px: 1.43
+        pitch_deg: 59.19
+        roll_deg: 6.05
+        desk_tilt_deg: 24.3
+        boundary: false
+        start: profile_1
+    limit_10:
+      free_template:
+        f: 3072.0
+        rms_px: 0.58
+        boundary: true
+      ramp_11:
+        f: 1606.1
+        rms_px: 2.98
+        pitch_deg: 11.0
+        roll_deg: 0.0
+        desk_tilt_deg: 42.5
+        boundary: false
+        start: profile_6
+      free_5:
+        f: 1853.7
+        rms_px: 2.43
+        pitch_deg: 8.17
+        roll_deg: -7.82
+        desk_tilt_deg: 46.5
+        boundary: false
+        start: free_template
+      free_12:
+        f: 672.0
+        rms_px: 4.76
+        pitch_deg: 49.39
+        roll_deg: -4.64
+        desk_tilt_deg: 23.6
+        boundary: true
+        start: profile_2
+      free_19:
+        f: 672.0
+        rms_px: 4.76
+        pitch_deg: 49.31
+        roll_deg: -5.61
+        desk_tilt_deg: 23.6
+        boundary: true
+        start: profile_0
+  IMG_7357.MOV:
+    group: old
+    distance_cm: 75
+    hand: left
+    drift:
+      n_use: 601
+      n_measured: 589
+      drift_median: 8.484376151780396
+      drift_p90: 14.05674269375343
+      rank_corr_with_distance_from_ref: -0.31097352065628414
+      kept:
+        '5': 169
+        '10': 396
+    limit_5:
+      free_template:
+        f: 2514.9
+        rms_px: 0.66
+        boundary: false
+      ramp_11:
+        f: 1766.2
+        rms_px: 2.48
+        pitch_deg: 11.0
+        roll_deg: 0.0
+        desk_tilt_deg: 44.2
+        boundary: false
+        start: profile_5
+      free_5:
+        f: 3072.0
+        rms_px: 2.96
+        pitch_deg: -27.81
+        roll_deg: 12.66
+        desk_tilt_deg: 45.7
+        boundary: true
+        start: profile_7
+      free_12:
+        f: 3072.0
+        rms_px: 2.96
+        pitch_deg: -27.81
+        roll_deg: 12.66
+        desk_tilt_deg: 45.7
+        boundary: true
+        start: profile_7
+      free_19:
+        f: 3072.0
+        rms_px: 2.96
+        pitch_deg: -27.81
+        roll_deg: 12.66
+        desk_tilt_deg: 45.7
+        boundary: true
+        start: profile_7
+    limit_10:
+      free_template:
+        f: 3072.0
+        rms_px: 1.05
+        boundary: true
+      ramp_11:
+        f: 2636.6
+        rms_px: 2.97
+        pitch_deg: 11.0
+        roll_deg: 0.0
+        desk_tilt_deg: 44.8
+        boundary: false
+        start: free_template
+      free_5:
+        f: 1779.2
+        rms_px: 2.74
+        pitch_deg: 5.22
+        roll_deg: -3.99
+        desk_tilt_deg: 47.5
+        boundary: false
+        start: profile_7
+      free_12:
+        f: 1779.2
+        rms_px: 2.74
+        pitch_deg: 5.22
+        roll_deg: -3.99
+        desk_tilt_deg: 47.5
+        boundary: false
+        start: profile_7
+      free_19:
+        f: 1779.2
+        rms_px: 2.74
+        pitch_deg: 5.22
+        roll_deg: -3.99
+        desk_tilt_deg: 47.5
+        boundary: false
+        start: free_template
+  IMG_7354 - 복사본.MOV:
+    group: self
+    distance_cm: 60
+    hand: right
+    drift:
+      n_use: 564
+      n_measured: 564
+      drift_median: 7.990339432309357
+      drift_p90: 16.335823832181077
+      rank_corr_with_distance_from_ref: -0.4604600592690596
+      kept:
+        '5': 244
+        '10': 421
+    limit_5:
+      free_template:
+        f: 3072.0
+        rms_px: 0.39
+        boundary: true
+      ramp_11:
+        f: 1482.2
+        rms_px: 1.09
+        pitch_deg: 11.0
+        roll_deg: 0.0
+        desk_tilt_deg: 57.0
+        boundary: false
+        start: profile_3
+      free_5:
+        f: 1414.8
+        rms_px: 2.09
+        pitch_deg: 61.31
+        roll_deg: -9.54
+        desk_tilt_deg: 44.6
+        boundary: false
+        start: profile_5
+      free_12:
+        f: 1623.5
+        rms_px: 1.02
+        pitch_deg: 12.11
+        roll_deg: -6.78
+        desk_tilt_deg: 59.3
+        boundary: false
+        start: profile_4
+      free_19:
+        f: 1414.8
+        rms_px: 2.09
+        pitch_deg: 61.31
+        roll_deg: -9.54
+        desk_tilt_deg: 44.6
+        boundary: false
+        start: profile_5
+    limit_10:
+      free_template:
+        f: 3072.0
+        rms_px: 0.73
+        boundary: true
+      ramp_11:
+        f: 1714.1
+        rms_px: 2.73
+        pitch_deg: 11.0
+        roll_deg: 0.0
+        desk_tilt_deg: 57.9
+        boundary: false
+        start: free_template
+      free_5:
+        f: 1668.0
+        rms_px: 6.17
+        pitch_deg: 44.61
+        roll_deg: 42.51
+        desk_tilt_deg: 33.7
+        boundary: false
+        start: profile_3
+      free_12:
+        f: 1667.8
+        rms_px: 6.17
+        pitch_deg: 44.65
+        roll_deg: 42.46
+        desk_tilt_deg: 33.7
+        boundary: false
+        start: profile_4
+      free_19:
+        f: 1668.0
+        rms_px: 6.17
+        pitch_deg: 44.47
+        roll_deg: 42.67
+        desk_tilt_deg: 33.7
+        boundary: false
+        start: profile_3
+  IMG_7355 - 복사본.MOV:
+    group: self
+    distance_cm: 60
+    hand: right
+    drift:
+      n_use: 498
+      n_measured: 498
+      drift_median: 4.825522734524778
+      drift_p90: 7.952321043704297
+      rank_corr_with_distance_from_ref: -0.5150679531713788
+      kept:
+        '5': 254
+        '10': 490
+    limit_5:
+      free_template:
+        f: 3072.0
+        rms_px: 0.38
+        boundary: true
+      ramp_11:
+        f: 1506.4
+        rms_px: 1.34
+        pitch_deg: 11.0
+        roll_deg: 0.0
+        desk_tilt_deg: 55.8
+        boundary: false
+        start: profile_5
+      free_5:
+        f: 2308.4
+        rms_px: 0.96
+        pitch_deg: 13.74
+        roll_deg: -9.33
+        desk_tilt_deg: 56.9
+        boundary: false
+        start: free_template
+      free_12:
+        f: 2308.4
+        rms_px: 0.96
+        pitch_deg: 13.74
+        roll_deg: -9.33
+        desk_tilt_deg: 56.9
+        boundary: false
+        start: free_template
+      free_19:
+        f: 2308.4
+        rms_px: 0.96
+        pitch_deg: 13.74
+        roll_deg: -9.33
+        desk_tilt_deg: 56.9
+        boundary: false
+        start: free_template
+    limit_10:
+      free_template:
+        f: 2537.2
+        rms_px: 0.63
+        boundary: false
+      ramp_11:
+        f: 1596.6
+        rms_px: 2.89
+        pitch_deg: 11.0
+        roll_deg: 0.0
+        desk_tilt_deg: 57.2
+        boundary: false
+        start: free_template
+      free_5:
+        f: 1557.7
+        rms_px: 2.41
+        pitch_deg: 9.37
+        roll_deg: -5.71
+        desk_tilt_deg: 60.1
+        boundary: false
+        start: profile_4
+      free_12:
+        f: 1557.7
+        rms_px: 2.41
+        pitch_deg: 9.37
+        roll_deg: -5.71
+        desk_tilt_deg: 60.1
+        boundary: false
+        start: profile_4
+      free_19:
+        f: 1557.7
+        rms_px: 2.41
+        pitch_deg: 9.46
+        roll_deg: -5.56
+        desk_tilt_deg: 60.1
+        boundary: false
+        start: free_template
+  IMG_7351 - 복사본.MOV:
+    group: teammate
+    distance_cm: 60
+    hand: right
+    drift:
+      n_use: 386
+      n_measured: 386
+      drift_median: 19.59574828648522
+      drift_p90: 23.112478338532874
+      rank_corr_with_distance_from_ref: 0.7453185044461103
+      kept:
+        '5': 34
+        '10': 113
+    limit_5:
+      skipped: 사용 프레임 34 < 60
+    limit_10:
+      free_template:
+        f: 1370.2
+        rms_px: 0.06
+        boundary: false
+      ramp_11:
+        f: 754.6
+        rms_px: 0.51
+        pitch_deg: 11.0
+        roll_deg: 0.0
+        desk_tilt_deg: 52.2
+        boundary: false
+        start: profile_2
+      free_5:
+        f: 672.0
+        rms_px: 0.34
+        pitch_deg: 26.8
+        roll_deg: -2.54
+        desk_tilt_deg: 43.1
+        boundary: true
+        start: profile_2
+      free_12:
+        f: 672.0
+        rms_px: 0.34
+        pitch_deg: 26.57
+        roll_deg: -4.4
+        desk_tilt_deg: 43.1
+        boundary: true
+        start: free_template
+      free_19:
+        f: 672.0
+        rms_px: 0.34
+        pitch_deg: 26.57
+        roll_deg: -4.4
+        desk_tilt_deg: 43.1
+        boundary: true
+        start: profile_1
+  IMG_7352 - 복사본.MOV:
+    group: teammate
+    distance_cm: 60
+    hand: right
+    drift:
+      n_use: 368
+      n_measured: 368
+      drift_median: 13.590467424992474
+      drift_p90: 18.440725444694394
+      rank_corr_with_distance_from_ref: 0.6113335221138019
+      kept:
+        '5': 68
+        '10': 130
+    limit_5:
+      free_template:
+        f: 1962.1
+        rms_px: 0.09
+        boundary: false
+      ramp_11:
+        f: 1185.7
+        rms_px: 0.58
+        pitch_deg: 11.0
+        roll_deg: 0.0
+        desk_tilt_deg: 52.3
+        boundary: false
+        start: profile_1
+      free_5:
+        f: 2043.3
+        rms_px: 0.36
+        pitch_deg: 26.99
+        roll_deg: -5.3
+        desk_tilt_deg: 42.4
+        boundary: false
+        start: profile_3
+      free_12:
+        f: 2043.2
+        rms_px: 0.36
+        pitch_deg: 27.02
+        roll_deg: -5.16
+        desk_tilt_deg: 42.4
+        boundary: false
+        start: profile_6
+      free_19:
+        f: 2043.3
+        rms_px: 0.36
+        pitch_deg: 26.96
+        roll_deg: -5.46
+        desk_tilt_deg: 42.4
+        boundary: false
+        start: profile_4
+    limit_10:
+      free_template:
+        f: 2627.7
+        rms_px: 0.11
+        boundary: false
+      ramp_11:
+        f: 1063.0
+        rms_px: 0.74
+        pitch_deg: 11.0
+        roll_deg: 0.0
+        desk_tilt_deg: 51.7
+        boundary: false
+        start: profile_1
+      free_5:
+        f: 2461.7
+        rms_px: 0.44
+        pitch_deg: 19.13
+        roll_deg: -4.74
+        desk_tilt_deg: 47.0
+        boundary: false
+        start: profile_5
+      free_12:
+        f: 2461.7
+        rms_px: 0.44
+        pitch_deg: 19.2
+        roll_deg: -4.44
+        desk_tilt_deg: 47.0
+        boundary: false
+        start: profile_1
+      free_19:
+        f: 2461.7
+        rms_px: 0.44
+        pitch_deg: 10.86
+        roll_deg: 196.52
+        desk_tilt_deg: 47.0
+        boundary: false
+        start: profile_1
