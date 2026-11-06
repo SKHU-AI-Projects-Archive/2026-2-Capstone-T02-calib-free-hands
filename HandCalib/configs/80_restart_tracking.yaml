@@ -1,0 +1,21 @@
+# 80: 56's chain restarted in windows (user 2026-11-06: "지금 팀원이 옆에 없어서 1번만 지금 확인해줘" - 1 = restart the tracking so its error cannot accumulate), record only, no verdict.
+# 78: the teammate's tracked-wrist error grows with the distance from the chain's reference frame (rank correlation 0.75 / 0.61; own videos -0.59 to +0.24) - an error accumulated along
+# 56's one chain. Here the video's detected span is cut into windows of 30 frames (1 s) and 60 frames (2 s); each window's anchor = the detected frame nearest its middle (hf.rt_windows),
+# its points = the anchor's mediapipe joints moved by kt_chain (56's settings, unchanged) forward and backward inside the window; 56's edge rule. 74b's estimator on these points (free_template
+# once, then ms2_job: 11 deg fixed and the ramp free from 5 / 12 / 19 deg, lowest cost), j16; one-chain values read from 74b's run, one-chain drift from 78's run. The wrist drift of 78
+# measured again, with its rank correlation against the distance from the window's anchor. Choices made by me before the run: the window lengths. All 16 videos (74's list).
+# Reference f only in summary.md. Fixed before the run.
+experiment:
+  name: 80_restart_tracking
+  seed: 42
+settings_config: configs/74b_multistart_rerun.yaml
+previous_run: runs/74b_multistart_rerun/20261105T044422Z
+run_78: runs/78_wrist_drift/20261106T042905Z
+joint_set: j16
+restart: {windows_frames: [30, 60]}
+code_80: {branch: exp/80-restart-tracking, base_commit: 8aa20b2, commit: b66ab07, modules: [HandCalib/handfocal_report.py, HandCalib/run.py]}
+workers: 64
+video_workers: 8
+output:
+  root: runs/80_restart_tracking
+  results_yaml: results/80_restart_tracking.yaml
