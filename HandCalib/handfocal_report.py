@@ -7076,6 +7076,21 @@ def dr_drift_frames(kp_t: np.ndarray, kp_d: np.ndarray, box_d: np.ndarray, use: 
     return out
 
 
+# ----------------------------------------------------------------------------------------------------
+# 80 (user 2026-11-06: "1번만 지금 확인해줘"): 78 found the teammate's tracked-wrist error growing with the distance from the chain's reference frame (rank correlation 0.75 / 0.61; own
+# videos -0.59 to +0.24): an error accumulated along 56's one chain. Here the chain restarts in windows, each from a detected frame of its own.
+# ----------------------------------------------------------------------------------------------------
+def rt_windows(a: int, b: int, present: np.ndarray, win: int) -> list:
+    """Windows [lo, hi] of win frames over a..b (the last one ends at b); each with its anchor = the detected frame nearest the window's middle (windows without a detected frame left out)."""
+    out = []
+    for lo in range(int(a), int(b) + 1, int(win)):
+        hi = min(lo + int(win) - 1, int(b))
+        det = np.flatnonzero(present[lo:hi + 1]) + lo
+        if len(det):
+            out.append((int(det[np.argmin(np.abs(det - (lo + hi) / 2))]), lo, hi))
+    return out
+
+
 def od_fix_lines(path=None) -> list:
     """Where the six corrections to the supervisor's code sit in handfocal_estimate.py (line numbers of the corrected spellings inside section 5)."""
     p = Path(path) if path else Path(__file__).resolve().parent / "handfocal_estimate.py"
