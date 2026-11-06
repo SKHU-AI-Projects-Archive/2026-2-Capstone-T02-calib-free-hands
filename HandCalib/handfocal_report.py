@@ -7004,6 +7004,78 @@ def kf_drift(kp_t: np.ndarray, kp_d: np.ndarray, box_d: np.ndarray, present: np.
     return {"n_frames": int(k.sum()), **{g: float(np.median(d[:, j])) for g, j in KF_GROUPS.items()}}
 
 
+# ----------------------------------------------------------------------------------------------------
+# 79 (user 2026-11-06: "너가 제안하는 확인 해봐"): 76's fixed fits were re-solved once from dk_init at 74b's f and many fell into wrong basins (cost 600-2000 against 74b's 10-20). Here the
+# fixed ramp is solved with dk_estimate_ms's starts (74b's way) keeping the winning solution, and pitch and roll are freed from it. dk_estimate_ms unchanged; its steps are repeated.
+# ----------------------------------------------------------------------------------------------------
+def dk_ms_then_free(pb, grid: np.ndarray, A: dict, ramp_deg: float, coarse_n: int = 8, max_frames: int = 120, n_final: int = 3) -> dict:
+    """dk_estimate_ms in ramp_fixed mode (same profile, warm sweeps and final starts), the lowest-cost final kept with its state; then pitch and roll freed from it (f free). trf only lowers
+    the cost, so the free cost is at most the fixed one. Returns {fixed, free} with CH_KEYS, the bound flag and the fixed fit's start."""
+    pr, ids = _restrict(pb, max_frames=max_frames)
+    if list(ids) != list(A["joint_ids"]):
+        raise ValueError("free_template result was computed on different joints")
+    jid = [int(j) for j in A["joint_ids"]]
+    T2 = np.asarray(A["template"], float)
+    g = grid[np.unique(np.linspace(0, len(grid) - 1, coarse_n).round().astype(int))] if len(grid) > coarse_n else grid
+    p0 = np.radians(float(ramp_deg))
+    fb = (grid[0], grid[-1])
+    prof = [dk_solve(pr, float(f), T2, jid, p0, 0.0, False, False, fb) for f in g]
+    for d, idx in ((-1, range(1, len(g))), (1, range(len(g) - 2, -1, -1))):
+        for i in idx:
+            s = prof[i + d]["state"]
+            x = dk_solve(pr, float(g[i]), T2, jid, s["pitch"], s["roll"], False, False, fb, init=dict(s, f=float(g[i])))
+            if x["cost"] < prof[i]["cost"]:
+                prof[i] = x
+    c = np.array([x["cost"] for x in prof])
+    starts = []
+    for k in np.argsort(c)[:n_final]:
+        k = int(k)
+        loc = 0 < k < len(g) - 1 and c[k] <= c[k - 1] and c[k] <= c[k + 1]
+        fs = float(np.exp(np.clip(_parabola(np.log(g), c, k), np.log(fb[0]), np.log(fb[1])))) if loc else float(g[k])
+        starts.append((f"profile_{k}", fs, prof[k]["state"]))
+    fa = float(np.clip(A["f"], fb[0], fb[1]))
+    k = int(np.argmin(np.abs(np.log(g) - np.log(fa))))
+    s = prof[k]["state"]
+    xa = dk_solve(pr, fa, T2, jid, s["pitch"], s["roll"], False, False, fb, init=dict(s, f=fa))
+    starts.append(("free_template", fa, xa["state"]))
+    finals = [(nm, dk_solve(pr, fs, T2, jid, s["pitch"], s["roll"], True, False, fb, init=dict(s, f=fs))) for nm, fs, s in starts]
+    nm, B = min(finals, key=lambda t: t[1]["cost"])
+    st = B.pop("state")
+    C = dk_solve(pr, float(B["f"]), T2, jid, st["pitch"], st["roll"], True, True, fb, init=st)
+    C.pop("state")
+    pick = lambda X: dict({k_: X[k_] for k_ in CH_KEYS}, boundary=bool(X["at_bound"]) or od_boundary(float(X["f"]), grid))      # noqa: E731
+    return {"fixed": dict(pick(B), start=nm), "free": pick(C)}
+
+
+def ch2_job(args) -> dict:
+    """Experiment 79, one (video, joint set, ramp): dk_ms_then_free from a free_template computed once. args = (kp, mask, frames, box, size_wh, ecfg, ids, A, ramp_deg)."""
+    kp, mask, frames, box, size_wh, ecfg, ids, A, ramp_deg = args
+    os.environ.setdefault("OMP_NUM_THREADS", "1")
+    cv2.setNumThreads(1)
+    grid = f_grid(ecfg, max(*size_wh))
+    t0 = time.time()
+    try:
+        pb = od_bridge(kp, mask, frames, box, size_wh, ecfg, ids)
+        out = dk_ms_then_free(pb, grid, A, ramp_deg)
+    except Exception as e:                                            # a failure is a result, not a crash of the run
+        return {"failed": f"{type(e).__name__}: {e}"}
+    out["elapsed_s"] = float(time.time() - t0)
+    return out
+
+
+# ----------------------------------------------------------------------------------------------------
+# 78 (user 2026-11-06): 77 found the tracked wrist (moved by 56's hand chain) far from the detected wrist in the teammate's videos (13.6 / 19.6 % of the hand box, own videos 3-10 %): the
+# hand does not move as one plane there (wrist bend or finger flexion; 2-D joints cannot tell which). Per-frame drift and the frames kept under a limit.
+# ----------------------------------------------------------------------------------------------------
+def dr_drift_frames(kp_t: np.ndarray, kp_d: np.ndarray, box_d: np.ndarray, use: np.ndarray, joint: int = 0) -> np.ndarray:
+    """Per frame distance between the tracked and the detected joint (% of the detected box's long side); NaN where the frame is not used or the joint is not detected."""
+    out = np.full(len(kp_t), np.nan)
+    k = use & np.isfinite(kp_t[:, joint]).all(1) & np.isfinite(kp_d[:, joint]).all(1) & np.isfinite(box_d).all(1)
+    if k.any():
+        out[k] = np.linalg.norm(kp_t[k, joint] - kp_d[k, joint], axis=1) / box_long(np.asarray(box_d, float)[k]) * 100.0
+    return out
+
+
 def od_fix_lines(path=None) -> list:
     """Where the six corrections to the supervisor's code sit in handfocal_estimate.py (line numbers of the corrected spellings inside section 5)."""
     p = Path(path) if path else Path(__file__).resolve().parent / "handfocal_estimate.py"
