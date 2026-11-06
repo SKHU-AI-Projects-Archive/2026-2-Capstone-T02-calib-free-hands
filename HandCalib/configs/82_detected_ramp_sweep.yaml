@@ -1,0 +1,18 @@
+# 82: the ramp sweep on detected joints (user 2026-11-06: "해봐라"), record only, no verdict.
+# 81 left every group low at 11 deg on the mediapipe joints (self about -25 %, teammate about -16 %); in 74b's runs f rises with the ramp, so the list runs past 74's 22.5 deg up to 30 deg.
+# Same points as 81 (sg_video_job's "detected" source, 56's rule for detected joints), free_template once, then ms2_job with the ramp fixed at each value of ramps_deg, j16. All 16 videos
+# (74's list). Summary: per ramp and group, per video the ramp where f meets the reference (linear interpolation of the error), and a ramp picked on one group (lowest median |error| on the
+# list) applied to the others. 81's 11 deg read from its run beside. Reference f only in summary.md. Fixed before the run.
+experiment:
+  name: 82_detected_ramp_sweep
+  seed: 42
+settings_config: configs/74b_multistart_rerun.yaml
+run_81: runs/81_detected_joints/20261106T055430Z
+joint_set: j16
+code_82: {branch: exp/82-detected-ramp-sweep, base_commit: f51bdbe, commit: b6d5ee1, modules: [HandCalib/run.py]}
+ramps_deg: [7, 9, 11, 13, 15, 17.5, 20, 22.5, 25, 27.5, 30]
+workers: 64
+video_workers: 8
+output:
+  root: runs/82_detected_ramp_sweep
+  results_yaml: results/82_detected_ramp_sweep.yaml

@@ -1,0 +1,13 @@
+# 65c: 65b's point video for the teammate's hand (user 2026-11-06: "팀원 손도 이전처럼 영상으로 뽑아줄 수 있어?"). Same format as 65b: blue = 56's tracked joints (one continuous KLT
+# chain, the points 74b's estimates used), orange = mediapipe joints; header with time, frame and pause state. The two teammate videos of 74's list (73's new-phone list), 56's rules
+# through 74b's config (not copied), 65's render settings, dm_video_job and pv_render unchanged. Videos written to the run folder (runs/ is not committed), metadata dropped by ffmpeg.
+experiment:
+  name: 65c_teammate_points_video
+  seed: 42
+settings_config: configs/74b_multistart_rerun.yaml
+video_config: configs/65_hand_deformation.yaml
+videos: ["IMG_7351 - 복사본.MOV", "IMG_7352 - 복사본.MOV"]
+code_65c: {branch: exp/82-detected-ramp-sweep, base_commit: f51bdbe, commit: b6d5ee1, modules: [HandCalib/run.py]}
+n_workers: 4
+output:
+  root: runs/65c_teammate_points_video
