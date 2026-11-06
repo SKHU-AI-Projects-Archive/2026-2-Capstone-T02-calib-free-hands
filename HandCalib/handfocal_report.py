@@ -7091,6 +7091,100 @@ def rt_windows(a: int, b: int, present: np.ndarray, win: int) -> list:
     return out
 
 
+# ----------------------------------------------------------------------------------------------------
+# 83 (user 2026-11-06: "개선 방법 다 해봐라"): in the teammate's videos 56's chain moves the wrist far from the detected wrist (77: 13.6 / 19.6 % of the hand box) while the j16 joints stay
+# as close as in the own videos (1.6-3.1 %); 77 also found 65-68 % of the chain's corners on the fingers. Two changes to the tracking: the corners split evenly between the hand body and
+# the fingers (bc_chain), and the wrist moved on its own by the corners around it (wt_track). kt_chain unchanged; its steps are repeated.
+# ----------------------------------------------------------------------------------------------------
+def bc_chain(pngs: list, kps: np.ndarray, boxes: np.ndarray, order: list, kcfg: dict, body_joints) -> dict:
+    """kt_chain with the corners split evenly between the hand body (hull of body_joints, dilated as the hand mask, inside the hand mask) and the rest of the hand mask (the fingers):
+    max_corners // 2 from each region (goodFeaturesToTrack per region, so its quality threshold is relative to that region), then kt_chain's LK, forward-backward check and USAC_MAGSAC
+    homography. Returns kt_chain's dict plus the per-step corner counts of both regions (n_body, n_finger)."""
+    lk = dict(winSize=(int(kcfg["win"]), int(kcfg["win"])), maxLevel=int(kcfg["levels"]), criteria=(cv2.TERM_CRITERIA_EPS | cv2.TERM_CRITERIA_COUNT, 30, 0.01))
+    bj = [int(j) for j in body_joints]
+    half = max(1, int(kcfg["max_corners"]) // 2)
+    Hc = {order[0]: np.eye(3)}
+    inls, n_body, n_finger = [], [], []
+    breaks, broken = 0, False
+    gray = lambda i: cv2.cvtColor(cv2.imread(pngs[i], cv2.IMREAD_COLOR), cv2.COLOR_BGR2GRAY)      # noqa: E731
+    g0 = gray(order[0])
+    for prev, cur in zip(order[:-1], order[1:]):
+        g1 = gray(cur)
+        if broken:
+            Hc[cur] = None
+            g0 = g1
+            continue
+        m = kt_hand_mask(kps[prev], boxes[prev], g0.shape, kcfg["dilate_frac"])
+        mb = cv2.bitwise_and(kt_hand_mask(kps[prev][bj], boxes[prev], g0.shape, kcfg["dilate_frac"]), m)
+        mf = cv2.bitwise_and(m, cv2.bitwise_not(mb))
+        cs = [cv2.goodFeaturesToTrack(g0, half, float(kcfg["quality"]), float(kcfg["min_distance"]), mask=mm, blockSize=int(kcfg["block"])) if mm.any() else None for mm in (mb, mf)]
+        n_body.append(0 if cs[0] is None else len(cs[0]))
+        n_finger.append(0 if cs[1] is None else len(cs[1]))
+        cs = [c.reshape(-1, 2) for c in cs if c is not None]
+        Hs = None
+        if cs and sum(len(c) for c in cs) >= 8:
+            p0 = np.concatenate(cs).astype(np.float32)
+            p1, s1, _ = cv2.calcOpticalFlowPyrLK(g0, g1, p0.reshape(-1, 1, 2), None, **lk)
+            pb, s2, _ = cv2.calcOpticalFlowPyrLK(g1, g0, p1, None, **lk)
+            ok = (s1.ravel() == 1) & (s2.ravel() == 1) & (np.linalg.norm(pb.reshape(-1, 2) - p0, axis=1) < float(kcfg["fb_px"]))
+            if ok.sum() >= int(kcfg["min_inliers"]):
+                Hs, inl = cv2.findHomography(p0[ok].astype(np.float64), p1.reshape(-1, 2)[ok].astype(np.float64), cv2.USAC_MAGSAC, float(kcfg["threshold_px"]))
+                if Hs is None or inl is None or int(inl.sum()) < int(kcfg["min_inliers"]):
+                    Hs = None
+                else:
+                    inls.append(int(inl.sum()))
+        if Hs is None:
+            breaks += 1
+            broken = True
+            Hc[cur] = None
+        else:
+            Hc[cur] = Hs @ Hc[prev]
+        g0 = g1
+    return {"H": Hc, "breaks": breaks, "inl": inls, "n_body": n_body, "n_finger": n_finger}
+
+
+def wt_track(pngs: list, boxes: np.ndarray, order: list, kcfg: dict, p0, radius_frac: float, min_inliers: int) -> dict:
+    """The wrist moved on its own: at each step the corners in a disk of radius_frac x the hand box's long side (boxes: carried detected boxes) around the current wrist - no hand mask, so
+    the forearm next to it counts - pyramidal LK with kt_chain's forward-backward check, a similarity (estimateAffinePartial2D, RANSAC at threshold_px) from them, applied to the wrist.
+    A step with fewer than min_inliers inliers breaks it (that frame and every later one None). p0: the wrist at order[0]. Returns {p: {frame: (2,) | None}, breaks, inl}."""
+    lk = dict(winSize=(int(kcfg["win"]), int(kcfg["win"])), maxLevel=int(kcfg["levels"]), criteria=(cv2.TERM_CRITERIA_EPS | cv2.TERM_CRITERIA_COUNT, 30, 0.01))
+    P = {order[0]: np.asarray(p0, float)}
+    inls, breaks, broken = [], 0, False
+    gray = lambda i: cv2.cvtColor(cv2.imread(pngs[i], cv2.IMREAD_COLOR), cv2.COLOR_BGR2GRAY)      # noqa: E731
+    g0 = gray(order[0])
+    for prev, cur in zip(order[:-1], order[1:]):
+        g1 = gray(cur)
+        if broken:
+            P[cur] = None
+            g0 = g1
+            continue
+        w = P[prev]
+        r = max(2, int(round(float(radius_frac) * float(box_long(np.asarray(boxes[prev], float)[None])[0]))))
+        m = np.zeros(g0.shape, np.uint8)
+        cv2.circle(m, (int(round(w[0])), int(round(w[1]))), r, 255, -1)
+        c = cv2.goodFeaturesToTrack(g0, int(kcfg["max_corners"]), float(kcfg["quality"]), float(kcfg["min_distance"]), mask=m, blockSize=int(kcfg["block"])) if m.any() else None
+        A = None
+        if c is not None and len(c) >= 3:
+            q0 = c.reshape(-1, 2).astype(np.float32)
+            q1, s1, _ = cv2.calcOpticalFlowPyrLK(g0, g1, q0.reshape(-1, 1, 2), None, **lk)
+            qb, s2, _ = cv2.calcOpticalFlowPyrLK(g1, g0, q1, None, **lk)
+            ok = (s1.ravel() == 1) & (s2.ravel() == 1) & (np.linalg.norm(qb.reshape(-1, 2) - q0, axis=1) < float(kcfg["fb_px"]))
+            if ok.sum() >= int(min_inliers):
+                A, inl = cv2.estimateAffinePartial2D(q0[ok], q1.reshape(-1, 2)[ok], method=cv2.RANSAC, ransacReprojThreshold=float(kcfg["threshold_px"]))
+                if A is None or inl is None or int(inl.sum()) < int(min_inliers):
+                    A = None
+                else:
+                    inls.append(int(inl.sum()))
+        if A is None:
+            breaks += 1
+            broken = True
+            P[cur] = None
+        else:
+            P[cur] = A[:, :2] @ w + A[:, 2]
+        g0 = g1
+    return {"p": P, "breaks": breaks, "inl": inls}
+
+
 def od_fix_lines(path=None) -> list:
     """Where the six corrections to the supervisor's code sit in handfocal_estimate.py (line numbers of the corrected spellings inside section 5)."""
     p = Path(path) if path else Path(__file__).resolve().parent / "handfocal_estimate.py"
