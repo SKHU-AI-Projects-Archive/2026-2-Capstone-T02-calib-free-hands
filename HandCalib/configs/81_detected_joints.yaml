@@ -1,0 +1,17 @@
+# 81: the control for 80 (user 2026-11-06: "근데 추적 다시 시작하기는 결국 검출기로 하는거랑 크게 다르지 않을것 같은데?"), record only, no verdict.
+# 80's restarted points are tied to the mediapipe joints once per window; to see whether its effect comes from the detector, 74b's estimator runs on the mediapipe joints themselves:
+# sg_video_job's "detected" source (hand detected, box off the image border - 56's rule for detected joints), free_template once, then ms2_job at 11 deg fixed and the ramp free from
+# 5 / 12 / 19 deg (lowest cost), j16. One chain read from 74b's run, restarted windows from 80's run. All 16 videos (74's list). Reference f only in summary.md. Fixed before the run.
+experiment:
+  name: 81_detected_joints
+  seed: 42
+settings_config: configs/74b_multistart_rerun.yaml
+previous_run: runs/74b_multistart_rerun/20261105T044422Z
+run_80: runs/80_restart_tracking/20261106T052032Z
+joint_set: j16
+code_81: {branch: exp/81-detected-joints, base_commit: 7755939, commit: 6e9a939, modules: [HandCalib/run.py]}
+workers: 64
+video_workers: 8
+output:
+  root: runs/81_detected_joints
+  results_yaml: results/81_detected_joints.yaml
