@@ -14771,7 +14771,114 @@ def rt_results_yaml(run_dir: Path, cfg: dict):
     p.write_text(yaml.safe_dump(hf.jsonable(out), allow_unicode=True, sort_keys=False))
     return p
 
-COMMANDS = {"protocol": protocol_main, "frame-filter": ff_main, "same-session": session_main, "overlay": overlay_main, "phase-segmentation": pseg_main, "guide-revision": grev_main, "f-response": fresp_main, "error-factors": ferr_main, "long-video-check": long_main, "generalization": gen_main, "main-camera-extension": ext_main, "wide-60cm": wide_main, "jointset-sets": jset_main, "verdict-calibration": cal_main, "printed-hand": pr_main, "hand-markers": mk_main, "markers-only": mo_main, "free-template": ft_main, "free-shape3d": s3_main, "free-shape3d-hand": h3_main, "free-shape3d-27": e3_main, "free-shape3d-new": e4_main, "mmpose-hand": mm_main, "mmpose-hand-46": mm2_main, "free-shape3d-new2": e5_main, "mmpose-hand-src": mm3_main, "free-shape3d-detectors": fs_main, "free-shape3d-hand-sets": h4_main, "free-shape3d-hand-sets-42track": h4b_main, "oblique-desk": od_main, "oblique-synthetic": sy_main, "oblique-fixed-template": fx_main, "oblique-desk-videos": om_main, "pause-stabilized": ps_main, "continuous-klt": kt_main, "continuous-klt-palm": kp_main, "klt-paper-dorsum": pp_main, "paper-parallax": hp_main, "segment-template": sg_main, "turn-synthetic": tr_main, "window-f": wd_main, "anycalib-videos": ac_main, "error-sources": ec_main, "hand-deformation": dm_main, "joint-combos": fc_main, "points-video": pv_main, "desk-motion": dk_main, "ramp-sensitivity": rs_main, "teammate-hands": tm_main, "finger-ramp": fr_main, "contact-points": ct_main, "wilor-ramp": wl_main, "ramp-identifiability": id_main, "new-phone-hands": nc_main, "multistart": ms_main, "multistart-rerun": ms2_main, "known-tilt": tl_main, "results-yaml-74b-75": ry_main, "free-from-fixed": ch_main, "klt-features": kf_main, "wrist-drift": dr_main, "free-from-multistart": cm_main, "restart-tracking": rt_main}
+
+# ----------------------------------------------------------------------------------------------------
+# 81 (user 2026-11-06: "추적 다시 시작하기는 결국 검출기로 하는거랑 크게 다르지 않을것 같은데?"): the control for 80 - 74b's estimator on the mediapipe joints themselves (56's frames
+# and edge rule for detected joints, sg_video_job's "detected" source). Settings read from 74b's config (74's through it), not copied.
+# ----------------------------------------------------------------------------------------------------
+DT_NOTE = ("실험 80(구간마다 추적 다시 시작)의 대조. 다시 시작한 점은 구간마다 검출 관절에 묶이므로, 그 효과가 검출기에서 오는 것인지 보려고 같은 74b 추정기를 MediaPipe 검출 관절 "
+           "그대로에 돌린다(free_template, 경사 11° 고정, 함께 추정 시작 5·12·19° 중 비용 최소). 프레임은 실험 56의 검출 관절 규칙(손이 검출되고 화면 가장자리에 닿지 않은 프레임). "
+           "사슬 하나는 74b, 다시 시작은 80에서 읽는다. 점 j16. 판정 없음.")
+
+
+def dt_main(argv=None):
+    ap = argparse.ArgumentParser()
+    ap.add_argument("--config", default=str(hf.PROJECT_ROOT / "configs/81_detected_joints.yaml"))
+    sub = ap.add_subparsers(dest="cmd")
+    ry = sub.add_parser("results-yaml")
+    ry.add_argument("--run", required=True)
+    ap.add_argument("--out", default=None)
+    ap.add_argument("--videos", type=int, default=None, help="dry run: last N videos, two estimates")
+    a = ap.parse_args(argv)
+    text = Path(a.config).read_text()
+    own = yaml.safe_load(text)
+    cfg, o74 = ck_cfg(own, ("experiment", "workers", "video_workers", "output", "previous_run", "run_80", "joint_set"))
+    cfg["joint_sets"] = {own["joint_set"]: cfg["joint_sets"][own["joint_set"]]}
+    prev = json.loads((hf.resolve(own["previous_run"]) / "results.json").read_text())["real"]
+    r80 = json.loads((hf.resolve(own["run_80"]) / "results.json").read_text())["real"]
+    if a.cmd == "results-yaml":
+        print(dt_results_yaml(hf.resolve(a.run), cfg))
+        return None
+    todo = [("ramp_11", "ramp_fixed", 11.0)] + [(f"free_{r:g}", "ramp_free", float(r)) for r in cfg["free_starts_deg"]]
+    if a.videos:
+        cfg["videos"] = cfg["videos"][-a.videos:]
+        todo = todo[:2]
+    run_root, log = x70_head(None, a.out, cfg, f"81 검출 관절 그대로: 영상 {len(cfg['videos'])}개")
+    t0 = time.time()
+    vid = x70_points(cfg, run_root, log)
+    log(f"  영상 처리: {time.time() - t0:.0f} s")
+    dv = {f: {"size": x["size"], "tracked": x["detected"]} for f, x in vid.items()}
+    fts = tl_templates(cfg, dv, log)
+    log(f"  free_template: {time.time() - t0:.0f} s")
+    js = next(iter(cfg["joint_sets"]))
+    res, jobs, keys = {}, [], []
+    for e in cfg["videos"]:
+        k = f"{e['file']}|{js}"
+        res[k] = {"n_use": int(dv[e["file"]]["tracked"]["use"].sum()), "free_template": tl_ft_entry(fts[k], cfg["pipeline"]["estimate"], dv[e["file"]]["size"])}
+        if "A" not in fts[k]:
+            continue
+        for mk, mode, r in todo:
+            jobs.append(tl_args(cfg, dv, e, js, fts[k]["A"]) + (mode, r))
+            keys.append((k, mk))
+    log(f"  추정 {len(jobs)}건")
+    import multiprocessing as mp
+    from concurrent.futures import ProcessPoolExecutor
+    with ProcessPoolExecutor(max_workers=int(cfg["workers"]), mp_context=mp.get_context("spawn")) as ex:
+        for i, ((k, mk), o) in enumerate(zip(keys, ex.map(hf.ms2_job, jobs, chunksize=1))):
+            res[k][mk] = o
+            if (i + 1) % 16 == 0 or i + 1 == len(jobs):
+                log(f"  진행 {i + 1} / {len(jobs)} ({time.time() - t0:.0f} s)")
+    (run_root / "results.json").write_text(json.dumps(hf.jsonable({"real": res}), ensure_ascii=False, indent=1))
+    try:
+        (run_root / "summary.md").write_text(dt_summary(res, prev, r80, cfg))
+    except Exception as ex_:                                          # the results are already saved; a summary failure is logged
+        log(f"  summary 실패: {type(ex_).__name__}: {ex_}")
+    x70_finish(run_root, {"real": res}, text, a.config, "code_81", own, t0, log)
+    return run_root, res
+
+
+def dt_summary(res: dict, prev: dict, r80: dict, cfg: dict) -> str:
+    fe = lambda x, e: ck_fe(x, e, cfg)      # noqa: E731
+    js = next(iter(cfg["joint_sets"]))
+    best_free = lambda d: min([d[k] for k in d if k.startswith("free_") and k != "free_template" and d[k] and d[k].get("cost") is not None], key=lambda x: x["cost"], default=None)      # noqa: E731
+    fr = lambda b, e: "-" if not b or "f" not in b else f"{fe(b, e)} ({b['pitch_deg']:.1f}°)"      # noqa: E731
+    vids = [e for e in cfg["videos"] if f"{e['file']}|{js}" in res]
+    srcs = [("사슬 하나 (74b)", lambda e: prev.get(f"{e['file']}|{js}") or {}), ("30프레임마다 (80)", lambda e: (r80.get(e["file"]) or {}).get("win_30") or {}),
+            ("60프레임마다 (80)", lambda e: (r80.get(e["file"]) or {}).get("win_60") or {}), ("검출 관절 (이번)", lambda e: res.get(f"{e['file']}|{js}") or {})]
+    L = ["# 실험 81 summary", "", f"**{DT_NOTE}**", "", f"- 기준 f: 기존 핸드폰 {float(cfg['ref_f']['value']):g} px, 새 핸드폰 " +
+         ", ".join(sorted({f'{x70_ref(e, cfg):g} px' for e in cfg["videos"] if e["person"] != "old"})) + ". 기준 f는 이 파일에만 적는다. * = f 탐색 범위 끝.", "",
+         "## 1. 묶음별 요약", "", "| 방식 | 점 | 묶음 | ±10% 안 | ±25% 안 | 오차 절댓값 중앙값 | 중앙값(부호) | 최소 ~ 최대 | 범위 끝 |", "|---|---|---|---|---|---|---|---|---|"]
+    for nm, get in (("free_template", lambda d: d.get("free_template")), ("경사 11°", lambda d: d.get("ramp_11")), ("함께 추정", best_free)):
+        for lab, src in srcs:
+            for gk in ("old", "self", "teammate"):
+                xs = [(get(src(e)) or {}, e) for e in vids if e["person"] == gk]
+                if xs:
+                    L.append(f"| {nm} | {lab} | {MS_GROUP[gk]} {len(xs)} | {x70_stats([ck_err(x, e, cfg) for x, e in xs])} | {sum(bool(x.get('boundary')) for x, _ in xs)} |")
+    L += ["", f"## 2. 영상별 f ({js})", "", "| 영상 | 묶음 | 손 | 방식 | " + " | ".join(lab for lab, _ in srcs) + " |", "|---|---|---|---|" + "---|" * len(srcs)]
+    for e in vids:
+        for nm, get, show in (("free_template", lambda d: d.get("free_template"), fe), ("경사 11°", lambda d: d.get("ramp_11"), fe), ("함께 추정 (경사)", best_free, fr)):
+            L.append(f"| {e['file']} | {MS_GROUP[e['person']]} | {e['hand']} | {nm} | " + " | ".join(show(get(src(e)), e) for _, src in srcs) + " |")
+    L += ["", "## 한계", "", "- 검출 관절은 프레임마다 따로 흔들리고 손이 검출되지 않은 프레임은 빠진다(사용 프레임 수는 results.json).", ""]
+    return "\n".join(L) + "\n"
+
+
+def dt_results_yaml(run_dir: Path, cfg: dict):
+    """Values only (no reference f or errors)."""
+    r = json.loads((run_dir / "results.json").read_text())["real"]
+    m = json.loads((run_dir / "metadata.json").read_text())
+    out = {"experiment": cfg["experiment"]["name"], "run": str(run_dir.resolve().relative_to(hf.PROJECT_ROOT)), "code_commit": m["git"]["commit"][:7],
+           "git_dirty_at_run": m["git"]["git_dirty"], "note": DT_NOTE, "free_starts_deg": cfg["free_starts_deg"], "videos": {}}
+    keys = ("f", "rms_px", "pitch_deg", "roll_deg", "desk_tilt_deg", "boundary", "start")
+    js = next(iter(cfg["joint_sets"]))
+    for e in cfg["videos"]:
+        d = r.get(f"{e['file']}|{js}") or {}
+        out["videos"][e["file"]] = {"group": e["person"], "distance_cm": e["distance_cm"], "hand": e["hand"], "n_use": d.get("n_use"),
+                                    "detected": {js: ry_tracked({k: v for k, v in d.items() if k != "n_use"}, keys)}}
+    p = hf.resolve(cfg["output"]["results_yaml"])
+    p.write_text(yaml.safe_dump(hf.jsonable(out), allow_unicode=True, sort_keys=False))
+    return p
+
+COMMANDS = {"protocol": protocol_main, "frame-filter": ff_main, "same-session": session_main, "overlay": overlay_main, "phase-segmentation": pseg_main, "guide-revision": grev_main, "f-response": fresp_main, "error-factors": ferr_main, "long-video-check": long_main, "generalization": gen_main, "main-camera-extension": ext_main, "wide-60cm": wide_main, "jointset-sets": jset_main, "verdict-calibration": cal_main, "printed-hand": pr_main, "hand-markers": mk_main, "markers-only": mo_main, "free-template": ft_main, "free-shape3d": s3_main, "free-shape3d-hand": h3_main, "free-shape3d-27": e3_main, "free-shape3d-new": e4_main, "mmpose-hand": mm_main, "mmpose-hand-46": mm2_main, "free-shape3d-new2": e5_main, "mmpose-hand-src": mm3_main, "free-shape3d-detectors": fs_main, "free-shape3d-hand-sets": h4_main, "free-shape3d-hand-sets-42track": h4b_main, "oblique-desk": od_main, "oblique-synthetic": sy_main, "oblique-fixed-template": fx_main, "oblique-desk-videos": om_main, "pause-stabilized": ps_main, "continuous-klt": kt_main, "continuous-klt-palm": kp_main, "klt-paper-dorsum": pp_main, "paper-parallax": hp_main, "segment-template": sg_main, "turn-synthetic": tr_main, "window-f": wd_main, "anycalib-videos": ac_main, "error-sources": ec_main, "hand-deformation": dm_main, "joint-combos": fc_main, "points-video": pv_main, "desk-motion": dk_main, "ramp-sensitivity": rs_main, "teammate-hands": tm_main, "finger-ramp": fr_main, "contact-points": ct_main, "wilor-ramp": wl_main, "ramp-identifiability": id_main, "new-phone-hands": nc_main, "multistart": ms_main, "multistart-rerun": ms2_main, "known-tilt": tl_main, "results-yaml-74b-75": ry_main, "free-from-fixed": ch_main, "klt-features": kf_main, "wrist-drift": dr_main, "free-from-multistart": cm_main, "restart-tracking": rt_main, "detected-joints": dt_main}
 
 
 def main(argv=None):
