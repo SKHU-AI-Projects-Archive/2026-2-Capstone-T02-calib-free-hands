@@ -194,3 +194,12 @@ All implementation items above are complete. Remaining user and Windows GUI acce
 - [x] Replace the Labels checkbox with an accessible On/Off switch; consolidate View, Space, Labels, and Pin in the palette-aware primary control strip and remove duplicate state text.
 - [x] Preserve camera/frame behavior and keep Grid, Axis, and numeric Labels visibility independent.
 - [ ] Native Windows visual acceptance and manual playback review remain pending; Phase C.1B camera behavior and detached-view redesign are deferred.
+
+## Phase C.1A Fix Pass: Workspace Placement and Space Center (2026-11-07)
+
+- [x] Correct Physical reference planes to the global coordinate planes: XY at raw Z=0, XZ at raw Y=0, and YZ at raw X=0. Plane sizes remain 2 m × 2 m; the Physical volume center remains (0, 0, 1 m).
+- [x] Keep Physical axes on the raw coordinate axes through (0, 0, 0); Hand planes and equal-length axes remain centered on the selected-GT cube.
+- [x] On Space changes, move only the orbit center to the active workspace center while preserving distance/orientation and synchronizing Overlay/Split cameras. Frame and playback state remain unchanged.
+- [x] Make the primary control container transparent; retain its compact View, Space, Labels, Pin order and palette-aware individual controls.
+- [x] Focused and full automated validation pass (100 viewer/comparison tests; 281 total tests), with import, compileall, and dependency checks passing.
+- [ ] Native Windows review of Physical plane placement, orbit center, and transparent toolbar remains pending. Camera preset semantics remain deferred to C.1B.

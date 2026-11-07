@@ -8,6 +8,7 @@ from pathlib import Path
 from time import monotonic
 
 import numpy as np
+import pyqtgraph as pg
 import pyqtgraph.opengl as gl
 from PySide6.QtCore import QEvent, QObject, QPoint, Qt, QTimer, QSignalBlocker, QRectF, QSize, QVariantAnimation
 from PySide6.QtGui import QAction, QActionGroup, QImage, QWindow, QIcon, QPainter, QPainterPath, QPen, QPixmap, QPalette, QColor
@@ -798,7 +799,7 @@ class ComparisonViewer(QWidget):
 
         self.primary_controls = QFrame()
         self.primary_controls.setFrameShape(QFrame.Shape.NoFrame)
-        self.primary_controls.setAutoFillBackground(True)
+        self.primary_controls.setAutoFillBackground(False)
         self.primary_controls.setSizePolicy(QSizePolicy.Policy.Fixed, QSizePolicy.Policy.Preferred)
         primary_layout = QHBoxLayout(self.primary_controls)
         primary_layout.setContentsMargins(5, 3, 5, 3)
@@ -1417,10 +1418,24 @@ class ComparisonViewer(QWidget):
         views.extend(view for _window, _source, detached in self._detached_windows for view in detached)
         return views
 
-    def _apply_workspace(self):
+    def _apply_workspace(self, recenter_camera=False):
         bounds = self._hand_space_for(self._hand_view_source_id()) if self.space_mode == "hand" else None
         for view in self._workspace_views():
             view.set_workspace(self.space_mode, bounds)
+        if not recenter_camera:
+            return
+        center = self.overlay_view.workspace.display_center
+        source = self.overlay_view if self.mode == "overlay" else self.split_views[0]
+        params = source.cameraParams()
+        params["center"] = pg.Vector(*center)
+        source.setCameraParams(**params)
+        self._sync_camera(source)
+        for _window, _detached_source, detached_views in self._detached_windows:
+            if detached_views:
+                detached_params = detached_views[0].cameraParams()
+                detached_params["center"] = pg.Vector(*center)
+                detached_views[0].setCameraParams(**detached_params)
+                self._sync_detached(detached_views, detached_views[0])
 
     def _set_space_mode_from_switch(self, hand_enabled):
         self.set_space_mode("hand" if hand_enabled else "physical")
@@ -1432,7 +1447,7 @@ class ComparisonViewer(QWidget):
         self.space_mode_switch.setChecked(mode == "hand")
         label = "Hand" if mode == "hand" else "Physical"
         self.space_mode_switch.setToolTip(f"Space: {label}")
-        self._apply_workspace()
+        self._apply_workspace(recenter_camera=True)
 
     def _set_scale_labels(self, visible):
         self.labels_switch.setToolTip(f"Scale labels: {'On' if visible else 'Off'}")

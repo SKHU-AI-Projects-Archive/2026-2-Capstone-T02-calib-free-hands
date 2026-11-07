@@ -323,7 +323,7 @@ def test_hand_view_follows_selected_gt_without_jumping_and_metric_overview_is_re
     viewer.close()
 
 
-def test_physical_and_hand_spaces_share_gt_bounds_without_camera_or_frame_jumps(tmp_path, qapp):
+def test_physical_and_hand_spaces_update_orbit_center_only_and_preserve_frame_playback(tmp_path, qapp):
     from calibfreehands.visualization.comparison import ComparisonViewer
     from calibfreehands.visualization.viewer import hand_space_bounds
 
@@ -337,8 +337,12 @@ def test_physical_and_hand_spaces_share_gt_bounds_without_camera_or_frame_jumps(
                    loaded.result.focal_px.copy(), loaded.result.detected.copy())
                   for loaded in viewer.loaded_results]
     viewer.slider.setValue(1)
+    viewer.overlay_view.setCameraPosition(pos=(0.25, -0.75, 1.2), distance=4.5,
+                                          azimuth=24.0, elevation=10.0)
+    viewer._sync_camera(viewer.overlay_view)
     before_camera = viewer.overlay_view.cameraParams()
     before_frame = viewer.slider.value()
+    viewer.timer.start()
 
     viewer.space_mode_switch.setChecked(True)
 
@@ -346,10 +350,14 @@ def test_physical_and_hand_spaces_share_gt_bounds_without_camera_or_frame_jumps(
     assert viewer.space_mode_switch.toolTip() == "Space: Hand"
     assert not hasattr(viewer, "space_mode_value")
     assert viewer.slider.value() == before_frame
-    assert viewer.overlay_view.cameraParams() == before_camera
+    hand_center_display = viewer.overlay_view.workspace.display_center
     for view in [viewer.overlay_view, *viewer.split_views]:
         np.testing.assert_allclose(view.workspace_bounds_m, expected_gt_bounds)
-        assert view.cameraParams() == before_camera
+        np.testing.assert_allclose(tuple(view.cameraParams()["center"]), hand_center_display)
+        assert view.cameraParams()["distance"] == pytest.approx(before_camera["distance"])
+        assert view.cameraParams()["azimuth"] == pytest.approx(before_camera["azimuth"])
+        assert view.cameraParams()["elevation"] == pytest.approx(before_camera["elevation"])
+    assert viewer.timer.isActive()
     assert np.max(np.ptp(viewer.overlay_view.workspace_bounds_m, axis=1)) < 1.0
 
     viewer.labels_switch.setChecked(False)
@@ -358,13 +366,18 @@ def test_physical_and_hand_spaces_share_gt_bounds_without_camera_or_frame_jumps(
     assert all(grid.visible() for grid in viewer.overlay_view.grids)
     assert viewer.overlay_view.axis.visible()
     assert viewer.slider.value() == before_frame
-    assert viewer.overlay_view.cameraParams() == before_camera
+    np.testing.assert_allclose(tuple(viewer.overlay_view.cameraParams()["center"]), hand_center_display)
+    assert viewer.timer.isActive()
     viewer.labels_switch.setChecked(True)
     assert all(label.visible() for label in viewer.overlay_view.numeric_labels)
 
+    hand_camera = viewer.overlay_view.cameraParams()
     viewer.reference_selector.setCurrentIndex(viewer.reference_selector.findData("cfg-0"))
     changed_camera = viewer.overlay_view.cameraParams()
-    assert changed_camera == before_camera
+    assert tuple(changed_camera["center"]) == pytest.approx(tuple(hand_camera["center"]))
+    assert changed_camera["distance"] == pytest.approx(hand_camera["distance"])
+    assert changed_camera["azimuth"] == pytest.approx(hand_camera["azimuth"])
+    assert changed_camera["elevation"] == pytest.approx(hand_camera["elevation"])
     np.testing.assert_allclose(viewer.overlay_view.workspace_bounds_m,
                                hand_space_bounds(viewer.loaded_results[0].result.keypoints_3d,
                                                  viewer.loaded_results[0].result.detected))
@@ -372,11 +385,31 @@ def test_physical_and_hand_spaces_share_gt_bounds_without_camera_or_frame_jumps(
     assert viewer.space_mode == "hand"
     for view in viewer.split_views:
         np.testing.assert_allclose(view.workspace_bounds_m, viewer.overlay_view.workspace_bounds_m)
-    viewer.set_mode("overlay")
+    viewer.set_mode("split")
     viewer.space_mode_switch.setChecked(False)
     assert viewer.space_mode == "physical"
     np.testing.assert_allclose(viewer.overlay_view.workspace_bounds_m, ((-1, 1), (-1, 1), (0, 2)))
-    assert viewer.overlay_view.cameraParams() == before_camera
+    physical_center_display = (0.0, -1.0, 0.0)
+    for view in [viewer.overlay_view, *viewer.split_views]:
+        np.testing.assert_allclose(tuple(view.cameraParams()["center"]), physical_center_display)
+        assert view.cameraParams()["distance"] == pytest.approx(before_camera["distance"])
+        assert view.cameraParams()["azimuth"] == pytest.approx(before_camera["azimuth"])
+        assert view.cameraParams()["elevation"] == pytest.approx(before_camera["elevation"])
+    assert viewer.slider.value() == before_frame
+    assert viewer.timer.isActive()
+    viewer.timer.stop()
+    for target_mode, target_center in (
+            ("hand", hand_center_display), ("physical", physical_center_display),
+            ("hand", hand_center_display)):
+        viewer.set_space_mode(target_mode)
+        if target_mode == "hand":
+            target_center = viewer.overlay_view.workspace.display_center
+        for view in [viewer.overlay_view, *viewer.split_views]:
+            np.testing.assert_allclose(tuple(view.cameraParams()["center"]), target_center)
+            assert view.cameraParams()["distance"] == pytest.approx(before_camera["distance"])
+            assert view.cameraParams()["azimuth"] == pytest.approx(before_camera["azimuth"])
+            assert view.cameraParams()["elevation"] == pytest.approx(before_camera["elevation"])
+        assert viewer.slider.value() == before_frame
     for loaded, before in zip(viewer.loaded_results, raw_before):
         np.testing.assert_array_equal(loaded.result.keypoints_3d, before[0])
         if before[1] is not None:
@@ -1566,7 +1599,7 @@ def test_mode_switch_has_compact_neutral_track_and_single_view_label(tmp_path, q
         assert viewer.primary_controls.palette().color(QPalette.ColorRole.Window) == background
         assert all(label.palette().color(QPalette.ColorRole.WindowText) == foreground
                    for label in (viewer.mode_label, viewer.space_label, viewer.labels_label))
-        assert viewer.primary_controls.autoFillBackground()
+        assert not viewer.primary_controls.autoFillBackground()
         assert viewer.primary_controls.sizeHint().width() < 400
     viewer.set_space_mode("hand")
     assert viewer.space_mode_switch.toolTip() == "Space: Hand"

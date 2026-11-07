@@ -468,3 +468,11 @@ All entries below are pending implementation and validation. No acceptance item 
 - [x] Comparison tests validate the accessible Labels switch, palette-aware compact primary control strip, toolbar order, and unchanged frame/camera behavior; detached views inherit the Labels state.
 - [x] Viewer/comparison test modules: 100 passed. Full pytest suite: 281 passed.
 - [ ] Native Windows visual acceptance and manual playback review remain pending; no native visual claim is made from offscreen testing.
+
+## Phase C.1A Fix Pass: Workspace Placement and Space Center (2026-11-07)
+
+- [x] Update regression coverage to distinguish the Physical volume center (0, 0, 1 m) from the coordinate origin (0, 0, 0); verify Physical XY/XZ/YZ planes at their global coordinate planes and Physical axes through the origin.
+- [x] Verify Hand planes/axes remain centered on the selected-GT cube, while Physical↔Hand updates only the camera center and preserves distance, azimuth, elevation, current frame, and active playback timer across Overlay/Split.
+- [x] Verify the primary control container does not auto-fill an opaque background; switch and toolbar behavior remains covered.
+- [x] Focused viewer/comparison modules: 100 passed. Full pytest: 281 passed; app import, compileall, `pip check`, and `git diff --check` passed.
+- [ ] Native Windows visual review and playback check remain pending; previous native review identified incorrect Physical plane placement and is not counted as acceptance.

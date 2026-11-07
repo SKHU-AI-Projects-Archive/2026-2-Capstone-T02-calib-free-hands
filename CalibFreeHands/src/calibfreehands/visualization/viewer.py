@@ -460,42 +460,65 @@ class _GLResultView(gl.GLViewWidget):
 
         workspace = self.workspace
         side = workspace.side_length_m
-        display_center = workspace.display_center
+        raw_center = np.asarray(workspace.center_raw)
+        bounds = workspace.bounds_array
+        if workspace.space_mode == "physical":
+            plane_centers_raw = (
+                (raw_center[0], raw_center[1], bounds[2, 0]),
+                (raw_center[0], raw_center[1], raw_center[2]),
+                (raw_center[0], raw_center[1], raw_center[2]),
+            )
+            axis_center_raw = np.zeros(3, dtype=np.float64)
+            raw_segments = np.asarray((
+                ((bounds[0, 0], 0.0, 0.0), (bounds[0, 1], 0.0, 0.0)),
+                ((0.0, bounds[1, 1], 0.0), (0.0, bounds[1, 0], 0.0)),
+                ((0.0, 0.0, bounds[2, 0]), (0.0, 0.0, bounds[2, 1])),
+            ), dtype=np.float32)
+            axis_endpoints = (
+                (bounds[0, 1] + min(side * WORKSPACE_AXIS_LABEL_OFFSET_FRACTION,
+                                    self.workspace_major_spacing_m * 0.5), 0.0, 0.0),
+                (0.0, bounds[1, 0] - min(side * WORKSPACE_AXIS_LABEL_OFFSET_FRACTION,
+                                         self.workspace_major_spacing_m * 0.5), 0.0),
+                (0.0, 0.0, bounds[2, 1] + min(side * WORKSPACE_AXIS_LABEL_OFFSET_FRACTION,
+                                              self.workspace_major_spacing_m * 0.5)),
+            )
+        else:
+            plane_centers_raw = (workspace.center_raw,) * 3
+            axis_center_raw = raw_center
+            half_side = side / 2.0
+            raw_segments = np.asarray((
+                ((raw_center[0] - half_side, raw_center[1], raw_center[2]),
+                 (raw_center[0] + half_side, raw_center[1], raw_center[2])),
+                ((raw_center[0], raw_center[1] + half_side, raw_center[2]),
+                 (raw_center[0], raw_center[1] - half_side, raw_center[2])),
+                ((raw_center[0], raw_center[1], raw_center[2] - half_side),
+                 (raw_center[0], raw_center[1], raw_center[2] + half_side)),
+            ), dtype=np.float32)
+            axis_label_offset = min(side * WORKSPACE_AXIS_LABEL_OFFSET_FRACTION,
+                                    self.workspace_major_spacing_m * 0.5)
+            axis_endpoints = (
+                (raw_center[0] + half_side + axis_label_offset, raw_center[1], raw_center[2]),
+                (raw_center[0], raw_center[1] - half_side - axis_label_offset, raw_center[2]),
+                (raw_center[0], raw_center[1], raw_center[2] + half_side + axis_label_offset),
+            )
         grid_specs = (
             (90, 1, 0, 0),
             None,
             (90, 0, 1, 0),
         )
-        for grid, rotation in zip(self.grids, grid_specs):
+        for grid, rotation, plane_center_raw in zip(self.grids, grid_specs, plane_centers_raw):
             grid.resetTransform()
             grid.setSize(side, side, 1.0)
             grid.setSpacing(self.workspace_minor_spacing_m, self.workspace_minor_spacing_m, 1.0)
             if rotation:
                 grid.rotate(*rotation)
-            grid.translate(*display_center)
+            grid.translate(*_view_point_from_raw(plane_center_raw))
 
-        raw_center = np.asarray(workspace.center_raw)
-        half_side = side / 2.0
-        raw_segments = np.asarray((
-            ((raw_center[0] - half_side, raw_center[1], raw_center[2]),
-             (raw_center[0] + half_side, raw_center[1], raw_center[2])),
-            ((raw_center[0], raw_center[1] + half_side, raw_center[2]),
-             (raw_center[0], raw_center[1] - half_side, raw_center[2])),
-            ((raw_center[0], raw_center[1], raw_center[2] - half_side),
-             (raw_center[0], raw_center[1], raw_center[2] + half_side)),
-        ), dtype=np.float32)
         positions = (raw_segments @ RAW_TO_VIEW.T).reshape(-1, 3)
         colors = np.repeat(np.asarray(((1, 0.2, 0.2, 1), (0.2, 1, 0.2, 1),
                                        (0.3, 0.5, 1, 1)), dtype=np.float32), 2, axis=0)
         self.axis.setData(pos=np.ascontiguousarray(positions), color=colors, mode="lines")
 
-        axis_label_offset = min(side * WORKSPACE_AXIS_LABEL_OFFSET_FRACTION,
-                                self.workspace_major_spacing_m * 0.5)
-        axis_endpoints = (
-            (raw_center[0] + half_side + axis_label_offset, raw_center[1], raw_center[2]),
-            (raw_center[0], raw_center[1] - half_side - axis_label_offset, raw_center[2]),
-            (raw_center[0], raw_center[1], raw_center[2] + half_side + axis_label_offset),
-        )
         for label, endpoint in zip(self.axis_labels, axis_endpoints):
             label.setData(pos=_view_point_from_raw(endpoint), color=self.numeric_label_color,
                           font=QFont("Helvetica", 12))
@@ -509,7 +532,7 @@ class _GLResultView(gl.GLViewWidget):
             first = np.ceil((low - 1e-10) / step) * step
             last = np.floor((high + 1e-10) / step) * step
             for value in np.arange(first, last + step * 0.5, step):
-                raw_point = raw_center.copy()
+                raw_point = axis_center_raw.copy()
                 raw_point[axis] = value
                 if axis == 0:
                     raw_point[1] -= label_offset
