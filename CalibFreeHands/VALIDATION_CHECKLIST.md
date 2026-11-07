@@ -433,3 +433,14 @@ All entries below are pending implementation and validation. No acceptance item 
 - [x] Offscreen read-only smoke opened the existing three same-source `.cfh` results (Manual Focal 1655, 2500, and 15000 px), verified selected-GT Hand View and frame navigation stability, and restored Metric Overview/Hand View. No inference ran and no result files were modified.
 - [x] Viewer/comparison tests: 86 passed; full pytest: 260 passed; application import, compileall, `pip check`, and `git diff --check` passed.
 - [ ] Native Windows visual/menu interaction review remains pending because the Computer Use native pipe was unavailable; first-user inference rerun remains pending until the user selects a date.
+
+
+## Phase A Viewer Menu and HUD Cleanup (2026-11-07)
+
+- [x] Toolbar labels are `Error Types`, `Confidence Display`, `Annotations`, `HUD`, and `More`; metric IDs, availability, formulas, confidence options/source, and metric categories are unchanged.
+- [x] Annotation menu order is All joints, Hovered joint, Key joints, Worst 5, Off, separator, Label; the default remains Off. HUD menu order is HUD opacity, Size, Background.
+- [x] HUD is a checkable split button: its body performs actual panel hide/show and the arrow opens settings. Visibility stays synchronized across Overlay/Split; anchor, size, opacity, and background survive toggling.
+- [x] Removed the Auto-hide controls while playing setting; Pin is the only policy switch. Playback with Pin OFF can auto-hide after the existing delay, Pin ON restores/keeps controls visible, and stopping playback shows controls.
+- [x] More menu action is Playback Stats; existing source FPS, frame-update FPS, speed, skipped-frame display and toggle behavior remain.
+- [x] Focused comparison viewer tests: 68 passed; full pytest: 263 passed; app import, compileall, `pip check`, and `git diff --check` passed.
+- [ ] Native Windows visual smoke was unavailable: Computer Use reported that its native pipe could not connect.

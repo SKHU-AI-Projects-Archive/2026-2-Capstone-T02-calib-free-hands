@@ -437,9 +437,9 @@ def test_comparison_toolbar_wording_and_unavailable_metrics(tmp_path, qapp):
     assert viewer.results_menu_button.text() == "Visible (3/3)"
     assert viewer.results_menu_button.toolTip() == "Show or hide comparison results"
     assert viewer.reference_label.text() == "GT"
-    assert viewer.metric_menu_button.text() == "Differences"
-    assert viewer.metric_menu_button.toolTip() == "Differences from selected GT"
-    assert viewer.confidence_menu_button.text() == "Confidence"
+    assert viewer.metric_menu_button.text() == "Error Types"
+    assert viewer.metric_menu_button.toolTip() == "Select error types shown in the HUD"
+    assert viewer.confidence_menu_button.text() == "Confidence Display"
     assert viewer.configuration_colors[1] == pytest.approx((0x33 / 255, 0x33 / 255, 1.0))
     assert not viewer.confidence_opacity_checkbox.isChecked()
     assert not viewer.confidence_numeric_checkbox.isChecked()
@@ -464,6 +464,112 @@ def test_gt_default_prefers_unique_checkerboard_and_metric_menu_rebuilds(tmp_pat
     viewer.reference_selector.setCurrentIndex(1)
     assert "mpvpe" not in viewer.metric_checks
     assert "mpvpe" not in viewer.selected_metric_ids
+    viewer.close()
+
+
+def test_phase_a_viewer_menu_wording_order_and_hud_visibility(tmp_path, qapp):
+    from PySide6.QtWidgets import QLabel, QToolButton, QWidgetAction
+    from calibfreehands.visualization.comparison import ComparisonViewer
+
+    viewer = ComparisonViewer(_session(tmp_path, 2, mesh=True))
+    assert viewer.metric_menu_button.text() == "Error Types"
+    assert viewer.confidence_menu_button.text() == "Confidence Display"
+    toolbar_labels = [item.text() for index in range(viewer.toolbar.count())
+                      if isinstance(item := viewer.toolbar.itemAt(index).widget(), QToolButton)
+                      and item.text() in {"Error Types", "Confidence Display", "Annotations", "HUD", "More"}]
+    assert toolbar_labels == ["Error Types", "Confidence Display", "Annotations", "HUD", "More"]
+    assert [action.text() for action in viewer.annotation_menu.actions()] == [
+        "All joints", "Hovered joint", "Key joints", "Worst 5", "Off", "", "Label"
+    ]
+    assert viewer.annotation_actions["off"].isChecked()
+    hud_items = [action.defaultWidget().findChild(QLabel).text()
+                 if isinstance(action, QWidgetAction) else action.text()
+                 for action in viewer.hud_menu.actions()]
+    assert hud_items == ["HUD opacity", "Size", "Background"]
+
+    assert viewer.hud_button.isCheckable() and viewer.hud_button.isChecked()
+    assert viewer.hud_button.toolTip() == "Hide HUD"
+    viewer._set_hud(anchor="bottom-right", scale="large", opacity=0.6)
+    viewer._set_hud_background("subtle")
+    viewer.hud_button.setChecked(False)
+    assert all(panel.isHidden() for panel in (viewer.overlay_panel, *viewer.split_panels))
+    assert viewer.hud_button.toolTip() == "Show HUD"
+    viewer.set_mode("split")
+    assert all(panel.isHidden() for panel in (viewer.overlay_panel, *viewer.split_panels))
+    viewer.hud_button.setChecked(True)
+    assert all(not panel.isHidden() for panel in (viewer.overlay_panel, *viewer.split_panels))
+    viewer.set_mode("overlay")
+    assert not viewer.overlay_panel.isHidden()
+    assert viewer.overlay_panel.anchor == "bottom-right"
+    assert viewer.overlay_panel.scale == "large"
+    assert viewer.overlay_panel.opacity == pytest.approx(0.6)
+    assert viewer.overlay_panel.background == "subtle"
+
+    labels = [action.text() for action in viewer.more_menu.actions()]
+    assert "Playback Stats" in labels
+    assert "Performance stats" not in labels
+    assert "Auto-hide controls while playing" not in labels
+    assert not hasattr(viewer, "auto_hide_action")
+    assert viewer.performance_stats_action.text() == "Playback Stats"
+    viewer.performance_stats_action.setChecked(True)
+    assert not viewer.performance_stats_label.isHidden()
+    assert all(value in viewer.performance_stats_label.text()
+               for value in ("Source", "Frame updates", "Skipped"))
+    assert chr(0xD7) in viewer.performance_stats_label.text()
+    viewer.performance_stats_action.setChecked(False)
+    assert viewer.performance_stats_label.isHidden()
+    assert viewer.performance_stats_label.text() == ""
+    viewer.close()
+
+
+def test_pin_is_the_only_auto_hide_setting_and_unpin_restores_timer(tmp_path, qapp):
+    from calibfreehands.visualization.comparison import ComparisonViewer
+
+    viewer = ComparisonViewer(_session(tmp_path, 2))
+    viewer.show()
+    qapp.processEvents()
+    viewer.timer.start(1000)
+    viewer._auto_hide_controls()
+    assert viewer.chrome.isHidden()
+    viewer.pin_controls_button.setChecked(True)
+    assert not viewer.chrome.isHidden()
+    viewer._auto_hide_controls()
+    assert not viewer.chrome.isHidden()
+    viewer.pin_controls_button.setChecked(False)
+    assert viewer.auto_hide_timer.isActive()
+    viewer._auto_hide_controls()
+    assert viewer.chrome.isHidden()
+    viewer.timer.stop()
+    viewer._play()
+    assert not viewer.chrome.isHidden()
+    viewer.close()
+
+
+def test_hud_split_button_body_toggles_visibility_and_arrow_opens_settings(tmp_path, qapp):
+    from PySide6.QtCore import QPoint, Qt
+    from PySide6.QtTest import QTest
+    from calibfreehands.visualization.comparison import ComparisonViewer
+
+    viewer = ComparisonViewer(_session(tmp_path, 2))
+    viewer.resize(1280, 800)
+    viewer.show()
+    qapp.processEvents()
+    button = viewer.hud_button
+    from PySide6.QtWidgets import QStyle, QStyleOptionToolButton
+    option = QStyleOptionToolButton()
+    button.initStyleOption(option)
+    arrow = button.style().subControlRect(QStyle.ComplexControl.CC_ToolButton, option,
+                                          QStyle.SubControl.SC_ToolButtonMenu, button)
+    assert not arrow.isEmpty()
+
+    body = QPoint(max(0, arrow.left() - 3), button.height() // 2)
+    QTest.mouseClick(button, Qt.MouseButton.LeftButton, pos=body)
+    assert not button.isChecked()
+    assert all(panel.isHidden() for panel in (viewer.overlay_panel, *viewer.split_panels))
+    QTest.mouseClick(button, Qt.MouseButton.LeftButton, pos=arrow.center())
+    qapp.processEvents()
+    assert viewer.hud_menu.isVisible()
+    assert not button.isChecked()
     viewer.close()
 
 
@@ -1006,7 +1112,7 @@ def test_comparison_dashboard_uses_viewport_overlays_and_compact_menus(tmp_path,
     assert viewer.split_views[1].minimumHeight() >= 240
     assert viewer.mode_switch.isCheckable()
     assert viewer.results_menu_button.text().startswith("Visible")
-    assert viewer.confidence_menu_button.text() == "Confidence"
+    assert viewer.confidence_menu_button.text() == "Confidence Display"
     assert len(viewer.visibility_checks) == 5
     assert all(check.parentWidget() is not viewer for check in viewer.visibility_checks)
     for button in viewer.view_buttons + viewer.playback_buttons:
@@ -1056,7 +1162,7 @@ def test_presentation_hud_is_viewport_child_and_reorder_preserves_result_data(tm
 def test_presentation_controls_keep_detection_and_mesh_opacity_distinct(tmp_path, qapp):
     from calibfreehands.visualization.comparison import ComparisonViewer
     viewer = ComparisonViewer(_session(tmp_path, 2, mesh=True))
-    assert viewer.confidence_menu_button.text() == "Confidence"
+    assert viewer.confidence_menu_button.text() == "Confidence Display"
     assert viewer.confidence_opacity_checkbox.text() == "Use as opacity"
     assert viewer.confidence_numeric_checkbox.text() == "Numeric value"
     assert viewer.mesh_opacity_label.text() == "Mesh opacity"
@@ -1649,22 +1755,27 @@ def test_hover_menu_becomes_latched_by_click_and_closes_on_action(tmp_path, qapp
 def test_clicked_menu_stays_latched_until_second_toggle_or_escape(tmp_path, qapp):
     from PySide6.QtCore import QPoint, Qt
     from PySide6.QtTest import QTest
+    from PySide6.QtWidgets import QStyle, QStyleOptionToolButton
     from calibfreehands.visualization.comparison import ComparisonViewer
 
     viewer = ComparisonViewer(_session(tmp_path, 2))
     viewer.resize(1280, 800); viewer.show(); qapp.processEvents()
     button = viewer.hud_button
-    QTest.mouseClick(button, Qt.MouseButton.LeftButton); qapp.processEvents()
+    option = QStyleOptionToolButton(); button.initStyleOption(option)
+    arrow = button.style().subControlRect(QStyle.ComplexControl.CC_ToolButton, option,
+                                          QStyle.SubControl.SC_ToolButtonMenu, button)
+    arrow_position = arrow.center()
+    QTest.mouseClick(button, Qt.MouseButton.LeftButton, pos=arrow_position); qapp.processEvents()
     assert viewer.hud_menu.isVisible() and viewer._hover_menu_latched
     QTest.mouseMove(viewer.views, QPoint(40, 40)); qapp.processEvents()
     assert viewer.hud_menu.isVisible()
-    QTest.mouseClick(button, Qt.MouseButton.LeftButton); qapp.processEvents()
+    QTest.mouseClick(button, Qt.MouseButton.LeftButton, pos=arrow_position); qapp.processEvents()
     assert not viewer.hud_menu.isVisible()
-    QTest.mouseClick(button, Qt.MouseButton.LeftButton); qapp.processEvents()
+    QTest.mouseClick(button, Qt.MouseButton.LeftButton, pos=arrow_position); qapp.processEvents()
     assert viewer.hud_menu.isVisible()
     QTest.keyClick(viewer.hud_menu, Qt.Key.Key_Escape); qapp.processEvents()
     assert not viewer.hud_menu.isVisible()
-    QTest.mouseClick(button, Qt.MouseButton.LeftButton); qapp.processEvents()
+    QTest.mouseClick(button, Qt.MouseButton.LeftButton, pos=arrow_position); qapp.processEvents()
     assert viewer.hud_menu.isVisible()
     QTest.mouseClick(viewer.playback_buttons[-1], Qt.MouseButton.LeftButton); qapp.processEvents()
     assert not viewer.hud_menu.isVisible() and not viewer._hover_menu_latched
@@ -1723,7 +1834,7 @@ def test_compact_presentation_explains_disabled_options_and_hud_background_defau
     assert viewer.error_vectors_button.text() == "Error vectors: Off"
     assert viewer.overlay_panel.background == "none"
     assert "transparent" in viewer.overlay_panel.card.styleSheet()
-    assert viewer.metric_menu_button.text() == "Differences"
+    assert viewer.metric_menu_button.text() == "Error Types"
     assert viewer.confidence_menu_button.toolTip().startswith("YOLO hand detector")
     viewer.close()
 

@@ -13,7 +13,7 @@ from PySide6.QtCore import QEvent, QObject, QPoint, Qt, QTimer, QSignalBlocker, 
 from PySide6.QtGui import QAction, QActionGroup, QImage, QWindow, QIcon, QPainter, QPainterPath, QPen, QPixmap, QPalette, QColor
 from PySide6.QtWidgets import (
     QApplication, QAbstractButton, QCheckBox, QColorDialog, QComboBox, QDialog, QFileDialog, QGridLayout,
-    QHBoxLayout, QLabel, QMainWindow, QMenu, QPushButton, QScrollArea, QSizePolicy,
+    QHBoxLayout, QLabel, QMainWindow, QMenu, QPushButton, QScrollArea, QSizePolicy, QStyle, QStyleOptionToolButton,
     QSlider, QSplitter, QStackedWidget, QTableWidget, QTableWidgetItem, QToolButton,
     QVBoxLayout, QWidget, QWidgetAction,
 )
@@ -826,7 +826,7 @@ class ComparisonViewer(QWidget):
         self.confidence_menu_button = QToolButton()
         self.confidence_menu_button.setPopupMode(QToolButton.ToolButtonPopupMode.InstantPopup)
         self.confidence_menu_button.setMenu(self.confidence_menu)
-        self.confidence_menu_button.setText("Confidence")
+        self.confidence_menu_button.setText("Confidence Display")
         confidence_description = "YOLO hand detector bounding-box confidence; not joint or reconstruction confidence."
         self.confidence_menu_button.setToolTip(confidence_description)
         self.confidence_menu_button.setAccessibleName("Hand Detection Confidence")
@@ -866,8 +866,8 @@ class ComparisonViewer(QWidget):
         self.annotation_menu = QMenu(self)
         self.annotation_group = QActionGroup(self); self.annotation_group.setExclusive(True)
         self.annotation_actions = {}
-        for text, mode in (("Off", "off"), ("Hovered joint", "hovered"),
-                           ("Key joints", "key_joints"), ("Worst 5", "worst5"), ("All joints", "all")):
+        for text, mode in (("All joints", "all"), ("Hovered joint", "hovered"),
+                           ("Key joints", "key_joints"), ("Worst 5", "worst5"), ("Off", "off")):
             action = QAction(text, self); action.setCheckable(True); action.setChecked(mode == "off")
             action.triggered.connect(lambda checked, value=mode: self.set_annotation_mode(value) if checked else None)
             self.annotation_group.addAction(action); self.annotation_menu.addAction(action)
@@ -875,6 +875,7 @@ class ComparisonViewer(QWidget):
         self.annotation_button = QToolButton(); self.annotation_button.setText("Annotations")
         self.annotation_button.setPopupMode(QToolButton.ToolButtonPopupMode.InstantPopup)
         self.annotation_button.setMenu(self.annotation_menu)
+        self.annotation_menu.addSeparator()
         self.annotation_content_menu = self.annotation_menu.addMenu("Label")
         self.annotation_content_group = QActionGroup(self); self.annotation_content_group.setExclusive(True)
         self.annotation_content_actions = {}
@@ -887,16 +888,16 @@ class ComparisonViewer(QWidget):
             self.annotation_content_actions["error"].setVisible(False)
             self.annotation_actions["worst5"].setVisible(False)
         self.hud_menu = QMenu(self)
-        size_menu = self.hud_menu.addMenu("Size")
-        for size in ("small", "medium", "large"):
-            action = QAction(size.title(), self); action.triggered.connect(lambda _=False, value=size: self._set_hud(scale=value))
-            size_menu.addAction(action)
         opacity_widget = QWidget(); opacity_layout = QHBoxLayout(opacity_widget); opacity_layout.setContentsMargins(8, 2, 8, 2)
         opacity_layout.addWidget(QLabel("HUD opacity")); self.hud_opacity_slider = QSlider(Qt.Orientation.Horizontal)
         self.hud_opacity_slider.setRange(20, 100); self.hud_opacity_slider.setValue(100); self.hud_opacity_slider.setFixedWidth(100)
         self.hud_opacity_slider.valueChanged.connect(lambda value: self._set_hud(opacity=value / 100))
         opacity_layout.addWidget(self.hud_opacity_slider); opacity_action = QWidgetAction(self.hud_menu)
         opacity_action.setDefaultWidget(opacity_widget); self.hud_menu.addAction(opacity_action)
+        size_menu = self.hud_menu.addMenu("Size")
+        for size in ("small", "medium", "large"):
+            action = QAction(size.title(), self); action.triggered.connect(lambda _=False, value=size: self._set_hud(scale=value))
+            size_menu.addAction(action)
         self.hud_background_menu = self.hud_menu.addMenu("Background")
         self.hud_background_group = QActionGroup(self); self.hud_background_group.setExclusive(True)
         self.hud_background_actions = {}
@@ -906,18 +907,21 @@ class ComparisonViewer(QWidget):
             self.hud_background_group.addAction(action); self.hud_background_menu.addAction(action)
             self.hud_background_actions[style] = action
         self.hud_button = QToolButton(); self.hud_button.setText("HUD")
-        self.hud_button.setPopupMode(QToolButton.ToolButtonPopupMode.InstantPopup); self.hud_button.setMenu(self.hud_menu)
+        self.hud_button.setCheckable(True); self.hud_button.setChecked(True)
+        self.hud_visible = True
+        self.hud_button.setAccessibleName("HUD visibility")
+        self.hud_button.setPopupMode(QToolButton.ToolButtonPopupMode.MenuButtonPopup); self.hud_button.setMenu(self.hud_menu)
+        self.hud_button.toggled.connect(self._set_hud_visible)
+        self._set_hud_visibility_label(True)
 
         self.detach_button = QPushButton("Detach")
         self.detach_button.setSizePolicy(QSizePolicy.Policy.Fixed, QSizePolicy.Policy.Fixed)
         self.detach_button.clicked.connect(self.detach_all)
         self.more_menu = QMenu(self)
         self.more_menu.addAction("Detach panels", self.detach_all)
-        self.performance_stats_action = self.more_menu.addAction("Performance stats")
+        self.performance_stats_action = self.more_menu.addAction("Playback Stats")
         self.performance_stats_action.setCheckable(True)
         self.performance_stats_action.toggled.connect(self._set_performance_stats)
-        self.auto_hide_action = self.more_menu.addAction("Auto-hide controls while playing")
-        self.auto_hide_action.setCheckable(True); self.auto_hide_action.setChecked(True)
         self.more_button = QToolButton(); self.more_button.setText("More")
         self.more_button.setPopupMode(QToolButton.ToolButtonPopupMode.InstantPopup); self.more_button.setMenu(self.more_menu)
         self.export_csv_button = QPushButton("CSV")
@@ -1123,7 +1127,7 @@ class ComparisonViewer(QWidget):
         layout.addWidget(self.chrome, 0, 0, Qt.AlignmentFlag.AlignBottom)
         self.auto_hide_timer = QTimer(self); self.auto_hide_timer.setSingleShot(True); self.auto_hide_timer.setInterval(2500)
         self.auto_hide_timer.timeout.connect(self._auto_hide_controls)
-        self.pin_controls_button.toggled.connect(lambda pinned: self.auto_hide_timer.stop() if pinned else self._show_controls())
+        self.pin_controls_button.toggled.connect(self._set_pin_state)
         self.pin_controls_button.toggled.connect(self._set_pin_label)
         self._sync_speed_controls()
         self._sync_play_icon()
@@ -1174,6 +1178,17 @@ class ComparisonViewer(QWidget):
     def _set_hud_background(self, style):
         for hud in (self.overlay_panel, *self.split_panels): hud.set_background(style)
 
+    def _set_hud_visible(self, visible):
+        self.hud_visible = bool(visible)
+        for panel in (self.overlay_panel, *self.split_panels):
+            panel.setVisible(self.hud_visible)
+        self._set_hud_visibility_label(self.hud_visible)
+
+    def _set_hud_visibility_label(self, visible):
+        label = "Hide HUD" if visible else "Show HUD"
+        self.hud_button.setToolTip(label)
+        self.hud_button.setAccessibleDescription(label)
+
     def _select_error_candidate(self, candidate_id):
         if candidate_id == self.reference_id or candidate_id not in self.error_vector_actions:
             return
@@ -1192,7 +1207,15 @@ class ComparisonViewer(QWidget):
 
     def _show_controls(self):
         self.chrome.show()
-        if self.timer.isActive() and self.auto_hide_action.isChecked(): self.auto_hide_timer.start()
+        if self.timer.isActive() and not self.pin_controls_button.isChecked():
+            self.auto_hide_timer.start()
+
+    def _set_pin_state(self, pinned):
+        if pinned:
+            self.auto_hide_timer.stop()
+            self.chrome.show()
+        else:
+            self._show_controls()
 
     def _set_pin_label(self, pinned):
         self.pin_controls_button.setToolTip("Controls pinned" if pinned else "Keep controls visible")
@@ -1209,8 +1232,8 @@ class ComparisonViewer(QWidget):
             self._hover_menu_latched = False
 
     def _auto_hide_controls(self):
-        if (not self.timer.isActive() or not self.auto_hide_action.isChecked()
-                or self.pin_controls_button.isChecked() or self._panel_reorder_active): return
+        if (not self.timer.isActive() or self.pin_controls_button.isChecked()
+                or self._panel_reorder_active): return
         popup_open = any(menu.isVisible() for menu in self.findChildren(QMenu))
         combo_open = any(combo.view().isVisible() for combo in self.findChildren(QComboBox))
         modal = QApplication.activeModalWidget()
@@ -1283,14 +1306,11 @@ class ComparisonViewer(QWidget):
         self.results_menu_button.setToolTip("Show or hide comparison results")
 
     def _update_metrics_button(self):
-        self.metric_menu_button.setText("Differences")
-        self.metric_menu_button.setToolTip("Differences from selected GT")
+        self.metric_menu_button.setText("Error Types")
+        self.metric_menu_button.setToolTip("Select error types shown in the HUD")
 
     def _update_confidence_button(self):
-        active = sum(check.isChecked() for check in (self.confidence_opacity_checkbox,
-                                                       self.confidence_numeric_checkbox,
-                                                       self.confidence_bar_checkbox))
-        self.confidence_menu_button.setText("Confidence")
+        self.confidence_menu_button.setText("Confidence Display")
 
     def _configuration_index(self, configuration_id):
         return next(index for index, config in enumerate(self.configurations)
@@ -1967,13 +1987,28 @@ class ComparisonViewer(QWidget):
                     or isinstance(watched, QComboBox)):
                 if event.type() == QEvent.Type.Enter:
                     if not self._hover_menu_latched or watched is self._hover_menu_target:
-                        self.hover_close_timer.stop()
-                        self._hover_menu_target = watched
-                        self._hover_button_entered = True
-                        self.hover_menu_timer.start()
+                        if watched is self.hud_button:
+                            from PySide6.QtGui import QCursor
+                            menu_area = self._is_hud_menu_arrow(watched.mapFromGlobal(QCursor.pos()))
+                        else:
+                            menu_area = True
+                        if menu_area:
+                            self.hover_close_timer.stop()
+                            self._hover_menu_target = watched
+                            self._hover_button_entered = True
+                            self.hover_menu_timer.start()
                 elif event.type() == QEvent.Type.Leave:
                     self._hover_button_entered = False
                     self.hover_close_timer.start()
+                elif event.type() == QEvent.Type.MouseMove and watched is self.hud_button:
+                    menu_area = self._is_hud_menu_arrow(event.position().toPoint())
+                    self._hover_button_entered = menu_area
+                    if menu_area:
+                        self._hover_menu_target = watched
+                        self.hover_close_timer.stop()
+                        self.hover_menu_timer.start()
+                    else:
+                        self.hover_menu_timer.stop()
             elif self._is_active_hover_menu(watched):
                 if event.type() == QEvent.Type.Enter:
                     self.hover_close_timer.stop()
@@ -1987,6 +2022,10 @@ class ComparisonViewer(QWidget):
             if event.type() == QEvent.Type.MouseButtonPress and (
                     (isinstance(watched, QToolButton) and watched.menu() is not None)
                     or isinstance(watched, QComboBox)):
+                if watched is self.hud_button and not self._is_hud_menu_arrow(event.position().toPoint()):
+                    if watched.menu().isVisible():
+                        self._hide_hover_popup(watched)
+                    return False
                 popup_visible = (watched.menu().isVisible() if isinstance(watched, QToolButton)
                                  else watched.view().isVisible())
                 if popup_visible:
@@ -2091,6 +2130,15 @@ class ComparisonViewer(QWidget):
             return False
         root = button.menu()
         return _is_widget_or_popup_window(root, target)
+
+    def _is_hud_menu_arrow(self, position):
+        option = QStyleOptionToolButton()
+        self.hud_button.initStyleOption(option)
+        arrow_rect = self.hud_button.style().subControlRect(
+            QStyle.ComplexControl.CC_ToolButton, option,
+            QStyle.SubControl.SC_ToolButtonMenu, self.hud_button
+        )
+        return arrow_rect.contains(position)
 
     def _close_hover_menu(self):
         button = self._hover_menu_target
