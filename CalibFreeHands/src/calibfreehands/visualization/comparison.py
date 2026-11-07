@@ -888,12 +888,6 @@ class ComparisonViewer(QWidget):
             self.annotation_content_actions["error"].setVisible(False)
             self.annotation_actions["worst5"].setVisible(False)
         self.hud_menu = QMenu(self)
-        opacity_widget = QWidget(); opacity_layout = QHBoxLayout(opacity_widget); opacity_layout.setContentsMargins(8, 2, 8, 2)
-        opacity_layout.addWidget(QLabel("HUD opacity")); self.hud_opacity_slider = QSlider(Qt.Orientation.Horizontal)
-        self.hud_opacity_slider.setRange(20, 100); self.hud_opacity_slider.setValue(100); self.hud_opacity_slider.setFixedWidth(100)
-        self.hud_opacity_slider.valueChanged.connect(lambda value: self._set_hud(opacity=value / 100))
-        opacity_layout.addWidget(self.hud_opacity_slider); opacity_action = QWidgetAction(self.hud_menu)
-        opacity_action.setDefaultWidget(opacity_widget); self.hud_menu.addAction(opacity_action)
         size_menu = self.hud_menu.addMenu("Size")
         for size in ("small", "medium", "large"):
             action = QAction(size.title(), self); action.triggered.connect(lambda _=False, value=size: self._set_hud(scale=value))
@@ -906,6 +900,22 @@ class ComparisonViewer(QWidget):
             action.triggered.connect(lambda checked, value=style: self._set_hud_background(value) if checked else None)
             self.hud_background_group.addAction(action); self.hud_background_menu.addAction(action)
             self.hud_background_actions[style] = action
+        self.hud_opacity_widget = QWidget()
+        opacity_layout = QHBoxLayout(self.hud_opacity_widget)
+        opacity_layout.setContentsMargins(8, 0, 8, 0)
+        self.hud_opacity_label = QLabel("HUD opacity")
+        self.hud_opacity_label.setAlignment(Qt.AlignmentFlag.AlignVCenter | Qt.AlignmentFlag.AlignLeft)
+        opacity_layout.addWidget(self.hud_opacity_label)
+        self.hud_opacity_slider = QSlider(Qt.Orientation.Horizontal)
+        self.hud_opacity_slider.setRange(20, 100)
+        self.hud_opacity_slider.setValue(100)
+        self.hud_opacity_slider.setFixedWidth(100)
+        self.hud_opacity_slider.valueChanged.connect(lambda value: self._set_hud(opacity=value / 100))
+        opacity_layout.addWidget(self.hud_opacity_slider, 0, Qt.AlignmentFlag.AlignVCenter)
+        self.hud_opacity_action = QWidgetAction(self.hud_menu)
+        self.hud_opacity_action.setDefaultWidget(self.hud_opacity_widget)
+        self.hud_menu.insertAction(size_menu.menuAction(), self.hud_opacity_action)
+        self._fit_hud_opacity_row()
         self.hud_button = QToolButton(); self.hud_button.setText("HUD")
         self.hud_button.setCheckable(True); self.hud_button.setChecked(True)
         self.hud_visible = True
@@ -1177,6 +1187,16 @@ class ComparisonViewer(QWidget):
 
     def _set_hud_background(self, style):
         for hud in (self.overlay_panel, *self.split_panels): hud.set_background(style)
+
+    def _fit_hud_opacity_row(self):
+        self.hud_menu.ensurePolished()
+        self.hud_menu.adjustSize()
+        reference_height = self.hud_menu.actionGeometry(
+            self.hud_background_menu.menuAction()
+        ).height()
+        if reference_height > 0:
+            self.hud_opacity_widget.setFixedHeight(reference_height)
+        self.hud_menu.adjustSize()
 
     def _set_hud_visible(self, visible):
         self.hud_visible = bool(visible)

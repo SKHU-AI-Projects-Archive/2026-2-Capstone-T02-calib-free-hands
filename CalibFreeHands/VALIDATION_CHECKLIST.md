@@ -444,3 +444,13 @@ All entries below are pending implementation and validation. No acceptance item 
 - [x] More menu action is Playback Stats; existing source FPS, frame-update FPS, speed, skipped-frame display and toggle behavior remain.
 - [x] Focused comparison viewer tests: 68 passed; full pytest: 263 passed; app import, compileall, `pip check`, and `git diff --check` passed.
 - [ ] Native Windows visual smoke was unavailable: Computer Use reported that its native pipe could not connect.
+
+
+## Phase A.1 HUD Menu Row Height Polish (2026-11-07)
+
+- [x] Size the custom opacity QWidgetAction from the displayed `Background` submenu row geometry after QMenu polish/adjustSize; this uses the active Qt style's actual row height rather than a fixed pixel guess.
+- [x] Remove vertical layout margins and vertically center the opacity label and slider. Preserve the existing 8 px left padding and 100 px slider width.
+- [x] Offscreen layout tests compare opacity/Size/Background row heights (1 px tolerance), slider and label centers (1 px), and menu width (280 px maximum) under dark/light palettes for Fusion, Windows, Windows Vista, and Windows 11 styles. All passed.
+- [x] HUD slider remains 20-100, defaults to 100, and updates opacity while hidden; presentation settings persist across HUD visibility and Overlay/Split changes.
+- [x] Focused comparison viewer tests: 72 passed; full pytest: 267 passed; app import, compileall, `pip check`, and `git diff --check` passed.
+- [ ] Native Windows visual smoke remains unavailable: Computer Use native pipe connection failed twice, including after the documented 2-second retry.

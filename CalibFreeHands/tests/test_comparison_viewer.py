@@ -489,11 +489,17 @@ def test_phase_a_viewer_menu_wording_order_and_hud_visibility(tmp_path, qapp):
 
     assert viewer.hud_button.isCheckable() and viewer.hud_button.isChecked()
     assert viewer.hud_button.toolTip() == "Hide HUD"
-    viewer._set_hud(anchor="bottom-right", scale="large", opacity=0.6)
-    viewer._set_hud_background("subtle")
+    viewer._set_hud(anchor="bottom-right")
+    viewer.hud_menu.actions()[1].menu().actions()[-1].trigger()
+    viewer.hud_background_actions["subtle"].trigger()
+    assert all(panel.scale == "large" and panel.background == "subtle"
+               for panel in (viewer.overlay_panel, *viewer.split_panels))
     viewer.hud_button.setChecked(False)
     assert all(panel.isHidden() for panel in (viewer.overlay_panel, *viewer.split_panels))
     assert viewer.hud_button.toolTip() == "Show HUD"
+    viewer.hud_opacity_slider.setValue(60)
+    assert all(panel.opacity == pytest.approx(0.6)
+               for panel in (viewer.overlay_panel, *viewer.split_panels))
     viewer.set_mode("split")
     assert all(panel.isHidden() for panel in (viewer.overlay_panel, *viewer.split_panels))
     viewer.hud_button.setChecked(True)
@@ -570,6 +576,53 @@ def test_hud_split_button_body_toggles_visibility_and_arrow_opens_settings(tmp_p
     qapp.processEvents()
     assert viewer.hud_menu.isVisible()
     assert not button.isChecked()
+    QTest.keyClick(viewer.hud_menu, Qt.Key.Key_Escape)
+    QTest.mouseClick(button, Qt.MouseButton.LeftButton, pos=body)
+    assert button.isChecked()
+    assert all(not panel.isHidden() for panel in (viewer.overlay_panel, *viewer.split_panels))
+    viewer.close()
+
+
+@pytest.mark.parametrize("style_name", ["Fusion", "Windows", "windowsvista", "windows11"])
+def test_hud_menu_opacity_row_matches_submenu_rows_in_dark_and_light_palettes(tmp_path, qapp, style_name):
+    from PySide6.QtCore import QPoint
+    from PySide6.QtGui import QColor, QPalette
+    from PySide6.QtWidgets import QStyleFactory, QWidgetAction
+    from calibfreehands.visualization.comparison import ComparisonViewer
+
+    viewer = ComparisonViewer(_session(tmp_path, 2))
+    menu = viewer.hud_menu
+    opacity_action, size_action, background_action = menu.actions()
+    assert isinstance(opacity_action, QWidgetAction)
+    for widget in (viewer, menu, viewer.hud_background_menu):
+        widget.setStyle(QStyleFactory.create(style_name))
+    viewer._fit_hud_opacity_row()
+
+    for background, foreground in (("#202020", "#f2f2f2"), ("#f8f8f8", "#202020")):
+        palette = QPalette(viewer.palette())
+        palette.setColor(QPalette.ColorRole.Window, QColor(background))
+        palette.setColor(QPalette.ColorRole.WindowText, QColor(foreground))
+        viewer.setPalette(palette)
+        menu.setPalette(palette)
+        menu.ensurePolished()
+        menu.popup(QPoint(20, 20))
+        qapp.processEvents()
+
+        opacity_rect = menu.actionGeometry(opacity_action)
+        size_rect = menu.actionGeometry(size_action)
+        background_rect = menu.actionGeometry(background_action)
+        assert abs(opacity_rect.height() - size_rect.height()) <= 1
+        assert abs(opacity_rect.height() - background_rect.height()) <= 1
+        slider_center = viewer.hud_opacity_slider.mapTo(menu, viewer.hud_opacity_slider.rect().center())
+        assert abs(slider_center.y() - opacity_rect.center().y()) <= 1
+        label_center = viewer.hud_opacity_label.mapTo(menu, viewer.hud_opacity_label.rect().center())
+        assert abs(label_center.y() - opacity_rect.center().y()) <= 1
+        assert menu.width() <= 280
+        menu.hide()
+        qapp.processEvents()
+    assert viewer.hud_opacity_slider.minimum() == 20
+    assert viewer.hud_opacity_slider.maximum() == 100
+    assert viewer.hud_opacity_slider.value() == 100
     viewer.close()
 
 
