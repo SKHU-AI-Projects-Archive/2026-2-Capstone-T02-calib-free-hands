@@ -1616,12 +1616,12 @@ def test_presentation_hud_is_viewport_child_and_reorder_preserves_result_data(tm
     assert viewer.overlay_panel.geometry() == viewer.overlay_view.rect()
     assert viewer.split_panels[1].geometry() == viewer.split_views[1].rect()
     overlay_splitter = viewer.views.widget(0)
-    assert overlay_splitter.widget(1) is viewer.overlay_view
+    assert overlay_splitter.widget(1).content is viewer.overlay_view
     original_media_cell = viewer.split_grid.itemAtPosition(0, 0).widget()
     before = [loaded.result.keypoints_3d.copy() for loaded in viewer.loaded_results]
     viewer.reorder_result("cfg-2", "cfg-0")
     assert viewer.split_result_order == [2, 0, 1]
-    assert viewer.split_grid.itemAtPosition(0, 1).widget() is viewer.split_views[2]
+    assert viewer.split_grid.itemAtPosition(0, 1).widget().content is viewer.split_views[2]
     assert viewer.split_grid.itemAtPosition(0, 0).widget() is original_media_cell
     from calibfreehands.visualization.comparison_presentation import _ResultDragHandle
     handle = viewer.split_panels[2].findChild(_ResultDragHandle)
@@ -1643,6 +1643,222 @@ def test_presentation_hud_is_viewport_child_and_reorder_preserves_result_data(tm
     assert {row[3] for row in viewer.split_annotations[1].projected_annotations()} <= set(JOINT_NAMES)
     viewer.set_annotation_mode("off")
     assert not viewer.split_annotations[1].projected_annotations()
+    viewer.close()
+
+
+def test_comparison_order_has_stable_panel_ids_and_user_order_survives_gt_change(tmp_path, qapp):
+    from calibfreehands.visualization.comparison import ComparisonViewer
+    viewer = ComparisonViewer(_session(tmp_path, 3))
+    assert viewer.split_panel_order == ["source-media", "result:cfg-0", "result:cfg-1", "result:cfg-2"]
+    viewer.reorder_result("cfg-2", "cfg-0")
+    assert viewer.result_order_ids == ["cfg-2", "cfg-0", "cfg-1"]
+    viewer.reference_selector.setCurrentIndex(2)
+    assert viewer.reference_id == "cfg-2"
+    assert viewer.result_order_ids == ["cfg-2", "cfg-0", "cfg-1"]
+    assert viewer.user_ordered_panels
+    viewer.close()
+
+
+def test_gt_change_keeps_initial_automatic_priority_until_manual_reorder(tmp_path, qapp):
+    from calibfreehands.visualization.comparison import ComparisonViewer
+    viewer = ComparisonViewer(_session(tmp_path, 3))
+    viewer.reference_selector.setCurrentIndex(2)
+    assert viewer.result_order_ids == ["cfg-2", "cfg-0", "cfg-1"]
+    assert not viewer.user_ordered_panels
+    viewer.close()
+
+
+def test_duplicate_names_and_hidden_results_keep_stable_order_across_modes(tmp_path, qapp):
+    from calibfreehands.visualization.comparison import ComparisonViewer
+    viewer = ComparisonViewer(_session(tmp_path, 3))
+    viewer.configurations[0]["name"] = "Duplicate"
+    viewer.configurations[1]["name"] = "Duplicate"
+    ids = [surface.panel_id for surface in viewer.split_surfaces.values()]
+    viewer._set_configuration_visible(1, False)
+    viewer.reorder_result("cfg-2", "cfg-0")
+    expected = ["cfg-2", "cfg-0", "cfg-1"]
+    viewer.set_mode("split")
+    assert viewer.result_order_ids == expected
+    assert viewer.split_surfaces["result:cfg-1"].isHidden()
+    viewer._set_configuration_visible(1, True)
+    viewer.set_mode("overlay")
+    assert viewer.result_order_ids == expected
+    assert not viewer.split_surfaces["result:cfg-1"].isHidden()
+    assert [surface.panel_id for surface in viewer.split_surfaces.values()] == ids
+    viewer.close()
+
+
+def test_result_noop_reorder_does_not_claim_custom_order(tmp_path, qapp):
+    from calibfreehands.visualization.comparison import ComparisonViewer
+    viewer = ComparisonViewer(_session(tmp_path, 3))
+    before = viewer.result_order_ids
+    viewer.reorder_result("cfg-0", "cfg-1")
+    assert viewer.result_order_ids == before
+    assert not viewer.user_ordered_panels
+    viewer.close()
+
+
+def test_hud_result_reorder_preserves_source_slot_in_split_order(tmp_path, qapp):
+    from calibfreehands.visualization.comparison import ComparisonViewer
+    viewer = ComparisonViewer(_session(tmp_path, 3))
+    viewer.split_panel_order = ["result:cfg-0", "source-media", "result:cfg-1", "result:cfg-2"]
+    viewer._sync_split_layout()
+    viewer.reorder_result("cfg-2", "cfg-0")
+    assert viewer.split_panel_order == ["result:cfg-2", "source-media", "result:cfg-0", "result:cfg-1"]
+    assert viewer.result_order_ids == ["cfg-2", "cfg-0", "cfg-1"]
+    viewer.close()
+
+
+def test_overlay_panel_order_swap_preserves_original_widgets(tmp_path, qapp):
+    from calibfreehands.visualization.comparison import ComparisonViewer
+    viewer = ComparisonViewer(_session(tmp_path, 3))
+    splitter = viewer.views.widget(0)
+    source, overlay = viewer.source_overlay, viewer.overlay_view
+    viewer.reorder_overlay_panel("overlay-3d", "source-media")
+    assert viewer.overlay_panel_order == ["overlay-3d", "source-media"]
+    assert splitter.widget(0).content is overlay
+    assert splitter.widget(1).content is source
+    viewer.reorder_overlay_panel("source-media", "overlay-3d")
+    assert splitter.widget(0).content is source
+    assert splitter.widget(1).content is overlay
+    viewer.close()
+
+
+def test_overlay_hud_mouse_drag_inserts_using_hud_row_geometry(tmp_path, qapp):
+    from PySide6.QtCore import QEvent, QPoint, Qt
+    from PySide6.QtGui import QMouseEvent
+    from PySide6.QtWidgets import QApplication
+    from calibfreehands.visualization.comparison import ComparisonViewer
+    from calibfreehands.visualization.comparison_presentation import _ResultDragHandle
+
+    viewer = ComparisonViewer(_session(tmp_path, 4))
+    viewer.resize(1500, 900)
+    viewer.show()
+    qapp.processEvents()
+    hud = viewer.overlay_panel
+    source_id = "cfg-3"
+    handle = next(item for item in hud.findChildren(_ResultDragHandle)
+                  if item.configuration_id == source_id)
+    header_y = hud.group_headers["cfg-1"].geometry().center().y()
+    end = hud.body.mapToGlobal(QPoint(30, header_y))
+    start = handle.mapToGlobal(handle.rect().center())
+    QTest = __import__("PySide6.QtTest", fromlist=["QTest"]).QTest
+    QTest.mousePress(handle, Qt.MouseButton.LeftButton, pos=handle.rect().center())
+    move = QMouseEvent(QEvent.Type.MouseMove, handle.mapFromGlobal(end), end,
+                       Qt.MouseButton.NoButton, Qt.MouseButton.LeftButton, Qt.KeyboardModifier.NoModifier)
+    QApplication.sendEvent(handle, move)
+    QTest.mouseRelease(handle, Qt.MouseButton.LeftButton, pos=handle.mapFromGlobal(end))
+    assert viewer.result_order_ids == ["cfg-0", "cfg-3", "cfg-1", "cfg-2"]
+    assert not viewer._panel_reorder_active
+    viewer.close()
+
+
+def test_overlay_hud_click_does_not_reorder_results(tmp_path, qapp):
+    from PySide6.QtCore import Qt
+    from PySide6.QtTest import QTest
+    from calibfreehands.visualization.comparison import ComparisonViewer
+    from calibfreehands.visualization.comparison_presentation import _ResultDragHandle
+    viewer = ComparisonViewer(_session(tmp_path, 3))
+    handle = next(item for item in viewer.overlay_panel.findChildren(_ResultDragHandle)
+                  if item.configuration_id == "cfg-2")
+    before = viewer.result_order_ids
+    QTest.mouseClick(handle, Qt.MouseButton.LeftButton)
+    assert viewer.result_order_ids == before
+    assert not viewer._panel_reorder_active
+    viewer.close()
+
+
+def test_escape_cancels_active_panel_reorder_without_sticking_controls(tmp_path, qapp):
+    from PySide6.QtCore import QEvent, QPoint, Qt
+    from PySide6.QtGui import QKeyEvent, QMouseEvent
+    from PySide6.QtWidgets import QApplication
+    from PySide6.QtTest import QTest
+    from calibfreehands.visualization.comparison import ComparisonViewer
+    from calibfreehands.visualization.comparison_presentation import _ResultDragHandle
+    viewer = ComparisonViewer(_session(tmp_path, 3))
+    viewer.resize(1500, 900)
+    viewer.show()
+    qapp.processEvents()
+    handle = next(item for item in viewer.overlay_panel.findChildren(_ResultDragHandle)
+                  if item.configuration_id == "cfg-2")
+    end = viewer.overlay_panel.body.mapToGlobal(QPoint(20, 5))
+    order = viewer.result_order_ids
+    QTest.mousePress(handle, Qt.MouseButton.LeftButton, pos=handle.rect().center())
+    move = QMouseEvent(QEvent.Type.MouseMove, handle.mapFromGlobal(end), end,
+                       Qt.MouseButton.NoButton, Qt.MouseButton.LeftButton, Qt.KeyboardModifier.NoModifier)
+    QApplication.sendEvent(handle, move)
+    assert viewer._panel_reorder_active
+    QApplication.sendEvent(viewer, QKeyEvent(QEvent.Type.KeyPress, Qt.Key.Key_Escape,
+                                               Qt.KeyboardModifier.NoModifier))
+    assert not viewer._panel_reorder_active
+    assert viewer.result_order_ids == order
+    QTest.mouseRelease(handle, Qt.MouseButton.LeftButton, pos=handle.mapFromGlobal(end))
+    viewer.close()
+
+
+def test_split_source_can_move_through_first_middle_last_without_duplicate_widgets(tmp_path, qapp):
+    from calibfreehands.visualization.comparison import ComparisonViewer
+    viewer = ComparisonViewer(_session(tmp_path, 3))
+    source = viewer.split_surfaces["source-media"]
+    viewer.reorder_split_panel("source-media", "result:cfg-1", after=True)
+    assert viewer.split_panel_order == ["result:cfg-0", "result:cfg-1", "source-media", "result:cfg-2"]
+    viewer.reorder_split_panel("source-media", "result:cfg-0")
+    assert viewer.split_panel_order[0] == "source-media"
+    viewer.reorder_split_panel("source-media", "result:cfg-2", after=True)
+    assert viewer.split_panel_order[-1] == "source-media"
+    widgets = [viewer.split_grid.itemAt(i).widget() for i in range(viewer.split_grid.count())]
+    assert len(widgets) == 4 and len({id(widget) for widget in widgets}) == 4
+    assert source in widgets
+    assert viewer.split_surfaces["result:cfg-0"].content is viewer.split_views[0]
+    viewer.close()
+
+
+def test_split_panel_mouse_drag_reorders_existing_surface(tmp_path, qapp):
+    from PySide6.QtCore import QEvent, QPoint, Qt
+    from PySide6.QtGui import QMouseEvent
+    from PySide6.QtWidgets import QApplication
+    from PySide6.QtTest import QTest
+    from calibfreehands.visualization.comparison import ComparisonViewer
+    from calibfreehands.visualization.comparison_presentation import _PanelDragHandle
+    viewer = ComparisonViewer(_session(tmp_path, 3))
+    viewer.resize(1500, 900)
+    viewer.show()
+    viewer.set_mode("split")
+    qapp.processEvents()
+    source_surface = viewer.split_surfaces["source-media"]
+    handle = source_surface.findChild(_PanelDragHandle)
+    target = viewer.split_surfaces["result:cfg-1"]
+    end = target.mapToGlobal(QPoint(target.width() // 2, target.height() - 2))
+    QTest.mousePress(handle, Qt.MouseButton.LeftButton, pos=handle.rect().center())
+    move = QMouseEvent(QEvent.Type.MouseMove, handle.mapFromGlobal(end), end,
+                       Qt.MouseButton.NoButton, Qt.MouseButton.LeftButton, Qt.KeyboardModifier.NoModifier)
+    QApplication.sendEvent(handle, move)
+    QTest.mouseRelease(handle, Qt.MouseButton.LeftButton, pos=handle.mapFromGlobal(end))
+    assert viewer.split_panel_order.index("source-media") > viewer.split_panel_order.index("result:cfg-1")
+    assert not viewer._panel_reorder_active
+    viewer.close()
+
+
+def test_reorder_preserves_frame_playback_clock_camera_and_result_arrays(tmp_path, qapp):
+    from calibfreehands.visualization.comparison import ComparisonViewer
+    viewer = ComparisonViewer(_session(tmp_path, 3))
+    viewer.slider.setValue(1)
+    viewer.playback_clock.set_speed(1.25)
+    viewer.playback_clock.play(1)
+    viewer.timer.start(1000)
+    provider_ids = tuple(id(bundle.media_frames) for bundle in viewer.loaded_results)
+    arrays = [bundle.result.keypoints_3d.copy() for bundle in viewer.loaded_results]
+    camera = dict(viewer.overlay_view.opts)
+    clock = viewer.playback_clock
+    viewer.reorder_result("cfg-2", "cfg-0")
+    viewer.reorder_overlay_panel("overlay-3d", "source-media")
+    assert viewer.slider.value() == 1
+    assert viewer.playback_clock is clock and clock.speed == 1.25 and clock.playing
+    assert viewer.timer.isActive()
+    assert tuple(id(bundle.media_frames) for bundle in viewer.loaded_results) == provider_ids
+    assert viewer.overlay_view.opts == camera
+    for bundle, before in zip(viewer.loaded_results, arrays):
+        np.testing.assert_array_equal(bundle.result.keypoints_3d, before)
     viewer.close()
 
 

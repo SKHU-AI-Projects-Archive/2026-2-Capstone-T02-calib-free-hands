@@ -212,3 +212,16 @@ All implementation items above are complete. Remaining user and Windows GUI acce
 - [x] Cache metrics by ordered Reference/Candidate result IDs; remove duplicate GT-change render/panel refreshes and run large uncached metric batches in a single background worker with stale-selection protection.
 - [x] Keep metric formulas, canonical result arrays, `.cfh` data, and frame/playback behavior unchanged.
 - [ ] Native Windows visual contrast, camera interaction, and playback acceptance remains pending; Phase D is not started.
+
+## Phase D.1 Unified Panel Ordering Foundation
+
+- [x] Stable Source Media, Overlay 3D, and configuration-ID result panel identities; Split and Overlay orders use existing widget instances.
+- [x] Shared result ordering across Overlay HUD, Split panels, and Results menu; Source Media Split position and Overlay left/right order are independent.
+- [x] Initial GT-first policy yields to explicit user ordering; later GT changes preserve the custom order.
+- [x] HUD drag insertion uses rendered HUD group geometry; Split panels and Overlay Source/3D can be reordered with compact handles.
+- [x] Preserve original GL/source widgets, result arrays, providers, frame/playback, camera, HUD, annotations, and saved data during reordering.
+- [x] Focused automated regression coverage added for ID/order behavior, mouse-driven HUD and Split drags, source placement, Overlay swapping, and frame/camera/provider/array preservation.
+- [ ] Native Windows D.1 visual and interaction review remains pending.
+- [ ] D.2 individual Detach/Reattach and D.3 detached synchronization/aspect-ratio work are deferred.
+
+Phase C Final native Windows testing and acceptance were reported by the user as completed. This is user-reported acceptance, not a claim that Codex independently performed the native checks.

@@ -485,3 +485,15 @@ All entries below are pending implementation and validation. No acceptance item 
 - [x] Viewer/comparison tests: 108 passed; full pytest: 289 passed. App import, compileall, `pip check`, and `git diff --check` pass after the final source changes.
 - [x] Read-only `2_screw` set (4 `.cfh` results, 364 frames): previous uncached GT change took 0.880 s total (0.831 s metric comparison); repeated uncached reference switch took 0.871 s. Updated measurement: uncached selection handler returned in 0.031 s, background metric work took 0.902 s and completed in 0.942 s total; switching to the cached GT took 0.053 s. Initial Viewer load was 1.374 s.
 - [ ] Native Windows visual review of camera presets/space restoration, Light/Dark chrome, GT changes during playback, and any visible playback skip remains pending; Computer Use native pipe was unavailable, so no manual acceptance is claimed.
+
+## Phase D.1 Unified Panel Ordering Foundation
+
+- [x] Baseline before changes: Viewer/comparison 108 passed; full suite 289 passed.
+- [x] Regression tests cover stable panel IDs, initial GT priority and custom-order precedence, HUD insertion by mouse using HUD row geometry, Split panel drag, Source Media first/middle/last, Overlay swap, and frame/playback/camera/provider/result-array preservation.
+- [x] Focused Viewer/comparison suite: 120 passed; comparison viewer suite: 96 passed.
+- [x] Full pytest suite: 301 passed; application import prints `IMPORT_OK`; `compileall` and `pip check` pass.
+- [x] `git diff --check` passes after the final documentation and test updates.
+- [ ] Native Windows D.1 interaction review remains pending; no native acceptance is inferred from offscreen tests.
+- [ ] D.2 individual Detach/Reattach and D.3 detached-state synchronization/Source Media aspect-ratio work remain deferred.
+
+Phase C Final native Windows testing and acceptance were reported by the user as completed. This is user-reported acceptance, not an assertion that Codex independently performed the native checks.

@@ -1554,7 +1554,7 @@ The C-2B dashboard foundation is saved as a checkpoint. It is not the completion
 - Name the confidence menu **Detection confidence** with `Use as opacity`, `Show value`, and `Show bar` options. Name the color selector **Color by** with `Result` and `Detection confidence` choices.
 - Keep `Mesh opacity` separate from the confidence-opacity toggle and disable it while Mesh is off.
 - Make Error Vectors a clear on/off action with an explicit candidate target. Keep Detach in a secondary `More` menu so it does not displace primary viewing controls.
-- In Split mode, keep Original media fixed in its source panel and allow result panels to be reordered using a visible drag handle. Reordering is presentation-only: result identity, color mapping, Reference ID, and data association stay attached to each result.
+- Historical Split contract (superseded by Phase D.1): Original media stayed fixed while result panels could be reordered. Phase D.1 allows Source Media to move with result panels.
 - Auto-hide, fullscreen, reordering, HUD controls, annotations, and control-menu changes must not rerun inference or mutate canonical results.
 
 ### Detection Confidence frozen decisions
@@ -1737,6 +1737,17 @@ The unified Viewer used for a single `.cfh` and multi-result comparison provides
 **Hand** uses cached robust whole-sequence bounds from detected finite geometry in the selected GT result, or the sole result in single-result mode. Candidate results do not influence those bounds. The space uses padded percentile extents, frame-center outlier filtering, a minimum span, and adaptive metric grid spacing. If no valid reference geometry exists, it uses Physical bounds. Neither workspace follows playback frames.
 
 Numeric **Labels** visibility is independent of Grid and Axis visibility. Physical/Hand changes and GT selection retain the current frame and camera. **Focus GT** (shown as **Focus Hands** for a single result) applies whole-video reference hand framing; **Space Overview** frames the active metric workspace; **Fit All** frames finite visible current-frame geometry. Workspace and Labels state are shared by Overlay, Split, and existing detached result panels.
+
+## Phase D.1 Unified Panel Ordering Foundation
+
+- Stable presentation identities are `source-media`, `overlay-3d`, and `result:<configuration_id>`. Display names, colors, list positions, and current GT selection do not define identity.
+- Overlay has two panels, Source Media and the composite Overlay 3D view. Its initial order is Source Media then Overlay 3D; users may swap them independently of result order.
+- Split has Source Media and one panel for each result. Initial order places Source Media first, then the selected GT, then other results in stable configuration order. Source Media can subsequently move to any slot.
+- Result ordering is shared by the Overlay HUD, Split result panels, and Results menu. Reordering in the HUD preserves Source Media's Split slot. Overlay's left/right panel order remains independent.
+- GT-first is an initialization policy until the user explicitly reorders a result or Split panel. Before that point, changing GT updates the leading result. After a user reorder, later GT changes update semantics, badges, colors, and metrics without moving panels.
+- Drag insertion uses the actual HUD group geometry or Split panel geometry. A click, same-order insertion, Escape, or drop outside the active surface leaves order unchanged. Hidden results retain their identity and order slot.
+- Reordering reparents existing presentation surfaces while retaining the original source widgets, GL views, result arrays, provider, frame/playback state, camera, HUD, and annotations. It does not run inference or modify `.cfh` data.
+- The older fixed-Source-Media Split requirement and HUD-only GT-first presentation are superseded by this section. D.2 individual Detach/Reattach and D.3 detached-workspace synchronization and source aspect-ratio work remain deferred.
 
 ## Phase C.1A Workspace Geometry and Controls clarification
 

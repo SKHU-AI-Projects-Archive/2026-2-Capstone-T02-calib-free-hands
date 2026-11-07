@@ -29,7 +29,7 @@ from .viewer import (
     _GLResultView, _OverlayCanvas, hand_space_bounds, load_bundle_result, load_npz_result,
     whole_video_hand_framing, workspace_geometry,
 )
-from .comparison_presentation import _JointAnnotationLayer, _ViewportPanel
+from .comparison_presentation import _JointAnnotationLayer, _ViewportPanel, _PanelSurface
 from .playback import PlaybackClock
 
 METRIC_FIELDS = ("source_identity", "reference_result_id", "candidate_result_id", "candidate_name", "metric_id",
@@ -755,7 +755,12 @@ class ComparisonViewer(QWidget):
             view.viewer = self; view.configuration_id = self.configurations[index]["id"]
         self.split_panels = [_ViewportPanel(view, [index]) for index, view in enumerate(self.split_views)]
         for view, panel in zip(self.split_views, self.split_panels): view.hud = panel
-        self.split_result_order = list(range(len(entries)))
+        result_ids = [config["id"] for config in self.configurations]
+        initial_results = sorted(result_ids, key=lambda config_id: (config_id != self.reference_id,
+                                                                     result_ids.index(config_id)))
+        self.split_panel_order = ["source-media", *(f"result:{config_id}" for config_id in initial_results)]
+        self.user_ordered_panels = False
+        self.overlay_panel_order = ["source-media", "overlay-3d"]
         self.annotation_mode = "off"
         self.annotation_content = "name" if self.single_mode else "error"
         self.overlay_annotations = _JointAnnotationLayer(self, self.overlay_view, list(range(len(entries))))
@@ -763,8 +768,12 @@ class ComparisonViewer(QWidget):
                                   for index, view in enumerate(self.split_views)]
         self.views = QStackedWidget()
         overlay_splitter = QSplitter(Qt.Orientation.Horizontal)
-        overlay_splitter.addWidget(self.source_overlay)
-        overlay_splitter.addWidget(self.overlay_view)
+        self.overlay_surfaces = {
+            "source-media": _PanelSurface("source-media", "Source Media", self.source_overlay, self, scope="overlay"),
+            "overlay-3d": _PanelSurface("overlay-3d", "Overlay 3D", self.overlay_view, self, scope="overlay"),
+        }
+        for panel_id in self.overlay_panel_order:
+            overlay_splitter.addWidget(self.overlay_surfaces[panel_id])
         overlay_splitter.setStretchFactor(0, 1)
         overlay_splitter.setStretchFactor(1, 2)
         overlay_splitter.setSizes([560, 1120])
@@ -784,9 +793,12 @@ class ComparisonViewer(QWidget):
         source_layout.setContentsMargins(0, 0, 0, 0)
         source_layout.addWidget(QLabel("Original media"))
         source_layout.addWidget(self.split_source_overlay, 1)
-        self.split_grid.addWidget(source_cell, 0, 0)
-        for order, index in enumerate(self.split_result_order, 1):
-            self.split_grid.addWidget(self.split_views[index], order // self.split_columns, order % self.split_columns)
+        self.split_surfaces = {"source-media": _PanelSurface("source-media", "Source Media", source_cell, self,
+                                                                scope="split")}
+        for index, config in enumerate(self.configurations):
+            self.split_surfaces[f"result:{config['id']}"] = _PanelSurface(
+                f"result:{config['id']}", config["name"], self.split_views[index], self, scope="split")
+        self._sync_split_layout()
         for column in range(self.split_columns):
             self.split_grid.setColumnStretch(column, 1)
         for row in range(self.split_rows):
@@ -1378,19 +1390,108 @@ class ComparisonViewer(QWidget):
         if popup_open or combo_open or dialog_open or self.slider.isSliderDown() or dragging: self.auto_hide_timer.start()
         else: self.chrome.hide()
 
-    def reorder_result(self, source_id, target_id):
-        source = next(i for i, config in enumerate(self.configurations) if config["id"] == source_id)
-        target = next(i for i, config in enumerate(self.configurations) if config["id"] == target_id)
-        self.split_result_order.remove(source)
-        self.split_result_order.insert(self.split_result_order.index(target), source)
-        for position, index in enumerate(self.split_result_order, 1):
-            self.split_grid.addWidget(self.split_views[index], position // self.split_columns, position % self.split_columns)
-        for panel in (self.overlay_panel, *self.split_panels):
-            panel.configuration_indices = sorted(panel.configuration_indices,
-                key=lambda i: self.split_result_order.index(i) if i in self.split_result_order else i)
+    @property
+    def result_order_ids(self):
+        return [panel_id.removeprefix("result:") for panel_id in self.split_panel_order
+                if panel_id.startswith("result:")]
+
+    @property
+    def split_result_order(self):
+        return [self._configuration_index(config_id) for config_id in self.result_order_ids]
+
+    def _sync_split_layout(self):
+        while self.split_grid.count():
+            self.split_grid.takeAt(0)
+        for position, panel_id in enumerate(self.split_panel_order):
+            self.split_grid.addWidget(self.split_surfaces[panel_id],
+                                      position // self.split_columns, position % self.split_columns)
+        self.split_rows = int(np.ceil(len(self.split_panel_order) / self.split_columns))
+        for column in range(self.split_columns):
+            self.split_grid.setColumnStretch(column, 1)
+        for row in range(self.split_rows):
+            self.split_grid.setRowStretch(row, 1)
+        self.split_widget.setMinimumSize(self.split_columns * 340, self.split_rows * 260)
+
+    def _refresh_ordered_presentations(self):
+        self.overlay_panel.configuration_indices = [self._configuration_index(config_id)
+                                                    for config_id in self.result_order_ids]
+        self.overlay_panel.refresh(self)
+        for index, panel in enumerate(self.split_panels):
+            panel.configuration_indices = [index]
             panel.refresh(self)
+        self._sync_split_layout()
         self._rebuild_results_menu()
         self._refresh_annotations()
+
+    def reorder_result_at(self, source_id, visible_ids, insertion):
+        order = self.result_order_ids
+        if source_id not in order:
+            return
+        visible_ids = [config_id for config_id in visible_ids if config_id in order]
+        insertion = max(0, min(insertion, len(visible_ids)))
+        preceding = [config_id for config_id in visible_ids[:insertion] if config_id != source_id]
+        following = [config_id for config_id in visible_ids[insertion:] if config_id != source_id]
+        order.remove(source_id)
+        if following:
+            target_slot = order.index(following[0])
+        elif preceding:
+            target_slot = order.index(preceding[-1]) + 1
+        else:
+            target_slot = 0
+        order.insert(target_slot, source_id)
+        self._set_result_order(order, manual=True)
+
+    def reorder_result(self, source_id, target_id):
+        order = self.result_order_ids
+        if source_id not in order or target_id not in order or source_id == target_id:
+            return
+        order.remove(source_id)
+        order.insert(order.index(target_id), source_id)
+        self._set_result_order(order, manual=True)
+
+    def _set_result_order(self, result_order, *, manual):
+        if result_order == self.result_order_ids:
+            return
+        iterator = iter(result_order)
+        self.split_panel_order = ["result:" + next(iterator) if panel_id.startswith("result:") else panel_id
+                                  for panel_id in self.split_panel_order]
+        if manual:
+            self.user_ordered_panels = True
+        self._refresh_ordered_presentations()
+
+    def reorder_split_panel(self, source_id, target_id, *, after=False):
+        if source_id not in self.split_panel_order or target_id not in self.split_panel_order or source_id == target_id:
+            return
+        order = self.split_panel_order.copy()
+        order.remove(source_id)
+        target_index = order.index(target_id) + int(after)
+        order.insert(target_index, source_id)
+        if order != self.split_panel_order:
+            self.split_panel_order = order
+            self.user_ordered_panels = True
+            self._refresh_ordered_presentations()
+
+    def reorder_overlay_panel(self, source_id, target_id, *, after=False):
+        order = self.overlay_panel_order.copy()
+        if source_id not in order or target_id not in order or source_id == target_id:
+            return
+        order.remove(source_id)
+        order.insert(order.index(target_id) + int(after), source_id)
+        if order == self.overlay_panel_order:
+            return
+        self.overlay_panel_order = order
+        splitter = self.views.widget(0)
+        for index, panel_id in enumerate(order):
+            splitter.insertWidget(index, self.overlay_surfaces[panel_id])
+
+    def _apply_default_gt_order(self):
+        if self.user_ordered_panels:
+            return
+        result_ids = self.result_order_ids
+        sorted_ids = sorted(result_ids, key=lambda config_id: (config_id != self.reference_id,
+                                                                result_ids.index(config_id)))
+        if sorted_ids != result_ids:
+            self._set_result_order(sorted_ids, manual=False)
 
     def _rebuild_results_menu(self):
         self.results_menu.clear(); self.visibility_checks = [None] * len(self.configurations)
@@ -1666,6 +1767,7 @@ class ComparisonViewer(QWidget):
             self.error_vectors_checkbox.setChecked(False)
         self._request_metrics_for_reference()
         self._refresh_metric_panels()
+        self._apply_default_gt_order()
         self.error_vectors_button.setText("Error vectors: Off")
         self._rebuild_error_vector_menu()
 
@@ -1924,7 +2026,7 @@ class ComparisonViewer(QWidget):
         self.overlay_view.set_configuration_visible(index, visible)
         if visible and self.mode == "overlay":
             self._render_active_frame()
-        self.split_views[index].setVisible(visible)
+        self.split_surfaces[f"result:{self.configurations[index]['id']}"].setVisible(visible)
         if visible and self.mode == "split":
             self.split_views[index].set_frame(self.slider.value())
         self._update_results_button()

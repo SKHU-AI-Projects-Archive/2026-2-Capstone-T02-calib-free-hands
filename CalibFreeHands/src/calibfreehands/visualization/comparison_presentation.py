@@ -3,10 +3,109 @@ from __future__ import annotations
 import numpy as np
 from PySide6.QtCore import QEvent, Qt, QPropertyAnimation, QEasingCurve, QPoint, QTimer, QRectF
 from PySide6.QtGui import QColor, QFont, QFontMetrics, QPainter, QPen, QVector4D
-from PySide6.QtWidgets import QCheckBox, QFrame, QGraphicsOpacityEffect, QHBoxLayout, QLabel, QProgressBar, QPushButton, QSizePolicy, QToolButton, QVBoxLayout, QWidget
+from PySide6.QtWidgets import QApplication, QCheckBox, QFrame, QGraphicsOpacityEffect, QHBoxLayout, QLabel, QProgressBar, QPushButton, QSizePolicy, QToolButton, QVBoxLayout, QWidget
 
 from calibfreehands.joint_schema import JOINT_NAMES
 from .topology import RAW_TO_VIEW
+
+
+class _PanelSurface(QWidget):
+    """Small ordering header that hosts an existing viewer widget unchanged."""
+
+    def __init__(self, panel_id, title, content, viewer, *, scope):
+        super().__init__()
+        self.panel_id = panel_id
+        self.content = content
+        layout = QVBoxLayout(self)
+        layout.setContentsMargins(0, 0, 0, 0)
+        layout.setSpacing(1)
+        header = QHBoxLayout()
+        header.setContentsMargins(3, 1, 3, 1)
+        label = QLabel(title)
+        label.setStyleSheet("color: palette(windowText); font-size: 9px;")
+        handle = _PanelDragHandle(viewer, panel_id, scope, self)
+        header.addWidget(handle)
+        header.addWidget(label)
+        header.addStretch(1)
+        layout.addLayout(header)
+        layout.addWidget(content, 1)
+
+
+class _PanelDragHandle(QToolButton):
+    def __init__(self, viewer, panel_id, scope, parent=None):
+        super().__init__(parent)
+        self.viewer, self.panel_id, self.scope = viewer, panel_id, scope
+        self.setText("↕")
+        self.setToolTip("Drag to reorder panel")
+        self.setFixedSize(18, 18)
+        self._press = None
+        self._filter_installed = False
+
+    def mousePressEvent(self, event):
+        if event.button() == Qt.MouseButton.LeftButton:
+            self._press = event.globalPosition().toPoint()
+            event.accept()
+            return
+        super().mousePressEvent(event)
+
+    def mouseMoveEvent(self, event):
+        if self._press is not None and event.buttons() & Qt.MouseButton.LeftButton:
+            if (event.globalPosition().toPoint() - self._press).manhattanLength() >= 8:
+                if not self._filter_installed:
+                    QApplication.instance().installEventFilter(self)
+                    self._filter_installed = True
+                self.viewer._panel_reorder_active = True
+            event.accept()
+            return
+        super().mouseMoveEvent(event)
+
+    def mouseReleaseEvent(self, event):
+        if event.button() == Qt.MouseButton.LeftButton and self._press is not None:
+            start, end = self._press, event.globalPosition().toPoint()
+            self._press = None
+            self.viewer._panel_reorder_active = False
+            self._remove_drag_filter()
+            if (end - start).manhattanLength() < 8:
+                event.accept()
+                return
+            surfaces = (self.viewer.overlay_surfaces if self.scope == "overlay"
+                        else self.viewer.split_surfaces)
+            target = next((surface for surface in surfaces.values()
+                           if surface.isVisible()
+                           and surface.geometry().contains(surface.parentWidget().mapFromGlobal(end))), None)
+            if target is not None and target.panel_id != self.panel_id:
+                rect = target.rect()
+                local = target.mapFromGlobal(end)
+                after = local.x() >= rect.center().x() if self.scope == "overlay" else local.y() >= rect.center().y()
+                if self.scope == "overlay":
+                    self.viewer.reorder_overlay_panel(self.panel_id, target.panel_id, after=after)
+                else:
+                    self.viewer.reorder_split_panel(self.panel_id, target.panel_id, after=after)
+            event.accept()
+            return
+        super().mouseReleaseEvent(event)
+
+    def keyPressEvent(self, event):
+        if event.key() == Qt.Key.Key_Escape and self._press is not None:
+            self._press = None
+            self.viewer._panel_reorder_active = False
+            event.accept()
+            return
+        super().keyPressEvent(event)
+
+    def eventFilter(self, watched, event):
+        if (self._filter_installed and event.type() == QEvent.Type.KeyPress
+                and event.key() == Qt.Key.Key_Escape):
+            self._press = None
+            self.viewer._panel_reorder_active = False
+            self._remove_drag_filter()
+            return True
+        return super().eventFilter(watched, event)
+
+    def _remove_drag_filter(self):
+        if self._filter_installed:
+            QApplication.instance().removeEventFilter(self)
+            self._filter_installed = False
 
 
 class _ViewportPanel(QWidget):
@@ -59,6 +158,7 @@ class _ViewportPanel(QWidget):
         self.reference_badges = {}
         self.confidence_rows = {}
         self.confidence_bars = {}
+        self.group_headers = {}
 
     def eventFilter(self, watched, event):
         if watched is self.view and event.type() == QEvent.Type.Resize:
@@ -230,8 +330,11 @@ class _ViewportPanel(QWidget):
         self.reference_badges.clear()
         self.confidence_rows.clear()
         self.confidence_bars.clear()
-        ordered_indices = sorted(self.configuration_indices,
-                                 key=lambda index: viewer.configurations[index]["id"] != viewer.reference_id)
+        self.group_headers.clear()
+        ordered_indices = [viewer._configuration_index(config_id)
+                           for config_id in viewer.result_order_ids
+                           if config_id in {viewer.configurations[index]["id"]
+                                            for index in self.configuration_indices}]
         for config_index in ordered_indices:
             config = viewer.configurations[config_index]
             if viewer.mode == "overlay" and not viewer.overlay_view.configuration_visible[config_index]:
@@ -284,6 +387,7 @@ class _ViewportPanel(QWidget):
 
     def _add_result_group(self, viewer, index, config):
         header = QHBoxLayout()
+        self.group_headers[config["id"]] = header
         title = QLabel(config["name"])
         title.setStyleSheet("font-weight: 600; color: white;")
         title.setWordWrap(True)
@@ -375,8 +479,7 @@ class _ResultDragHandle(QToolButton):
         self._press = None
         self._dragging = False
         self._drop_target = None
-        if isinstance(parent, QWidget):
-            parent.installEventFilter(self)
+        self._filter_installed = False
 
     def mousePressEvent(self, event):
         if event.button() == Qt.MouseButton.LeftButton:
@@ -400,36 +503,32 @@ class _ResultDragHandle(QToolButton):
             return
         super().mouseReleaseEvent(event)
 
-    def eventFilter(self, watched, event):
-        if watched is self.parentWidget():
-            if event.type() == QEvent.Type.MouseButtonPress and event.button() == Qt.MouseButton.LeftButton:
-                self._press = event.globalPosition().toPoint()
-                self._dragging = False
-            elif event.type() == QEvent.Type.MouseMove and self._press is not None:
-                self._move_drag(event.globalPosition().toPoint())
-            elif event.type() == QEvent.Type.MouseButtonRelease:
-                self._finish_drag(event.globalPosition().toPoint())
-        return super().eventFilter(watched, event)
-
     def _move_drag(self, global_position):
         if self._press is None:
             return
         if not self._dragging and (global_position - self._press).manhattanLength() < 8:
             return
+        if not self._dragging:
+            QApplication.instance().installEventFilter(self)
+            self._filter_installed = True
         self._dragging = True
         self.viewer._panel_reorder_active = True
-        target = next((view for view in self.viewer.split_views
-                       if view.rect().contains(view.mapFromGlobal(global_position))), None)
-        if target is self.viewer.split_views[next(i for i, c in enumerate(self.viewer.configurations)
-                                                  if c["id"] == self.configuration_id)]:
-            target = None
-        if target is not self._drop_target:
-            for panel in self.viewer.split_panels:
-                panel._drop_active = panel.view is target
-                panel._apply_style()
-            for view in self.viewer.split_views:
-                view.setStyleSheet("border: 2px solid palette(highlight);" if view is target else "")
-            self._drop_target = target
+        panel = (self.viewer.overlay_panel if self.viewer.mode == "overlay" else
+                 self.viewer.split_panels[self.viewer._configuration_index(self.configuration_id)])
+        body_y = panel.body.mapFromGlobal(global_position).y()
+        if not panel.body.rect().contains(panel.body.mapFromGlobal(global_position)):
+            self._drop_target = None
+            return
+        visible_ids = [config_id for config_id in self.viewer.result_order_ids
+                       if config_id in panel.group_headers and panel.group_headers[config_id].geometry().isValid()]
+        insertion = len(visible_ids)
+        starts = [panel.group_headers[config_id].geometry().top() for config_id in visible_ids]
+        for position in range(len(visible_ids) - 1):
+            boundary = (starts[position] + starts[position + 1]) / 2
+            if body_y < boundary:
+                insertion = position
+                break
+        self._drop_target = (visible_ids, insertion) if visible_ids else None
 
     def _finish_drag(self, global_position):
         if self._press is None:
@@ -439,16 +538,40 @@ class _ResultDragHandle(QToolButton):
         if self._dragging:
             target = self._drop_target
             if target is not None:
-                self.viewer.reorder_result(self.configuration_id, target.configuration_id)
-        for panel in self.viewer.split_panels:
-            panel._drop_active = False
-            panel._apply_style()
-        for view in self.viewer.split_views:
-            view.setStyleSheet("")
+                visible_ids, insertion = target
+                self.viewer.reorder_result_at(self.configuration_id, visible_ids, insertion)
         self.viewer._panel_reorder_active = False
         self._drop_target = None
         self._press = None
         self._dragging = False
+        self._remove_drag_filter()
+
+    def keyPressEvent(self, event):
+        if event.key() == Qt.Key.Key_Escape and self._press is not None:
+            self._drop_target = None
+            self._panel_drag_cancelled()
+            event.accept()
+            return
+        super().keyPressEvent(event)
+
+    def _panel_drag_cancelled(self):
+        self.viewer._panel_reorder_active = False
+        self._drop_target = None
+        self._press = None
+        self._dragging = False
+        self._remove_drag_filter()
+
+    def eventFilter(self, watched, event):
+        if (self._filter_installed and event.type() == QEvent.Type.KeyPress
+                and event.key() == Qt.Key.Key_Escape):
+            self._panel_drag_cancelled()
+            return True
+        return super().eventFilter(watched, event)
+
+    def _remove_drag_filter(self):
+        if self._filter_installed:
+            QApplication.instance().removeEventFilter(self)
+            self._filter_installed = False
 
 
 class _JointAnnotationLayer(QWidget):
