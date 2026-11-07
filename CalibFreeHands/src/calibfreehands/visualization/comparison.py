@@ -779,7 +779,6 @@ class ComparisonViewer(QWidget):
         overlay_splitter.setStretchFactor(0, 1)
         overlay_splitter.setStretchFactor(1, 2)
         overlay_splitter.setSizes([560, 1120])
-        self.overlay_swap_button = overlay_splitter.swap_button
         overlay_splitter.swapRequested.connect(
             lambda: self.reorder_overlay_panel(self.overlay_panel_order[1], self.overlay_panel_order[0]))
         self.views.addWidget(overlay_splitter)
@@ -1422,13 +1421,34 @@ class ComparisonViewer(QWidget):
 
     def _split_grid_shape(self, panel_count):
         size = self._split_available_size()
-        max_columns = max(1, size.width() // 340)
-        aspect = max(0.25, size.width() / max(1, size.height()))
-        columns = min(panel_count, max_columns, max(1, int(np.sqrt(panel_count * aspect))))
-        if panel_count > 1 and aspect >= 1.2 and max_columns >= 2:
-            columns = max(2, columns)
-        rows = int(np.ceil(panel_count / columns))
-        return columns, rows
+        if panel_count <= 0:
+            return 1, 1
+
+        minimum_width, minimum_height = 340, 260
+        margins = self.split_grid.contentsMargins()
+        spacing = self.split_grid.spacing()
+        available_width = max(1, size.width() - margins.left() - margins.right())
+        available_height = max(1, size.height() - margins.top() - margins.bottom())
+        best_shape = (1, panel_count)
+        best_score = None
+        for columns in range(1, panel_count + 1):
+            rows = int(np.ceil(panel_count / columns))
+            cell_width = max(1, (available_width - spacing * (columns - 1)) / columns)
+            cell_height = max(1, (available_height - spacing * (rows - 1)) / rows)
+            required_width = columns * minimum_width + spacing * (columns - 1)
+            required_height = rows * minimum_height + spacing * (rows - 1)
+            horizontal_overflow = max(0, required_width - available_width) / available_width
+            vertical_overflow = max(0, required_height - available_height) / available_height
+            aspect_error = abs(np.log((cell_width / cell_height) / 1.4))
+            unused_fraction = (columns * rows - panel_count) / panel_count
+            # Avoid vertical scrolling first, then horizontal overflow; next prefer
+            # usable landscape-ish cells and denser final rows. The row term breaks ties.
+            score = (10 * (horizontal_overflow + 1.5 * vertical_overflow)
+                     + aspect_error + 0.3 * unused_fraction + 0.01 * rows,
+                     columns, rows)
+            if best_score is None or score < best_score:
+                best_score, best_shape = score, (columns, rows)
+        return best_shape
 
     def _sync_split_layout(self):
         if not hasattr(self, "split_grid"):
@@ -1460,7 +1480,12 @@ class ComparisonViewer(QWidget):
             self.split_grid.setColumnStretch(column, 1)
         for row in range(rows):
             self.split_grid.setRowStretch(row, 1)
-        self.split_widget.setMinimumSize(columns * 340, rows * 260)
+        margins = self.split_grid.contentsMargins()
+        spacing = self.split_grid.spacing()
+        self.split_widget.setMinimumSize(
+            columns * 340 + max(0, columns - 1) * spacing + margins.left() + margins.right(),
+            rows * 260 + max(0, rows - 1) * spacing + margins.top() + margins.bottom(),
+        )
         self._laid_out_panel_ids = panel_ids
 
     def _split_panel_at(self, global_position):

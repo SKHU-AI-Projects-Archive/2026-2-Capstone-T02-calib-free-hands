@@ -1779,19 +1779,31 @@ def test_split_surface_is_in_owning_layout_before_first_show(tmp_path, qapp, mon
     viewer.close()
 
 
-def test_overlay_center_swap_button_preserves_slot_sizes_and_viewer_state(tmp_path, qapp):
-    from PySide6.QtCore import Qt
+def test_overlay_divider_right_click_swap_preserves_slot_sizes_and_viewer_state(tmp_path, qapp):
+    from PySide6.QtCore import QPoint, Qt
+    from PySide6.QtGui import QColor, QPalette
     from PySide6.QtTest import QTest
+    from PySide6.QtWidgets import QMenu
     from calibfreehands.visualization.comparison import ComparisonViewer
     viewer = ComparisonViewer(_session(tmp_path, 3))
     viewer.resize(1500, 900)
     viewer.show()
     qapp.processEvents()
     splitter = viewer.views.widget(0)
-    assert splitter.handleWidth() == 4
-    assert viewer.overlay_swap_button.text() == ""
-    assert viewer.overlay_swap_button.objectName() == "overlay-panel-swap"
-    assert viewer.overlay_swap_button.width() <= 28
+    assert splitter.handleWidth() <= 10
+    handle = splitter.handle(1)
+    assert handle.cursor().shape() == Qt.CursorShape.SplitHCursor
+    assert "Right-click" in handle.toolTip()
+    assert not hasattr(viewer, "overlay_swap_button")
+    palette = handle.palette()
+    rendered_grip_colors = []
+    for mid_color in (QColor("#626a75"), QColor("#b7bec8")):
+        palette.setColor(QPalette.ColorRole.Mid, mid_color)
+        handle.setPalette(palette)
+        image = handle.grab().toImage()
+        center = handle.rect().center()
+        rendered_grip_colors.append(image.pixelColor(center))
+    assert rendered_grip_colors[0] != rendered_grip_colors[1]
     splitter.setSizes([420, 760])
     qapp.processEvents()
     before_sizes = splitter.sizes()
@@ -1799,10 +1811,33 @@ def test_overlay_center_swap_button_preserves_slot_sizes_and_viewer_state(tmp_pa
     before_clock = viewer.playback_clock
     before_camera = dict(viewer.overlay_view.opts)
     before_split_order = viewer.split_panel_order.copy()
-    button = viewer.overlay_swap_button
-    assert button.accessibleName()
-    assert button.toolTip()
-    QTest.mouseClick(button, Qt.MouseButton.LeftButton)
+
+    QTest.mouseClick(handle, Qt.MouseButton.LeftButton, pos=handle.rect().center())
+    qapp.processEvents()
+    assert viewer.overlay_panel_order == ["source-media", "overlay-3d"]
+    sizes_before_drag = splitter.sizes()
+    center = handle.rect().center()
+    QTest.mousePress(handle, Qt.MouseButton.LeftButton, pos=center)
+    QTest.mouseMove(handle, center + QPoint(45, 0), 100)
+    QTest.mouseRelease(handle, Qt.MouseButton.LeftButton, pos=center + QPoint(45, 0))
+    qapp.processEvents()
+    assert splitter.sizes() != sizes_before_drag
+    splitter.setSizes(before_sizes)
+    qapp.processEvents()
+
+    QTest.mouseClick(handle, Qt.MouseButton.RightButton, pos=handle.rect().center())
+    qapp.processEvents()
+    menu = handle.findChild(QMenu)
+    assert menu is not None and menu.isVisible()
+    assert [action.text() for action in menu.actions()] == ["Swap"]
+    menu.hide()
+    qapp.processEvents()
+    assert viewer.overlay_panel_order == ["source-media", "overlay-3d"]
+    QTest.mouseClick(handle, Qt.MouseButton.RightButton, pos=handle.rect().center())
+    qapp.processEvents()
+    menu = handle.findChild(QMenu)
+    menu.actions()[0].trigger()
+    menu.close()
     qapp.processEvents()
     assert viewer.overlay_panel_order == ["overlay-3d", "source-media"]
     assert splitter.widget(0).content is viewer.overlay_view
@@ -1812,10 +1847,15 @@ def test_overlay_center_swap_button_preserves_slot_sizes_and_viewer_state(tmp_pa
     assert viewer.playback_clock is before_clock
     assert viewer.overlay_view.opts == before_camera
     assert viewer.split_panel_order == before_split_order
-    button = viewer.overlay_swap_button
-    QTest.mouseClick(button, Qt.MouseButton.LeftButton)
-    assert viewer.overlay_panel_order == ["source-media", "overlay-3d"]
-    assert splitter.widget(0).content is viewer.source_overlay
+
+    for expected_order in (["source-media", "overlay-3d"], ["overlay-3d", "source-media"]):
+        QTest.mouseClick(handle, Qt.MouseButton.RightButton, pos=handle.rect().center())
+        qapp.processEvents()
+        menu = handle.findChild(QMenu)
+        menu.actions()[0].trigger()
+        menu.close()
+        qapp.processEvents()
+        assert viewer.overlay_panel_order == expected_order
     viewer.close()
 
 
@@ -1870,8 +1910,8 @@ def test_split_reflow_keeps_native_gl_contexts_and_paints_frames(tmp_path, qapp)
         viewer.resize(1680, 960)
         QTest.qWait(250)
         viewer.set_mode("overlay")
-        viewer.overlay_swap_button.click()
-        viewer.overlay_swap_button.click()
+        viewer.overlay_splitter.request_swap()
+        viewer.overlay_splitter.request_swap()
         viewer.set_mode("split")
         QTest.qWait(300)
 
@@ -2084,36 +2124,55 @@ def test_split_shift_drag_escape_and_outside_release_cancel_cleanly(tmp_path, qa
     viewer.close()
 
 
-@pytest.mark.parametrize("results_to_hide,expected_count", [
-    ([], 5),
-    (["cfg-3"], 4),
-    (["cfg-3", "cfg-2"], 3),
-    (["cfg-3", "cfg-2", "cfg-1"], 2),
-    (["cfg-3", "cfg-2", "cfg-1", "cfg-0"], 1),
+@pytest.mark.parametrize("results_to_hide,expected_count,expected_shape", [
+    ([], 5, (3, 2)),
+    (["cfg-3"], 4, (2, 2)),
+    (["cfg-3", "cfg-2"], 3, (2, 2)),
+    (["cfg-3", "cfg-2", "cfg-1"], 2, (2, 1)),
+    (["cfg-3", "cfg-2", "cfg-1", "cfg-0"], 1, (1, 1)),
 ])
 def test_split_grid_reflows_for_visible_panel_count(tmp_path, qapp, results_to_hide,
-                                                    expected_count):
+                                                    expected_count, expected_shape):
+    from PySide6.QtTest import QTest
     from calibfreehands.visualization.comparison import ComparisonViewer
     viewer = ComparisonViewer(_session(tmp_path, 4))
     viewer.resize(1280, 720)
     viewer.show()
     viewer.set_mode("split")
-    qapp.processEvents()
+    QTest.qWait(200)
     for config_id in results_to_hide:
         index = viewer._configuration_index(config_id)
         viewer._set_configuration_visible(index, False)
     qapp.processEvents()
     assert viewer.split_grid.count() == expected_count
-    expected_columns, expected_rows = viewer._split_grid_shape(expected_count)
-    assert viewer.split_columns == expected_columns
+    expected_columns, expected_rows = expected_shape
+    assert viewer.split_columns == expected_columns, (
+        f"shape={viewer.split_columns}x{viewer.split_rows}, "
+        f"available={viewer._split_available_size().width()}x{viewer._split_available_size().height()}"
+    )
     assert viewer.split_rows == expected_rows
     visible_ids = ["source-media", *(f"result:{config['id']}" for config in viewer.configurations
                                       if viewer.overlay_view.configuration_visible[
                                           viewer._configuration_index(config["id"])])]
     assert [viewer.split_grid.itemAt(index).widget().panel_id for index in range(viewer.split_grid.count())] == visible_ids
+    positions = [viewer.split_grid.getItemPosition(index)[:2]
+                 for index in range(viewer.split_grid.count())]
+    assert positions == [(index // expected_columns, index % expected_columns)
+                         for index in range(expected_count)]
     assert len({id(viewer.split_grid.itemAt(index).widget()) for index in range(viewer.split_grid.count())}) == expected_count
-    assert viewer.split_widget.minimumWidth() == expected_columns * 340
-    assert viewer.split_widget.minimumHeight() == expected_rows * 260
+    margins = viewer.split_grid.contentsMargins()
+    spacing = viewer.split_grid.spacing()
+    assert viewer.split_widget.minimumWidth() == (
+        expected_columns * 340 + max(0, expected_columns - 1) * spacing
+        + margins.left() + margins.right()
+    )
+    assert viewer.split_widget.minimumHeight() == (
+        expected_rows * 260 + max(0, expected_rows - 1) * spacing
+        + margins.top() + margins.bottom()
+    )
+    if expected_count == 5:
+        assert viewer.split_scroll.horizontalScrollBar().maximum() == 0
+        assert viewer.split_scroll.verticalScrollBar().maximum() == 0
     viewer.close()
 
 
@@ -2139,6 +2198,54 @@ def test_split_grid_restore_and_resize_preserve_canonical_order(tmp_path, qapp):
     assert viewer.split_columns >= 2 and viewer.split_rows == int(np.ceil(9 / viewer.split_columns))
     assert len({id(viewer.split_grid.itemAt(index).widget()) for index in range(9)}) == 9
     assert original_order != custom_order
+    viewer.close()
+
+
+def test_split_grid_adapts_to_viewport_and_keeps_large_result_widgets(tmp_path, qapp):
+    from PySide6.QtTest import QTest
+    from calibfreehands.visualization.comparison import ComparisonViewer
+    viewer = ComparisonViewer(_session(tmp_path, 12))
+    viewer.resize(1280, 720)
+    viewer.show()
+    viewer.set_mode("split")
+    QTest.qWait(200)
+    widget_ids = {panel_id: id(surface) for panel_id, surface in viewer.split_surfaces.items()}
+
+    def assert_row_major_and_usable():
+        expected_ids = viewer._visible_split_panel_ids()
+        assert viewer.split_grid.count() == len(expected_ids)
+        actual = []
+        for index in range(viewer.split_grid.count()):
+            row, column, row_span, column_span = viewer.split_grid.getItemPosition(index)
+            assert row_span == column_span == 1
+            actual.append((row, column, viewer.split_grid.itemAt(index).widget().panel_id))
+        assert actual == [(index // viewer.split_columns, index % viewer.split_columns, panel_id)
+                          for index, panel_id in enumerate(expected_ids)]
+        assert all(id(viewer.split_surfaces[panel_id]) == widget_ids[panel_id]
+                   for panel_id in viewer.split_surfaces)
+        assert all(viewer.split_surfaces[panel_id].minimumWidth() <= 340
+                   and viewer.split_surfaces[panel_id].minimumHeight() <= 260
+                   for panel_id in expected_ids)
+
+    landscape_columns = viewer.split_columns
+    assert_row_major_and_usable()
+    viewer.resize(720, 1280)
+    QTest.qWait(200)
+    assert viewer.split_columns < landscape_columns
+    assert_row_major_and_usable()
+    viewer.resize(1920, 720)
+    QTest.qWait(200)
+    assert viewer.split_columns >= landscape_columns
+    assert_row_major_and_usable()
+
+    viewer._set_configuration_visible(10, False)
+    hidden_id = "result:cfg-10"
+    assert hidden_id not in viewer._laid_out_panel_ids
+    viewer.reorder_split_panel(hidden_id, "result:cfg-2")
+    remembered_order = viewer.split_panel_order.copy()
+    viewer._set_configuration_visible(10, True)
+    assert viewer.split_panel_order == remembered_order
+    assert_row_major_and_usable()
     viewer.close()
 
 
@@ -2576,6 +2683,7 @@ def test_playback_icons_follow_palette_and_use_single_frame_arrows(tmp_path, qap
 
 
 def test_hud_layout_updates_are_coalesced_after_content_and_viewport_settle(tmp_path, qapp):
+    from PySide6.QtTest import QTest
     from calibfreehands.visualization.comparison import ComparisonViewer
 
     viewer = ComparisonViewer(_session(tmp_path, 3))
@@ -2604,6 +2712,8 @@ def test_hud_layout_updates_are_coalesced_after_content_and_viewport_settle(tmp_
         change()
         assert all(not panel.card.updatesEnabled() for panel in panels)
         assert calls == before
+        qapp.processEvents()
+        QTest.qWait(1)
         qapp.processEvents()
         assert all(panel.card.updatesEnabled() for panel in panels), [
             (index, panel.card.updatesEnabled(), panel._fit_timer.isActive())

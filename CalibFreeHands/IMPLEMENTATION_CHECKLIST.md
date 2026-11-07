@@ -243,3 +243,12 @@ Phase C Final native Windows testing and acceptance were reported by the user as
 - [x] Ensure Detach All opens at a renderable initial size so detached OpenGL views receive valid geometry.
 - [x] Native Windows rendering reproduced before the fix and verified after it with saved `.cfh` results; native context/framebuffer and interaction details are recorded in `VALIDATION_CHECKLIST.md`.
 - [ ] Phase D.1 remains pending user visual/interaction acceptance. D.2/D.3, Phase E/F/G, and release packaging remain deferred.
+
+### Phase D.1 Final Fix: Adaptive Grid & Overlay Divider UX (2026-11-07)
+
+- [x] Replaced the floor-based square-root grid heuristic with candidate column enumeration scored by minimum-size overflow, viewport-cell aspect balance, unused final-row positions, and row count; no panel-count-specific production branches.
+- [x] Normal 1280×720 Viewer geometry places 5/4/3/2/1 visible panels in 3×2, 2×2, 2×2, 2×1, and 1×1 row-major layouts. Five panels fit without scrollbars while preserving 340×260 minimum cells.
+- [x] Larger result counts, narrow/wide resize, hide/restore, and reordering a hidden result preserve canonical order and existing widget identities.
+- [x] Replaced the floating swap button with a neutral palette-aware three-dot QSplitterHandle grip; left drag resizes and right-click opens a `Swap` menu. Repeated swaps retain slot proportions and viewer state.
+- [x] Kept GL surfaces in their existing owning layouts and reused GL widgets. Native Windows saved-result check confirmed the five-panel 3×2 layout and valid rendering without GL errors/draw warnings.
+- [ ] Phase D.1 final user review remains pending. D.2 independent per-panel windows, D.3 detached synchronization/aspect ratio, Phase E polish/animations, Phase F/G, and release packaging remain deferred.

@@ -517,3 +517,14 @@ Phase C Final native Windows testing and acceptance were reported by the user as
 - [x] Full pytest suite: 313 passed, 1 skipped. App import, compileall, `pip check`, and `git diff --check` passed.
 - [ ] Computer Use native pipe was unavailable. Native Qt/window/framebuffer verification was performed directly, but no human visual acceptance is claimed. Phase D.1 remains unapproved until user confirmation.
 - [ ] D.2 individual Detach/Reattach, D.3 detached synchronization/aspect ratio, Phase E HUD polish/animations, Phase F/G, and release packaging remain deferred.
+
+### Phase D.1 Final Fix: Adaptive Grid & Overlay Divider UX (2026-11-07)
+
+- [x] Starting baseline: branch `CalibFreeHands`, HEAD/origin `090453291c4822e341ad9b7110c0635e32b4ebd2`, clean tree; full suite 313 passed, 1 skipped.
+- [x] Grid regression tests assert actual `QGridLayout` row/column placements at 1280×720: 5→3×2, 4→2×2, 3→2×2, 2→2×1, 1→1×1. Five visible panels have no horizontal/vertical scrollbar and retain 340×260 minimum panel dimensions.
+- [x] Twelve-result grid tests cover narrow portrait and wider landscape resizing, row-major placement, scrollable minimum-size behavior, hidden result reorder/restore, and persistent panel widget identities.
+- [x] Splitter interaction tests exercise left-click no-op, actual left-drag resize, right-click `Swap` menu, dismiss-without-selection, repeated menu swaps, stable panel identity/width/state, 8 px handle, horizontal-resize cursor, and palette-dependent three-dot grip rendering.
+- [x] Native Windows (`QT_QPA_PLATFORM=windows`) OpenGL regression test: 1 passed; native direct run with four saved `2_screw` `.cfh` bundles verified Overlay and Split, five-panel 3×2 placement, right-click swap, visibility reflow, resize, playback/camera, and existing Detach All. GL framebuffer checks passed; GL errors=0, pyqtgraph draw warnings=0.
+- [x] Focused comparison Viewer suite: 109 passed, 1 skipped. Full pytest suite: 314 passed, 1 skipped. Application import, compileall, and `pip check` passed.
+- [ ] User has confirmed the preceding rendering recovery. This final layout/divider pass still awaits user review; no final Phase D.1 approval is claimed.
+- [ ] Phase D.2 independent Source/3D windows and individual Detach/Reattach remain deferred. D.3 detached-state synchronization and Source Media aspect ratio, Phase E HUD/animation polish, Phase F/G, and release packaging remain deferred.
