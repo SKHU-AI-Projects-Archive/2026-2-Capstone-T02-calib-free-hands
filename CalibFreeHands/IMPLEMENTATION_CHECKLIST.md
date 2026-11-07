@@ -185,3 +185,12 @@ All implementation items above are complete. Remaining user and Windows GUI acce
 - [x] Separate numeric scale Labels from Grid and Axis visibility. Physical/Hand changes and GT selection preserve the active camera and frame.
 - [x] Expose Focus GT / Focus Hands, Space Overview, and Fit All as separate camera actions; synchronize workspace and labels across Overlay, Split, and existing detached views.
 - [x] Correct README's built-in Original preset description to all-frame sampling, matching the Phase B implementation.
+
+## Phase C.1A Workspace Geometry and Controls Stabilization
+
+- [x] Use one centered cubic workspace model for all three grid planes, axis lines, numeric labels, and workspace framing in both Physical and Hand modes.
+- [x] Preserve robust whole-video Hand bounds while expanding them to a cube; keep all raw camera-space results unchanged and retain Physical fallback for missing/invalid geometry.
+- [x] Derive label offsets from workspace scale, show actual metric ticks with normalized zero labels, and remove stale numeric label items when changing modes.
+- [x] Replace the Labels checkbox with an accessible On/Off switch; consolidate View, Space, Labels, and Pin in the palette-aware primary control strip and remove duplicate state text.
+- [x] Preserve camera/frame behavior and keep Grid, Axis, and numeric Labels visibility independent.
+- [ ] Native Windows visual acceptance and manual playback review remain pending; Phase C.1B camera behavior and detached-view redesign are deferred.

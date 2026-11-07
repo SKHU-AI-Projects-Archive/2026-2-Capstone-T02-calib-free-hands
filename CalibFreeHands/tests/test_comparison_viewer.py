@@ -202,9 +202,11 @@ def test_detached_comparison_views_share_current_pose_and_remain_linked(tmp_path
         assert tuple(params["center"]) == pytest.approx((0.1, -0.3, 0.2))
     viewer.set_space_mode("hand")
     expected_bounds = viewer.overlay_view.workspace_bounds_m.copy()
+    side_lengths = np.ptp(expected_bounds, axis=1)
+    np.testing.assert_allclose(side_lengths, np.repeat(side_lengths[0], 3))
     for view in detached_views:
         np.testing.assert_allclose(view.workspace_bounds_m, expected_bounds)
-    viewer.scale_labels_checkbox.setChecked(False)
+    viewer.labels_switch.setChecked(False)
     assert all(not label.visible() for view in detached_views for label in view.numeric_labels)
     window.close()
     viewer.close()
@@ -326,10 +328,14 @@ def test_physical_and_hand_spaces_share_gt_bounds_without_camera_or_frame_jumps(
     from calibfreehands.visualization.viewer import hand_space_bounds
 
     viewer = ComparisonViewer(_session(tmp_path, 3, gt_index=1))
-    viewer.loaded_results[2].result.keypoints_3d[:] = 15000.0
+    viewer.loaded_results[2].result.keypoints_3d[..., 2] = 15.0
     gt = viewer.loaded_results[1].result
     expected_gt_bounds = hand_space_bounds(gt.keypoints_3d, gt.detected)
-    raw_before = [loaded.result.keypoints_3d.copy() for loaded in viewer.loaded_results]
+    raw_before = [(loaded.result.keypoints_3d.copy(),
+                   None if loaded.result.mano_vertices is None else loaded.result.mano_vertices.copy(),
+                   None if loaded.result.camera_translation is None else loaded.result.camera_translation.copy(),
+                   loaded.result.focal_px.copy(), loaded.result.detected.copy())
+                  for loaded in viewer.loaded_results]
     viewer.slider.setValue(1)
     before_camera = viewer.overlay_view.cameraParams()
     before_frame = viewer.slider.value()
@@ -337,7 +343,8 @@ def test_physical_and_hand_spaces_share_gt_bounds_without_camera_or_frame_jumps(
     viewer.space_mode_switch.setChecked(True)
 
     assert viewer.space_mode == "hand"
-    assert viewer.space_mode_value.text() == "Hand"
+    assert viewer.space_mode_switch.toolTip() == "Space: Hand"
+    assert not hasattr(viewer, "space_mode_value")
     assert viewer.slider.value() == before_frame
     assert viewer.overlay_view.cameraParams() == before_camera
     for view in [viewer.overlay_view, *viewer.split_views]:
@@ -345,13 +352,14 @@ def test_physical_and_hand_spaces_share_gt_bounds_without_camera_or_frame_jumps(
         assert view.cameraParams() == before_camera
     assert np.max(np.ptp(viewer.overlay_view.workspace_bounds_m, axis=1)) < 1.0
 
-    viewer.scale_labels_checkbox.setChecked(False)
+    viewer.labels_switch.setChecked(False)
     assert viewer.overlay_view.show_labels is False
     assert all(not label.visible() for label in viewer.overlay_view.numeric_labels)
     assert all(grid.visible() for grid in viewer.overlay_view.grids)
+    assert viewer.overlay_view.axis.visible()
     assert viewer.slider.value() == before_frame
     assert viewer.overlay_view.cameraParams() == before_camera
-    viewer.scale_labels_checkbox.setChecked(True)
+    viewer.labels_switch.setChecked(True)
     assert all(label.visible() for label in viewer.overlay_view.numeric_labels)
 
     viewer.reference_selector.setCurrentIndex(viewer.reference_selector.findData("cfg-0"))
@@ -370,7 +378,13 @@ def test_physical_and_hand_spaces_share_gt_bounds_without_camera_or_frame_jumps(
     np.testing.assert_allclose(viewer.overlay_view.workspace_bounds_m, ((-1, 1), (-1, 1), (0, 2)))
     assert viewer.overlay_view.cameraParams() == before_camera
     for loaded, before in zip(viewer.loaded_results, raw_before):
-        np.testing.assert_array_equal(loaded.result.keypoints_3d, before)
+        np.testing.assert_array_equal(loaded.result.keypoints_3d, before[0])
+        if before[1] is not None:
+            np.testing.assert_array_equal(loaded.result.mano_vertices, before[1])
+        if before[2] is not None:
+            np.testing.assert_array_equal(loaded.result.camera_translation, before[2])
+        np.testing.assert_array_equal(loaded.result.focal_px, before[3])
+        np.testing.assert_array_equal(loaded.result.detected, before[4])
     viewer.close()
 
 
@@ -424,6 +438,28 @@ def test_single_cfh_viewer_uses_sole_result_for_hand_space_and_focus(tmp_path, q
     frame = viewer.slider.value()
     viewer.focus_gt()
     assert viewer.slider.value() == frame
+    viewer.close()
+
+
+def test_scale_labels_switch_preserves_playback_and_workspace_visibility_state(tmp_path, qapp):
+    from calibfreehands.visualization.comparison import ComparisonViewer
+
+    viewer = ComparisonViewer(_session(tmp_path, 3))
+    viewer.slider.setValue(1)
+    viewer.timer.start(1000)
+    before_frame = viewer.slider.value()
+    before_camera = viewer.overlay_view.cameraParams()
+    before_grid = tuple(grid.visible() for grid in viewer.overlay_view.grids)
+    before_axis = viewer.overlay_view.axis.visible()
+    for visible in (False, True, False, True, False, True):
+        viewer.labels_switch.setChecked(visible)
+        assert viewer.timer.isActive()
+        assert viewer.slider.value() == before_frame
+        assert viewer.overlay_view.cameraParams() == before_camera
+        assert tuple(grid.visible() for grid in viewer.overlay_view.grids) == before_grid
+        assert viewer.overlay_view.axis.visible() == before_axis
+        assert all(label.visible() == visible for label in viewer.overlay_view.numeric_labels)
+    viewer.timer.stop()
     viewer.close()
 
 
@@ -1482,7 +1518,7 @@ def test_detection_bar_off_reflows_hud_before_any_pointer_event(tmp_path, qapp):
 def test_mode_switch_has_compact_neutral_track_and_single_view_label(tmp_path, qapp):
     from PySide6.QtCore import Qt
     from PySide6.QtGui import QColor, QPalette
-    from PySide6.QtWidgets import QAbstractButton, QLabel
+    from PySide6.QtWidgets import QAbstractButton, QCheckBox, QLabel
     from calibfreehands.visualization.comparison import ComparisonViewer
 
     viewer = ComparisonViewer(_session(tmp_path, 2))
@@ -1500,7 +1536,22 @@ def test_mode_switch_has_compact_neutral_track_and_single_view_label(tmp_path, q
     assert not hasattr(viewer, "split_mode_label")
     assert viewer.mode_switch.focusPolicy().name == "StrongFocus"
     assert viewer.mode_selector.layout().indexOf(viewer.mode_label) < viewer.mode_selector.layout().indexOf(viewer.mode_switch)
-    assert viewer.mode_selector.layout().indexOf(viewer.mode_switch) < viewer.mode_selector.layout().indexOf(viewer.pin_controls_button)
+    assert viewer.mode_selector.layout().indexOf(viewer.pin_controls_button) == -1
+    assert viewer.space_mode_switch.isCheckable() and viewer.labels_switch.isCheckable()
+    assert not isinstance(viewer.labels_switch, QCheckBox)
+    assert not hasattr(viewer, "space_mode_value")
+    assert viewer.space_mode_switch.toolTip() == "Space: Physical"
+    assert viewer.labels_switch.toolTip() == "Scale labels: On"
+    assert viewer.space_mode_switch.accessibleName() == "3D space mode"
+    assert viewer.labels_switch.accessibleName() == "Scale labels"
+    controls = [viewer.mode_selector, viewer.space_mode_selector, viewer.labels_selector,
+                viewer.pin_controls_button]
+    assert [viewer.primary_controls.layout().indexOf(control) for control in controls] == [0, 1, 2, 3]
+    toolbar_widgets = [viewer.toolbar.itemAt(index).widget() for index in range(viewer.toolbar.count())]
+    toolbar_widgets = [widget for widget in toolbar_widgets if widget is not None]
+    assert toolbar_widgets[:4] == [
+        viewer.primary_controls, viewer.results_menu_button, viewer.reference_label, viewer.reference_selector
+    ]
     assert 24 <= viewer.pin_controls_button.width() <= 26
     assert viewer.pin_controls_button.focusPolicy().name == "StrongFocus"
     for background, foreground, muted in (
@@ -1512,6 +1563,17 @@ def test_mode_switch_has_compact_neutral_track_and_single_view_label(tmp_path, q
         palette.setColor(QPalette.ColorRole.Mid, muted)
         viewer.setPalette(palette)
         assert viewer.mode_switch.palette().color(QPalette.ColorRole.Window) == background
+        assert viewer.primary_controls.palette().color(QPalette.ColorRole.Window) == background
+        assert all(label.palette().color(QPalette.ColorRole.WindowText) == foreground
+                   for label in (viewer.mode_label, viewer.space_label, viewer.labels_label))
+        assert viewer.primary_controls.autoFillBackground()
+        assert viewer.primary_controls.sizeHint().width() < 400
+    viewer.set_space_mode("hand")
+    assert viewer.space_mode_switch.toolTip() == "Space: Hand"
+    viewer.labels_switch.setChecked(False)
+    assert viewer.labels_switch.toolTip() == "Scale labels: Off"
+    viewer.labels_switch.setChecked(True)
+    assert viewer.labels_switch.toolTip() == "Scale labels: On"
     for _ in range(4):
         viewer.mode_switch.click()
         assert viewer.mode == "split"
@@ -1562,8 +1624,8 @@ def test_pin_button_icon_is_palette_aware_and_view_precedes_results(tmp_path, qa
     viewer.resize(1280, 720)
     viewer.show()
     qapp.processEvents()
-    assert viewer.mode_selector.geometry().left() < viewer.results_menu_button.geometry().left()
-    group_gap = viewer.results_menu_button.geometry().left() - viewer.mode_selector.geometry().right() - 1
+    assert viewer.primary_controls.geometry().left() < viewer.results_menu_button.geometry().left()
+    group_gap = viewer.results_menu_button.geometry().left() - viewer.primary_controls.geometry().right() - 1
     assert 10 <= group_gap <= 14
 
     for window, off_surface, off_ink in (

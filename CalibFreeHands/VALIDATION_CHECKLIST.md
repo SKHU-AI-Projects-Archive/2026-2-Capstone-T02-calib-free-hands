@@ -461,3 +461,10 @@ All entries below are pending implementation and validation. No acceptance item 
 - [x] Offscreen comparison tests cover independent Labels visibility, frame and camera preservation during mode/GT changes, detached workspace propagation, and distinct Focus GT / Space Overview / Fit All behavior.
 - [x] Existing same-source saved results remain available read-only under `D:\hand-demo\samples`, including Manual Focal 1655/2500/15000 px and Original results.
 - [ ] Native Windows visual acceptance and manual playback check remain pending; offscreen tests do not establish visual acceptance.
+
+## Phase C.1A Workspace Geometry and Controls Stabilization (2026-11-07)
+
+- [x] Offscreen viewer tests validate the shared centered cube, equal plane/axis lengths, metric tick placement, zero formatting, robust Hand bounds, Physical fallback, and stale-label cleanup across repeated mode changes.
+- [x] Comparison tests validate the accessible Labels switch, palette-aware compact primary control strip, toolbar order, and unchanged frame/camera behavior; detached views inherit the Labels state.
+- [x] Viewer/comparison test modules: 100 passed. Full pytest suite: 281 passed.
+- [ ] Native Windows visual acceptance and manual playback review remain pending; no native visual claim is made from offscreen testing.

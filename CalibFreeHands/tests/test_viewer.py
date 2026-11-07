@@ -142,7 +142,7 @@ def test_fixed_metric_workspace_planes_axes_and_major_labels(tmp_path, qapp):
     from PySide6.QtGui import QVector3D
     from calibfreehands.visualization.viewer import (
         GRID_MAJOR_SPACING_M, GRID_MINOR_SPACING_M, WORKSPACE_BOUNDS_M,
-        GRID_LABEL_OFFSET_M, ResultViewer, _view_point_from_raw,
+    ResultViewer, _view_point_from_raw,
     )
 
     npz, _ = save_result(_viewer_result(mesh=False), tmp_path, {"schema_version": 1})
@@ -157,31 +157,25 @@ def test_fixed_metric_workspace_planes_axes_and_major_labels(tmp_path, qapp):
         assert grid.spacing() == pytest.approx([0.1, 0.1, 1.0])
 
     planes = [grid.transform().map(QVector3D(0, 0, 0)) for grid in view.grids]
-    assert [point.toTuple() for point in planes] == pytest.approx([(0, 0, 0), (0, -1, 0), (0, -1, 0)])
-    assert view.grids[0].transform().map(QVector3D(0, 1, 0)).toTuple() == pytest.approx((0, 0, 1))
-    assert view.grids[1].transform().map(QVector3D(0, 1, 0)).toTuple() == pytest.approx((0, 0, 0))
-    assert view.grids[2].transform().map(QVector3D(1, 0, 0)).toTuple() == pytest.approx((0, -1, -1))
+    assert [point.toTuple() for point in planes] == pytest.approx([(0, -1, 0)] * 3)
     assert view.axis.pos == pytest.approx(np.asarray((
-        _view_point_from_raw((-1, 0, 0)), _view_point_from_raw((1, 0, 0)),
-        _view_point_from_raw((0, 1, 0)), _view_point_from_raw((0, -1, 0)),
+        _view_point_from_raw((-1, 0, 1)), _view_point_from_raw((1, 0, 1)),
+        _view_point_from_raw((0, 1, 1)), _view_point_from_raw((0, -1, 1)),
         _view_point_from_raw((0, 0, 0)), _view_point_from_raw((0, 0, 2)),
     )))
 
-    assert len(view.numeric_labels) == 13
-    assert sum(label.text == "0" for label in view.numeric_labels) == 1
-    origin_label = next(label for label in view.numeric_labels if label.text == "0")
-    np.testing.assert_allclose(origin_label.pos,
-                               _view_point_from_raw((GRID_LABEL_OFFSET_M, -GRID_LABEL_OFFSET_M,
-                                                     GRID_LABEL_OFFSET_M)))
-    for text, raw_point in (("50 cm", (-GRID_LABEL_OFFSET_M, 0, 0.5)),
-                            ("50 cm", (GRID_LABEL_OFFSET_M, -0.5, 0)),
-                            ("-50 cm", (GRID_LABEL_OFFSET_M, 0.5, 0)),
-                            ("100 cm", (1, -GRID_LABEL_OFFSET_M, 0)),
-                            ("150 cm", (-GRID_LABEL_OFFSET_M, 0, 1.5))):
+    assert len(view.numeric_labels) == 15
+    assert sum(label.text == "0 cm" for label in view.numeric_labels) == 3
+    assert not any(label.text == "-0 cm" for label in view.numeric_labels)
+    for text, raw_point in (("50 cm", (0.5, -0.12, 1)),
+                            ("50 cm", (0.12, -0.5, 1)),
+                            ("-50 cm", (0.12, 0.5, 1)),
+                                ("100 cm", (0.12, -1, 1)),
+                            ("150 cm", (-0.12, 0, 1.5))):
         assert any(label.text == text and np.allclose(label.pos, _view_point_from_raw(raw_point))
                    for label in view.numeric_labels)
     assert [label.text for label in view.axis_labels] == ["X", "Y", "Z"]
-    for label, raw_point in zip(view.axis_labels, ((1.3, 0, 0), (0, -1.3, 0), (0, 0, 2.3))):
+    for label, raw_point in zip(view.axis_labels, ((1.16, 0, 1), (0, -1.16, 1), (0, 0, 2.16))):
         np.testing.assert_allclose(label.pos, _view_point_from_raw(raw_point))
     assert all(label.color.getRgb() == view.numeric_label_color for label in view.numeric_labels)
     viewer.close()
@@ -302,7 +296,12 @@ def test_hand_space_bounds_are_robust_metric_and_fall_back_to_physical_workspace
     assert np.isfinite(bounds).all()
     assert np.all(bounds[:, 1] > bounds[:, 0])
     assert np.all(bounds[:, 1] - bounds[:, 0] >= HAND_SPACE_MIN_SPAN_M)
+    assert np.ptp(bounds[:, 1] - bounds[:, 0]) == pytest.approx(0.0)
     assert np.max(np.abs(bounds)) < 2.0
+    robust_points = keypoints[:-1, 0]
+    robust_points = robust_points[np.isfinite(robust_points).all(axis=-1)]
+    assert np.all(robust_points.min(axis=0) >= bounds[:, 0])
+    assert np.all(robust_points.max(axis=0) <= bounds[:, 1])
     np.testing.assert_array_equal(keypoints, raw_before)
     assert hand_space_bounds(keypoints, np.zeros_like(detected)).tolist() == [list(axis) for axis in WORKSPACE_BOUNDS_M]
     assert nice_grid_spacing(2.0) == pytest.approx(0.5)
@@ -320,12 +319,64 @@ def test_physical_y_labels_and_positive_axis_follow_y_up_display(tmp_path, qapp)
 
     y_segment = gl_view.axis.pos[2:4]
     assert y_segment[1, 2] > y_segment[0, 2]
-    assert any(label.text == "100 cm" and np.allclose(label.pos, _view_point_from_raw((0.15, -1.0, 0.0)))
+    assert any(label.text == "100 cm" and np.allclose(label.pos, _view_point_from_raw((0.12, -1.0, 1.0)))
                for label in gl_view.numeric_labels)
-    assert any(label.text == "-100 cm" and np.allclose(label.pos, _view_point_from_raw((0.15, 1.0, 0.0)))
+    assert any(label.text == "-100 cm" and np.allclose(label.pos, _view_point_from_raw((0.12, 1.0, 1.0)))
                for label in gl_view.numeric_labels)
     np.testing.assert_array_equal(viewer.loaded.result.keypoints_3d, raw_before)
     viewer.close()
+
+
+def test_workspace_planes_axes_and_labels_share_one_cubic_definition(qapp):
+    from PySide6.QtGui import QVector3D
+    from calibfreehands.visualization.viewer import (
+        LoadedResult, _GLResultView, RAW_TO_VIEW, _view_point_from_raw, hand_space_bounds,
+    )
+
+    result = _viewer_result(mesh=True)
+    view = _GLResultView(LoadedResult(result))
+    physical_center = _view_point_from_raw((0.0, 0.0, 1.0))
+    assert [grid.size()[:2] for grid in view.grids] == [pytest.approx([2.0, 2.0])] * 3
+    assert [grid.transform().map(QVector3D()).toTuple() for grid in view.grids] == [
+        pytest.approx(physical_center)
+    ] * 3
+    physical_axis_lengths = np.linalg.norm(view.axis.pos.reshape(3, 2, 3)[:, 1]
+                                           - view.axis.pos.reshape(3, 2, 3)[:, 0], axis=1)
+    np.testing.assert_allclose(physical_axis_lengths, (2.0, 2.0, 2.0))
+
+    hand_bounds = hand_space_bounds(result.keypoints_3d, result.detected, result.mano_vertices)
+    view.set_workspace("hand", hand_bounds)
+    side = float(np.ptp(hand_bounds, axis=1)[0])
+    assert np.ptp(hand_bounds, axis=1) == pytest.approx([side] * 3)
+    assert [grid.size()[:2] for grid in view.grids] == [pytest.approx([side, side])] * 3
+    hand_center = _view_point_from_raw(hand_bounds.mean(axis=1))
+    assert [grid.transform().map(QVector3D()).toTuple() for grid in view.grids] == [
+        pytest.approx(hand_center)
+    ] * 3
+    hand_axis_lengths = np.linalg.norm(view.axis.pos.reshape(3, 2, 3)[:, 1]
+                                       - view.axis.pos.reshape(3, 2, 3)[:, 0], axis=1)
+    np.testing.assert_allclose(hand_axis_lengths, (side, side, side))
+
+    original_labels = tuple(view.numeric_labels)
+    original_label_ids = tuple(id(label) for label in original_labels)
+    mode_item_counts = {}
+    for mode in ("physical", "hand", "physical", "hand", "physical", "hand"):
+        view.set_workspace(mode, hand_bounds if mode == "hand" else None)
+        view.set_labels_visible(mode == "hand")
+        if mode in mode_item_counts:
+            assert len(view.items) == mode_item_counts[mode]
+        mode_item_counts[mode] = len(view.items)
+        if mode == "hand":
+            assert set(id(label) for label in view.numeric_labels).isdisjoint(original_label_ids)
+            raw_label_positions = np.asarray([label.pos @ RAW_TO_VIEW for label in view.numeric_labels])
+            center = hand_bounds.mean(axis=1)
+            half_span = np.ptp(hand_bounds, axis=1) / 2
+            assert np.all(np.abs(raw_label_positions - center) <= half_span + side * 0.07)
+        else:
+            assert len(view.numeric_labels) == 15
+    assert all(label.visible() for label in view.numeric_labels)
+    assert len(original_label_ids) == len(view.numeric_labels)
+    view.close()
 
 
 def test_single_result_viewer_starts_in_hand_view_and_exposes_camera_modes(tmp_path, qapp):
@@ -533,9 +584,9 @@ def test_axis_ranges_remain_fixed_to_metric_workspace(qapp):
     assert np.linalg.norm(view.axis.pos[1] - view.axis.pos[0]) == pytest.approx(2.0)
     assert np.linalg.norm(view.axis.pos[3] - view.axis.pos[2]) == pytest.approx(2.0)
     assert np.linalg.norm(view.axis.pos[5] - view.axis.pos[4]) == pytest.approx(2.0)
-    np.testing.assert_allclose(view.axis_labels[0].pos, (-1.3, 0, 0))
-    np.testing.assert_allclose(view.axis_labels[1].pos, (0, 0, 1.3))
-    np.testing.assert_allclose(view.axis_labels[2].pos, (0, -2.3, 0))
+    np.testing.assert_allclose(view.axis_labels[0].pos, (-1.16, -1, 0))
+    np.testing.assert_allclose(view.axis_labels[1].pos, (0, -1, 1.16))
+    np.testing.assert_allclose(view.axis_labels[2].pos, (0, -2.16, 0))
 
 
 def test_click_context_routes_arrows_without_mutating_frame_in_orbit_mode(tmp_path, qapp):

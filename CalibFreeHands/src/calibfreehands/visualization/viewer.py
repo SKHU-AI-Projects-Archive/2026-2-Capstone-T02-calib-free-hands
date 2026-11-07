@@ -31,8 +31,8 @@ HAND_SPACE_MIN_SPAN_M = 0.2
 HAND_SPACE_PADDING_FRACTION = 0.15
 HAND_SPACE_MIN_PADDING_M = 0.05
 HAND_SPACE_OUTLIER_LIMIT_M = 0.25
-GRID_LABEL_OFFSET_M = 0.15
-AXIS_LABEL_MARGIN_M = 0.3
+WORKSPACE_LABEL_OFFSET_FRACTION = 0.06
+WORKSPACE_AXIS_LABEL_OFFSET_FRACTION = 0.08
 
 
 def _view_point_from_raw(point):
@@ -64,6 +64,69 @@ def _camera_distance_for_radius(radius, fov_degrees=60.0, aspect=DEFAULT_WORKSPA
 
 def default_metric_camera_distance(fov_degrees=60.0, aspect=DEFAULT_WORKSPACE_ASPECT):
     return _camera_distance_for_radius(_workspace_radius(), fov_degrees, aspect)
+
+
+@dataclass(frozen=True)
+class WorkspaceGeometry:
+    """One metric cube definition for grid, axes, labels, and camera framing."""
+
+    space_mode: str
+    center_raw: tuple[float, float, float]
+    side_length_m: float
+    bounds_raw: tuple[tuple[float, float], tuple[float, float], tuple[float, float]]
+    major_spacing_m: float
+    minor_spacing_m: float
+
+    @property
+    def bounds_array(self) -> np.ndarray:
+        return np.asarray(self.bounds_raw, dtype=np.float64)
+
+    @property
+    def display_center(self) -> np.ndarray:
+        return _view_point_from_raw(self.center_raw)
+
+    @property
+    def display_corners(self) -> np.ndarray:
+        return np.asarray([
+            (x, y, z)
+            for x in self.bounds_raw[0]
+            for y in self.bounds_raw[1]
+            for z in self.bounds_raw[2]
+        ], dtype=np.float64) @ RAW_TO_VIEW.T
+
+
+def workspace_geometry(space_mode: str, bounds_m: np.ndarray | None = None) -> WorkspaceGeometry:
+    if space_mode not in {"physical", "hand"}:
+        raise ValueError(f"unknown 3D space mode: {space_mode}")
+    bounds = np.asarray(WORKSPACE_BOUNDS_M if space_mode == "physical" or bounds_m is None else bounds_m,
+                        dtype=np.float64)
+    if bounds.shape != (3, 2) or not np.isfinite(bounds).all() or np.any(bounds[:, 1] <= bounds[:, 0]):
+        raise ValueError("workspace bounds must be finite increasing [axis, lower/upper] pairs")
+    if space_mode == "hand" and np.array_equal(bounds, np.asarray(WORKSPACE_BOUNDS_M)):
+        return workspace_geometry("physical")
+    if space_mode == "physical":
+        bounds = np.asarray(WORKSPACE_BOUNDS_M, dtype=np.float64)
+        side = 2.0
+        major, minor = GRID_MAJOR_SPACING_M, GRID_MINOR_SPACING_M
+    else:
+        center = bounds.mean(axis=1)
+        side = float(np.max(np.ptp(bounds, axis=1)))
+        if side <= 0 or not np.isfinite(side):
+            return workspace_geometry("physical")
+        if center[2] - side / 2 < 0 and bounds[2, 0] >= 0:
+            center[2] = side / 2
+        bounds = np.column_stack((center - side / 2, center + side / 2))
+        major = nice_grid_spacing(side)
+        minor = major / 5.0
+    center = bounds.mean(axis=1)
+    return WorkspaceGeometry(
+        space_mode="physical" if space_mode == "physical" else "hand",
+        center_raw=tuple(float(value) for value in center),
+        side_length_m=side,
+        bounds_raw=tuple(tuple(float(value) for value in pair) for pair in bounds),
+        major_spacing_m=major,
+        minor_spacing_m=minor,
+    )
 
 
 def hand_space_bounds(keypoints_3d: np.ndarray, detected: np.ndarray,
@@ -122,7 +185,11 @@ def hand_space_bounds(keypoints_3d: np.ndarray, detected: np.ndarray,
     too_small = spans < HAND_SPACE_MIN_SPAN_M
     bounds[too_small, 0] = centers[too_small] - HAND_SPACE_MIN_SPAN_M / 2
     bounds[too_small, 1] = centers[too_small] + HAND_SPACE_MIN_SPAN_M / 2
-    return bounds
+    cube_side = float(np.max(bounds[:, 1] - bounds[:, 0]))
+    cube_center = bounds.mean(axis=1)
+    if cube_center[2] - cube_side / 2 < 0 and bounds[2, 0] >= 0:
+        cube_center[2] = cube_side / 2
+    return np.column_stack((cube_center - cube_side / 2, cube_center + cube_side / 2))
 
 
 def nice_grid_spacing(span_m: float, target_major_intervals: int = 5) -> float:
@@ -325,10 +392,7 @@ class _GLResultView(gl.GLViewWidget):
         self.numeric_labels = []
         self.addItem(self.axis)
         for label in self.axis_labels: self.addItem(label)
-        self.workspace_space_mode = "physical"
-        self.workspace_bounds_m = np.asarray(WORKSPACE_BOUNDS_M, dtype=np.float64)
-        self.workspace_minor_spacing_m = GRID_MINOR_SPACING_M
-        self.workspace_major_spacing_m = GRID_MAJOR_SPACING_M
+        self.workspace = workspace_geometry("physical")
         self._configure_workspace()
         self.metric_center = np.asarray(metric_workspace_center_display(), dtype=np.float64)
         self.default_metric_distance = default_metric_camera_distance(self.opts["fov"])
@@ -344,6 +408,30 @@ class _GLResultView(gl.GLViewWidget):
         for item in (*self.joints, *self.bones, *self.meshes): self.addItem(item); item.setVisible(False)
         self.set_mesh_opacity(self.mesh_opacity)
         self.set_frame(0)
+
+    @property
+    def workspace_space_mode(self) -> str:
+        return self.workspace.space_mode
+
+    @property
+    def workspace_bounds_m(self) -> np.ndarray:
+        return self.workspace.bounds_array
+
+    @property
+    def workspace_center_raw(self) -> np.ndarray:
+        return np.asarray(self.workspace.center_raw, dtype=np.float64)
+
+    @property
+    def workspace_side_length_m(self) -> float:
+        return self.workspace.side_length_m
+
+    @property
+    def workspace_major_spacing_m(self) -> float:
+        return self.workspace.major_spacing_m
+
+    @property
+    def workspace_minor_spacing_m(self) -> float:
+        return self.workspace.minor_spacing_m
     def mousePressEvent(self, event):
         self.setFocus(Qt.FocusReason.MouseFocusReason)
         super().mousePressEvent(event)
@@ -370,79 +458,69 @@ class _GLResultView(gl.GLViewWidget):
             self.removeItem(label)
         self.numeric_labels.clear()
 
-        raw_corners = np.asarray([
-            (x, y, z)
-            for x in self.workspace_bounds_m[0]
-            for y in self.workspace_bounds_m[1]
-            for z in self.workspace_bounds_m[2]
-        ])
-        display_corners = raw_corners @ RAW_TO_VIEW.T
-        lower = display_corners.min(axis=0)
-        upper = display_corners.max(axis=0)
-        span = upper - lower
-        center = (lower + upper) / 2
-        x_span, depth_span, up_span = span
-        center_x, center_depth, center_up = center
-
-        raw_center = self.workspace_bounds_m.mean(axis=1)
+        workspace = self.workspace
+        side = workspace.side_length_m
+        display_center = workspace.display_center
         grid_specs = (
-            (x_span, up_span, (90, 1, 0, 0), (center_x, -self.workspace_bounds_m[2, 0], center_up)),
-            (x_span, depth_span, None, (center_x, center_depth, 0.0)),
-            (depth_span, up_span, (90, 0, 1, 0), (-raw_center[0], center_depth, center_up)),
+            (90, 1, 0, 0),
+            None,
+            (90, 0, 1, 0),
         )
-        for grid, (width, height, rotation, position) in zip(self.grids, grid_specs):
+        for grid, rotation in zip(self.grids, grid_specs):
             grid.resetTransform()
-            grid.setSize(float(width), float(height), 1.0)
+            grid.setSize(side, side, 1.0)
             grid.setSpacing(self.workspace_minor_spacing_m, self.workspace_minor_spacing_m, 1.0)
             if rotation:
                 grid.rotate(*rotation)
-            grid.translate(*position)
+            grid.translate(*display_center)
 
-        axis_center = np.zeros(3) if self.workspace_space_mode == "physical" else raw_center
+        raw_center = np.asarray(workspace.center_raw)
+        half_side = side / 2.0
         raw_segments = np.asarray((
-            ((self.workspace_bounds_m[0, 0], axis_center[1], axis_center[2]),
-             (self.workspace_bounds_m[0, 1], axis_center[1], axis_center[2])),
-            ((axis_center[0], self.workspace_bounds_m[1, 1], axis_center[2]),
-             (axis_center[0], self.workspace_bounds_m[1, 0], axis_center[2])),
-            ((axis_center[0], axis_center[1], self.workspace_bounds_m[2, 0]),
-             (axis_center[0], axis_center[1], self.workspace_bounds_m[2, 1])),
+            ((raw_center[0] - half_side, raw_center[1], raw_center[2]),
+             (raw_center[0] + half_side, raw_center[1], raw_center[2])),
+            ((raw_center[0], raw_center[1] + half_side, raw_center[2]),
+             (raw_center[0], raw_center[1] - half_side, raw_center[2])),
+            ((raw_center[0], raw_center[1], raw_center[2] - half_side),
+             (raw_center[0], raw_center[1], raw_center[2] + half_side)),
         ), dtype=np.float32)
         positions = (raw_segments @ RAW_TO_VIEW.T).reshape(-1, 3)
         colors = np.repeat(np.asarray(((1, 0.2, 0.2, 1), (0.2, 1, 0.2, 1),
                                        (0.3, 0.5, 1, 1)), dtype=np.float32), 2, axis=0)
         self.axis.setData(pos=np.ascontiguousarray(positions), color=colors, mode="lines")
 
-        x_positive = self.workspace_bounds_m[0, 1]
-        y_positive = self.workspace_bounds_m[1, 0]
-        z_positive = self.workspace_bounds_m[2, 1]
+        axis_label_offset = min(side * WORKSPACE_AXIS_LABEL_OFFSET_FRACTION,
+                                self.workspace_major_spacing_m * 0.5)
         axis_endpoints = (
-            (x_positive + AXIS_LABEL_MARGIN_M, axis_center[1], axis_center[2]),
-            (axis_center[0], y_positive - AXIS_LABEL_MARGIN_M, axis_center[2]),
-            (axis_center[0], axis_center[1], z_positive + AXIS_LABEL_MARGIN_M),
+            (raw_center[0] + half_side + axis_label_offset, raw_center[1], raw_center[2]),
+            (raw_center[0], raw_center[1] - half_side - axis_label_offset, raw_center[2]),
+            (raw_center[0], raw_center[1], raw_center[2] + half_side + axis_label_offset),
         )
         for label, endpoint in zip(self.axis_labels, axis_endpoints):
             label.setData(pos=_view_point_from_raw(endpoint), color=self.numeric_label_color,
                           font=QFont("Helvetica", 12))
 
         ticks = []
-        for axis, (low, high) in enumerate(self.workspace_bounds_m):
-            step = self.workspace_major_spacing_m
+        bounds = workspace.bounds_array
+        label_offset = min(side * WORKSPACE_LABEL_OFFSET_FRACTION,
+                           self.workspace_major_spacing_m * 0.35)
+        for axis, (low, high) in enumerate(bounds):
+            step = workspace.major_spacing_m
             first = np.ceil((low - 1e-10) / step) * step
             last = np.floor((high + 1e-10) / step) * step
             for value in np.arange(first, last + step * 0.5, step):
-                if np.isclose(value, 0.0):
-                    continue
-                raw_point = np.zeros(3)
+                raw_point = raw_center.copy()
                 raw_point[axis] = value
                 if axis == 0:
-                    raw_point[1] = raw_center[1] - GRID_LABEL_OFFSET_M
+                    raw_point[1] -= label_offset
                 elif axis == 1:
-                    raw_point[0] = raw_center[0] + GRID_LABEL_OFFSET_M
+                    raw_point[0] += label_offset
                 else:
-                    raw_point[0] = raw_center[0] - GRID_LABEL_OFFSET_M
+                    raw_point[0] -= label_offset
                 display_value = -value if axis == 1 else value
+                if abs(display_value) < step * 1e-8:
+                    display_value = 0.0
                 ticks.append((f"{display_value * 100:g} cm", raw_point))
-        ticks.append(("0", (GRID_LABEL_OFFSET_M, -GRID_LABEL_OFFSET_M, GRID_LABEL_OFFSET_M)))
         for text, raw_point in ticks:
             label = gl.GLTextItem(text=text, pos=_view_point_from_raw(raw_point), color=self.numeric_label_color,
                                   font=QFont("Helvetica", 9),
@@ -452,21 +530,7 @@ class _GLResultView(gl.GLViewWidget):
         self._update_reference_visibility()
 
     def set_workspace(self, space_mode: str, bounds_m: np.ndarray | None = None) -> None:
-        if space_mode not in {"physical", "hand"}:
-            raise ValueError(f"unknown 3D space mode: {space_mode}")
-        bounds = np.asarray(WORKSPACE_BOUNDS_M if space_mode == "physical" else bounds_m,
-                            dtype=np.float64)
-        if bounds.shape != (3, 2) or not np.isfinite(bounds).all() or np.any(bounds[:, 1] <= bounds[:, 0]):
-            raise ValueError("workspace bounds must be finite increasing [axis, lower/upper] pairs")
-        self.workspace_space_mode = space_mode
-        self.workspace_bounds_m = bounds.copy()
-        if space_mode == "physical":
-            self.workspace_minor_spacing_m = GRID_MINOR_SPACING_M
-            self.workspace_major_spacing_m = GRID_MAJOR_SPACING_M
-        else:
-            major = nice_grid_spacing(float(np.max(bounds[:, 1] - bounds[:, 0])))
-            self.workspace_major_spacing_m = major
-            self.workspace_minor_spacing_m = major / 5.0
+        self.workspace = workspace_geometry(space_mode, bounds_m)
         self._configure_workspace()
 
     def set_labels_visible(self, visible: bool) -> None:
@@ -475,19 +539,12 @@ class _GLResultView(gl.GLViewWidget):
 
     def space_overview(self) -> bool:
         if self.workspace_space_mode == "physical":
-            self.fit_center = self.metric_center.copy()
+            self.fit_center = self.workspace.display_center
             self.fit_distance = self.default_metric_distance
             self.setCameraPosition(pos=pg.Vector(*self.fit_center), distance=self.fit_distance,
                                    elevation=20, azimuth=45)
             return True
-        raw_corners = np.asarray([
-            (x, y, z)
-            for x in self.workspace_bounds_m[0]
-            for y in self.workspace_bounds_m[1]
-            for z in self.workspace_bounds_m[2]
-        ])
-        display_corners = raw_corners @ RAW_TO_VIEW.T
-        return self.fit_camera_to_points(display_corners, reset_orientation=True)
+        return self.fit_camera_to_points(self.workspace.display_corners, reset_orientation=True)
 
     def _frame_camera(self, frame=None, reset_orientation=False):
         finite = self._geometry(self.frame if frame is None else frame)

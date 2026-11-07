@@ -13,7 +13,7 @@ from PySide6.QtCore import QEvent, QObject, QPoint, Qt, QTimer, QSignalBlocker, 
 from PySide6.QtGui import QAction, QActionGroup, QImage, QWindow, QIcon, QPainter, QPainterPath, QPen, QPixmap, QPalette, QColor
 from PySide6.QtWidgets import (
     QApplication, QAbstractButton, QCheckBox, QColorDialog, QComboBox, QDialog, QFileDialog, QGridLayout,
-    QHBoxLayout, QLabel, QMainWindow, QMenu, QPushButton, QScrollArea, QSizePolicy, QStyle, QStyleOptionToolButton,
+    QFrame, QHBoxLayout, QLabel, QMainWindow, QMenu, QPushButton, QScrollArea, QSizePolicy, QStyle, QStyleOptionToolButton,
     QSlider, QSplitter, QStackedWidget, QTableWidget, QTableWidgetItem, QToolButton,
     QVBoxLayout, QWidget, QWidgetAction,
 )
@@ -36,16 +36,18 @@ METRIC_FIELDS = ("source_identity", "reference_result_id", "candidate_result_id"
 
 
 class _ModeSwitch(QAbstractButton):
-    """Compact accessible Overlay/Split toggle with a neutral painted track."""
+    """Compact accessible toggle with a neutral painted track."""
 
-    def __init__(self, parent=None):
+    def __init__(self, parent=None, *, accessible_name="View mode",
+                 accessible_description="Toggle between Overlay and Split views",
+                 tooltip="View: Overlay"):
         super().__init__(parent)
         self.setCheckable(True)
         self.setFixedSize(42, 22)
         self.setFocusPolicy(Qt.FocusPolicy.StrongFocus)
-        self.setAccessibleName("View mode")
-        self.setAccessibleDescription("Toggle between Overlay and Split views")
-        self.setToolTip("View: Overlay")
+        self.setAccessibleName(accessible_name)
+        self.setAccessibleDescription(accessible_description)
+        self.setToolTip(tooltip)
         self._thumb_position = 0.0
         self._animation = QVariantAnimation(self)
         self._animation.setDuration(120)
@@ -755,33 +757,55 @@ class ComparisonViewer(QWidget):
         mode_layout.setContentsMargins(0, 0, 0, 0)
         mode_layout.setSpacing(6)
         self.mode_label = QLabel("View")
-        self.mode_switch = _ModeSwitch()
+        self.mode_switch = _ModeSwitch(
+            accessible_name="View mode",
+            accessible_description="Toggle between Overlay and Split views",
+            tooltip="View: Overlay",
+        )
         self.pin_controls_button = _PinButton()
         mode_layout.addWidget(self.mode_label)
         mode_layout.addWidget(self.mode_switch)
-        mode_layout.addWidget(self.pin_controls_button)
         self.mode_switch.toggled.connect(self._set_mode_from_switch)
 
         self.space_mode_selector = QWidget()
         space_layout = QHBoxLayout(self.space_mode_selector)
         space_layout.setContentsMargins(0, 0, 0, 0)
-        space_layout.setSpacing(5)
-        space_layout.addWidget(QLabel("Space"))
-        self.space_mode_switch = _ModeSwitch()
-        self.space_mode_switch.setAccessibleName("3D space mode")
-        self.space_mode_switch.setAccessibleDescription("Toggle between Physical and Hand 3D spaces")
-        self.space_mode_switch.setToolTip("Space: Physical")
-        self.space_mode_value = QLabel("Physical")
-        self.space_mode_value.setMinimumWidth(self.space_mode_value.fontMetrics().horizontalAdvance("Physical"))
+        space_layout.setSpacing(6)
+        self.space_label = QLabel("Space")
+        self.space_mode_switch = _ModeSwitch(
+            accessible_name="3D space mode",
+            accessible_description="Toggle between Physical and Hand 3D spaces",
+            tooltip="Space: Physical",
+        )
         self.space_mode_switch.toggled.connect(self._set_space_mode_from_switch)
+        space_layout.addWidget(self.space_label)
         space_layout.addWidget(self.space_mode_switch)
-        space_layout.addWidget(self.space_mode_value)
-        self.scale_labels_checkbox = QCheckBox("Labels")
-        self.scale_labels_checkbox.setChecked(True)
-        self.scale_labels_checkbox.setToolTip("Show scale labels (cm)")
-        self.scale_labels_checkbox.setAccessibleName("Scale labels")
-        self.scale_labels_checkbox.setAccessibleDescription("Show or hide numeric metric scale labels in centimetres")
-        self.scale_labels_checkbox.toggled.connect(self._set_scale_labels)
+
+        self.labels_selector = QWidget()
+        labels_layout = QHBoxLayout(self.labels_selector)
+        labels_layout.setContentsMargins(0, 0, 0, 0)
+        labels_layout.setSpacing(6)
+        self.labels_label = QLabel("Labels")
+        self.labels_switch = _ModeSwitch(
+            accessible_name="Scale labels",
+            accessible_description="Show or hide numeric centimetre scale labels",
+            tooltip="Scale labels: On",
+        )
+        self.labels_switch.setChecked(True)
+        self.labels_switch.toggled.connect(self._set_scale_labels)
+        labels_layout.addWidget(self.labels_label)
+        labels_layout.addWidget(self.labels_switch)
+
+        self.primary_controls = QFrame()
+        self.primary_controls.setFrameShape(QFrame.Shape.NoFrame)
+        self.primary_controls.setAutoFillBackground(True)
+        self.primary_controls.setSizePolicy(QSizePolicy.Policy.Fixed, QSizePolicy.Policy.Preferred)
+        primary_layout = QHBoxLayout(self.primary_controls)
+        primary_layout.setContentsMargins(5, 3, 5, 3)
+        primary_layout.setSpacing(10)
+        for control in (self.mode_selector, self.space_mode_selector, self.labels_selector,
+                        self.pin_controls_button):
+            primary_layout.addWidget(control)
 
         self.results_menu = QMenu(self)
         self.visibility_checks = []
@@ -970,7 +994,7 @@ class ComparisonViewer(QWidget):
         toolbar = QHBoxLayout()
         toolbar.setContentsMargins(14, 8, 14, 6)
         toolbar.setSpacing(7)
-        toolbar.addWidget(self.mode_selector)
+        toolbar.addWidget(self.primary_controls)
         toolbar.addSpacing(5)
         toolbar.addWidget(self.results_menu_button)
         toolbar.addWidget(self.reference_label); toolbar.addWidget(self.reference_selector)
@@ -979,8 +1003,6 @@ class ComparisonViewer(QWidget):
         self.error_vectors_button.setToolTip("Show selected GT versus candidate error vectors")
         toolbar.addWidget(self.annotation_button); toolbar.addWidget(self.hud_button)
         toolbar.addWidget(self.more_button)
-        toolbar.addWidget(self.space_mode_selector)
-        toolbar.addWidget(self.scale_labels_checkbox)
         toolbar.addStretch(1)
         self.toolbar = toolbar
 
@@ -1049,8 +1071,8 @@ class ComparisonViewer(QWidget):
             action.toggled.connect(check.setChecked); check.toggled.connect(action.setChecked)
         labels_action = geometry_menu.addAction("Scale labels")
         labels_action.setCheckable(True); labels_action.setChecked(True)
-        labels_action.toggled.connect(self.scale_labels_checkbox.setChecked)
-        self.scale_labels_checkbox.toggled.connect(labels_action.setChecked)
+        labels_action.toggled.connect(self.labels_switch.setChecked)
+        self.labels_switch.toggled.connect(labels_action.setChecked)
         mesh_opacity_action = QWidgetAction(geometry_menu)
         mesh_opacity_action.setDefaultWidget(self.mesh_opacity_group)
         geometry_menu.addAction(mesh_opacity_action)
@@ -1409,11 +1431,11 @@ class ComparisonViewer(QWidget):
         self.space_mode = mode
         self.space_mode_switch.setChecked(mode == "hand")
         label = "Hand" if mode == "hand" else "Physical"
-        self.space_mode_value.setText(label)
         self.space_mode_switch.setToolTip(f"Space: {label}")
         self._apply_workspace()
 
     def _set_scale_labels(self, visible):
+        self.labels_switch.setToolTip(f"Scale labels: {'On' if visible else 'Off'}")
         for view in self._workspace_views():
             view.set_labels_visible(visible)
 
@@ -1681,7 +1703,7 @@ class ComparisonViewer(QWidget):
             view.set_workspace(self.space_mode,
                                self._hand_space_for(self._hand_view_source_id())
                                if self.space_mode == "hand" else None)
-            view.set_labels_visible(self.scale_labels_checkbox.isChecked())
+            view.set_labels_visible(self.labels_switch.isChecked())
             view.camera_changed = lambda source, group=detached_views: self._sync_detached(group, source)
         window.show()
 
