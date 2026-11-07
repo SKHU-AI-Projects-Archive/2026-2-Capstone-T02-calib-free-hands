@@ -24,7 +24,7 @@ from calibfreehands.pipeline.result_bundle import ResultBundle
 from calibfreehands.pipeline.metrics import compare_results, metric_registry
 from calibfreehands.joint_schema import JOINT_NAMES
 from .viewer import (
-    _GLResultView, _OverlayCanvas, load_bundle_result, load_npz_result,
+    _GLResultView, _OverlayCanvas, hand_space_bounds, load_bundle_result, load_npz_result,
     whole_video_hand_framing,
 )
 from .comparison_presentation import _JointAnnotationLayer, _ViewportPanel
@@ -662,6 +662,8 @@ class ComparisonViewer(QWidget):
         self._reference_fallback = False
         self.reference_id = None if self.single_mode else self._default_reference_id()
         self.hand_view_cache = {}
+        self.hand_space_cache = {}
+        self.space_mode = "physical"
         reference_index = (self._configuration_index(self.reference_id)
                            if self.reference_id is not None else None)
         candidate_index = 0
@@ -759,6 +761,27 @@ class ComparisonViewer(QWidget):
         mode_layout.addWidget(self.mode_switch)
         mode_layout.addWidget(self.pin_controls_button)
         self.mode_switch.toggled.connect(self._set_mode_from_switch)
+
+        self.space_mode_selector = QWidget()
+        space_layout = QHBoxLayout(self.space_mode_selector)
+        space_layout.setContentsMargins(0, 0, 0, 0)
+        space_layout.setSpacing(5)
+        space_layout.addWidget(QLabel("Space"))
+        self.space_mode_switch = _ModeSwitch()
+        self.space_mode_switch.setAccessibleName("3D space mode")
+        self.space_mode_switch.setAccessibleDescription("Toggle between Physical and Hand 3D spaces")
+        self.space_mode_switch.setToolTip("Space: Physical")
+        self.space_mode_value = QLabel("Physical")
+        self.space_mode_value.setMinimumWidth(self.space_mode_value.fontMetrics().horizontalAdvance("Physical"))
+        self.space_mode_switch.toggled.connect(self._set_space_mode_from_switch)
+        space_layout.addWidget(self.space_mode_switch)
+        space_layout.addWidget(self.space_mode_value)
+        self.scale_labels_checkbox = QCheckBox("Labels")
+        self.scale_labels_checkbox.setChecked(True)
+        self.scale_labels_checkbox.setToolTip("Show scale labels (cm)")
+        self.scale_labels_checkbox.setAccessibleName("Scale labels")
+        self.scale_labels_checkbox.setAccessibleDescription("Show or hide numeric metric scale labels in centimetres")
+        self.scale_labels_checkbox.toggled.connect(self._set_scale_labels)
 
         self.results_menu = QMenu(self)
         self.visibility_checks = []
@@ -956,6 +979,8 @@ class ComparisonViewer(QWidget):
         self.error_vectors_button.setToolTip("Show selected GT versus candidate error vectors")
         toolbar.addWidget(self.annotation_button); toolbar.addWidget(self.hud_button)
         toolbar.addWidget(self.more_button)
+        toolbar.addWidget(self.space_mode_selector)
+        toolbar.addWidget(self.scale_labels_checkbox)
         toolbar.addStretch(1)
         self.toolbar = toolbar
 
@@ -1001,8 +1026,9 @@ class ComparisonViewer(QWidget):
         self.view_buttons = []
         view_toolbar = QHBoxLayout()
         view_toolbar.addWidget(QLabel("Camera"))
+        focus_name = "Focus Hands" if self.single_mode else "Focus GT"
         for text, method in (("Front", "front_view"), ("Side", "side_view"), ("Top", "top_view"),
-                             ("Hand View", "hand_view"), ("Metric Overview", "metric_overview"),
+                             (focus_name, "focus_gt"), ("Space Overview", "space_overview"),
                              ("Fit All", "fit_all")):
             button = QPushButton(text)
             button.setFixedWidth(64)
@@ -1021,6 +1047,10 @@ class ComparisonViewer(QWidget):
             action = geometry_menu.addAction(label)
             action.setCheckable(True); action.setChecked(check.isChecked()); action.setEnabled(check.isEnabled())
             action.toggled.connect(check.setChecked); check.toggled.connect(action.setChecked)
+        labels_action = geometry_menu.addAction("Scale labels")
+        labels_action.setCheckable(True); labels_action.setChecked(True)
+        labels_action.toggled.connect(self.scale_labels_checkbox.setChecked)
+        self.scale_labels_checkbox.toggled.connect(labels_action.setChecked)
         mesh_opacity_action = QWidgetAction(geometry_menu)
         mesh_opacity_action.setDefaultWidget(self.mesh_opacity_group)
         geometry_menu.addAction(mesh_opacity_action)
@@ -1030,7 +1060,7 @@ class ComparisonViewer(QWidget):
             widget.hide()
         camera_menu = self.more_menu.addMenu("Camera")
         for text, method in (("Front", "front_view"), ("Side", "side_view"), ("Top", "top_view"),
-                             ("Hand View", "hand_view"), ("Metric Overview", "metric_overview"),
+                             (focus_name, "focus_gt"), ("Space Overview", "space_overview"),
                              ("Fit All", "fit_all")):
             camera_menu.addAction(text, lambda _=False, name=method: self._apply_camera_preset(name))
         self.more_menu.addSeparator()
@@ -1350,6 +1380,43 @@ class ComparisonViewer(QWidget):
             )
         return self.hand_view_cache[configuration_id]
 
+    def _hand_space_for(self, configuration_id):
+        bounds = self.hand_space_cache.get(configuration_id)
+        if bounds is None:
+            index = self._configuration_index(configuration_id)
+            result = self.loaded_results[index].result
+            bounds = hand_space_bounds(result.keypoints_3d, result.detected, result.mano_vertices)
+            bounds.setflags(write=False)
+            self.hand_space_cache[configuration_id] = bounds
+        return self.hand_space_cache[configuration_id]
+
+    def _workspace_views(self):
+        views = [self.overlay_view, *self.split_views]
+        views.extend(view for _window, _source, detached in self._detached_windows for view in detached)
+        return views
+
+    def _apply_workspace(self):
+        bounds = self._hand_space_for(self._hand_view_source_id()) if self.space_mode == "hand" else None
+        for view in self._workspace_views():
+            view.set_workspace(self.space_mode, bounds)
+
+    def _set_space_mode_from_switch(self, hand_enabled):
+        self.set_space_mode("hand" if hand_enabled else "physical")
+
+    def set_space_mode(self, mode):
+        if mode not in {"physical", "hand"}:
+            raise ValueError(f"unknown 3D space mode: {mode}")
+        self.space_mode = mode
+        self.space_mode_switch.setChecked(mode == "hand")
+        label = "Hand" if mode == "hand" else "Physical"
+        self.space_mode_value.setText(label)
+        self.space_mode_switch.setToolTip(f"Space: {label}")
+        self._apply_workspace()
+
+    def _set_scale_labels(self, visible):
+        for view in self._workspace_views():
+            view.set_labels_visible(visible)
+
     def _rebuild_metrics_menu(self):
         self.metric_menu.clear()
         self.metric_checks.clear()
@@ -1453,6 +1520,8 @@ class ComparisonViewer(QWidget):
             return
         self.reference_id = self.reference_selector.currentData()
         self._hand_view_for(self.reference_id)
+        if self.space_mode == "hand":
+            self._apply_workspace()
         self.reference_selector.setToolTip(self.reference_selector.currentText())
         self.reference_label.setText("GT")
         self._rebuild_metrics_menu()
@@ -1609,6 +1678,10 @@ class ComparisonViewer(QWidget):
             detached_grid.addWidget(cell, index // self.split_columns, index % self.split_columns)
         self._detached_windows.append((window, detached_source, detached_views))
         for view in detached_views:
+            view.set_workspace(self.space_mode,
+                               self._hand_space_for(self._hand_view_source_id())
+                               if self.space_mode == "hand" else None)
+            view.set_labels_visible(self.scale_labels_checkbox.isChecked())
             view.camera_changed = lambda source, group=detached_views: self._sync_detached(group, source)
         window.show()
 
@@ -1902,6 +1975,15 @@ class ComparisonViewer(QWidget):
         self._sync_camera(source)
         self._refresh_annotations()
 
+    def focus_gt(self):
+        self.hand_view()
+
+    def space_overview(self):
+        source = self.overlay_view if self.mode == "overlay" else self.split_views[0]
+        source.space_overview()
+        self._sync_camera(source)
+        self._refresh_annotations()
+
     def metric_overview(self):
         source = self.overlay_view if self.mode == "overlay" else self.split_views[0]
         source.metric_overview()
@@ -1912,11 +1994,11 @@ class ComparisonViewer(QWidget):
         self.hand_view()
 
     def _apply_camera_preset(self, method):
-        if method == "hand_view":
+        if method in {"hand_view", "focus_gt"}:
             self.hand_view()
             return
-        if method == "metric_overview":
-            self.metric_overview()
+        if method in {"metric_overview", "space_overview"}:
+            self.space_overview()
             return
         if method == "fit_all":
             self.fit_all()

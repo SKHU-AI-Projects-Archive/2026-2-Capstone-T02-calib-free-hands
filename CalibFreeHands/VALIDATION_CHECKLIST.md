@@ -454,3 +454,10 @@ All entries below are pending implementation and validation. No acceptance item 
 - [x] HUD slider remains 20-100, defaults to 100, and updates opacity while hidden; presentation settings persist across HUD visibility and Overlay/Split changes.
 - [x] Focused comparison viewer tests: 72 passed; full pytest: 267 passed; app import, compileall, `pip check`, and `git diff --check` passed.
 - [ ] Native Windows visual smoke remains unavailable: Computer Use native pipe connection failed twice, including after the documented 2-second retry.
+
+## Phase C Physical / Hand 3D Space (2026-11-07)
+
+- [x] Offscreen tests cover fixed Physical bounds, positive display-Y orientation and labels, unchanged raw arrays, robust whole-video Hand bounds, missing-geometry fallback, adaptive spacing, and `.cfh` single-result/comparison synchronization.
+- [x] Offscreen comparison tests cover independent Labels visibility, frame and camera preservation during mode/GT changes, detached workspace propagation, and distinct Focus GT / Space Overview / Fit All behavior.
+- [x] Existing same-source saved results remain available read-only under `D:\hand-demo\samples`, including Manual Focal 1655/2500/15000 px and Original results.
+- [ ] Native Windows visual acceptance and manual playback check remain pending; offscreen tests do not establish visual acceptance.

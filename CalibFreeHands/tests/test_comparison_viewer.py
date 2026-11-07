@@ -151,8 +151,8 @@ def test_comparison_camera_is_shared_across_modes_and_fit_all_is_explicit(tmp_pa
                        if action.menu() is not None and action.text() == "Camera")
     assert "Fit All" in [action.text() for action in camera_menu.actions()]
     viewer.geometry_checks["show_grid"].setChecked(False)
-    assert not any(label.visible() for label in viewer.overlay_view.numeric_labels)
-    assert all(not any(label.visible() for label in view.numeric_labels) for view in viewer.split_views)
+    assert all(label.visible() for label in viewer.overlay_view.numeric_labels)
+    assert all(all(label.visible() for label in view.numeric_labels) for view in viewer.split_views)
     viewer.geometry_checks["show_grid"].setChecked(True)
     assert all(label.visible() for label in viewer.overlay_view.numeric_labels)
 
@@ -200,6 +200,12 @@ def test_detached_comparison_views_share_current_pose_and_remain_linked(tmp_path
         assert params["azimuth"] == pytest.approx(30.0)
         assert params["elevation"] == pytest.approx(25.0)
         assert tuple(params["center"]) == pytest.approx((0.1, -0.3, 0.2))
+    viewer.set_space_mode("hand")
+    expected_bounds = viewer.overlay_view.workspace_bounds_m.copy()
+    for view in detached_views:
+        np.testing.assert_allclose(view.workspace_bounds_m, expected_bounds)
+    viewer.scale_labels_checkbox.setChecked(False)
+    assert all(not label.visible() for view in detached_views for label in view.numeric_labels)
     window.close()
     viewer.close()
 
@@ -310,8 +316,114 @@ def test_hand_view_follows_selected_gt_without_jumping_and_metric_overview_is_re
     camera_menu = next(action.menu() for action in viewer.more_menu.actions()
                        if action.menu() is not None and action.text() == "Camera")
     assert [action.text() for action in camera_menu.actions()] == [
-        "Front", "Side", "Top", "Hand View", "Metric Overview", "Fit All"
+        "Front", "Side", "Top", "Focus GT", "Space Overview", "Fit All"
     ]
+    viewer.close()
+
+
+def test_physical_and_hand_spaces_share_gt_bounds_without_camera_or_frame_jumps(tmp_path, qapp):
+    from calibfreehands.visualization.comparison import ComparisonViewer
+    from calibfreehands.visualization.viewer import hand_space_bounds
+
+    viewer = ComparisonViewer(_session(tmp_path, 3, gt_index=1))
+    viewer.loaded_results[2].result.keypoints_3d[:] = 15000.0
+    gt = viewer.loaded_results[1].result
+    expected_gt_bounds = hand_space_bounds(gt.keypoints_3d, gt.detected)
+    raw_before = [loaded.result.keypoints_3d.copy() for loaded in viewer.loaded_results]
+    viewer.slider.setValue(1)
+    before_camera = viewer.overlay_view.cameraParams()
+    before_frame = viewer.slider.value()
+
+    viewer.space_mode_switch.setChecked(True)
+
+    assert viewer.space_mode == "hand"
+    assert viewer.space_mode_value.text() == "Hand"
+    assert viewer.slider.value() == before_frame
+    assert viewer.overlay_view.cameraParams() == before_camera
+    for view in [viewer.overlay_view, *viewer.split_views]:
+        np.testing.assert_allclose(view.workspace_bounds_m, expected_gt_bounds)
+        assert view.cameraParams() == before_camera
+    assert np.max(np.ptp(viewer.overlay_view.workspace_bounds_m, axis=1)) < 1.0
+
+    viewer.scale_labels_checkbox.setChecked(False)
+    assert viewer.overlay_view.show_labels is False
+    assert all(not label.visible() for label in viewer.overlay_view.numeric_labels)
+    assert all(grid.visible() for grid in viewer.overlay_view.grids)
+    assert viewer.slider.value() == before_frame
+    assert viewer.overlay_view.cameraParams() == before_camera
+    viewer.scale_labels_checkbox.setChecked(True)
+    assert all(label.visible() for label in viewer.overlay_view.numeric_labels)
+
+    viewer.reference_selector.setCurrentIndex(viewer.reference_selector.findData("cfg-0"))
+    changed_camera = viewer.overlay_view.cameraParams()
+    assert changed_camera == before_camera
+    np.testing.assert_allclose(viewer.overlay_view.workspace_bounds_m,
+                               hand_space_bounds(viewer.loaded_results[0].result.keypoints_3d,
+                                                 viewer.loaded_results[0].result.detected))
+    viewer.set_mode("split")
+    assert viewer.space_mode == "hand"
+    for view in viewer.split_views:
+        np.testing.assert_allclose(view.workspace_bounds_m, viewer.overlay_view.workspace_bounds_m)
+    viewer.set_mode("overlay")
+    viewer.space_mode_switch.setChecked(False)
+    assert viewer.space_mode == "physical"
+    np.testing.assert_allclose(viewer.overlay_view.workspace_bounds_m, ((-1, 1), (-1, 1), (0, 2)))
+    assert viewer.overlay_view.cameraParams() == before_camera
+    for loaded, before in zip(viewer.loaded_results, raw_before):
+        np.testing.assert_array_equal(loaded.result.keypoints_3d, before)
+    viewer.close()
+
+
+def test_camera_actions_frame_distinct_gt_workspace_and_visible_union(tmp_path, qapp):
+    from calibfreehands.visualization.comparison import ComparisonViewer
+
+    viewer = ComparisonViewer(_session(tmp_path, 3, gt_index=1))
+    camera_menu = next(action.menu() for action in viewer.more_menu.actions()
+                       if action.menu() is not None and action.text() == "Camera")
+    assert [action.text() for action in camera_menu.actions()] == [
+        "Front", "Side", "Top", "Focus GT", "Space Overview", "Fit All"
+    ]
+    initial = viewer.overlay_view.cameraParams()
+    viewer.focus_gt()
+    focus = viewer.overlay_view.cameraParams()
+    viewer.space_overview()
+    overview = viewer.overlay_view.cameraParams()
+
+    assert focus["distance"] != pytest.approx(overview["distance"])
+    assert tuple(focus["center"]) != pytest.approx(tuple(overview["center"]))
+    assert initial["distance"] == pytest.approx(focus["distance"])
+
+    viewer.space_mode_switch.setChecked(True)
+    viewer.space_overview()
+    hand_overview = viewer.overlay_view.cameraParams()
+    assert hand_overview["distance"] < overview["distance"]
+    assert tuple(hand_overview["center"]) != pytest.approx(tuple(overview["center"]))
+
+    viewer.loaded_results[2].result.keypoints_3d[:] = (0.0, 0.0, 15.0)
+    assert viewer.fit_all()
+    fitted = viewer.overlay_view.cameraParams()
+    assert fitted["distance"] > hand_overview["distance"]
+    assert tuple(fitted["center"]) != pytest.approx(tuple(hand_overview["center"]))
+    viewer.close()
+
+
+def test_single_cfh_viewer_uses_sole_result_for_hand_space_and_focus(tmp_path, qapp):
+    from calibfreehands.visualization.comparison import ComparisonViewer
+    from calibfreehands.visualization.viewer import hand_space_bounds
+
+    viewer = ComparisonViewer(_session(tmp_path, 1))
+    assert viewer.single_mode
+    assert viewer.space_mode == "physical"
+    viewer.space_mode_switch.setChecked(True)
+    expected = hand_space_bounds(viewer.loaded_results[0].result.keypoints_3d,
+                                 viewer.loaded_results[0].result.detected)
+    np.testing.assert_allclose(viewer.overlay_view.workspace_bounds_m, expected)
+    camera_menu = next(action.menu() for action in viewer.more_menu.actions()
+                       if action.menu() is not None and action.text() == "Camera")
+    assert "Focus Hands" in [action.text() for action in camera_menu.actions()]
+    frame = viewer.slider.value()
+    viewer.focus_gt()
+    assert viewer.slider.value() == frame
     viewer.close()
 
 

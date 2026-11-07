@@ -1728,3 +1728,11 @@ Rename the result annotation control/menu from **Joints** to **Annotations**, be
 After implementation, the team member who supplied this feedback shall repeat the complete flow without a preview explanation of the changes: launch, select media, configure, start processing, wait, open the result, play it, and inspect 3D. The goal is successful use without explanation. Prefer repeating the same task with a second team member who has not used the application; observe whether they can find the primary actions, understand Manual Focal, locate Add Configuration, and operate the result controls without coaching.
 
 No new scientific feature, metric, inference behavior, calibration model, confidence type, or playback operation is part of this pass. Preserve same-source result behavior, `.cfh` compatibility, C-2B/C-2C viewer behavior, scientific data and confidence semantics, and all established coordinate/metric contracts.
+
+## Phase C Physical / Hand 3D space clarification
+
+The unified Viewer used for a single `.cfh` and multi-result comparison provides two presentation workspaces, defaulting to **Physical**. Physical uses fixed camera-space bounds X/Y [-1, 1] m and Z [0, 2] m. Its display convention is X right, Y up, and Z forward; display Y is the negation of raw camera Y. Canonical saved data remains X right, Y down, Z forward in metres and is never rewritten by viewing controls.
+
+**Hand** uses cached robust whole-sequence bounds from detected finite geometry in the selected GT result, or the sole result in single-result mode. Candidate results do not influence those bounds. The space uses padded percentile extents, frame-center outlier filtering, a minimum span, and adaptive metric grid spacing. If no valid reference geometry exists, it uses Physical bounds. Neither workspace follows playback frames.
+
+Numeric **Labels** visibility is independent of Grid and Axis visibility. Physical/Hand changes and GT selection retain the current frame and camera. **Focus GT** (shown as **Focus Hands** for a single result) applies whole-video reference hand framing; **Space Overview** frames the active metric workspace; **Fit All** frames finite visible current-frame geometry. Workspace and Labels state are shared by Overlay, Split, and existing detached result panels.

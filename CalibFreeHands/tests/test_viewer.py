@@ -163,7 +163,7 @@ def test_fixed_metric_workspace_planes_axes_and_major_labels(tmp_path, qapp):
     assert view.grids[2].transform().map(QVector3D(1, 0, 0)).toTuple() == pytest.approx((0, -1, -1))
     assert view.axis.pos == pytest.approx(np.asarray((
         _view_point_from_raw((-1, 0, 0)), _view_point_from_raw((1, 0, 0)),
-        _view_point_from_raw((0, -1, 0)), _view_point_from_raw((0, 1, 0)),
+        _view_point_from_raw((0, 1, 0)), _view_point_from_raw((0, -1, 0)),
         _view_point_from_raw((0, 0, 0)), _view_point_from_raw((0, 0, 2)),
     )))
 
@@ -174,13 +174,14 @@ def test_fixed_metric_workspace_planes_axes_and_major_labels(tmp_path, qapp):
                                _view_point_from_raw((GRID_LABEL_OFFSET_M, -GRID_LABEL_OFFSET_M,
                                                      GRID_LABEL_OFFSET_M)))
     for text, raw_point in (("50 cm", (-GRID_LABEL_OFFSET_M, 0, 0.5)),
-                            ("-50 cm", (GRID_LABEL_OFFSET_M, -0.5, 0)),
+                            ("50 cm", (GRID_LABEL_OFFSET_M, -0.5, 0)),
+                            ("-50 cm", (GRID_LABEL_OFFSET_M, 0.5, 0)),
                             ("100 cm", (1, -GRID_LABEL_OFFSET_M, 0)),
                             ("150 cm", (-GRID_LABEL_OFFSET_M, 0, 1.5))):
         assert any(label.text == text and np.allclose(label.pos, _view_point_from_raw(raw_point))
                    for label in view.numeric_labels)
     assert [label.text for label in view.axis_labels] == ["X", "Y", "Z"]
-    for label, raw_point in zip(view.axis_labels, ((1.3, 0, 0), (0, 1.3, 0), (0, 0, 2.3))):
+    for label, raw_point in zip(view.axis_labels, ((1.3, 0, 0), (0, -1.3, 0), (0, 0, 2.3))):
         np.testing.assert_allclose(label.pos, _view_point_from_raw(raw_point))
     assert all(label.color.getRgb() == view.numeric_label_color for label in view.numeric_labels)
     viewer.close()
@@ -278,6 +279,53 @@ def test_whole_video_hand_framing_falls_back_to_joints_then_metric_workspace():
     fallback_target, fallback_distance = whole_video_hand_framing(points, detected)
     np.testing.assert_allclose(fallback_target, metric_workspace_center_display())
     assert fallback_distance == pytest.approx(default_metric_camera_distance())
+
+
+def test_hand_space_bounds_are_robust_metric_and_fall_back_to_physical_workspace():
+    from calibfreehands.visualization.viewer import (
+        HAND_SPACE_MIN_SPAN_M, WORKSPACE_BOUNDS_M, hand_space_bounds, nice_grid_spacing,
+    )
+
+    keypoints = np.full((12, 2, 21, 3), np.nan, dtype=np.float64)
+    detected = np.zeros((12, 2), dtype=bool)
+    for frame in range(12):
+        detected[frame, 0] = True
+        keypoints[frame, 0, :, 0] = np.linspace(-0.12, 0.12, 21) + frame * 0.005
+        keypoints[frame, 0, :, 1] = np.linspace(-0.08, 0.08, 21)
+        keypoints[frame, 0, :, 2] = np.linspace(0.7, 1.0, 21)
+    keypoints[-1, 0] += 50.0
+    raw_before = keypoints.copy()
+
+    bounds = hand_space_bounds(keypoints, detected)
+
+    assert bounds.shape == (3, 2)
+    assert np.isfinite(bounds).all()
+    assert np.all(bounds[:, 1] > bounds[:, 0])
+    assert np.all(bounds[:, 1] - bounds[:, 0] >= HAND_SPACE_MIN_SPAN_M)
+    assert np.max(np.abs(bounds)) < 2.0
+    np.testing.assert_array_equal(keypoints, raw_before)
+    assert hand_space_bounds(keypoints, np.zeros_like(detected)).tolist() == [list(axis) for axis in WORKSPACE_BOUNDS_M]
+    assert nice_grid_spacing(2.0) == pytest.approx(0.5)
+    assert nice_grid_spacing(0.35) == pytest.approx(0.05)
+
+
+def test_physical_y_labels_and_positive_axis_follow_y_up_display(tmp_path, qapp):
+    from calibfreehands.visualization.viewer import ResultViewer, _view_point_from_raw
+
+    result = _viewer_result(mesh=False)
+    raw_before = result.keypoints_3d.copy()
+    npz, _ = save_result(result, tmp_path, {"schema_version": 1})
+    viewer = ResultViewer(npz)
+    gl_view = viewer.gl_view
+
+    y_segment = gl_view.axis.pos[2:4]
+    assert y_segment[1, 2] > y_segment[0, 2]
+    assert any(label.text == "100 cm" and np.allclose(label.pos, _view_point_from_raw((0.15, -1.0, 0.0)))
+               for label in gl_view.numeric_labels)
+    assert any(label.text == "-100 cm" and np.allclose(label.pos, _view_point_from_raw((0.15, 1.0, 0.0)))
+               for label in gl_view.numeric_labels)
+    np.testing.assert_array_equal(viewer.loaded.result.keypoints_3d, raw_before)
+    viewer.close()
 
 
 def test_single_result_viewer_starts_in_hand_view_and_exposes_camera_modes(tmp_path, qapp):
@@ -486,7 +534,7 @@ def test_axis_ranges_remain_fixed_to_metric_workspace(qapp):
     assert np.linalg.norm(view.axis.pos[3] - view.axis.pos[2]) == pytest.approx(2.0)
     assert np.linalg.norm(view.axis.pos[5] - view.axis.pos[4]) == pytest.approx(2.0)
     np.testing.assert_allclose(view.axis_labels[0].pos, (-1.3, 0, 0))
-    np.testing.assert_allclose(view.axis_labels[1].pos, (0, 0, -1.3))
+    np.testing.assert_allclose(view.axis_labels[1].pos, (0, 0, 1.3))
     np.testing.assert_allclose(view.axis_labels[2].pos, (0, -2.3, 0))
 
 

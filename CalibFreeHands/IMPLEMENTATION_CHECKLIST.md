@@ -176,3 +176,12 @@ All implementation items above are complete. Remaining user and Windows GUI acce
 - [x] Keep Metric Overview at the fixed Phase 2 workspace camera; Fit All remains based on current-frame visible geometry; Reset restores Hand View.
 - [x] Recompute/cache a new GT framing on selection while preserving current camera pose; apply it only when Hand View is chosen.
 - [x] Keep Front/Side/Top orientation-only relative to current center/distance, and synchronize Hand View / Metric Overview across Overlay and Split.
+
+## Phase C Physical / Hand 3D Space
+
+- [x] Add shared Physical/Hand runtime mode to the unified result/comparison Viewer; default remains fixed X/Y [-1, 1] m and Z [0, 2] m Physical workspace.
+- [x] Present physical camera Y as display-up without changing raw camera-space arrays; use real metric bounds and adaptive 1/2/5 grid spacing in Hand Space.
+- [x] Cache robust whole-video Hand bounds from selected GT (or sole result), using detected finite joints and MANO vertices, percentile extents, frame-center outlier filtering, padding, and a 0.2 m minimum span; fall back to Physical bounds without valid geometry.
+- [x] Separate numeric scale Labels from Grid and Axis visibility. Physical/Hand changes and GT selection preserve the active camera and frame.
+- [x] Expose Focus GT / Focus Hands, Space Overview, and Fit All as separate camera actions; synchronize workspace and labels across Overlay, Split, and existing detached views.
+- [x] Correct README's built-in Original preset description to all-frame sampling, matching the Phase B implementation.
