@@ -1123,7 +1123,8 @@ Preserve:
 - Grid
 - Axis
 - Front
-- Side
+- Left
+- Right
 - Top
 - Fit Hands
 - Reset View
@@ -1744,3 +1745,13 @@ Both Physical and Hand workspaces use a centered cube as the common metric defin
 ## Phase C.1A Fix Pass: Workspace Placement and Space Center
 
 The earlier C.1A expectation that all Physical grid planes share the volume midpoint is superseded. Physical bounds remain X/Y [-1, 1] m and Z [0, 2] m, with volume center raw (0, 0, 1 m). The Physical XY plane is at Z=0; XZ is at Y=0; YZ is at X=0. Physical axes follow the global camera-space axes through raw origin (0, 0, 0). All reference planes remain 2 m × 2 m. Hand planes and equal-length axes remain centered on the selected-GT cube. On a Space change, the orbit center moves to the active workspace center while distance and orientation stay fixed; frame and playback state stay fixed. The primary controls container is transparent, with palette-aware individual controls. This pass does not redesign camera presets; that remains C.1B work. Native Windows review identified the previous Physical placement error, so the fix still requires user review.
+
+## Phase C Final: Camera State, Controls, Contrast, and GT Switching
+
+The Comparison Viewer retains one independent camera pose per 3D Space, including center, distance, azimuth, and elevation. The first Physical pose is the actual initial view. First entry to Hand uses the current orientation and distance centered on the Hand workspace; subsequent transitions restore each Space's last pose. Overlay and Split share this camera state. A GT change updates Hand workspace/framing definitions without immediately moving the camera; a retained Hand pose is rebased to the new workspace when it is next stored or restored. Focus GT and Space Overview apply the currently selected GT/workspace. Fit All continues to include all finite geometry visible in the current frame.
+
+Orientation controls are **Front**, **Left**, **Right**, and **Top**. They change orientation while preserving center and distance. Viewport-overlaid plain text uses a consistent light foreground in all application themes; the primary controls remain transparent.
+
+Comparison metrics are cached by ordered `(reference result ID, candidate result ID)` pairs because metric direction is reference-dependent. Small uncached workloads are computed inline; larger GT changes use a single background worker. While a new GT's metrics are pending, stale metrics are cleared. Results from a superseded selection can populate the pair cache but cannot replace the current GT's displayed metrics. Metric formulas and canonical result data are unchanged.
+
+Automated Phase C Final coverage is recorded in `VALIDATION_CHECKLIST.md`. Native Windows visual/playback acceptance remains pending; passing offscreen tests does not count as manual acceptance. Phase D panel workspace work remains deferred.

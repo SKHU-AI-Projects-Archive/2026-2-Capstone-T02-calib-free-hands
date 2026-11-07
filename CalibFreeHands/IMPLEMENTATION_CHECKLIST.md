@@ -203,3 +203,12 @@ All implementation items above are complete. Remaining user and Windows GUI acce
 - [x] Make the primary control container transparent; retain its compact View, Space, Labels, Pin order and palette-aware individual controls.
 - [x] Focused and full automated validation pass (100 viewer/comparison tests; 281 total tests), with import, compileall, and dependency checks passing.
 - [ ] Native Windows review of Physical plane placement, orbit center, and transparent toolbar remains pending. Camera preset semantics remain deferred to C.1B.
+
+## Phase C Final Camera, Contrast, and GT Switching
+
+- [x] Store separate Physical/Hand camera poses and restore each pose across space changes in Overlay and Split; preserve the initial Physical pose and rebase retained Hand offsets when GT changes.
+- [x] Provide deterministic Front/Left/Right/Top orientation presets and reliable Focus GT, Space Overview, and current-frame Fit All recovery actions.
+- [x] Use a consistent light foreground for plain viewport chrome labels without adding an opaque primary-controls panel.
+- [x] Cache metrics by ordered Reference/Candidate result IDs; remove duplicate GT-change render/panel refreshes and run large uncached metric batches in a single background worker with stale-selection protection.
+- [x] Keep metric formulas, canonical result arrays, `.cfh` data, and frame/playback behavior unchanged.
+- [ ] Native Windows visual contrast, camera interaction, and playback acceptance remains pending; Phase D is not started.

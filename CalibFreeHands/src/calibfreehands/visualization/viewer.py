@@ -624,7 +624,9 @@ class _GLResultView(gl.GLViewWidget):
         self.setCameraPosition(pos=pg.Vector(*center), distance=current["distance"],
                                azimuth=azimuth, elevation=elevation)
     def front_view(self): self._preset((0, 0, -1))
-    def side_view(self): self._preset((-1, 0, 0))
+    def left_view(self): self._preset((-1, 0, 0))
+    def right_view(self): self._preset((1, 0, 0))
+    def side_view(self): self.left_view()
     def top_view(self): self._preset((0, -1, 0))
     def _update_reference_visibility(self):
         for grid in self.grids: grid.setVisible(self.show_grid)

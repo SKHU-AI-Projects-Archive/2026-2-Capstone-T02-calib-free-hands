@@ -10,7 +10,8 @@ from time import monotonic
 import numpy as np
 import pyqtgraph as pg
 import pyqtgraph.opengl as gl
-from PySide6.QtCore import QEvent, QObject, QPoint, Qt, QTimer, QSignalBlocker, QRectF, QSize, QVariantAnimation
+from PySide6.QtCore import (QEvent, QObject, QPoint, Qt, QTimer, QSignalBlocker, QRectF, QSize,
+                            QVariantAnimation, QRunnable, QThreadPool, Signal)
 from PySide6.QtGui import QAction, QActionGroup, QImage, QWindow, QIcon, QPainter, QPainterPath, QPen, QPixmap, QPalette, QColor
 from PySide6.QtWidgets import (
     QApplication, QAbstractButton, QCheckBox, QColorDialog, QComboBox, QDialog, QFileDialog, QGridLayout,
@@ -26,7 +27,7 @@ from calibfreehands.pipeline.metrics import compare_results, metric_registry
 from calibfreehands.joint_schema import JOINT_NAMES
 from .viewer import (
     _GLResultView, _OverlayCanvas, hand_space_bounds, load_bundle_result, load_npz_result,
-    whole_video_hand_framing,
+    whole_video_hand_framing, workspace_geometry,
 )
 from .comparison_presentation import _JointAnnotationLayer, _ViewportPanel
 from .playback import PlaybackClock
@@ -34,6 +35,37 @@ from .playback import PlaybackClock
 METRIC_FIELDS = ("source_identity", "reference_result_id", "candidate_result_id", "candidate_name", "metric_id",
                  "metric_name", "category", "protocol_version", "frame_index", "timestamp_s", "hand",
                  "joint_index", "joint_name", "value", "unit", "valid_status")
+
+VIEWER_CHROME_LABEL_STYLE = (
+    "QLabel { color: #f2f3f4; background: transparent; padding: 0px; border: none; }"
+)
+
+
+class _MetricSignals(QObject):
+    completed = Signal(int, str, object, object)
+
+
+class _MetricJob(QRunnable):
+    def __init__(self, generation, reference_id, reference, candidates):
+        super().__init__()
+        self.generation = generation
+        self.reference_id = reference_id
+        self.reference = reference
+        self.candidates = candidates
+        self.signals = _MetricSignals()
+
+    def run(self):
+        try:
+            computed = {
+                (self.reference_id, candidate_id): {
+                    (row.frame_index, row.hand): row
+                    for row in compare_results(self.reference, candidate)
+                }
+                for candidate_id, candidate in self.candidates
+            }
+            self.signals.completed.emit(self.generation, self.reference_id, computed, None)
+        except Exception as exc:
+            self.signals.completed.emit(self.generation, self.reference_id, {}, exc)
 
 
 class _ModeSwitch(QAbstractButton):
@@ -505,6 +537,18 @@ class _OverlayComparisonView(_GLResultView):
             self.extra_items.append(items)
         self.set_frame(self.frame)
 
+    def mouseMoveEvent(self, event):
+        super().mouseMoveEvent(event)
+        callback = getattr(self, "camera_changed", None)
+        if callback is not None:
+            callback(self)
+
+    def wheelEvent(self, event):
+        super().wheelEvent(event)
+        callback = getattr(self, "camera_changed", None)
+        if callback is not None:
+            callback(self)
+
     def confidence_alpha(self, frame, hand, confidence=None):
         return _confidence_alpha(self.loaded_results[0].result, frame, hand, confidence)
 
@@ -667,6 +711,8 @@ class ComparisonViewer(QWidget):
         self.hand_view_cache = {}
         self.hand_space_cache = {}
         self.space_mode = "physical"
+        self._camera_states = {"physical": None, "hand": None}
+        self._pending_hand_camera_rebase = None
         reference_index = (self._configuration_index(self.reference_id)
                            if self.reference_id is not None else None)
         candidate_index = 0
@@ -683,12 +729,18 @@ class ComparisonViewer(QWidget):
         self.metric_definitions = metric_registry()
         self.selected_metric_ids = {"wrist_error", "mpjpe", "wrist_depth_error"}
         self._metric_cache = {}
+        self._metric_pair_cache = {}
+        self._metric_generation = 0
+        self._metric_thread_pool = QThreadPool(self)
+        self._metric_thread_pool.setMaxThreadCount(1)
+        self._metric_jobs = {}
         self.setWindowTitle("CalibFreeHands - Result" if self.single_mode else "CalibFreeHands - Comparison")
         self.setMinimumSize(1280, 720)
 
         self.source_overlay = _OverlayCanvas(self.loaded_results[0])
         self.source_overlay.setMinimumSize(360, 300)
         self.overlay_view = _OverlayComparisonView(self.loaded_results, self.configuration_colors)
+        self.overlay_view.camera_changed = self._camera_interacted
         self.overlay_view.setMinimumSize(340, 260)
         self.overlay_panel = _ViewportPanel(self.overlay_view, list(range(len(entries))))
         self.overlay_view.hud = self.overlay_panel
@@ -696,7 +748,7 @@ class ComparisonViewer(QWidget):
             tuple(float(value) for value in self.overlay_view.hand_view_target),
             float(self.overlay_view.hand_view_distance),
         )
-        self.split_views = [_LinkedResultView(loaded, color, self._sync_camera)
+        self.split_views = [_LinkedResultView(loaded, color, self._camera_interacted)
                             for loaded, color in zip(self.loaded_results, self.configuration_colors)]
         for index, view in enumerate(self.split_views):
             view.setMinimumSize(340, 260); view.setAcceptDrops(not self.single_mode)
@@ -1050,7 +1102,8 @@ class ComparisonViewer(QWidget):
         view_toolbar = QHBoxLayout()
         view_toolbar.addWidget(QLabel("Camera"))
         focus_name = "Focus Hands" if self.single_mode else "Focus GT"
-        for text, method in (("Front", "front_view"), ("Side", "side_view"), ("Top", "top_view"),
+        for text, method in (("Front", "front_view"), ("Left", "left_view"),
+                             ("Right", "right_view"), ("Top", "top_view"),
                              (focus_name, "focus_gt"), ("Space Overview", "space_overview"),
                              ("Fit All", "fit_all")):
             button = QPushButton(text)
@@ -1082,7 +1135,8 @@ class ComparisonViewer(QWidget):
             widget.setParent(self)
             widget.hide()
         camera_menu = self.more_menu.addMenu("Camera")
-        for text, method in (("Front", "front_view"), ("Side", "side_view"), ("Top", "top_view"),
+        for text, method in (("Front", "front_view"), ("Left", "left_view"),
+                             ("Right", "right_view"), ("Top", "top_view"),
                              (focus_name, "focus_gt"), ("Space Overview", "space_overview"),
                              ("Fit All", "fit_all")):
             camera_menu.addAction(text, lambda _=False, name=method: self._apply_camera_preset(name))
@@ -1124,7 +1178,8 @@ class ComparisonViewer(QWidget):
         playback_group_layout = QHBoxLayout(self.playback_group)
         playback_group_layout.setContentsMargins(0, 0, 0, 0)
         playback_group_layout.setSpacing(3)
-        playback_group_layout.addWidget(QLabel("Playback"))
+        self.playback_label = QLabel("Playback")
+        playback_group_layout.addWidget(self.playback_label)
         self.playback_icon_kinds = ["previous_frame", "play", "next_frame"]
         accessible_names = ("Previous frame", "Play", "Next frame")
         foreground = self.palette().color(QPalette.ColorRole.ButtonText)
@@ -1168,6 +1223,14 @@ class ComparisonViewer(QWidget):
         self.performance_stats_timer = QTimer(self)
         self.performance_stats_timer.setInterval(1000)
         self.performance_stats_timer.timeout.connect(self._update_performance_stats)
+
+        self.chrome_text_labels = [
+            self.mode_label, self.space_label, self.labels_label, self.reference_label,
+            self.playback_label, self.speed_label, self.speed_value_label, self.status,
+            self.metric_status, self.performance_stats_label,
+        ]
+        for label in self.chrome_text_labels:
+            label.setStyleSheet(VIEWER_CHROME_LABEL_STYLE)
 
         exports = QHBoxLayout()
         exports.addWidget(self.metric_status, 1)
@@ -1418,24 +1481,22 @@ class ComparisonViewer(QWidget):
         views.extend(view for _window, _source, detached in self._detached_windows for view in detached)
         return views
 
-    def _apply_workspace(self, recenter_camera=False):
+    def _apply_workspace(self):
         bounds = self._hand_space_for(self._hand_view_source_id()) if self.space_mode == "hand" else None
         for view in self._workspace_views():
             view.set_workspace(self.space_mode, bounds)
-        if not recenter_camera:
-            return
-        center = self.overlay_view.workspace.display_center
-        source = self.overlay_view if self.mode == "overlay" else self.split_views[0]
-        params = source.cameraParams()
-        params["center"] = pg.Vector(*center)
-        source.setCameraParams(**params)
+
+    @staticmethod
+    def _copy_camera_params(view):
+        params = dict(view.cameraParams())
+        params["center"] = pg.Vector(*tuple(params["center"]))
+        return params
+
+    def _camera_source(self):
+        return self.overlay_view if self.mode == "overlay" else self.split_views[0]
+
+    def _camera_interacted(self, source):
         self._sync_camera(source)
-        for _window, _detached_source, detached_views in self._detached_windows:
-            if detached_views:
-                detached_params = detached_views[0].cameraParams()
-                detached_params["center"] = pg.Vector(*center)
-                detached_views[0].setCameraParams(**detached_params)
-                self._sync_detached(detached_views, detached_views[0])
 
     def _set_space_mode_from_switch(self, hand_enabled):
         self.set_space_mode("hand" if hand_enabled else "physical")
@@ -1443,11 +1504,32 @@ class ComparisonViewer(QWidget):
     def set_space_mode(self, mode):
         if mode not in {"physical", "hand"}:
             raise ValueError(f"unknown 3D space mode: {mode}")
+        if mode == self.space_mode:
+            return
+        previous_mode = self.space_mode
+        current_pose = self._copy_camera_params(self._camera_source())
+        if previous_mode == "hand" and self._pending_hand_camera_rebase is not None:
+            center = np.asarray(tuple(current_pose["center"])) + self._pending_hand_camera_rebase
+            current_pose["center"] = pg.Vector(*center)
+            self._pending_hand_camera_rebase = None
+        self._camera_states[previous_mode] = current_pose
         self.space_mode = mode
         self.space_mode_switch.setChecked(mode == "hand")
         label = "Hand" if mode == "hand" else "Physical"
         self.space_mode_switch.setToolTip(f"Space: {label}")
-        self._apply_workspace(recenter_camera=True)
+        self._apply_workspace()
+        target_pose = self._camera_states[mode]
+        if target_pose is None:
+            target_pose = dict(current_pose)
+            target_pose["center"] = pg.Vector(*self.overlay_view.workspace.display_center)
+            self._camera_states[mode] = target_pose
+        source = self._camera_source()
+        source.setCameraParams(**target_pose)
+        self._sync_camera(source, clear_hand_rebase=True)
+        for _window, _detached_source, detached_views in self._detached_windows:
+            if detached_views:
+                detached_views[0].setCameraParams(**target_pose)
+                self._sync_detached(detached_views, detached_views[0])
 
     def _set_scale_labels(self, visible):
         self.labels_switch.setToolTip(f"Scale labels: {'On' if visible else 'Off'}")
@@ -1529,7 +1611,7 @@ class ComparisonViewer(QWidget):
         self.candidate_colors[index] = tuple(color)
         self._refresh_effective_colors()
 
-    def _refresh_effective_colors(self):
+    def _refresh_effective_colors(self, *, render=True, refresh_panels=True):
         self.configuration_colors[:] = self.candidate_colors
         if self.reference_id is not None:
             self.configuration_colors[self._configuration_index(self.reference_id)] = (0x33 / 255, 1.0, 0x33 / 255)
@@ -1549,20 +1631,29 @@ class ComparisonViewer(QWidget):
                 view.configuration_color = color
                 view.hand_colors = (color, color)
                 view.set_frame(self.slider.value())
-        self._render_active_frame()
-        self._refresh_metric_panels()
+        if render:
+            self._render_active_frame()
+        if refresh_panels:
+            self._refresh_metric_panels()
 
     def _reference_changed(self, _index):
         if self.single_mode:
             return
+        previous_hand_center = (np.asarray(self.overlay_view.workspace.display_center, dtype=float)
+                                if self.space_mode == "hand" else None)
         self.reference_id = self.reference_selector.currentData()
         self._hand_view_for(self.reference_id)
         if self.space_mode == "hand":
+            next_bounds = self._hand_space_for(self.reference_id)
+            next_center = np.asarray(workspace_geometry("hand", next_bounds).display_center, dtype=float)
+            previous_rebase = (self._pending_hand_camera_rebase
+                               if self._pending_hand_camera_rebase is not None else np.zeros(3))
+            self._pending_hand_camera_rebase = previous_rebase + next_center - previous_hand_center
             self._apply_workspace()
         self.reference_selector.setToolTip(self.reference_selector.currentText())
         self.reference_label.setText("GT")
         self._rebuild_metrics_menu()
-        self._refresh_effective_colors()
+        self._refresh_effective_colors(render=False, refresh_panels=False)
         self.error_candidate_selector.clear()
         for config in self.configurations:
             if config["id"] != self.reference_id:
@@ -1573,7 +1664,7 @@ class ComparisonViewer(QWidget):
         self.error_vectors_checkbox.setChecked(False)
         if not self.error_candidate_selector.count():
             self.error_vectors_checkbox.setChecked(False)
-        self._compute_metrics()
+        self._request_metrics_for_reference()
         self._refresh_metric_panels()
         self.error_vectors_button.setText("Error vectors: Off")
         self._rebuild_error_vector_menu()
@@ -1600,10 +1691,91 @@ class ComparisonViewer(QWidget):
         cache = {}
         for index, loaded in enumerate(self.loaded_results):
             if index != reference_index:
-                cache[self.configurations[index]["id"]] = {
-                    (row.frame_index, row.hand): row for row in compare_results(reference, loaded.result)
-                }
+                candidate_id = self.configurations[index]["id"]
+                pair_key = (self.reference_id, candidate_id)
+                if pair_key not in self._metric_pair_cache:
+                    self._metric_pair_cache[pair_key] = {
+                        (row.frame_index, row.hand): row
+                        for row in compare_results(reference, loaded.result)
+                    }
+                cache[candidate_id] = self._metric_pair_cache[pair_key]
         self._metric_cache = cache
+
+    def _request_metrics_for_reference(self):
+        self._metric_generation += 1
+        generation = self._metric_generation
+        for old_generation, old_job in list(self._metric_jobs.items()):
+            if old_generation != generation and self._metric_thread_pool.tryTake(old_job):
+                self._metric_jobs.pop(old_generation, None)
+        reference_index = self._configuration_index(self.reference_id)
+        reference = self.loaded_results[reference_index].result
+        missing = []
+        self._metric_cache = {}
+        for index, loaded in enumerate(self.loaded_results):
+            if index == reference_index:
+                continue
+            candidate_id = self.configurations[index]["id"]
+            pair_key = (self.reference_id, candidate_id)
+            cached = self._metric_pair_cache.get(pair_key)
+            if cached is None:
+                missing.append((candidate_id, loaded.result))
+            else:
+                self._metric_cache[candidate_id] = cached
+        if not missing:
+            self.metric_status.clear()
+            self.export_csv_button.setEnabled(True)
+            self.export_json_button.setEnabled(True)
+            return
+        if sum(loaded.frame_count for index, loaded in enumerate(self.loaded_results)
+               if index != reference_index) <= 200:
+            computed = {}
+            try:
+                for candidate_id, candidate in missing:
+                    computed[(self.reference_id, candidate_id)] = {
+                        (row.frame_index, row.hand): row
+                        for row in compare_results(reference, candidate)
+                    }
+            except Exception as exc:
+                self.metric_status.setText(f"Metric calculation failed: {exc}")
+                self.export_csv_button.setEnabled(False)
+                self.export_json_button.setEnabled(False)
+                return
+            self._metric_pair_cache.update(computed)
+            for candidate_id, _candidate in missing:
+                self._metric_cache[candidate_id] = self._metric_pair_cache[(self.reference_id, candidate_id)]
+            self.metric_status.clear()
+            self.export_csv_button.setEnabled(True)
+            self.export_json_button.setEnabled(True)
+            return
+        self._metric_cache = {}
+        self.metric_status.setText("Updating comparison metrics…")
+        self.export_csv_button.setEnabled(False)
+        self.export_json_button.setEnabled(False)
+        job = _MetricJob(generation, self.reference_id, reference, missing)
+        job.signals.completed.connect(self._metric_job_completed)
+        self._metric_jobs[generation] = job
+        self._metric_thread_pool.start(job)
+
+    def _metric_job_completed(self, generation, reference_id, computed, error):
+        self._metric_jobs.pop(generation, None)
+        self._metric_pair_cache.update(computed)
+        if generation != self._metric_generation or reference_id != self.reference_id:
+            return
+        if error is not None:
+            self._metric_cache = {}
+            self.metric_status.setText(f"Metric calculation failed: {error}")
+            self.export_csv_button.setEnabled(False)
+            self.export_json_button.setEnabled(False)
+        else:
+            self._metric_cache = {
+                candidate_id: self._metric_pair_cache[(reference_id, candidate_id)]
+                for candidate_id in (config["id"] for config in self.configurations)
+                if candidate_id != reference_id
+            }
+            self.metric_status.clear()
+            self.export_csv_button.setEnabled(True)
+            self.export_json_button.setEnabled(True)
+        self._refresh_metric_panels()
 
     def _set_metric_selected(self, metric_id, selected):
         if selected:
@@ -1719,7 +1891,7 @@ class ComparisonViewer(QWidget):
                                self._hand_space_for(self._hand_view_source_id())
                                if self.space_mode == "hand" else None)
             view.set_labels_visible(self.labels_switch.isChecked())
-            view.camera_changed = lambda source, group=detached_views: self._sync_detached(group, source)
+            view.camera_changed = self._camera_interacted
         window.show()
 
     @staticmethod
@@ -1971,7 +2143,7 @@ class ComparisonViewer(QWidget):
         self._stats_started = monotonic()
         self._stats_frames = 0
 
-    def _sync_camera(self, source):
+    def _sync_camera(self, source, clear_hand_rebase=False):
         if self._syncing_camera or not self.split_views:
             return
         self._syncing_camera = True
@@ -1979,8 +2151,20 @@ class ComparisonViewer(QWidget):
             params = source.cameraParams()
             for view in [self.overlay_view, *self.split_views]:
                 if view is not source: view.setCameraParams(**params)
+            for _window, _detached_source, detached_views in self._detached_windows:
+                for view in detached_views:
+                    if view is not source:
+                        view.setCameraParams(**params)
         finally:
             self._syncing_camera = False
+        state = self._copy_camera_params(source)
+        if self.space_mode == "hand" and self._pending_hand_camera_rebase is not None:
+            if clear_hand_rebase:
+                self._pending_hand_camera_rebase = None
+            else:
+                center = np.asarray(tuple(state["center"])) + self._pending_hand_camera_rebase
+                state["center"] = pg.Vector(*center)
+        self._camera_states[self.space_mode] = state
         self._refresh_annotations()
 
     def fit_all(self):
@@ -1990,7 +2174,7 @@ class ComparisonViewer(QWidget):
         if self.mode == "overlay":
             fitted = self.overlay_view.fit_camera_to_points(points)
             if fitted:
-                self._refresh_annotations()
+                self._sync_camera(self.overlay_view, clear_hand_rebase=True)
             return fitted
 
         visible_indices = [index for index, check in enumerate(self.visibility_checks) if check.isChecked()]
@@ -2002,14 +2186,14 @@ class ComparisonViewer(QWidget):
         source = visible_views[0]
         if not source.fit_camera_to_points(points, aspect=aspect):
             return False
-        self._sync_camera(source)
+        self._sync_camera(source, clear_hand_rebase=True)
         return True
 
     def hand_view(self):
         target, distance = self._hand_view_for(self._hand_view_source_id())
         source = self.overlay_view if self.mode == "overlay" else self.split_views[0]
         source.apply_hand_view(target, distance)
-        self._sync_camera(source)
+        self._sync_camera(source, clear_hand_rebase=True)
         self._refresh_annotations()
 
     def focus_gt(self):
@@ -2018,13 +2202,13 @@ class ComparisonViewer(QWidget):
     def space_overview(self):
         source = self.overlay_view if self.mode == "overlay" else self.split_views[0]
         source.space_overview()
-        self._sync_camera(source)
+        self._sync_camera(source, clear_hand_rebase=True)
         self._refresh_annotations()
 
     def metric_overview(self):
         source = self.overlay_view if self.mode == "overlay" else self.split_views[0]
         source.metric_overview()
-        self._sync_camera(source)
+        self._sync_camera(source, clear_hand_rebase=True)
         self._refresh_annotations()
 
     def reset_camera(self):
@@ -2046,8 +2230,7 @@ class ComparisonViewer(QWidget):
         views = [self.overlay_view] if self.mode == "overlay" else self.split_views
         if not views: return
         getattr(views[0], method)()
-        if self.mode == "split": self._sync_camera(views[0])
-        self._refresh_annotations()
+        self._sync_camera(views[0], clear_hand_rebase=True)
 
     def _previous(self): self.slider.setValue(max(0, self.slider.value() - 1))
     def _next_frame(self): self.slider.setValue(min(self.slider.maximum(), self.slider.value() + 1))

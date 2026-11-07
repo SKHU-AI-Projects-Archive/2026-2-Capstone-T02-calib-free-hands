@@ -476,3 +476,12 @@ All entries below are pending implementation and validation. No acceptance item 
 - [x] Verify the primary control container does not auto-fill an opaque background; switch and toolbar behavior remains covered.
 - [x] Focused viewer/comparison modules: 100 passed. Full pytest: 281 passed; app import, compileall, `pip check`, and `git diff --check` passed.
 - [ ] Native Windows visual review and playback check remain pending; previous native review identified incorrect Physical plane placement and is not counted as acceptance.
+
+## Phase C Final Camera, Contrast, and GT Switching (2026-11-07)
+
+- [x] Offscreen regression tests verify distinct Physical/Hand camera poses and restoration in Overlay/Split, deterministic orientation angles, and Fit All recovery through Focus GT and Space Overview.
+- [x] Offscreen tests verify light foreground styles for viewport chrome, ordered directed metric-pair reuse, one immediate coherent GT panel refresh, asynchronous large-workload calculation, and stale-result rejection.
+- [x] Playback/frame preservation and canonical result immutability remain covered by the existing Viewer suite.
+- [x] Viewer/comparison tests: 108 passed; full pytest: 289 passed. App import, compileall, `pip check`, and `git diff --check` pass after the final source changes.
+- [x] Read-only `2_screw` set (4 `.cfh` results, 364 frames): previous uncached GT change took 0.880 s total (0.831 s metric comparison); repeated uncached reference switch took 0.871 s. Updated measurement: uncached selection handler returned in 0.031 s, background metric work took 0.902 s and completed in 0.942 s total; switching to the cached GT took 0.053 s. Initial Viewer load was 1.374 s.
+- [ ] Native Windows visual review of camera presets/space restoration, Light/Dark chrome, GT changes during playback, and any visible playback skip remains pending; Computer Use native pipe was unavailable, so no manual acceptance is claimed.
