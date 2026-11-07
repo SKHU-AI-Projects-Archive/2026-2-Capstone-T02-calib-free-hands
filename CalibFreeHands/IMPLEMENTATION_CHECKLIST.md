@@ -225,3 +225,13 @@ All implementation items above are complete. Remaining user and Windows GUI acce
 - [ ] D.2 individual Detach/Reattach and D.3 detached synchronization/aspect-ratio work are deferred.
 
 Phase C Final native Windows testing and acceptance were reported by the user as completed. This is user-reported acceptance, not a claim that Codex independently performed the native checks.
+
+### Phase D.1 Fix Pass: Panel Interaction and Adaptive Layout
+
+- [x] Removed top-level panel headers/drag buttons and the duplicate Split Source Media title while retaining stable source/GL widgets and HUD result handles.
+- [x] Added a compact accessible Overlay divider swap control; swaps retain splitter slot sizes and viewer state.
+- [x] Added Split Shift + left-drag handling at press, full-cell target detection, deterministic target-slot movement, palette-aware source/target feedback, and Escape/outside cancellation.
+- [x] Added HUD result insertion marker feedback using rendered group geometry; no reorder animation was introduced.
+- [x] Reflowed visible Split panels from current viewport geometry after visibility changes and debounced resize; hidden result identities/order are retained and stale stretches/minimum constraints are reset.
+- [ ] Native Windows D.1 Fix Pass review and user acceptance remain pending.
+- [ ] Phase E HUD snap/margin/badge polish and reorder animations, D.2, D.3, Phase F/G, and release packaging remain deferred.

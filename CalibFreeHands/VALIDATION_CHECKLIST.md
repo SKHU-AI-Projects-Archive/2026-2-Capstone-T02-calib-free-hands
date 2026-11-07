@@ -497,3 +497,10 @@ All entries below are pending implementation and validation. No acceptance item 
 - [ ] D.2 individual Detach/Reattach and D.3 detached-state synchronization/Source Media aspect-ratio work remain deferred.
 
 Phase C Final native Windows testing and acceptance were reported by the user as completed. This is user-reported acceptance, not an assertion that Codex independently performed the native checks.
+
+### Phase D.1 Fix Pass: Panel Interaction and Adaptive Layout
+
+- [x] Added offscreen regression coverage for header-free surfaces, Overlay swapping and state/slot-size preservation, Split Shift drags from source and GL content, ordinary unmodified drag, target feedback, Escape/outside cancellation, HUD insertion marker cleanup, visibility-driven 5-to-1 panel reflow, restore, and resize.
+- [x] Focused comparison Viewer suite: 106 passed; full pytest suite: 311 passed.
+- [x] Application import prints `IMPORT_OK`; `compileall` and `pip check` pass; `git diff --check` passes.
+- [ ] Native Windows interaction/visual review remains pending; offscreen coverage does not count as user acceptance.

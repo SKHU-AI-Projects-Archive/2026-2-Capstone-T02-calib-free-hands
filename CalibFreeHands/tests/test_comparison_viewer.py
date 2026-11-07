@@ -1621,7 +1621,8 @@ def test_presentation_hud_is_viewport_child_and_reorder_preserves_result_data(tm
     before = [loaded.result.keypoints_3d.copy() for loaded in viewer.loaded_results]
     viewer.reorder_result("cfg-2", "cfg-0")
     assert viewer.split_result_order == [2, 0, 1]
-    assert viewer.split_grid.itemAtPosition(0, 1).widget().content is viewer.split_views[2]
+    assert [viewer.split_grid.itemAt(index).widget().panel_id
+            for index in range(viewer.split_grid.count())] == viewer._visible_split_panel_ids()
     assert viewer.split_grid.itemAtPosition(0, 0).widget() is original_media_cell
     from calibfreehands.visualization.comparison_presentation import _ResultDragHandle
     handle = viewer.split_panels[2].findChild(_ResultDragHandle)
@@ -1724,6 +1725,58 @@ def test_overlay_panel_order_swap_preserves_original_widgets(tmp_path, qapp):
     viewer.close()
 
 
+def test_viewer_surfaces_have_no_titles_or_panel_drag_handles(tmp_path, qapp):
+    from PySide6.QtWidgets import QLabel
+    from calibfreehands.visualization.comparison import ComparisonViewer
+    viewer = ComparisonViewer(_session(tmp_path, 3))
+    assert all(surface.layout().count() == 1 for surface in viewer.overlay_surfaces.values())
+    assert all(surface.layout().count() == 1 for surface in viewer.split_surfaces.values())
+    assert all(surface.layout().count() == 1 for surface in viewer.findChildren(type(viewer.overlay_surfaces["source-media"])))
+    assert not viewer.split_surfaces["source-media"].content.findChildren(QLabel)
+    assert viewer.overlay_surfaces["source-media"].content is viewer.source_overlay
+    assert viewer.overlay_surfaces["overlay-3d"].content is viewer.overlay_view
+    assert viewer.split_surfaces["source-media"].content is viewer.split_source_overlay
+    assert all(viewer.split_surfaces[f"result:{config['id']}"].content is viewer.split_views[index]
+               for index, config in enumerate(viewer.configurations))
+    viewer.close()
+
+
+def test_overlay_center_swap_button_preserves_slot_sizes_and_viewer_state(tmp_path, qapp):
+    from PySide6.QtCore import Qt
+    from PySide6.QtTest import QTest
+    from calibfreehands.visualization.comparison import ComparisonViewer
+    viewer = ComparisonViewer(_session(tmp_path, 3))
+    viewer.resize(1500, 900)
+    viewer.show()
+    qapp.processEvents()
+    splitter = viewer.views.widget(0)
+    splitter.setSizes([420, 760])
+    qapp.processEvents()
+    before_sizes = splitter.sizes()
+    before_frame = viewer.slider.value()
+    before_clock = viewer.playback_clock
+    before_camera = dict(viewer.overlay_view.opts)
+    before_split_order = viewer.split_panel_order.copy()
+    button = viewer.overlay_swap_button
+    assert button.accessibleName()
+    assert button.toolTip()
+    QTest.mouseClick(button, Qt.MouseButton.LeftButton)
+    qapp.processEvents()
+    assert viewer.overlay_panel_order == ["overlay-3d", "source-media"]
+    assert splitter.widget(0).content is viewer.overlay_view
+    assert splitter.widget(1).content is viewer.source_overlay
+    assert splitter.sizes() == before_sizes
+    assert viewer.slider.value() == before_frame
+    assert viewer.playback_clock is before_clock
+    assert viewer.overlay_view.opts == before_camera
+    assert viewer.split_panel_order == before_split_order
+    button = viewer.overlay_swap_button
+    QTest.mouseClick(button, Qt.MouseButton.LeftButton)
+    assert viewer.overlay_panel_order == ["source-media", "overlay-3d"]
+    assert splitter.widget(0).content is viewer.source_overlay
+    viewer.close()
+
+
 def test_overlay_hud_mouse_drag_inserts_using_hud_row_geometry(tmp_path, qapp):
     from PySide6.QtCore import QEvent, QPoint, Qt
     from PySide6.QtGui import QMouseEvent
@@ -1747,8 +1800,10 @@ def test_overlay_hud_mouse_drag_inserts_using_hud_row_geometry(tmp_path, qapp):
     move = QMouseEvent(QEvent.Type.MouseMove, handle.mapFromGlobal(end), end,
                        Qt.MouseButton.NoButton, Qt.MouseButton.LeftButton, Qt.KeyboardModifier.NoModifier)
     QApplication.sendEvent(handle, move)
+    assert hud.insertion_marker.isVisible()
     QTest.mouseRelease(handle, Qt.MouseButton.LeftButton, pos=handle.mapFromGlobal(end))
     assert viewer.result_order_ids == ["cfg-0", "cfg-3", "cfg-1", "cfg-2"]
+    assert not hud.insertion_marker.isVisible()
     assert not viewer._panel_reorder_active
     viewer.close()
 
@@ -1813,29 +1868,168 @@ def test_split_source_can_move_through_first_middle_last_without_duplicate_widge
     viewer.close()
 
 
-def test_split_panel_mouse_drag_reorders_existing_surface(tmp_path, qapp):
+def test_shift_drag_over_split_panel_body_reorders_and_shows_live_target(tmp_path, qapp):
     from PySide6.QtCore import QEvent, QPoint, Qt
     from PySide6.QtGui import QMouseEvent
     from PySide6.QtWidgets import QApplication
     from PySide6.QtTest import QTest
     from calibfreehands.visualization.comparison import ComparisonViewer
-    from calibfreehands.visualization.comparison_presentation import _PanelDragHandle
     viewer = ComparisonViewer(_session(tmp_path, 3))
     viewer.resize(1500, 900)
     viewer.show()
     viewer.set_mode("split")
     qapp.processEvents()
+    source_widget = viewer.split_source_overlay
     source_surface = viewer.split_surfaces["source-media"]
-    handle = source_surface.findChild(_PanelDragHandle)
     target = viewer.split_surfaces["result:cfg-1"]
-    end = target.mapToGlobal(QPoint(target.width() // 2, target.height() - 2))
-    QTest.mousePress(handle, Qt.MouseButton.LeftButton, pos=handle.rect().center())
-    move = QMouseEvent(QEvent.Type.MouseMove, handle.mapFromGlobal(end), end,
+    end = target.mapToGlobal(target.rect().center())
+    QTest.mousePress(source_widget, Qt.MouseButton.LeftButton, Qt.KeyboardModifier.ShiftModifier,
+                     pos=source_widget.rect().center())
+    move = QMouseEvent(QEvent.Type.MouseMove, source_widget.mapFromGlobal(end), end,
                        Qt.MouseButton.NoButton, Qt.MouseButton.LeftButton, Qt.KeyboardModifier.NoModifier)
-    QApplication.sendEvent(handle, move)
-    QTest.mouseRelease(handle, Qt.MouseButton.LeftButton, pos=handle.mapFromGlobal(end))
+    QApplication.sendEvent(target.content, move)
+    assert viewer.split_reorder_controller.target_panel_id == "result:cfg-1"
+    assert viewer._split_source_feedback.isVisible()
+    assert viewer._split_target_feedback.isVisible()
+    QTest.mouseRelease(source_widget, Qt.MouseButton.LeftButton, pos=source_widget.mapFromGlobal(end))
     assert viewer.split_panel_order.index("source-media") > viewer.split_panel_order.index("result:cfg-1")
     assert not viewer._panel_reorder_active
+    assert not viewer._split_source_feedback.isVisible()
+    assert not viewer._split_target_feedback.isVisible()
+    viewer.close()
+
+
+def test_shift_drag_moves_gl_result_diagonally_and_normal_drag_is_not_reordered(tmp_path, qapp):
+    from PySide6.QtCore import QEvent, Qt
+    from PySide6.QtGui import QMouseEvent
+    from PySide6.QtWidgets import QApplication
+    from PySide6.QtTest import QTest
+    from calibfreehands.visualization.comparison import ComparisonViewer
+    viewer = ComparisonViewer(_session(tmp_path, 4))
+    viewer.resize(1500, 900)
+    viewer.show()
+    viewer.set_mode("split")
+    qapp.processEvents()
+    source = viewer.split_views[3]
+    target = viewer.split_surfaces["result:cfg-0"]
+    start = source.mapToGlobal(source.rect().center())
+    end = target.mapToGlobal(target.rect().center())
+    order = viewer.split_panel_order.copy()
+    QTest.mousePress(source, Qt.MouseButton.LeftButton, pos=source.rect().center())
+    move = QMouseEvent(QEvent.Type.MouseMove, source.mapFromGlobal(end), end,
+                       Qt.MouseButton.NoButton, Qt.MouseButton.LeftButton, Qt.KeyboardModifier.NoModifier)
+    QApplication.sendEvent(target.content, move)
+    QTest.mouseRelease(source, Qt.MouseButton.LeftButton, pos=source.mapFromGlobal(end))
+    assert viewer.split_panel_order == order
+    assert not viewer._panel_reorder_active
+
+    QTest.mousePress(source, Qt.MouseButton.LeftButton, Qt.KeyboardModifier.ShiftModifier,
+                     pos=source.rect().center())
+    move = QMouseEvent(QEvent.Type.MouseMove, source.mapFromGlobal(end), end,
+                       Qt.MouseButton.NoButton, Qt.MouseButton.LeftButton, Qt.KeyboardModifier.ShiftModifier)
+    QApplication.sendEvent(target, move)
+    assert viewer.split_reorder_controller.target_panel_id == "result:cfg-0"
+    QTest.mouseRelease(source, Qt.MouseButton.LeftButton, pos=source.rect().center())
+    assert viewer.split_panel_order.index("result:cfg-3") < viewer.split_panel_order.index("result:cfg-0")
+    assert not viewer._panel_reorder_active
+    viewer.close()
+
+
+def test_split_shift_drag_escape_and_outside_release_cancel_cleanly(tmp_path, qapp):
+    from PySide6.QtCore import QEvent, QPoint, Qt
+    from PySide6.QtGui import QKeyEvent, QMouseEvent
+    from PySide6.QtWidgets import QApplication
+    from PySide6.QtTest import QTest
+    from calibfreehands.visualization.comparison import ComparisonViewer
+    viewer = ComparisonViewer(_session(tmp_path, 3))
+    viewer.resize(1500, 900)
+    viewer.show()
+    viewer.set_mode("split")
+    qapp.processEvents()
+    source = viewer.split_views[2]
+    target = viewer.split_surfaces["source-media"]
+    end = target.mapToGlobal(target.rect().center())
+    order = viewer.split_panel_order.copy()
+    QTest.mousePress(source, Qt.MouseButton.LeftButton, Qt.KeyboardModifier.ShiftModifier,
+                     pos=source.rect().center())
+    move = QMouseEvent(QEvent.Type.MouseMove, source.mapFromGlobal(end), end,
+                       Qt.MouseButton.NoButton, Qt.MouseButton.LeftButton, Qt.KeyboardModifier.ShiftModifier)
+    QApplication.sendEvent(source, move)
+    assert viewer._split_target_feedback.isVisible()
+    QApplication.sendEvent(viewer, QKeyEvent(QEvent.Type.KeyPress, Qt.Key.Key_Escape,
+                                               Qt.KeyboardModifier.NoModifier))
+    assert viewer.split_panel_order == order
+    assert not viewer._panel_reorder_active
+    assert not viewer._split_target_feedback.isVisible()
+    QTest.mouseRelease(source, Qt.MouseButton.LeftButton, pos=source.rect().center())
+
+    outside = viewer.mapToGlobal(viewer.rect().bottomRight() + QPoint(200, 200))
+    QTest.mousePress(source, Qt.MouseButton.LeftButton, Qt.KeyboardModifier.ShiftModifier,
+                     pos=source.rect().center())
+    move = QMouseEvent(QEvent.Type.MouseMove, source.mapFromGlobal(outside), outside,
+                       Qt.MouseButton.NoButton, Qt.MouseButton.LeftButton, Qt.KeyboardModifier.ShiftModifier)
+    QApplication.sendEvent(source, move)
+    QTest.mouseRelease(source, Qt.MouseButton.LeftButton, pos=source.mapFromGlobal(outside))
+    assert viewer.split_panel_order == order
+    assert not viewer._panel_reorder_active
+    viewer.close()
+
+
+@pytest.mark.parametrize("results_to_hide,expected_count", [
+    ([], 5),
+    (["cfg-3"], 4),
+    (["cfg-3", "cfg-2"], 3),
+    (["cfg-3", "cfg-2", "cfg-1"], 2),
+    (["cfg-3", "cfg-2", "cfg-1", "cfg-0"], 1),
+])
+def test_split_grid_reflows_for_visible_panel_count(tmp_path, qapp, results_to_hide,
+                                                    expected_count):
+    from calibfreehands.visualization.comparison import ComparisonViewer
+    viewer = ComparisonViewer(_session(tmp_path, 4))
+    viewer.resize(1280, 720)
+    viewer.show()
+    viewer.set_mode("split")
+    qapp.processEvents()
+    for config_id in results_to_hide:
+        index = viewer._configuration_index(config_id)
+        viewer._set_configuration_visible(index, False)
+    qapp.processEvents()
+    assert viewer.split_grid.count() == expected_count
+    expected_columns, expected_rows = viewer._split_grid_shape(expected_count)
+    assert viewer.split_columns == expected_columns
+    assert viewer.split_rows == expected_rows
+    visible_ids = ["source-media", *(f"result:{config['id']}" for config in viewer.configurations
+                                      if viewer.overlay_view.configuration_visible[
+                                          viewer._configuration_index(config["id"])])]
+    assert [viewer.split_grid.itemAt(index).widget().panel_id for index in range(viewer.split_grid.count())] == visible_ids
+    assert len({id(viewer.split_grid.itemAt(index).widget()) for index in range(viewer.split_grid.count())}) == expected_count
+    assert viewer.split_widget.minimumWidth() == expected_columns * 340
+    assert viewer.split_widget.minimumHeight() == expected_rows * 260
+    viewer.close()
+
+
+def test_split_grid_restore_and_resize_preserve_canonical_order(tmp_path, qapp):
+    from PySide6.QtTest import QTest
+    from calibfreehands.visualization.comparison import ComparisonViewer
+    viewer = ComparisonViewer(_session(tmp_path, 8))
+    viewer.resize(1280, 720)
+    viewer.show()
+    viewer.set_mode("split")
+    qapp.processEvents()
+    original_order = viewer.split_panel_order.copy()
+    viewer._set_configuration_visible(7, False)
+    assert viewer.split_grid.count() == 8
+    viewer._set_configuration_visible(7, True)
+    assert viewer.split_grid.count() == 9
+    viewer.reorder_split_panel("result:cfg-7", "result:cfg-2")
+    custom_order = viewer.split_panel_order.copy()
+    viewer.resize(1920, 1080)
+    QTest.qWait(200)
+    assert viewer.split_panel_order == custom_order
+    assert [viewer.split_grid.itemAt(index).widget().panel_id for index in range(viewer.split_grid.count())] == custom_order
+    assert viewer.split_columns >= 2 and viewer.split_rows == int(np.ceil(9 / viewer.split_columns))
+    assert len({id(viewer.split_grid.itemAt(index).widget()) for index in range(9)}) == 9
+    assert original_order != custom_order
     viewer.close()
 
 
@@ -2302,7 +2496,10 @@ def test_hud_layout_updates_are_coalesced_after_content_and_viewport_settle(tmp_
         assert all(not panel.card.updatesEnabled() for panel in panels)
         assert calls == before
         qapp.processEvents()
-        assert all(panel.card.updatesEnabled() for panel in panels)
+        assert all(panel.card.updatesEnabled() for panel in panels), [
+            (index, panel.card.updatesEnabled(), panel._fit_timer.isActive())
+            for index, panel in enumerate(panels)
+        ]
         assert all(calls[panel] - before[panel] <= 1 for panel in panels)
         assert all(panel.requested_scale == "large" for panel in panels)
         assert all(panel.effective_point_size >= 7.0 for panel in panels)
