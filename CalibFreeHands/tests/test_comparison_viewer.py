@@ -222,6 +222,22 @@ def test_detached_comparison_views_share_current_pose_and_remain_linked(tmp_path
     viewer.close()
 
 
+def test_detach_all_initial_geometry_keeps_3d_viewports_renderable(tmp_path, qapp):
+    from PySide6.QtTest import QTest
+    from calibfreehands.visualization.comparison import ComparisonViewer
+
+    viewer = ComparisonViewer(_session(tmp_path, 3))
+    viewer.resize(1500, 900)
+    viewer.show()
+    QTest.qWait(50)
+    viewer.detach_all()
+    window, _source, detached_views = viewer._detached_windows[0]
+    QTest.qWait(50)
+    assert all(view.width() >= 340 and view.height() >= 260 for view in detached_views)
+    window.close()
+    viewer.close()
+
+
 def test_fit_all_uses_visible_union_and_leaves_fixed_metric_reference_unchanged(tmp_path, qapp):
     from calibfreehands.visualization.comparison import ComparisonViewer
 
@@ -1741,6 +1757,28 @@ def test_viewer_surfaces_have_no_titles_or_panel_drag_handles(tmp_path, qapp):
     viewer.close()
 
 
+def test_split_surface_is_in_owning_layout_before_first_show(tmp_path, qapp, monkeypatch):
+    from calibfreehands.visualization.comparison_presentation import _PanelSurface
+    from calibfreehands.visualization.comparison import ComparisonViewer
+
+    original_show = _PanelSurface.show
+    first_show_ownership = []
+
+    def record_first_show(surface):
+        if surface.panel_id == "source-media" or surface.panel_id.startswith("result:"):
+            parent = surface.parentWidget()
+            layout_index = parent.layout().indexOf(surface) if parent and parent.layout() else -1
+            first_show_ownership.append((surface.panel_id, parent, layout_index))
+        original_show(surface)
+
+    monkeypatch.setattr(_PanelSurface, "show", record_first_show)
+    viewer = ComparisonViewer(_session(tmp_path, 3))
+    assert first_show_ownership
+    assert all(parent is viewer.split_widget and index >= 0
+               for _panel_id, parent, index in first_show_ownership)
+    viewer.close()
+
+
 def test_overlay_center_swap_button_preserves_slot_sizes_and_viewer_state(tmp_path, qapp):
     from PySide6.QtCore import Qt
     from PySide6.QtTest import QTest
@@ -1750,6 +1788,10 @@ def test_overlay_center_swap_button_preserves_slot_sizes_and_viewer_state(tmp_pa
     viewer.show()
     qapp.processEvents()
     splitter = viewer.views.widget(0)
+    assert splitter.handleWidth() == 4
+    assert viewer.overlay_swap_button.text() == ""
+    assert viewer.overlay_swap_button.objectName() == "overlay-panel-swap"
+    assert viewer.overlay_swap_button.width() <= 28
     splitter.setSizes([420, 760])
     qapp.processEvents()
     before_sizes = splitter.sizes()
@@ -1774,6 +1816,73 @@ def test_overlay_center_swap_button_preserves_slot_sizes_and_viewer_state(tmp_pa
     QTest.mouseClick(button, Qt.MouseButton.LeftButton)
     assert viewer.overlay_panel_order == ["source-media", "overlay-3d"]
     assert splitter.widget(0).content is viewer.source_overlay
+    viewer.close()
+
+
+def test_split_reflow_keeps_native_gl_contexts_and_paints_frames(tmp_path, qapp):
+    import warnings
+    import shiboken6
+    from OpenGL import GL
+    from PySide6.QtTest import QTest
+    from PySide6.QtWidgets import QApplication
+    from calibfreehands.visualization.comparison import ComparisonViewer
+
+    if QApplication.platformName() == "offscreen":
+        pytest.skip("requires a native platform plugin with a real OpenGL context")
+
+    viewer = ComparisonViewer(_session(tmp_path, 3, mesh=True))
+    viewer.resize(1500, 900)
+    with warnings.catch_warnings(record=True) as render_warnings:
+        warnings.simplefilter("always")
+        viewer.show()
+        QTest.qWait(250)
+        viewer.set_mode("split")
+        QTest.qWait(250)
+
+        views = [viewer.overlay_view, *viewer.split_views]
+        contexts = [view.context() for view in views]
+        assert all(context is not None and context.isValid() for context in contexts)
+        context_ids = [shiboken6.getCppPointer(context)[0] for context in contexts]
+        destroyed = [[] for _ in views]
+        for events, context in zip(destroyed, contexts):
+            context.aboutToBeDestroyed.connect(lambda events=events: events.append(True))
+
+        def assert_drawn(view):
+            image = view.grabFramebuffer()
+            assert not image.isNull()
+            pixels = np.frombuffer(image.bits(), dtype=np.uint8)
+            pixels = pixels.reshape(image.height(), image.bytesPerLine())
+            rgb = pixels[:, :image.width() * 4].reshape(image.height(), image.width(), 4)[:, :, :3]
+            assert len(np.unique(rgb.reshape(-1, 3), axis=0)) > 8
+            view.makeCurrent()
+            errors = []
+            while (error := GL.glGetError()) != GL.GL_NO_ERROR:
+                errors.append(error)
+            view.doneCurrent()
+            assert errors == []
+
+        for view in views:
+            assert_drawn(view)
+
+        viewer._set_configuration_visible(1, False)
+        viewer._set_configuration_visible(1, True)
+        viewer.reorder_split_panel("result:cfg-2", "result:cfg-0")
+        viewer.resize(1680, 960)
+        QTest.qWait(250)
+        viewer.set_mode("overlay")
+        viewer.overlay_swap_button.click()
+        viewer.overlay_swap_button.click()
+        viewer.set_mode("split")
+        QTest.qWait(300)
+
+        assert [shiboken6.getCppPointer(view.context())[0] for view in views] == context_ids
+        assert not any(destroyed)
+        for view in views:
+            assert_drawn(view)
+        rendering_errors = [str(item.message) for item in render_warnings
+                            if "Error while drawing item" in str(item.message)
+                            or "GLError" in str(item.message)]
+        assert rendering_errors == []
     viewer.close()
 
 

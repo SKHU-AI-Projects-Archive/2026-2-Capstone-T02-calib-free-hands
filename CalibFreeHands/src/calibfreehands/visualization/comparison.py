@@ -768,7 +768,7 @@ class ComparisonViewer(QWidget):
         self.split_annotations = [_JointAnnotationLayer(self, view, [index])
                                   for index, view in enumerate(self.split_views)]
         self.views = QStackedWidget()
-        overlay_splitter = _SwapSplitter(Qt.Orientation.Horizontal)
+        overlay_splitter = _SwapSplitter(Qt.Orientation.Horizontal, self.views)
         self.overlay_splitter = overlay_splitter
         self.overlay_surfaces = {
             "source-media": _PanelSurface("source-media", self.source_overlay),
@@ -779,7 +779,7 @@ class ComparisonViewer(QWidget):
         overlay_splitter.setStretchFactor(0, 1)
         overlay_splitter.setStretchFactor(1, 2)
         overlay_splitter.setSizes([560, 1120])
-        self.overlay_swap_button = overlay_splitter.handle(1).swap_button
+        self.overlay_swap_button = overlay_splitter.swap_button
         overlay_splitter.swapRequested.connect(
             lambda: self.reorder_overlay_panel(self.overlay_panel_order[1], self.overlay_panel_order[0]))
         self.views.addWidget(overlay_splitter)
@@ -1446,15 +1446,16 @@ class ComparisonViewer(QWidget):
         for row in range(previous_rows):
             self.split_grid.setRowStretch(row, 0)
             self.split_grid.setRowMinimumHeight(row, 0)
+        previous_panel_ids = set(self._laid_out_panel_ids)
         while self.split_grid.count():
             self.split_grid.takeAt(0)
-        for surface in self.split_surfaces.values():
-            surface.hide()
+        for panel_id in previous_panel_ids.difference(panel_ids):
+            self.split_surfaces[panel_id].hide()
         self.split_columns, self.split_rows = columns, rows
         for position, panel_id in enumerate(panel_ids):
             surface = self.split_surfaces[panel_id]
-            surface.show()
             self.split_grid.addWidget(surface, position // columns, position % columns)
+            surface.show()
         for column in range(columns):
             self.split_grid.setColumnStretch(column, 1)
         for row in range(rows):
@@ -1585,7 +1586,6 @@ class ComparisonViewer(QWidget):
             splitter.insertWidget(index, self.overlay_surfaces[panel_id])
         if sizes:
             splitter.setSizes(sizes)
-        self.overlay_swap_button = splitter.handle(1).swap_button
 
     def _apply_default_gt_order(self):
         if self.user_ordered_panels:
@@ -2097,6 +2097,7 @@ class ComparisonViewer(QWidget):
                                if self.space_mode == "hand" else None)
             view.set_labels_visible(self.labels_switch.isChecked())
             view.camera_changed = self._camera_interacted
+        window.resize(max(1280, self.width()), max(720, self.height()))
         window.show()
 
     @staticmethod

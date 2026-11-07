@@ -504,3 +504,16 @@ Phase C Final native Windows testing and acceptance were reported by the user as
 - [x] Focused comparison Viewer suite: 106 passed; full pytest suite: 311 passed.
 - [x] Application import prints `IMPORT_OK`; `compileall` and `pip check` pass; `git diff --check` passes.
 - [ ] Native Windows interaction/visual review remains pending; offscreen coverage does not count as user acceptance.
+
+### Phase D.1 Rendering Regression Fix & UI Stabilization (2026-11-07)
+
+- [x] Reproduced the native Windows failure with the four existing `2_screw` `.cfh` results: GL draw errors occurred during Split viewer construction at `_sync_split_layout`, when a parentless GL surface was shown before grid insertion.
+- [x] Confirmed lifecycle cause: showing the parentless surface exposed its `QOpenGLWidget` in a temporary top-level context; subsequent reparenting into the Viewer changed context/FBO ownership. The process-global pyqtgraph shader cache was not reset by the Fix Pass and was not independently identified as the trigger; it makes context churn unsafe, so the correction stabilizes widget ownership/lifetime without shader monkey-patching.
+- [x] Native real-context regression test verifies framebuffers contain rendered pixels, GL errors are absent, and context identities survive visibility/order/resize/mode/swap changes. `QT_QPA_PLATFORM=windows`: 1 passed.
+- [x] Native direct Qt run with the saved four-result `.cfh` set exercised single-result and comparison views, Overlay/Split, Shift-drag, visibility/reflow, repeated swaps, resize, Physical/Hand, GT, seek/play/pause, camera preset, mesh, and Detach All. Captured 16 valid GL framebuffers; 0 GL errors and 0 pyqtgraph draw warnings.
+- [x] Detach All regression checked: detached GL views receive renderable geometry and produce valid framebuffers.
+- [x] Overlay divider is 4 logical px; palette-aware painted double-arrow overlays it at 28×28 px. Repeated swaps preserve slot widths and interaction state; ordinary splitter resizing remains enabled.
+- [x] Focused comparison viewer suite: 108 passed, 1 skipped (native OpenGL case skips only under offscreen; separately run and passed on Windows platform).
+- [x] Full pytest suite: 313 passed, 1 skipped. App import, compileall, `pip check`, and `git diff --check` passed.
+- [ ] Computer Use native pipe was unavailable. Native Qt/window/framebuffer verification was performed directly, but no human visual acceptance is claimed. Phase D.1 remains unapproved until user confirmation.
+- [ ] D.2 individual Detach/Reattach, D.3 detached synchronization/aspect ratio, Phase E HUD polish/animations, Phase F/G, and release packaging remain deferred.

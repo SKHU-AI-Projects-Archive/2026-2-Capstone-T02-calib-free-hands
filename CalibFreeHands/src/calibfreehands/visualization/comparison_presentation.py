@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import numpy as np
 from PySide6.QtCore import QEvent, Qt, QPropertyAnimation, QEasingCurve, QPoint, QTimer, QRectF, Signal
-from PySide6.QtGui import QColor, QFont, QFontMetrics, QPainter, QPen, QVector4D
+from PySide6.QtGui import QColor, QFont, QFontMetrics, QPainter, QPalette, QPen, QVector4D
 from PySide6.QtWidgets import (QApplication, QCheckBox, QFrame, QGraphicsOpacityEffect, QHBoxLayout,
                                QLabel, QProgressBar, QPushButton, QSizePolicy, QSplitter, QSplitterHandle,
                                QToolButton, QVBoxLayout, QWidget)
@@ -24,25 +24,35 @@ class _PanelSurface(QWidget):
         layout.addWidget(content, 1)
 
 
-class _SwapSplitterHandle(QSplitterHandle):
-    def __init__(self, orientation, splitter):
-        super().__init__(orientation, splitter)
-        self.swap_button = QToolButton(self)
-        self.swap_button.setText("⇄")
-        self.swap_button.setToolTip("Swap Source Media and Overlay 3D")
-        self.swap_button.setAccessibleName("Swap Source Media and Overlay 3D")
-        self.swap_button.setAutoRaise(True)
-        self.swap_button.setFixedSize(28, 32)
-        self.swap_button.setStyleSheet(
-            "QToolButton { border: 1px solid palette(mid); border-radius: 5px; background: palette(window); }"
-            "QToolButton:hover { border-color: palette(highlight); }"
-        )
-        self.swap_button.clicked.connect(splitter.request_swap)
+class _SwapButton(QToolButton):
+    def __init__(self, parent):
+        super().__init__(parent)
+        self.setObjectName("overlay-panel-swap")
+        self.setText("")
+        self.setToolTip("Swap Source Media and Overlay 3D")
+        self.setAccessibleName("Swap Source Media and Overlay 3D")
+        self.setAutoRaise(True)
+        self.setFixedSize(28, 28)
+        self.setAttribute(Qt.WidgetAttribute.WA_TranslucentBackground)
 
-    def resizeEvent(self, event):
-        self.swap_button.move((self.width() - self.swap_button.width()) // 2,
-                              (self.height() - self.swap_button.height()) // 2)
-        super().resizeEvent(event)
+    def paintEvent(self, event):
+        painter = QPainter(self)
+        painter.setRenderHint(QPainter.RenderHint.Antialiasing)
+        if self.underMouse() or self.isDown():
+            fill = self.palette().color(QPalette.ColorRole.Button)
+            fill.setAlpha(235)
+            painter.setPen(QPen(self.palette().color(QPalette.ColorRole.Mid), 1))
+            painter.setBrush(fill)
+            painter.drawEllipse(self.rect().adjusted(2, 2, -2, -2))
+        color = self.palette().color(QPalette.ColorRole.ButtonText)
+        pen = QPen(color, 1.8, Qt.PenStyle.SolidLine, Qt.PenCapStyle.RoundCap, Qt.PenJoinStyle.RoundJoin)
+        painter.setPen(pen)
+        painter.drawLine(7, 9, 21, 9)
+        painter.drawLine(21, 9, 17, 5)
+        painter.drawLine(21, 9, 17, 13)
+        painter.drawLine(21, 19, 7, 19)
+        painter.drawLine(7, 19, 11, 15)
+        painter.drawLine(7, 19, 11, 23)
 
 
 class _SwapSplitter(QSplitter):
@@ -50,10 +60,30 @@ class _SwapSplitter(QSplitter):
 
     def __init__(self, orientation, parent=None):
         super().__init__(orientation, parent)
-        self.setHandleWidth(30)
+        self.setHandleWidth(4)
+        self.swap_button = _SwapButton(parent if parent is not None else self)
+        self.swap_button.clicked.connect(self.request_swap)
+        self.splitterMoved.connect(lambda *_: self._position_swap_button())
 
     def createHandle(self):
-        return _SwapSplitterHandle(self.orientation(), self)
+        return QSplitterHandle(self.orientation(), self)
+
+    def resizeEvent(self, event):
+        super().resizeEvent(event)
+        self._position_swap_button()
+
+    def showEvent(self, event):
+        super().showEvent(event)
+        self._position_swap_button()
+
+    def _position_swap_button(self):
+        handle = self.handle(1)
+        if handle is None or self.count() < 2:
+            return
+        center = self.mapTo(self.swap_button.parentWidget(), handle.geometry().center())
+        self.swap_button.move(center.x() - self.swap_button.width() // 2,
+                              center.y() - self.swap_button.height() // 2)
+        self.swap_button.raise_()
 
     def request_swap(self):
         self.swapRequested.emit()

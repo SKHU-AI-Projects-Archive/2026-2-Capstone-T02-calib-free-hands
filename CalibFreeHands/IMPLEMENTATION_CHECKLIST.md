@@ -235,3 +235,11 @@ Phase C Final native Windows testing and acceptance were reported by the user as
 - [x] Reflowed visible Split panels from current viewport geometry after visibility changes and debounced resize; hidden result identities/order are retained and stale stretches/minimum constraints are reset.
 - [ ] Native Windows D.1 Fix Pass review and user acceptance remain pending.
 - [ ] Phase E HUD snap/margin/badge polish and reorder animations, D.2, D.3, Phase F/G, and release packaging remain deferred.
+
+### Phase D.1 Rendering Regression Fix & UI Stabilization (2026-11-07)
+
+- [x] Fixed Split surface initialization order: each GL surface is inserted into its owning grid before it is shown; retained surfaces are not hidden/shown during reflow.
+- [x] Replaced the 30 px Overlay divider and text glyph with a 4 px splitter handle and a compact palette-aware Qt-painted swap icon.
+- [x] Ensure Detach All opens at a renderable initial size so detached OpenGL views receive valid geometry.
+- [x] Native Windows rendering reproduced before the fix and verified after it with saved `.cfh` results; native context/framebuffer and interaction details are recorded in `VALIDATION_CHECKLIST.md`.
+- [ ] Phase D.1 remains pending user visual/interaction acceptance. D.2/D.3, Phase E/F/G, and release packaging remain deferred.
