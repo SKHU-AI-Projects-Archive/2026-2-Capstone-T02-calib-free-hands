@@ -10,7 +10,7 @@ import numpy as np
 import pytest
 from PySide6.QtCore import Qt
 from PySide6.QtCore import QThread
-from PySide6.QtWidgets import QListWidgetItem, QPushButton
+from PySide6.QtWidgets import QLabel, QListWidgetItem, QPushButton
 
 from calibfreehands.app.settings import AppSettings
 from calibfreehands.pipeline import CanonicalResult, save_result
@@ -70,6 +70,36 @@ def test_main_surface_has_one_open_button_without_dropdown(tmp_path, monkeypatch
     assert "Browse folder" not in labels
     assert window.open_button.menu() is None
     assert "View Results..." in labels
+    window.close()
+
+
+def test_empty_queue_hint_tracks_queue_changes_and_resize(tmp_path, monkeypatch, qapp):
+    _, window, _ = make_window(tmp_path, monkeypatch)
+    hint = window.queue.empty_hint
+    assert window.queue.count() == 0
+    assert not hint.isHidden()
+    assert "Drag & Drop media here" in [label.text() for label in hint.findChildren(QLabel)]
+    assert "or click Open... to browse" in [label.text() for label in hint.findChildren(QLabel)]
+    assert hint.testAttribute(Qt.WidgetAttribute.WA_TransparentForMouseEvents)
+
+    media = tmp_path / "sample.mp4"
+    media.touch()
+    window._add_paths([media])
+    qapp.processEvents()
+    assert hint.isHidden()
+
+    window.queue.item(0).setSelected(True)
+    window._remove_selected()
+    qapp.processEvents()
+    assert not hint.isHidden()
+
+    window._add_paths([media])
+    window._clear_queue()
+    qapp.processEvents()
+    assert not hint.isHidden()
+    window.queue.resize(650, 320)
+    qapp.processEvents()
+    assert hint.geometry() == window.queue.viewport().rect()
     window.close()
 
 
@@ -220,7 +250,7 @@ def test_processing_disables_queue_and_configuration_controls_and_restores_them(
     window.sampling_combo.setCurrentIndex(window.sampling_combo.findData("all"))
     release.set()
     wait_for_job(window, qapp)
-    assert snapshots[0].sampling_mode == "uniform"
+    assert snapshots[0].sampling_mode == "all"
     assert snapshots[0].queue_paths == (source.resolve(),)
     assert window.open_button.isEnabled()
     assert window.start_button.isEnabled()

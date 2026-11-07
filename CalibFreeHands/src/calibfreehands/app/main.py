@@ -9,6 +9,7 @@ from dataclasses import dataclass
 from pathlib import Path
 
 from PySide6.QtCore import Qt, QStandardPaths
+from PySide6.QtGui import QColor, QFont, QPalette
 from PySide6.QtWidgets import (
     QApplication, QFileDialog, QLabel, QListWidget, QListWidgetItem, QMainWindow, QPushButton,
     QHBoxLayout, QVBoxLayout, QWidget, QComboBox, QLineEdit, QDoubleSpinBox,
@@ -49,6 +50,83 @@ from calibfreehands.app.media_picker import MediaOpenDialog
 from calibfreehands.visualization.comparison import ComparisonViewer
 from calibfreehands.visualization.viewer import ResultViewer
 import uuid
+
+
+def apply_application_theme(app: QApplication, value: str) -> None:
+    """Apply an explicit Qt color scheme, with a palette fallback for Fusion."""
+    theme = value.strip().lower()
+    hints = app.styleHints()
+    if not hasattr(app, "_calibfreehands_base_palette"):
+        app._calibfreehands_base_palette = app.style().standardPalette()
+
+    if theme == "system":
+        hints.unsetColorScheme()
+        app.setPalette(QPalette())
+        return
+
+    scheme = Qt.ColorScheme.Dark if theme == "dark" else Qt.ColorScheme.Light
+    hints.setColorScheme(scheme)
+    if hints.colorScheme() == scheme:
+        return
+
+    palette = QPalette(app._calibfreehands_base_palette)
+    if theme == "dark":
+        colors = {
+            QPalette.ColorRole.Window: "#202124",
+            QPalette.ColorRole.WindowText: "#e8eaed",
+            QPalette.ColorRole.Base: "#17191c",
+            QPalette.ColorRole.AlternateBase: "#292c30",
+            QPalette.ColorRole.Text: "#e8eaed",
+            QPalette.ColorRole.Button: "#303338",
+            QPalette.ColorRole.ButtonText: "#e8eaed",
+            QPalette.ColorRole.ToolTipBase: "#303338",
+            QPalette.ColorRole.ToolTipText: "#f1f3f4",
+            QPalette.ColorRole.Highlight: "#456a91",
+            QPalette.ColorRole.HighlightedText: "#ffffff",
+            QPalette.ColorRole.PlaceholderText: "#a6abb2",
+            QPalette.ColorRole.Link: "#8ab4f8",
+        }
+        for role, color in colors.items():
+            palette.setColor(role, QColor(color))
+        palette.setColor(QPalette.ColorGroup.Disabled, QPalette.ColorRole.WindowText, QColor("#92979e"))
+        palette.setColor(QPalette.ColorGroup.Disabled, QPalette.ColorRole.Text, QColor("#92979e"))
+        palette.setColor(QPalette.ColorGroup.Disabled, QPalette.ColorRole.ButtonText, QColor("#92979e"))
+    app.setPalette(palette)
+
+
+class QueueListWidget(QListWidget):
+    def __init__(self) -> None:
+        super().__init__()
+        self.empty_hint = QWidget(self.viewport())
+        self.empty_hint.setAttribute(Qt.WidgetAttribute.WA_TransparentForMouseEvents)
+        hint_layout = QVBoxLayout(self.empty_hint)
+        hint_layout.setContentsMargins(16, 16, 16, 16)
+        hint_layout.setSpacing(4)
+        primary = QLabel("Drag & Drop media here")
+        primary.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        primary.setForegroundRole(QPalette.ColorRole.PlaceholderText)
+        primary_font = primary.font()
+        primary_font.setPointSizeF(primary_font.pointSizeF() + 1.5)
+        primary_font.setWeight(QFont.Weight.DemiBold)
+        primary.setFont(primary_font)
+        secondary = QLabel("or click Open... to browse")
+        secondary.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        secondary.setForegroundRole(QPalette.ColorRole.PlaceholderText)
+        hint_layout.addWidget(primary)
+        hint_layout.addWidget(secondary)
+        model = self.model()
+        model.rowsInserted.connect(self._sync_empty_hint)
+        model.rowsRemoved.connect(self._sync_empty_hint)
+        model.modelReset.connect(self._sync_empty_hint)
+        self._sync_empty_hint()
+
+    def resizeEvent(self, event) -> None:
+        super().resizeEvent(event)
+        self.empty_hint.setGeometry(self.viewport().rect())
+
+    def _sync_empty_hint(self, *_args) -> None:
+        self.empty_hint.setGeometry(self.viewport().rect())
+        self.empty_hint.setVisible(self.count() == 0)
 
 
 @dataclass(frozen=True)
@@ -117,15 +195,19 @@ class MainWindow(QMainWindow):
     PATH_ROLE = Qt.ItemDataRole.UserRole
     STATE_ROLE = Qt.ItemDataRole.UserRole + 1
 
-    def __init__(self) -> None:
+    def __init__(self, settings: AppSettings | None = None) -> None:
+        settings = settings or AppSettings()
+        app = QApplication.instance()
+        if app is not None:
+            apply_application_theme(app, settings.get("theme"))
         super().__init__()
         self.setWindowTitle("CalibFreeHands")
         self.setMinimumSize(980, 560)
-        self.queue = QListWidget()
+        self.settings = settings
+        self.queue = QueueListWidget()
         self.queue.setSelectionMode(QAbstractItemView.SelectionMode.ExtendedSelection)
         self.queue.itemSelectionChanged.connect(self._refresh_queue_buttons)
         self.setAcceptDrops(True)
-        self.settings = AppSettings()
         self.configuration = load_configuration()
         self._preset_origin_id: str | None = None
         self.preset_store_path = Path(QStandardPaths.writableLocation(
@@ -806,7 +888,8 @@ class MainWindow(QMainWindow):
     def _set_theme(self, value: str) -> None:
         self._set_setting("theme", value.lower())
         app = QApplication.instance()
-        app.setStyleSheet("QWidget { background: #202124; color: #f1f3f4; }" if value == "Dark" else "")
+        if app is not None:
+            apply_application_theme(app, value)
 
     def _add_paths(self, paths: list[Path]) -> None:
         existing = {os.path.normcase(str(self._queue_path(self.queue.item(i))))
@@ -1184,7 +1267,9 @@ class MainWindow(QMainWindow):
 def main() -> int:
     app = QApplication(sys.argv)
     app.setStyle("Fusion")
-    window = MainWindow()
+    settings = AppSettings()
+    apply_application_theme(app, settings.get("theme"))
+    window = MainWindow(settings)
     window.show()
     app.aboutToQuit.connect(close_shared_media_providers)
     return app.exec()

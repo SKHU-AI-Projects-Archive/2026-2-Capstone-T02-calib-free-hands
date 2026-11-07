@@ -7,6 +7,7 @@ import pytest
 from PySide6.QtCore import Qt
 from pathlib import Path
 from types import SimpleNamespace
+from PySide6.QtGui import QPalette
 
 
 def test_settings_persist(tmp_path):
@@ -19,6 +20,55 @@ def test_settings_persist(tmp_path):
     assert restored.get("sample_count") == 12
 
 
+def test_fresh_settings_use_all_frames_sampling():
+    assert AppSettings.defaults["sampling_mode"] == "all"
+
+
+@pytest.mark.parametrize("theme", ["dark", "light", "system"])
+def test_saved_theme_is_applied_before_window_construction(tmp_path, monkeypatch, qapp, theme):
+    main = importlib.import_module("calibfreehands.app.main")
+    settings_path = tmp_path / f"{theme}.ini"
+    settings = AppSettings(settings_path)
+    settings.set("theme", theme)
+    settings.sync()
+    monkeypatch.setattr(main, "AppSettings", lambda: AppSettings(settings_path))
+
+    window = main.MainWindow()
+
+    assert window.theme_combo.currentText() == theme.title()
+    if theme == "system":
+        assert qapp.styleHints().colorScheme() == main.Qt.ColorScheme.Unknown
+    elif theme == "dark":
+        assert qapp.palette().color(QPalette.ColorRole.Window).name() == "#202124"
+    else:
+        assert qapp.palette().color(QPalette.ColorRole.Window) == qapp._calibfreehands_base_palette.color(QPalette.ColorRole.Window)
+    window.close()
+
+
+def test_runtime_theme_switching_persists_without_stylesheet(tmp_path, monkeypatch, qapp):
+    main = importlib.import_module("calibfreehands.app.main")
+    settings_path = tmp_path / "settings.ini"
+    monkeypatch.setattr(main, "AppSettings", lambda: AppSettings(settings_path))
+    window = main.MainWindow()
+
+    window._set_theme("Dark")
+    qapp.processEvents()
+    dark = qapp.palette().color(QPalette.ColorRole.Window)
+    assert window.palette().color(QPalette.ColorRole.Window) == dark
+    window._set_theme("Light")
+    qapp.processEvents()
+    light = qapp.palette().color(QPalette.ColorRole.Window)
+    assert window.palette().color(QPalette.ColorRole.Window) == light
+    window._set_theme("System")
+
+    assert dark != light
+    assert window.settings.get("theme") == "system"
+    assert qapp.styleHints().colorScheme() == main.Qt.ColorScheme.Unknown
+    assert qapp.palette().color(QPalette.ColorRole.Window) == qapp._calibfreehands_base_palette.color(QPalette.ColorRole.Window)
+    assert not qapp.styleSheet()
+    window.close()
+
+
 def test_model_and_preset_defaults_persist_and_missing_ids_fall_back(tmp_path, monkeypatch, qapp):
     main = importlib.import_module("calibfreehands.app.main")
     settings_path = tmp_path / "settings.ini"
@@ -29,7 +79,7 @@ def test_model_and_preset_defaults_persist_and_missing_ids_fall_back(tmp_path, m
     assert len(window.configuration_rows) == 1
     assert window.calibration_combo.currentData() == "anycalib_original"
     assert window.reconstruction_combo.currentData() == "wilor_original"
-    assert window.sampling_combo.currentData() == "uniform"
+    assert window.sampling_combo.currentData() == "all"
     assert window.sample_count_combo.currentText() == "8"
     assert window.aggregation_combo.currentData() == "median"
     handcalib_index = window.calibration_combo.findData("handcalib")
@@ -67,12 +117,39 @@ def test_preset_updates_controls_and_manual_change_does_not_mutate_definition(tm
     window.sample_count_combo.setCurrentText("16")
     window.aggregation_combo.setCurrentText("mean")
     assert window.preset_combo.currentData() == "custom"
-    assert (original.sampling, original.sample_count, original.aggregation) == ("uniform", 8, "median")
+    assert (original.sampling, original.sample_count, original.aggregation) == ("all", 8, "median")
 
     window.preset_combo.setCurrentIndex(window.preset_combo.findData("original"))
-    assert window.sampling_combo.currentData() == "uniform"
+    assert window.sampling_combo.currentData() == "all"
     assert window.sample_count_combo.currentText() == "8"
+    assert not window.sample_count_combo.isEnabled()
     assert window.aggregation_combo.currentData() == "median"
+    window.sampling_combo.setCurrentIndex(window.sampling_combo.findData("uniform"))
+    assert window.preset_combo.currentData() == "custom"
+    window.sampling_combo.setCurrentIndex(window.sampling_combo.findData("all"))
+    assert window.preset_combo.currentData() == "original"
+    window.close()
+
+
+def test_old_saved_original_uniform_defaults_use_updated_builtin_definition(tmp_path, monkeypatch, qapp):
+    main = importlib.import_module("calibfreehands.app.main")
+    settings_path = tmp_path / "settings.ini"
+    settings = AppSettings(settings_path)
+    settings.set("default_preset_id", "original")
+    settings.set("sampling_mode", "uniform")
+    settings.set("sample_count", 8)
+    settings.set("aggregation", "median")
+    settings.set("default_configurations_json", '{"schema_version":1,"preset_id":"original","sampling_mode":"uniform","sample_count":8,"aggregation":"median","configurations":[{"id":"original-1","name":"Original","calibration_model_id":"anycalib_original","reconstruction_model_id":"wilor_original"}]}')
+    settings.sync()
+    monkeypatch.setattr(main, "AppSettings", lambda: AppSettings(settings_path))
+
+    window = main.MainWindow()
+
+    assert window.preset_combo.currentData() == "original"
+    assert window.sampling_combo.currentData() == "all"
+    assert not window.sample_count_combo.isEnabled()
+    assert window.aggregation_combo.currentData() == "median"
+    assert window.settings.get("default_configurations_json").startswith('{"schema_version":1')
     window.close()
 
 
@@ -155,7 +232,7 @@ def test_malformed_or_empty_saved_configuration_falls_back_to_original(tmp_path,
     assert len(window.configuration_rows) == 1
     assert window.calibration_combo.currentData() == "anycalib_original"
     assert window.reconstruction_combo.currentData() == "wilor_original"
-    assert window.sampling_combo.currentData() == "uniform"
+    assert window.sampling_combo.currentData() == "all"
     assert window.sample_count_combo.currentText() == "8"
     assert window.aggregation_combo.currentData() == "median"
     window.close()
@@ -253,7 +330,8 @@ def test_main_window_groups_processing_settings_without_unused_audio_control(tmp
     assert [group.itemAt(0).widget().text() for group in compact_groups] == ["Sampling", "Sample count", "Aggregate"]
     assert window.collision_group.layout().itemAt(0).widget().text() == "Collision"
     assert collision.currentText() == "Ask"
-    assert sampling.currentText() == "Uniform"
+    assert sampling.currentText() == "All frames"
+    assert not sample_count.isEnabled()
     assert sample_count.currentText() == str(window.settings.get("sample_count"))
     assert aggregation.currentText() == "Median"
     assert not any(box.text() == "Preserve audio" for box in window.findChildren(QCheckBox))

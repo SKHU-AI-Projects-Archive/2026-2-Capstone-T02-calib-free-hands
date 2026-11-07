@@ -52,7 +52,7 @@
       "display_name": "Original",
       "calibration_model_id": "anycalib_original",
       "reconstruction_model_id": "wilor_original",
-      "sampling": "uniform",
+      "sampling": "all",
       "sample_count": 8,
       "aggregation": "median"
     }

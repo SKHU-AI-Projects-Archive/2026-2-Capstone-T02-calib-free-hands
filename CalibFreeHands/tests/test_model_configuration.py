@@ -15,7 +15,7 @@ def test_built_in_configuration_exposes_original_default_and_unavailable_models(
 
     assert original.calibration_model_id == "anycalib_original"
     assert original.reconstruction_model_id == "wilor_original"
-    assert (original.sampling, original.sample_count, original.aggregation) == ("uniform", 8, "median")
+    assert (original.sampling, original.sample_count, original.aggregation) == ("all", 8, "median")
     assert config.calibration_models["anycalib_original"].available
     assert not config.calibration_models["handcalib"].available
     assert not config.reconstruction_models["anyhand_wilor"].available
