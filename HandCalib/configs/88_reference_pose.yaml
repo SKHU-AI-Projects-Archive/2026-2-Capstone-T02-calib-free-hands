@@ -1,0 +1,19 @@
+# 88: the chain's reference frame at different hand poses (user 2026-11-09: "일단 1부터 진행을 하고 1에 결과에 따라서 내가 판단해서 알려줄게."), record only.
+# 87: the chain's error vs the detected joints rises and falls with the turn from the reference frame's pose; 56's reference (middle detected frame) is near 0 deg in the user's videos
+# but at an extreme in the teammate's. Here 56's chain (kt_chain unchanged) is built from the middle detected frame of each pause (60's rule, as 87: still frames as sg_video_job, runs
+# with gap <= 15 and >= 5 frames), with 56's edge rule; 74b's estimator (11 deg fixed, ramp free from 5/12/19, j16) on each. Same four videos as 87; detections copied from 81's run.
+# 56's own reference read from 74b. Reference f only in summary.md. Fixed before the run.
+experiment:
+  name: 88_reference_pose
+  seed: 42
+settings_config: configs/74b_multistart_rerun.yaml
+previous_run: runs/74b_multistart_rerun/20261105T044422Z
+run_81: runs/81_detected_joints/20261106T055430Z
+joint_set: j16
+code_88: {branch: exp/88-reference-pose, base_commit: 367a217, commit: 772f2ea, modules: [HandCalib/run.py]}
+videos: ["IMG_7354 - 복사본.MOV", "IMG_7355 - 복사본.MOV", "IMG_7351 - 복사본.MOV", "IMG_7352 - 복사본.MOV"]
+workers: 64
+video_workers: 4
+output:
+  root: runs/88_reference_pose
+  results_yaml: results/88_reference_pose.yaml
