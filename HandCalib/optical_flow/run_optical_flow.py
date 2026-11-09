@@ -125,14 +125,32 @@ def estimate_args(cfg: dict, x: dict, A: dict = None) -> tuple:
     return a if A is None else a + (A,)
 
 
+def results_yaml(run_dir: Path, own: dict, path: Path) -> Path:
+    """값만 (기준 f, 오차 없음): 영상별 기준 프레임, 사용 프레임, 추정마다 f·경사·RMS 등."""
+    r = json.loads((run_dir / "results.json").read_text())["real"]
+    m = json.loads((run_dir / "metadata.json").read_text())
+    rv = lambda x: x if not isinstance(x, float) else (round(x, 3) if np.isfinite(x) else None)      # noqa: E731
+    keys = ("f", "rms_px", "pitch_deg", "roll_deg", "desk_tilt_deg", "boundary", "start")
+    out = {"experiment": own["experiment"]["name"], "run": str(run_dir.resolve().relative_to(hf.PROJECT_ROOT)), "code_commit": m["git"]["commit"][:7],
+           "git_dirty_at_run": m["git"]["git_dirty"], "videos": {}}
+    for f, d in r.items():
+        out["videos"][f] = {k: (rv(v) if not isinstance(v, dict) else {kk: rv(v[kk]) for kk in keys if kk in v} if "f" in v else v) for k, v in d.items()}
+    path.write_text(yaml.safe_dump(hf.jsonable(out), allow_unicode=True, sort_keys=False))
+    return path
+
+
 def main(argv=None):
     ap = argparse.ArgumentParser(description="광류(KLT) 추적점 + 책상 운동 추정기(74b)로 f 추정")
     ap.add_argument("--config", default=str(HERE.parent / "configs/89_optical_flow_entry.yaml"))
     ap.add_argument("--out", default=None, help="결과 폴더 (기본: output.root/<UTC>)")
     ap.add_argument("--videos", type=int, default=None, help="시험 실행: 앞의 N 개 영상만")
+    ap.add_argument("--results-yaml", default=None, help="이미 끝난 실행 폴더의 결과 yaml 을 output.results_yaml 에 쓴다")
     a = ap.parse_args(argv)
     text = Path(a.config).read_text()
     own = yaml.safe_load(text)
+    if a.results_yaml:
+        print(results_yaml(hf.resolve(a.results_yaml), own, hf.resolve(own["output"]["results_yaml"])))
+        return None
     cfg = load_settings(own)
     if a.videos:
         cfg["videos"] = cfg["videos"][:a.videos]
