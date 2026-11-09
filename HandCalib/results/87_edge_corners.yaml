@@ -1,0 +1,538 @@
+experiment: 87_edge_corners
+run: runs/87_edge_corners/20261109T025109Z
+code_commit: 9ee20dd
+git_dirty_at_run: false
+note: '실험 56의 추적 사슬은 팀원 영상에서 단계마다 잘 맞으면서도(77) 천천히 미끄러진다(78). 후보: 손가락과 흰 종이의 경계(윤곽)에
+  잡힌 특징점은 손이 돌면 피부 위를 미끄러지므로 같은 방향의 치우침을 쌓는다. 본인 새 폰 영상 2개와 팀원 영상 2개에서 (1) 추적 창(21×21)에
+  종이가 들어간 특징점(경계 점)의 비율, (2) 멈춤 구간 사이에서 손이 돈 각도와 그 사이 추적 오차(검출 관절과의 거리)의 증가, (3) 경계
+  점을 빼고 추적했을 때의 오차와 f(74b 추정기, 경사 11° 고정, 함께 추정 시작 5·12·19° 중 비용 최소, j16)를 본다. 기존
+  사슬의 f는 74b에서 읽는다. 판정 없음.'
+edge:
+  paper_s_max: 40
+  paper_v_min: 90
+  edge_frac: 0.1
+videos:
+  IMG_7354 - 복사본.MOV:
+    person: self
+    ref_t: 9.37
+    all:
+      n_use: 564.0
+      breaks: 0.0
+      corners_per_step: 260.0
+      edge_share: 0.158
+      inliers_per_step: 258.0
+      edge_share_inl: 0.155
+      drift_j16_median: 2.255
+      drift_j16_p90: 4.466
+      drift_wrist_median: 7.99
+      pauses:
+      - frames:
+        - 0.0
+        - 69.0
+        t:
+        - 0.0
+        - 2.3
+        angle_deg: 172.23
+        drift_j16: 0.99
+        drift_wrist: 2.22
+        steps_from_ref: 245.0
+      - frames:
+        - 109.0
+        - 236.0
+        t:
+        - 3.63
+        - 7.87
+        angle_deg: 230.09
+        drift_j16: 4.52
+        drift_wrist: 17.16
+        steps_from_ref: 105.0
+      - frames:
+        - 318.0
+        - 434.0
+        t:
+        - 10.6
+        - 14.47
+        angle_deg: 110.85
+        drift_j16: 3.44
+        drift_wrist: 8.33
+        steps_from_ref: 96.0
+      - frames:
+        - 469.0
+        - 563.0
+        t:
+        - 15.63
+        - 18.77
+        angle_deg: 168.91
+        drift_j16: 1.06
+        drift_wrist: 1.96
+        steps_from_ref: 237.0
+    no_edge:
+      n_use: 564.0
+      breaks: 0.0
+      corners_per_step: 260.0
+      edge_share: 0.158
+      inliers_per_step: 222.0
+      edge_share_inl: 0.0
+      drift_j16_median: 2.708
+      drift_j16_p90: 5.098
+      drift_wrist_median: 8.028
+      pauses:
+      - frames:
+        - 0.0
+        - 69.0
+        t:
+        - 0.0
+        - 2.3
+        angle_deg: 172.23
+        drift_j16: 1.09
+        drift_wrist: 2.13
+        steps_from_ref: 245.0
+      - frames:
+        - 109.0
+        - 236.0
+        t:
+        - 3.63
+        - 7.87
+        angle_deg: 230.09
+        drift_j16: 5.37
+        drift_wrist: 17.02
+        steps_from_ref: 105.0
+      - frames:
+        - 318.0
+        - 434.0
+        t:
+        - 10.6
+        - 14.47
+        angle_deg: 110.85
+        drift_j16: 4.07
+        drift_wrist: 8.37
+        steps_from_ref: 96.0
+      - frames:
+        - 469.0
+        - 563.0
+        t:
+        - 15.63
+        - 18.77
+        angle_deg: 168.91
+        drift_j16: 1.01
+        drift_wrist: 2.2
+        steps_from_ref: 237.0
+      free_template:
+        f: 1429.1
+        rms_px: 0.38
+        boundary: false
+      ramp_11:
+        f: 1493.2
+        rms_px: 3.07
+        pitch_deg: 11.0
+        roll_deg: 0.0
+        desk_tilt_deg: 57.1
+        boundary: false
+        start: free_template
+      free_5:
+        f: 1567.8
+        rms_px: 2.04
+        pitch_deg: 9.33
+        roll_deg: -6.81
+        desk_tilt_deg: 59.9
+        boundary: false
+        start: profile_4
+      free_12:
+        f: 1567.8
+        rms_px: 2.04
+        pitch_deg: 9.43
+        roll_deg: -6.67
+        desk_tilt_deg: 59.9
+        boundary: false
+        start: profile_4
+      free_19:
+        f: 1567.8
+        rms_px: 2.04
+        pitch_deg: 9.33
+        roll_deg: -6.81
+        desk_tilt_deg: 59.9
+        boundary: false
+        start: profile_4
+  IMG_7355 - 복사본.MOV:
+    person: self
+    ref_t: 8.27
+    all:
+      n_use: 498.0
+      breaks: 0.0
+      corners_per_step: 231.0
+      edge_share: 0.154
+      inliers_per_step: 231.0
+      edge_share_inl: 0.153
+      drift_j16_median: 1.381
+      drift_j16_p90: 2.505
+      drift_wrist_median: 4.826
+      pauses:
+      - frames:
+        - 0.0
+        - 67.0
+        t:
+        - 0.0
+        - 2.23
+        angle_deg: 170.95
+        drift_j16: 0.67
+        drift_wrist: 2.02
+        steps_from_ref: 217.0
+      - frames:
+        - 134.0
+        - 195.0
+        t:
+        - 4.47
+        - 6.5
+        angle_deg: 206.61
+        drift_j16: 2.14
+        drift_wrist: 7.96
+        steps_from_ref: 81.0
+      - frames:
+        - 274.0
+        - 362.0
+        t:
+        - 9.13
+        - 12.07
+        angle_deg: 112.08
+        drift_j16: 2.49
+        drift_wrist: 6.9
+        steps_from_ref: 69.0
+      - frames:
+        - 399.0
+        - 497.0
+        t:
+        - 13.3
+        - 16.57
+        angle_deg: 169.92
+        drift_j16: 0.99
+        drift_wrist: 1.23
+        steps_from_ref: 201.0
+    no_edge:
+      n_use: 498.0
+      breaks: 0.0
+      corners_per_step: 231.0
+      edge_share: 0.154
+      inliers_per_step: 193.0
+      edge_share_inl: 0.0
+      drift_j16_median: 1.539
+      drift_j16_p90: 2.758
+      drift_wrist_median: 4.678
+      pauses:
+      - frames:
+        - 0.0
+        - 67.0
+        t:
+        - 0.0
+        - 2.23
+        angle_deg: 170.95
+        drift_j16: 0.71
+        drift_wrist: 1.94
+        steps_from_ref: 217.0
+      - frames:
+        - 134.0
+        - 195.0
+        t:
+        - 4.47
+        - 6.5
+        angle_deg: 206.61
+        drift_j16: 2.32
+        drift_wrist: 7.68
+        steps_from_ref: 81.0
+      - frames:
+        - 274.0
+        - 362.0
+        t:
+        - 9.13
+        - 12.07
+        angle_deg: 112.08
+        drift_j16: 2.72
+        drift_wrist: 7.0
+        steps_from_ref: 69.0
+      - frames:
+        - 399.0
+        - 497.0
+        t:
+        - 13.3
+        - 16.57
+        angle_deg: 169.92
+        drift_j16: 1.14
+        drift_wrist: 1.24
+        steps_from_ref: 201.0
+      free_template:
+        f: 1619.2
+        rms_px: 0.4
+        boundary: false
+      ramp_11:
+        f: 1489.0
+        rms_px: 3.01
+        pitch_deg: 11.0
+        roll_deg: 0.0
+        desk_tilt_deg: 56.4
+        boundary: false
+        start: profile_5
+      free_5:
+        f: 1636.1
+        rms_px: 1.92
+        pitch_deg: 9.92
+        roll_deg: -7.99
+        desk_tilt_deg: 59.4
+        boundary: false
+        start: free_template
+      free_12:
+        f: 1636.1
+        rms_px: 1.92
+        pitch_deg: 9.84
+        roll_deg: -8.08
+        desk_tilt_deg: 59.4
+        boundary: false
+        start: free_template
+      free_19:
+        f: 1636.1
+        rms_px: 1.92
+        pitch_deg: 9.92
+        roll_deg: -7.99
+        desk_tilt_deg: 59.4
+        boundary: false
+        start: free_template
+  IMG_7351 - 복사본.MOV:
+    person: teammate
+    ref_t: 6.4
+    all:
+      n_use: 386.0
+      breaks: 0.0
+      corners_per_step: 161.0
+      edge_share: 0.206
+      inliers_per_step: 160.0
+      edge_share_inl: 0.205
+      drift_j16_median: 2.087
+      drift_j16_p90: 3.853
+      drift_wrist_median: 19.596
+      pauses:
+      - frames:
+        - 0.0
+        - 62.0
+        t:
+        - 0.0
+        - 2.07
+        angle_deg: 169.03
+        drift_j16: 2.15
+        drift_wrist: 23.09
+        steps_from_ref: 162.0
+      - frames:
+        - 122.0
+        - 200.0
+        t:
+        - 4.07
+        - 6.67
+        angle_deg: 244.02
+        drift_j16: 1.32
+        drift_wrist: 8.01
+        steps_from_ref: 25.0
+      - frames:
+        - 290.0
+        - 385.0
+        t:
+        - 9.67
+        - 12.83
+        angle_deg: 125.08
+        drift_j16: 3.8
+        drift_wrist: 19.85
+        steps_from_ref: 145.0
+    no_edge:
+      n_use: 386.0
+      breaks: 0.0
+      corners_per_step: 161.0
+      edge_share: 0.206
+      inliers_per_step: 123.0
+      edge_share_inl: 0.0
+      drift_j16_median: 3.652
+      drift_j16_p90: 5.442
+      drift_wrist_median: 16.694
+      pauses:
+      - frames:
+        - 0.0
+        - 62.0
+        t:
+        - 0.0
+        - 2.07
+        angle_deg: 169.03
+        drift_j16: 3.81
+        drift_wrist: 22.18
+        steps_from_ref: 162.0
+      - frames:
+        - 122.0
+        - 200.0
+        t:
+        - 4.07
+        - 6.67
+        angle_deg: 244.02
+        drift_j16: 1.26
+        drift_wrist: 8.04
+        steps_from_ref: 25.0
+      - frames:
+        - 290.0
+        - 385.0
+        t:
+        - 9.67
+        - 12.83
+        angle_deg: 125.08
+        drift_j16: 5.41
+        drift_wrist: 16.74
+        steps_from_ref: 145.0
+      free_template:
+        f: 1356.8
+        rms_px: 0.65
+        boundary: false
+      ramp_11:
+        f: 947.5
+        rms_px: 3.58
+        pitch_deg: 11.0
+        roll_deg: 0.0
+        desk_tilt_deg: 47.1
+        boundary: false
+        start: profile_1
+      free_5:
+        f: 952.1
+        rms_px: 2.53
+        pitch_deg: 6.76
+        roll_deg: -7.11
+        desk_tilt_deg: 51.7
+        boundary: false
+        start: free_template
+      free_12:
+        f: 952.1
+        rms_px: 2.53
+        pitch_deg: 6.79
+        roll_deg: -7.09
+        desk_tilt_deg: 51.7
+        boundary: false
+        start: free_template
+      free_19:
+        f: 952.1
+        rms_px: 2.53
+        pitch_deg: 6.76
+        roll_deg: -7.11
+        desk_tilt_deg: 51.7
+        boundary: false
+        start: free_template
+  IMG_7352 - 복사본.MOV:
+    person: teammate
+    ref_t: 6.1
+    all:
+      n_use: 368.0
+      breaks: 0.0
+      corners_per_step: 182.0
+      edge_share: 0.236
+      inliers_per_step: 181.0
+      edge_share_inl: 0.235
+      drift_j16_median: 2.532
+      drift_j16_p90: 3.848
+      drift_wrist_median: 13.59
+      pauses:
+      - frames:
+        - 0.0
+        - 61.0
+        t:
+        - 0.0
+        - 2.03
+        angle_deg: 169.38
+        drift_j16: 2.81
+        drift_wrist: 18.22
+        steps_from_ref: 158.0
+      - frames:
+        - 126.0
+        - 183.0
+        t:
+        - 4.2
+        - 6.1
+        angle_deg: 224.16
+        drift_j16: 1.24
+        drift_wrist: 4.71
+        steps_from_ref: 30.0
+      - frames:
+        - 289.0
+        - 367.0
+        t:
+        - 9.63
+        - 12.23
+        angle_deg: 115.24
+        drift_j16: 3.83
+        drift_wrist: 13.75
+        steps_from_ref: 145.0
+    no_edge:
+      n_use: 368.0
+      breaks: 0.0
+      corners_per_step: 182.0
+      edge_share: 0.236
+      inliers_per_step: 137.0
+      edge_share_inl: 0.0
+      drift_j16_median: 3.157
+      drift_j16_p90: 4.56
+      drift_wrist_median: 10.501
+      pauses:
+      - frames:
+        - 0.0
+        - 61.0
+        t:
+        - 0.0
+        - 2.03
+        angle_deg: 169.38
+        drift_j16: 3.67
+        drift_wrist: 18.0
+        steps_from_ref: 158.0
+      - frames:
+        - 126.0
+        - 183.0
+        t:
+        - 4.2
+        - 6.1
+        angle_deg: 224.16
+        drift_j16: 1.29
+        drift_wrist: 4.55
+        steps_from_ref: 30.0
+      - frames:
+        - 289.0
+        - 367.0
+        t:
+        - 9.63
+        - 12.23
+        angle_deg: 115.24
+        drift_j16: 4.54
+        drift_wrist: 10.36
+        steps_from_ref: 145.0
+      free_template:
+        f: 1333.3
+        rms_px: 0.6
+        boundary: false
+      ramp_11:
+        f: 816.9
+        rms_px: 4.26
+        pitch_deg: 11.0
+        roll_deg: 0.0
+        desk_tilt_deg: 46.4
+        boundary: false
+        start: profile_1
+      free_5:
+        f: 962.3
+        rms_px: 3.05
+        pitch_deg: 9.48
+        roll_deg: -8.74
+        desk_tilt_deg: 50.6
+        boundary: false
+        start: profile_2
+      free_12:
+        f: 962.3
+        rms_px: 3.05
+        pitch_deg: 9.48
+        roll_deg: -8.74
+        desk_tilt_deg: 50.6
+        boundary: false
+        start: profile_2
+      free_19:
+        f: 962.3
+        rms_px: 3.05
+        pitch_deg: 9.48
+        roll_deg: -8.74
+        desk_tilt_deg: 50.6
+        boundary: false
+        start: profile_2
