@@ -528,3 +528,11 @@ Phase C Final native Windows testing and acceptance were reported by the user as
 - [x] Focused comparison Viewer suite: 109 passed, 1 skipped. Full pytest suite: 314 passed, 1 skipped. Application import, compileall, and `pip check` passed.
 - [ ] User has confirmed the preceding rendering recovery. This final layout/divider pass still awaits user review; no final Phase D.1 approval is claimed.
 - [ ] Phase D.2 independent Source/3D windows and individual Detach/Reattach remain deferred. D.3 detached-state synchronization and Source Media aspect ratio, Phase E HUD/animation polish, Phase F/G, and release packaging remain deferred.
+
+### Phase D.1 Final UI Fix: Overlay Splitter Grip (2026-11-09)
+
+- [x] Reproduced weak grip visibility from the actual 8 px handle: 1 px radius circles used low-contrast `Mid` color, while base native handle painting was also underneath.
+- [x] Pixel-level grip test confirms three distinct high-contrast dot runs, equal logical spacing, clear gaps, Light/Dark palettes, and 100%, 125%, 150%, and 200% device-pixel ratios.
+- [x] Native Windows Qt tests exercise the actual handle grab, right-click Swap, left-drag resize, repeated swaps, preserved widths/state, and OpenGL rendering: 3 passed.
+- [x] Focused Viewer suite: 110 passed, 1 skipped. Full pytest: 315 passed, 1 skipped. App import, compileall, and `pip check` passed.
+- [ ] Final user confirmation that the dots are visually clear remains pending; no Phase D.1 approval is inferred.

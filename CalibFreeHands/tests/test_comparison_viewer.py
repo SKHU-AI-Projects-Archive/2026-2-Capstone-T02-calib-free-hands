@@ -1781,7 +1781,6 @@ def test_split_surface_is_in_owning_layout_before_first_show(tmp_path, qapp, mon
 
 def test_overlay_divider_right_click_swap_preserves_slot_sizes_and_viewer_state(tmp_path, qapp):
     from PySide6.QtCore import QPoint, Qt
-    from PySide6.QtGui import QColor, QPalette
     from PySide6.QtTest import QTest
     from PySide6.QtWidgets import QMenu
     from calibfreehands.visualization.comparison import ComparisonViewer
@@ -1795,15 +1794,39 @@ def test_overlay_divider_right_click_swap_preserves_slot_sizes_and_viewer_state(
     assert handle.cursor().shape() == Qt.CursorShape.SplitHCursor
     assert "Right-click" in handle.toolTip()
     assert not hasattr(viewer, "overlay_swap_button")
-    palette = handle.palette()
-    rendered_grip_colors = []
-    for mid_color in (QColor("#626a75"), QColor("#b7bec8")):
-        palette.setColor(QPalette.ColorRole.Mid, mid_color)
-        handle.setPalette(palette)
-        image = handle.grab().toImage()
-        center = handle.rect().center()
-        rendered_grip_colors.append(image.pixelColor(center))
-    assert rendered_grip_colors[0] != rendered_grip_colors[1]
+    image = handle.grab().toImage()
+    scale = image.devicePixelRatio()
+    center = handle.rect().center()
+
+    def luminance(color):
+        channels = [component / 12.92 if component <= 0.04045 else ((component + 0.055) / 1.055) ** 2.4
+                    for component in (color.redF(), color.greenF(), color.blueF())]
+        return 0.2126 * channels[0] + 0.7152 * channels[1] + 0.0722 * channels[2]
+
+    def contrast(first, second):
+        light = max(luminance(first), luminance(second))
+        dark = min(luminance(first), luminance(second))
+        return (light + 0.05) / (dark + 0.05)
+
+    background = image.pixelColor(0, 0)
+    line_x = round(center.x() * scale)
+    foreground_pixels = [contrast(background, image.pixelColor(line_x, y)) >= 3
+                         for y in range(image.height())]
+    runs = []
+    start = None
+    for y, is_dot in enumerate(foreground_pixels):
+        if is_dot and start is None:
+            start = y
+        elif not is_dot and start is not None:
+            runs.append((start, y - 1))
+            start = None
+    if start is not None:
+        runs.append((start, image.height() - 1))
+    expected_centers = [round((center.y() + offset) * scale) for offset in (-5, 0, 5)]
+    assert len(runs) == 3, (runs, expected_centers)
+    actual_centers = [round((start + end) / 2) for start, end in runs]
+    assert all(abs(actual - expected) <= 1 for actual, expected in zip(actual_centers, expected_centers))
+    assert all(abs((end - start + 1) - round(3 * scale)) <= 1 for start, end in runs)
     splitter.setSizes([420, 760])
     qapp.processEvents()
     before_sizes = splitter.sizes()
@@ -1856,6 +1879,63 @@ def test_overlay_divider_right_click_swap_preserves_slot_sizes_and_viewer_state(
         menu.close()
         qapp.processEvents()
         assert viewer.overlay_panel_order == expected_order
+    viewer.close()
+
+
+def test_overlay_splitter_grip_pixels_at_light_dark_and_high_dpi(tmp_path, qapp):
+    from PySide6.QtCore import QRectF
+    from PySide6.QtGui import QColor, QImage, QPainter, QPalette
+    from calibfreehands.visualization.comparison import ComparisonViewer
+
+    viewer = ComparisonViewer(_session(tmp_path, 2))
+    handle = viewer.overlay_splitter.handle(1)
+    palette = handle.palette()
+
+    def luminance(color):
+        components = [value / 12.92 if value <= 0.04045 else ((value + 0.055) / 1.055) ** 2.4
+                      for value in (color.redF(), color.greenF(), color.blueF())]
+        return 0.2126 * components[0] + 0.7152 * components[1] + 0.0722 * components[2]
+
+    def contrast(first, second):
+        light = max(luminance(first), luminance(second))
+        dark = min(luminance(first), luminance(second))
+        return (light + 0.05) / (dark + 0.05)
+
+    themes = ((QColor("#f2f2f2"), QColor("#151515")),
+              (QColor("#2f3238"), QColor("#eeeeee")))
+    for background, foreground in themes:
+        palette.setColor(QPalette.ColorRole.Window, background)
+        palette.setColor(QPalette.ColorRole.WindowText, foreground)
+        handle.setPalette(palette)
+        for scale in (1.0, 1.25, 1.5, 2.0):
+            image = QImage(round(8 * scale), round(24 * scale),
+                           QImage.Format.Format_ARGB32_Premultiplied)
+            image.setDevicePixelRatio(scale)
+            painter = QPainter(image)
+            handle._paint_grip(painter, QRectF(0, 0, 8, 24))
+            painter.end()
+            line_x = round(4 * scale)
+            background_pixel = image.pixelColor(0, 0)
+            active = [contrast(background_pixel, image.pixelColor(line_x, y)) >= 3
+                      for y in range(image.height())]
+            runs = []
+            start = None
+            for y, is_dot in enumerate(active):
+                if is_dot and start is None:
+                    start = y
+                elif not is_dot and start is not None:
+                    runs.append((start, y - 1))
+                    start = None
+            if start is not None:
+                runs.append((start, image.height() - 1))
+            centers = [round((start + end) / 2) for start, end in runs]
+            expected = [round((12 + offset) * scale) for offset in (-5, 0, 5)]
+            assert len(runs) == 3, (scale, runs, expected)
+            assert all(abs(actual - target) <= 1 for actual, target in zip(centers, expected))
+            assert all(abs((end - start + 1) - round(3 * scale)) <= 1
+                       for start, end in runs)
+            assert all(contrast(background_pixel, image.pixelColor(line_x, y)) < 3
+                       for y in (round(9.5 * scale), round(14.5 * scale)))
     viewer.close()
 
 

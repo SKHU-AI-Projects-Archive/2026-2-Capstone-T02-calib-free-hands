@@ -34,14 +34,24 @@ class _SwapSplitterHandle(QSplitterHandle):
         self.swap_action.triggered.connect(splitter.request_swap)
 
     def paintEvent(self, event):
-        super().paintEvent(event)
         painter = QPainter(self)
+        self._paint_grip(painter, QRectF(self.rect()))
+        painter.end()
+
+    def _paint_grip(self, painter: QPainter, rect: QRectF) -> None:
+        palette = self.palette()
+        painter.save()
+        painter.fillRect(rect, palette.color(QPalette.ColorRole.Window))
         painter.setRenderHint(QPainter.RenderHint.Antialiasing)
         painter.setPen(Qt.PenStyle.NoPen)
-        painter.setBrush(self.palette().color(QPalette.ColorRole.Mid))
-        center = self.rect().center()
-        for offset in (-4, 0, 4):
-            painter.drawEllipse(QPoint(center.x(), center.y() + offset), 1, 1)
+        painter.setBrush(palette.color(QPalette.ColorRole.WindowText))
+        center_x, center_y = rect.center().x(), rect.center().y()
+        diameter = 3.0
+        for offset in (-5.0, 0.0, 5.0):
+            painter.drawEllipse(QRectF(center_x - diameter / 2,
+                                       center_y + offset - diameter / 2,
+                                       diameter, diameter))
+        painter.restore()
 
     def mousePressEvent(self, event):
         if event.button() == Qt.MouseButton.RightButton:
