@@ -2302,6 +2302,164 @@ def test_overlay_hud_mouse_drag_inserts_using_hud_row_geometry(tmp_path, qapp):
     viewer.close()
 
 
+@pytest.mark.parametrize(("reference_id", "anchor", "scale", "source_id", "insertion", "playing"), [
+    ("cfg-0", "top-left", "small", "cfg-3", 1, False),
+    ("cfg-1", "top-right", "medium", "cfg-0", 4, True),
+    ("cfg-3", "bottom-right", "large", "cfg-2", 0, False),
+    ("cfg-2", "bottom-left", "medium", "cfg-1", 2, True),
+])
+def test_overlay_hud_reorder_keeps_layout_stable_without_followup_mouse_move(
+        tmp_path, qapp, reference_id, anchor, scale, source_id, insertion, playing):
+    from PySide6.QtCore import QEvent, QObject, QPoint, Qt
+    from PySide6.QtGui import QMouseEvent
+    from PySide6.QtWidgets import QApplication, QLabel, QWidget
+    from calibfreehands.visualization.comparison import ComparisonViewer
+    from calibfreehands.visualization.comparison_presentation import _ResultDragHandle
+
+    viewer = ComparisonViewer(_session(tmp_path, 4))
+    viewer.resize(1500, 900)
+    viewer.show()
+    qapp.processEvents()
+    panel = viewer.overlay_panel
+    viewer.reference_selector.setCurrentIndex(viewer.reference_selector.findData(reference_id))
+    _wait_for_metric_job(viewer, qapp)
+    viewer.confidence_numeric_checkbox.setChecked(True)
+    viewer.confidence_bar_checkbox.setChecked(True)
+    _wait_for_metric_job(viewer, qapp)
+    QTest = __import__("PySide6.QtTest", fromlist=["QTest"]).QTest
+    panel.set_presentation(anchor=anchor, scale=scale)
+    panel._position()
+    QTest.qWait(100)
+    if playing:
+        viewer._play()
+    playback_was_active = viewer.timer.isActive()
+
+    def layout_state():
+        badges = list(panel.reference_badges.values())
+        labels = panel.body.findChildren(QLabel)
+        return {
+            "card": panel.card.geometry().getRect(),
+            "groups": tuple(sorted((cid, widget.geometry().getRect())
+                                    for cid, widget in panel.group_widgets.items())),
+            "badges": tuple(badge.size().toTuple() for badge in badges),
+            "fonts": tuple(round(label.font().pointSizeF(), 2) for label in labels),
+            "labels": tuple((label.wordWrap(), label.sizeHint().toTuple()) for label in labels),
+            "spacing": panel.body_layout.spacing(),
+            "fit_pending": panel._fit_timer.isActive(),
+        }
+
+    def appearance(state):
+        return (state["card"],
+                tuple((cid, rect[2:]) for cid, rect in state["groups"]),
+                state["badges"], state["fonts"], state["labels"], state["spacing"])
+
+    before = layout_state()
+    group_widget_ids = {cid: id(widget) for cid, widget in panel.group_widgets.items()}
+    paint_states = []
+
+    class PaintTrace(QObject):
+        def eventFilter(self, watched, event):
+            if event.type() == QEvent.Type.Paint:
+                paint_states.append(layout_state())
+            return False
+
+    trace = PaintTrace()
+    for widget in [panel.card, *panel.card.findChildren(QWidget)]:
+        widget.installEventFilter(trace)
+    handle = next(item for item in panel.findChildren(_ResultDragHandle)
+                  if item.configuration_id == source_id)
+    initial_order = viewer.result_order_ids.copy()
+    insertion = min(insertion, len(initial_order))
+    centers = [panel.group_widgets[cid].geometry().center().y() for cid in initial_order]
+    if insertion == 0:
+        body_y = panel.group_widgets[initial_order[0]].geometry().top()
+    elif insertion == len(initial_order):
+        body_y = panel.body.height() - 1
+    else:
+        body_y = round((centers[insertion - 1] + centers[insertion]) / 2)
+    start = handle.mapToGlobal(handle.rect().center())
+    end = panel.body.mapToGlobal(QPoint(24, body_y))
+    QTest.mousePress(handle, Qt.MouseButton.LeftButton, pos=handle.rect().center())
+    move = QMouseEvent(QEvent.Type.MouseMove, handle.mapFromGlobal(end), end,
+                       Qt.MouseButton.NoButton, Qt.MouseButton.LeftButton, Qt.KeyboardModifier.NoModifier)
+    QApplication.sendEvent(handle, move)
+    during = layout_state()
+    QTest.mouseRelease(handle, Qt.MouseButton.LeftButton, pos=handle.mapFromGlobal(end))
+    immediately_after_release = layout_state()
+
+    # Let queued deletion, layout activation, and single-shot fitting callbacks run,
+    # but do not deliver any pointer movement after release.
+    qapp.processEvents()
+    after_event_pump = layout_state()
+    QTest.qWait(100)
+    after_idle = layout_state()
+    # Simulate the user's later pointer movement only after stability has already
+    # been checked; it must not be required to repair the layout.
+    move = QMouseEvent(QEvent.Type.MouseMove, handle.mapFromGlobal(end + QPoint(2, 0)),
+                       end + QPoint(2, 0), Qt.MouseButton.NoButton, Qt.MouseButton.NoButton,
+                       Qt.KeyboardModifier.NoModifier)
+    QApplication.sendEvent(handle, move)
+    after_later_mouse_move = layout_state()
+
+    expected_order = initial_order.copy()
+    expected_order.remove(source_id)
+    preceding = [cid for cid in initial_order[:insertion] if cid != source_id]
+    following = [cid for cid in initial_order[insertion:] if cid != source_id]
+    target_slot = expected_order.index(following[0]) if following else (
+        expected_order.index(preceding[-1]) + 1 if preceding else 0)
+    expected_order.insert(target_slot, source_id)
+    assert viewer.result_order_ids == expected_order
+    assert viewer.timer.isActive() == playback_was_active
+    assert {cid: id(widget) for cid, widget in panel.group_widgets.items()} == group_widget_ids
+    assert paint_states
+    assert appearance(during) == appearance(before)
+    assert appearance(immediately_after_release) == appearance(before)
+    assert after_event_pump == immediately_after_release
+    assert after_idle == immediately_after_release
+    assert after_later_mouse_move == immediately_after_release
+    allowed_group_positions = {before["groups"], immediately_after_release["groups"]}
+    assert all(appearance(state) == appearance(before)
+               and state["groups"] in allowed_group_positions for state in paint_states), (
+                f"before={before!r}; during={during!r}; release={immediately_after_release!r}; "
+                f"pump={after_event_pump!r}; idle={after_idle!r}; "
+                f"later_mouse={after_later_mouse_move!r}; painted={paint_states!r}")
+    viewer.close()
+
+
+def test_overlay_hud_settings_still_relayout_after_result_reorder(tmp_path, qapp):
+    from PySide6.QtTest import QTest
+    from calibfreehands.visualization.comparison import ComparisonViewer
+
+    viewer = ComparisonViewer(_session(tmp_path, 4))
+    viewer.resize(1500, 900)
+    viewer.show()
+    qapp.processEvents()
+    panel = viewer.overlay_panel
+    QTest.qWait(100)
+    original_widgets = dict(panel.group_widgets)
+    viewer.reorder_result_at("cfg-3", viewer.result_order_ids.copy(), 1)
+    assert panel.group_widgets == original_widgets
+
+    panel.set_presentation(scale="large")
+    QTest.qWait(100)
+    assert panel._fit_signature[-1] == "large"
+    assert 7.0 <= panel.effective_point_size <= 10.0
+
+    viewer.confidence_numeric_checkbox.setChecked(True)
+    viewer.confidence_bar_checkbox.setChecked(True)
+    _wait_for_metric_job(viewer, qapp)
+    QTest.qWait(100)
+    assert panel.confidence_rows
+    assert panel.confidence_bars
+    assert panel._fit_signature[-1] == "large"
+
+    viewer.resize(1280, 720)
+    QTest.qWait(100)
+    assert panel.card.geometry().right() <= panel.width()
+    assert panel.card.geometry().bottom() <= panel.height()
+    viewer.close()
+
+
 @pytest.mark.parametrize(("source_id", "insertion", "expected_order"), [
     ("cfg-3", 0, ["cfg-3", "cfg-0", "cfg-1", "cfg-2"]),
     ("cfg-3", 1, ["cfg-0", "cfg-3", "cfg-1", "cfg-2"]),

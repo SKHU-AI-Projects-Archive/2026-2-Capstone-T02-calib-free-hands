@@ -1303,7 +1303,7 @@ class ComparisonViewer(QWidget):
         self._set_frame(0)
         self.hand_view()
 
-    def _refresh_annotations(self):
+    def _refresh_annotations(self, *, position_panels=True):
         if self.annotation_mode != "off":
             layers = [self.overlay_annotations] if self.mode == "overlay" else self.split_annotations
             for layer in layers:
@@ -1314,7 +1314,8 @@ class ComparisonViewer(QWidget):
                 layer.hide()
         panels = [self.overlay_panel] if self.mode == "overlay" else self.split_panels
         for panel in panels:
-            panel._position()
+            if position_panels:
+                panel._position()
             panel.raise_()
 
     def _set_hud(self, anchor=None, scale=None, opacity=None):
@@ -1540,16 +1541,18 @@ class ComparisonViewer(QWidget):
             self.user_ordered_panels = True
             self._refresh_ordered_presentations()
 
-    def _refresh_ordered_presentations(self):
+    def _refresh_ordered_presentations(self, *, preserve_overlay_groups=True):
         self.overlay_panel.configuration_indices = [self._configuration_index(config_id)
                                                     for config_id in self.result_order_ids]
-        self.overlay_panel.refresh(self)
+        if (not preserve_overlay_groups
+                or not self.overlay_panel.reorder_groups(self.result_order_ids)):
+            self.overlay_panel.refresh(self)
         for index, panel in enumerate(self.split_panels):
             panel.configuration_indices = [index]
             panel.refresh(self)
         self._sync_split_layout()
         self._rebuild_results_menu()
-        self._refresh_annotations()
+        self._refresh_annotations(position_panels=False)
 
     def reorder_result_at(self, source_id, visible_ids, insertion):
         order = self.result_order_ids
@@ -1585,7 +1588,7 @@ class ComparisonViewer(QWidget):
                                   for panel_id in self.split_panel_order]
         if manual:
             self.user_ordered_panels = True
-        self._refresh_ordered_presentations()
+        self._refresh_ordered_presentations(preserve_overlay_groups=manual)
 
     def reorder_split_panel(self, source_id, target_id, *, after=False):
         if source_id not in self.split_panel_order or target_id not in self.split_panel_order or source_id == target_id:

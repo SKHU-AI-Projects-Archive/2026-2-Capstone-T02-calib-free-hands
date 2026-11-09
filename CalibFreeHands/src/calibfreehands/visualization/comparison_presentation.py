@@ -474,6 +474,29 @@ class _ViewportPanel(QWidget):
         self._fit_signature = None
         self._position()
 
+    def reorder_groups(self, result_order_ids):
+        """Reorder existing result groups without rebuilding their fitted widgets."""
+        ordered_ids = [config_id for config_id in result_order_ids if config_id in self.group_widgets]
+        if (not self.group_widgets or len(ordered_ids) != len(self.group_widgets)
+                or set(ordered_ids) != set(self.group_widgets)):
+            return False
+        self.clear_insertion_marker()
+        self.card.setUpdatesEnabled(False)
+        while self.body_layout.count():
+            item = self.body_layout.takeAt(0)
+            widget = item.widget()
+            if widget is not None and widget not in self.group_widgets.values():
+                widget.deleteLater()
+        for config_id in ordered_ids:
+            self.body_layout.addWidget(self.group_widgets[config_id])
+        self.body_layout.invalidate()
+        self.body_layout.activate()
+        self.card.layout().invalidate()
+        self.card.layout().activate()
+        self.card.setUpdatesEnabled(True)
+        self.card.update()
+        return True
+
     def update_values(self, viewer):
         frame = viewer.slider.value()
         frame_index = int(viewer.loaded_results[0].result.frame_indices[frame])
