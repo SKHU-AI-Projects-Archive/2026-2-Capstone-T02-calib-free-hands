@@ -1,0 +1,20 @@
+# 85: the return to the starting pose cut off (user 2026-11-09: "팀원 손 영상이 ... 마지막에 처음 위치로 돌아오는 자세를 취하지 않는데, 이 문제 때문일 가능성이 있을까?" -> "진행해줘"), record only.
+# The user's two new-phone videos (as 84) cut after the last frame of the dwell at the second extreme (hf.nr_cut on the detected joints: hand direction wrist -> middle MCP, relative to the
+# first used frame, running median over smooth_frames; second extreme = 5th or 95th percentile on the side opposite to the first turn > 20 deg; dwell = within near_deg of it), so that they
+# move like the teammate's (0 -> one side -> the other). Both point sources (56's chain, tracked again; detected joints with 56's rule), the use masks cut, everything else as 74b / 81.
+# Detections copied from 81's run. Full-video values read from 74b (tracked) and 81 (detected). Cut settings chosen by me before the run. Reference f only in summary.md.
+experiment:
+  name: 85_no_return
+  seed: 42
+settings_config: configs/74b_multistart_rerun.yaml
+previous_run: runs/74b_multistart_rerun/20261105T044422Z
+run_81: runs/81_detected_joints/20261106T055430Z
+joint_set: j16
+code_85: {branch: exp/85-no-return, base_commit: 4048642, commit: 81edf71, modules: [HandCalib/handfocal_report.py, HandCalib/run.py]}
+videos: ["IMG_7354 - 복사본.MOV", "IMG_7355 - 복사본.MOV"]
+cut: {smooth_frames: 5, near_deg: 10}
+workers: 64
+video_workers: 2
+output:
+  root: runs/85_no_return
+  results_yaml: results/85_no_return.yaml
