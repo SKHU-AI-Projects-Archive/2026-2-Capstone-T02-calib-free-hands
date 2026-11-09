@@ -7185,6 +7185,66 @@ def wt_track(pngs: list, boxes: np.ndarray, order: list, kcfg: dict, p0, radius_
     return {"p": P, "breaks": breaks, "inl": inls}
 
 
+# ----------------------------------------------------------------------------------------------------
+# 84 (user 2026-11-09): does the hand change shape during a video? In the teammate's videos the tracked thumb and wrist (and, less, the fingers) leave the detected ones (77, 83), as if
+# the hand did not move as one plane. Per frame of WiLoR's 3-D hand (73's run): finger and thumb angles, the palm ramp (wl_geometry), and how far the wrist and thumb leave a rigid hand
+# fitted on the j16 joints.
+# ----------------------------------------------------------------------------------------------------
+HS_FINGERS = {"index": [5, 6, 7, 8], "middle": [9, 10, 11, 12], "ring": [13, 14, 15, 16], "little": [17, 18, 19, 20]}
+
+
+def _ang(u: np.ndarray, v: np.ndarray) -> float:
+    return float(np.degrees(np.arccos(np.clip(u @ v / (np.linalg.norm(u) * np.linalg.norm(v)), -1.0, 1.0))))
+
+
+def hs_frame(kp3: np.ndarray) -> dict:
+    """One frame of WiLoR's 21 joints (metres): per finger the flexion = sum of the bend angles at MCP (wrist->MCP against MCP->PIP), PIP and DIP (deg); the thumb's abduction = angle
+    between its metacarpal (1->2) and the index metacarpal (0->5), its flexion = bends at MCP (2) and IP (3)."""
+    if not np.isfinite(kp3).all():
+        return {"failed": "no hand"}
+    out = {}
+    for nm, (a, b, c, d) in HS_FINGERS.items():
+        bones = [kp3[a] - kp3[0], kp3[b] - kp3[a], kp3[c] - kp3[b], kp3[d] - kp3[c]]
+        out[f"flex_{nm}"] = sum(_ang(bones[i], bones[i + 1]) for i in range(3))
+    out["flex_mean4"] = float(np.mean([out[f"flex_{nm}"] for nm in HS_FINGERS]))
+    out["thumb_abd"] = _ang(kp3[2] - kp3[1], kp3[5] - kp3[0])
+    out["thumb_flex"] = _ang(kp3[2] - kp3[1], kp3[3] - kp3[2]) + _ang(kp3[3] - kp3[2], kp3[4] - kp3[3])
+    return out
+
+
+def hs_rigid_residual(K: np.ndarray, ids_fit, ids_out) -> dict:
+    """Per frame of K (n, 21, 3), a rigid fit (Kabsch, no scale) of the joints ids_fit onto their median shape over the frames (shape: each frame centred on its ids_fit mean, aligned to the
+    first valid frame, median, repeated twice); returns per frame the RMS of ids_fit (mm) and the distance of every joint in ids_out from the median shape moved by that fit (mm)."""
+    ids_fit = [int(j) for j in ids_fit]
+    ok = np.isfinite(K).all((1, 2))
+    n = len(K)
+    rms = np.full(n, np.nan)
+    dist = {int(j): np.full(n, np.nan) for j in ids_out}
+    if ok.sum() < 3:
+        return {"rms_fit_mm": rms, "dist_mm": dist}
+    def fit(P, Q):                                                    # R, t with R P + t ~ Q on ids_fit
+        p, q = P[ids_fit].mean(0), Q[ids_fit].mean(0)
+        U, _, Vt = np.linalg.svd((P[ids_fit] - p).T @ (Q[ids_fit] - q))
+        D = np.diag([1.0, 1.0, np.sign(np.linalg.det(Vt.T @ U.T))])
+        R = Vt.T @ D @ U.T
+        return R, q - R @ p
+    idx = np.flatnonzero(ok)
+    M = K[idx[0]].copy()
+    for _ in range(2):
+        A = []
+        for i in idx:
+            R, t = fit(K[i], M)
+            A.append(K[i] @ R.T + t)
+        M = np.median(np.array(A), axis=0)
+    for i in idx:
+        R, t = fit(M, K[i])
+        Mi = M @ R.T + t
+        rms[i] = 1000 * float(np.sqrt(np.mean(np.sum((Mi[ids_fit] - K[i][ids_fit]) ** 2, axis=1))))
+        for j in ids_out:
+            dist[int(j)][i] = 1000 * float(np.linalg.norm(Mi[int(j)] - K[i][int(j)]))
+    return {"rms_fit_mm": rms, "dist_mm": dist}
+
+
 def od_fix_lines(path=None) -> list:
     """Where the six corrections to the supervisor's code sit in handfocal_estimate.py (line numbers of the corrected spellings inside section 5)."""
     p = Path(path) if path else Path(__file__).resolve().parent / "handfocal_estimate.py"

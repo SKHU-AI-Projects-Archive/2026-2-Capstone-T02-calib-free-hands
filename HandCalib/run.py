@@ -15252,7 +15252,148 @@ def wb_results_yaml(run_dir: Path, cfg: dict):
     return p
 
 
-COMMANDS = {"protocol": protocol_main, "frame-filter": ff_main, "same-session": session_main, "overlay": overlay_main, "phase-segmentation": pseg_main, "guide-revision": grev_main, "f-response": fresp_main, "error-factors": ferr_main, "long-video-check": long_main, "generalization": gen_main, "main-camera-extension": ext_main, "wide-60cm": wide_main, "jointset-sets": jset_main, "verdict-calibration": cal_main, "printed-hand": pr_main, "hand-markers": mk_main, "markers-only": mo_main, "free-template": ft_main, "free-shape3d": s3_main, "free-shape3d-hand": h3_main, "free-shape3d-27": e3_main, "free-shape3d-new": e4_main, "mmpose-hand": mm_main, "mmpose-hand-46": mm2_main, "free-shape3d-new2": e5_main, "mmpose-hand-src": mm3_main, "free-shape3d-detectors": fs_main, "free-shape3d-hand-sets": h4_main, "free-shape3d-hand-sets-42track": h4b_main, "oblique-desk": od_main, "oblique-synthetic": sy_main, "oblique-fixed-template": fx_main, "oblique-desk-videos": om_main, "pause-stabilized": ps_main, "continuous-klt": kt_main, "continuous-klt-palm": kp_main, "klt-paper-dorsum": pp_main, "paper-parallax": hp_main, "segment-template": sg_main, "turn-synthetic": tr_main, "window-f": wd_main, "anycalib-videos": ac_main, "error-sources": ec_main, "hand-deformation": dm_main, "joint-combos": fc_main, "points-video": pv_main, "desk-motion": dk_main, "ramp-sensitivity": rs_main, "teammate-hands": tm_main, "finger-ramp": fr_main, "contact-points": ct_main, "wilor-ramp": wl_main, "ramp-identifiability": id_main, "new-phone-hands": nc_main, "multistart": ms_main, "multistart-rerun": ms2_main, "known-tilt": tl_main, "results-yaml-74b-75": ry_main, "free-from-fixed": ch_main, "klt-features": kf_main, "wrist-drift": dr_main, "free-from-multistart": cm_main, "restart-tracking": rt_main, "detected-joints": dt_main, "detected-ramp-sweep": ds_main, "teammate-points-video": pv2_main, "wrist-balanced": wb_main}
+# ----------------------------------------------------------------------------------------------------
+# 84 (user 2026-11-09: "오차가 상대적으로 적은 내 손 영상 2개와 팀원 영상 2개, 총 4개로 진행해줘"): does the hand change shape during the video? WiLoR's 3-D hand per frame read from 73's
+# run (73 ran it on exactly these four new-phone videos, every 3rd frame), not run again. Angles (hf.hs_frame), the palm ramp and heights (hf.wl_geometry), and the departure of the wrist
+# and thumb from a rigid hand fitted on j16 (hf.hs_rigid_residual).
+# ----------------------------------------------------------------------------------------------------
+HS_NOTE = ("팀원 영상에서 추적한 엄지와 손목(덜하지만 손가락도)이 검출 관절에서 벗어난다(77, 83). 손이 촬영 중에 모양을 바꾸는지 보려고, 실험 73이 이 4개 영상에 돌려 둔 WiLoR 3차원 손(3프레임마다)을 "
+           "읽어 프레임마다 손가락 굽힘, 엄지 벌림·굽힘, 손바닥 경사(71의 방식), 그리고 j16으로 맞춘 강체 손에서 손목과 엄지가 벗어나는 거리를 잰다. 본인 2개(새 폰, 74b에서 11° 오차가 작은 영상)와 "
+           "팀원 2개. 판정 없음.")
+HS_METRICS = (("flex_mean4", "손가락 굽힘 평균 (4손가락, °)"), ("thumb_abd", "엄지 벌림 (°)"), ("thumb_flex", "엄지 굽힘 (°)"), ("ramp_center", "손바닥 경사 j16 관절 중심 (°)"),
+              ("ramp_dorsal", "손바닥 경사 j16 손등 피부 (°)"), ("wrist_h", "손가락 끝 대비 손목 높이 관절 중심 (mm)"), ("rms_j16", "j16 강체 맞춤 RMS (mm)"),
+              ("d_wrist", "강체 손에서 손목이 벗어난 거리 (mm)"), ("d_thumb", "강체 손에서 엄지 끝이 벗어난 거리 (mm)"))
+
+
+def hs_main(argv=None):
+    ap = argparse.ArgumentParser()
+    ap.add_argument("--config", default=str(hf.PROJECT_ROOT / "configs/84_hand_shape.yaml"))
+    sub = ap.add_subparsers(dest="cmd")
+    ry = sub.add_parser("results-yaml")
+    ry.add_argument("--run", required=True)
+    ap.add_argument("--out", default=None)
+    a = ap.parse_args(argv)
+    text = Path(a.config).read_text()
+    own = yaml.safe_load(text)
+    if a.cmd == "results-yaml":
+        print(hs_results_yaml(hf.resolve(a.run), own))
+        return None
+    r67 = yaml.safe_load(hf.resolve(own["estimator_config"]).read_text())
+    j16 = [int(j) for j in r67["joint_sets"]["j16"]]
+    run_root, log = x70_head(None, a.out, own, f"84 손 모양 변화: 영상 {len(own['videos'])}개 (WiLoR: {own['wilor_run']})")
+    t0 = time.time()
+    fps = float(own["fps"])
+    res, series = {}, {}
+    for e in own["videos"]:
+        z = np.load(hf.resolve(own["wilor_run"]) / "wilor" / f"{Path(e['file']).stem}.npz")
+        K, V = z["keypoints_3d"].astype(float), z["vertices"].astype(float)
+        t = z["frame_index"].astype(float) / fps
+        per = [hf.hs_frame(K[k]) for k in range(len(K))]
+        geo = [hf.wl_geometry(K[k], V[k], {"j16": j16}) for k in range(len(K))]
+        rr = hf.hs_rigid_residual(K, j16, [0, 4])
+        s = {"t": t}
+        for m in ("flex_mean4", "thumb_abd", "thumb_flex", "flex_index", "flex_middle", "flex_ring", "flex_little"):
+            s[m] = np.array([g.get(m, np.nan) for g in per], float)
+        s["ramp_center"] = np.array([np.nan if "failed" in g or g["ramp"]["j16"]["center"] is None else g["ramp"]["j16"]["center"] for g in geo], float)
+        s["ramp_dorsal"] = np.array([np.nan if "failed" in g or g["ramp"]["j16"]["dorsal"] is None else g["ramp"]["j16"]["dorsal"] for g in geo], float)
+        s["wrist_h"] = np.array([np.nan if "failed" in g else g["center_mm"][0] - min(g["center_mm"][j] for j in (8, 12, 16, 20)) for g in geo], float)
+        s["rms_j16"], s["d_wrist"], s["d_thumb"] = rr["rms_fit_mm"], rr["dist_mm"][0], rr["dist_mm"][4]
+        series[e["file"]] = s
+        d = {"n_frames": int(len(K)), "n_hand": int(np.isfinite(K).all((1, 2)).sum()), "metrics": {}}
+        for m in [k for k in s if k != "t"]:
+            x = s[m]
+            ok = np.isfinite(x)
+            if ok.sum() < 3:
+                d["metrics"][m] = None
+                continue
+            xv, tv = x[ok], t[ok]
+            p5, p25, p50, p75, p95 = np.percentile(xv, [5, 25, 50, 75, 95])
+            rho = float(np.corrcoef(np.argsort(np.argsort(xv)), np.argsort(np.argsort(tv)))[0, 1])
+            d["metrics"][m] = {"median": float(p50), "iqr": [float(p25), float(p75)], "p5_p95": [float(p5), float(p95)], "range_90": float(p95 - p5),
+                               "jitter": float(np.median(np.abs(np.diff(xv)))), "rank_corr_time": rho}
+        res[e["file"]] = d
+        g = lambda m: "-" if d["metrics"].get(m) is None else f"{d['metrics'][m]['range_90']:.1f}"      # noqa: E731
+        log(f"  {e['file']}: 손 {d['n_hand']} / {d['n_frames']}, 5~95% 폭: 손가락 굽힘 {g('flex_mean4')}°, 엄지 벌림 {g('thumb_abd')}°, 엄지 굽힘 {g('thumb_flex')}°, "
+            f"경사(중심) {g('ramp_center')}°, 손목 이탈 {g('d_wrist')} mm, 엄지 이탈 {g('d_thumb')} mm")
+    np.savez_compressed(run_root / "series.npz", **{f"{Path(f).stem.replace(' ', '')}__{k}": v for f, s in series.items() for k, v in s.items()})
+    try:
+        hs_figure(run_root / "hand_shape.png", series, own)
+    except Exception as ex_:
+        log(f"  그림 실패: {type(ex_).__name__}: {ex_}")
+    (run_root / "summary.md").write_text(hs_summary(res, own))
+    x70_finish(run_root, {"real": res}, text, a.config, "code_84", own, t0, log)
+    return run_root, res
+
+
+HS_COLORS = {("self", 0): ("#2a78d6", "-"), ("self", 1): ("#2a78d6", "--"), ("teammate", 0): ("#eb6834", "-"), ("teammate", 1): ("#eb6834", "--")}
+
+
+def hs_figure(path: Path, series: dict, own: dict):
+    """Small multiples over time, one panel per metric: blue = the user's videos, orange = the teammate's; solid / dashed = first / second video of each person."""
+    plt = _plt()
+    ms = [m for m in HS_METRICS if m[0] != "ramp_dorsal"]
+    fig, axs = plt.subplots(len(ms), 1, figsize=(9, 2.0 * len(ms)), sharex=True)
+    seen = {}
+    for e in own["videos"]:
+        k = seen.get(e["person"], 0)
+        seen[e["person"]] = k + 1
+        c, ls = HS_COLORS[(e["person"], k)]
+        s = series[e["file"]]
+        for ax, (m, lab) in zip(axs, ms):
+            ax.plot(s["t"], s[m], color=c, ls=ls, lw=1.5, label=f"{e['file']} ({'본인' if e['person'] == 'self' else '팀원'})")
+    for ax, (m, lab) in zip(axs, ms):
+        ax.set_title(lab, fontsize=9, loc="left")
+        ax.grid(alpha=0.25, lw=0.5)
+        for sp in ("top", "right"):
+            ax.spines[sp].set_visible(False)
+    axs[-1].set_xlabel("시간 (s)")
+    h, lb = axs[0].get_legend_handles_labels()
+    fig.legend(h, lb, fontsize=8, ncol=2, loc="upper center", frameon=False)
+    fig.tight_layout(rect=(0, 0, 1, 0.975))
+    fig.savefig(path, dpi=130)
+    plt.close(fig)
+
+
+def hs_summary(res: dict, own: dict) -> str:
+    L = ["# 실험 84 summary", "", f"**{HS_NOTE}**", "", f"- WiLoR 출처: {own['wilor_run']} (3프레임마다, 30 fps 기준 시간). 그림: hand_shape.png (파랑 = 본인, 주황 = 팀원; 실선/점선 = 각자 첫째/둘째 영상).",
+         "- 폭 = 프레임 값의 5~95% 범위(최댓값 대신, 튀는 프레임 제외). 흔들림 = 이웃 프레임 사이 변화의 중앙값(복원 잡음의 대략적 크기). 시간 상관 = 값과 시간의 순위 상관(+ = 영상 뒤로 갈수록 커짐).", ""]
+    for m, lab in HS_METRICS:
+        L += [f"## {lab}", "", "| 영상 | 손 주인 | 중앙값 | 사분위 범위 | 5~95% 범위 | 폭 | 흔들림 | 시간 상관 |", "|---|---|---|---|---|---|---|---|"]
+        for e in own["videos"]:
+            x = res[e["file"]]["metrics"].get(m)
+            if x is None:
+                L.append(f"| {e['file']} | {'본인' if e['person'] == 'self' else '팀원'} | - | - | - | - | - | - |")
+                continue
+            L.append(f"| {e['file']} | {'본인' if e['person'] == 'self' else '팀원'} | {x['median']:.1f} | {x['iqr'][0]:.1f} ~ {x['iqr'][1]:.1f} | {x['p5_p95'][0]:.1f} ~ {x['p5_p95'][1]:.1f} | "
+                     f"{x['range_90']:.1f} | {x['jitter']:.1f} | {x['rank_corr_time']:+.2f} |")
+        L.append("")
+    L += ["## 손가락별 굽힘 폭 (5~95%, °)", "", "| 영상 | 손 주인 | 검지 | 중지 | 약지 | 소지 |", "|---|---|---|---|---|---|"]
+    for e in own["videos"]:
+        x = res[e["file"]]["metrics"]
+        L.append(f"| {e['file']} | {'본인' if e['person'] == 'self' else '팀원'} | " + " | ".join("-" if x.get(f"flex_{n}") is None else f"{x[f'flex_{n}']['range_90']:.1f}" for n in ("index", "middle", "ring", "little")) + " |")
+    L += ["", "## 한계", "", "- 단안 3차원 복원이라 깊이 방향 오차가 크고, 학습된 손 모양 사전 때문에 실제 변화가 작게 나올 수 있다. 흔들림 열을 잡음의 기준으로 본다.",
+          "- 손 모델(MANO)에는 팔뚝이 없어 손목 꺾임 각도 자체는 잴 수 없다. 대신 손바닥 경사, 손가락 끝 대비 손목 높이, 강체 손에서 손목이 벗어난 거리로 본다.",
+          "- 영상은 4개뿐이다.", ""]
+    return "\n".join(L) + "\n"
+
+
+def hs_results_yaml(run_dir: Path, own: dict):
+    """Values only."""
+    r = json.loads((run_dir / "results.json").read_text())["real"]
+    m = json.loads((run_dir / "metadata.json").read_text())
+    out = {"experiment": own["experiment"]["name"], "run": str(run_dir.resolve().relative_to(hf.PROJECT_ROOT)), "code_commit": m["git"]["commit"][:7],
+           "git_dirty_at_run": m["git"]["git_dirty"], "note": HS_NOTE, "wilor_run": own["wilor_run"], "videos": {}}
+    for e in own["videos"]:
+        d = r[e["file"]]
+        out["videos"][e["file"]] = {"person": e["person"], "n_frames": d["n_frames"], "n_hand": d["n_hand"],
+                                    "metrics": {k: (None if x is None else {kk: ([ry_value(q, 2) for q in vv] if isinstance(vv, list) else ry_value(vv, 2)) for kk, vv in x.items()})
+                                                for k, x in d["metrics"].items()}}
+    p = hf.resolve(own["output"]["results_yaml"])
+    p.write_text(yaml.safe_dump(hf.jsonable(out), allow_unicode=True, sort_keys=False))
+    return p
+
+
+COMMANDS = {"protocol": protocol_main, "frame-filter": ff_main, "same-session": session_main, "overlay": overlay_main, "phase-segmentation": pseg_main, "guide-revision": grev_main, "f-response": fresp_main, "error-factors": ferr_main, "long-video-check": long_main, "generalization": gen_main, "main-camera-extension": ext_main, "wide-60cm": wide_main, "jointset-sets": jset_main, "verdict-calibration": cal_main, "printed-hand": pr_main, "hand-markers": mk_main, "markers-only": mo_main, "free-template": ft_main, "free-shape3d": s3_main, "free-shape3d-hand": h3_main, "free-shape3d-27": e3_main, "free-shape3d-new": e4_main, "mmpose-hand": mm_main, "mmpose-hand-46": mm2_main, "free-shape3d-new2": e5_main, "mmpose-hand-src": mm3_main, "free-shape3d-detectors": fs_main, "free-shape3d-hand-sets": h4_main, "free-shape3d-hand-sets-42track": h4b_main, "oblique-desk": od_main, "oblique-synthetic": sy_main, "oblique-fixed-template": fx_main, "oblique-desk-videos": om_main, "pause-stabilized": ps_main, "continuous-klt": kt_main, "continuous-klt-palm": kp_main, "klt-paper-dorsum": pp_main, "paper-parallax": hp_main, "segment-template": sg_main, "turn-synthetic": tr_main, "window-f": wd_main, "anycalib-videos": ac_main, "error-sources": ec_main, "hand-deformation": dm_main, "joint-combos": fc_main, "points-video": pv_main, "desk-motion": dk_main, "ramp-sensitivity": rs_main, "teammate-hands": tm_main, "finger-ramp": fr_main, "contact-points": ct_main, "wilor-ramp": wl_main, "ramp-identifiability": id_main, "new-phone-hands": nc_main, "multistart": ms_main, "multistart-rerun": ms2_main, "known-tilt": tl_main, "results-yaml-74b-75": ry_main, "free-from-fixed": ch_main, "klt-features": kf_main, "wrist-drift": dr_main, "free-from-multistart": cm_main, "restart-tracking": rt_main, "detected-joints": dt_main, "detected-ramp-sweep": ds_main, "teammate-points-video": pv2_main, "wrist-balanced": wb_main, "hand-shape": hs_main}
 
 
 def main(argv=None):
