@@ -64,7 +64,30 @@ def load_settings(own: dict) -> dict:
     return {**b53, "pipeline": b49["pipeline"], "detector_settings": {d: ds[d] for d in b53["detectors"]}, "videos": videos, "tracking": r56["tracking"],
             "joint_ids": [int(j) for j in r67["joint_sets"][own["joint_set"]]], "joint_set": own["joint_set"],
             "ramps_deg": [float(r) for r in own["ramps_deg"]], "free_starts_deg": [float(r) for r in o74["free_starts_deg"]],
+            "reference": own.get("reference", REFERENCE_DEFAULT),
             **{k: own[k] for k in ("experiment", "workers", "video_workers", "output")}}
+
+
+# 기준 프레임 규칙. 처음(실험 56)에는 "검출 범위의 한가운데 시간"이었는데, 손 자세를 보지 않아서 처음 자세로 돌아오지 않는 영상(팀원 영상)에서는 손을 크게 돌려 둔
+# 순간이 기준이 됐다. 모든 추적점이 그 순간의 검출 관절에서 출발하므로, 손을 돌리기 전 첫 정지 구간(손이 가만히 있고 정면에 가까워 검출이 가장 안정적인 때)으로 바꾼다.
+REFERENCE_DEFAULT = {"mode": "first_pause", "pause_gap_frames": 15, "min_pause_frames": 5}
+
+
+def choose_reference_pose(tr: dict, size_wh, cfg: dict) -> int:
+    """기준 프레임.
+    mode = "first_pause": 손을 돌리기 전 첫 정지 구간의 가운데 검출 프레임. 정지 = 기본 설정의 selection 규칙(손 상자 중심의 움직임 < still_frac),
+                          정지 구간 = 간격 pause_gap_frames 이하로 이어진 min_pause_frames 개 이상의 정지 프레임. 정지 구간이 없으면 "middle".
+    mode = "middle": 검출 범위의 한가운데 (실험 56 의 규칙, optical_flow.choose_reference)."""
+    rule = cfg.get("reference") or REFERENCE_DEFAULT
+    if rule["mode"] == "middle":
+        return of.choose_reference(tr["present"])
+    motion = hf.od_select(tr["kp"], tr["mask"], tr["present"], tr["box"], tuple(size_wh), cfg["selection"])["motion"]
+    still = np.isfinite(motion) & (motion < float(cfg["selection"]["still_frac"])) & tr["present"]
+    pauses = [np.asarray(g) for g in hf.hp_groups(np.flatnonzero(still), int(rule["pause_gap_frames"])) if len(g) >= int(rule["min_pause_frames"])]
+    if not pauses:
+        return of.choose_reference(tr["present"])
+    g = pauses[0]
+    return int(g[np.argmin(np.abs(g - (g[0] + g[-1]) / 2))])
 
 
 def video_points(args):
@@ -88,7 +111,7 @@ def video_points(args):
         p2 = copy.deepcopy(pc)
         p2["tracking"]["conf_min"] = float(cfg["detector_settings"]["mediapipe_hands"]["conf_min"])
         tr = hf.track(d, times, (W, H), p2["tracking"], front_start_s=float(p2["phases"]["front_skip_s"]))
-        out = of.track_hand([r["png"] for r in frames], tr["kp"], tr["present"], tr["box"], (W, H), cfg["tracking"])
+        out = of.track_hand([r["png"] for r in frames], tr["kp"], tr["present"], tr["box"], (W, H), cfg["tracking"], ref=choose_reference_pose(tr, (W, H), cfg))
     finally:
         shutil.rmtree(tmp, ignore_errors=True)
     out["size"] = (W, H)
@@ -118,7 +141,7 @@ def main(argv=None):
     for k in ("OMP_NUM_THREADS", "OPENBLAS_NUM_THREADS", "MKL_NUM_THREADS"):
         os.environ[k] = "1"
     log = log_to(run_root / "log.txt")
-    log(f"광류 방식: 영상 {len(cfg['videos'])}개, 점 {cfg['joint_set']}, 경사 {cfg['ramps_deg']} 고정 + 함께 추정(시작 {cfg['free_starts_deg']}) → {run_root}")
+    log(f"광류 방식: 영상 {len(cfg['videos'])}개, 점 {cfg['joint_set']}, 기준 프레임 {cfg['reference']['mode']}, 경사 {cfg['ramps_deg']} 고정 + 함께 추정(시작 {cfg['free_starts_deg']}) → {run_root}")
     t0 = time.time()
     if own.get("detection_cache_from"):                                # 검출 결과 재사용 (같은 검출기 설정일 때만 맞음)
         shutil.copytree(hf.resolve(own["detection_cache_from"]), run_root / "detection_cache")

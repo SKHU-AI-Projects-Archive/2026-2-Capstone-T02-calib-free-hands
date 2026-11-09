@@ -53,6 +53,7 @@ python optical_flow/run_optical_flow.py --config configs/89_optical_flow_entry.y
 | `settings_config` | 기본 설정 파일. 영상 목록, 광류 설정(`tracking`), 프레임·추정 설정, 기준 f를 여기서 읽는다 |
 | `joint_set` | f 추정에 쓰는 관절 묶음(`j16` = 관절 5~20, 손목과 엄지 제외) |
 | `ramps_deg` | 고정할 손 경사 목록. 경사를 함께 추정하는 결과도 같이 낸다 |
+| `reference` | 추적을 시작하는 기준 프레임. 기본값 `{mode: first_pause}` = 손을 돌리기 전 첫 정지 구간의 가운데. `{mode: middle}` = 검출 범위의 한가운데(예전 규칙) |
 | `videos` | 비우면 기본 설정의 영상 전부. 파일 이름 목록을 주면 그 영상만 |
 | `compare_run` | 비교할 이전 실행 폴더(선택). 있으면 summary.md에 같은 추정의 f를 옆에 적는다 |
 | `detection_cache_from` | MediaPipe 검출 결과를 재사용할 폴더(선택, 같은 검출기 설정일 때만) |
@@ -91,7 +92,7 @@ python optical_flow/run_optical_flow.py --config configs/89_optical_flow_entry.y
 3. **다음 프레임 위치 찾기**: 피라미드 Lucas-Kanade(21×21 창, 3단계).
 4. **되돌려서 검사**: 다음 프레임에서 거꾸로 추적해 원래 위치에서 1 px 넘게 어긋나는 점은 버린다.
 5. **평면 변환**: 남은 점으로 USAC_MAGSAC 호모그래피(1.5 px)를 구한다. inlier가 20개 미만이면 그 지점에서 사슬이 끊긴다.
-6. **이어 붙이기** (`kt_chain`, `track_hand`): 기준 프레임(검출된 범위의 한가운데, `choose_reference`)에서 앞뒤로 단계별 변환을 곱한다. 기준 프레임의 관절 21개를 이 변환으로 옮긴 것이 추적점이다(`chain_points`).
+6. **이어 붙이기** (`kt_chain`, `track_hand`): 기준 프레임에서 앞뒤로 단계별 변환을 곱한다. 기준 프레임은 손을 돌리기 전 첫 정지 구간의 가운데다(`run_optical_flow.choose_reference_pose`). 예전 규칙(검출 범위의 한가운데, `choose_reference`)은 손 자세를 보지 않아서, 처음 자세로 돌아오지 않는 영상에서는 손을 크게 돌려 둔 순간이 기준이 됐다. 기준 프레임의 관절 21개를 이 변환으로 옮긴 것이 추적점이다(`chain_points`).
 
 ---
 
