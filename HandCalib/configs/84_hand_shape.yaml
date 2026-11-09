@@ -1,0 +1,20 @@
+# 84: does the hand change shape during the video? (user 2026-11-09: "영상 16개를 전부 돌리지 말고, 오차가 상대적으로 적은 내 손 영상 2개와 팀원 영상 2개, 총 4개로 진행해줘."), record only.
+# The user's two videos: the new-phone ones (74b 11 deg: -4.4 / -4.8 %; same phone and setup as the teammate's). WiLoR's 3-D hand read from 73's run, which ran it on exactly these four
+# videos (every 3rd frame, 71's settings), not run again. Per frame: finger flexion (sum of MCP/PIP/DIP bends), thumb abduction (metacarpal vs index metacarpal) and flexion, 71's palm ramp
+# on j16 (joint centres and dorsal skin), wrist height above the lowest fingertip, and a rigid fit on j16 (Kabsch to the video's median shape) with the wrist's and thumb tip's distance
+# from it. Per video the median, IQR, 5-95 % range, frame-to-frame jitter and rank correlation with time. Chosen by me before the run. No f, no reference f.
+experiment:
+  name: 84_hand_shape
+  seed: 42
+wilor_run: runs/73_new_phone_hands/20261105T022515Z
+estimator_config: configs/67_desk_motion.yaml
+fps: 30
+code_84: {branch: exp/84-hand-shape, base_commit: 702fd51, commit: 026474d, modules: [HandCalib/handfocal_report.py, HandCalib/run.py]}
+videos:
+  - {file: "IMG_7354 - 복사본.MOV", person: self}
+  - {file: "IMG_7355 - 복사본.MOV", person: self}
+  - {file: "IMG_7351 - 복사본.MOV", person: teammate}
+  - {file: "IMG_7352 - 복사본.MOV", person: teammate}
+output:
+  root: runs/84_hand_shape
+  results_yaml: results/84_hand_shape.yaml
