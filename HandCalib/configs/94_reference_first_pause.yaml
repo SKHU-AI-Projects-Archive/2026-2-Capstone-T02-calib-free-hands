@@ -1,0 +1,20 @@
+# 94: 기준 프레임 규칙 수정 (사용자 2026-11-09: "그 문제를 수정해."), 기록용, 판정 없음.
+# 문제: 실험 56 이후 추적 사슬의 기준 프레임 = 검출 범위의 한가운데 시간. 손 자세를 보지 않아, 처음 자세로 돌아오지 않는 팀원 영상에서는 손을 +52~75° 돌려 둔 순간(6.1, 6.4 s)이 기준이
+# 됐고, 모든 추적점이 그 순간의 검출 관절에서 출발했다. 수정: run_optical_flow.choose_reference_pose (기본) = 손을 돌리기 전 첫 정지 구간의 가운데 검출 프레임 (정지 = 기본 설정 selection 의
+# still 규칙, 정지 구간 = 간격 15 이하로 이어진 5 프레임 이상, 실험 60 의 값; 정지 구간이 없으면 예전 규칙). 나머지는 89(= 74b 와 같은 계산)와 같다: 광류 추적점 j16, 책상 운동 추정기,
+# 경사 11° 고정과 함께 추정(시작 5·12·19° 중 비용 최소). 영상 = 74 의 16개 전부. 비교: 74b(예전 기준 프레임). 검출은 81 실행의 캐시 재사용. 기준 f 는 summary.md 에만. 실행 전에 정함.
+experiment:
+  name: 94_reference_first_pause
+  seed: 42
+settings_config: configs/74b_multistart_rerun.yaml
+compare_run: runs/74b_multistart_rerun/20261105T044422Z
+detection_cache_from: runs/81_detected_joints/20261106T055430Z/detection_cache
+joint_set: j16
+code_94: {branch: optical_flow, commit: f0a2448, modules: [HandCalib/optical_flow/run_optical_flow.py]}
+ramps_deg: [11]
+reference: {mode: first_pause, pause_gap_frames: 15, min_pause_frames: 5}
+videos: []
+workers: 64
+video_workers: 8
+output:
+  root: runs/94_reference_first_pause
