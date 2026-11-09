@@ -3782,6 +3782,70 @@ def test_pause_discards_pending_playback_frame_but_manual_seek_is_exact(tmp_path
     viewer.close()
 
 
+def test_comparison_recovers_after_delayed_initial_decode_and_latest_seek(tmp_path, qapp, monkeypatch):
+    from threading import Event
+
+    from PySide6.QtCore import QEventLoop, QTimer
+
+    from calibfreehands.media.provider import MediaFrameProvider
+    from calibfreehands.visualization import comparison
+
+    source_path = tmp_path / "source.mp4"
+    source_path.write_bytes(b"test source identity")
+    session_path = _session(tmp_path, 2)
+    session = json.loads(session_path.read_text(encoding="utf-8"))
+    session["source_media"] = str(source_path)
+    session_path.write_text(json.dumps(session), encoding="utf-8")
+
+    initial_decode_started = Event()
+    release_initial_decode = Event()
+
+    def load_frame(index):
+        if index == 0:
+            initial_decode_started.set()
+            if not release_initial_decode.wait(timeout=3):
+                raise TimeoutError("test did not release the initial frame decode")
+        return np.full((24, 32, 3), index, np.uint8)
+
+    provider = MediaFrameProvider(source_path, frame_loader=load_frame)
+    monkeypatch.setattr(comparison, "shared_media_provider", lambda *_args: (provider, "available"))
+    viewer = comparison.ComparisonViewer(session_path)
+    ready_indices = []
+    provider.signals.frame_ready.connect(ready_indices.append)
+
+    try:
+        assert initial_decode_started.wait(timeout=2), "initial source-frame decode did not start"
+        assert viewer.presented_frame is None
+
+        # Advance the requested position while frame zero is still being decoded.
+        viewer._set_frame(2)
+        release_initial_decode.set()
+
+        loop = QEventLoop()
+        poll = QTimer()
+        poll.setInterval(5)
+        poll.timeout.connect(lambda: loop.quit() if viewer.presented_frame == 2 else None)
+        timeout = QTimer()
+        timeout.setSingleShot(True)
+        timeout.timeout.connect(loop.quit)
+        poll.start()
+        timeout.start(3000)
+        if viewer.presented_frame != 2:
+            loop.exec()
+
+        assert viewer.presented_frame == 2
+        assert viewer.requested_frame == 2
+        assert viewer._last_rendered_frame == 2
+        assert viewer.source_overlay.frame == 2
+        assert viewer.overlay_view.frame == 2
+        assert 0 in ready_indices and 2 in ready_indices
+        assert provider.decoded_frames == 2
+    finally:
+        release_initial_decode.set()
+        viewer.close()
+        provider.close()
+
+
 @pytest.mark.parametrize("selector_name", ["reference_selector"])
 def test_dropdown_combos_open_on_hover_and_click_latches(tmp_path, qapp, selector_name):
     from PySide6.QtCore import QPoint, Qt

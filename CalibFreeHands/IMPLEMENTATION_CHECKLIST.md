@@ -276,11 +276,11 @@ Phase C Final native Windows testing and acceptance were reported by the user as
 - [x] Coalesce live Overlay splitter drag updates to 30 Hz only during playback, and apply the final pointer location on release; paused resize remains live at full event frequency.
 - [x] Use actual body-local result-group bounds for HUD insertion slots and marker placement, with body clipping and content inset.
 - [x] Add regressions for playback resize cadence/release position and HUD insertion across variable-height groups, HUD sizes, hidden results, reorder directions, and refresh/cancel behavior.
-- [ ] Cold-cache source-frame presentation in Comparison Viewer remains unresolved; native user review is required. See `VALIDATION_CHECKLIST.md`.
+- [x] Cold-cache investigation completed: the earlier apparent stall was not reproduced under the normal native Qt event loop and was traced to starvation in the Python-side polling harness. A deterministic delayed-initial-frame/latest-seek test verifies eventual Source/3D presentation; no production fix was justified. See `VALIDATION_CHECKLIST.md` for native conditions and remaining user review.
 
 ### Phase D.1 HUD Layout Stability Fix (2026-11-09)
 
 - [x] Reproduce the post-reorder sizing transition with a Qt mouse press/move/release regression and capture card, per-result group, badge, font, wrapping, spacing, and position state through paint events and idle without a follow-up pointer move.
 - [x] Order-only refresh reorders the existing Overlay group widgets in place, preserving their fitted presentation state; it avoids an unnecessary HUD position/refit. GT/content changes retain the regular refresh path.
 - [x] Keep annotation refresh and HUD stacking, result order synchronization, insertion marker behavior, playback state, and split panel refresh behavior.
-- [x] Verify explicit HUD size, confidence display, viewport resize, four corner anchors, first/middle/last GT, and playing/paused reorder cases. Native visual user acceptance remains pending; cold-cache playback remains a separate issue.
+- [x] Verify explicit HUD size, confidence display, viewport resize, four corner anchors, first/middle/last GT, and playing/paused reorder cases. Native visual user acceptance remains pending.
