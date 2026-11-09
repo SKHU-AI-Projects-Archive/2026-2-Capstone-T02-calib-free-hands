@@ -7245,6 +7245,30 @@ def hs_rigid_residual(K: np.ndarray, ids_fit, ids_out) -> dict:
     return {"rms_fit_mm": rms, "dist_mm": dist}
 
 
+# ----------------------------------------------------------------------------------------------------
+# 85 (user 2026-11-09): the user's videos end back at the starting pose (0 -> one side -> the other -> 0), the teammate's do not (0 -> one side -> the other). The cut that removes the
+# return from the user's videos.
+# ----------------------------------------------------------------------------------------------------
+def nr_cut(kp: np.ndarray, use: np.ndarray, smooth: int = 5, near_deg: float = 10.0) -> dict:
+    """The hand's direction in the image (detected wrist -> middle MCP, deg, unwrapped, relative to the first used frame, running median over smooth used frames). The second extreme =
+    the 5th or 95th percentile on the side opposite to the first large turn; its dwell = used frames within near_deg of it; cut = the last frame of the dwell that comes before the
+    angle leaves it for good (frames after the cut are the return). Returns {cut, angle (per frame, NaN where unused), extreme_deg, side}."""
+    idx = np.flatnonzero(use & np.isfinite(kp[:, [0, 9]]).all((1, 2)))
+    a = np.unwrap(np.arctan2(kp[idx, 9, 1] - kp[idx, 0, 1], kp[idx, 9, 0] - kp[idx, 0, 0]))
+    a = np.degrees(a - a[0])
+    h = int(smooth) // 2
+    a = np.array([np.median(a[max(0, i - h):i + h + 1]) for i in range(len(a))])
+    first = a[np.argmax(np.abs(a) > 20.0)] if (np.abs(a) > 20.0).any() else 0.0
+    side = -1.0 if first > 0 else 1.0
+    ext = float(np.percentile(a, 5)) if side < 0 else float(np.percentile(a, 95))
+    near = np.abs(a - ext) <= float(near_deg)
+    k = np.flatnonzero(near)
+    cut = int(idx[k[-1]]) if len(k) else int(idx[-1])
+    ang = np.full(len(kp), np.nan)
+    ang[idx] = a
+    return {"cut": cut, "angle": ang, "extreme_deg": ext, "side": side}
+
+
 def od_fix_lines(path=None) -> list:
     """Where the six corrections to the supervisor's code sit in handfocal_estimate.py (line numbers of the corrected spellings inside section 5)."""
     p = Path(path) if path else Path(__file__).resolve().parent / "handfocal_estimate.py"
