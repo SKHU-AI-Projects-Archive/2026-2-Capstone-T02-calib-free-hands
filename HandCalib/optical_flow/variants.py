@@ -272,3 +272,51 @@ def eg_chain(pngs: list, kps: np.ndarray, boxes: np.ndarray, order: list, kcfg: 
             Hc[cur] = Hs @ Hc[prev]
         im0, g0 = im1, g1
     return {"H": Hc, "breaks": breaks, "inl": inls, "n_corners": n_c, "n_edge": n_e, "n_edge_inl": n_ei}
+
+
+# ----------------------------------------------------------------------------------------------------
+# 91: 특징점을 고르는 영역과 영상(대비 보정) 바꾸기
+# ----------------------------------------------------------------------------------------------------
+def dc_chain(pngs: list, kps: np.ndarray, boxes: np.ndarray, order: list, kcfg: dict, mask_joints=None, clahe: dict = None) -> dict:
+    """kt_chain 과 같은 단계에서 두 가지만 바꿀 수 있는 사슬.
+    mask_joints: 특징점 마스크를 만들 관절 번호 (None = 21개 전부 = kt_chain). 예: 손등 몸통 [0, 1, 5, 9, 13, 17]. 넓히는 양은 dilate_frac 그대로.
+    clahe: {clip, tile} 이면 특징점을 고를 때만 대비 보정(CLAHE)한 영상을 쓴다. LK 추적은 원래 회색 영상으로 한다(프레임마다 보정이 달라져
+           밝기 일정 가정이 깨지지 않도록). None 이면 보정 없음.
+    반환: kt_chain 의 dict + 단계별 특징점 수 (n_corners)."""
+    lk = _lk(kcfg)
+    mj = None if mask_joints is None else [int(j) for j in mask_joints]
+    cl = None if clahe is None else cv2.createCLAHE(clipLimit=float(clahe["clip"]), tileGridSize=(int(clahe["tile"]), int(clahe["tile"])))
+    Hc = {order[0]: np.eye(3)}
+    inls, n_c = [], []
+    breaks, broken = 0, False
+    gray = lambda i: cv2.cvtColor(cv2.imread(pngs[i], cv2.IMREAD_COLOR), cv2.COLOR_BGR2GRAY)      # noqa: E731
+    g0 = gray(order[0])
+    for prev, cur in zip(order[:-1], order[1:]):
+        g1 = gray(cur)
+        if broken:
+            Hc[cur] = None
+            g0 = g1
+            continue
+        m = kt_hand_mask(kps[prev] if mj is None else kps[prev][mj], boxes[prev], g0.shape, kcfg["dilate_frac"])
+        c = cv2.goodFeaturesToTrack(g0 if cl is None else cl.apply(g0), int(kcfg["max_corners"]), float(kcfg["quality"]), float(kcfg["min_distance"]), mask=m, blockSize=int(kcfg["block"]))
+        n_c.append(0 if c is None else int(len(c)))
+        Hs = None
+        if c is not None and len(c) >= 8:
+            p0 = c.reshape(-1, 2).astype(np.float32)
+            p1, s1, _ = cv2.calcOpticalFlowPyrLK(g0, g1, p0.reshape(-1, 1, 2), None, **lk)
+            pb, s2, _ = cv2.calcOpticalFlowPyrLK(g1, g0, p1, None, **lk)
+            ok = (s1.ravel() == 1) & (s2.ravel() == 1) & (np.linalg.norm(pb.reshape(-1, 2) - p0, axis=1) < float(kcfg["fb_px"]))
+            if ok.sum() >= int(kcfg["min_inliers"]):
+                Hs, inl = cv2.findHomography(p0[ok].astype(np.float64), p1.reshape(-1, 2)[ok].astype(np.float64), cv2.USAC_MAGSAC, float(kcfg["threshold_px"]))
+                if Hs is None or inl is None or int(inl.sum()) < int(kcfg["min_inliers"]):
+                    Hs = None
+                else:
+                    inls.append(int(inl.sum()))
+        if Hs is None:
+            breaks += 1
+            broken = True
+            Hc[cur] = None
+        else:
+            Hc[cur] = Hs @ Hc[prev]
+        g0 = g1
+    return {"H": Hc, "breaks": breaks, "inl": inls, "n_corners": n_c}

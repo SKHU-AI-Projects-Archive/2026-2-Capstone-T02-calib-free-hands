@@ -1,0 +1,18 @@
+# 90: 광류 추적 사슬이 손의 어느 평면을 따라가는지 (사용자 2026-11-09: "1,2번을 동시에 진행할 수 있을까?" - 1번), 기록용, 판정 없음.
+# 같은 폰·같은 영상 형식인데 광류 추적점과 검출 관절의 f 차이가 본인(광류가 약 22%p 높음)과 팀원(약 22~28%p 낮음)에서 반대 방향이다. 가설: 팀원 영상은 특징점이 손가락에 몰려
+# 사슬이 손가락 평면을 따라가고, 본인 영상은 손등 평면을 따라간다. 기준 프레임 -> 각 프레임의 사슬 변환(실험 56 의 사슬 = optical_flow.kt_chain)을, 같은 두 프레임의 검출 관절로
+# 맞춘 변환 세 가지(손등 몸통 0·1·5·9·13·17 / 손가락 PIP·DIP·끝 12개 / j16, 최소제곱 호모그래피)와 비교한다: 기준 프레임 관절 21개를 두 변환으로 옮긴 위치 차이(검출 상자 긴 변 대비 %),
+# 회전 구간(0~30, 30~60, 60~90, 90° 이상)별로도. f 추정 없음. 영상 = 84~88 과 같은 4개(본인 새 폰 2, 팀원 2). 검출은 81 실행의 캐시 재사용. 실행 전에 정함.
+experiment:
+  name: 90_tracking_plane
+  seed: 42
+settings_config: configs/74b_multistart_rerun.yaml
+detection_cache_from: runs/81_detected_joints/20261106T055430Z/detection_cache
+joint_set: j16
+ramps_deg: [11]
+videos: ["IMG_7354 - 복사본.MOV", "IMG_7355 - 복사본.MOV", "IMG_7351 - 복사본.MOV", "IMG_7352 - 복사본.MOV"]
+workers: 16
+video_workers: 4
+output:
+  root: runs/90_tracking_plane
+  results_yaml: results/90_tracking_plane.yaml

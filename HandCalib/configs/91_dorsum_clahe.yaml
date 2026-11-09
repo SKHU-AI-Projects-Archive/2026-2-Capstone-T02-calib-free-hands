@@ -1,0 +1,26 @@
+# 91: 특징점을 손등에만 두고 대비 보정으로 점 수 확보 (사용자 2026-11-09: "1,2번을 동시에 진행할 수 있을까?" - 2번), 기록용, 판정 없음.
+# 83 의 균형 사슬(손등·손가락 반반)은 f 가 나빠졌다. 58 의 손등 몸통만 쓴 사슬은 마스크를 넓히지 않아(0%) 특징점이 너무 적었다. 여기서는 세 가지 사슬(optical_flow.dc_chain):
+#   dorsum       = 특징점 마스크를 손등 몸통(관절 0·1·5·9·13·17 의 볼록 껍질)으로, 넓히는 양은 실험 56 의 손 마스크와 같게(손 상자 긴 변 3%), 대비 보정 없음
+#   dorsum_clahe = dorsum + 특징점을 고를 때만 CLAHE(clip 2.0, tile 8x8, OpenCV 흔한 기본값; 다른 값은 시도하지 않음). LK 추적은 원래 회색 영상
+#   hand_clahe   = 실험 56 의 손 마스크 그대로 + 같은 CLAHE
+# 나머지(특징점·LK·전후방 검사·MAGSAC 설정, 기준 프레임, 가장자리 규칙)는 실험 56 그대로. 추정: 74b 추정기(경사 11° 고정, 함께 추정 시작 5·12·19° 중 비용 최소), j16.
+# 기존 사슬의 f 는 74b 에서 읽는다. 영상 = 90 과 같은 4개. 검출은 81 실행의 캐시 재사용. 기준 f 는 summary.md 에만. 실행 전에 정함.
+experiment:
+  name: 91_dorsum_clahe
+  seed: 42
+settings_config: configs/74b_multistart_rerun.yaml
+compare_run: runs/74b_multistart_rerun/20261105T044422Z
+detection_cache_from: runs/81_detected_joints/20261106T055430Z/detection_cache
+joint_set: j16
+ramps_deg: [11]
+videos: ["IMG_7354 - 복사본.MOV", "IMG_7355 - 복사본.MOV", "IMG_7351 - 복사본.MOV", "IMG_7352 - 복사본.MOV"]
+variants:
+  dorsum: {mask: dorsum, clahe: false}
+  dorsum_clahe: {mask: dorsum, clahe: true}
+  hand_clahe: {mask: hand, clahe: true}
+clahe: {clip: 2.0, tile: 8}
+workers: 48
+video_workers: 4
+output:
+  root: runs/91_dorsum_clahe
+  results_yaml: results/91_dorsum_clahe.yaml
