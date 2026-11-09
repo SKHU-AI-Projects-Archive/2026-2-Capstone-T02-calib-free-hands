@@ -7269,6 +7269,29 @@ def nr_cut(kp: np.ndarray, use: np.ndarray, smooth: int = 5, near_deg: float = 1
     return {"cut": cut, "angle": ang, "extreme_deg": ext, "side": side}
 
 
+# ----------------------------------------------------------------------------------------------------
+# 86 (user 2026-11-09: "각각의 단계를 이미지로 시각화 해줄수 있어? 내 영상을 예시로."): one step of kt_chain with every intermediate kept, for the figures. kt_chain unchanged; its step
+# is repeated here with the same calls and settings.
+# ----------------------------------------------------------------------------------------------------
+def kv_step(g0: np.ndarray, g1: np.ndarray, kp_prev: np.ndarray, box_prev: np.ndarray, kcfg: dict) -> dict:
+    """kt_chain's step from g0 to g1 (grey images): the hand mask, the Shi-Tomasi score (cornerMinEigenVal, the score goodFeaturesToTrack ranks by) inside it, the corners, LK forward
+    and backward, the forward-backward error and check, the MAGSAC homography and its inlier mask and residuals."""
+    lk = dict(winSize=(int(kcfg["win"]), int(kcfg["win"])), maxLevel=int(kcfg["levels"]), criteria=(cv2.TERM_CRITERIA_EPS | cv2.TERM_CRITERIA_COUNT, 30, 0.01))
+    m = kt_hand_mask(kp_prev, box_prev, g0.shape, kcfg["dilate_frac"])
+    score = cv2.cornerMinEigenVal(g0, int(kcfg["block"]), 3)
+    score[m == 0] = 0.0
+    c = cv2.goodFeaturesToTrack(g0, int(kcfg["max_corners"]), float(kcfg["quality"]), float(kcfg["min_distance"]), mask=m, blockSize=int(kcfg["block"]))
+    p0 = c.reshape(-1, 2).astype(np.float32)
+    p1, s1, _ = cv2.calcOpticalFlowPyrLK(g0, g1, p0.reshape(-1, 1, 2), None, **lk)
+    pb, s2, _ = cv2.calcOpticalFlowPyrLK(g1, g0, p1, None, **lk)
+    p1, pb = p1.reshape(-1, 2), pb.reshape(-1, 2)
+    fb = np.linalg.norm(pb - p0, axis=1)
+    ok = (s1.ravel() == 1) & (s2.ravel() == 1) & (fb < float(kcfg["fb_px"]))
+    Hs, inl = cv2.findHomography(p0[ok].astype(np.float64), p1[ok].astype(np.float64), cv2.USAC_MAGSAC, float(kcfg["threshold_px"]))
+    res = np.linalg.norm(kt_map(p0[ok], Hs) - p1[ok], axis=1)
+    return {"mask": m, "score": score, "score_max": float(score.max()), "p0": p0, "p1": p1, "fb": fb, "ok": ok, "H": Hs, "inl": inl.ravel() > 0, "res": res}
+
+
 def od_fix_lines(path=None) -> list:
     """Where the six corrections to the supervisor's code sit in handfocal_estimate.py (line numbers of the corrected spellings inside section 5)."""
     p = Path(path) if path else Path(__file__).resolve().parent / "handfocal_estimate.py"

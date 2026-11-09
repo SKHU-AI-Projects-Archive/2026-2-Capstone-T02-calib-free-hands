@@ -15514,7 +15514,209 @@ def nr_results_yaml(run_dir: Path, cfg: dict):
     return p
 
 
-COMMANDS = {"protocol": protocol_main, "frame-filter": ff_main, "same-session": session_main, "overlay": overlay_main, "phase-segmentation": pseg_main, "guide-revision": grev_main, "f-response": fresp_main, "error-factors": ferr_main, "long-video-check": long_main, "generalization": gen_main, "main-camera-extension": ext_main, "wide-60cm": wide_main, "jointset-sets": jset_main, "verdict-calibration": cal_main, "printed-hand": pr_main, "hand-markers": mk_main, "markers-only": mo_main, "free-template": ft_main, "free-shape3d": s3_main, "free-shape3d-hand": h3_main, "free-shape3d-27": e3_main, "free-shape3d-new": e4_main, "mmpose-hand": mm_main, "mmpose-hand-46": mm2_main, "free-shape3d-new2": e5_main, "mmpose-hand-src": mm3_main, "free-shape3d-detectors": fs_main, "free-shape3d-hand-sets": h4_main, "free-shape3d-hand-sets-42track": h4b_main, "oblique-desk": od_main, "oblique-synthetic": sy_main, "oblique-fixed-template": fx_main, "oblique-desk-videos": om_main, "pause-stabilized": ps_main, "continuous-klt": kt_main, "continuous-klt-palm": kp_main, "klt-paper-dorsum": pp_main, "paper-parallax": hp_main, "segment-template": sg_main, "turn-synthetic": tr_main, "window-f": wd_main, "anycalib-videos": ac_main, "error-sources": ec_main, "hand-deformation": dm_main, "joint-combos": fc_main, "points-video": pv_main, "desk-motion": dk_main, "ramp-sensitivity": rs_main, "teammate-hands": tm_main, "finger-ramp": fr_main, "contact-points": ct_main, "wilor-ramp": wl_main, "ramp-identifiability": id_main, "new-phone-hands": nc_main, "multistart": ms_main, "multistart-rerun": ms2_main, "known-tilt": tl_main, "results-yaml-74b-75": ry_main, "free-from-fixed": ch_main, "klt-features": kf_main, "wrist-drift": dr_main, "free-from-multistart": cm_main, "restart-tracking": rt_main, "detected-joints": dt_main, "detected-ramp-sweep": ds_main, "teammate-points-video": pv2_main, "wrist-balanced": wb_main, "hand-shape": hs_main, "no-return": nr_main}
+# ----------------------------------------------------------------------------------------------------
+# 86 (user 2026-11-09: "각각의 단계를 이미지로 시각화 해줄수 있어? 내 영상을 예시로."): figures of 56's tracking steps on one of the user's videos. One step (hf.kv_step) on a moving frame
+# pair, and the chained result (56's kt_chain, unchanged) on a few frames. Detections copied from 81's run. Settings read from 74b's config (74's through it), not copied.
+# ----------------------------------------------------------------------------------------------------
+def kv_main(argv=None):
+    ap = argparse.ArgumentParser()
+    ap.add_argument("--config", default=str(hf.PROJECT_ROOT / "configs/86_klt_steps_figure.yaml"))
+    ap.add_argument("--out", default=None)
+    a = ap.parse_args(argv)
+    text = Path(a.config).read_text()
+    own = yaml.safe_load(text)
+    cfg, o74 = ck_cfg(own, ("experiment", "output", "run_81", "figure"))
+    cfg["n_workers"] = 1
+    e = next(v for v in cfg["videos"] if v["file"] == own["video"])
+    run_root, log = x70_head(None, a.out, cfg, f"86 추적 단계 그림: {e['file']}")
+    t0 = time.time()
+    shutil.copytree(hf.resolve(own["run_81"]) / "detection_cache", run_root / "detection_cache")
+    pc = copy.deepcopy(cfg["pipeline"])
+    pc["frames"]["detect_fps"] = int(cfg["tracking"]["fps"])
+    kc = cfg["tracking"]
+    tmp = run_root / "_frames"
+    tmp.mkdir()
+    try:
+        prep = hf.fresp_prepare((e["file"], cfg["input_dir"], pc, {}, str(tmp)))
+        frames, (W, H) = prep["frames"], prep["size"]
+        times = np.array([r["time_s"] for r in frames])
+        npz = hf.fresp_detect_many([((e["file"], "orig"), frames)], cfg["detector_settings"]["mediapipe_hands"], run_root / "detection_cache", 1, log)[(e["file"], "orig")]
+        d = hf.load_detections(Path(npz))
+        hf.check_alignment(frames, d)
+        p2 = copy.deepcopy(pc)
+        p2["tracking"]["conf_min"] = float(cfg["detector_settings"]["mediapipe_hands"]["conf_min"])
+        tr = hf.track(d, times, (W, H), p2["tracking"], front_start_s=float(p2["phases"]["front_skip_s"]))
+        pres = np.flatnonzero(tr["present"])
+        n = len(times)
+        a_, b_ = int(pres[0]), int(pres[-1])
+        ref = int(pres[np.argmin(np.abs(pres - (a_ + b_) / 2))])
+        kps = np.stack([hf.kt_carry(tr["present"], tr["kp"][:, j, k]) for j in range(21) for k in range(2)], axis=1).reshape(n, 21, 2)
+        boxes = np.stack([hf.kt_carry(tr["present"], tr["box"][:, k]) for k in range(4)], axis=1)
+        pngs = [r["png"] for r in frames]
+        both = tr["present"][:-1] & tr["present"][1:]
+        mv = np.full(n - 1, np.nan)
+        mv[both] = np.median(np.linalg.norm(tr["kp"][1:][both] - tr["kp"][:-1][both], axis=2), axis=1)
+        q = np.nanpercentile(mv, float(own["figure"]["step_motion_percentile"]))
+        i0 = int(np.nanargmin(np.abs(mv - q)))
+        img0, img1 = cv2.imread(pngs[i0]), cv2.imread(pngs[i0 + 1])
+        st = hf.kv_step(cv2.cvtColor(img0, cv2.COLOR_BGR2GRAY), cv2.cvtColor(img1, cv2.COLOR_BGR2GRAY), kps[i0], boxes[i0], kc)
+        fwd = hf.kt_chain(pngs, kps, boxes, list(range(ref, b_ + 1)), kc)
+        bwd = hf.kt_chain(pngs, kps, boxes, list(range(ref, a_ - 1, -1)), kc)
+        Hall = {**bwd["H"], **fwd["H"]}
+        show = sorted({int(round(a_ + fr * (b_ - a_))) for fr in own["figure"]["chain_fractions"]} | {ref})
+        chain_imgs = {i: cv2.imread(pngs[i]) for i in show}
+    finally:
+        shutil.rmtree(tmp, ignore_errors=True)
+    P = tr["kp"][ref]
+    kv_figures(run_root, e, st, img0, img1, kps[i0], i0, times, ref, chain_imgs, {i: hf.kt_map(P, Hall.get(i)) for i in show}, tr, kc, own["figure"], log)
+    info = {"step_frame": i0, "step_time_s": float(times[i0]), "step_motion_px": float(mv[i0]), "ref": ref, "ref_time_s": float(times[ref]), "chain_frames": show,
+            "n_corners": int(len(st["p0"])), "n_fb_ok": int(st["ok"].sum()), "n_inliers": int(st["inl"].sum()), "res_median_px": float(np.median(st["res"][st["inl"]])),
+            "fb_median_px": float(np.median(st["fb"][np.isfinite(st["fb"])]))}
+    log(f"  단계 프레임 {i0} -> {i0 + 1} ({times[i0]:.2f} s, 관절 이동 중앙값 {mv[i0]:.1f} px), 특징점 {info['n_corners']}, 전후방 통과 {info['n_fb_ok']}, inlier {info['n_inliers']}")
+    x70_finish(run_root, {"info": info}, text, a.config, "code_86", own, t0, log)
+    return run_root
+
+
+def kv_figures(run_root: Path, e: dict, st: dict, img0, img1, kp0, i0: int, times, ref: int, chain_imgs: dict, chain_kp: dict, tr: dict, kc: dict, fc: dict, log):
+    """Six PNGs (metadata dropped): 1 the hand mask, 2 the corner score and the corners, 3 LK motion, 4 the forward-backward check, 5 the homography inliers, 6 the chain on a few frames."""
+    plt = _plt()
+    from matplotlib.lines import Line2D
+    BLUE, ORANGE, GREEN, RED, GREY = "#2a78d6", "#eb6834", "#1baf7a", "#d03b3b", "#8a8a85"
+    rgb0, rgb1 = img0[:, :, ::-1], img1[:, :, ::-1]
+    x0, y0 = np.nanmin(kp0, 0)
+    x1, y1 = np.nanmax(kp0, 0)
+    cx, cy, half = (x0 + x1) / 2, (y0 + y1) / 2, max(x1 - x0, y1 - y0) * float(fc["crop_margin"]) / 2
+    lim = lambda ax: (ax.set_xlim(cx - half, cx + half), ax.set_ylim(cy + half, cy - half), ax.set_axis_off())      # noqa: E731
+    t0s = f"프레임 {i0} → {i0 + 1} ({times[i0]:.2f} s)"
+    out = []
+
+    def save(fig, name):
+        p = run_root / name
+        fig.savefig(p, dpi=int(fc["dpi"]), metadata={"Software": None})
+        plt.close(fig)
+        out.append(p.name)
+
+    # 1 hand mask
+    fig, axs = plt.subplots(1, 2, figsize=(13, 5.2), gridspec_kw={"width_ratios": [1.6, 1]})
+    hull = cv2.convexHull(kp0.astype(np.float32)).reshape(-1, 2)
+    for ax in axs:
+        ax.imshow(rgb0)
+        ov = np.zeros((*st["mask"].shape, 4))
+        ov[st["mask"] > 0] = (0.16, 0.47, 0.84, 0.28)
+        ax.imshow(ov)
+        ax.plot(*np.r_[hull, hull[:1]].T, color="white", lw=1.2, ls="--")
+        ax.scatter(kp0[:, 0], kp0[:, 1], s=14, color=ORANGE, edgecolor="white", lw=0.5, zorder=3)
+    axs[0].set_axis_off()
+    lim(axs[1])
+    axs[0].set_title(f"1. 손 영역 마스크 — {t0s}", loc="left", fontsize=11)
+    axs[1].set_title("확대", loc="left", fontsize=10)
+    fig.legend(handles=[Line2D([], [], marker="o", ls="", color=ORANGE, label="MediaPipe 관절 21개"), Line2D([], [], color="black", ls="--", label="관절을 감싸는 볼록 껍질"),
+                        Line2D([], [], marker="s", ls="", color=BLUE, alpha=0.4, ms=10, label=f"마스크 = 껍질을 손 상자 긴 변의 {100 * float(kc['dilate_frac']):g}%만큼 넓힘")],
+               loc="lower center", ncol=3, frameon=False, fontsize=9)
+    fig.tight_layout(rect=(0, 0.07, 1, 1))
+    save(fig, "step1_mask.png")
+
+    # 2 corner score and corners
+    fig, axs = plt.subplots(1, 2, figsize=(13, 6))
+    sc = st["score"] / st["score_max"]
+    axs[0].imshow(cv2.cvtColor(img0, cv2.COLOR_BGR2GRAY), cmap="gray")
+    ov = plt.get_cmap("magma")(np.clip(np.log10(np.maximum(sc, 1e-4)) / 4 + 1, 0, 1))
+    ov[..., 3] = np.where(st["mask"] > 0, 0.75, 0.0)
+    axs[0].imshow(ov)
+    lim(axs[0])
+    axs[0].set_title("모서리 점수 (7×7 밝기 변화의 작은 고유값, 밝을수록 높음, 로그 눈금)", loc="left", fontsize=10)
+    axs[1].imshow(rgb0)
+    axs[1].scatter(st["p0"][:, 0], st["p0"][:, 1], s=9, color=BLUE, edgecolor="white", lw=0.4)
+    lim(axs[1])
+    axs[1].set_title(f"고른 특징점 {len(st['p0'])}개 (최고 점수의 {100 * float(kc['quality']):g}% 이상, 서로 {kc['min_distance']} px 이상 떨어짐, 최대 {kc['max_corners']}개)",
+                     loc="left", fontsize=10)
+    fig.suptitle(f"2. 특징점 고르기 (Shi-Tomasi) — {t0s}", x=0.01, ha="left", fontsize=11)
+    fig.tight_layout()
+    save(fig, "step2_corners.png")
+
+    # 3 LK motion
+    g = float(fc["arrow_gain"])
+    fig, axs = plt.subplots(1, 2, figsize=(13, 6))
+    for ax, im, nm in ((axs[0], rgb0, f"프레임 {i0}"), (axs[1], rgb1, f"프레임 {i0 + 1}")):
+        ax.imshow(im)
+        lim(ax)
+        ax.set_title(nm, loc="left", fontsize=10)
+    axs[0].scatter(st["p0"][:, 0], st["p0"][:, 1], s=8, color=BLUE)
+    d = st["p1"] - st["p0"]
+    axs[1].quiver(st["p0"][:, 0], st["p0"][:, 1], d[:, 0] * g, d[:, 1] * g, angles="xy", scale_units="xy", scale=1, color=BLUE, width=0.0025)
+    mv = np.median(np.linalg.norm(d, axis=1))
+    fig.suptitle(f"3. 다음 프레임에서 위치 찾기 (피라미드 Lucas-Kanade, {kc['win']}×{kc['win']} 창, {kc['levels']}단계) — 화살표는 실제 이동의 {g:g}배 (이동 중앙값 {mv:.1f} px)",
+                 x=0.01, ha="left", fontsize=11)
+    fig.tight_layout()
+    save(fig, "step3_lk.png")
+
+    # 4 forward-backward check
+    fig, axs = plt.subplots(1, 2, figsize=(13, 6), gridspec_kw={"width_ratios": [1.5, 1]})
+    axs[0].imshow(rgb0)
+    ok = st["ok"]
+    axs[0].scatter(st["p0"][ok, 0], st["p0"][ok, 1], s=9, color=GREEN, marker="o", label=f"통과 {int(ok.sum())}개")
+    axs[0].scatter(st["p0"][~ok, 0], st["p0"][~ok, 1], s=40, color=RED, marker="x", lw=1.4, label=f"버림 {int((~ok).sum())}개")
+    lim(axs[0])
+    axs[0].legend(loc="lower left", fontsize=9)
+    fb = st["fb"][np.isfinite(st["fb"])]
+    axs[1].hist(np.clip(fb, 0, 3), bins=np.linspace(0, 3, 31), color=GREY)
+    axs[1].axvline(float(kc["fb_px"]), color=RED, lw=1.5)
+    axs[1].text(float(kc["fb_px"]) + 0.05, axs[1].get_ylim()[1] * 0.9, f"기준 {kc['fb_px']} px", color=RED, fontsize=9)
+    axs[1].set_xlabel("되돌아온 위치와 원래 위치의 거리 (px, 3 이상은 3에 모음)")
+    axs[1].set_ylabel("특징점 수")
+    for sp in ("top", "right"):
+        axs[1].spines[sp].set_visible(False)
+    fig.suptitle(f"4. 되돌려서 검사 (다음 프레임 → 이전 프레임으로 다시 추적, {kc['fb_px']} px 넘게 어긋나면 버림) — {t0s}", x=0.01, ha="left", fontsize=11)
+    fig.tight_layout()
+    save(fig, "step4_fb_check.png")
+
+    # 5 homography
+    p0k, p1k = st["p0"][ok], st["p1"][ok]
+    inl = st["inl"]
+    fig, axs = plt.subplots(1, 2, figsize=(13, 6), gridspec_kw={"width_ratios": [1.5, 1]})
+    axs[0].imshow(rgb1)
+    s_ = axs[0].scatter(p1k[inl, 0], p1k[inl, 1], c=st["res"][inl], cmap="viridis", vmin=0, vmax=float(kc["threshold_px"]), s=12, label=f"맞는 점 {int(inl.sum())}개")
+    axs[0].scatter(p1k[~inl, 0], p1k[~inl, 1], s=40, color=RED, marker="x", lw=1.4, label=f"벗어난 점 {int((~inl).sum())}개")
+    lim(axs[0])
+    axs[0].legend(loc="lower left", fontsize=9)
+    fig.colorbar(s_, ax=axs[0], fraction=0.035, label="변환과의 차이 (px)")
+    axs[1].hist(np.clip(st["res"], 0, 3), bins=np.linspace(0, 3, 31), color=GREY)
+    axs[1].axvline(float(kc["threshold_px"]), color=RED, lw=1.5)
+    axs[1].set_xlabel("변환으로 옮긴 위치와 추적한 위치의 차이 (px)")
+    axs[1].set_ylabel("특징점 수")
+    for sp in ("top", "right"):
+        axs[1].spines[sp].set_visible(False)
+    fig.suptitle(f"5. 평면 변환 하나 구하기 (호모그래피, MAGSAC, 기준 {kc['threshold_px']} px) — 차이 중앙값 {np.median(st['res'][inl]):.2f} px", x=0.01, ha="left", fontsize=11)
+    fig.tight_layout()
+    save(fig, "step5_homography.png")
+
+    # 6 chain
+    ks = sorted(chain_imgs)
+    fig, axs = plt.subplots(1, len(ks), figsize=(4.0 * len(ks), 4.6))
+    for ax, i in zip(np.atleast_1d(axs), ks):
+        im = chain_imgs[i][:, :, ::-1]
+        ax.imshow(im)
+        kt, kd = chain_kp[i], tr["kp"][i]
+        P_ = np.r_[kt[np.isfinite(kt).all(1)], kd[np.isfinite(kd).all(1)]]
+        ccx, ccy = (P_.min(0) + P_.max(0)) / 2
+        hh = (P_.max(0) - P_.min(0)).max() * float(fc["crop_margin"]) / 2
+        ax.set_xlim(ccx - hh, ccx + hh)
+        ax.set_ylim(ccy + hh, ccy - hh)
+        ax.set_axis_off()
+        if np.isfinite(kd).all():
+            ax.scatter(kd[:, 0], kd[:, 1], s=16, color=ORANGE, edgecolor="white", lw=0.4, zorder=3)
+        ax.scatter(kt[:, 0], kt[:, 1], s=16, color=BLUE, edgecolor="white", lw=0.4, zorder=4)
+        lab = "기준 프레임" if i == ref else f"기준에서 {abs(i - ref)}단계 {'뒤' if i > ref else '앞'}"
+        ax.set_title(f"{times[i]:.1f} s · {lab}", fontsize=10, loc="left")
+    fig.legend(handles=[Line2D([], [], marker="o", ls="", color=BLUE, label="추적점 = 기준 프레임의 관절을 이어 붙인 변환으로 옮김"),
+                        Line2D([], [], marker="o", ls="", color=ORANGE, label="그 프레임의 MediaPipe 관절")], loc="lower center", ncol=2, frameon=False, fontsize=9)
+    fig.suptitle(f"6. 이어 붙이기 — 기준 프레임({times[ref]:.1f} s)에서 앞뒤로 매 단계 변환을 곱해 각 프레임까지의 변환을 만들고 기준 관절을 옮김", x=0.01, ha="left", fontsize=11)
+    fig.tight_layout(rect=(0, 0.06, 1, 1))
+    save(fig, "step6_chain.png")
+    log("  그림: " + ", ".join(out))
+
+
+COMMANDS = {"protocol": protocol_main, "frame-filter": ff_main, "same-session": session_main, "overlay": overlay_main, "phase-segmentation": pseg_main, "guide-revision": grev_main, "f-response": fresp_main, "error-factors": ferr_main, "long-video-check": long_main, "generalization": gen_main, "main-camera-extension": ext_main, "wide-60cm": wide_main, "jointset-sets": jset_main, "verdict-calibration": cal_main, "printed-hand": pr_main, "hand-markers": mk_main, "markers-only": mo_main, "free-template": ft_main, "free-shape3d": s3_main, "free-shape3d-hand": h3_main, "free-shape3d-27": e3_main, "free-shape3d-new": e4_main, "mmpose-hand": mm_main, "mmpose-hand-46": mm2_main, "free-shape3d-new2": e5_main, "mmpose-hand-src": mm3_main, "free-shape3d-detectors": fs_main, "free-shape3d-hand-sets": h4_main, "free-shape3d-hand-sets-42track": h4b_main, "oblique-desk": od_main, "oblique-synthetic": sy_main, "oblique-fixed-template": fx_main, "oblique-desk-videos": om_main, "pause-stabilized": ps_main, "continuous-klt": kt_main, "continuous-klt-palm": kp_main, "klt-paper-dorsum": pp_main, "paper-parallax": hp_main, "segment-template": sg_main, "turn-synthetic": tr_main, "window-f": wd_main, "anycalib-videos": ac_main, "error-sources": ec_main, "hand-deformation": dm_main, "joint-combos": fc_main, "points-video": pv_main, "desk-motion": dk_main, "ramp-sensitivity": rs_main, "teammate-hands": tm_main, "finger-ramp": fr_main, "contact-points": ct_main, "wilor-ramp": wl_main, "ramp-identifiability": id_main, "new-phone-hands": nc_main, "multistart": ms_main, "multistart-rerun": ms2_main, "known-tilt": tl_main, "results-yaml-74b-75": ry_main, "free-from-fixed": ch_main, "klt-features": kf_main, "wrist-drift": dr_main, "free-from-multistart": cm_main, "restart-tracking": rt_main, "detected-joints": dt_main, "detected-ramp-sweep": ds_main, "teammate-points-video": pv2_main, "wrist-balanced": wb_main, "hand-shape": hs_main, "no-return": nr_main, "klt-steps-figure": kv_main}
 
 
 def main(argv=None):
