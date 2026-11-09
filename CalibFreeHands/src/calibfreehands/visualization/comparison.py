@@ -699,6 +699,7 @@ class ComparisonViewer(QWidget):
                 ordinal = sum(name == config["name"] for name in names[:index + 1]) + 1
                 self.configurations[index] = dict(config, name=f"{config['name']} ({ordinal})")
         self.mode = "overlay"
+        self._overlay_splitter_dragging = False
         self._syncing_camera = False
         self._arrow_mode = "frame"
         self._detached_windows = []
@@ -781,6 +782,7 @@ class ComparisonViewer(QWidget):
         overlay_splitter.setSizes([560, 1120])
         overlay_splitter.swapRequested.connect(
             lambda: self.reorder_overlay_panel(self.overlay_panel_order[1], self.overlay_panel_order[0]))
+        overlay_splitter.draggingChanged.connect(self._set_overlay_splitter_dragging)
         self.views.addWidget(overlay_splitter)
 
         self.split_columns = 1
@@ -2484,6 +2486,15 @@ class ComparisonViewer(QWidget):
 
     def _previous(self): self.slider.setValue(max(0, self.slider.value() - 1))
     def _next_frame(self): self.slider.setValue(min(self.slider.maximum(), self.slider.value() + 1))
+
+    def _set_overlay_splitter_dragging(self, dragging):
+        self._overlay_splitter_dragging = bool(dragging)
+        self._update_overlay_resize_coalescing()
+
+    def _update_overlay_resize_coalescing(self):
+        self.overlay_splitter.set_drag_updates_coalesced(
+            self._overlay_splitter_dragging and self.timer.isActive())
+
     def _advance(self):
         frame_count = max(1, self.slider.maximum() + 1)
         target = self.playback_clock.frame_at()
@@ -2505,6 +2516,7 @@ class ComparisonViewer(QWidget):
             self.auto_hide_timer.stop(); self.chrome.show()
         else:
             self.playback_clock.play(self.slider.value()); self.timer.start(); self._show_controls()
+        self._update_overlay_resize_coalescing()
         self._sync_play_icon()
 
     def _export_csv(self): self._export("csv")

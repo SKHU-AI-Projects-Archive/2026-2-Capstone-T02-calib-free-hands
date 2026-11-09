@@ -1004,7 +1004,8 @@ def test_gt_switching_recolors_results_and_keeps_candidate_base_colors(tmp_path,
     assert viewer.configuration_colors[0] == pytest.approx(green)
     assert viewer.reference_label.text() == "GT"
     assert viewer.overlay_panel.reference_badges["cfg-0"].text() == "GT"
-    assert viewer.overlay_panel.body_layout.itemAt(0).layout().itemAt(2).widget().text() == viewer.configurations[0]["name"]
+    assert (viewer.overlay_panel.group_widgets["cfg-0"].layout().itemAt(0).layout()
+            .itemAt(2).widget().text() == viewer.configurations[0]["name"])
     initial_mpjpe = viewer._metric_cache["cfg-2"][(0, "left")].metrics["mpjpe"]
     viewer.set_annotation_mode("all")
     viewer._set_annotation_content("error")
@@ -1018,7 +1019,9 @@ def test_gt_switching_recolors_results_and_keeps_candidate_base_colors(tmp_path,
         assert viewer.configuration_colors[previous_index] == pytest.approx(
             custom_a if previous_index == 0 else original[previous_index]
         )
-        assert viewer.overlay_panel.body_layout.itemAt(0).layout().itemAt(2).widget().text() == viewer.configurations[selected_index]["name"]
+        selected_id = viewer.configurations[selected_index]["id"]
+        assert (viewer.overlay_panel.group_widgets[selected_id].layout().itemAt(0).layout()
+                .itemAt(2).widget().text() == viewer.configurations[selected_index]["name"])
         assert list(viewer.overlay_panel.reference_badges) == [f"cfg-{selected_index}"]
         assert viewer.color_buttons[selected_index].toolTip() == "GT color is fixed to #33FF33"
         assert not viewer.color_buttons[selected_index].isEnabled()
@@ -2082,6 +2085,66 @@ def test_overlay_divider_right_click_swap_preserves_slot_sizes_and_viewer_state(
     viewer.close()
 
 
+def test_overlay_splitter_drag_coalesces_resize_to_playback_cadence(tmp_path, qapp, monkeypatch):
+    from PySide6.QtCore import QPoint, Qt
+    from PySide6.QtTest import QTest
+    import calibfreehands.visualization.comparison_presentation as presentation
+    from calibfreehands.visualization.comparison import ComparisonViewer
+
+    viewer = ComparisonViewer(_session(tmp_path, 3))
+    viewer.resize(1500, 900)
+    viewer.show()
+    qapp.processEvents()
+    splitter = viewer.overlay_splitter
+    handle = splitter.handle(1)
+    center = handle.rect().center()
+    start_global = handle.mapToGlobal(center)
+    fake_time = [0.0]
+    monkeypatch.setattr(presentation, "monotonic", lambda: fake_time[0])
+    initial_camera = dict(viewer.overlay_view.cameraParams())
+    initial_reference = viewer.reference_id
+    initial_results = tuple(map(id, viewer.loaded_results))
+    viewer.timer.start()
+
+    QTest.mousePress(handle, Qt.MouseButton.LeftButton, pos=center)
+    QTest.mouseMove(handle, handle.mapFromGlobal(start_global + QPoint(20, 0)))
+    first_resize = splitter.sizes()
+    viewer._set_frame(1)
+    assert viewer.requested_frame == viewer.presented_frame == 1
+    assert viewer.source_overlay.frame == viewer.overlay_view.frame == 1
+    assert viewer.reference_id == initial_reference
+    assert tuple(map(id, viewer.loaded_results)) == initial_results
+    assert viewer.overlay_view.cameraParams() == initial_camera
+    fake_time[0] = 0.01
+    QTest.mouseMove(handle, handle.mapFromGlobal(start_global + QPoint(40, 0)))
+    assert splitter.sizes() == first_resize
+    fake_time[0] = 0.04
+    QTest.mouseMove(handle, handle.mapFromGlobal(start_global + QPoint(60, 0)))
+    last_coalesced_resize = splitter.sizes()
+    assert splitter.sizes() != first_resize
+    fake_time[0] = 0.08
+    QTest.mouseRelease(handle, Qt.MouseButton.LeftButton,
+                       pos=handle.mapFromGlobal(start_global + QPoint(80, 0)))
+    assert splitter.sizes()[0] == pytest.approx(first_resize[0] + 60, abs=4)
+    assert splitter.sizes()[0] > last_coalesced_resize[0]
+    assert viewer.timer.isActive()
+    assert not splitter.drag_updates_coalesced
+
+    viewer.timer.stop()
+    before_paused_move = splitter.sizes()
+    paused_center = handle.rect().center()
+    paused_start_global = handle.mapToGlobal(paused_center)
+    QTest.mousePress(handle, Qt.MouseButton.LeftButton, pos=paused_center)
+    QTest.mouseMove(handle, handle.mapFromGlobal(paused_start_global + QPoint(-20, 0)))
+    first_paused_move = splitter.sizes()
+    QTest.mouseMove(handle, handle.mapFromGlobal(paused_start_global + QPoint(-50, 0)))
+    assert first_paused_move != before_paused_move
+    assert splitter.sizes() != first_paused_move
+    QTest.mouseRelease(handle, Qt.MouseButton.LeftButton,
+                       pos=handle.mapFromGlobal(paused_start_global + QPoint(-50, 0)))
+    viewer.close()
+
+
 def test_overlay_splitter_grip_pixels_at_light_dark_and_high_dpi(tmp_path, qapp):
     from PySide6.QtCore import QRectF
     from PySide6.QtGui import QColor, QImage, QPainter, QPalette
@@ -2221,8 +2284,10 @@ def test_overlay_hud_mouse_drag_inserts_using_hud_row_geometry(tmp_path, qapp):
     source_id = "cfg-3"
     handle = next(item for item in hud.findChildren(_ResultDragHandle)
                   if item.configuration_id == source_id)
-    header_y = hud.group_headers["cfg-1"].geometry().center().y()
-    end = hud.body.mapToGlobal(QPoint(30, header_y))
+    previous_center = hud.group_widgets["cfg-0"].geometry().center().y()
+    target_center = hud.group_widgets["cfg-1"].geometry().center().y()
+    insertion_y = round((previous_center + target_center) / 2)
+    end = hud.body.mapToGlobal(QPoint(30, insertion_y))
     start = handle.mapToGlobal(handle.rect().center())
     QTest = __import__("PySide6.QtTest", fromlist=["QTest"]).QTest
     QTest.mousePress(handle, Qt.MouseButton.LeftButton, pos=handle.rect().center())
@@ -2234,6 +2299,171 @@ def test_overlay_hud_mouse_drag_inserts_using_hud_row_geometry(tmp_path, qapp):
     assert viewer.result_order_ids == ["cfg-0", "cfg-3", "cfg-1", "cfg-2"]
     assert not hud.insertion_marker.isVisible()
     assert not viewer._panel_reorder_active
+    viewer.close()
+
+
+@pytest.mark.parametrize(("source_id", "insertion", "expected_order"), [
+    ("cfg-3", 0, ["cfg-3", "cfg-0", "cfg-1", "cfg-2"]),
+    ("cfg-3", 1, ["cfg-0", "cfg-3", "cfg-1", "cfg-2"]),
+    ("cfg-0", 3, ["cfg-1", "cfg-2", "cfg-0", "cfg-3"]),
+    ("cfg-0", 4, ["cfg-1", "cfg-2", "cfg-3", "cfg-0"]),
+    ("cfg-1", 2, ["cfg-0", "cfg-1", "cfg-2", "cfg-3"]),
+])
+def test_overlay_hud_marker_tracks_variable_group_bounds_and_drop_slot(
+        tmp_path, qapp, source_id, insertion, expected_order):
+    from PySide6.QtCore import QPoint
+    from calibfreehands.visualization.comparison import ComparisonViewer
+    from calibfreehands.visualization.comparison_presentation import _ResultDragHandle
+
+    viewer = ComparisonViewer(_session(tmp_path, 4))
+    viewer.resize(1500, 900)
+    viewer.show()
+    viewer.confidence_numeric_checkbox.setChecked(True)
+    viewer.confidence_bar_checkbox.setChecked(True)
+    qapp.processEvents()
+    panel = viewer.overlay_panel
+    group_ids = viewer.result_order_ids
+    assert len({panel.group_widgets[cid].height() for cid in group_ids}) > 1
+    handle = next(item for item in panel.findChildren(_ResultDragHandle)
+                  if item.configuration_id == source_id)
+    centers = [panel.group_widgets[cid].geometry().center().y() for cid in group_ids]
+    if insertion == 0:
+        body_y = panel.group_widgets[group_ids[0]].geometry().top()
+    elif insertion == len(group_ids):
+        body_y = panel.body.height() - 1
+    else:
+        body_y = round((centers[insertion - 1] + centers[insertion]) / 2)
+    start = handle.mapToGlobal(handle.rect().center())
+    target = panel.body.mapToGlobal(QPoint(24, body_y))
+    handle._press = start
+    handle._move_drag(target)
+    assert handle._drop_target[1] == insertion
+
+    marker = panel.insertion_marker
+    assert marker.isVisible()
+    marker_in_card = marker.geometry().translated(panel.body.mapTo(panel.card, QPoint(0, 0)))
+    assert panel.card.rect().contains(marker_in_card)
+    assert marker_in_card.left() >= 8
+    assert marker_in_card.right() <= panel.card.width() - 8
+    marker_rect = marker.geometry()
+    if 0 < insertion < len(group_ids):
+        previous = panel.group_widgets[group_ids[insertion - 1]].geometry()
+        following = panel.group_widgets[group_ids[insertion]].geometry()
+        assert previous.bottom() < marker_rect.center().y() < following.top()
+    elif insertion == 0:
+        assert marker_rect.bottom() <= panel.group_widgets[group_ids[0]].geometry().top() + 2
+    else:
+        assert marker_rect.top() >= panel.group_widgets[group_ids[-1]].geometry().bottom() - 2
+
+    handle._finish_drag(target)
+    assert viewer.result_order_ids == expected_order
+    assert not marker.isVisible()
+    viewer.close()
+
+
+@pytest.mark.parametrize(("anchor", "scale"), [
+    ("top-right", "small"), ("bottom-left", "large"),
+])
+def test_overlay_hud_marker_remains_inside_content_after_resize_and_reanchor(
+        tmp_path, qapp, anchor, scale):
+    from PySide6.QtCore import QPoint
+    from calibfreehands.visualization.comparison import ComparisonViewer
+    from calibfreehands.visualization.comparison_presentation import _ResultDragHandle
+
+    viewer = ComparisonViewer(_session(tmp_path, 4))
+    viewer.resize(1500, 900)
+    viewer.show()
+    qapp.processEvents()
+    panel = viewer.overlay_panel
+    panel.set_presentation(anchor=anchor, scale=scale)
+    qapp.processEvents()
+    source_id = "cfg-3"
+    handle = next(item for item in panel.findChildren(_ResultDragHandle)
+                  if item.configuration_id == source_id)
+    destination = panel.body.mapToGlobal(QPoint(25, panel.body.height() - 1))
+    handle._press = handle.mapToGlobal(handle.rect().center())
+    handle._move_drag(destination)
+    viewer.resize(1600, 960)
+    qapp.processEvents()
+    destination = panel.body.mapToGlobal(QPoint(25, panel.body.height() - 1))
+    handle._move_drag(destination)
+    marker = panel.insertion_marker
+    marker_rect = marker.geometry().translated(panel.body.mapTo(panel.card, QPoint(0, 0)))
+    assert panel.card.rect().contains(marker_rect)
+    assert marker_rect.left() >= 8
+    assert marker_rect.right() <= panel.card.width() - 8
+    handle._panel_drag_cancelled()
+    assert not marker.isVisible()
+    viewer.close()
+
+
+def test_overlay_hud_hidden_groups_and_outside_drop_cancel_marker(tmp_path, qapp):
+    from PySide6.QtCore import QPoint
+    from calibfreehands.visualization.comparison import ComparisonViewer
+    from calibfreehands.visualization.comparison_presentation import _ResultDragHandle
+
+    viewer = ComparisonViewer(_session(tmp_path, 4))
+    viewer.resize(1500, 900)
+    viewer.show()
+    qapp.processEvents()
+    viewer.visibility_checks[1].setChecked(False)
+    qapp.processEvents()
+    panel = viewer.overlay_panel
+    assert "cfg-1" not in panel.group_widgets
+    handle = next(item for item in panel.findChildren(_ResultDragHandle)
+                  if item.configuration_id == "cfg-3")
+    visible_ids = [cid for cid in viewer.result_order_ids if cid in panel.group_widgets]
+    centers = [panel.group_widgets[cid].geometry().center().y() for cid in visible_ids]
+    target = panel.body.mapToGlobal(QPoint(20, round((centers[0] + centers[1]) / 2)))
+    original_order = viewer.result_order_ids.copy()
+    handle._press = handle.mapToGlobal(handle.rect().center())
+    handle._move_drag(target)
+    assert handle._drop_target == (visible_ids, 1)
+    assert panel.insertion_marker.isVisible()
+
+    outside = viewer.overlay_view.mapToGlobal(QPoint(viewer.overlay_view.width() - 3,
+                                                     viewer.overlay_view.height() - 3))
+    handle._move_drag(outside)
+    assert handle._drop_target is None
+    assert not panel.insertion_marker.isVisible()
+    handle._finish_drag(outside)
+    assert viewer.result_order_ids == original_order
+    assert not viewer._panel_reorder_active
+    viewer.close()
+
+
+def test_overlay_hud_marker_rebuilds_after_reference_change(tmp_path, qapp):
+    from PySide6.QtCore import QPoint
+    from calibfreehands.visualization.comparison import ComparisonViewer
+    from calibfreehands.visualization.comparison_presentation import _ResultDragHandle
+
+    viewer = ComparisonViewer(_session(tmp_path, 4, gt_index=0))
+    viewer.resize(1500, 900)
+    viewer.show()
+    qapp.processEvents()
+    panel = viewer.overlay_panel
+    handle = next(item for item in panel.findChildren(_ResultDragHandle)
+                  if item.configuration_id == "cfg-3")
+    first_ids = viewer.result_order_ids.copy()
+    initial_y = round((panel.group_widgets[first_ids[0]].geometry().center().y()
+                       + panel.group_widgets[first_ids[1]].geometry().center().y()) / 2)
+    handle._press = handle.mapToGlobal(handle.rect().center())
+    handle._move_drag(panel.body.mapToGlobal(QPoint(20, initial_y)))
+    assert panel.insertion_marker.isVisible()
+
+    viewer.reference_selector.setCurrentIndex(viewer.reference_selector.findData("cfg-2"))
+    _wait_for_metric_job(viewer, qapp)
+    assert not panel.insertion_marker.isVisible()
+    assert set(panel.group_widgets) == set(viewer.result_order_ids)
+
+    reordered_ids = viewer.result_order_ids
+    body_y = round((panel.group_widgets[reordered_ids[0]].geometry().center().y()
+                    + panel.group_widgets[reordered_ids[1]].geometry().center().y()) / 2)
+    handle._move_drag(panel.body.mapToGlobal(QPoint(20, body_y)))
+    assert panel.insertion_marker.isVisible()
+    assert handle._drop_target[0] == reordered_ids
+    handle._panel_drag_cancelled()
+    assert not panel.insertion_marker.isVisible()
     viewer.close()
 
 
@@ -2272,9 +2502,11 @@ def test_escape_cancels_active_panel_reorder_without_sticking_controls(tmp_path,
                        Qt.MouseButton.NoButton, Qt.MouseButton.LeftButton, Qt.KeyboardModifier.NoModifier)
     QApplication.sendEvent(handle, move)
     assert viewer._panel_reorder_active
+    assert viewer.overlay_panel.insertion_marker.isVisible()
     QApplication.sendEvent(viewer, QKeyEvent(QEvent.Type.KeyPress, Qt.Key.Key_Escape,
                                                Qt.KeyboardModifier.NoModifier))
     assert not viewer._panel_reorder_active
+    assert not viewer.overlay_panel.insertion_marker.isVisible()
     assert viewer.result_order_ids == order
     QTest.mouseRelease(handle, Qt.MouseButton.LeftButton, pos=handle.mapFromGlobal(end))
     viewer.close()

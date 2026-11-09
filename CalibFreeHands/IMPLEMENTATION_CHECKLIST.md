@@ -269,4 +269,11 @@ Phase C Final native Windows testing and acceptance were reported by the user as
 - [x] Derive the axis intersection from the same `WorkspaceGeometry` used by `_configure_workspace`, including Physical fallback geometry; preserve raw result and fixed Physical workspace values.
 - [x] Apply the policy on GT changes and first entry to Hand, while preserving each Space's independent orientation and restoring manual poses on later Space switches without a GT change.
 - [x] Keep explicit Focus GT, Space Overview, and Fit All behaviors distinct; no playback, decoding, splitter, or inference behavior changed.
-- [ ] Native OpenGL and saved-result checks are recorded in `VALIDATION_CHECKLIST.md`; user visual confirmation remains pending. Playback resize stutter remains the next separate D.1 task.
+- [ ] Native OpenGL and saved-result checks are recorded in `VALIDATION_CHECKLIST.md`; user visual confirmation remains pending.
+
+### Phase D.1 Playback Resize and HUD Insertion Marker Fix (2026-11-09)
+
+- [x] Coalesce live Overlay splitter drag updates to 30 Hz only during playback, and apply the final pointer location on release; paused resize remains live at full event frequency.
+- [x] Use actual body-local result-group bounds for HUD insertion slots and marker placement, with body clipping and content inset.
+- [x] Add regressions for playback resize cadence/release position and HUD insertion across variable-height groups, HUD sizes, hidden results, reorder directions, and refresh/cancel behavior.
+- [ ] Cold-cache source-frame presentation in Comparison Viewer remains unresolved; native user review is required. See `VALIDATION_CHECKLIST.md`.

@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import numpy as np
+from time import monotonic
 from PySide6.QtCore import QEvent, Qt, QPropertyAnimation, QEasingCurve, QPoint, QTimer, QRectF, Signal
 from PySide6.QtGui import QColor, QFont, QFontMetrics, QPainter, QPalette, QPen, QVector4D
 from PySide6.QtWidgets import (QApplication, QCheckBox, QFrame, QGraphicsOpacityEffect, QHBoxLayout,
@@ -32,6 +33,10 @@ class _SwapSplitterHandle(QSplitterHandle):
         self.swap_menu = QMenu(self)
         self.swap_action = self.swap_menu.addAction("Swap")
         self.swap_action.triggered.connect(splitter.request_swap)
+        self._press_position = None
+        self._dragging = False
+        self._last_forwarded_move = None
+        self._last_forwarded_position = None
 
     def paintEvent(self, event):
         painter = QPainter(self)
@@ -58,15 +63,59 @@ class _SwapSplitterHandle(QSplitterHandle):
             self.swap_menu.popup(event.globalPosition().toPoint())
             event.accept()
             return
+        if event.button() == Qt.MouseButton.LeftButton:
+            self._press_position = event.globalPosition().toPoint()
+            self._dragging = False
+            self._last_forwarded_move = None
+            self._last_forwarded_position = None
         super().mousePressEvent(event)
+
+    def mouseMoveEvent(self, event):
+        if (self._press_position is not None and event.buttons() & Qt.MouseButton.LeftButton):
+            if not self._dragging and (event.globalPosition().toPoint() - self._press_position).manhattanLength() >= QApplication.startDragDistance():
+                self._dragging = True
+                self.splitter().draggingChanged.emit(True)
+            if self._dragging and self.splitter().drag_updates_coalesced:
+                now = monotonic()
+                if (self._last_forwarded_move is not None
+                        and now - self._last_forwarded_move < self.splitter().minimum_drag_interval):
+                    event.accept()
+                    return
+                self._last_forwarded_move = now
+            self._last_forwarded_position = event.globalPosition().toPoint()
+        super().mouseMoveEvent(event)
+
+    def mouseReleaseEvent(self, event):
+        if event.button() == Qt.MouseButton.LeftButton:
+            splitter = self.splitter()
+            release_position = event.globalPosition().toPoint()
+            if self._dragging and self._last_forwarded_position != release_position:
+                position = splitter.mapFromGlobal(release_position)
+                self.moveSplitter(position.x() if self.orientation() == Qt.Orientation.Horizontal
+                                  else position.y())
+            super().mouseReleaseEvent(event)
+            if self._dragging:
+                splitter.draggingChanged.emit(False)
+            self._press_position = None
+            self._dragging = False
+            self._last_forwarded_move = None
+            self._last_forwarded_position = None
+            return
+        super().mouseReleaseEvent(event)
 
 
 class _SwapSplitter(QSplitter):
     swapRequested = Signal()
+    draggingChanged = Signal(bool)
+    minimum_drag_interval = 1.0 / 30.0
 
     def __init__(self, orientation, parent=None):
         super().__init__(orientation, parent)
         self.setHandleWidth(8)
+        self.drag_updates_coalesced = False
+
+    def set_drag_updates_coalesced(self, enabled):
+        self.drag_updates_coalesced = bool(enabled)
 
     def createHandle(self):
         return _SwapSplitterHandle(self.orientation(), self)
@@ -211,7 +260,7 @@ class _ViewportPanel(QWidget):
         self.reference_badges = {}
         self.confidence_rows = {}
         self.confidence_bars = {}
-        self.group_headers = {}
+        self.group_widgets = {}
 
     def eventFilter(self, watched, event):
         if watched is self.view and event.type() == QEvent.Type.Resize:
@@ -376,19 +425,25 @@ class _ViewportPanel(QWidget):
         self._position()
 
     def set_insertion_marker(self, visible_ids, insertion):
-        visible_ids = [config_id for config_id in visible_ids if config_id in self.group_headers]
+        self.body_layout.activate()
+        visible_ids = [config_id for config_id in visible_ids
+                       if config_id in self.group_widgets and not self.group_widgets[config_id].isHidden()]
         if not visible_ids:
             self.clear_insertion_marker()
             return
-        starts = [self.group_headers[config_id].geometry().top() for config_id in visible_ids]
+        bounds = [self.group_widgets[config_id].geometry() for config_id in visible_ids]
         insertion = max(0, min(int(insertion), len(visible_ids)))
+        marker_height = 3
         if insertion == 0:
-            y = starts[0]
+            y = bounds[0].top()
         elif insertion == len(visible_ids):
-            y = max(0, self.body.height() - 3)
+            y = bounds[-1].bottom() + 1
         else:
-            y = round((starts[insertion - 1] + starts[insertion]) / 2)
-        self.insertion_marker.setGeometry(2, y, max(0, self.body.width() - 4), 3)
+            gap_start = bounds[insertion - 1].bottom() + 1
+            gap_end = bounds[insertion].top()
+            y = round((gap_start + gap_end - marker_height) / 2)
+        y = max(0, min(y, max(0, self.body.height() - marker_height)))
+        self.insertion_marker.setGeometry(2, y, max(0, self.body.width() - 4), marker_height)
         self.insertion_marker.show()
         self.insertion_marker.raise_()
 
@@ -404,7 +459,7 @@ class _ViewportPanel(QWidget):
         self.reference_badges.clear()
         self.confidence_rows.clear()
         self.confidence_bars.clear()
-        self.group_headers.clear()
+        self.group_widgets.clear()
         ordered_indices = [viewer._configuration_index(config_id)
                            for config_id in viewer.result_order_ids
                            if config_id in {viewer.configurations[index]["id"]
@@ -460,8 +515,12 @@ class _ViewportPanel(QWidget):
                 item.layout().deleteLater()
 
     def _add_result_group(self, viewer, index, config):
+        group = QWidget(self.body)
+        group.setStyleSheet("background: transparent;")
+        group_layout = QVBoxLayout(group)
+        group_layout.setContentsMargins(0, 0, 0, 0)
+        group_layout.setSpacing(2)
         header = QHBoxLayout()
-        self.group_headers[config["id"]] = header
         title = QLabel(config["name"])
         title.setStyleSheet("font-weight: 600; color: white;")
         title.setWordWrap(True)
@@ -481,7 +540,7 @@ class _ViewportPanel(QWidget):
             badge.setStyleSheet("font-weight: 700; color: #111111; background-color: #33FF33; border: 1px solid #249924; padding: 1px 4px;")
             header.addWidget(badge)
             self.reference_badges[config["id"]] = badge
-        self.body_layout.addLayout(header)
+        group_layout.addLayout(header)
         if not viewer.single_mode and config["id"] != viewer.reference_id:
             for definition in viewer.metric_definitions:
                 if definition.metric_id not in viewer.selected_metric_ids:
@@ -494,7 +553,7 @@ class _ViewportPanel(QWidget):
                     details.clicked.connect(lambda _=False, cid=config["id"]: viewer._show_joint_table(cid))
                     row.addWidget(label, 1)
                     row.addWidget(details)
-                    self.body_layout.addLayout(row)
+                    group_layout.addLayout(row)
                     self.metric_rows[(config["id"], definition.metric_id, "left")] = label
                     self.details_buttons[(config["id"], definition.metric_id, "left")] = details
                     continue
@@ -508,7 +567,7 @@ class _ViewportPanel(QWidget):
                 display_name = "Wrist Error" if definition.metric_id == "wrist_error" else definition.name
                 label = QLabel(f"{display_name} | L {values[0]} / R {values[1]} {definition.unit}")
                 label.setStyleSheet("color: white;")
-                self.body_layout.addWidget(label)
+                group_layout.addWidget(label)
                 for hand in ("left", "right"):
                     self.metric_rows[(config["id"], definition.metric_id, hand)] = label
         if viewer.confidence_numeric_checkbox.isChecked() or viewer.confidence_bar_checkbox.isChecked():
@@ -540,8 +599,10 @@ class _ViewportPanel(QWidget):
                     row_layout.addWidget(bar)
                     self.confidence_bars[(config["id"], hand)] = bar
                 row_layout.addStretch(1)
-                self.body_layout.addWidget(row)
+                group_layout.addWidget(row)
                 self.confidence_rows[(config["id"], hand)] = value_label
+        self.group_widgets[config["id"]] = group
+        self.body_layout.addWidget(group)
 
 
 class _ResultDragHandle(QToolButton):
@@ -594,15 +655,14 @@ class _ResultDragHandle(QToolButton):
             self._drop_target = None
             panel.clear_insertion_marker()
             return
+        panel.body_layout.activate()
         visible_ids = [config_id for config_id in self.viewer.result_order_ids
-                       if config_id in panel.group_headers and panel.group_headers[config_id].geometry().isValid()]
+                       if config_id in panel.group_widgets
+                       and not panel.group_widgets[config_id].isHidden()
+                       and panel.group_widgets[config_id].geometry().isValid()]
         insertion = len(visible_ids)
-        starts = [panel.group_headers[config_id].geometry().top() for config_id in visible_ids]
-        for position in range(len(visible_ids) - 1):
-            boundary = (starts[position] + starts[position + 1]) / 2
-            if body_y < boundary:
-                insertion = position
-                break
+        centers = [panel.group_widgets[config_id].geometry().center().y() for config_id in visible_ids]
+        insertion = next((position for position, center_y in enumerate(centers) if body_y < center_y), insertion)
         self._drop_target = (visible_ids, insertion) if visible_ids else None
         panel.set_insertion_marker(visible_ids, insertion)
 
