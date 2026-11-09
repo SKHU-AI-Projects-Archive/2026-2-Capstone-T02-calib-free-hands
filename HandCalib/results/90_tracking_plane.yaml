@@ -1,0 +1,53 @@
+experiment: 90_tracking_plane
+run: runs/90_tracking_plane/20261109T035132Z
+code_commit: 864323a
+git_dirty_at_run: false
+videos:
+  IMG_7354 - 복사본.MOV:
+    ref_t: 9.367
+    n_rows: 563
+    d_dorsum: 8.111
+    fit_dorsum: 0.538
+    drift_dorsum: 2.913
+    d_finger: 2.519
+    fit_finger: 0.877
+    drift_finger: 2.181
+    d_j16: 2.321
+    fit_j16: 1.044
+    drift_j16: 2.28
+  IMG_7355 - 복사본.MOV:
+    ref_t: 8.267
+    n_rows: 497
+    d_dorsum: 4.73
+    fit_dorsum: 0.317
+    drift_dorsum: 2.172
+    d_finger: 1.44
+    fit_finger: 0.884
+    drift_finger: 1.268
+    d_j16: 1.41
+    fit_j16: 0.897
+    drift_j16: 1.383
+  IMG_7351 - 복사본.MOV:
+    ref_t: 6.4
+    n_rows: 385
+    d_dorsum: 11.097
+    fit_dorsum: 0.487
+    drift_dorsum: 5.116
+    d_finger: 4.291
+    fit_finger: 1.354
+    drift_finger: 1.979
+    d_j16: 3.91
+    fit_j16: 1.762
+    drift_j16: 2.087
+  IMG_7352 - 복사본.MOV:
+    ref_t: 6.1
+    n_rows: 367
+    d_dorsum: 6.051
+    fit_dorsum: 0.457
+    drift_dorsum: 5.736
+    d_finger: 4.035
+    fit_finger: 0.703
+    drift_finger: 2.271
+    d_j16: 3.998
+    fit_j16: 0.873
+    drift_j16: 2.542
