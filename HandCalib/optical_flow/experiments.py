@@ -533,6 +533,22 @@ def tw_results_yaml(run_dir: Path, own: dict) -> Path:
     return p
 
 
+def jt_results_yaml(run_dir: Path, own: dict) -> Path:
+    """93 의 값만: 영상별 기준 시각, 검출 관절과의 거리(기존 사슬 / 관절별), 옮긴 방식 비율. 프레임별 점은 넣지 않음."""
+    r = json.loads((run_dir / "results.json").read_text())["real"]
+    m = json.loads((run_dir / "metadata.json").read_text())
+    rv = lambda x: x if not isinstance(x, float) else (round(x, 3) if np.isfinite(x) else None)      # noqa: E731
+    deep = lambda d: {k: (deep(v) if isinstance(v, dict) else rv(v)) for k, v in d.items()}      # noqa: E731
+    out = {"experiment": own["experiment"]["name"], "run": str(run_dir.resolve().relative_to(hf.PROJECT_ROOT)), "code_commit": m["git"]["commit"][:7],
+           "git_dirty_at_run": m["git"]["git_dirty"], "videos": {}}
+    for f in own["videos"]:
+        x = r.get(f) or {}
+        out["videos"][f] = {k: (deep(x[k]) if isinstance(x[k], dict) else rv(x[k])) for k in ("ref", "ref_t", "n_frames", "video", "how_share", "how_share_by_group", "drift") if k in x}
+    p = hf.resolve(own["output"]["results_yaml"])
+    p.write_text(yaml.safe_dump(hf.jsonable(out), allow_unicode=True, sort_keys=False))
+    return p
+
+
 def main(argv=None):
     ap = argparse.ArgumentParser(description="광류 방식 원인 확인 실험")
     ap.add_argument("cmd", choices=["tracking-plane", "dorsum-corners", "two-plane", "joint-track-video"])
@@ -546,7 +562,8 @@ def main(argv=None):
     text = Path(a.config).read_text()
     own = yaml.safe_load(text)
     if a.sub == "results-yaml":
-        print((tw_results_yaml(hf.resolve(a.run), own)) if a.cmd == "two-plane" else results_yaml(a.cmd, hf.resolve(a.run), own))
+        print(tw_results_yaml(hf.resolve(a.run), own) if a.cmd == "two-plane" else jt_results_yaml(hf.resolve(a.run), own) if a.cmd == "joint-track-video"
+              else results_yaml(a.cmd, hf.resolve(a.run), own))
         return None
     cfg = rof.load_settings(own)
     cfg.update({k: own[k] for k in ("variants", "clahe", "two_plane", "joint_track", "render", "reference") if k in own})

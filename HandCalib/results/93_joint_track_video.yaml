@@ -1,0 +1,143 @@
+experiment: 93_joint_track_video
+run: runs/93_joint_track_video/20261109T050525Z
+code_commit: bd0f3c7
+git_dirty_at_run: false
+videos:
+  IMG_7354 - 복사본.MOV:
+    ref: 34
+    ref_t: 1.133
+    n_frames: 564
+    video: IMG_7354-복사본_joint_track.mp4
+    how_share:
+      local: 0.719
+      wide: 0.26
+      global: 0.021
+      broken: 0.0
+    how_share_by_group:
+      wrist:
+        local: 0.933
+        wide: 0.067
+        global: 0.0
+      thumb:
+        local: 0.391
+        wide: 0.52
+        global: 0.09
+      mcp:
+        local: 0.486
+        wide: 0.494
+        global: 0.02
+      pip:
+        local: 0.912
+        wide: 0.088
+        global: 0.0
+      dip_tip:
+        local: 0.876
+        wide: 0.124
+        global: 0.0
+    drift:
+      chain:
+        wrist: 7.794
+        thumb: 4.94
+        mcp: 2.038
+        pip: 1.608
+        dip_tip: 2.864
+        j16: 2.144
+      joint:
+        wrist: 8.571
+        thumb: 3.181
+        mcp: 2.895
+        pip: 1.482
+        dip_tip: 2.298
+        j16: 2.117
+  IMG_7351 - 복사본.MOV:
+    ref: 31
+    ref_t: 1.033
+    n_frames: 386
+    video: IMG_7351-복사본_joint_track.mp4
+    how_share:
+      local: 0.645
+      wide: 0.267
+      global: 0.088
+      broken: 0.0
+    how_share_by_group:
+      wrist:
+        local: 0.003
+        wide: 0.041
+        global: 0.956
+      thumb:
+        local: 0.459
+        wide: 0.376
+        global: 0.165
+      mcp:
+        local: 0.575
+        wide: 0.367
+        global: 0.058
+      pip:
+        local: 0.811
+        wide: 0.189
+        global: 0.0
+      dip_tip:
+        local: 0.769
+        wide: 0.231
+        global: 0.0
+    drift:
+      chain:
+        wrist: 7.926
+        thumb: 3.327
+        mcp: 2.519
+        pip: 1.265
+        dip_tip: 2.762
+        j16: 2.575
+      joint:
+        wrist: 8.333
+        thumb: 2.712
+        mcp: 2.934
+        pip: 1.197
+        dip_tip: 2.663
+        j16: 1.938
+  IMG_7352 - 복사본.MOV:
+    ref: 30
+    ref_t: 1.0
+    n_frames: 368
+    video: IMG_7352-복사본_joint_track.mp4
+    how_share:
+      local: 0.696
+      wide: 0.236
+      global: 0.068
+      broken: 0.0
+    how_share_by_group:
+      wrist:
+        local: 0.003
+        wide: 0.323
+        global: 0.674
+      thumb:
+        local: 0.454
+        wide: 0.366
+        global: 0.179
+      mcp:
+        local: 0.645
+        wide: 0.348
+        global: 0.007
+      pip:
+        local: 0.869
+        wide: 0.131
+        global: 0.0
+      dip_tip:
+        local: 0.844
+        wide: 0.156
+        global: 0.0
+    drift:
+      chain:
+        wrist: 6.627
+        thumb: 3.27
+        mcp: 2.74
+        pip: 1.64
+        dip_tip: 2.816
+        j16: 2.539
+      joint:
+        wrist: 6.539
+        thumb: 3.338
+        mcp: 4.821
+        pip: 1.936
+        dip_tip: 1.524
+        j16: 2.585
