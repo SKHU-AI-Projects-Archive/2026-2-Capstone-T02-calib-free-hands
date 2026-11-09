@@ -18,3 +18,4 @@ workers: 64
 video_workers: 8
 output:
   root: runs/94_reference_first_pause
+  results_yaml: results/94_reference_first_pause.yaml

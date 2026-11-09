@@ -1,0 +1,645 @@
+experiment: 94_reference_first_pause
+run: runs/94_reference_first_pause/20261109T051805Z
+code_commit: 7c11dbd
+git_dirty_at_run: false
+videos:
+  IMG_7346.MOV:
+    ref: 39
+    breaks: 0
+    n_use: 678
+    free_template:
+      f: 1950.717
+      rms_px: 0.866
+      boundary: false
+    ramp_11:
+      f: 1458.003
+      rms_px: 4.127
+      pitch_deg: 11.0
+      roll_deg: 0.0
+      desk_tilt_deg: 45.666
+      boundary: false
+      start: profile_3
+    free_5:
+      f: 1531.013
+      rms_px: 3.777
+      pitch_deg: 10.116
+      roll_deg: -4.553
+      desk_tilt_deg: 48.106
+      boundary: false
+      start: profile_5
+    free_12:
+      f: 1531.013
+      rms_px: 3.777
+      pitch_deg: 10.116
+      roll_deg: -4.553
+      desk_tilt_deg: 48.106
+      boundary: false
+      start: profile_5
+    free_19:
+      f: 1531.013
+      rms_px: 3.777
+      pitch_deg: 10.116
+      roll_deg: -4.553
+      desk_tilt_deg: 48.106
+      boundary: false
+      start: profile_5
+  IMG_7347.MOV:
+    ref: 41
+    breaks: 0
+    n_use: 658
+    free_template:
+      f: 2256.318
+      rms_px: 0.799
+      boundary: false
+    ramp_11:
+      f: 1810.21
+      rms_px: 4.793
+      pitch_deg: 11.0
+      roll_deg: 0.0
+      desk_tilt_deg: 45.63
+      boundary: false
+      start: profile_4
+    free_5:
+      f: 2235.138
+      rms_px: 4.438
+      pitch_deg: 12.21
+      roll_deg: -4.662
+      desk_tilt_deg: 47.635
+      boundary: false
+      start: profile_5
+    free_12:
+      f: 2235.138
+      rms_px: 4.438
+      pitch_deg: 12.225
+      roll_deg: -4.623
+      desk_tilt_deg: 47.635
+      boundary: false
+      start: profile_5
+    free_19:
+      f: 2235.128
+      rms_px: 4.438
+      pitch_deg: 12.225
+      roll_deg: -4.623
+      desk_tilt_deg: 47.635
+      boundary: false
+      start: profile_5
+  IMG_7348.MOV:
+    ref: 55
+    breaks: 0
+    n_use: 618
+    free_template:
+      f: 2845.04
+      rms_px: 0.889
+      boundary: false
+    ramp_11:
+      f: 1565.492
+      rms_px: 4.253
+      pitch_deg: 11.0
+      roll_deg: 0.0
+      desk_tilt_deg: 46.226
+      boundary: false
+      start: profile_4
+    free_5:
+      f: 1688.79
+      rms_px: 3.729
+      pitch_deg: 10.756
+      roll_deg: -5.345
+      desk_tilt_deg: 49.113
+      boundary: false
+      start: free_template
+    free_12:
+      f: 1688.79
+      rms_px: 3.729
+      pitch_deg: 10.753
+      roll_deg: -5.35
+      desk_tilt_deg: 49.113
+      boundary: false
+      start: free_template
+    free_19:
+      f: 1688.839
+      rms_px: 3.729
+      pitch_deg: 10.727
+      roll_deg: -5.405
+      desk_tilt_deg: 49.113
+      boundary: false
+      start: free_template
+  IMG_7349.MOV:
+    ref: 53
+    breaks: 0
+    n_use: 683
+    free_template:
+      f: 3072.0
+      rms_px: 1.659
+      boundary: true
+    ramp_11:
+      f: 1759.764
+      rms_px: 8.761
+      pitch_deg: 11.0
+      roll_deg: 0.0
+      desk_tilt_deg: 46.543
+      boundary: false
+      start: profile_6
+    free_5:
+      f: 3072.0
+      rms_px: 13.685
+      pitch_deg: -49.614
+      roll_deg: -75.824
+      desk_tilt_deg: 7.347
+      boundary: true
+      start: profile_6
+    free_12:
+      f: 1549.282
+      rms_px: 8.295
+      pitch_deg: 2.937
+      roll_deg: -9.129
+      desk_tilt_deg: 49.032
+      boundary: false
+      start: profile_3
+    free_19:
+      f: 1549.282
+      rms_px: 8.295
+      pitch_deg: 2.937
+      roll_deg: -9.129
+      desk_tilt_deg: 49.032
+      boundary: false
+      start: profile_3
+  IMG_7350.MOV:
+    ref: 49
+    breaks: 0
+    n_use: 700
+    free_template:
+      f: 3072.0
+      rms_px: 0.841
+      boundary: true
+    ramp_11:
+      f: 1583.192
+      rms_px: 3.276
+      pitch_deg: 11.0
+      roll_deg: 0.0
+      desk_tilt_deg: 46.184
+      boundary: false
+      start: free_template
+    free_5:
+      f: 1590.616
+      rms_px: 3.208
+      pitch_deg: 10.455
+      roll_deg: -3.111
+      desk_tilt_deg: 47.416
+      boundary: false
+      start: profile_3
+    free_12:
+      f: 1590.616
+      rms_px: 3.208
+      pitch_deg: 10.533
+      roll_deg: -2.833
+      desk_tilt_deg: 47.416
+      boundary: false
+      start: profile_3
+    free_19:
+      f: 1590.616
+      rms_px: 3.208
+      pitch_deg: 10.533
+      roll_deg: -2.833
+      desk_tilt_deg: 47.416
+      boundary: false
+      start: profile_3
+  IMG_7351.MOV:
+    ref: 52
+    breaks: 0
+    n_use: 645
+    free_template:
+      f: 2143.174
+      rms_px: 1.027
+      boundary: false
+    ramp_11:
+      f: 1771.22
+      rms_px: 4.194
+      pitch_deg: 11.0
+      roll_deg: 0.0
+      desk_tilt_deg: 45.785
+      boundary: false
+      start: profile_5
+    free_5:
+      f: 3072.0
+      rms_px: 45.606
+      pitch_deg: -23.206
+      roll_deg: 7.337
+      desk_tilt_deg: 89.171
+      boundary: true
+      start: profile_7
+    free_12:
+      f: 3072.0
+      rms_px: 5.599
+      pitch_deg: -35.089
+      roll_deg: 0.991
+      desk_tilt_deg: 36.055
+      boundary: true
+      start: profile_7
+    free_19:
+      f: 3072.0
+      rms_px: 5.599
+      pitch_deg: -35.089
+      roll_deg: 0.991
+      desk_tilt_deg: 36.055
+      boundary: true
+      start: profile_7
+  IMG_7352.MOV:
+    ref: 56
+    breaks: 0
+    n_use: 707
+    free_template:
+      f: 2437.811
+      rms_px: 0.959
+      boundary: false
+    ramp_11:
+      f: 1667.587
+      rms_px: 3.278
+      pitch_deg: 11.0
+      roll_deg: 0.0
+      desk_tilt_deg: 45.821
+      boundary: false
+      start: profile_5
+    free_5:
+      f: 1634.739
+      rms_px: 2.975
+      pitch_deg: 9.552
+      roll_deg: -4.443
+      desk_tilt_deg: 48.093
+      boundary: false
+      start: profile_6
+    free_12:
+      f: 1634.734
+      rms_px: 2.975
+      pitch_deg: 9.574
+      roll_deg: -4.395
+      desk_tilt_deg: 48.093
+      boundary: false
+      start: profile_5
+    free_19:
+      f: 1634.743
+      rms_px: 2.975
+      pitch_deg: 9.563
+      roll_deg: -4.418
+      desk_tilt_deg: 48.093
+      boundary: false
+      start: free_template
+  IMG_7353.MOV:
+    ref: 61
+    breaks: 0
+    n_use: 681
+    free_template:
+      f: 1832.479
+      rms_px: 0.91
+      boundary: false
+    ramp_11:
+      f: 1812.309
+      rms_px: 3.813
+      pitch_deg: 11.0
+      roll_deg: 0.0
+      desk_tilt_deg: 45.38
+      boundary: false
+      start: profile_6
+    free_5:
+      f: 2212.145
+      rms_px: 3.698
+      pitch_deg: 13.043
+      roll_deg: -2.503
+      desk_tilt_deg: 45.846
+      boundary: false
+      start: free_template
+    free_12:
+      f: 2212.145
+      rms_px: 3.698
+      pitch_deg: 13.043
+      roll_deg: -2.503
+      desk_tilt_deg: 45.846
+      boundary: false
+      start: free_template
+    free_19:
+      f: 2212.145
+      rms_px: 3.698
+      pitch_deg: 13.02
+      roll_deg: -2.622
+      desk_tilt_deg: 45.846
+      boundary: false
+      start: free_template
+  IMG_7354.MOV:
+    ref: 61
+    breaks: 0
+    n_use: 624
+    free_template:
+      f: 3072.0
+      rms_px: 0.799
+      boundary: true
+    ramp_11:
+      f: 1560.871
+      rms_px: 3.451
+      pitch_deg: 11.0
+      roll_deg: 0.0
+      desk_tilt_deg: 43.515
+      boundary: false
+      start: profile_3
+    free_5:
+      f: 1866.842
+      rms_px: 2.371
+      pitch_deg: 8.546
+      roll_deg: -9.455
+      desk_tilt_deg: 47.767
+      boundary: false
+      start: profile_5
+    free_12:
+      f: 1866.842
+      rms_px: 2.371
+      pitch_deg: 8.507
+      roll_deg: -9.489
+      desk_tilt_deg: 47.767
+      boundary: false
+      start: profile_5
+    free_19:
+      f: 1866.842
+      rms_px: 2.371
+      pitch_deg: 8.557
+      roll_deg: -9.445
+      desk_tilt_deg: 47.767
+      boundary: false
+      start: profile_5
+  IMG_7355.MOV:
+    ref: 50
+    breaks: 0
+    n_use: 609
+    free_template:
+      f: 1578.856
+      rms_px: 0.69
+      boundary: false
+    ramp_11:
+      f: 2131.034
+      rms_px: 4.448
+      pitch_deg: 11.0
+      roll_deg: 0.0
+      desk_tilt_deg: 45.319
+      boundary: false
+      start: profile_1
+    free_5:
+      f: 3072.0
+      rms_px: 4.73
+      pitch_deg: -23.475
+      roll_deg: 7.419
+      desk_tilt_deg: 46.423
+      boundary: true
+      start: profile_7
+    free_12:
+      f: 3072.0
+      rms_px: 4.73
+      pitch_deg: -23.475
+      roll_deg: 7.419
+      desk_tilt_deg: 46.423
+      boundary: true
+      start: profile_7
+    free_19:
+      f: 3072.0
+      rms_px: 4.73
+      pitch_deg: -23.475
+      roll_deg: 7.419
+      desk_tilt_deg: 46.423
+      boundary: true
+      start: profile_7
+  IMG_7356.MOV:
+    ref: 57
+    breaks: 0
+    n_use: 627
+    free_template:
+      f: 3072.0
+      rms_px: 0.607
+      boundary: true
+    ramp_11:
+      f: 1757.861
+      rms_px: 3.354
+      pitch_deg: 11.0
+      roll_deg: 0.0
+      desk_tilt_deg: 43.442
+      boundary: false
+      start: profile_3
+    free_5:
+      f: 1949.762
+      rms_px: 2.554
+      pitch_deg: 7.444
+      roll_deg: -7.775
+      desk_tilt_deg: 47.407
+      boundary: false
+      start: free_template
+    free_12:
+      f: 1949.755
+      rms_px: 2.554
+      pitch_deg: 7.444
+      roll_deg: -7.775
+      desk_tilt_deg: 47.407
+      boundary: false
+      start: profile_6
+    free_19:
+      f: 1949.748
+      rms_px: 2.554
+      pitch_deg: 7.401
+      roll_deg: -7.816
+      desk_tilt_deg: 47.407
+      boundary: false
+      start: profile_6
+  IMG_7357.MOV:
+    ref: 46
+    breaks: 0
+    n_use: 601
+    free_template:
+      f: 1833.053
+      rms_px: 1.027
+      boundary: false
+    ramp_11:
+      f: 2052.316
+      rms_px: 4.135
+      pitch_deg: 11.0
+      roll_deg: 0.0
+      desk_tilt_deg: 45.903
+      boundary: false
+      start: profile_6
+    free_5:
+      f: 1669.423
+      rms_px: 3.777
+      pitch_deg: 7.532
+      roll_deg: -4.956
+      desk_tilt_deg: 48.924
+      boundary: false
+      start: profile_3
+    free_12:
+      f: 1669.423
+      rms_px: 3.777
+      pitch_deg: 7.532
+      roll_deg: -4.956
+      desk_tilt_deg: 48.924
+      boundary: false
+      start: profile_3
+    free_19:
+      f: 1669.423
+      rms_px: 3.777
+      pitch_deg: 7.532
+      roll_deg: -4.956
+      desk_tilt_deg: 48.924
+      boundary: false
+      start: profile_3
+  IMG_7354 - 복사본.MOV:
+    ref: 34
+    breaks: 0
+    n_use: 564
+    free_template:
+      f: 2196.685
+      rms_px: 0.706
+      boundary: false
+    ramp_11:
+      f: 1737.866
+      rms_px: 3.045
+      pitch_deg: 11.0
+      roll_deg: 0.0
+      desk_tilt_deg: 57.736
+      boundary: false
+      start: profile_6
+    free_5:
+      f: 1785.154
+      rms_px: 2.679
+      pitch_deg: 11.028
+      roll_deg: -4.108
+      desk_tilt_deg: 59.41
+      boundary: false
+      start: free_template
+    free_12:
+      f: 1785.154
+      rms_px: 2.679
+      pitch_deg: 11.028
+      roll_deg: -4.108
+      desk_tilt_deg: 59.41
+      boundary: false
+      start: free_template
+    free_19:
+      f: 1785.154
+      rms_px: 2.679
+      pitch_deg: 11.028
+      roll_deg: -4.108
+      desk_tilt_deg: 59.41
+      boundary: false
+      start: free_template
+  IMG_7355 - 복사본.MOV:
+    ref: 33
+    breaks: 0
+    n_use: 498
+    free_template:
+      f: 3072.0
+      rms_px: 0.76
+      boundary: true
+    ramp_11:
+      f: 1636.976
+      rms_px: 2.92
+      pitch_deg: 11.0
+      roll_deg: 0.0
+      desk_tilt_deg: 57.4
+      boundary: false
+      start: profile_7
+    free_5:
+      f: 1573.759
+      rms_px: 2.552
+      pitch_deg: 9.764
+      roll_deg: -4.903
+      desk_tilt_deg: 60.036
+      boundary: false
+      start: profile_5
+    free_12:
+      f: 1573.759
+      rms_px: 2.552
+      pitch_deg: 9.572
+      roll_deg: -5.27
+      desk_tilt_deg: 60.036
+      boundary: false
+      start: profile_5
+    free_19:
+      f: 1573.759
+      rms_px: 2.552
+      pitch_deg: 9.764
+      roll_deg: -4.903
+      desk_tilt_deg: 60.036
+      boundary: false
+      start: profile_5
+  IMG_7351 - 복사본.MOV:
+    ref: 31
+    breaks: 0
+    n_use: 386
+    free_template:
+      f: 1479.912
+      rms_px: 0.326
+      boundary: false
+    ramp_11:
+      f: 1249.037
+      rms_px: 2.987
+      pitch_deg: 11.0
+      roll_deg: 0.0
+      desk_tilt_deg: 48.396
+      boundary: false
+      start: profile_4
+    free_5:
+      f: 1264.17
+      rms_px: 1.727
+      pitch_deg: 7.264
+      roll_deg: -7.105
+      desk_tilt_deg: 53.114
+      boundary: false
+      start: profile_3
+    free_12:
+      f: 1264.17
+      rms_px: 1.727
+      pitch_deg: 7.217
+      roll_deg: -7.152
+      desk_tilt_deg: 53.114
+      boundary: false
+      start: profile_3
+    free_19:
+      f: 1264.17
+      rms_px: 1.727
+      pitch_deg: 7.264
+      roll_deg: -7.105
+      desk_tilt_deg: 53.114
+      boundary: false
+      start: profile_3
+  IMG_7352 - 복사본.MOV:
+    ref: 30
+    breaks: 0
+    n_use: 368
+    free_template:
+      f: 3071.991
+      rms_px: 0.535
+      boundary: true
+    ramp_11:
+      f: 1102.019
+      rms_px: 3.314
+      pitch_deg: 11.0
+      roll_deg: 0.0
+      desk_tilt_deg: 47.546
+      boundary: false
+      start: profile_2
+    free_5:
+      f: 1210.416
+      rms_px: 2.185
+      pitch_deg: 9.118
+      roll_deg: -7.628
+      desk_tilt_deg: 51.903
+      boundary: false
+      start: profile_4
+    free_12:
+      f: 1210.416
+      rms_px: 2.185
+      pitch_deg: 8.697
+      roll_deg: -8.105
+      desk_tilt_deg: 51.903
+      boundary: false
+      start: profile_4
+    free_19:
+      f: 1210.416
+      rms_px: 2.185
+      pitch_deg: 9.118
+      roll_deg: -7.628
+      desk_tilt_deg: 51.903
+      boundary: false
+      start: profile_4
