@@ -1,0 +1,182 @@
+experiment: 85_no_return
+run: runs/85_no_return/20261109T023040Z
+code_commit: 11e6255
+git_dirty_at_run: false
+note: 본인 영상은 마지막에 처음 자세로 돌아오고(0 → 한쪽 → 반대쪽 → 0) 팀원 영상은 돌아오지 않는다(0 → 한쪽 → 반대쪽). 돌아오는
+  동작이 f에 영향을 주는지 보려고, 본인 새 폰 영상 2개에서 돌아오는 구간(반대쪽 끝에 머문 마지막 프레임 이후)을 잘라 팀원과 같은 동작으로
+  만들고 74b 추정기(경사 11° 고정, 함께 추정 시작 5·12·19° 중 비용 최소)를 추적점(실험 56 사슬)과 검출 관절에 돌린다. 영상
+  전체 값은 74b(추적점)와 81(검출 관절)에서 읽는다. 점 j16. 판정 없음.
+cut:
+  smooth_frames: 5
+  near_deg: 10
+videos:
+  IMG_7354 - 복사본.MOV:
+    cut_frame: 435.0
+    cut_s: 14.5
+    n_frames: 564.0
+    extreme_deg: -62.13
+    angle_end_deg: -1.35
+    angle_at_cut_deg: -53.73
+    tracked:
+      n_use_full: 564
+      n_use: 436
+      free_template:
+        f: 1732.6
+        rms_px: 0.55
+        boundary: false
+      ramp_11:
+        f: 1605.5
+        rms_px: 3.34
+        pitch_deg: 11.0
+        roll_deg: 0.0
+        desk_tilt_deg: 56.7
+        boundary: false
+        start: profile_5
+      free_5:
+        f: 1728.5
+        rms_px: 2.65
+        pitch_deg: 10.74
+        roll_deg: -6.08
+        desk_tilt_deg: 59.2
+        boundary: false
+        start: free_template
+      free_12:
+        f: 1728.5
+        rms_px: 2.65
+        pitch_deg: 10.88
+        roll_deg: -5.81
+        desk_tilt_deg: 59.2
+        boundary: false
+        start: free_template
+      free_19:
+        f: 1728.5
+        rms_px: 2.65
+        pitch_deg: 10.74
+        roll_deg: -6.08
+        desk_tilt_deg: 59.2
+        boundary: false
+        start: free_template
+    detected:
+      n_use_full: 564
+      n_use: 436
+      free_template:
+        f: 2300.1
+        rms_px: 3.48
+        boundary: false
+      ramp_11:
+        f: 1198.9
+        rms_px: 6.3
+        pitch_deg: 11.0
+        roll_deg: 0.0
+        desk_tilt_deg: 57.4
+        boundary: false
+        start: profile_3
+      free_5:
+        f: 1671.8
+        rms_px: 6.1
+        pitch_deg: 19.61
+        roll_deg: -2.29
+        desk_tilt_deg: 51.7
+        boundary: false
+        start: profile_5
+      free_12:
+        f: 1671.8
+        rms_px: 6.1
+        pitch_deg: 19.64
+        roll_deg: -1.99
+        desk_tilt_deg: 51.7
+        boundary: false
+        start: free_template
+      free_19:
+        f: 1671.8
+        rms_px: 6.1
+        pitch_deg: 19.62
+        roll_deg: -2.22
+        desk_tilt_deg: 51.7
+        boundary: false
+        start: free_template
+  IMG_7355 - 복사본.MOV:
+    cut_frame: 364.0
+    cut_s: 12.13
+    n_frames: 498.0
+    extreme_deg: -58.63
+    angle_end_deg: 0.57
+    angle_at_cut_deg: -49.3
+    tracked:
+      n_use_full: 498
+      n_use: 365
+      free_template:
+        f: 2101.8
+        rms_px: 0.64
+        boundary: false
+      ramp_11:
+        f: 1547.5
+        rms_px: 3.15
+        pitch_deg: 11.0
+        roll_deg: 0.0
+        desk_tilt_deg: 56.7
+        boundary: false
+        start: profile_3
+      free_5:
+        f: 1585.3
+        rms_px: 2.61
+        pitch_deg: 10.19
+        roll_deg: -5.27
+        desk_tilt_deg: 59.7
+        boundary: false
+        start: free_template
+      free_12:
+        f: 1585.3
+        rms_px: 2.61
+        pitch_deg: 10.05
+        roll_deg: -5.54
+        desk_tilt_deg: 59.7
+        boundary: false
+        start: free_template
+      free_19:
+        f: 1585.3
+        rms_px: 2.61
+        pitch_deg: 9.92
+        roll_deg: -5.76
+        desk_tilt_deg: 59.7
+        boundary: false
+        start: free_template
+    detected:
+      n_use_full: 498
+      n_use: 365
+      free_template:
+        f: 2778.5
+        rms_px: 3.14
+        boundary: false
+      ramp_11:
+        f: 1174.2
+        rms_px: 5.95
+        pitch_deg: 11.0
+        roll_deg: 0.0
+        desk_tilt_deg: 56.9
+        boundary: false
+        start: profile_3
+      free_5:
+        f: 3072.0
+        rms_px: 7.1
+        pitch_deg: -34.37
+        roll_deg: 9.59
+        desk_tilt_deg: 39.2
+        boundary: true
+        start: profile_4
+      free_12:
+        f: 1616.0
+        rms_px: 5.68
+        pitch_deg: 15.57
+        roll_deg: -5.75
+        desk_tilt_deg: 55.4
+        boundary: false
+        start: free_template
+      free_19:
+        f: 3072.0
+        rms_px: 7.1
+        pitch_deg: -34.37
+        roll_deg: 9.59
+        desk_tilt_deg: 39.2
+        boundary: true
+        start: profile_6
