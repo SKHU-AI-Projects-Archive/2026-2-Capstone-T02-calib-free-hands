@@ -1,0 +1,157 @@
+experiment: 92_two_plane
+run: runs/92_two_plane/20261109T043518Z
+code_commit: 423342b
+git_dirty_at_run: false
+videos:
+  IMG_7354 - 복사본.MOV:
+    A:
+      f: 2301.098
+      cost: 5571.629
+      rms_px: 2.103
+      plane_a_deg: 18.115
+      plane_b_deg: 18.115
+      dihedral_deg: 0.0
+      desk_tilt_deg: 57.073
+      turn_range_deg: 113.599
+      at_bound: false
+      elapsed_s: 16.275
+    B:
+      f: 1562083.639
+      cost: 903033.495
+      rms_px: 26.771
+      plane_a_deg: 86.111
+      plane_b_deg: 86.111
+      dihedral_deg: 0.0
+      desk_tilt_deg: 2.806
+      turn_range_deg: 64.519
+      at_bound: true
+      elapsed_s: 134.802
+    AB:
+      f: 2594.519
+      cost: 1330611.536
+      rms_px: 22.979
+      plane_a_deg: 17.032
+      plane_b_deg: 23.582
+      dihedral_deg: 19.508
+      desk_tilt_deg: 50.056
+      turn_range_deg: 94.127
+      at_bound: false
+      elapsed_s: 67.157
+    info:
+      ref_t: 9.367
+      n_ok: 436
+      n_used: 120
+  IMG_7355 - 복사본.MOV:
+    A:
+      f: 2405.551
+      cost: 23522.301
+      rms_px: 4.321
+      plane_a_deg: 18.11
+      plane_b_deg: 18.11
+      dihedral_deg: 0.0
+      desk_tilt_deg: 56.633
+      turn_range_deg: 118.562
+      at_bound: false
+      elapsed_s: 187.138
+    B:
+      f: 2053840.931
+      cost: 1699549.868
+      rms_px: 36.727
+      plane_a_deg: 42.108
+      plane_b_deg: 42.108
+      dihedral_deg: 0.0
+      desk_tilt_deg: 31.591
+      turn_range_deg: 91.907
+      at_bound: true
+      elapsed_s: 227.176
+    AB:
+      f: 1890.607
+      cost: 2431205.662
+      rms_px: 31.061
+      plane_a_deg: 8.702
+      plane_b_deg: 16.615
+      dihedral_deg: 20.186
+      desk_tilt_deg: 54.138
+      turn_range_deg: 114.599
+      at_bound: false
+      elapsed_s: 356.187
+    info:
+      ref_t: 8.267
+      n_ok: 498
+      n_used: 120
+  IMG_7351 - 복사본.MOV:
+    A:
+      f: 2579.977
+      cost: 24214.861
+      rms_px: 4.384
+      plane_a_deg: 16.919
+      plane_b_deg: 16.919
+      dihedral_deg: 0.0
+      desk_tilt_deg: 52.072
+      turn_range_deg: 130.638
+      at_bound: false
+      elapsed_s: 100.755
+    B:
+      f: 1729.037
+      cost: 462075.434
+      rms_px: 19.15
+      plane_a_deg: 8.317
+      plane_b_deg: 8.317
+      dihedral_deg: 0.0
+      desk_tilt_deg: 57.639
+      turn_range_deg: 131.355
+      at_bound: false
+      elapsed_s: 141.673
+    AB:
+      f: 2086.937
+      cost: 881504.832
+      rms_px: 18.703
+      plane_a_deg: 14.623
+      plane_b_deg: 5.312
+      dihedral_deg: 12.37
+      desk_tilt_deg: 55.121
+      turn_range_deg: 131.156
+      at_bound: false
+      elapsed_s: 411.566
+    info:
+      ref_t: 6.4
+      n_ok: 386
+      n_used: 120
+  IMG_7352 - 복사본.MOV:
+    A:
+      f: 2893.277
+      cost: 26341.475
+      rms_px: 4.572
+      plane_a_deg: 19.322
+      plane_b_deg: 19.322
+      dihedral_deg: 0.0
+      desk_tilt_deg: 50.976
+      turn_range_deg: 134.007
+      at_bound: false
+      elapsed_s: 57.017
+    B:
+      f: 1237.12
+      cost: 525344.663
+      rms_px: 20.419
+      plane_a_deg: 12.063
+      plane_b_deg: 12.063
+      dihedral_deg: 0.0
+      desk_tilt_deg: 61.44
+      turn_range_deg: 135.157
+      at_bound: false
+      elapsed_s: 157.884
+    AB:
+      f: 1837.005
+      cost: 1185974.888
+      rms_px: 21.694
+      plane_a_deg: 16.27
+      plane_b_deg: 8.498
+      dihedral_deg: 8.575
+      desk_tilt_deg: 56.477
+      turn_range_deg: 134.216
+      at_bound: false
+      elapsed_s: 221.614
+    info:
+      ref_t: 6.1
+      n_ok: 368
+      n_used: 120
