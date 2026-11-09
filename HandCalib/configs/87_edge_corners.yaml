@@ -1,0 +1,23 @@
+# 87: why 56's chain drifts in the teammate's videos (user 2026-11-09: "추적오차가 왜 팀원 손에서 유독 쌓이는 걸까?" -> "기존 결과로 확인해 볼 수 있는지 살펴보고, 진행해줘"), record only.
+# Saved runs keep summaries only (no corner positions, no per-frame drift), so the chain is tracked again (detections copied from 81's run; 56's settings through 74b's config).
+# Four videos: the user's two new-phone videos (as 84/85) and the teammate's two. (1) edge corners = corners whose LK window (56's win) holds >= edge_frac paper pixels (white: HSV
+# S <= paper_s_max, V >= paper_v_min; V lowered from 150 to 90 after a look at one frame per person, before any tracking, so that the paper in the hand's shadow counts - skin stayed out);
+# their share among all corners and among the homography inliers. (2) drift = tracked vs detected joints (j16 median and wrist, % of the detected box) per frame; per pause (60's rule:
+# still frames as sg_video_job, runs with gap <= 15 and >= 5 frames) its median and the hand direction (detected wrist -> middle MCP), and its change between pauses against the turn there.
+# (3) the chain with the edge corners left out (the rest unchanged): drift, and 74b's estimator (11 deg fixed, ramp free from 5/12/19) on j16. The old chain's f read from 74b.
+# Reference f only in summary.md. Fixed before the run.
+experiment:
+  name: 87_edge_corners
+  seed: 42
+settings_config: configs/74b_multistart_rerun.yaml
+previous_run: runs/74b_multistart_rerun/20261105T044422Z
+run_81: runs/81_detected_joints/20261106T055430Z
+joint_set: j16
+code_87: {branch: exp/87-edge-corners, base_commit: 0a7b843, commit: 6544d25, modules: [HandCalib/handfocal_report.py, HandCalib/run.py]}
+videos: ["IMG_7354 - 복사본.MOV", "IMG_7355 - 복사본.MOV", "IMG_7351 - 복사본.MOV", "IMG_7352 - 복사본.MOV"]
+edge: {paper_s_max: 40, paper_v_min: 90, edge_frac: 0.1}
+workers: 64
+video_workers: 4
+output:
+  root: runs/87_edge_corners
+  results_yaml: results/87_edge_corners.yaml
