@@ -1,0 +1,32 @@
+# 92: 두 평면 추정기 (사용자 2026-11-09: "1번 방법으로 한 번 해보자" - 손가락 평면과 손등 평면을 함께 써서 손 경사 없이 f), 기록용, 판정 없음.
+# 90: 손 마스크 사슬은 두 사람 모두 손가락 평면을 따라간다. 91: 손등 몸통 마스크 사슬은 손등 평면. 74b 경사별 결과에서 기준과 맞는 경사가 본인 약 12°, 팀원 17.5~20° 로 사람마다 다르다.
+# optical_flow.two_plane.solve: 평면 A(손 마스크 사슬 = kt_chain), 평면 B(손등 몸통 사슬 = dc_chain, 관절 0·1·5·9·13·17, 대비 보정 없음)를 함께 맞춘다. 모델 = 기준 프레임 검출 관절 21개의 광선과
+# 각 평면의 교점이 손에 붙어, 프레임마다 책상 법선 둘레 회전 + 책상 면 안 미끄러짐. 자유: f, 책상 법선, 평면 A(깊이 1 로 크기 고정)·B 방향과 위치, 프레임별 회전·미끄러짐. 손 경사 가정 없음.
+# 비교로 같은 풀이를 평면 A 만, B 만 (modes). f 격자 = 긴 변 x 0.35~1.6 의 8개, 시작 책상 기울기 30/45/60°, 회전 방향 두 가지, 낮은 3곳에서 f 까지 풀어 비용 최소; 프레임 최대 120개 (74b 와 같은 수).
+# 합성 확인 두 장면(풀이기 점검; 잡음 0.5 px, 60 프레임): 본인처럼 경사 A 11° B 15°, 팀원처럼 A 18° B 7°. 영상 = 90/91 과 같은 4개. 검출은 81 실행의 캐시 재사용.
+# 74b(경사 11° 고정, 함께 추정)를 옆에 적는다. 기준 f 는 summary.md 에만. 실행 전에 정함(설정 값은 합성 시험 한 번 뒤에 정함, 실제 영상 결과는 보지 않음).
+experiment:
+  name: 92_two_plane
+  seed: 42
+settings_config: configs/74b_multistart_rerun.yaml
+compare_run: runs/74b_multistart_rerun/20261105T044422Z
+detection_cache_from: runs/81_detected_joints/20261106T055430Z/detection_cache
+joint_set: j16
+code: {branch: optical_flow, commit: ce87c06, modules: [HandCalib/optical_flow/two_plane.py, HandCalib/optical_flow/experiments.py]}
+ramps_deg: [11]
+videos: ["IMG_7354 - 복사본.MOV", "IMG_7355 - 복사본.MOV", "IMG_7351 - 복사본.MOV", "IMG_7352 - 복사본.MOV"]
+two_plane:
+  modes: [A, B, AB]
+  f_ratio_range: [0.35, 1.6]
+  f_grid_n: 8
+  start_tilts_deg: [30, 45, 60]
+  n_final: 3
+  max_frames: 120
+  synthetic:
+    - {f: 1672, ramp_a: 11, ramp_b: 15, noise_px: 0.5, frames: 60}
+    - {f: 1672, ramp_a: 18, ramp_b: 7, noise_px: 0.5, frames: 60}
+workers: 24
+video_workers: 4
+output:
+  root: runs/92_two_plane
+  results_yaml: results/92_two_plane.yaml
