@@ -1,0 +1,18 @@
+# 89: 광류 방식의 별도 실행 파일 (사용자 2026-11-09: "검출기 사용은 run.py를 호출하고 optical flow는 다른 파일을 호출하는 식으로").
+# optical_flow/run_optical_flow.py 가 run.py 를 거치지 않고 optical_flow.track_hand(실험 56 의 추적 사슬과 같은 계산)로 추적점을 만들고, 74b 와 같은 추정기(handfocal.tl_template_job,
+# ms2_job)로 f 를 낸다. 설정은 74b 의 설정 사슬을 읽는다(복사하지 않음). 확인용: 74b 실행(run.py multistart-rerun)과 같은 f 가 나오는지 영상별로 비교한다(compare_run).
+# 경사는 주 설정인 11° 고정만, 함께 추정은 74 의 시작 경사 5·12·19°. 검출 결과는 81 실행의 캐시를 재사용한다(같은 MediaPipe 설정). 영상 = 74 의 16개 전부(videos 비움).
+# 기준 f 는 summary.md 에만. 실행 전에 정함.
+experiment:
+  name: 89_optical_flow_entry
+  seed: 42
+settings_config: configs/74b_multistart_rerun.yaml
+compare_run: runs/74b_multistart_rerun/20261105T044422Z
+detection_cache_from: runs/81_detected_joints/20261106T055430Z/detection_cache
+joint_set: j16
+ramps_deg: [11]
+videos: []
+workers: 64
+video_workers: 8
+output:
+  root: runs/89_optical_flow_entry

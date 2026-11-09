@@ -8,6 +8,60 @@
 
 ---
 
+## 0. 실행 방법: 광류 방식과 검출기 방식
+
+두 방식은 **실행 파일이 다르다.** 광류 방식은 이 폴더의 `run_optical_flow.py`, 기존 검출기 방식은 `run.py`를 쓴다.
+아래 명령은 모두 `HandCalib` 폴더에서, 프로젝트 가상환경을 켠 뒤 실행한다.
+
+```bash
+cd HandCalib
+source ../.venv/bin/activate        # 프로젝트 가상환경 (서버: /home/juson/project/2026-2-Capstone-T02-calib-free-hands/.venv)
+```
+
+### 0-1. 광류(KLT) 방식: `optical_flow/run_optical_flow.py`
+
+MediaPipe로 손 위치를 잡은 뒤 광류 추적 사슬로 옮긴 점(`optical_flow.track_hand`)에 책상 운동 추정기(실험 74b)를 적용한다. `run.py`를 거치지 않는다.
+
+```bash
+python optical_flow/run_optical_flow.py --config configs/89_optical_flow_entry.yaml               # 설정의 영상 전부
+python optical_flow/run_optical_flow.py --config configs/89_optical_flow_entry.yaml --videos 2    # 시험 실행: 앞의 2개 영상만
+python optical_flow/run_optical_flow.py --config configs/89_optical_flow_entry.yaml --out <폴더>  # 결과 폴더 직접 지정
+```
+
+설정 파일(`configs/89_optical_flow_entry.yaml`)에서 바꿀 수 있는 것:
+
+| 키 | 뜻 |
+|---|---|
+| `settings_config` | 설정 사슬의 시작(74b). 영상 목록, 광류 설정(실험 56의 `tracking`), 프레임·추정 설정, 기준 f를 여기서 읽는다 |
+| `joint_set` | f 추정에 쓰는 관절 묶음(`j16` = 관절 5~20) |
+| `ramps_deg` | 고정할 손 경사 목록(주 설정 11°). 함께 추정(경사도 푸는 것)은 74의 시작 경사 5·12·19° 중 비용 최소 |
+| `videos` | 비우면 74의 16개 전부. 파일 이름 목록을 주면 그 영상만 |
+| `compare_run` | 비교할 이전 실행(있으면 summary.md에 같은 추정의 f를 옆에 적음) |
+| `detection_cache_from` | MediaPipe 검출 결과를 재사용할 폴더(같은 검출기 설정일 때만). 없으면 새로 검출 |
+
+결과: `runs/89_optical_flow_entry/<UTC>/`에 `results.json`(영상별 f, 경사, RMS 등), `summary.md`(기준 f와 오차는 여기에만), `metadata.json`(git 상태, 설정 해시, 라이브러리 버전), `log.txt`가 남는다.
+
+### 0-2. 기존 검출기 방식: `run.py`
+
+검출기가 매 프레임 낸 2D 관절을 그대로 f 추정에 넣는다. 하위 명령으로 실행한다.
+
+```bash
+# 실험 51: 검출기별 관절(MediaPipe, MMPose 5종) + 교수님 free_shape3d (46·49 영상, 카메라가 내려다보고 손바닥이 카메라 쪽)
+python run.py free-shape3d-detectors --config configs/51_free_shape3d_mmpose.yaml
+
+# 실험 81: MediaPipe 관절 그대로 + 광류 방식과 같은 책상 운동 추정기(74b), 경사 11° (45° 영상 16개)
+python run.py detected-joints --config configs/81_detected_joints.yaml
+
+# 실험 82: MediaPipe 관절 그대로 + 경사 7~30° 스윕
+python run.py detected-ramp-sweep --config configs/82_detected_ramp_sweep.yaml
+```
+
+참고:
+- `run.py`에는 광류 방식의 실험 명령도 그대로 있다(예: `continuous-klt` = 실험 56, `multistart-rerun` = 실험 74b). 이 명령들은 원본 함수를 부른다.
+- `run_optical_flow.py`는 74b와 같은 f를 낸다. 시험 실행에서 IMG_7346, IMG_7347의 free_template, 11° 고정, 함께 추정 값이 74b와 0.000 px 차이였다.
+
+---
+
 ## 1. 한눈에 보는 차이
 
 | 항목 | 실험 51 (`exp/51-free-shape3d-mmpose`) | 지금 (실험 56 이후, 주 결과는 74b) |
@@ -112,6 +166,7 @@
 | `klt.py` | 주 파이프라인의 추적 사슬: `box_long`, `edge_flags`, `kt_hand_mask`, `kt_chain`, `kt_carry`, `kt_map`, `chain_points`, `choose_reference`, `track_hand` | `handfocal_estimate.box_long`, `handfocal_report.edge_flags / kt_hand_mask / kt_chain / kt_carry / kt_map`, `run.pp_points`, `run.sg_video_job`의 사슬 부분 |
 | `variants.py` | 실험용 변형: `kt_chain_log`(77), `rt_windows`(80), `bc_chain`·`wt_track`(83), `kv_step`(86), `eg_paper`·`eg_window_frac`·`eg_chain`(87) | `handfocal_report.py`의 같은 이름 함수 |
 | `__init__.py` | 위 함수들을 `import optical_flow as of`로 쓸 수 있게 묶음 | - |
+| `run_optical_flow.py` | 광류 방식 실행 파일(0-1절). 프레임 추출·검출·추정기는 `handfocal`, 추적은 이 폴더 | `run.py`의 `multistart-rerun`(74b)과 같은 계산 |
 | `test_equivalence.py` | 원본과 사본이 같은 결과를 내는지 확인하는 테스트(합성 영상) | - |
 | `README.md` | 이 문서 | - |
 
@@ -138,7 +193,7 @@ pts = out["kp"][:, 5:21]                                                    # f 
 use = out["use"]                                                            # 쓸 프레임
 ```
 
-실험을 다시 돌릴 때는 지금처럼 `run.py`의 명령을 쓴다.
+전체 실행은 0절의 명령을 쓴다. 기존 실험을 그대로 다시 돌릴 때는 `run.py`의 명령을 쓴다.
 - 56: `python run.py continuous-klt --config configs/56_continuous_klt.yaml`
 - 74b: `python run.py multistart-rerun --config configs/74b_multistart_rerun.yaml`
 
