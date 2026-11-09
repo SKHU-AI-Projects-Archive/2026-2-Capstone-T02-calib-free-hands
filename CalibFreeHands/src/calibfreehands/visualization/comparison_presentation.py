@@ -5,7 +5,7 @@ from time import monotonic
 from PySide6.QtCore import QEvent, Qt, QPropertyAnimation, QEasingCurve, QPoint, QTimer, QRectF, Signal
 from PySide6.QtGui import QColor, QFont, QFontMetrics, QPainter, QPalette, QPen, QVector4D
 from PySide6.QtWidgets import (QApplication, QCheckBox, QFrame, QGraphicsOpacityEffect, QHBoxLayout,
-                               QLabel, QMenu, QProgressBar, QPushButton, QSizePolicy, QSplitter,
+                               QGridLayout, QLabel, QMenu, QProgressBar, QPushButton, QSizePolicy, QSplitter,
                                QSplitterHandle, QToolButton, QVBoxLayout, QWidget)
 
 from calibfreehands.joint_schema import JOINT_NAMES
@@ -19,10 +19,22 @@ class _PanelSurface(QWidget):
         super().__init__()
         self.panel_id = panel_id
         self.content = content
-        layout = QVBoxLayout(self)
+        layout = QGridLayout(self)
         layout.setContentsMargins(0, 0, 0, 0)
         layout.setSpacing(0)
-        layout.addWidget(content, 1)
+        layout.addWidget(content, 0, 0)
+        self.detach_source_button = None
+        if panel_id == "source-media":
+            self.detach_source_button = QToolButton(self)
+            self.detach_source_button.setText("↗")
+            self.detach_source_button.setFixedSize(30, 28)
+            self.detach_source_button.setToolTip("Detach Source Media and shared Viewer controls")
+            self.detach_source_button.setAccessibleName("Detach Source Media")
+            self.detach_source_button.setStyleSheet(
+                "QToolButton { background: palette(window); border: 1px solid palette(mid); }"
+                "QToolButton:hover { border-color: palette(highlight); }")
+            layout.addWidget(self.detach_source_button, 0, 0,
+                             Qt.AlignmentFlag.AlignTop | Qt.AlignmentFlag.AlignLeft)
 
 
 class _SwapSplitterHandle(QSplitterHandle):
@@ -158,11 +170,17 @@ class _SplitPanelReorderController(QWidget):
                 event.accept()
                 return True
             if event.type() == QEvent.Type.MouseButtonRelease and event.button() == Qt.MouseButton.LeftButton:
-                self._update_target(event.globalPosition().toPoint())
+                global_position = event.globalPosition().toPoint()
+                self._update_target(global_position)
                 source, target = self._source_panel_id, self.target_panel_id
+                dragged = (self._press_position is not None and
+                           (global_position - self._press_position).manhattanLength()
+                           >= QApplication.startDragDistance())
                 self.cancel()
                 if target is not None:
                     self.viewer.move_split_panel_to_slot(source, target)
+                elif dragged:
+                    self.viewer.drop_split_panel(source, global_position)
                 event.accept()
                 return True
             if event.type() == QEvent.Type.KeyPress and event.key() == Qt.Key.Key_Escape:
@@ -190,6 +208,7 @@ class _SplitPanelReorderController(QWidget):
             return
         self.target_panel_id = self.viewer._split_panel_at(global_position)
         self.viewer._show_split_drag_feedback(self._source_panel_id, self.target_panel_id)
+        self.viewer._show_workspace_drop_feedback_at(global_position, "main")
 
     def cancel(self):
         if self._application_filter:
@@ -204,6 +223,7 @@ class _SplitPanelReorderController(QWidget):
         self.target_panel_id = None
         self.viewer._panel_reorder_active = False
         self.viewer._show_split_drag_feedback(None, None)
+        self.viewer._clear_workspace_drop_feedback()
 
 
 class _ViewportPanel(QWidget):
@@ -461,12 +481,17 @@ class _ViewportPanel(QWidget):
         self.confidence_bars.clear()
         self.group_widgets.clear()
         ordered_indices = [viewer._configuration_index(config_id)
-                           for config_id in viewer.result_order_ids
+                           for config_id in (
+                               [panel_id.removeprefix("result:")
+                                for panel_id in viewer._workspace_model.group(self.workspace_group_id).result_panel_ids]
+                               if getattr(self, "is_detached_group", False)
+                               else viewer.result_order_ids)
                            if config_id in {viewer.configurations[index]["id"]
                                             for index in self.configuration_indices}]
         for config_index in ordered_indices:
             config = viewer.configurations[config_index]
-            if viewer.mode == "overlay" and not viewer.overlay_view.configuration_visible[config_index]:
+            if ((viewer.mode == "overlay" or getattr(self, "is_detached_group", False))
+                    and not viewer.visibility_checks[config_index].isChecked()):
                 continue
             self._add_result_group(viewer, config_index, config)
         if not self.body_layout.count():
@@ -556,7 +581,7 @@ class _ViewportPanel(QWidget):
             swatch.setStyleSheet(f"background-color: rgb{color}; border: 1px solid white;")
             header.addWidget(swatch)
             header.addWidget(title, 1)
-            handle = _ResultDragHandle(viewer, config["id"], title)
+            handle = _ResultDragHandle(viewer, config["id"], title, panel=self)
             header.insertWidget(0, handle)
         if not viewer.single_mode and config["id"] == viewer.reference_id:
             badge = QLabel("GT")
@@ -629,9 +654,10 @@ class _ViewportPanel(QWidget):
 
 
 class _ResultDragHandle(QToolButton):
-    def __init__(self, viewer, configuration_id, parent=None):
+    def __init__(self, viewer, configuration_id, parent=None, *, panel=None):
         super().__init__(parent)
         self.viewer, self.configuration_id = viewer, configuration_id
+        self.panel = panel
         self.setText("\u2195"); self.setToolTip("Drag to reorder result panels")
         self.setFixedWidth(20)
         self._press = None
@@ -671,15 +697,24 @@ class _ResultDragHandle(QToolButton):
             self._filter_installed = True
         self._dragging = True
         self.viewer._panel_reorder_active = True
-        panel = (self.viewer.overlay_panel if self.viewer.mode == "overlay" else
-                 self.viewer.split_panels[self.viewer._configuration_index(self.configuration_id)])
+        panel = self.panel or (self.viewer.overlay_panel if self.viewer.mode == "overlay" else
+                               self.viewer.split_panels[self.viewer._configuration_index(self.configuration_id)])
         body_y = panel.body.mapFromGlobal(global_position).y()
         if not panel.body.rect().contains(panel.body.mapFromGlobal(global_position)):
             self._drop_target = None
             panel.clear_insertion_marker()
+            group_id = (panel.workspace_group_id if getattr(panel, "is_detached_group", False)
+                        else (self.viewer._main_workspace_group().group_id
+                              if self.viewer._main_workspace_group() is not None else "main"))
+            self.viewer._show_workspace_drop_feedback_at(global_position, group_id)
             return
+        self.viewer._clear_workspace_drop_feedback()
         panel.body_layout.activate()
-        visible_ids = [config_id for config_id in self.viewer.result_order_ids
+        result_order = ([panel_id.removeprefix("result:")
+                         for panel_id in self.viewer._workspace_model.group(panel.workspace_group_id).result_panel_ids]
+                        if getattr(panel, "is_detached_group", False)
+                        else self.viewer.result_order_ids)
+        visible_ids = [config_id for config_id in result_order
                        if config_id in panel.group_widgets
                        and not panel.group_widgets[config_id].isHidden()
                        and panel.group_widgets[config_id].geometry().isValid()]
@@ -696,9 +731,19 @@ class _ResultDragHandle(QToolButton):
             self._move_drag(global_position)
         if self._dragging:
             target = self._drop_target
+            panel = self.panel
+            group_id = (panel.workspace_group_id if getattr(panel, "is_detached_group", False)
+                        else (self.viewer._main_workspace_group().group_id
+                              if self.viewer._main_workspace_group() is not None else "main"))
             if target is not None:
                 visible_ids, insertion = target
-                self.viewer.reorder_result_at(self.configuration_id, visible_ids, insertion)
+                if getattr(panel, "is_detached_group", False):
+                    self.viewer.reorder_workspace_result_at(
+                        self.configuration_id, group_id, [f"result:{item}" for item in visible_ids], insertion)
+                else:
+                    self.viewer.reorder_result_at(self.configuration_id, visible_ids, insertion)
+            else:
+                self.viewer.drop_result_from_workspace(self.configuration_id, group_id, global_position)
         self.viewer._panel_reorder_active = False
         self._drop_target = None
         self._press = None
@@ -707,6 +752,9 @@ class _ResultDragHandle(QToolButton):
         self.viewer.overlay_panel.clear_insertion_marker()
         for panel in self.viewer.split_panels:
             panel.clear_insertion_marker()
+        if self.panel is not None:
+            self.panel.clear_insertion_marker()
+        self.viewer._clear_workspace_drop_feedback()
 
     def keyPressEvent(self, event):
         if event.key() == Qt.Key.Key_Escape and self._press is not None:
@@ -725,6 +773,9 @@ class _ResultDragHandle(QToolButton):
         self.viewer.overlay_panel.clear_insertion_marker()
         for panel in self.viewer.split_panels:
             panel.clear_insertion_marker()
+        if self.panel is not None:
+            self.panel.clear_insertion_marker()
+        self.viewer._clear_workspace_drop_feedback()
 
     def eventFilter(self, watched, event):
         if (self._filter_installed and event.type() == QEvent.Type.KeyPress

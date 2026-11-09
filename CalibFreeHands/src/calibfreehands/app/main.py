@@ -1265,6 +1265,7 @@ class MainWindow(QMainWindow):
 
 
 def main() -> int:
+    QApplication.setAttribute(Qt.ApplicationAttribute.AA_ShareOpenGLContexts, True)
     app = QApplication(sys.argv)
     app.setStyle("Fusion")
     settings = AppSettings()

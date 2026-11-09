@@ -284,3 +284,14 @@ Phase C Final native Windows testing and acceptance were reported by the user as
 - [x] Order-only refresh reorders the existing Overlay group widgets in place, preserving their fitted presentation state; it avoids an unnecessary HUD position/refit. GT/content changes retain the regular refresh path.
 - [x] Keep annotation refresh and HUD stacking, result order synchronization, insertion marker behavior, playback state, and split panel refresh behavior.
 - [x] Verify explicit HUD size, confidence display, viewport resize, four corner anchors, first/middle/last GT, and playing/paused reorder cases. Native visual user acceptance remains pending.
+
+
+### Phase D.2 Independent Detach, Reattach & Composable Multi-Window Workspace (2026-11-09)
+
+- [x] Added stable logical workspace groups with unique Source/result panel membership, detach/extract/merge/reorder/reattach operations, and invariant tests.
+- [x] Implemented individual Split and Overlay HUD detach gestures, Source detach affordance, group drag/drop composition feedback, and Escape cancellation.
+- [x] Detach All creates independent Source and visible-result windows; visibility remains separate from ownership. Results form one 3D overlay; Source plus results form a resizable split composition.
+- [x] Shared chrome, playback clock, selected GT, Space, playback frame, and media provider remain singular. Detached X reattaches its group; Reattach All restores the main Viewer; app shutdown disposes the workspace.
+- [x] Added Link Cameras control and retained unlinked camera poses through detach, merge in either direction (including onto Source), extraction, reattach, and GT-authoritative relinking.
+- [x] Enabled Qt shared OpenGL contexts before QApplication creation and in the test fixture for valid GL resources across native top-level windows.
+- [ ] Real Windows user interaction/visual acceptance remains required. D.3, E, F/G, and release packaging remain deferred.

@@ -4,6 +4,7 @@ import colorsys
 import csv
 import json
 import re
+from dataclasses import dataclass
 from pathlib import Path
 from time import monotonic
 
@@ -11,8 +12,9 @@ import numpy as np
 import pyqtgraph as pg
 import pyqtgraph.opengl as gl
 from PySide6.QtCore import (QEvent, QObject, QPoint, Qt, QTimer, QSignalBlocker, QRectF, QSize,
-                            QVariantAnimation, QRunnable, QThreadPool, Signal)
-from PySide6.QtGui import QAction, QActionGroup, QImage, QWindow, QIcon, QPainter, QPainterPath, QPen, QPixmap, QPalette, QColor
+                            QVariantAnimation, QRunnable, QThreadPool, Signal, QMimeData)
+from PySide6.QtGui import (QAction, QActionGroup, QDrag, QImage, QWindow, QIcon, QPainter,
+                           QPainterPath, QPen, QPixmap, QPalette, QColor)
 from PySide6.QtWidgets import (
     QApplication, QAbstractButton, QCheckBox, QColorDialog, QComboBox, QDialog, QFileDialog, QGridLayout,
     QFrame, QHBoxLayout, QLabel, QMainWindow, QMenu, QPushButton, QScrollArea, QSizePolicy, QStyle, QStyleOptionToolButton,
@@ -33,6 +35,7 @@ from .viewer import (
 from .comparison_presentation import (_JointAnnotationLayer, _ViewportPanel, _PanelSurface,
                                       _ResultDragHandle, _SplitPanelReorderController, _SwapSplitter)
 from .playback import PlaybackClock
+from .workspace import SOURCE_PANEL_ID, WorkspaceGroup, WorkspaceModel
 
 METRIC_FIELDS = ("source_identity", "reference_result_id", "candidate_result_id", "candidate_name", "metric_id",
                  "metric_name", "category", "protocol_version", "frame_index", "timestamp_s", "hand",
@@ -518,6 +521,7 @@ class _OverlayComparisonView(_GLResultView):
         self.error_vectors_enabled = False
         self.error_candidate = 1 if len(loaded_results) > 1 else 0
         self.reference_index = 0
+        self.member_configuration_indices = set(range(len(loaded_results)))
         self.error_items = []
         self.extra_items = []
         super().__init__(loaded_results[0])
@@ -559,7 +563,8 @@ class _OverlayComparisonView(_GLResultView):
             return super()._geometry(frame)
         points = []
         for index, loaded in enumerate(self.loaded_results):
-            if not self.configuration_visible[index]:
+            if (not self.configuration_visible[index]
+                    or index not in self.member_configuration_indices):
                 continue
             result = loaded.result
             position = min(frame, loaded.frame_count - 1)
@@ -594,7 +599,8 @@ class _OverlayComparisonView(_GLResultView):
             if self.bones[hand].visible(): self.bones[hand].setData(color=(*_bone_color(base), alpha))
             if self.meshes[hand].visible(): _set_mesh_color(self.meshes[hand], self.configuration_colors[0], alpha * self.mesh_opacity)
         for item in (*self.joints, *self.bones, *self.meshes):
-            item.setVisible(item.visible() and self.configuration_visible[0])
+            item.setVisible(item.visible() and self.configuration_visible[0]
+                            and 0 in self.member_configuration_indices)
         for config_index, (loaded, hands) in enumerate(zip(self.loaded_results[1:], self.extra_items), 1):
             position = min(self.frame, loaded.frame_count - 1)
             result = loaded.result
@@ -602,7 +608,9 @@ class _OverlayComparisonView(_GLResultView):
             for hand, (joints, bones, mesh) in enumerate(hands):
                 for item in (joints, bones, mesh):
                     item.setVisible(False)
-                visible = self.configuration_visible[config_index] and bool(result.detected[position, hand])
+                visible = (self.configuration_visible[config_index]
+                           and config_index in self.member_configuration_indices
+                           and bool(result.detected[position, hand]))
                 visible &= not (hand == 0 and not self.show_left) and not (hand == 1 and not self.show_right)
                 has_visible_geometry = (self.show_joints or self.show_bones
                                         or (self.show_mesh and loaded.has_mesh_topology))
@@ -630,6 +638,11 @@ class _OverlayComparisonView(_GLResultView):
                         mesh.setVisible(True)
         if self.error_vectors_enabled:
             self._update_error_vectors()
+
+    def set_member_configuration_ids(self, configuration_ids):
+        self.member_configuration_indices = set(configuration_ids)
+        self.set_frame(self.frame)
+
 
     def _update_error_vectors(self):
         if not self.error_items:
@@ -671,6 +684,104 @@ class _OverlayComparisonView(_GLResultView):
                 _set_mesh_color(mesh, self.configuration_colors[config_index], alpha * self.mesh_opacity)
 
 
+@dataclass
+class _DetachedWorkspace:
+    group_id: str
+    window: QMainWindow
+    source_canvas: _OverlayCanvas | None
+    views: list
+    panel: _ViewportPanel | None
+    members: tuple[str, ...]
+
+    def __iter__(self):
+        yield self.window
+        yield self.source_canvas
+        yield self.views
+
+    def __getitem__(self, index):
+        return tuple(self)[index]
+
+
+class _WorkspaceDragGrip(QToolButton):
+    """Compact drag handle that leaves native top-level resize behavior intact."""
+
+    MIME_TYPE = "application/x-calibfreehands-workspace"
+
+    def __init__(self, group_id, title, parent=None):
+        super().__init__(parent)
+        self.group_id = group_id
+        self._press_position = None
+        self.setText("↕")
+        self.setToolTip("Drag this workspace onto another Viewer window to combine them")
+        self.setAccessibleName(f"Move workspace {title}")
+        self.setFixedSize(30, 26)
+
+    def mousePressEvent(self, event):
+        if event.button() == Qt.MouseButton.LeftButton:
+            self._press_position = event.position().toPoint()
+            event.accept()
+            return
+        super().mousePressEvent(event)
+
+    def mouseMoveEvent(self, event):
+        if (self._press_position is not None
+                and event.buttons() & Qt.MouseButton.LeftButton
+                and (event.position().toPoint() - self._press_position).manhattanLength()
+                >= QApplication.startDragDistance()):
+            drag = QDrag(self)
+            data = QMimeData()
+            data.setData(self.MIME_TYPE, self.group_id.encode("utf-8"))
+            drag.setMimeData(data)
+            drag.exec(Qt.DropAction.MoveAction)
+            self._press_position = None
+            event.accept()
+            return
+        super().mouseMoveEvent(event)
+
+    def mouseReleaseEvent(self, event):
+        self._press_position = None
+        super().mouseReleaseEvent(event)
+
+
+class _WorkspaceDropArea(QWidget):
+    def __init__(self, controller, group_id, parent=None):
+        super().__init__(parent)
+        self.controller = controller
+        self.group_id = group_id
+        self.setAcceptDrops(True)
+
+    def dragEnterEvent(self, event):
+        if event.mimeData().hasFormat(_WorkspaceDragGrip.MIME_TYPE):
+            self.controller._set_workspace_drop_feedback(self.group_id, True)
+            event.acceptProposedAction()
+        else:
+            event.ignore()
+
+    def dragLeaveEvent(self, event):
+        self.controller._set_workspace_drop_feedback(self.group_id, False)
+        super().dragLeaveEvent(event)
+
+    def dropEvent(self, event):
+        source_group_id = bytes(event.mimeData().data(_WorkspaceDragGrip.MIME_TYPE)).decode("utf-8")
+        self.controller._set_workspace_drop_feedback(self.group_id, False)
+        self.controller.merge_workspace_groups(source_group_id, self.group_id)
+        event.acceptProposedAction()
+
+
+class _WorkspaceWindow(QMainWindow):
+    def __init__(self, controller, group_id, title):
+        super().__init__(controller, Qt.WindowType.Window)
+        self.controller = controller
+        self.group_id = group_id
+        self._closing_for_transition = False
+        self.setWindowTitle(title)
+
+    def closeEvent(self, event):
+        if not self._closing_for_transition and not self.controller._shutting_down:
+            self.controller.reattach_workspace_group(self.group_id, closing_window=self)
+        super().closeEvent(event)
+
+
 class ComparisonViewer(QWidget):
     def __init__(self, session_path: Path | list[ResultBundle]):
         super().__init__()
@@ -685,6 +796,7 @@ class ComparisonViewer(QWidget):
             if isinstance(loaded.media_frames, MediaFrameProvider)
         }.values())
         self._media_providers_released = False
+        self._shutting_down = False
         for config, loaded in zip(self.configurations, self.loaded_results):
             focal = loaded.result.video_focal_px
             if focal is None:
@@ -703,6 +815,9 @@ class ComparisonViewer(QWidget):
         self._syncing_camera = False
         self._arrow_mode = "frame"
         self._detached_windows = []
+        self._workspace_model = WorkspaceModel(tuple(config["id"] for config in self.configurations))
+        self._camera_linked = True
+        self._workspace_drop_group_id = None
         frame_counts = {loaded.frame_count for loaded in self.loaded_results}
         frame_indices = [loaded.result.frame_indices for loaded in self.loaded_results]
         timestamps = [loaded.result.timestamps for loaded in self.loaded_results]
@@ -775,6 +890,7 @@ class ComparisonViewer(QWidget):
             "source-media": _PanelSurface("source-media", self.source_overlay),
             "overlay-3d": _PanelSurface("overlay-3d", self.overlay_view),
         }
+        self.overlay_surfaces[SOURCE_PANEL_ID].detach_source_button.clicked.connect(self.detach_source_media)
         for panel_id in self.overlay_panel_order:
             overlay_splitter.addWidget(self.overlay_surfaces[panel_id])
         overlay_splitter.setStretchFactor(0, 1)
@@ -795,6 +911,7 @@ class ComparisonViewer(QWidget):
         self.split_source_overlay = _OverlayCanvas(self.loaded_results[0])
         self.split_source_overlay.setMinimumSize(340, 260)
         self.split_surfaces = {"source-media": _PanelSurface("source-media", self.split_source_overlay)}
+        self.split_surfaces[SOURCE_PANEL_ID].detach_source_button.clicked.connect(self.detach_source_media)
         for index, config in enumerate(self.configurations):
             self.split_surfaces[f"result:{config['id']}"] = _PanelSurface(
                 f"result:{config['id']}", self.split_views[index])
@@ -1043,11 +1160,23 @@ class ComparisonViewer(QWidget):
         self.hud_button.toggled.connect(self._set_hud_visible)
         self._set_hud_visibility_label(True)
 
-        self.detach_button = QPushButton("Detach")
+        self.detach_button = QPushButton("Detach All")
         self.detach_button.setSizePolicy(QSizePolicy.Policy.Fixed, QSizePolicy.Policy.Fixed)
         self.detach_button.clicked.connect(self.detach_all)
+        self.detach_source_button = QPushButton("Detach Source")
+        self.detach_source_button.setSizePolicy(QSizePolicy.Policy.Fixed, QSizePolicy.Policy.Fixed)
+        self.detach_source_button.clicked.connect(self.detach_source_media)
+        self.reattach_all_button = QPushButton("Reattach All")
+        self.reattach_all_button.setSizePolicy(QSizePolicy.Policy.Fixed, QSizePolicy.Policy.Fixed)
+        self.reattach_all_button.clicked.connect(self.reattach_all)
+        self.reattach_all_button.setEnabled(False)
+        self.camera_link_checkbox = QCheckBox("Link Cameras")
+        self.camera_link_checkbox.setChecked(True)
+        self.camera_link_checkbox.toggled.connect(self.set_camera_linked)
         self.more_menu = QMenu(self)
-        self.more_menu.addAction("Detach panels", self.detach_all)
+        self.more_menu.addAction("Detach All", self.detach_all)
+        self.more_menu.addAction("Detach Source Media", self.detach_source_media)
+        self.more_menu.addAction("Reattach All", self.reattach_all)
         self.performance_stats_action = self.more_menu.addAction("Playback Stats")
         self.performance_stats_action.setCheckable(True)
         self.performance_stats_action.toggled.connect(self._set_performance_stats)
@@ -1075,6 +1204,10 @@ class ComparisonViewer(QWidget):
         self.error_vectors_button.setToolTip("Show selected GT versus candidate error vectors")
         toolbar.addWidget(self.annotation_button); toolbar.addWidget(self.hud_button)
         toolbar.addWidget(self.more_button)
+        toolbar.addWidget(self.detach_button)
+        toolbar.addWidget(self.detach_source_button)
+        toolbar.addWidget(self.reattach_all_button)
+        toolbar.addWidget(self.camera_link_checkbox)
         toolbar.addStretch(1)
         self.toolbar = toolbar
 
@@ -1256,6 +1389,8 @@ class ComparisonViewer(QWidget):
         exports.addWidget(self.export_csv_button)
         exports.addWidget(self.export_json_button)
         layout = QGridLayout(self)
+        self._root_layout = layout
+        self.setAcceptDrops(True)
         layout.setContentsMargins(0, 0, 0, 0)
         layout.addWidget(self.views, 0, 0)
         self.chrome = QWidget(); chrome_layout = QVBoxLayout(self.chrome); chrome_layout.setContentsMargins(14, 8, 14, 12); chrome_layout.setSpacing(6)
@@ -1408,10 +1543,19 @@ class ComparisonViewer(QWidget):
         return [self._configuration_index(config_id) for config_id in self.result_order_ids]
 
     def _visible_split_panel_ids(self):
+        main_members = self._main_workspace_members()
         return [panel_id for panel_id in self.split_panel_order
-                if (panel_id == "source-media"
-                    or self.overlay_view.configuration_visible[
-                        self._configuration_index(panel_id.removeprefix("result:"))])]
+                if (panel_id in main_members
+                    and (panel_id == SOURCE_PANEL_ID
+                         or self.overlay_view.configuration_visible[
+                             self._configuration_index(panel_id.removeprefix("result:"))]))]
+
+    def _main_workspace_group(self) -> WorkspaceGroup | None:
+        return next(iter(self._workspace_model.groups(host="main")), None)
+
+    def _main_workspace_members(self) -> set[str]:
+        group = self._main_workspace_group()
+        return set(group.members) if group is not None else set()
 
     def _split_available_size(self):
         if hasattr(self, "split_scroll"):
@@ -1710,13 +1854,13 @@ class ComparisonViewer(QWidget):
             self.hand_space_cache[configuration_id] = bounds
         return self.hand_space_cache[configuration_id]
 
-    def _camera_framing_for(self, configuration_id, space_mode):
+    def _camera_framing_for(self, configuration_id, space_mode, view=None):
         if space_mode == "physical":
             return self._hand_view_for(configuration_id)
         if space_mode != "hand":
             raise ValueError(f"unknown 3D space mode: {space_mode}")
         workspace = workspace_geometry("hand", self._hand_space_for(configuration_id))
-        view = self._camera_source()
+        view = view or self._camera_source()
         aspect = (view.width() / view.height() if view.height() > 0
                   else DEFAULT_WORKSPACE_ASPECT)
         return workspace_camera_framing(workspace, view.opts["fov"], aspect)
@@ -1726,6 +1870,9 @@ class ComparisonViewer(QWidget):
         views.extend(view for _window, _source, detached in self._detached_windows for view in detached)
         return views
 
+    def _all_detached_views(self):
+        return [view for workspace in self._detached_windows for view in workspace.views]
+
     def _apply_workspace(self):
         bounds = self._hand_space_for(self._hand_view_source_id()) if self.space_mode == "hand" else None
         for view in self._workspace_views():
@@ -1733,22 +1880,33 @@ class ComparisonViewer(QWidget):
 
     def _refocus_selected_gt(self):
         configuration_id = self._hand_view_source_id()
-        active_source = self._camera_source()
-        active_pose = self._copy_camera_params(active_source)
-        poses = {}
+        source = self._view_for_configuration(configuration_id)
+        views = self._workspace_views()
+        active_pose = self._copy_camera_params(source)
         for mode in ("physical", "hand"):
-            target, distance = self._camera_framing_for(configuration_id, mode)
-            pose = active_pose if mode == self.space_mode else self._camera_states[mode]
-            if pose is None:
-                pose = active_pose
+            stored_pose = self._camera_states[mode]
+            if stored_pose is None:
+                stored_pose = active_pose
             else:
-                pose = dict(pose)
-            pose["center"] = pg.Vector(*target)
-            pose["distance"] = distance
-            poses[mode] = pose
-        self._camera_states.update(poses)
-        active_source.setCameraParams(**poses[self.space_mode])
-        self._sync_camera(active_source)
+                stored_pose = dict(stored_pose)
+            target, distance = self._camera_framing_for(configuration_id, mode, source)
+            stored_pose["center"] = pg.Vector(*target)
+            stored_pose["distance"] = distance
+            self._camera_states[mode] = stored_pose
+
+        for view in views:
+            view_states = getattr(view, "_space_camera_states", {})
+            for mode in ("physical", "hand"):
+                pose = (self._copy_camera_params(source) if self._camera_linked
+                        else dict(view_states.get(mode, self._copy_camera_params(view))))
+                target, distance = self._camera_framing_for(configuration_id, mode, view)
+                pose["center"] = pg.Vector(*target)
+                pose["distance"] = distance
+                view_states[mode] = pose
+            view._space_camera_states = view_states
+            view.setCameraParams(**view_states[self.space_mode])
+        if self._camera_linked:
+            self._sync_camera(source, force=True)
 
     @staticmethod
     def _copy_camera_params(view):
@@ -1759,8 +1917,38 @@ class ComparisonViewer(QWidget):
     def _camera_source(self):
         return self.overlay_view if self.mode == "overlay" else self.split_views[0]
 
+    def _view_for_configuration(self, configuration_id):
+        panel_id = f"result:{configuration_id}"
+        try:
+            owner = self._workspace_model.owner(panel_id)
+        except ValueError:
+            owner = None
+        if owner is not None and owner.host == "detached":
+            workspace = next((item for item in self._detached_windows
+                              if item.group_id == owner.group_id), None)
+            if workspace is not None and workspace.views:
+                return workspace.views[0]
+        index = self._configuration_index(configuration_id)
+        if owner is not None and owner.host == "main" and self.mode == "split":
+            return self.split_views[index]
+        if panel_id in self._main_workspace_members():
+            return self.overlay_view
+        return self._camera_source()
+
     def _camera_interacted(self, source):
         self._sync_camera(source)
+
+    def set_camera_linked(self, linked):
+        linked = bool(linked)
+        if linked == self._camera_linked:
+            return
+        self._camera_linked = linked
+        if linked:
+            source = self._view_for_configuration(self.reference_id or self.configurations[0]["id"])
+            self._sync_camera(source, force=True)
+        else:
+            self._camera_states[self.space_mode] = self._copy_camera_params(
+                self._view_for_configuration(self.reference_id or self.configurations[0]["id"]))
 
     def _set_space_mode_from_switch(self, hand_enabled):
         self.set_space_mode("hand" if hand_enabled else "physical")
@@ -1771,27 +1959,34 @@ class ComparisonViewer(QWidget):
         if mode == self.space_mode:
             return
         previous_mode = self.space_mode
-        current_pose = self._copy_camera_params(self._camera_source())
+        source = self._view_for_configuration(self.reference_id or self.configurations[0]["id"])
+        current_pose = self._copy_camera_params(source)
         self._camera_states[previous_mode] = current_pose
+        views = self._workspace_views()
+        for view in views:
+            view_states = getattr(view, "_space_camera_states", {})
+            view_states[previous_mode] = self._copy_camera_params(view)
+            view._space_camera_states = view_states
         self.space_mode = mode
         self.space_mode_switch.setChecked(mode == "hand")
         label = "Hand" if mode == "hand" else "Physical"
         self.space_mode_switch.setToolTip(f"Space: {label}")
         self._apply_workspace()
-        target_pose = self._camera_states[mode]
-        if target_pose is None:
-            target, distance = self._camera_framing_for(self._hand_view_source_id(), mode)
-            target_pose = dict(current_pose)
-            target_pose["center"] = pg.Vector(*target)
-            target_pose["distance"] = distance
-            self._camera_states[mode] = target_pose
-        source = self._camera_source()
-        source.setCameraParams(**target_pose)
+        source = self._view_for_configuration(self.reference_id or self.configurations[0]["id"])
+        shared_pose = self._camera_states[mode]
+        for view in views:
+            view_states = getattr(view, "_space_camera_states", {})
+            saved_pose = shared_pose if self._camera_linked else view_states.get(mode)
+            pose = dict(saved_pose) if saved_pose is not None else self._copy_camera_params(view)
+            if saved_pose is None:
+                target, distance = self._camera_framing_for(self._hand_view_source_id(), mode, view)
+                pose["center"] = pg.Vector(*target)
+                pose["distance"] = distance
+            view.setCameraParams(**pose)
+            view_states[mode] = self._copy_camera_params(view)
+            view._space_camera_states = view_states
+        self._camera_states[mode] = self._copy_camera_params(source)
         self._sync_camera(source)
-        for _window, _detached_source, detached_views in self._detached_windows:
-            if detached_views:
-                detached_views[0].setCameraParams(**target_pose)
-                self._sync_detached(detached_views, detached_views[0])
 
     def _set_scale_labels(self, visible):
         self.labels_switch.setToolTip(f"Scale labels: {'On' if visible else 'Off'}")
@@ -1888,10 +2083,16 @@ class ComparisonViewer(QWidget):
             swatch.setEnabled(not is_gt)
             swatch.setToolTip("GT color is fixed to #33FF33" if is_gt else "Choose candidate result color")
         self.overlay_view.set_frame(self.slider.value())
-        for _window, _source, views in self._detached_windows:
-            for view, color in zip(views, self.configuration_colors):
-                view.configuration_color = color
-                view.hand_colors = (color, color)
+        for workspace in self._detached_windows:
+            for view in workspace.views:
+                if isinstance(view, _OverlayComparisonView):
+                    view.configuration_colors[:] = self.configuration_colors
+                    view.reference_index = self._configuration_index(self.reference_id) if self.reference_id else 0
+                else:
+                    index = self._configuration_index(view.configuration_id)
+                    color = self.configuration_colors[index]
+                    view.configuration_color = color
+                    view.hand_colors = (color, color)
                 view.set_frame(self.slider.value())
         if render:
             self._render_active_frame()
@@ -2047,25 +2248,17 @@ class ComparisonViewer(QWidget):
         self.overlay_panel.refresh(self)
         for panel in self.split_panels:
             panel.refresh(self)
+        for workspace in self._detached_windows:
+            if workspace.panel is not None:
+                workspace.panel.refresh(self)
+                workspace.panel.update_values(self)
         self._refresh_annotations()
 
     def _confidence_opacity_changed(self, enabled):
         self._update_confidence_button()
-        for view in [self.overlay_view, *self.split_views]:
+        for view in self._workspace_views():
             view.confidence_opacity_enabled = enabled
-        for hand, mesh in enumerate(self.overlay_view.meshes):
-            alpha = _confidence_alpha(self.overlay_view.loaded.result, self.overlay_view.frame, hand) if enabled else 1.0
-            _set_mesh_color(mesh, self.configuration_colors[0], alpha * self.overlay_view.mesh_opacity)
-        for config_index, hands in enumerate(self.overlay_view.extra_items, 1):
-            result = self.loaded_results[config_index].result
-            frame = min(self.overlay_view.frame, self.loaded_results[config_index].frame_count - 1)
-            for hand, (_, _, mesh) in enumerate(hands):
-                alpha = _confidence_alpha(result, frame, hand) if enabled else 1.0
-                _set_mesh_color(mesh, self.configuration_colors[config_index], alpha * self.overlay_view.mesh_opacity)
-        for view in self.split_views:
-            for hand, mesh in enumerate(view.meshes):
-                alpha = _confidence_alpha(view.loaded.result, view.frame, hand) if enabled else 1.0
-                _set_mesh_color(mesh, view.hand_colors[hand], alpha * view.mesh_opacity)
+            view.set_frame(self.slider.value())
         self._render_active_frame()
 
     def _set_error_vectors(self, enabled):
@@ -2123,34 +2316,465 @@ class ComparisonViewer(QWidget):
         dialog.open()
         return dialog
 
-    def detach_all(self):
-        window = QMainWindow(self, Qt.WindowType.Window)
-        window.setWindowTitle("CalibFreeHands - Detached Comparison")
-        content = QWidget(window)
-        detached_grid = QGridLayout(content)
-        detached_source = _OverlayCanvas(self.loaded_results[0])
-        detached_grid.addWidget(detached_source, 0, 0)
-        window.setCentralWidget(content)
-        detached_views = [_LinkedResultView(loaded, color, lambda *_: None)
-                          for loaded, color in zip(self.loaded_results, self.configuration_colors)]
-        camera_source = self.overlay_view if self.mode == "overlay" else self.split_views[0]
-        for view in detached_views:
-            view.setCameraParams(**camera_source.cameraParams())
-        for index, (config, view) in enumerate(zip(self.configurations, detached_views), 1):
-            cell = QWidget()
-            cell_layout = QVBoxLayout(cell)
-            cell_layout.addWidget(QLabel(config["name"]))
-            cell_layout.addWidget(view, 1)
-            detached_grid.addWidget(cell, index // self.split_columns, index % self.split_columns)
-        self._detached_windows.append((window, detached_source, detached_views))
-        for view in detached_views:
-            view.set_workspace(self.space_mode,
-                               self._hand_space_for(self._hand_view_source_id())
-                               if self.space_mode == "hand" else None)
-            view.set_labels_visible(self.labels_switch.isChecked())
-            view.camera_changed = self._camera_interacted
-        window.resize(max(1280, self.width()), max(720, self.height()))
+    def _update_main_workspace(self):
+        members = self._main_workspace_members()
+        result_indices = [index for index, config in enumerate(self.configurations)
+                          if f"result:{config['id']}" in members]
+        self.overlay_view.set_member_configuration_ids(result_indices)
+        self.overlay_panel.configuration_indices = result_indices
+        self.overlay_panel.refresh(self)
+        self.overlay_surfaces[SOURCE_PANEL_ID].setVisible(SOURCE_PANEL_ID in members)
+        self.overlay_surfaces["overlay-3d"].setVisible(bool(result_indices))
+        self._sync_split_layout()
+        self._render_active_frame()
+        has_visible_main_panel = (SOURCE_PANEL_ID in members or any(
+            self.visibility_checks[index].isChecked() for index in result_indices))
+        self.reattach_all_button.setEnabled(bool(self._detached_windows))
+        self.detach_source_button.setEnabled(SOURCE_PANEL_ID in members)
+        if has_visible_main_panel:
+            self.show()
+        else:
+            self.hide()
+
+    def _camera_pose_for_new_view(self):
+        return self._copy_camera_params(self._camera_source())
+
+    def _camera_snapshot_for_panel(self, panel_id):
+        owner = self._workspace_model.owner(panel_id)
+        if owner.host == "detached":
+            workspace = next((item for item in self._detached_windows
+                              if item.group_id == owner.group_id), None)
+            view = workspace.views[0] if workspace and workspace.views else self._camera_source()
+        else:
+            view = self._camera_source()
+            if panel_id.startswith("result:") and self.mode == "split":
+                view = self.split_views[self._configuration_index(panel_id.removeprefix("result:"))]
+        states = getattr(view, "_space_camera_states", {})
+        copied_states = {key: self._copy_camera_params_value(value) for key, value in states.items()}
+        return self._copy_camera_params(view), copied_states
+
+    @staticmethod
+    def _copy_camera_params_value(params):
+        copied = dict(params)
+        if "center" in copied:
+            copied["center"] = pg.Vector(*tuple(copied["center"]))
+        return copied
+
+    def _restore_group_cameras_to_main(self, workspace):
+        if not workspace.views:
+            return
+        pose = self._copy_camera_params(workspace.views[0])
+        states = getattr(workspace.views[0], "_space_camera_states", {})
+        group = self._workspace_model.group(workspace.group_id)
+        for panel_id in group.result_panel_ids:
+            index = self._configuration_index(panel_id.removeprefix("result:"))
+            split_view = self.split_views[index]
+            split_view.setCameraParams(**pose)
+            split_view._space_camera_states = {
+                key: self._copy_camera_params_value(value) for key, value in states.items()}
+            if panel_id == f"result:{self.reference_id or self.configurations[0]['id']}":
+                self.overlay_view.setCameraParams(**pose)
+                self.overlay_view._space_camera_states = {
+                    key: self._copy_camera_params_value(value) for key, value in states.items()}
+
+    def _create_detached_workspace(self, group_id, *, position=None, size=None,
+                                   camera_pose=None, camera_states=None):
+        group = self._workspace_model.group(group_id)
+        result_indices = [self._configuration_index(panel_id.removeprefix("result:"))
+                          for panel_id in group.result_panel_ids]
+        title_names = [self.configurations[index]["name"] for index in result_indices]
+        title = "Source Media" if not title_names else " + ".join(title_names)
+        window = _WorkspaceWindow(self, group_id, f"CalibFreeHands - {title}")
+        area = _WorkspaceDropArea(self, group_id)
+        area.setObjectName("workspace-drop-area")
+        layout = QVBoxLayout(area)
+        layout.setContentsMargins(6, 6, 6, 6)
+        layout.setSpacing(5)
+
+        header = QWidget(area)
+        header_layout = QHBoxLayout(header)
+        header_layout.setContentsMargins(0, 0, 0, 0)
+        grip = _WorkspaceDragGrip(group_id, title, header)
+        header_layout.addWidget(grip)
+        identity = QLabel(title, header)
+        identity.setStyleSheet("font-weight: 600")
+        header_layout.addWidget(identity, 1)
+        if SOURCE_PANEL_ID in group.members:
+            header_layout.addWidget(QLabel("Shared Viewer controls", header))
+            if result_indices:
+                separate_source = QToolButton(header)
+                separate_source.setText("Separate Source")
+                separate_source.setToolTip("Move Source Media and shared controls into its own window")
+                separate_source.clicked.connect(
+                    lambda _=False, current_group=group_id: self.extract_source_from_workspace(current_group))
+                header_layout.addWidget(separate_source)
+        layout.addWidget(header)
+
+        source_canvas = None
+        if SOURCE_PANEL_ID in group.members:
+            source_canvas = _OverlayCanvas(self.loaded_results[0])
+            source_canvas.set_frame(self.slider.value(), self._presented_source_image)
+            source_canvas.show_joints = self.source_overlay.show_joints
+            source_canvas.show_bones = self.source_overlay.show_bones
+            source_canvas.show_left = self.source_overlay.show_left
+            source_canvas.show_right = self.source_overlay.show_right
+            self.chrome.setParent(area)
+            self.chrome.show()
+            layout.addWidget(self.chrome)
+
+        views = []
+        panel = None
+        result_view = None
+        if result_indices:
+            if len(result_indices) == 1:
+                index = result_indices[0]
+                result_view = _LinkedResultView(
+                    self.loaded_results[index], self.configuration_colors[index], self._camera_interacted)
+                result_view.configuration_id = self.configurations[index]["id"]
+            else:
+                result_view = _OverlayComparisonView(self.loaded_results, self.configuration_colors)
+                result_view.set_member_configuration_ids(result_indices)
+            result_view.setMinimumSize(340, 260)
+            result_view.setCameraParams(**(camera_pose or self._camera_pose_for_new_view()))
+            if camera_states is not None:
+                result_view._space_camera_states = {
+                    key: self._copy_camera_params_value(value) for key, value in camera_states.items()
+                }
+            result_view.set_workspace(
+                self.space_mode,
+                self._hand_space_for(self._hand_view_source_id()) if self.space_mode == "hand" else None)
+            result_view.set_labels_visible(self.labels_switch.isChecked())
+            result_view.set_frame(self.slider.value())
+            if isinstance(result_view, _OverlayComparisonView):
+                result_view.configuration_visible = [check.isChecked() for check in self.visibility_checks]
+            else:
+                result_view.setVisible(self.visibility_checks[result_indices[0]].isChecked())
+            for attribute in ("show_joints", "show_bones", "show_left", "show_right", "show_grid", "show_axis"):
+                setattr(result_view, attribute, getattr(self.overlay_view, attribute))
+            result_view.show_mesh = self.mesh_checkbox.isChecked()
+            result_view.mesh_opacity = self.mesh_opacity_slider.value() / 100
+            result_view.confidence_opacity_enabled = self.confidence_opacity_checkbox.isChecked()
+            result_view.camera_changed = self._camera_interacted
+            panel = _ViewportPanel(result_view, result_indices)
+            panel.is_detached_group = True
+            panel.workspace_group_id = group_id
+            result_view.hud = panel
+            panel.refresh(self)
+            panel.update_values(self)
+            views.append(result_view)
+
+        if source_canvas is not None and result_view is not None:
+            composition = QSplitter(Qt.Orientation.Horizontal, area)
+            composition.addWidget(source_canvas)
+            composition.addWidget(result_view)
+            composition.setStretchFactor(0, 1)
+            composition.setStretchFactor(1, 2)
+            composition.setSizes([500, 1000])
+            layout.addWidget(composition, 1)
+        elif source_canvas is not None:
+            layout.addWidget(source_canvas, 1)
+        elif result_view is not None:
+            layout.addWidget(result_view, 1)
+        else:
+            layout.addWidget(QLabel("No visible results", area), 1)
+
+        window.setCentralWidget(area)
+        workspace = _DetachedWorkspace(group_id, window, source_canvas, views, panel, group.members)
+        self._detached_windows.append(workspace)
+        window.resize(size or QSize(900, 650))
+        if position is not None:
+            window.move(position)
         window.show()
+        return workspace
+
+    def _dispose_detached_workspace(self, workspace):
+        workspace.window._closing_for_transition = True
+        if workspace.source_canvas is not None and self.chrome.parentWidget() is not self:
+            self.chrome.setParent(self)
+            self._root_layout.addWidget(self.chrome, 0, 0, Qt.AlignmentFlag.AlignBottom)
+        workspace.window.close()
+        workspace.window.deleteLater()
+        if workspace in self._detached_windows:
+            self._detached_windows.remove(workspace)
+
+    def _set_workspace_drop_feedback(self, group_id, active):
+        self._workspace_drop_group_id = group_id if active else None
+        for workspace in self._detached_windows:
+            if workspace.group_id == group_id:
+                workspace.window.centralWidget().setStyleSheet(
+                    "QWidget#workspace-drop-area { border: 3px solid palette(highlight); }" if active else "")
+
+    def _show_workspace_drop_feedback_at(self, global_position, source_group_id):
+        target_group_id = None
+        widget = QApplication.widgetAt(global_position)
+        if widget is not None:
+            target_window = widget.window()
+            target_group_id = next((workspace.group_id for workspace in self._detached_windows
+                                   if workspace.window is target_window), None)
+        if target_group_id == source_group_id:
+            target_group_id = None
+        self._workspace_drop_group_id = target_group_id
+        for workspace in self._detached_windows:
+            workspace.window.centralWidget().setStyleSheet(
+                "QWidget#workspace-drop-area { border: 3px solid palette(highlight); }"
+                if workspace.group_id == target_group_id else "")
+        return target_group_id
+
+    def _clear_workspace_drop_feedback(self):
+        self._workspace_drop_group_id = None
+        for workspace in self._detached_windows:
+            workspace.window.centralWidget().setStyleSheet("")
+
+    def detach_source_media(self):
+        if SOURCE_PANEL_ID not in self._main_workspace_members():
+            return
+        group_id = self._workspace_model.detach_panel(SOURCE_PANEL_ID)
+        self._update_main_workspace()
+        self._create_detached_workspace(group_id)
+        self.reattach_all_button.setEnabled(True)
+
+    def detach_result(self, configuration_id):
+        panel_id = f"result:{configuration_id}"
+        camera_pose, camera_states = self._camera_snapshot_for_panel(panel_id)
+        group_id = self._workspace_model.detach_panel(panel_id)
+        self._update_main_workspace()
+        self._create_detached_workspace(group_id, camera_pose=camera_pose, camera_states=camera_states)
+        self.reattach_all_button.setEnabled(True)
+
+    def reorder_workspace_result_at(self, configuration_id, group_id, visible_ids, insertion):
+        group = self._workspace_model.group(group_id)
+        ordered = [panel_id for panel_id in group.result_panel_ids if panel_id in visible_ids]
+        source_id = f"result:{configuration_id}"
+        if source_id not in ordered:
+            return
+        insertion = max(0, min(int(insertion), len(ordered)))
+        ordered.remove(source_id)
+        ordered.insert(insertion, source_id)
+        visible_set = set(visible_ids)
+        merged_order = []
+        visible_iter = iter(ordered)
+        for panel_id in group.result_panel_ids:
+            merged_order.append(next(visible_iter) if panel_id in visible_set else panel_id)
+        self._workspace_model.reorder_results(group_id, merged_order)
+        self._refresh_metric_panels()
+
+    def drop_result_from_workspace(self, configuration_id, source_group_id, global_position):
+        panel_id = f"result:{configuration_id}"
+        source_group = self._workspace_model.group(source_group_id)
+        target_group_id = None
+        widget = QApplication.widgetAt(global_position)
+        if widget is not None:
+            target_window = widget.window()
+            target_group_id = next((workspace.group_id for workspace in self._detached_windows
+                                   if workspace.window is target_window), None)
+            if target_group_id is None and (target_window is self or self.isAncestorOf(target_window)):
+                main = self._main_workspace_group()
+                target_group_id = main.group_id if main is not None else None
+        if target_group_id == source_group_id:
+            return
+
+        if target_group_id is not None:
+            old_workspace = next((item for item in self._detached_windows
+                                  if item.group_id == source_group_id), None)
+            old_position = old_workspace.window.pos() if old_workspace is not None else None
+            old_size = old_workspace.window.size() if old_workspace is not None else None
+            old_pose = (self._copy_camera_params(old_workspace.views[0])
+                        if old_workspace and old_workspace.views else None)
+            old_states = (getattr(old_workspace.views[0], "_space_camera_states", {})
+                          if old_workspace and old_workspace.views else None)
+            if source_group.host == "main":
+                moving_group = self._workspace_model.detach_panel(panel_id)
+                self._update_main_workspace()
+            else:
+                moving_group = self._workspace_model.extract(panel_id, source_group_id)
+                if old_workspace is not None:
+                    self._dispose_detached_workspace(old_workspace)
+                self._update_main_workspace()
+                self._create_detached_workspace(source_group_id, position=old_position, size=old_size,
+                                                camera_pose=old_pose, camera_states=old_states)
+            self.merge_workspace_groups(moving_group, target_group_id)
+            return
+
+        if source_group.host == "main":
+            self.detach_result(configuration_id)
+        else:
+            old_workspace = next((item for item in self._detached_windows
+                                  if item.group_id == source_group_id), None)
+            position = old_workspace.window.pos() if old_workspace is not None else None
+            size = old_workspace.window.size() if old_workspace is not None else None
+            camera_pose = (self._copy_camera_params(old_workspace.views[0])
+                           if old_workspace and old_workspace.views else None)
+            camera_states = (getattr(old_workspace.views[0], "_space_camera_states", {})
+                             if old_workspace and old_workspace.views else None)
+            new_group_id = self._workspace_model.extract(panel_id, source_group_id)
+            if new_group_id == source_group_id:
+                return
+            if old_workspace is not None:
+                self._dispose_detached_workspace(old_workspace)
+            self._update_main_workspace()
+            self._create_detached_workspace(source_group_id, position=position, size=size,
+                                            camera_pose=camera_pose, camera_states=camera_states)
+            self._create_detached_workspace(new_group_id,
+                                            position=position + QPoint(36, 36) if position else None,
+                                            size=size, camera_pose=camera_pose, camera_states=camera_states)
+
+    def drop_split_panel(self, panel_id, global_position):
+        camera_pose, camera_states = self._camera_snapshot_for_panel(panel_id)
+        target_group = None
+        widget = QApplication.widgetAt(global_position)
+        if widget is not None:
+            target_window = widget.window()
+            target_group = next((workspace.group_id for workspace in self._detached_windows
+                                 if workspace.window is target_window), None)
+        if target_group is not None:
+            source_group = self._workspace_model.detach_panel(panel_id)
+            self._update_main_workspace()
+            self.merge_workspace_groups(source_group, target_group)
+            return
+        if self.rect().contains(self.mapFromGlobal(global_position)):
+            return
+        group_id = self._workspace_model.detach_panel(panel_id)
+        self._update_main_workspace()
+        self._create_detached_workspace(group_id, position=global_position + QPoint(16, 16),
+                                        camera_pose=camera_pose, camera_states=camera_states)
+        self.reattach_all_button.setEnabled(True)
+
+    def extract_result_from_workspace(self, configuration_id, group_id):
+        panel_id = f"result:{configuration_id}"
+        old_workspace = next((item for item in self._detached_windows
+                              if item.group_id == group_id), None)
+        camera_pose = self._copy_camera_params(old_workspace.views[0]) if old_workspace and old_workspace.views else None
+        camera_states = getattr(old_workspace.views[0], "_space_camera_states", {}) if old_workspace and old_workspace.views else None
+        new_group_id = self._workspace_model.extract(panel_id, group_id)
+        if new_group_id == group_id:
+            return group_id
+        position = old_workspace.window.pos() if old_workspace is not None else None
+        size = old_workspace.window.size() if old_workspace is not None else None
+        if old_workspace is not None:
+            self._dispose_detached_workspace(old_workspace)
+        self._update_main_workspace()
+        self._create_detached_workspace(group_id, position=position, size=size,
+                                        camera_pose=camera_pose, camera_states=camera_states)
+        self._create_detached_workspace(new_group_id, position=(position + QPoint(36, 36)) if position else None,
+                                        size=size, camera_pose=camera_pose, camera_states=camera_states)
+        return new_group_id
+
+    def extract_source_from_workspace(self, group_id):
+        group = self._workspace_model.group(group_id)
+        if SOURCE_PANEL_ID not in group.members or not group.result_panel_ids:
+            return group_id
+        old_workspace = next((item for item in self._detached_windows
+                              if item.group_id == group_id), None)
+        camera_pose = self._copy_camera_params(old_workspace.views[0]) if old_workspace and old_workspace.views else None
+        camera_states = getattr(old_workspace.views[0], "_space_camera_states", {}) if old_workspace and old_workspace.views else None
+        position = old_workspace.window.pos() if old_workspace is not None else None
+        size = old_workspace.window.size() if old_workspace is not None else None
+        source_group_id = self._workspace_model.extract(SOURCE_PANEL_ID, group_id)
+        if old_workspace is not None:
+            self._dispose_detached_workspace(old_workspace)
+        self._update_main_workspace()
+        self._create_detached_workspace(source_group_id, position=position, size=size)
+        self._create_detached_workspace(group_id,
+                                        position=position + QPoint(36, 36) if position else None,
+                                        size=size, camera_pose=camera_pose, camera_states=camera_states)
+        return source_group_id
+
+    def detach_all(self):
+        visible = [config["id"] for index, config in enumerate(self.configurations)
+                   if self.visibility_checks[index].isChecked()]
+        camera_snapshots = {
+            f"result:{configuration_id}": self._camera_snapshot_for_panel(f"result:{configuration_id}")
+            for configuration_id in visible
+        }
+        group_ids = self._workspace_model.detach_visible(visible)
+        self._update_main_workspace()
+        for index, group_id in enumerate(group_ids):
+            offset = QPoint(80 + index * 36, 80 + index * 32)
+            result_panel_ids = self._workspace_model.group(group_id).result_panel_ids
+            if result_panel_ids:
+                camera_pose, camera_states = camera_snapshots[result_panel_ids[0]]
+            else:
+                camera_pose, camera_states = None, None
+            self._create_detached_workspace(group_id, position=self.pos() + offset,
+                                            camera_pose=camera_pose, camera_states=camera_states)
+        self.reattach_all_button.setEnabled(True)
+
+    def reattach_workspace_group(self, group_id, *, closing_window=None):
+        workspace = next((item for item in self._detached_windows if item.group_id == group_id), None)
+        if workspace is not None:
+            self._restore_group_cameras_to_main(workspace)
+        try:
+            self._workspace_model.reattach(group_id)
+        except ValueError:
+            return
+        if workspace is not None:
+            if closing_window is not None:
+                workspace.window._closing_for_transition = True
+                if workspace.source_canvas is not None and self.chrome.parentWidget() is not self:
+                    self.chrome.setParent(self)
+                    self._root_layout.addWidget(self.chrome, 0, 0, Qt.AlignmentFlag.AlignBottom)
+                self._detached_windows.remove(workspace)
+                workspace.window.deleteLater()
+            else:
+                self._dispose_detached_workspace(workspace)
+        self._update_main_workspace()
+
+    def reattach_all(self):
+        if not self._detached_windows:
+            return
+        for workspace in tuple(self._detached_windows):
+            self._restore_group_cameras_to_main(workspace)
+        self._workspace_model.reattach_all()
+        for workspace in tuple(self._detached_windows):
+            self._dispose_detached_workspace(workspace)
+        self._update_main_workspace()
+
+    def merge_workspace_groups(self, source_group_id, target_group_id):
+        if source_group_id == target_group_id:
+            return
+        self._workspace_model.group(source_group_id)
+        self._workspace_model.group(target_group_id)
+        target_workspace = next((item for item in self._detached_windows
+                                 if item.group_id == target_group_id), None)
+        source_workspace = next((item for item in self._detached_windows
+                                 if item.group_id == source_group_id), None)
+        position = target_workspace.window.pos() if target_workspace is not None else None
+        size = target_workspace.window.size() if target_workspace is not None else None
+        camera_workspace = (target_workspace if target_workspace and target_workspace.views else
+                            source_workspace if source_workspace and source_workspace.views else None)
+        camera_pose = (self._copy_camera_params(camera_workspace.views[0])
+                       if camera_workspace else None)
+        camera_states = (getattr(camera_workspace.views[0], "_space_camera_states", {})
+                         if camera_workspace else None)
+        self._workspace_model.merge(source_group_id, target_group_id)
+        for workspace in tuple(self._detached_windows):
+            if workspace.group_id in {source_group_id, target_group_id}:
+                self._dispose_detached_workspace(workspace)
+        self._update_main_workspace()
+        merged = self._workspace_model.group(target_group_id)
+        if merged.host == "detached":
+            self._create_detached_workspace(target_group_id, position=position, size=size,
+                                            camera_pose=camera_pose, camera_states=camera_states)
+        self.reattach_all_button.setEnabled(bool(self._detached_windows))
+        return target_group_id
+
+    def dragEnterEvent(self, event):
+        if event.mimeData().hasFormat(_WorkspaceDragGrip.MIME_TYPE):
+            event.acceptProposedAction()
+            return
+        super().dragEnterEvent(event)
+
+    def dropEvent(self, event):
+        if event.mimeData().hasFormat(_WorkspaceDragGrip.MIME_TYPE):
+            source_group_id = bytes(event.mimeData().data(_WorkspaceDragGrip.MIME_TYPE)).decode("utf-8")
+            target = self._main_workspace_group()
+            if target is not None:
+                self.merge_workspace_groups(source_group_id, target.group_id)
+            else:
+                self.reattach_workspace_group(source_group_id)
+            event.acceptProposedAction()
+            return
+        super().dropEvent(event)
 
     @staticmethod
     def _sync_detached(views, source):
@@ -2182,12 +2806,18 @@ class ComparisonViewer(QWidget):
 
     def _set_configuration_visible(self, index, visible):
         self.overlay_view.set_configuration_visible(index, visible)
-        if visible and self.mode == "overlay":
+        config_id = self.configurations[index]["id"]
+        for workspace in self._detached_windows:
+            for view in workspace.views:
+                if isinstance(view, _OverlayComparisonView):
+                    view.set_configuration_visible(index, visible)
+                elif getattr(view, "configuration_id", None) == config_id:
+                    view.setVisible(bool(visible))
+        self.split_surfaces[f"result:{config_id}"].setVisible(
+            f"result:{config_id}" in self._main_workspace_members() and bool(visible))
+        if visible:
             self._render_active_frame()
-        self.split_surfaces[f"result:{self.configurations[index]['id']}"].setVisible(visible)
         self._sync_split_layout()
-        if visible and self.mode == "split":
-            self.split_views[index].set_frame(self.slider.value())
         self._update_results_button()
         self._refresh_metric_panels()
 
@@ -2196,7 +2826,12 @@ class ComparisonViewer(QWidget):
         if hasattr(source, attr):
             setattr(source, attr, value)
         source.update()
-        for view in [self.overlay_view, *self.split_views]:
+        for workspace in self._detached_windows:
+            if workspace.source_canvas is not None:
+                if hasattr(workspace.source_canvas, attr):
+                    setattr(workspace.source_canvas, attr, value)
+                workspace.source_canvas.update()
+        for view in self._workspace_views():
             setattr(view, attr, value)
             view._update_reference_visibility()
         self._render_active_frame()
@@ -2206,7 +2841,7 @@ class ComparisonViewer(QWidget):
         if value:
             for check in (self.joint_checkbox, self.bone_checkbox):
                 check.setChecked(False)
-        for view in [self.overlay_view, *self.split_views]:
+        for view in self._workspace_views():
             view.show_mesh = value
         self._render_active_frame()
 
@@ -2222,7 +2857,7 @@ class ComparisonViewer(QWidget):
 
     def _set_opacity(self, value):
         self.mesh_opacity_value.setText(f"{value}%")
-        for view in [self.overlay_view, *self.split_views]:
+        for view in self._workspace_views():
             view.mesh_opacity = value / 100
         self._render_active_frame()
 
@@ -2290,13 +2925,16 @@ class ComparisonViewer(QWidget):
             for index, view in enumerate(self.split_views):
                 if self.visibility_checks[index].isChecked():
                     view.set_frame(frame)
-        for _window, detached_source, views in self._detached_windows:
-            if not _window.isVisible():
+        for workspace in self._detached_windows:
+            if not workspace.window.isVisible():
                 continue
-            detached_source.set_frame(frame, source_image)
-            for view in views:
+            if workspace.source_canvas is not None:
+                workspace.source_canvas.set_frame(frame, source_image)
+            for view in workspace.views:
                 if not view.isHidden():
                     view.set_frame(frame)
+            if workspace.panel is not None:
+                workspace.panel.update_values(self)
         panels = [self.overlay_panel] if self.mode == "overlay" else self.split_panels
         for panel in panels:
             if (self.mode == "split" and not self.visibility_checks[panel.configuration_indices[0]].isChecked()):
@@ -2404,18 +3042,15 @@ class ComparisonViewer(QWidget):
         self._stats_started = monotonic()
         self._stats_frames = 0
 
-    def _sync_camera(self, source):
-        if self._syncing_camera or not self.split_views:
+    def _sync_camera(self, source, *, force=False):
+        if self._syncing_camera or (not self._camera_linked and not force):
             return
         self._syncing_camera = True
         try:
             params = source.cameraParams()
-            for view in [self.overlay_view, *self.split_views]:
-                if view is not source: view.setCameraParams(**params)
-            for _window, _detached_source, detached_views in self._detached_windows:
-                for view in detached_views:
-                    if view is not source:
-                        view.setCameraParams(**params)
+            for view in self._workspace_views():
+                if view is not source:
+                    view.setCameraParams(**params)
         finally:
             self._syncing_camera = False
         state = self._copy_camera_params(source)
@@ -2758,6 +3393,12 @@ class ComparisonViewer(QWidget):
             self._hide_hover_popup(button)
 
     def closeEvent(self, event):
+        self._shutting_down = True
+        for workspace in tuple(self._detached_windows):
+            workspace.window._closing_for_transition = True
+            workspace.window.close()
+            workspace.window.deleteLater()
+        self._detached_windows.clear()
         if hasattr(self, "split_reorder_controller"):
             self.split_reorder_controller.cancel()
         for handle in self.findChildren(_ResultDragHandle):

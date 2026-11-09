@@ -193,7 +193,9 @@ def test_detached_comparison_views_share_current_pose_and_remain_linked(tmp_path
     viewer = ComparisonViewer(_session(tmp_path, 3))
     viewer.overlay_view.setCameraPosition(pos=(0.2, -0.8, 0.4), distance=6.0, azimuth=72.0, elevation=18.0)
     viewer.detach_all()
-    window, _source, detached_views = viewer._detached_windows[0]
+    assert len(viewer._detached_windows) == 4
+    detached_views = [view for workspace in viewer._detached_windows for view in workspace.views]
+    assert len(detached_views) == 3
     for view in detached_views:
         params = view.cameraParams()
         assert params["distance"] == pytest.approx(6.0)
@@ -218,7 +220,7 @@ def test_detached_comparison_views_share_current_pose_and_remain_linked(tmp_path
         np.testing.assert_allclose(view.workspace_bounds_m, expected_bounds)
     viewer.labels_switch.setChecked(False)
     assert all(not label.visible() for view in detached_views for label in view.numeric_labels)
-    window.close()
+    viewer.reattach_all()
     viewer.close()
 
 
@@ -231,10 +233,215 @@ def test_detach_all_initial_geometry_keeps_3d_viewports_renderable(tmp_path, qap
     viewer.show()
     QTest.qWait(50)
     viewer.detach_all()
-    window, _source, detached_views = viewer._detached_windows[0]
+    assert len(viewer._detached_windows) == 4
+    detached_views = [view for workspace in viewer._detached_windows for view in workspace.views]
     QTest.qWait(50)
     assert all(view.width() >= 340 and view.height() >= 260 for view in detached_views)
-    window.close()
+    viewer.reattach_all()
+    viewer.close()
+
+
+def test_detach_all_creates_source_controls_and_one_window_per_visible_result(tmp_path, qapp):
+    from calibfreehands.visualization.comparison import ComparisonViewer
+    from calibfreehands.visualization.workspace import SOURCE_PANEL_ID
+
+    viewer = ComparisonViewer(_session(tmp_path, 3))
+    timer, clock = viewer.timer, viewer.playback_clock
+    arrays = [loaded.result.keypoints_3d.copy() for loaded in viewer.loaded_results]
+
+    viewer.detach_all()
+
+    assert len(viewer._detached_windows) == 4
+    source = next(workspace for workspace in viewer._detached_windows
+                  if workspace.members == (SOURCE_PANEL_ID,))
+    assert source.source_canvas is not None
+    assert viewer.chrome.parentWidget() is source.window.centralWidget()
+    assert viewer.timer is timer and viewer.playback_clock is clock
+    assert not viewer.isVisible()
+    assert all(len(workspace.views) == 1 for workspace in viewer._detached_windows
+               if workspace.source_canvas is None)
+    assert viewer._workspace_model.validate()
+
+    viewer.slider.setValue(2)
+    assert source.source_canvas.frame == 2
+    assert all(view.frame == 2 for workspace in viewer._detached_windows
+               for view in workspace.views)
+    for loaded, before in zip(viewer.loaded_results, arrays):
+        np.testing.assert_array_equal(loaded.result.keypoints_3d, before)
+
+    viewer.reattach_all()
+    assert viewer.chrome.parentWidget() is viewer
+    assert viewer.isVisible()
+    assert viewer.slider.value() == 2
+    assert not viewer._detached_windows
+    assert viewer._workspace_model.validate()
+    viewer.close()
+
+
+def test_detach_all_keeps_hidden_result_membership_separate_from_visibility(tmp_path, qapp):
+    from calibfreehands.visualization.comparison import ComparisonViewer
+
+    viewer = ComparisonViewer(_session(tmp_path, 3))
+    viewer.visibility_checks[1].setChecked(False)
+    hidden_owner = viewer._workspace_model.owner("result:cfg-1").group_id
+
+    viewer.detach_all()
+
+    assert len(viewer._detached_windows) == 3
+    assert viewer._workspace_model.owner("result:cfg-1").group_id == hidden_owner
+    assert viewer._workspace_model.owner("result:cfg-1").host == "main"
+    assert not viewer.visibility_checks[1].isChecked()
+    assert all("result:cfg-1" not in workspace.members for workspace in viewer._detached_windows)
+    viewer.reattach_all()
+    viewer.close()
+
+
+def test_detaching_source_controls_preserves_result_windows_and_shared_playback_owner(tmp_path, qapp):
+    from calibfreehands.visualization.comparison import ComparisonViewer
+    from calibfreehands.visualization.workspace import SOURCE_PANEL_ID
+
+    viewer = ComparisonViewer(_session(tmp_path, 2))
+    timer, clock = viewer.timer, viewer.playback_clock
+    viewer.set_mode("split")
+    viewer.detach_source_media()
+
+    source = next(workspace for workspace in viewer._detached_windows
+                  if SOURCE_PANEL_ID in workspace.members)
+    assert source.members == (SOURCE_PANEL_ID,)
+    assert source.source_canvas is not None
+    assert viewer.chrome.parentWidget() is source.window.centralWidget()
+    assert viewer.timer is timer and viewer.playback_clock is clock
+    assert viewer._workspace_model.owner("result:cfg-0").host == "main"
+    assert viewer.isVisible()
+
+    source.window.close()
+    qapp.processEvents()
+    assert viewer._workspace_model.owner(SOURCE_PANEL_ID).host == "main"
+    assert viewer.chrome.parentWidget() is viewer
+    assert len(viewer._detached_windows) == 0
+    assert viewer.isVisible()
+    viewer.close()
+
+
+def test_source_can_be_extracted_from_composition_and_closed_independently(tmp_path, qapp):
+    from calibfreehands.visualization.comparison import ComparisonViewer
+    from calibfreehands.visualization.workspace import SOURCE_PANEL_ID
+
+    viewer = ComparisonViewer(_session(tmp_path, 2))
+    viewer.detach_all()
+    groups = {workspace.members[0]: workspace.group_id for workspace in viewer._detached_windows}
+    composition_id = viewer.merge_workspace_groups(
+        groups[SOURCE_PANEL_ID], groups["result:cfg-0"])
+
+    source_id = viewer.extract_source_from_workspace(composition_id)
+
+    source = next(workspace for workspace in viewer._detached_windows
+                  if workspace.group_id == source_id)
+    assert source.members == (SOURCE_PANEL_ID,)
+    assert viewer._workspace_model.owner("result:cfg-0").members == ("result:cfg-0",)
+    source.window.close()
+    qapp.processEvents()
+    assert viewer._workspace_model.owner(SOURCE_PANEL_ID).host == "main"
+    assert any("result:cfg-0" in workspace.members for workspace in viewer._detached_windows)
+    assert viewer._workspace_model.validate()
+    viewer.reattach_all()
+    viewer.close()
+
+
+def test_reattach_all_keeps_active_shared_playback_clock(tmp_path, qapp):
+    from PySide6.QtTest import QTest
+    from calibfreehands.visualization.comparison import ComparisonViewer
+
+    viewer = ComparisonViewer(_session(tmp_path, 3))
+    timer, clock = viewer.timer, viewer.playback_clock
+    viewer.timer.start()
+    viewer.playback_clock.play(viewer.slider.value())
+    viewer.detach_all()
+    viewer.reattach_all()
+
+    assert viewer.timer is timer and viewer.timer.isActive()
+    assert viewer.playback_clock is clock and viewer.playback_clock.playing
+    QTest.qWait(60)
+    assert viewer.presented_frame is not None
+    viewer.close()
+
+
+def test_detached_groups_compose_overlay_split_extract_and_close_reattaches(tmp_path, qapp):
+    from calibfreehands.visualization.comparison import ComparisonViewer, _OverlayComparisonView
+    from calibfreehands.visualization.workspace import SOURCE_PANEL_ID
+
+    viewer = ComparisonViewer(_session(tmp_path, 3))
+    viewer.detach_all()
+    group_for = {workspace.members[0]: workspace.group_id for workspace in viewer._detached_windows}
+    source_group = group_for[SOURCE_PANEL_ID]
+    a_group = group_for["result:cfg-0"]
+    b_group = group_for["result:cfg-1"]
+    b_workspace = next(workspace for workspace in viewer._detached_windows if workspace.group_id == b_group)
+    b_workspace.views[0].setCameraPosition(azimuth=135, elevation=42)
+
+    merged_id = viewer.merge_workspace_groups(a_group, b_group)
+    merged = next(workspace for workspace in viewer._detached_windows if workspace.group_id == merged_id)
+    assert merged.members == ("result:cfg-0", "result:cfg-1")
+    assert len(merged.views) == 1 and isinstance(merged.views[0], _OverlayComparisonView)
+    assert merged.views[0].member_configuration_indices == {0, 1}
+    assert merged.views[0].cameraParams()["azimuth"] == pytest.approx(135)
+    assert merged.views[0].cameraParams()["elevation"] == pytest.approx(42)
+
+    source_composition_id = viewer.merge_workspace_groups(merged_id, source_group)
+    composition = next(workspace for workspace in viewer._detached_windows
+                       if workspace.group_id == source_composition_id)
+    assert composition.members == (SOURCE_PANEL_ID, "result:cfg-0", "result:cfg-1")
+    assert composition.source_canvas is not None
+    assert composition.panel is not None
+    assert composition.views[0].cameraParams()["azimuth"] == pytest.approx(135)
+    assert composition.views[0].cameraParams()["elevation"] == pytest.approx(42)
+    assert viewer.chrome.parentWidget() is composition.window.centralWidget()
+
+    viewer.extract_result_from_workspace("cfg-1", source_composition_id)
+    assert viewer._workspace_model.owner("result:cfg-1").members == ("result:cfg-1",)
+    assert viewer._workspace_model.owner("result:cfg-0").members == (SOURCE_PANEL_ID, "result:cfg-0")
+    assert viewer._workspace_model.validate()
+
+    cfg0_window = next(workspace.window for workspace in viewer._detached_windows
+                       if "result:cfg-0" in workspace.members)
+    cfg0_window.close()
+    assert viewer._workspace_model.owner("result:cfg-0").host == "main"
+    assert viewer._workspace_model.owner("source-media").host == "main"
+    assert any("result:cfg-1" in workspace.members for workspace in viewer._detached_windows)
+    assert viewer._workspace_model.validate()
+    viewer.reattach_all()
+    viewer.close()
+
+
+def test_camera_link_toggle_keeps_unlinked_orientations_and_relinks_to_selected_gt(tmp_path, qapp):
+    from calibfreehands.visualization.comparison import ComparisonViewer
+
+    viewer = ComparisonViewer(_session(tmp_path, 3, gt_index=1))
+    viewer.detach_all()
+    views = [view for workspace in viewer._detached_windows for view in workspace.views]
+    assert viewer.camera_link_checkbox.isChecked()
+
+    viewer.set_camera_linked(False)
+    views[0].setCameraPosition(azimuth=15, elevation=20)
+    views[0].camera_changed(views[0])
+    views[1].setCameraPosition(azimuth=100, elevation=35)
+    views[1].camera_changed(views[1])
+    assert views[0].cameraParams()["azimuth"] == pytest.approx(15)
+    assert views[1].cameraParams()["azimuth"] == pytest.approx(100)
+
+    gt_view = next(workspace.views[0] for workspace in viewer._detached_windows
+                   if "result:cfg-1" in workspace.members)
+    gt_view.setCameraPosition(azimuth=230, elevation=42)
+    viewer.set_camera_linked(True)
+    for view in views:
+        assert view.cameraParams()["azimuth"] == pytest.approx(230)
+        assert view.cameraParams()["elevation"] == pytest.approx(42)
+
+    viewer.set_camera_linked(False)
+    views[0].setCameraPosition(azimuth=300, elevation=10)
+    views[0].camera_changed(views[0])
+    assert views[1].cameraParams()["azimuth"] == pytest.approx(230)
+    viewer.reattach_all()
     viewer.close()
 
 
@@ -634,7 +841,7 @@ def test_gt_refocus_syncs_split_detached_views_and_preserves_playback_order(
     assert viewer.reference_id == "cfg-2"
     assert viewer.configuration_colors[2] == pytest.approx((0x33 / 255, 1.0, 0x33 / 255))
     all_views = [viewer.overlay_view, *viewer.split_views,
-                 *viewer._detached_windows[0][2]]
+                 *(view for workspace in viewer._detached_windows for view in workspace.views)]
     for view in all_views:
         params = view.cameraParams()
         np.testing.assert_allclose(tuple(params["center"]), expected_center)
@@ -642,7 +849,7 @@ def test_gt_refocus_syncs_split_detached_views_and_preserves_playback_order(
         assert params["azimuth"] == pytest.approx(27.0)
         assert params["elevation"] == pytest.approx(13.0)
     viewer._play()
-    viewer._detached_windows[0][0].close()
+    viewer.reattach_all()
     viewer.close()
 
 
@@ -1760,10 +1967,12 @@ def test_dashboard_checkerboard_default_metric_export_reference_and_detach_sync(
     rows = json.loads((tmp_path / "selected.json").read_text(encoding="utf-8"))
     assert rows and {row["reference_result_id"] for row in rows} == {"cfg-2"}
     viewer.detach_all()
-    window, source, detached_views = viewer._detached_windows[0]
+    source_workspace = next(workspace for workspace in viewer._detached_windows
+                            if workspace.source_canvas is not None)
     viewer.slider.setValue(2)
-    assert source.frame == 2 and all(view.frame == 2 for view in detached_views)
-    window.close()
+    assert source_workspace.source_canvas.frame == 2
+    assert all(view.frame == 2 for workspace in viewer._detached_windows for view in workspace.views)
+    viewer.reattach_all()
     viewer.close()
 
 
@@ -1944,13 +2153,14 @@ def test_overlay_panel_order_swap_preserves_original_widgets(tmp_path, qapp):
     viewer.close()
 
 
-def test_viewer_surfaces_have_no_titles_or_panel_drag_handles(tmp_path, qapp):
+def test_viewer_surfaces_keep_source_detach_affordance_without_panel_titles(tmp_path, qapp):
     from PySide6.QtWidgets import QLabel
     from calibfreehands.visualization.comparison import ComparisonViewer
     viewer = ComparisonViewer(_session(tmp_path, 3))
-    assert all(surface.layout().count() == 1 for surface in viewer.overlay_surfaces.values())
-    assert all(surface.layout().count() == 1 for surface in viewer.split_surfaces.values())
-    assert all(surface.layout().count() == 1 for surface in viewer.findChildren(type(viewer.overlay_surfaces["source-media"])))
+    assert all(surface.layout().count() == (2 if surface.panel_id == "source-media" else 1)
+               for surface in viewer.overlay_surfaces.values())
+    assert all(surface.layout().count() == (2 if surface.panel_id == "source-media" else 1)
+               for surface in viewer.split_surfaces.values())
     assert not viewer.split_surfaces["source-media"].content.findChildren(QLabel)
     assert viewer.overlay_surfaces["source-media"].content is viewer.source_overlay
     assert viewer.overlay_surfaces["overlay-3d"].content is viewer.overlay_view
@@ -2206,6 +2416,7 @@ def test_split_reflow_keeps_native_gl_contexts_and_paints_frames(tmp_path, qapp)
     import warnings
     import shiboken6
     from OpenGL import GL
+    from PySide6.QtGui import QOpenGLContext
     from PySide6.QtTest import QTest
     from PySide6.QtWidgets import QApplication
     from calibfreehands.visualization.comparison import ComparisonViewer
@@ -2225,6 +2436,8 @@ def test_split_reflow_keeps_native_gl_contexts_and_paints_frames(tmp_path, qapp)
         views = [viewer.overlay_view, *viewer.split_views]
         contexts = [view.context() for view in views]
         assert all(context is not None and context.isValid() for context in contexts)
+        assert all(QOpenGLContext.areSharing(QOpenGLContext.globalShareContext(), context)
+                   for context in contexts)
         context_ids = [shiboken6.getCppPointer(context)[0] for context in contexts]
         destroyed = [[] for _ in views]
         for events, context in zip(destroyed, contexts):
@@ -2262,6 +2475,53 @@ def test_split_reflow_keeps_native_gl_contexts_and_paints_frames(tmp_path, qapp)
         assert not any(destroyed)
         for view in views:
             assert_drawn(view)
+
+        viewer.detach_all()
+        QTest.qWait(250)
+        detached_groups = tuple(viewer._detached_windows)
+        assert len(detached_groups) == 4
+        for workspace in detached_groups:
+            for view in workspace.views:
+                assert view.context() is not None and view.context().isValid()
+                assert QOpenGLContext.areSharing(QOpenGLContext.globalShareContext(), view.context())
+                assert_drawn(view)
+                assert any(item.visible() for item in view.joints + view.bones)
+                assert all(grid.visible() for grid in view.grids)
+                assert view.axis.visible()
+        viewer.mesh_checkbox.setChecked(True)
+        for workspace in detached_groups:
+            for view in workspace.views:
+                assert_drawn(view)
+                assert any(mesh.visible() for mesh in view.meshes)
+        group_ids = {workspace.members[0]: workspace.group_id for workspace in detached_groups
+                     if len(workspace.members) == 1}
+        result_ids = [f"result:{config['id']}" for config in viewer.configurations]
+        merged_id = viewer.merge_workspace_groups(group_ids[result_ids[0]], group_ids[result_ids[1]])
+        QTest.qWait(150)
+        merged = next(workspace for workspace in viewer._detached_windows
+                      if workspace.group_id == merged_id)
+        assert len(merged.views) == 1 and len(merged.members) == 2
+        assert_drawn(merged.views[0])
+        source = next(workspace for workspace in viewer._detached_windows
+                      if workspace.source_canvas is not None)
+        merged_id = viewer.merge_workspace_groups(merged_id, source.group_id)
+        QTest.qWait(150)
+        composition = next(workspace for workspace in viewer._detached_windows
+                            if workspace.group_id == merged_id)
+        assert composition.source_canvas is not None and len(composition.views) == 1
+        assert_drawn(composition.views[0])
+        extracted_id = viewer.extract_result_from_workspace(result_ids[1].removeprefix("result:"), merged_id)
+        QTest.qWait(150)
+        extracted = next(workspace for workspace in viewer._detached_windows
+                         if workspace.group_id == extracted_id)
+        assert_drawn(extracted.views[0])
+        extracted.window.close()
+        QTest.qWait(150)
+        assert viewer._workspace_model.owner(result_ids[1]).host == "main"
+        viewer.reattach_all()
+        QTest.qWait(250)
+        assert not viewer._detached_windows and viewer._workspace_model.validate()
+        assert_drawn(viewer.overlay_view)
         rendering_errors = [str(item.message) for item in render_warnings
                             if "Error while drawing item" in str(item.message)
                             or "GLError" in str(item.message)]
@@ -2754,7 +3014,7 @@ def test_shift_drag_moves_gl_result_diagonally_and_normal_drag_is_not_reordered(
     viewer.close()
 
 
-def test_split_shift_drag_escape_and_outside_release_cancel_cleanly(tmp_path, qapp):
+def test_split_shift_drag_escape_cancels_and_external_release_detaches_panel(tmp_path, qapp):
     from PySide6.QtCore import QEvent, QPoint, Qt
     from PySide6.QtGui import QKeyEvent, QMouseEvent
     from PySide6.QtWidgets import QApplication
@@ -2790,7 +3050,44 @@ def test_split_shift_drag_escape_and_outside_release_cancel_cleanly(tmp_path, qa
     QApplication.sendEvent(source, move)
     QTest.mouseRelease(source, Qt.MouseButton.LeftButton, pos=source.mapFromGlobal(outside))
     assert viewer.split_panel_order == order
+    assert viewer._workspace_model.owner("result:cfg-2").host == "detached"
+    detached = next(workspace for workspace in viewer._detached_windows
+                    if "result:cfg-2" in workspace.members)
+    assert len(detached.views) == 1
     assert not viewer._panel_reorder_active
+    viewer.reattach_all()
+    viewer.close()
+
+
+def test_overlay_hud_external_drag_detaches_only_the_selected_result(tmp_path, qapp):
+    from PySide6.QtCore import QEvent, QPoint, Qt
+    from PySide6.QtGui import QMouseEvent
+    from PySide6.QtWidgets import QApplication
+    from PySide6.QtTest import QTest
+    from calibfreehands.visualization.comparison import ComparisonViewer
+    from calibfreehands.visualization.comparison_presentation import _ResultDragHandle
+
+    viewer = ComparisonViewer(_session(tmp_path, 4))
+    viewer.resize(1500, 900)
+    viewer.show()
+    qapp.processEvents()
+    handle = next(item for item in viewer.overlay_panel.findChildren(_ResultDragHandle)
+                  if item.configuration_id == "cfg-1")
+    outside = viewer.mapToGlobal(QPoint(viewer.width() + 240, viewer.height() + 180))
+    QTest.mousePress(handle, Qt.MouseButton.LeftButton, pos=handle.rect().center())
+    move = QMouseEvent(QEvent.Type.MouseMove, handle.mapFromGlobal(outside), outside,
+                       Qt.MouseButton.NoButton, Qt.MouseButton.LeftButton, Qt.KeyboardModifier.NoModifier)
+    QApplication.sendEvent(handle, move)
+    assert viewer._workspace_drop_group_id is None
+    QTest.mouseRelease(handle, Qt.MouseButton.LeftButton, pos=handle.mapFromGlobal(outside))
+
+    assert viewer._workspace_model.owner("result:cfg-1").host == "detached"
+    detached = next(workspace for workspace in viewer._detached_windows
+                    if "result:cfg-1" in workspace.members)
+    assert detached.members == ("result:cfg-1",)
+    assert 1 not in viewer.overlay_view.member_configuration_indices
+    assert "cfg-1" not in viewer.overlay_panel.group_widgets
+    viewer.reattach_all()
     viewer.close()
 
 
@@ -2959,7 +3256,7 @@ def test_presentation_controls_keep_detection_and_mesh_opacity_distinct(tmp_path
     viewer.confidence_opacity_checkbox.setChecked(False)
     assert viewer.split_views[0].meshes[0].opts["color"][3] == pytest.approx(0.5)
     assert not viewer.joint_checkbox.isChecked() and not viewer.bone_checkbox.isChecked()
-    assert viewer.more_menu.actions()[0].text() == "Detach panels"
+    assert viewer.more_menu.actions()[0].text() == "Detach All"
     assert viewer.error_vectors_button.menu() is viewer.error_vectors_menu
     assert viewer.annotation_button.menu() is viewer.annotation_menu
     assert viewer.hud_button.menu() is viewer.hud_menu
@@ -3909,4 +4206,53 @@ def test_mouse_move_over_viewport_restores_hidden_controls(tmp_path, qapp):
     QTest.mouseMove(viewer.overlay_view, viewer.overlay_view.rect().center())
     qapp.processEvents()
     assert not viewer.chrome.isHidden()
+    viewer.close()
+
+
+def test_detach_merge_and_reattach_preserve_unlinked_group_camera_state(tmp_path, qapp):
+    from calibfreehands.visualization.comparison import ComparisonViewer
+
+    viewer = ComparisonViewer(_session(tmp_path, 3, gt_index=1))
+    viewer.resize(1500, 900)
+    viewer.show()
+    qapp.processEvents()
+    viewer.set_mode("split")
+    viewer.set_camera_linked(False)
+    poses = [(25, 15), (115, 35), (245, 65)]
+    for view, (azimuth, elevation) in zip(viewer.split_views, poses):
+        view.setCameraPosition(azimuth=azimuth, elevation=elevation)
+    qapp.processEvents()
+    viewer.detach_all()
+    qapp.processEvents()
+    groups = {workspace.members[0]: workspace for workspace in viewer._detached_windows
+              if len(workspace.members) == 1 and workspace.views}
+    for index, pose in enumerate(poses):
+        actual = groups[f"result:cfg-{index}"].views[0].cameraParams()
+        assert actual["azimuth"] == pytest.approx(pose[0])
+        assert actual["elevation"] == pytest.approx(pose[1])
+
+    left = groups["result:cfg-0"]
+    target = groups["result:cfg-1"]
+    merged_id = viewer.merge_workspace_groups(left.group_id, target.group_id)
+    qapp.processEvents()
+    merged = next(item for item in viewer._detached_windows if item.group_id == merged_id)
+    actual = merged.views[0].cameraParams()
+    assert actual["azimuth"] == pytest.approx(poses[1][0])
+    assert actual["elevation"] == pytest.approx(poses[1][1])
+
+    viewer.set_mode("overlay")
+    viewer.reattach_all()
+    qapp.processEvents()
+    viewer.set_mode("split")
+    for index, view in enumerate(viewer.split_views):
+        actual = view.cameraParams()
+        expected_pose = poses[1] if index in (0, 1) else poses[index]
+        assert actual["azimuth"] == pytest.approx(expected_pose[0])
+        assert actual["elevation"] == pytest.approx(expected_pose[1])
+    viewer.set_camera_linked(True)
+    selected_gt_pose = viewer._view_for_configuration("cfg-1").cameraParams()
+    for view in viewer._workspace_views():
+        actual = view.cameraParams()
+        assert actual["azimuth"] == pytest.approx(selected_gt_pose["azimuth"])
+        assert actual["elevation"] == pytest.approx(selected_gt_pose["elevation"])
     viewer.close()
