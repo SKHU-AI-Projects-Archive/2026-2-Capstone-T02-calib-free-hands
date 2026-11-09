@@ -355,6 +355,148 @@ def tw_summary(res: dict, cfg: dict, own: dict) -> str:
 
 
 # ----------------------------------------------------------------------------------------------------
+# 93: 관절별 따로 추적 + 점 영상
+# ----------------------------------------------------------------------------------------------------
+JT_GROUPS = {"wrist": [0], "thumb": [1, 2, 3, 4], "mcp": [5, 9, 13, 17], "pip": [6, 10, 14, 18], "dip_tip": [7, 8, 11, 12, 15, 16, 19, 20]}
+
+
+def jt_reference(tr: dict, size_wh, cfg: dict) -> int:
+    """기준 프레임. reference = "middle": 검출 범위의 한가운데(실험 56). "first_pause": 손을 돌리기 전 첫 정지 구간의 가운데 검출 프레임
+    (정지 = 기본 설정의 still 규칙, 정지 구간 = 간격 pause_gap_frames 이하로 이어진 min_pause_frames 개 이상; 정지 구간이 없으면 middle)."""
+    rule = cfg.get("reference", {"mode": "middle"})
+    if rule["mode"] == "middle":
+        return of.choose_reference(tr["present"])
+    motion = hf.od_select(tr["kp"], tr["mask"], tr["present"], tr["box"], tuple(size_wh), cfg["selection"])["motion"]
+    still = np.isfinite(motion) & (motion < float(cfg["selection"]["still_frac"])) & tr["present"]
+    pauses = [np.asarray(g) for g in hf.hp_groups(np.flatnonzero(still), int(rule["pause_gap_frames"])) if len(g) >= int(rule["min_pause_frames"])]
+    if not pauses:
+        return of.choose_reference(tr["present"])
+    g = pauses[0]
+    return int(g[np.argmin(np.abs(g - (g[0] + g[-1]) / 2))])
+
+
+def jt_render(path: Path, pngs: list, times: np.ndarray, frames: np.ndarray, kd: np.ndarray, kc: np.ndarray, kj: np.ndarray, how: np.ndarray, rc: dict, title: str):
+    """점 영상: 왼쪽 전체 화면, 오른쪽 손 확대. 주황 = MediaPipe, 파랑 = 기존 사슬(평면 변환 하나), 초록 = 관절별 추적(속 빈 점 = 그 단계는 손 전체 변환으로 대신 옮김).
+    프레임 이미지는 임시 폴더에 그린 뒤 ffmpeg 로 묶고(메타데이터 제거) 지운다."""
+    import subprocess
+    import tempfile
+    import cv2
+    from PIL import Image, ImageDraw, ImageFont
+    from optical_flow import JT_GLOBAL
+    font = lambda s: ImageFont.truetype(rc["font"], s, index=int(rc.get("font_index", 0)))      # noqa: E731
+    LW, RW, HD = int(rc["left_width"]), int(rc["zoom_size"]), 70
+    ORANGE, BLUE, GREEN = (235, 104, 52), (42, 120, 214), (27, 175, 122)
+    with tempfile.TemporaryDirectory(dir=str(path.parent)) as td:
+        for n_out, i in enumerate(frames):
+            img = cv2.imread(pngs[i])[:, :, ::-1]
+            H, W = img.shape[:2]
+            sc = LW / W
+            left = Image.fromarray(img).resize((LW, int(round(H * sc))))
+            pts = np.concatenate([x[np.isfinite(x).all(1)] for x in (kd[i], kc[i], kj[i])] or [np.zeros((0, 2))])
+            if len(pts):
+                cx, cy = (pts.min(0) + pts.max(0)) / 2
+                half = max(60.0, float((pts.max(0) - pts.min(0)).max()) * float(rc["crop_margin"]) / 2)
+            else:
+                cx, cy, half = W / 2, H / 2, H / 4
+            box = (int(cx - half), int(cy - half), int(cx + half), int(cy + half))
+            zoom = Image.fromarray(img).crop(box).resize((RW, RW))
+            zs = RW / (2 * half)
+            canvas = Image.new("RGB", (LW + RW, max(left.height, RW) + HD), (255, 255, 255))
+            canvas.paste(left, (0, HD))
+            canvas.paste(zoom, (LW, HD))
+            d = ImageDraw.Draw(canvas)
+            for kp, col, rad, hollow in ((kd[i], ORANGE, 4, None), (kc[i], BLUE, 4, None), (kj[i], GREEN, 5, how[i] == JT_GLOBAL)):
+                for j in range(len(kp)):
+                    if not np.isfinite(kp[j]).all():
+                        continue
+                    for (ox, oy, s_, r_) in ((0, HD, sc, rad - 1), (LW, HD, zs, rad + 2)):
+                        x = ox + (kp[j][0] - (0 if ox == 0 else box[0])) * s_
+                        y = oy + (kp[j][1] - (0 if ox == 0 else box[1])) * s_
+                        if hollow is not None and bool(hollow[j]):
+                            d.ellipse((x - r_, y - r_, x + r_, y + r_), outline=col, width=2)
+                        else:
+                            d.ellipse((x - r_, y - r_, x + r_, y + r_), fill=col, outline=(255, 255, 255))
+            n_glob = int(np.sum(how[i] == JT_GLOBAL)) if np.isfinite(kj[i]).any() else 0
+            d.text((10, 6), f"{title}   {times[i]:.2f} s   프레임 {i}   관절별 추적: 손 전체 변환으로 대신 옮긴 관절 {n_glob}/21", fill=(0, 0, 0), font=font(22))
+            x0 = 10
+            for col, lab in ((ORANGE, "MediaPipe 검출 관절"), (BLUE, "기존 추적(평면 변환 하나)"), (GREEN, "관절별 추적(속 빈 점 = 손 전체 변환으로 대신)")):
+                d.ellipse((x0, 44, x0 + 14, 58), fill=col)
+                d.text((x0 + 20, 38), lab, fill=(0, 0, 0), font=font(18))
+                x0 += 30 + int(d.textlength(lab, font=font(18)))
+            canvas.save(Path(td) / f"{n_out:06d}.png")
+        subprocess.run(["ffmpeg", "-hide_banner", "-loglevel", "error", "-y", "-framerate", f"{float(rc['fps']):.4f}", "-i", str(Path(td) / "%06d.png"), "-c:v", "libx264", "-crf", "20",
+                        "-pix_fmt", "yuv420p", "-vf", "pad=ceil(iw/2)*2:ceil(ih/2)*2", "-map_metadata", "-1", str(path)], check=True)
+
+
+def jt_job(args):
+    """한 영상: 기존 사슬과 관절별 추적을 기준 프레임에서 앞뒤로, 검출 관절과의 거리, 점 영상."""
+    e, cfg, run_root = args
+    import cv2
+    cv2.setNumThreads(1)
+    pngs, times, tr, (W, H), tmp = prepare(e, cfg, run_root)
+    try:
+        pres = np.flatnonzero(tr["present"])
+        n = len(pngs)
+        a, b = int(pres[0]), int(pres[-1])
+        ref = jt_reference(tr, (W, H), cfg)
+        kps = np.stack([of.kt_carry(tr["present"], tr["kp"][:, j, k]) for j in range(21) for k in range(2)], axis=1).reshape(n, 21, 2)
+        boxes = np.stack([of.kt_carry(tr["present"], tr["box"][:, k]) for k in range(4)], axis=1)
+        tk = cfg["tracking"]
+        Hc = {**of.kt_chain(pngs, kps, boxes, list(range(ref, a - 1, -1)), tk)["H"], **of.kt_chain(pngs, kps, boxes, list(range(ref, b + 1)), tk)["H"]}
+        kc, _, vc, ec = of.chain_points(tr["kp"][ref], Hc, n, W, H)
+        jb = of.jt_track(pngs, kps, boxes, list(range(ref, a - 1, -1)), tk, cfg["joint_track"], tr["kp"][ref])
+        jf = of.jt_track(pngs, kps, boxes, list(range(ref, b + 1)), tk, cfg["joint_track"], tr["kp"][ref])
+        kj = np.full((n, 21, 2), np.nan)
+        how = np.full((n, 21), of.JT_BROKEN)
+        for src in (jb, jf):
+            for i, P in src["P"].items():
+                kj[i], how[i] = P, src["how"][i]
+        span = np.arange(a, b + 1)
+        out = {"ref": ref, "ref_t": float(times[ref]), "n_frames": n, "how_share": {}, "drift": {}}
+        hs = how[span]
+        for nm, code in (("local", of.JT_LOCAL), ("wide", of.JT_WIDE), ("global", of.JT_GLOBAL), ("broken", of.JT_BROKEN)):
+            out["how_share"][nm] = float(np.mean(hs == code))
+        out["how_share_by_group"] = {g: {nm: float(np.mean(hs[:, ids] == code)) for nm, code in (("local", of.JT_LOCAL), ("wide", of.JT_WIDE), ("global", of.JT_GLOBAL))} for g, ids in JT_GROUPS.items()}
+        use = vc & ~ec & tr["present"]
+        for lab, kp in (("chain", kc), ("joint", kj)):
+            out["drift"][lab] = {g: med(region_drift(kp, tr["kp"], tr["box"], use, ids)) for g, ids in {**JT_GROUPS, "j16": cfg["joint_ids"]}.items()}
+        rc = {**cfg["render"], "fps": float(cfg["tracking"]["fps"])}
+        vpath = Path(run_root) / f"{Path(e['file']).stem.replace(' ', '')}_joint_track.mp4"
+        jt_render(vpath, pngs, times, span, tr["kp"], kc, kj, how, rc, f"{Path(e['file']).stem} ({'본인' if e['person'] == 'self' else '팀원'})")
+        out["video"] = vpath.name
+        out["kp_joint"], out["how"], out["kp_chain"] = kj, how, kc
+    finally:
+        shutil.rmtree(tmp, ignore_errors=True)
+    dj, dc = out["drift"]["joint"], out["drift"]["chain"]
+    f1 = lambda x: "-" if x is None else f"{x:.1f}"      # noqa: E731
+    return out, [f"  {e['file']}: 관절별 직접 {100 * out['how_share']['local']:.0f}% / 넓혀서 {100 * out['how_share']['wide']:.0f}% / 대신 {100 * out['how_share']['global']:.0f}%, "
+                 f"거리(기존 -> 관절별) 손목 {f1(dc['wrist'])} -> {f1(dj['wrist'])}, 엄지 {f1(dc['thumb'])} -> {f1(dj['thumb'])}, j16 {f1(dc['j16'])} -> {f1(dj['j16'])}, 영상 {out['video']}"]
+
+
+def jt_summary(res: dict, cfg: dict) -> str:
+    f1 = lambda x: "-" if x is None else f"{x:.1f}"      # noqa: E731
+    jc = cfg["joint_track"]
+    L = ["# 93 관절별 따로 추적 summary", "",
+         f"**관절마다 현재 위치 주변(반지름 = 손 상자 긴 변 x {jc['radius_frac']}) 특징점이 {jc['min_points']}개 이상이면 그 점들의 닮음 변환으로 그 관절만 옮기고, 모자라면 반지름 {jc['widen']}배, "
+         "그래도 모자라면 그 단계만 손 전체 호모그래피(기존 방식)로 옮긴다. 특징점·LK·전후방 검사는 기존 사슬과 같다. 기준 프레임에서 앞뒤로. f 추정 없음, 판정 없음.**", "",
+         "- 거리 = 추적점과 MediaPipe 검출 관절의 거리 (검출 상자 긴 변 대비 %, 프레임 중앙값). 검출 관절도 관절 중심 추정값이라 0 이 정답은 아니다.",
+         f"- 기준 프레임: {cfg.get('reference', {'mode': 'middle'})['mode']} (기존 사슬과 관절별 추적 모두 같은 기준). 영상별 기준 시각은 아래 표.", "",
+         "## 1. 검출 관절과의 거리: 기존 사슬 -> 관절별", "", "| 영상 | 손 주인 | 기준 시각 | 손목 | 엄지 | MCP | PIP | DIP·끝 | j16 | 영상 파일 |", "|---|---|---|---|---|---|---|---|---|---|"]
+    for e in cfg["videos"]:
+        x = res[e["file"]]
+        dc, dj = x["drift"]["chain"], x["drift"]["joint"]
+        L.append(f"| {e['file']} | {'본인' if e['person'] == 'self' else '팀원'} | {x['ref_t']:.1f} s | " + " | ".join(f"{f1(dc[g])} -> {f1(dj[g])}" for g in ("wrist", "thumb", "mcp", "pip", "dip_tip", "j16")) + f" | {x['video']} |")
+    L += ["", "## 2. 관절을 옮긴 방식의 비율 (관절 x 프레임)", "", "| 영상 | 묶음 | 직접 | 넓혀서 | 손 전체 변환으로 대신 |", "|---|---|---|---|---|"]
+    for e in cfg["videos"]:
+        x = res[e["file"]]
+        L.append(f"| {e['file']} | 전체 | {100 * x['how_share']['local']:.0f}% | {100 * x['how_share']['wide']:.0f}% | {100 * x['how_share']['global']:.0f}% |")
+        for g, v in x["how_share_by_group"].items():
+            L.append(f"| | {g} | {100 * v['local']:.0f}% | {100 * v['wide']:.0f}% | {100 * v['global']:.0f}% |")
+    L += ["", "## 한계", "", "- 관절마다 이웃 프레임끼리 이어 붙이므로 점마다 오차가 쌓일 수 있다. 영상 3개.", ""]
+    return "\n".join(L) + "\n"
+
+
+# ----------------------------------------------------------------------------------------------------
 # 실행
 # ----------------------------------------------------------------------------------------------------
 def results_yaml(cmd: str, run_dir: Path, own: dict) -> Path:
@@ -393,7 +535,7 @@ def tw_results_yaml(run_dir: Path, own: dict) -> Path:
 
 def main(argv=None):
     ap = argparse.ArgumentParser(description="광류 방식 원인 확인 실험")
-    ap.add_argument("cmd", choices=["tracking-plane", "dorsum-corners", "two-plane"])
+    ap.add_argument("cmd", choices=["tracking-plane", "dorsum-corners", "two-plane", "joint-track-video"])
     ap.add_argument("--config", required=True)
     ap.add_argument("--out", default=None)
     ap.add_argument("--videos", type=int, default=None, help="시험 실행: 앞의 N 개 영상만, 추정 1건씩")
@@ -407,7 +549,7 @@ def main(argv=None):
         print((tw_results_yaml(hf.resolve(a.run), own)) if a.cmd == "two-plane" else results_yaml(a.cmd, hf.resolve(a.run), own))
         return None
     cfg = rof.load_settings(own)
-    cfg.update({k: own[k] for k in ("variants", "clahe", "two_plane") if k in own})
+    cfg.update({k: own[k] for k in ("variants", "clahe", "two_plane", "joint_track", "render", "reference") if k in own})
     if a.videos:
         cfg["videos"] = cfg["videos"][:a.videos]
         cfg["free_starts_deg"] = []
@@ -426,7 +568,7 @@ def main(argv=None):
         shutil.copytree(hf.resolve(own["detection_cache_from"]), run_root / "detection_cache")
     import multiprocessing as mp
     from concurrent.futures import ProcessPoolExecutor
-    job = {"tracking-plane": tp_job, "dorsum-corners": dc_job, "two-plane": tw_points}[a.cmd]
+    job = {"tracking-plane": tp_job, "dorsum-corners": dc_job, "two-plane": tw_points, "joint-track-video": jt_job}[a.cmd]
     vid = {}
     with ProcessPoolExecutor(max_workers=int(cfg["video_workers"]), mp_context=mp.get_context("spawn")) as ex:
         for e, (x, lines) in zip(cfg["videos"], ex.map(job, [(e, cfg, str(run_root)) for e in cfg["videos"]])):
@@ -437,6 +579,9 @@ def main(argv=None):
     if a.cmd == "tracking-plane":
         res = vid
         text_sum = tp_summary(res, cfg)
+    elif a.cmd == "joint-track-video":
+        res = vid
+        text_sum = jt_summary(res, cfg)
     elif a.cmd == "two-plane":
         res = tw_run(cfg, vid, log)
         text_sum = tw_summary(res, cfg, own)

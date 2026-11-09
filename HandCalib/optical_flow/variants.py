@@ -320,3 +320,68 @@ def dc_chain(pngs: list, kps: np.ndarray, boxes: np.ndarray, order: list, kcfg: 
             Hc[cur] = Hs @ Hc[prev]
         g0 = g1
     return {"H": Hc, "breaks": breaks, "inl": inls, "n_corners": n_c}
+
+
+# ----------------------------------------------------------------------------------------------------
+# 93: 관절별 따로 추적
+# ----------------------------------------------------------------------------------------------------
+JT_LOCAL, JT_WIDE, JT_GLOBAL, JT_BROKEN = 0, 1, 2, 3                 # 그 단계에서 관절을 옮긴 방식
+
+
+def jt_track(pngs: list, kps: np.ndarray, boxes: np.ndarray, order: list, kcfg: dict, jcfg: dict, P0: np.ndarray) -> dict:
+    """관절마다 그 주변 특징점만으로 따로 옮긴다.
+    단계마다(prev -> cur): 손 마스크 안 특징점, LK, 전후방 검사는 kt_chain 과 같다. 그 뒤 관절 j 마다
+      1) 현재 추적 위치에서 반지름 r = radius_frac x 손 상자 긴 변 안의 점이 min_points 개 이상이면, 그 점들로 닮음 변환(estimateAffinePartial2D, RANSAC threshold_px)을 구해 관절에만 적용 (JT_LOCAL)
+      2) 모자라면 반지름을 widen 배로 넓혀 다시 (JT_WIDE)
+      3) 그래도 모자라면 이번 단계만 손 전체 호모그래피(MAGSAC, kt_chain 과 같은 방식)로 옮김 (JT_GLOBAL)
+      4) 손 전체 호모그래피도 못 구하면 그 프레임부터 끊김 (JT_BROKEN, 위치 NaN)
+    kps / boxes: 프레임마다 검출 관절과 상자(검출이 없으면 직전 값). P0: order[0] 의 관절 (21, 2).
+    반환: {P: {프레임: (21, 2)}, how: {프레임: (21,) 방식 코드}, n_pts: {프레임: (21,) 주변 점 수}}."""
+    lk = _lk(kcfg)
+    J = len(P0)
+    P = {order[0]: np.asarray(P0, float).copy()}
+    how = {order[0]: np.full(J, JT_LOCAL)}
+    npt = {order[0]: np.zeros(J, int)}
+    broken = False
+    gray = lambda i: cv2.cvtColor(cv2.imread(pngs[i], cv2.IMREAD_COLOR), cv2.COLOR_BGR2GRAY)      # noqa: E731
+    g0 = gray(order[0])
+    for prev, cur in zip(order[:-1], order[1:]):
+        g1 = gray(cur)
+        if broken:
+            P[cur], how[cur], npt[cur] = np.full((J, 2), np.nan), np.full(J, JT_BROKEN), np.zeros(J, int)
+            g0 = g1
+            continue
+        m = kt_hand_mask(kps[prev], boxes[prev], g0.shape, kcfg["dilate_frac"])
+        c = cv2.goodFeaturesToTrack(g0, int(kcfg["max_corners"]), float(kcfg["quality"]), float(kcfg["min_distance"]), mask=m, blockSize=int(kcfg["block"]))
+        q0 = q1 = np.zeros((0, 2), np.float32)
+        Hs = None
+        if c is not None and len(c) >= 8:
+            p0 = c.reshape(-1, 2).astype(np.float32)
+            p1, s1, _ = cv2.calcOpticalFlowPyrLK(g0, g1, p0.reshape(-1, 1, 2), None, **lk)
+            pb, s2, _ = cv2.calcOpticalFlowPyrLK(g1, g0, p1, None, **lk)
+            ok = (s1.ravel() == 1) & (s2.ravel() == 1) & (np.linalg.norm(pb.reshape(-1, 2) - p0, axis=1) < float(kcfg["fb_px"]))
+            q0, q1 = p0[ok], p1.reshape(-1, 2)[ok]
+            if ok.sum() >= int(kcfg["min_inliers"]):
+                Hs, inl = cv2.findHomography(q0.astype(np.float64), q1.astype(np.float64), cv2.USAC_MAGSAC, float(kcfg["threshold_px"]))
+                if Hs is None or inl is None or int(inl.sum()) < int(kcfg["min_inliers"]):
+                    Hs = None
+        Pp = P[prev]
+        r0 = float(jcfg["radius_frac"]) * float(box_long(np.asarray(boxes[prev], float)[None])[0])
+        Pc, hw, nn = np.full((J, 2), np.nan), np.full(J, JT_BROKEN), np.zeros(J, int)
+        for j in range(J):
+            done = False
+            for code, r in ((JT_LOCAL, r0), (JT_WIDE, r0 * float(jcfg["widen"]))):
+                sel = np.linalg.norm(q0 - Pp[j], axis=1) <= r if len(q0) else np.zeros(0, bool)
+                if sel.sum() >= int(jcfg["min_points"]):
+                    A, inl = cv2.estimateAffinePartial2D(q0[sel], q1[sel], method=cv2.RANSAC, ransacReprojThreshold=float(kcfg["threshold_px"]))
+                    if A is not None and inl is not None and int(inl.sum()) >= int(jcfg["min_points"]):
+                        Pc[j], hw[j], nn[j] = A[:, :2] @ Pp[j] + A[:, 2], code, int(sel.sum())
+                        done = True
+                        break
+            if not done and Hs is not None:
+                Pc[j], hw[j] = kt_map(Pp[j][None], Hs)[0], JT_GLOBAL
+        if Hs is None and (hw == JT_BROKEN).any():
+            broken = True
+        P[cur], how[cur], npt[cur] = Pc, hw, nn
+        g0 = g1
+    return {"P": P, "how": how, "n_pts": npt}
