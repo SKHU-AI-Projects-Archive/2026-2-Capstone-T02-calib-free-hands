@@ -10,6 +10,7 @@ settings_config: configs/74b_multistart_rerun.yaml
 compare_run: runs/74b_multistart_rerun/20261105T044422Z
 detection_cache_from: runs/81_detected_joints/20261106T055430Z/detection_cache
 joint_set: j16
+code_89: {branch: optical_flow, base_commit: d4a2988, commit: 248ff7f, modules: [HandCalib/optical_flow/run_optical_flow.py, HandCalib/optical_flow/klt.py]}
 ramps_deg: [11]
 videos: []
 workers: 64
