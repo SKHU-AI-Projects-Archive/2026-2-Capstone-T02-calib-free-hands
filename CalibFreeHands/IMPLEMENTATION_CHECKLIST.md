@@ -256,9 +256,17 @@ Phase C Final native Windows testing and acceptance were reported by the user as
 
 ### Phase D.1 Stabilization: GT Camera Focus and Playback During Resize (2026-11-09)
 
-- [x] Selecting a new GT refocuses the active camera using its robust whole-video target and distance, while preserving the active orientation and updating the inactive Space's saved target/distance with its own orientation intact.
+- [x] Historical D.1 Stabilization policy assigned the same GT framing center/distance to both Space poses. **Superseded by Phase D.1 Camera Center Fix** below: Physical uses the robust GT framing; Hand uses its rendered workspace axis intersection and workspace-derived distance.
 - [x] Keep Physical planes/axes fixed; update selected-GT Hand bounds and synchronize Overlay, Split, and existing detached views. Remove delayed Hand camera rebase state.
 - [x] Preserve frame, playback, panel order, metric/color behavior, and canonical result arrays during GT refocus; invalid geometry uses the existing finite fallback.
 - [x] Reuse the owned Source Media `QImage` for unchanged source frames; convert/copy only when the decoded source frame changes.
 - [x] Native Windows Qt matched 2-second playback/resize harness: Source Media paint average/max changed from 2.614/3.216 ms to 1.600/1.821 ms; Source/3D ended synchronized at frame 59 in both variants. Detailed resize/event-loop measurements are in `VALIDATION_CHECKLIST.md`.
 - [ ] User visual and continuous-playback acceptance remains pending. D.2/D.3, Phase E/F/G, and release packaging remain deferred.
+
+### Phase D.1 Camera Center Fix (2026-11-09)
+
+- [x] Define per-Space GT framing: Physical camera center/distance use robust whole-video GT framing; Hand uses the final workspace's rendered axis intersection and a distance fitted to its display-space corners, FOV, and active viewport aspect.
+- [x] Derive the axis intersection from the same `WorkspaceGeometry` used by `_configure_workspace`, including Physical fallback geometry; preserve raw result and fixed Physical workspace values.
+- [x] Apply the policy on GT changes and first entry to Hand, while preserving each Space's independent orientation and restoring manual poses on later Space switches without a GT change.
+- [x] Keep explicit Focus GT, Space Overview, and Fit All behaviors distinct; no playback, decoding, splitter, or inference behavior changed.
+- [ ] Native OpenGL and saved-result checks are recorded in `VALIDATION_CHECKLIST.md`; user visual confirmation remains pending. Playback resize stutter remains the next separate D.1 task.

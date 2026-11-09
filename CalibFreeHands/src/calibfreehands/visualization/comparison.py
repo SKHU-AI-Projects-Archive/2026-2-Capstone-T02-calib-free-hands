@@ -26,8 +26,9 @@ from calibfreehands.pipeline.result_bundle import ResultBundle
 from calibfreehands.pipeline.metrics import compare_results, metric_registry
 from calibfreehands.joint_schema import JOINT_NAMES
 from .viewer import (
-    _GLResultView, _OverlayCanvas, hand_space_bounds, load_bundle_result, load_npz_result,
-    whole_video_hand_framing, workspace_geometry,
+    DEFAULT_WORKSPACE_ASPECT, _GLResultView, _OverlayCanvas, hand_space_bounds,
+    load_bundle_result, load_npz_result,
+    whole_video_hand_framing, workspace_camera_framing, workspace_geometry,
 )
 from .comparison_presentation import (_JointAnnotationLayer, _ViewportPanel, _PanelSurface,
                                       _ResultDragHandle, _SplitPanelReorderController, _SwapSplitter)
@@ -1704,6 +1705,17 @@ class ComparisonViewer(QWidget):
             self.hand_space_cache[configuration_id] = bounds
         return self.hand_space_cache[configuration_id]
 
+    def _camera_framing_for(self, configuration_id, space_mode):
+        if space_mode == "physical":
+            return self._hand_view_for(configuration_id)
+        if space_mode != "hand":
+            raise ValueError(f"unknown 3D space mode: {space_mode}")
+        workspace = workspace_geometry("hand", self._hand_space_for(configuration_id))
+        view = self._camera_source()
+        aspect = (view.width() / view.height() if view.height() > 0
+                  else DEFAULT_WORKSPACE_ASPECT)
+        return workspace_camera_framing(workspace, view.opts["fov"], aspect)
+
     def _workspace_views(self):
         views = [self.overlay_view, *self.split_views]
         views.extend(view for _window, _source, detached in self._detached_windows for view in detached)
@@ -1715,11 +1727,12 @@ class ComparisonViewer(QWidget):
             view.set_workspace(self.space_mode, bounds)
 
     def _refocus_selected_gt(self):
-        target, distance = self._hand_view_for(self.reference_id)
+        configuration_id = self._hand_view_source_id()
         active_source = self._camera_source()
         active_pose = self._copy_camera_params(active_source)
         poses = {}
         for mode in ("physical", "hand"):
+            target, distance = self._camera_framing_for(configuration_id, mode)
             pose = active_pose if mode == self.space_mode else self._camera_states[mode]
             if pose is None:
                 pose = active_pose
@@ -1762,8 +1775,10 @@ class ComparisonViewer(QWidget):
         self._apply_workspace()
         target_pose = self._camera_states[mode]
         if target_pose is None:
+            target, distance = self._camera_framing_for(self._hand_view_source_id(), mode)
             target_pose = dict(current_pose)
-            target_pose["center"] = pg.Vector(*self.overlay_view.workspace.display_center)
+            target_pose["center"] = pg.Vector(*target)
+            target_pose["distance"] = distance
             self._camera_states[mode] = target_pose
         source = self._camera_source()
         source.setCameraParams(**target_pose)

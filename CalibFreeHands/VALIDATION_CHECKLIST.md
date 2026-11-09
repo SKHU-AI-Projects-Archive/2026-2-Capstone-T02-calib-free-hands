@@ -548,3 +548,12 @@ Phase C Final native Windows testing and acceptance were reported by the user as
 - [x] Native GL paint profiling during a separate 2-second cached-window run measured 60 paints at 3.710 ms average / 5.450 ms max without resizing, versus 110 paints at 4.071 ms / 7.147 ms while resizing; the resize run skipped 2 clock frames while its displayed Source/Overlay frames remained aligned. This confirms extra GL redraw work is still present.
 - [x] A native QtTest handle-drag run delivered 120 splitter-move events while playback was active; Source Media and Overlay displayed the same frame throughout sampling. The run lasted about 3.9 s and advanced beyond the 61-frame preloaded decoder window, so subsequent decode contention and QtTest event injection make its skipped-frame counts unsuitable as a before/after performance comparison.
 - [ ] Native automated evidence includes both repeated splitter size changes and QtTest handle-drag events; a user's manual continuous-playback review and confirmation of perceived smoothness remain pending. No user acceptance is claimed.
+
+### Phase D.1 Camera Center Fix (2026-11-09)
+
+- [x] Synthetic GT result deliberately separates the robust wrist framing target from the final Hand workspace's rendered axis intersection; tests verify Physical uses the former and Hand uses the latter.
+- [x] Tests derive Hand camera distance from the final display-space workspace corners, GL view FOV, and viewport aspect, and verify the three rendered axis segments meet at the camera center.
+- [x] Tests verify GT changes update both independent Space policies, preserve each orientation, restore custom poses when GT is unchanged, retain finite fallback behavior, and synchronize Overlay/Split/detached and single-result views.
+- [x] No media, playback, decoder, splitter, pipeline, canonical result, or inference code was changed in this pass.
+- [x] Native Windows OpenGL smoke test `test_split_reflow_keeps_native_gl_contexts_and_paints_frames` passed. A native Qt harness loaded all four saved `2_screw__*.cfh` results (15000, 1655, 2500, Original), without inference; in each, Physical and Hand centers matched their separate policies, distances were finite/positive, independent orientations survived switching, and Overlay/Split Hand axes met at the camera center. User visual confirmation remains pending.
+- [ ] Playback stutter during Overlay splitter resize remains outstanding for its separate task.

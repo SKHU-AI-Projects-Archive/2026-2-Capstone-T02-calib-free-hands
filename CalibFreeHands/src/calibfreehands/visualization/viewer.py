@@ -86,6 +86,14 @@ class WorkspaceGeometry:
         return _view_point_from_raw(self.center_raw)
 
     @property
+    def axis_intersection_raw(self) -> tuple[float, float, float]:
+        return self.center_raw if self.space_mode == "hand" else (0.0, 0.0, 0.0)
+
+    @property
+    def axis_intersection_display(self) -> np.ndarray:
+        return _view_point_from_raw(self.axis_intersection_raw)
+
+    @property
     def display_corners(self) -> np.ndarray:
         return np.asarray([
             (x, y, z)
@@ -127,6 +135,14 @@ def workspace_geometry(space_mode: str, bounds_m: np.ndarray | None = None) -> W
         major_spacing_m=major,
         minor_spacing_m=minor,
     )
+
+
+def workspace_camera_framing(workspace: WorkspaceGeometry, fov_degrees: float,
+                             aspect: float = DEFAULT_WORKSPACE_ASPECT) -> tuple[np.ndarray, float]:
+    """Return framing for the rendered workspace axes and their actual intersection."""
+    center = workspace.axis_intersection_display
+    radius = float(np.linalg.norm(workspace.display_corners - center, axis=1).max())
+    return center, _camera_distance_for_radius(radius, fov_degrees, aspect)
 
 
 def hand_space_bounds(keypoints_3d: np.ndarray, detected: np.ndarray,
@@ -478,7 +494,7 @@ class _GLResultView(gl.GLViewWidget):
                 (raw_center[0], raw_center[1], raw_center[2]),
                 (raw_center[0], raw_center[1], raw_center[2]),
             )
-            axis_center_raw = np.zeros(3, dtype=np.float64)
+            axis_center_raw = np.asarray(workspace.axis_intersection_raw)
             raw_segments = np.asarray((
                 ((bounds[0, 0], 0.0, 0.0), (bounds[0, 1], 0.0, 0.0)),
                 ((0.0, bounds[1, 1], 0.0), (0.0, bounds[1, 0], 0.0)),
@@ -494,7 +510,7 @@ class _GLResultView(gl.GLViewWidget):
             )
         else:
             plane_centers_raw = (workspace.center_raw,) * 3
-            axis_center_raw = raw_center
+            axis_center_raw = np.asarray(workspace.axis_intersection_raw)
             half_side = side / 2.0
             raw_segments = np.asarray((
                 ((raw_center[0] - half_side, raw_center[1], raw_center[2]),

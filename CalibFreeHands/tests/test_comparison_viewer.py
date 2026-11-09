@@ -377,10 +377,11 @@ def test_physical_and_hand_spaces_update_orbit_center_only_and_preserve_frame_pl
     assert not hasattr(viewer, "space_mode_value")
     assert viewer.slider.value() == before_frame
     hand_center_display = viewer.overlay_view.workspace.display_center
+    _expected_hand_center, expected_hand_distance = viewer._camera_framing_for("cfg-1", "hand")
     for view in [viewer.overlay_view, *viewer.split_views]:
         np.testing.assert_allclose(view.workspace_bounds_m, expected_gt_bounds)
         np.testing.assert_allclose(tuple(view.cameraParams()["center"]), hand_center_display)
-        assert view.cameraParams()["distance"] == pytest.approx(before_camera["distance"])
+        assert view.cameraParams()["distance"] == pytest.approx(expected_hand_distance)
         assert view.cameraParams()["azimuth"] == pytest.approx(before_camera["azimuth"])
         assert view.cameraParams()["elevation"] == pytest.approx(before_camera["elevation"])
     assert viewer.timer.isActive()
@@ -400,7 +401,7 @@ def test_physical_and_hand_spaces_update_orbit_center_only_and_preserve_frame_pl
     hand_camera = viewer.overlay_view.cameraParams()
     viewer.reference_selector.setCurrentIndex(viewer.reference_selector.findData("cfg-0"))
     changed_camera = viewer.overlay_view.cameraParams()
-    expected_hand_target, expected_hand_distance = viewer._hand_view_for("cfg-0")
+    expected_hand_target, expected_hand_distance = viewer._camera_framing_for("cfg-0", "hand")
     assert tuple(changed_camera["center"]) == pytest.approx(expected_hand_target)
     assert changed_camera["distance"] == pytest.approx(expected_hand_distance)
     assert changed_camera["azimuth"] == pytest.approx(hand_camera["azimuth"])
@@ -416,7 +417,7 @@ def test_physical_and_hand_spaces_update_orbit_center_only_and_preserve_frame_pl
     viewer.space_mode_switch.setChecked(False)
     assert viewer.space_mode == "physical"
     np.testing.assert_allclose(viewer.overlay_view.workspace_bounds_m, ((-1, 1), (-1, 1), (0, 2)))
-    physical_target, physical_distance = viewer._hand_view_for("cfg-0")
+    physical_target, physical_distance = viewer._camera_framing_for("cfg-0", "physical")
     physical_center_display = tuple(physical_target)
     for view in [viewer.overlay_view, *viewer.split_views]:
         np.testing.assert_allclose(tuple(view.cameraParams()["center"]), physical_center_display)
@@ -475,8 +476,11 @@ def test_each_space_restores_its_last_camera_pose(tmp_path, qapp, layout_mode):
 
     viewer.set_space_mode("hand")
     first_hand = source.cameraParams()
-    np.testing.assert_allclose(tuple(first_hand["center"]), viewer.overlay_view.workspace.display_center)
-    assert first_hand["distance"] == pytest.approx(physical_pose["distance"])
+    hand_workspace = viewer.overlay_view.workspace
+    np.testing.assert_allclose(tuple(first_hand["center"]), hand_workspace.axis_intersection_display)
+    expected_hand_center, expected_hand_distance = viewer._camera_framing_for("cfg-1", "hand")
+    np.testing.assert_allclose(tuple(first_hand["center"]), expected_hand_center)
+    assert first_hand["distance"] == pytest.approx(expected_hand_distance)
     assert first_hand["azimuth"] == pytest.approx(physical_pose["azimuth"])
     assert first_hand["elevation"] == pytest.approx(physical_pose["elevation"])
 
@@ -521,6 +525,7 @@ def test_gt_changes_refocus_both_space_poses_without_rebase_drift(tmp_path, qapp
     viewer.hand_space_cache.pop("cfg-1", None)
     expected_target, expected_distance = whole_video_hand_framing(
         target_result.keypoints_3d, target_result.detected)
+    expected_hand_center, expected_hand_distance = viewer._camera_framing_for("cfg-1", "hand")
     viewer.reference_selector.setCurrentIndex(viewer.reference_selector.findData("cfg-1"))
 
     physical = viewer.overlay_view.cameraParams()
@@ -529,24 +534,59 @@ def test_gt_changes_refocus_both_space_poses_without_rebase_drift(tmp_path, qapp
     assert physical["azimuth"] == pytest.approx(24.0)
     assert physical["elevation"] == pytest.approx(10.0)
     assert not hasattr(viewer, "_pending_hand_camera_rebase")
-    assert viewer._camera_states["hand"]["distance"] == pytest.approx(expected_distance)
+    assert viewer._camera_states["hand"]["distance"] == pytest.approx(expected_hand_distance)
+    np.testing.assert_allclose(tuple(viewer._camera_states["hand"]["center"]), expected_hand_center)
     assert viewer._camera_states["hand"]["azimuth"] == pytest.approx(142.0)
     assert viewer._camera_states["hand"]["elevation"] == pytest.approx(34.0)
 
     viewer.set_space_mode("hand")
     hand = viewer.overlay_view.cameraParams()
-    np.testing.assert_allclose(tuple(hand["center"]), expected_target)
-    assert hand["distance"] == pytest.approx(expected_distance)
+    np.testing.assert_allclose(tuple(hand["center"]), expected_hand_center)
+    assert hand["distance"] == pytest.approx(expected_hand_distance)
     assert hand["azimuth"] == pytest.approx(142.0)
     assert hand["elevation"] == pytest.approx(34.0)
 
     for configuration_id in ("cfg-2", "cfg-0", "cfg-1"):
         viewer.reference_selector.setCurrentIndex(viewer.reference_selector.findData(configuration_id))
         active = viewer.overlay_view.cameraParams()
-        expected, distance = viewer._hand_view_for(configuration_id)
+        expected, distance = viewer._camera_framing_for(configuration_id, "hand")
         np.testing.assert_allclose(tuple(active["center"]), expected)
         assert active["distance"] == pytest.approx(distance)
         assert not hasattr(viewer, "_pending_hand_camera_rebase")
+    viewer.close()
+
+
+def test_hand_gt_refocus_uses_rendered_workspace_axis_intersection(tmp_path, qapp):
+    from calibfreehands.visualization.comparison import ComparisonViewer
+    from calibfreehands.visualization.viewer import workspace_camera_framing, workspace_geometry
+
+    viewer = ComparisonViewer(_session(tmp_path, 3, gt_index=0))
+    result = viewer.loaded_results[1].result
+    result.keypoints_3d[:, :, 1:, 0] += 6.0
+    viewer.hand_view_cache.pop("cfg-1", None)
+    viewer.hand_space_cache.pop("cfg-1", None)
+    gt_center, _gt_distance = viewer._hand_view_for("cfg-1")
+    hand_workspace = workspace_geometry("hand", viewer._hand_space_for("cfg-1"))
+    hand_center = hand_workspace.display_center
+    assert not np.allclose(gt_center, hand_center)
+    active_view = viewer._camera_source()
+    aspect = active_view.width() / active_view.height()
+    expected_workspace_center, expected_hand_distance = workspace_camera_framing(
+        hand_workspace, active_view.opts["fov"], aspect)
+    np.testing.assert_allclose(expected_workspace_center, hand_center)
+
+    viewer.reference_selector.setCurrentIndex(viewer.reference_selector.findData("cfg-1"))
+    np.testing.assert_allclose(tuple(viewer._camera_states["physical"]["center"]), gt_center)
+    np.testing.assert_allclose(tuple(viewer._camera_states["hand"]["center"]), hand_center)
+    assert viewer._camera_states["physical"]["distance"] > 0
+    assert viewer._camera_states["hand"]["distance"] == pytest.approx(expected_hand_distance)
+
+    viewer.set_space_mode("hand")
+    for view in [viewer.overlay_view, *viewer.split_views]:
+        np.testing.assert_allclose(tuple(view.cameraParams()["center"]), hand_center)
+        axis_centers = view.axis.pos.reshape(3, 2, 3).mean(axis=1)
+        np.testing.assert_allclose(axis_centers, np.repeat(hand_center[None, :], 3, axis=0))
+    assert viewer.overlay_view.cameraParams()["distance"] == pytest.approx(expected_hand_distance)
     viewer.close()
 
 
@@ -616,10 +656,20 @@ def test_invalid_gt_geometry_refocuses_to_finite_fallback(tmp_path, qapp):
     viewer.hand_view_cache.pop("cfg-1", None)
     viewer.hand_space_cache.pop("cfg-1", None)
     viewer.reference_selector.setCurrentIndex(viewer.reference_selector.findData("cfg-1"))
+    viewer.set_space_mode("hand")
     params = viewer.overlay_view.cameraParams()
     assert np.isfinite(tuple(params["center"])).all()
     assert np.isfinite(params["distance"]) and params["distance"] > 0
     assert not hasattr(viewer, "_pending_hand_camera_rebase")
+    np.testing.assert_allclose(tuple(params["center"]),
+                               viewer.overlay_view.workspace.axis_intersection_display)
+    axis_segments = viewer.overlay_view.axis.pos.reshape(3, 2, 3)
+    axis_intersection = np.asarray(tuple(params["center"]))
+    for start, end in axis_segments:
+        direction = end - start
+        fraction = np.dot(axis_intersection - start, direction) / np.dot(direction, direction)
+        assert 0.0 <= fraction <= 1.0
+        np.testing.assert_allclose(start + fraction * direction, axis_intersection)
     viewer.close()
 
 
@@ -871,6 +921,12 @@ def test_single_cfh_viewer_uses_sole_result_for_hand_space_and_focus(tmp_path, q
     expected = hand_space_bounds(viewer.loaded_results[0].result.keypoints_3d,
                                  viewer.loaded_results[0].result.detected)
     np.testing.assert_allclose(viewer.overlay_view.workspace_bounds_m, expected)
+    hand_camera = viewer.overlay_view.cameraParams()
+    np.testing.assert_allclose(tuple(hand_camera["center"]),
+                               viewer.overlay_view.workspace.axis_intersection_display)
+    expected_center, expected_distance = viewer._camera_framing_for("cfg-0", "hand")
+    np.testing.assert_allclose(tuple(hand_camera["center"]), expected_center)
+    assert hand_camera["distance"] == pytest.approx(expected_distance)
     camera_menu = next(action.menu() for action in viewer.more_menu.actions()
                        if action.menu() is not None and action.text() == "Camera")
     assert "Focus Hands" in [action.text() for action in camera_menu.actions()]
