@@ -428,7 +428,7 @@ All entries below are pending implementation and validation. No acceptance item 
 ## Phase 2.1 Whole-Video GT Hand Framing (2026-11-06)
 
 - [x] Whole-video framing uses the selected GT's detected finite wrist median; finite detected joints provide the documented fallback and robust 2.5th-97.5th percentile extent, with a minimum camera radius.
-- [x] Candidate configurations do not affect the initial framing. GT changes cache a framing without moving the current camera; Hand View applies it explicitly. Frame changes and playback do not recalculate or recenter the camera.
+- [x] Historical Phase 2.1 validation: GT changes cached framing without moving the camera. This camera policy is superseded by Phase D.1 Stabilization below; frame changes and playback still do not recalculate or recenter the camera.
 - [x] Single-result and comparison viewers provide Hand View, fixed Metric Overview, and Fit All; Overlay and Split share the selected GT framing. Front/Side/Top preserve current camera center and distance.
 - [x] Offscreen read-only smoke opened the existing three same-source `.cfh` results (Manual Focal 1655, 2500, and 15000 px), verified selected-GT Hand View and frame navigation stability, and restored Metric Overview/Hand View. No inference ran and no result files were modified.
 - [x] Viewer/comparison tests: 86 passed; full pytest: 260 passed; application import, compileall, `pip check`, and `git diff --check` passed.
@@ -536,3 +536,15 @@ Phase C Final native Windows testing and acceptance were reported by the user as
 - [x] Native Windows Qt tests exercise the actual handle grab, right-click Swap, left-drag resize, repeated swaps, preserved widths/state, and OpenGL rendering: 3 passed.
 - [x] Focused Viewer suite: 110 passed, 1 skipped. Full pytest: 315 passed, 1 skipped. App import, compileall, and `pip check` passed.
 - [ ] Final user confirmation that the dots are visually clear remains pending; no Phase D.1 approval is inferred.
+
+### Phase D.1 Stabilization: GT Camera Focus and Playback During Resize (2026-11-09)
+
+- [x] Replaced the superseded Phase C/2.1 “GT change leaves camera in place” behavior. Regression tests verify new-GT whole-video target/distance in Physical and Hand, preserved per-Space azimuth/elevation, repeated A→B→A changes without drift, invalid-geometry finite fallback, and no pending rebase state.
+- [x] Tests cover camera synchronization across Overlay, Split, and existing detached views; during playback a GT change preserves frame, active timer, color semantics, and user panel order. Physical workspace bounds remain fixed; Hand bounds follow the selected GT.
+- [x] Deterministic resize/playback test verifies the requested, presented, Source Media, and Overlay 3D frame IDs stay equal through repeated splitter resizes.
+- [x] Source Media paint no longer rebuilds an owned `QImage` for an unchanged cached source frame. Regression test verifies the QImage cache key remains stable across repaints.
+- [x] Native Windows Qt harness used the four saved `2_screw` `.cfh` results (364 frames; no inference). A resident 61-frame decoded window allowed equivalent 2-second, 1x playback runs. With the previous per-paint copy behavior vs image reuse, resize-run Source Media paint average/max was 2.614/3.216 ms vs 1.600/1.821 ms; source paint count was 77 vs 81, GL paint count 117 vs 122, and Source/3D both ended at frame 59. No playback frame was skipped in either resize run.
+- [x] In the same resize harness, 43 vs 44 GL resize events were measured; 10 ms event timer intervals averaged 22.90 ms (33.68 ms max) vs 21.92 ms (29.66 ms max). Playback remained frame-synchronized; this shows the remaining layout/GL repaint cost and does not establish that every visible hitch is eliminated. Normal playback intervals averaged 11.45 ms (22.67 ms max) with the previous paint path and 11.43 ms (26.44 ms max) with image reuse.
+- [x] Native GL paint profiling during a separate 2-second cached-window run measured 60 paints at 3.710 ms average / 5.450 ms max without resizing, versus 110 paints at 4.071 ms / 7.147 ms while resizing; the resize run skipped 2 clock frames while its displayed Source/Overlay frames remained aligned. This confirms extra GL redraw work is still present.
+- [x] A native QtTest handle-drag run delivered 120 splitter-move events while playback was active; Source Media and Overlay displayed the same frame throughout sampling. The run lasted about 3.9 s and advanced beyond the 61-frame preloaded decoder window, so subsequent decode contention and QtTest event injection make its skipped-frame counts unsuitable as a before/after performance comparison.
+- [ ] Native automated evidence includes both repeated splitter size changes and QtTest handle-drag events; a user's manual continuous-playback review and confirmation of perceived smoothness remain pending. No user acceptance is claimed.

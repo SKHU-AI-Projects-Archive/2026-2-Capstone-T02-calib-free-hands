@@ -174,7 +174,7 @@ All implementation items above are complete. Remaining user and Windows GUI acce
 - [x] Compute the selected GT (or sole result) whole-video detected finite wrist median and robust all-joint 2.5–97.5 percentile extent once per loaded result/GT selection; apply only the camera transform.
 - [x] Use the selected GT framing for initial Hand View; candidate results do not affect the default framing, and playback/seek never recenter the camera.
 - [x] Keep Metric Overview at the fixed Phase 2 workspace camera; Fit All remains based on current-frame visible geometry; Reset restores Hand View.
-- [x] Recompute/cache a new GT framing on selection while preserving current camera pose; apply it only when Hand View is chosen.
+- [x] Historical Phase 2.1 behavior: cache GT framing without camera movement. **Superseded by Phase D.1 Stabilization**, which immediately refocuses both saved Space poses on GT selection.
 - [x] Keep Front/Side/Top orientation-only relative to current center/distance, and synchronize Hand View / Metric Overview across Overlay and Split.
 
 ## Phase C Physical / Hand 3D Space
@@ -182,7 +182,7 @@ All implementation items above are complete. Remaining user and Windows GUI acce
 - [x] Add shared Physical/Hand runtime mode to the unified result/comparison Viewer; default remains fixed X/Y [-1, 1] m and Z [0, 2] m Physical workspace.
 - [x] Present physical camera Y as display-up without changing raw camera-space arrays; use real metric bounds and adaptive 1/2/5 grid spacing in Hand Space.
 - [x] Cache robust whole-video Hand bounds from selected GT (or sole result), using detected finite joints and MANO vertices, percentile extents, frame-center outlier filtering, padding, and a 0.2 m minimum span; fall back to Physical bounds without valid geometry.
-- [x] Separate numeric scale Labels from Grid and Axis visibility. Physical/Hand changes and GT selection preserve the active camera and frame.
+- [x] Separate numeric scale Labels from Grid and Axis visibility. Physical/Hand changes preserve the active frame; GT selection camera behavior is superseded by Phase D.1 Stabilization.
 - [x] Expose Focus GT / Focus Hands, Space Overview, and Fit All as separate camera actions; synchronize workspace and labels across Overlay, Split, and existing detached views.
 - [x] Correct README's built-in Original preset description to all-frame sampling, matching the Phase B implementation.
 
@@ -253,3 +253,12 @@ Phase C Final native Windows testing and acceptance were reported by the user as
 - [x] Finalized grip rendering: exactly three 3-logical-pixel dots with 5-logical-pixel center spacing, explicit Window/WindowText palette painting, and no inherited native handle decoration.
 - [x] Kept GL surfaces in their existing owning layouts and reused GL widgets. Native Windows saved-result check confirmed the five-panel 3×2 layout and valid rendering without GL errors/draw warnings.
 - [ ] Phase D.1 final user review remains pending. D.2 independent per-panel windows, D.3 detached synchronization/aspect ratio, Phase E polish/animations, Phase F/G, and release packaging remain deferred.
+
+### Phase D.1 Stabilization: GT Camera Focus and Playback During Resize (2026-11-09)
+
+- [x] Selecting a new GT refocuses the active camera using its robust whole-video target and distance, while preserving the active orientation and updating the inactive Space's saved target/distance with its own orientation intact.
+- [x] Keep Physical planes/axes fixed; update selected-GT Hand bounds and synchronize Overlay, Split, and existing detached views. Remove delayed Hand camera rebase state.
+- [x] Preserve frame, playback, panel order, metric/color behavior, and canonical result arrays during GT refocus; invalid geometry uses the existing finite fallback.
+- [x] Reuse the owned Source Media `QImage` for unchanged source frames; convert/copy only when the decoded source frame changes.
+- [x] Native Windows Qt matched 2-second playback/resize harness: Source Media paint average/max changed from 2.614/3.216 ms to 1.600/1.821 ms; Source/3D ended synchronized at frame 59 in both variants. Detailed resize/event-loop measurements are in `VALIDATION_CHECKLIST.md`.
+- [ ] User visual and continuous-playback acceptance remains pending. D.2/D.3, Phase E/F/G, and release packaging remain deferred.

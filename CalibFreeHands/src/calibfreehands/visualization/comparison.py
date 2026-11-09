@@ -713,7 +713,6 @@ class ComparisonViewer(QWidget):
         self.hand_space_cache = {}
         self.space_mode = "physical"
         self._camera_states = {"physical": None, "hand": None}
-        self._pending_hand_camera_rebase = None
         reference_index = (self._configuration_index(self.reference_id)
                            if self.reference_id is not None else None)
         candidate_index = 0
@@ -1715,6 +1714,24 @@ class ComparisonViewer(QWidget):
         for view in self._workspace_views():
             view.set_workspace(self.space_mode, bounds)
 
+    def _refocus_selected_gt(self):
+        target, distance = self._hand_view_for(self.reference_id)
+        active_source = self._camera_source()
+        active_pose = self._copy_camera_params(active_source)
+        poses = {}
+        for mode in ("physical", "hand"):
+            pose = active_pose if mode == self.space_mode else self._camera_states[mode]
+            if pose is None:
+                pose = active_pose
+            else:
+                pose = dict(pose)
+            pose["center"] = pg.Vector(*target)
+            pose["distance"] = distance
+            poses[mode] = pose
+        self._camera_states.update(poses)
+        active_source.setCameraParams(**poses[self.space_mode])
+        self._sync_camera(active_source)
+
     @staticmethod
     def _copy_camera_params(view):
         params = dict(view.cameraParams())
@@ -1737,10 +1754,6 @@ class ComparisonViewer(QWidget):
             return
         previous_mode = self.space_mode
         current_pose = self._copy_camera_params(self._camera_source())
-        if previous_mode == "hand" and self._pending_hand_camera_rebase is not None:
-            center = np.asarray(tuple(current_pose["center"])) + self._pending_hand_camera_rebase
-            current_pose["center"] = pg.Vector(*center)
-            self._pending_hand_camera_rebase = None
         self._camera_states[previous_mode] = current_pose
         self.space_mode = mode
         self.space_mode_switch.setChecked(mode == "hand")
@@ -1754,7 +1767,7 @@ class ComparisonViewer(QWidget):
             self._camera_states[mode] = target_pose
         source = self._camera_source()
         source.setCameraParams(**target_pose)
-        self._sync_camera(source, clear_hand_rebase=True)
+        self._sync_camera(source)
         for _window, _detached_source, detached_views in self._detached_windows:
             if detached_views:
                 detached_views[0].setCameraParams(**target_pose)
@@ -1868,17 +1881,11 @@ class ComparisonViewer(QWidget):
     def _reference_changed(self, _index):
         if self.single_mode:
             return
-        previous_hand_center = (np.asarray(self.overlay_view.workspace.display_center, dtype=float)
-                                if self.space_mode == "hand" else None)
         self.reference_id = self.reference_selector.currentData()
         self._hand_view_for(self.reference_id)
         if self.space_mode == "hand":
-            next_bounds = self._hand_space_for(self.reference_id)
-            next_center = np.asarray(workspace_geometry("hand", next_bounds).display_center, dtype=float)
-            previous_rebase = (self._pending_hand_camera_rebase
-                               if self._pending_hand_camera_rebase is not None else np.zeros(3))
-            self._pending_hand_camera_rebase = previous_rebase + next_center - previous_hand_center
             self._apply_workspace()
+        self._refocus_selected_gt()
         self.reference_selector.setToolTip(self.reference_selector.currentText())
         self.reference_label.setText("GT")
         self._rebuild_metrics_menu()
@@ -2377,7 +2384,7 @@ class ComparisonViewer(QWidget):
         self._stats_started = monotonic()
         self._stats_frames = 0
 
-    def _sync_camera(self, source, clear_hand_rebase=False):
+    def _sync_camera(self, source):
         if self._syncing_camera or not self.split_views:
             return
         self._syncing_camera = True
@@ -2392,12 +2399,6 @@ class ComparisonViewer(QWidget):
         finally:
             self._syncing_camera = False
         state = self._copy_camera_params(source)
-        if self.space_mode == "hand" and self._pending_hand_camera_rebase is not None:
-            if clear_hand_rebase:
-                self._pending_hand_camera_rebase = None
-            else:
-                center = np.asarray(tuple(state["center"])) + self._pending_hand_camera_rebase
-                state["center"] = pg.Vector(*center)
         self._camera_states[self.space_mode] = state
         self._refresh_annotations()
 
@@ -2408,7 +2409,7 @@ class ComparisonViewer(QWidget):
         if self.mode == "overlay":
             fitted = self.overlay_view.fit_camera_to_points(points)
             if fitted:
-                self._sync_camera(self.overlay_view, clear_hand_rebase=True)
+                self._sync_camera(self.overlay_view)
             return fitted
 
         visible_indices = [index for index, check in enumerate(self.visibility_checks) if check.isChecked()]
@@ -2420,14 +2421,14 @@ class ComparisonViewer(QWidget):
         source = visible_views[0]
         if not source.fit_camera_to_points(points, aspect=aspect):
             return False
-        self._sync_camera(source, clear_hand_rebase=True)
+        self._sync_camera(source)
         return True
 
     def hand_view(self):
         target, distance = self._hand_view_for(self._hand_view_source_id())
         source = self.overlay_view if self.mode == "overlay" else self.split_views[0]
         source.apply_hand_view(target, distance)
-        self._sync_camera(source, clear_hand_rebase=True)
+        self._sync_camera(source)
         self._refresh_annotations()
 
     def focus_gt(self):
@@ -2436,13 +2437,13 @@ class ComparisonViewer(QWidget):
     def space_overview(self):
         source = self.overlay_view if self.mode == "overlay" else self.split_views[0]
         source.space_overview()
-        self._sync_camera(source, clear_hand_rebase=True)
+        self._sync_camera(source)
         self._refresh_annotations()
 
     def metric_overview(self):
         source = self.overlay_view if self.mode == "overlay" else self.split_views[0]
         source.metric_overview()
-        self._sync_camera(source, clear_hand_rebase=True)
+        self._sync_camera(source)
         self._refresh_annotations()
 
     def reset_camera(self):
@@ -2464,7 +2465,7 @@ class ComparisonViewer(QWidget):
         views = [self.overlay_view] if self.mode == "overlay" else self.split_views
         if not views: return
         getattr(views[0], method)()
-        self._sync_camera(views[0], clear_hand_rebase=True)
+        self._sync_camera(views[0])
 
     def _previous(self): self.slider.setValue(max(0, self.slider.value() - 1))
     def _next_frame(self): self.slider.setValue(min(self.slider.maximum(), self.slider.value() + 1))

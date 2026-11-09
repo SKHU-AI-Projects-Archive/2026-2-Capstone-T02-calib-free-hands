@@ -302,7 +302,12 @@ def load_bundle_result(bundle: ResultBundle, decode_media: bool = True) -> Loade
 
 class _OverlayCanvas(QWidget):
     def __init__(self, loaded):
-        super().__init__(); self.loaded = loaded; self.frame = 0; self._display_image = QImage(); self._requested_source_index = None
+        super().__init__()
+        self.loaded = loaded
+        self.frame = 0
+        self._display_image = QImage()
+        self._display_source_index = None
+        self._requested_source_index = None
         provider = loaded.media_frames
         if isinstance(provider, MediaFrameProvider):
             provider.signals.frame_ready.connect(self._frame_ready)
@@ -312,6 +317,7 @@ class _OverlayCanvas(QWidget):
         self.frame = max(0, min(frame, self.loaded.frame_count - 1))
         if source_image is not None:
             self._display_image = source_image
+            self._display_source_index = int(self.loaded.result.frame_indices[self.frame])
         provider = self.loaded.media_frames
         if isinstance(provider, MediaFrameProvider):
             source_index = int(self.loaded.result.frame_indices[self.frame])
@@ -353,8 +359,12 @@ class _OverlayCanvas(QWidget):
                 image = self._display_image
                 image_width, image_height = image.width(), image.height()
             else:
-                image = QImage(rgb.data, rgb.shape[1], rgb.shape[0], rgb.strides[0], QImage.Format.Format_RGB888).copy()
-                self._display_image = image
+                if self._display_source_index != source_index or self._display_image.isNull():
+                    self._display_image = QImage(
+                        rgb.data, rgb.shape[1], rgb.shape[0], rgb.strides[0],
+                        QImage.Format.Format_RGB888).copy()
+                    self._display_source_index = source_index
+                image = self._display_image
                 image_width, image_height = rgb.shape[1], rgb.shape[0]
             sx, sy = self.width() / image_width, self.height() / image_height
             painter.drawImage(self.rect(), image)
