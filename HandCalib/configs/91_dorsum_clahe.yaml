@@ -12,6 +12,7 @@ settings_config: configs/74b_multistart_rerun.yaml
 compare_run: runs/74b_multistart_rerun/20261105T044422Z
 detection_cache_from: runs/81_detected_joints/20261106T055430Z/detection_cache
 joint_set: j16
+code: {branch: optical_flow, commit: f1b0961, modules: [HandCalib/optical_flow/experiments.py, HandCalib/optical_flow/variants.py]}
 ramps_deg: [11]
 videos: ["IMG_7354 - 복사본.MOV", "IMG_7355 - 복사본.MOV", "IMG_7351 - 복사본.MOV", "IMG_7352 - 복사본.MOV"]
 variants:
