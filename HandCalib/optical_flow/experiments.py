@@ -240,6 +240,121 @@ def dc_summary(res: dict, cfg: dict, own: dict) -> str:
 
 
 # ----------------------------------------------------------------------------------------------------
+# 92: 두 평면 추정기 (optical_flow.two_plane)
+# ----------------------------------------------------------------------------------------------------
+def tw_points(args):
+    """한 영상: 평면 A 관측(손 마스크 사슬 = kt_chain) 과 평면 B 관측(손등 몸통 마스크 사슬 = dc_chain) -> 두 사슬이 모두 유효하고 가장자리에 닿지 않는
+    프레임을 max_frames 개 이하로 고르게 골라 둔다."""
+    e, cfg, run_root = args
+    import cv2
+    cv2.setNumThreads(1)
+    pngs, times, tr, (W, H), tmp = prepare(e, cfg, run_root)
+    try:
+        pres = np.flatnonzero(tr["present"])
+        n = len(pngs)
+        a, b = int(pres[0]), int(pres[-1])
+        ref = of.choose_reference(tr["present"])
+        kps = np.stack([of.kt_carry(tr["present"], tr["kp"][:, j, k]) for j in range(21) for k in range(2)], axis=1).reshape(n, 21, 2)
+        boxes = np.stack([of.kt_carry(tr["present"], tr["box"][:, k]) for k in range(4)], axis=1)
+        HA = {**of.kt_chain(pngs, kps, boxes, list(range(ref, a - 1, -1)), cfg["tracking"])["H"], **of.kt_chain(pngs, kps, boxes, list(range(ref, b + 1)), cfg["tracking"])["H"]}
+        HB = {**of.dc_chain(pngs, kps, boxes, list(range(ref, a - 1, -1)), cfg["tracking"], DORSUM)["H"], **of.dc_chain(pngs, kps, boxes, list(range(ref, b + 1)), cfg["tracking"], DORSUM)["H"]}
+    finally:
+        shutil.rmtree(tmp, ignore_errors=True)
+    P = tr["kp"][ref]
+    kA, _, vA, eA = of.chain_points(P, HA, n, W, H)
+    kB, _, vB, eB = of.chain_points(P, HB, n, W, H)
+    ok = np.flatnonzero(vA & ~eA & vB & ~eB)
+    m = int(cfg["two_plane"]["max_frames"])
+    sel = ok if len(ok) <= m else ok[np.unique(np.linspace(0, len(ok) - 1, m).round().astype(int))]
+    return {"ref": ref, "ref_t": float(times[ref]), "size": (W, H), "p_ref": P, "obsA": kA[sel], "obsB": kB[sel], "frames": sel, "n_ok": int(len(ok))}, \
+        [f"  {e['file']}: 기준 {times[ref]:.1f} s, 두 사슬 모두 쓸 수 있는 프레임 {len(ok)}, 고른 프레임 {len(sel)}"]
+
+
+def tw_job(args):
+    """(영상 또는 합성 장면, 방식) 하나: two_plane.solve."""
+    key, mode, x, grid, tc = args
+    import os
+    os.environ.setdefault("OMP_NUM_THREADS", "1")
+    from optical_flow import two_plane as tp
+    t0 = time.time()
+    try:
+        r = tp.solve(x["p_ref"], x["obsA"], x["obsB"], x["size"], np.asarray(grid), mode=mode, tilts=tuple(tc["start_tilts_deg"]), n_final=int(tc["n_final"]))
+    except Exception as ex:                                            # 실패도 결과로 남김
+        r = {"failed": f"{type(ex).__name__}: {ex}"}
+    r["elapsed_s"] = time.time() - t0
+    return key, mode, r
+
+
+def tw_run(cfg: dict, vid: dict, log) -> dict:
+    import multiprocessing as mp
+    from concurrent.futures import ProcessPoolExecutor
+    from optical_flow import two_plane as tp
+    tc = cfg["two_plane"]
+    jobs = []
+    for f, x in vid.items():
+        grid = hf.f_grid({"f_ratio_range": tc["f_ratio_range"], "f_grid_n": tc["f_grid_n"]}, max(*x["size"])).tolist()
+        for mode in tc["modes"]:
+            jobs.append((f, mode, x, grid, tc))
+    for sc in tc.get("synthetic", []):                                 # 합성 확인 (풀이기 점검용)
+        s = tp.synthetic(f=float(sc["f"]), ramp_a=float(sc["ramp_a"]), ramp_b=float(sc["ramp_b"]), noise_px=float(sc["noise_px"]), n=int(sc["frames"]), hand_cm=hf.OD_HAND_CM, seed=int(sc.get("seed", 0)))
+        grid = hf.f_grid({"f_ratio_range": tc["f_ratio_range"], "f_grid_n": tc["f_grid_n"]}, 1920).tolist()
+        for mode in tc["modes"]:
+            jobs.append((f"합성 f {sc['f']:g}, 경사 A {sc['ramp_a']:g}° B {sc['ramp_b']:g}°, 잡음 {sc['noise_px']:g} px", mode, s, grid, tc))
+    log(f"  풀이 {len(jobs)}건")
+    res = {}
+    with ProcessPoolExecutor(max_workers=int(cfg["workers"]), mp_context=mp.get_context("spawn")) as ex:
+        for key, mode, r in ex.map(tw_job, jobs, chunksize=1):
+            res.setdefault(key, {})[mode] = r
+            log(f"  {key} {mode}: " + (r["failed"] if "failed" in r else f"f {r['f']:.0f}, RMS {r['rms_px']:.2f} px, 평면 A {r['plane_a_deg']:.1f}° B {r['plane_b_deg']:.1f}°, 책상 {r['desk_tilt_deg']:.1f}°")
+                + f" ({r['elapsed_s']:.0f} s)")
+    for f, x in vid.items():
+        res[f]["info"] = {"ref_t": x["ref_t"], "n_ok": x["n_ok"], "n_used": int(len(x["frames"]))}
+    return res
+
+
+def tw_summary(res: dict, cfg: dict, own: dict) -> str:
+    prev = json.loads((hf.resolve(own["compare_run"]) / "results.json").read_text())["real"]
+    js = cfg["joint_set"]
+    tc = cfg["two_plane"]
+    best = lambda d: min([d[k] for k in d if k.startswith("free_") and isinstance(d[k], dict) and d[k].get("cost") not in (None, float("inf"))], key=lambda x: x["cost"], default=None)      # noqa: E731
+    lab = {"A": "평면 A만 (손 마스크 사슬)", "B": "평면 B만 (손등 몸통 사슬)", "AB": "두 평면 함께"}
+    L = ["# 92 두 평면 추정기 summary", "",
+         "**손가락 평면(손 마스크 사슬, 90 에서 손가락 평면을 따라감)과 손등 평면(손등 몸통 마스크 사슬, 91)을 함께 맞춘다. 평면 A·B 의 방향, 책상 법선, f, 프레임마다 책상 법선 둘레 회전과 "
+         "책상 면 안 미끄러짐을 함께 풀고, 손 경사는 가정하지 않는다(결과로 나옴). 비교로 같은 풀이를 평면 하나씩에도 돌린다. 74b(경사 11° 고정, 함께 추정)의 값은 옆에. 판정 없음.**", "",
+         f"- f 격자: 긴 변 x {tc['f_ratio_range']} 에서 {tc['f_grid_n']}개, 시작 책상 기울기 {tc['start_tilts_deg']}°, 회전 방향 두 가지, 낮은 {tc['n_final']}곳에서 f 까지 풀어 비용 최소. "
+         f"프레임 최대 {tc['max_frames']}개, 관측 점 = 기준 프레임 검출 관절 21개를 각 사슬로 옮긴 것.",
+         "- 기준 f 는 이 파일에만. 오차 = 기준 f 대비. * = f 격자 끝. 평면 각 = 그 평면과 책상 사이 각(손 경사에 해당).", "",
+         "| 영상 / 장면 | 기준 f | 방식 | f (오차) | RMS (px) | 평면 A 각 | 평면 B 각 | 두 평면 사이 각 | 책상 기울기 | 회전 범위 |", "|---|---|---|---|---|---|---|---|---|---|"]
+    vids = {e["file"]: e for e in cfg["videos"]}
+    for key, d in res.items():
+        e = vids.get(key)
+        rf = float(e.get("ref_f_px") or cfg["ref_f"]["value"]) if e else float(key.split("f ")[1].split(",")[0])
+        if e:
+            p = prev.get(f"{key}|{js}") or {}
+            for nm, x in (("74b 경사 11° 고정", p.get("ramp_11")), ("74b 경사 함께 추정", best(p))):
+                L.append(f"| {key} | {rf:g} | {nm} | " + ("-" if not x or "f" not in x else f"{x['f']:.0f} ({100 * (x['f'] / rf - 1):+.1f}%)") + " | - | " +
+                         ("-" if not x or "pitch_deg" not in x else f"{x['pitch_deg']:.1f}°") + " | - | - | - | - |")
+        for mode in tc["modes"]:
+            x = d.get(mode) or {}
+            if "f" not in x:
+                L.append(f"| {key} | {rf:g} | {lab[mode]} | 실패: {x.get('failed')} | | | | | | |")
+                continue
+            L.append(f"| {key} | {rf:g} | {lab[mode]} | {x['f']:.0f} ({100 * (x['f'] / rf - 1):+.1f}%){'*' if x['at_bound'] else ''} | {x['rms_px']:.2f} | {x['plane_a_deg']:.1f}° | "
+                     + ("-" if mode != "AB" else f"{x['plane_b_deg']:.1f}°") + " | " + ("-" if mode != "AB" else f"{x['dihedral_deg']:.1f}°") + f" | {x['desk_tilt_deg']:.1f}° | {x['turn_range_deg']:.0f}° |")
+    L += ["", "## 비용 곡선 (f 고정 풀이의 비용, 최솟값 = 1)", "", "| 영상 / 장면 | 방식 | " + " | ".join("f 격자 %d" % (i + 1) for i in range(int(tc["f_grid_n"]))) + " |",
+          "|---|---|" + "---|" * int(tc["f_grid_n"])]
+    for key, d in res.items():
+        for mode in tc["modes"]:
+            x = d.get(mode) or {}
+            if "profile_cost" in x:
+                c = np.array(x["profile_cost"])
+                L.append(f"| {key} | {mode} | " + " | ".join(f"{v:.2f}" for v in c / max(c.min(), 1e-12)) + " |")
+    L += ["", "## 한계", "", "- 두 사슬 모두 평면 하나로 옮긴 점이라, 실제 손이 두 평면이 아니면(엄지, 손목) 그만큼 맞지 않는다. 영상 4개.",
+          "- 합성 장면은 무작위 잡음만 있어 평면 하나로도 f 가 정해진다. 풀이기가 참값을 되찾는지만 본다.", ""]
+    return "\n".join(L) + "\n"
+
+
+# ----------------------------------------------------------------------------------------------------
 # 실행
 # ----------------------------------------------------------------------------------------------------
 def results_yaml(cmd: str, run_dir: Path, own: dict) -> Path:
@@ -263,7 +378,7 @@ def results_yaml(cmd: str, run_dir: Path, own: dict) -> Path:
 
 def main(argv=None):
     ap = argparse.ArgumentParser(description="광류 방식 원인 확인 실험")
-    ap.add_argument("cmd", choices=["tracking-plane", "dorsum-corners"])
+    ap.add_argument("cmd", choices=["tracking-plane", "dorsum-corners", "two-plane"])
     ap.add_argument("--config", required=True)
     ap.add_argument("--out", default=None)
     ap.add_argument("--videos", type=int, default=None, help="시험 실행: 앞의 N 개 영상만, 추정 1건씩")
@@ -277,10 +392,12 @@ def main(argv=None):
         print(results_yaml(a.cmd, hf.resolve(a.run), own))
         return None
     cfg = rof.load_settings(own)
-    cfg.update({k: own[k] for k in ("variants", "clahe") if k in own})
+    cfg.update({k: own[k] for k in ("variants", "clahe", "two_plane") if k in own})
     if a.videos:
         cfg["videos"] = cfg["videos"][:a.videos]
         cfg["free_starts_deg"] = []
+        if "two_plane" in cfg:
+            cfg["two_plane"] = {**cfg["two_plane"], "start_tilts_deg": [45], "n_final": 1, "synthetic": cfg["two_plane"].get("synthetic", [])[:1]}
     import datetime as dt
     import os
     run_root = Path(a.out).expanduser() if a.out else hf.resolve(cfg["output"]["root"]) / dt.datetime.now(dt.timezone.utc).strftime("%Y%m%dT%H%M%SZ")
@@ -294,7 +411,7 @@ def main(argv=None):
         shutil.copytree(hf.resolve(own["detection_cache_from"]), run_root / "detection_cache")
     import multiprocessing as mp
     from concurrent.futures import ProcessPoolExecutor
-    job = tp_job if a.cmd == "tracking-plane" else dc_job
+    job = {"tracking-plane": tp_job, "dorsum-corners": dc_job, "two-plane": tw_points}[a.cmd]
     vid = {}
     with ProcessPoolExecutor(max_workers=int(cfg["video_workers"]), mp_context=mp.get_context("spawn")) as ex:
         for e, (x, lines) in zip(cfg["videos"], ex.map(job, [(e, cfg, str(run_root)) for e in cfg["videos"]])):
@@ -305,6 +422,9 @@ def main(argv=None):
     if a.cmd == "tracking-plane":
         res = vid
         text_sum = tp_summary(res, cfg)
+    elif a.cmd == "two-plane":
+        res = tw_run(cfg, vid, log)
+        text_sum = tw_summary(res, cfg, own)
     else:
         res = dc_estimate(cfg, vid, log)
         text_sum = dc_summary(res, cfg, own)
