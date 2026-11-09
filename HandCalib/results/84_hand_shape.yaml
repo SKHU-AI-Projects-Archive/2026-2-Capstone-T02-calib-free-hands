@@ -1,0 +1,602 @@
+experiment: 84_hand_shape
+run: runs/84_hand_shape/20261109T021826Z
+code_commit: 0e6f5b8
+git_dirty_at_run: false
+note: 팀원 영상에서 추적한 엄지와 손목(덜하지만 손가락도)이 검출 관절에서 벗어난다(77, 83). 손이 촬영 중에 모양을 바꾸는지 보려고,
+  실험 73이 이 4개 영상에 돌려 둔 WiLoR 3차원 손(3프레임마다)을 읽어 프레임마다 손가락 굽힘, 엄지 벌림·굽힘, 손바닥 경사(71의
+  방식), 그리고 j16으로 맞춘 강체 손에서 손목과 엄지가 벗어나는 거리를 잰다. 본인 2개(새 폰, 74b에서 11° 오차가 작은 영상)와 팀원
+  2개. 판정 없음.
+wilor_run: runs/73_new_phone_hands/20261105T022515Z
+videos:
+  IMG_7354 - 복사본.MOV:
+    person: self
+    n_frames: 188
+    n_hand: 188
+    metrics:
+      flex_mean4:
+        median: 30.55
+        iqr:
+        - 27.32
+        - 32.57
+        p5_p95:
+        - 26.1
+        - 37.71
+        range_90: 11.61
+        jitter: 0.42
+        rank_corr_time: 0.23
+      thumb_abd:
+        median: 32.34
+        iqr:
+        - 28.01
+        - 35.43
+        p5_p95:
+        - 25.09
+        - 37.27
+        range_90: 12.18
+        jitter: 0.9
+        rank_corr_time: 0.28
+      thumb_flex:
+        median: 32.84
+        iqr:
+        - 30.49
+        - 39.16
+        p5_p95:
+        - 28.44
+        - 48.56
+        range_90: 20.12
+        jitter: 1.49
+        rank_corr_time: 0.26
+      flex_index:
+        median: 33.67
+        iqr:
+        - 30.18
+        - 37.78
+        p5_p95:
+        - 28.69
+        - 41.46
+        range_90: 12.77
+        jitter: 0.54
+        rank_corr_time: 0.21
+      flex_middle:
+        median: 15.17
+        iqr:
+        - 13.75
+        - 23.25
+        p5_p95:
+        - 12.49
+        - 31.47
+        range_90: 18.98
+        jitter: 0.81
+        rank_corr_time: 0.39
+      flex_ring:
+        median: 30.77
+        iqr:
+        - 29.27
+        - 31.7
+        p5_p95:
+        - 27.22
+        - 33.53
+        range_90: 6.31
+        jitter: 0.61
+        rank_corr_time: 0.09
+      flex_little:
+        median: 42.22
+        iqr:
+        - 33.97
+        - 43.87
+        p5_p95:
+        - 31.09
+        - 46.97
+        range_90: 15.88
+        jitter: 1.0
+        rank_corr_time: -0.01
+      ramp_center:
+        median: 4.19
+        iqr:
+        - 2.67
+        - 7.53
+        p5_p95:
+        - 1.43
+        - 10.08
+        range_90: 8.65
+        jitter: 0.6
+        rank_corr_time: 0.54
+      ramp_dorsal:
+        median: 10.71
+        iqr:
+        - 9.45
+        - 12.82
+        p5_p95:
+        - 7.91
+        - 13.98
+        range_90: 6.07
+        jitter: 0.47
+        rank_corr_time: 0.53
+      wrist_h:
+        median: 21.53
+        iqr:
+        - 18.84
+        - 24.2
+        p5_p95:
+        - 6.02
+        - 26.06
+        range_90: 20.04
+        jitter: 0.73
+        rank_corr_time: -0.12
+      rms_j16:
+        median: 2.93
+        iqr:
+        - 1.9
+        - 3.46
+        p5_p95:
+        - 1.58
+        - 5.35
+        range_90: 3.77
+        jitter: 0.19
+        rank_corr_time: 0.08
+      d_wrist:
+        median: 3.4
+        iqr:
+        - 2.25
+        - 8.57
+        p5_p95:
+        - 1.55
+        - 25.55
+        range_90: 24.0
+        jitter: 0.65
+        rank_corr_time: 0.16
+      d_thumb:
+        median: 5.05
+        iqr:
+        - 3.82
+        - 8.33
+        p5_p95:
+        - 2.45
+        - 11.09
+        range_90: 8.64
+        jitter: 1.17
+        rank_corr_time: -0.29
+  IMG_7355 - 복사본.MOV:
+    person: self
+    n_frames: 166
+    n_hand: 166
+    metrics:
+      flex_mean4:
+        median: 31.81
+        iqr:
+        - 29.61
+        - 33.49
+        p5_p95:
+        - 28.37
+        - 37.52
+        range_90: 9.15
+        jitter: 0.45
+        rank_corr_time: -0.04
+      thumb_abd:
+        median: 32.49
+        iqr:
+        - 26.72
+        - 37.78
+        p5_p95:
+        - 24.34
+        - 42.47
+        range_90: 18.13
+        jitter: 0.72
+        rank_corr_time: 0.16
+      thumb_flex:
+        median: 30.94
+        iqr:
+        - 29.67
+        - 34.24
+        p5_p95:
+        - 26.88
+        - 48.35
+        range_90: 21.47
+        jitter: 1.31
+        rank_corr_time: 0.36
+      flex_index:
+        median: 35.9
+        iqr:
+        - 33.67
+        - 39.77
+        p5_p95:
+        - 32.42
+        - 43.43
+        range_90: 11.01
+        jitter: 0.73
+        rank_corr_time: 0.11
+      flex_middle:
+        median: 18.35
+        iqr:
+        - 16.62
+        - 23.93
+        p5_p95:
+        - 15.29
+        - 31.66
+        range_90: 16.38
+        jitter: 0.77
+        rank_corr_time: 0.34
+      flex_ring:
+        median: 29.91
+        iqr:
+        - 28.9
+        - 30.7
+        p5_p95:
+        - 27.2
+        - 31.69
+        range_90: 4.49
+        jitter: 0.51
+        rank_corr_time: -0.07
+      flex_little:
+        median: 41.94
+        iqr:
+        - 36.61
+        - 46.14
+        p5_p95:
+        - 33.06
+        - 47.64
+        range_90: 14.58
+        jitter: 0.85
+        rank_corr_time: -0.33
+      ramp_center:
+        median: 1.5
+        iqr:
+        - 0.8
+        - 4.87
+        p5_p95:
+        - 0.11
+        - 10.75
+        range_90: 10.64
+        jitter: 0.66
+        rank_corr_time: 0.4
+      ramp_dorsal:
+        median: 8.52
+        iqr:
+        - 7.74
+        - 11.12
+        p5_p95:
+        - 7.05
+        - 14.94
+        range_90: 7.89
+        jitter: 0.52
+        rank_corr_time: 0.43
+      wrist_h:
+        median: 21.48
+        iqr:
+        - 20.65
+        - 23.28
+        p5_p95:
+        - 16.58
+        - 27.49
+        range_90: 10.92
+        jitter: 0.8
+        rank_corr_time: 0.02
+      rms_j16:
+        median: 2.45
+        iqr:
+        - 2.01
+        - 3.11
+        p5_p95:
+        - 1.26
+        - 3.72
+        range_90: 2.46
+        jitter: 0.27
+        rank_corr_time: 0.18
+      d_wrist:
+        median: 2.1
+        iqr:
+        - 1.32
+        - 4.81
+        p5_p95:
+        - 0.57
+        - 23.92
+        range_90: 23.35
+        jitter: 0.63
+        rank_corr_time: 0.22
+      d_thumb:
+        median: 8.62
+        iqr:
+        - 6.52
+        - 14.39
+        p5_p95:
+        - 4.65
+        - 16.88
+        range_90: 12.24
+        jitter: 1.08
+        rank_corr_time: -0.1
+  IMG_7351 - 복사본.MOV:
+    person: teammate
+    n_frames: 129
+    n_hand: 129
+    metrics:
+      flex_mean4:
+        median: 31.6
+        iqr:
+        - 30.99
+        - 32.09
+        p5_p95:
+        - 30.16
+        - 34.14
+        range_90: 3.98
+        jitter: 0.32
+        rank_corr_time: 0.17
+      thumb_abd:
+        median: 40.63
+        iqr:
+        - 32.86
+        - 43.33
+        p5_p95:
+        - 28.97
+        - 44.51
+        range_90: 15.54
+        jitter: 0.67
+        rank_corr_time: 0.65
+      thumb_flex:
+        median: 31.73
+        iqr:
+        - 29.27
+        - 33.44
+        p5_p95:
+        - 21.78
+        - 36.11
+        range_90: 14.32
+        jitter: 1.08
+        rank_corr_time: 0.1
+      flex_index:
+        median: 36.79
+        iqr:
+        - 35.11
+        - 37.66
+        p5_p95:
+        - 34.02
+        - 39.8
+        range_90: 5.78
+        jitter: 0.57
+        rank_corr_time: 0.09
+      flex_middle:
+        median: 20.19
+        iqr:
+        - 17.18
+        - 22.95
+        p5_p95:
+        - 15.05
+        - 24.65
+        range_90: 9.61
+        jitter: 0.62
+        rank_corr_time: 0.58
+      flex_ring:
+        median: 29.31
+        iqr:
+        - 28.3
+        - 30.35
+        p5_p95:
+        - 26.59
+        - 31.27
+        range_90: 4.67
+        jitter: 0.58
+        rank_corr_time: -0.41
+      flex_little:
+        median: 39.1
+        iqr:
+        - 36.82
+        - 43.65
+        p5_p95:
+        - 34.12
+        - 49.76
+        range_90: 15.64
+        jitter: 1.1
+        rank_corr_time: -0.2
+      ramp_center:
+        median: 1.12
+        iqr:
+        - 0.36
+        - 2.59
+        p5_p95:
+        - -0.51
+        - 3.86
+        range_90: 4.37
+        jitter: 0.52
+        rank_corr_time: 0.47
+      ramp_dorsal:
+        median: 8.23
+        iqr:
+        - 7.71
+        - 9.5
+        p5_p95:
+        - 6.78
+        - 10.73
+        range_90: 3.95
+        jitter: 0.5
+        rank_corr_time: 0.49
+      wrist_h:
+        median: 22.46
+        iqr:
+        - 19.84
+        - 23.16
+        p5_p95:
+        - 17.53
+        - 25.47
+        range_90: 7.94
+        jitter: 0.82
+        rank_corr_time: 0.11
+      rms_j16:
+        median: 2.61
+        iqr:
+        - 1.07
+        - 3.03
+        p5_p95:
+        - 0.68
+        - 3.65
+        range_90: 2.97
+        jitter: 0.16
+        rank_corr_time: -0.67
+      d_wrist:
+        median: 1.53
+        iqr:
+        - 0.98
+        - 2.25
+        p5_p95:
+        - 0.33
+        - 4.03
+        range_90: 3.69
+        jitter: 0.53
+        rank_corr_time: 0.06
+      d_thumb:
+        median: 8.18
+        iqr:
+        - 4.76
+        - 10.45
+        p5_p95:
+        - 3.41
+        - 14.97
+        range_90: 11.57
+        jitter: 1.03
+        rank_corr_time: -0.6
+  IMG_7352 - 복사본.MOV:
+    person: teammate
+    n_frames: 123
+    n_hand: 123
+    metrics:
+      flex_mean4:
+        median: 31.34
+        iqr:
+        - 30.72
+        - 32.4
+        p5_p95:
+        - 29.67
+        - 33.53
+        range_90: 3.86
+        jitter: 0.52
+        rank_corr_time: 0.23
+      thumb_abd:
+        median: 40.53
+        iqr:
+        - 30.44
+        - 43.15
+        p5_p95:
+        - 28.04
+        - 44.93
+        range_90: 16.89
+        jitter: 0.76
+        rank_corr_time: 0.68
+      thumb_flex:
+        median: 29.75
+        iqr:
+        - 25.2
+        - 33.52
+        p5_p95:
+        - 17.01
+        - 39.97
+        range_90: 22.96
+        jitter: 1.63
+        rank_corr_time: 0.08
+      flex_index:
+        median: 36.49
+        iqr:
+        - 35.13
+        - 37.56
+        p5_p95:
+        - 33.47
+        - 38.89
+        range_90: 5.42
+        jitter: 0.9
+        rank_corr_time: 0.24
+      flex_middle:
+        median: 19.7
+        iqr:
+        - 18.14
+        - 23.23
+        p5_p95:
+        - 16.21
+        - 25.5
+        range_90: 9.29
+        jitter: 0.92
+        rank_corr_time: 0.63
+      flex_ring:
+        median: 29.76
+        iqr:
+        - 28.3
+        - 30.96
+        p5_p95:
+        - 25.62
+        - 31.54
+        range_90: 5.92
+        jitter: 0.64
+        rank_corr_time: -0.33
+      flex_little:
+        median: 40.41
+        iqr:
+        - 37.96
+        - 42.68
+        p5_p95:
+        - 32.56
+        - 46.32
+        range_90: 13.76
+        jitter: 1.53
+        rank_corr_time: -0.26
+      ramp_center:
+        median: 2.07
+        iqr:
+        - 1.37
+        - 3.56
+        p5_p95:
+        - -0.72
+        - 6.18
+        range_90: 6.89
+        jitter: 0.51
+        rank_corr_time: 0.64
+      ramp_dorsal:
+        median: 9.01
+        iqr:
+        - 8.35
+        - 10.48
+        p5_p95:
+        - 6.82
+        - 12.61
+        range_90: 5.79
+        jitter: 0.52
+        rank_corr_time: 0.67
+      wrist_h:
+        median: 23.15
+        iqr:
+        - 21.77
+        - 24.28
+        p5_p95:
+        - 20.7
+        - 26.42
+        range_90: 5.72
+        jitter: 0.77
+        rank_corr_time: -0.02
+      rms_j16:
+        median: 2.48
+        iqr:
+        - 1.77
+        - 3.15
+        p5_p95:
+        - 0.88
+        - 3.91
+        range_90: 3.04
+        jitter: 0.35
+        rank_corr_time: -0.47
+      d_wrist:
+        median: 2.29
+        iqr:
+        - 1.0
+        - 4.54
+        p5_p95:
+        - 0.44
+        - 6.17
+        range_90: 5.73
+        jitter: 0.63
+        rank_corr_time: 0.65
+      d_thumb:
+        median: 5.58
+        iqr:
+        - 2.61
+        - 10.34
+        p5_p95:
+        - 0.87
+        - 16.45
+        range_90: 15.57
+        jitter: 1.18
+        rank_corr_time: -0.4
