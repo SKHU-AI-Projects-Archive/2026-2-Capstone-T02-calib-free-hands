@@ -15716,7 +15716,260 @@ def kv_figures(run_root: Path, e: dict, st: dict, img0, img1, kp0, i0: int, time
     log("  그림: " + ", ".join(out))
 
 
-COMMANDS = {"protocol": protocol_main, "frame-filter": ff_main, "same-session": session_main, "overlay": overlay_main, "phase-segmentation": pseg_main, "guide-revision": grev_main, "f-response": fresp_main, "error-factors": ferr_main, "long-video-check": long_main, "generalization": gen_main, "main-camera-extension": ext_main, "wide-60cm": wide_main, "jointset-sets": jset_main, "verdict-calibration": cal_main, "printed-hand": pr_main, "hand-markers": mk_main, "markers-only": mo_main, "free-template": ft_main, "free-shape3d": s3_main, "free-shape3d-hand": h3_main, "free-shape3d-27": e3_main, "free-shape3d-new": e4_main, "mmpose-hand": mm_main, "mmpose-hand-46": mm2_main, "free-shape3d-new2": e5_main, "mmpose-hand-src": mm3_main, "free-shape3d-detectors": fs_main, "free-shape3d-hand-sets": h4_main, "free-shape3d-hand-sets-42track": h4b_main, "oblique-desk": od_main, "oblique-synthetic": sy_main, "oblique-fixed-template": fx_main, "oblique-desk-videos": om_main, "pause-stabilized": ps_main, "continuous-klt": kt_main, "continuous-klt-palm": kp_main, "klt-paper-dorsum": pp_main, "paper-parallax": hp_main, "segment-template": sg_main, "turn-synthetic": tr_main, "window-f": wd_main, "anycalib-videos": ac_main, "error-sources": ec_main, "hand-deformation": dm_main, "joint-combos": fc_main, "points-video": pv_main, "desk-motion": dk_main, "ramp-sensitivity": rs_main, "teammate-hands": tm_main, "finger-ramp": fr_main, "contact-points": ct_main, "wilor-ramp": wl_main, "ramp-identifiability": id_main, "new-phone-hands": nc_main, "multistart": ms_main, "multistart-rerun": ms2_main, "known-tilt": tl_main, "results-yaml-74b-75": ry_main, "free-from-fixed": ch_main, "klt-features": kf_main, "wrist-drift": dr_main, "free-from-multistart": cm_main, "restart-tracking": rt_main, "detected-joints": dt_main, "detected-ramp-sweep": ds_main, "teammate-points-video": pv2_main, "wrist-balanced": wb_main, "hand-shape": hs_main, "no-return": nr_main, "klt-steps-figure": kv_main}
+# ----------------------------------------------------------------------------------------------------
+# 87 (user 2026-11-09: "기존 결과로 확인해 볼 수 있는지 살펴보고, 진행해줘"): why 56's chain drifts in the teammate's videos. Saved runs hold summaries only (no corners, no per-frame
+# drift), so the chain is tracked again (detections copied from 81's run). hf.eg_chain logs the edge corners (LK window on the white paper) and tracks without them; per-frame drift of
+# both chains against the detected joints, its change between pauses against the hand's turn there; 74b's estimator on the chain without edge corners. Settings read from 74b's config.
+# ----------------------------------------------------------------------------------------------------
+EG_NOTE = ("실험 56의 추적 사슬은 팀원 영상에서 단계마다 잘 맞으면서도(77) 천천히 미끄러진다(78). 후보: 손가락과 흰 종이의 경계(윤곽)에 잡힌 특징점은 손이 돌면 피부 위를 미끄러지므로 같은 "
+           "방향의 치우침을 쌓는다. 본인 새 폰 영상 2개와 팀원 영상 2개에서 (1) 추적 창(21×21)에 종이가 들어간 특징점(경계 점)의 비율, (2) 멈춤 구간 사이에서 손이 돈 각도와 그 사이 추적 오차(검출 "
+           "관절과의 거리)의 증가, (3) 경계 점을 빼고 추적했을 때의 오차와 f(74b 추정기, 경사 11° 고정, 함께 추정 시작 5·12·19° 중 비용 최소, j16)를 본다. 기존 사슬의 f는 74b에서 읽는다. 판정 없음.")
+
+
+def eg_drift(kp: np.ndarray, kd: np.ndarray, box: np.ndarray, use: np.ndarray, ids) -> np.ndarray:
+    """Per frame median distance over ids between the tracked and the detected joints, % of the detected box's long side (NaN where either is missing)."""
+    ids = [int(j) for j in ids]
+    out = np.full(len(kp), np.nan)
+    k = use & np.isfinite(kp[:, ids]).all((1, 2)) & np.isfinite(kd[:, ids]).all((1, 2)) & np.isfinite(box).all(1)
+    if k.any():
+        out[k] = np.median(np.linalg.norm(kp[k][:, ids] - kd[k][:, ids], axis=2), axis=1) / hf.box_long(np.asarray(box, float)[k]) * 100.0
+    return out
+
+
+def eg_video_job(args):
+    """Frames, detection and track as sg_video_job; hf.eg_chain from 56's reference frame, without and with the edge corners left out; per chain the moved joints with 56's edge rule, the
+    per-frame drift (j16 and wrist) and per pause the drift and the hand direction. Runs in a worker; returns (result, log lines)."""
+    e, cfg, run_root = args
+    cv2.setNumThreads(1)
+    lines = []
+    log = lines.append
+    pc = copy.deepcopy(cfg["pipeline"])
+    pc["frames"]["detect_fps"] = int(cfg["tracking"]["fps"])
+    v = e["file"]
+    tmp_root = Path(run_root) / f"_frames_{Path(v).stem}"
+    tmp_root.mkdir(exist_ok=True)
+    kc, ec, sc = cfg["tracking"], cfg["edge"], cfg["segments"]
+    out = {}
+    try:
+        prep = hf.fresp_prepare((v, cfg["input_dir"], pc, {}, str(tmp_root)))
+        frames, (W, H) = prep["frames"], prep["size"]
+        times = np.array([r["time_s"] for r in frames])
+        npz = hf.fresp_detect_many([((v, "orig"), frames)], cfg["detector_settings"]["mediapipe_hands"], Path(run_root) / "detection_cache", int(cfg["n_workers"]), log)[(v, "orig")]
+        d = hf.load_detections(Path(npz))
+        hf.check_alignment(frames, d)
+        p2 = copy.deepcopy(pc)
+        p2["tracking"]["conf_min"] = float(cfg["detector_settings"]["mediapipe_hands"]["conf_min"])
+        tr = hf.track(d, times, (W, H), p2["tracking"], front_start_s=float(p2["phases"]["front_skip_s"]))
+        pres = np.flatnonzero(tr["present"])
+        n = len(times)
+        a, b = int(pres[0]), int(pres[-1])
+        ref = int(pres[np.argmin(np.abs(pres - (a + b) / 2))])
+        kps = np.stack([hf.kt_carry(tr["present"], tr["kp"][:, j, k]) for j in range(21) for k in range(2)], axis=1).reshape(n, 21, 2)
+        boxes = np.stack([hf.kt_carry(tr["present"], tr["box"][:, k]) for k in range(4)], axis=1)
+        pngs = [r["png"] for r in frames]
+        ch = {nm: [hf.eg_chain(pngs, kps, boxes, o, kc, ec, ex) for o in (list(range(ref, b + 1)), list(range(ref, a - 1, -1)))] for nm, ex in (("all", False), ("no_edge", True))}
+    finally:
+        shutil.rmtree(tmp_root, ignore_errors=True)
+    motion = hf.od_select(tr["kp"], tr["mask"], tr["present"], tr["box"], (W, H), cfg["selection"])["motion"]
+    still = np.isfinite(motion) & (motion < float(cfg["selection"]["still_frac"]))
+    pauses = [g for g in hf.hp_groups(np.flatnonzero(still & tr["present"]), int(sc["pause_gap_frames"])) if len(g) >= int(sc["min_pause_frames"])]
+    det_ok = tr["present"] & np.isfinite(tr["kp"][:, [0, 9]]).all((1, 2))
+    ang = np.full(n, np.nan)
+    ang[det_ok] = np.degrees(np.unwrap(np.arctan2(tr["kp"][det_ok, 9, 1] - tr["kp"][det_ok, 0, 1], tr["kp"][det_ok, 9, 0] - tr["kp"][det_ok, 0, 0])))
+    j16 = cfg["joint_sets"]["j16"]
+    for nm, (fwd, bwd) in ch.items():
+        kp, tb, valid, edge = pp_points(tr["kp"][ref], {**bwd["H"], **fwd["H"]}, n, W, H)
+        use = valid & ~edge
+        dj, dw = eg_drift(kp, tr["kp"], tr["box"], use, j16), eg_drift(kp, tr["kp"], tr["box"], use, [0])
+        pz = []
+        for g in pauses:
+            g = np.asarray(g)
+            pz.append({"frames": [int(g[0]), int(g[-1])], "t": [float(times[g[0]]), float(times[g[-1]])], "angle_deg": float(np.nanmedian(ang[g])) if np.isfinite(ang[g]).any() else None,
+                       "drift_j16": float(np.nanmedian(dj[g])) if np.isfinite(dj[g]).any() else None, "drift_wrist": float(np.nanmedian(dw[g])) if np.isfinite(dw[g]).any() else None,
+                       "steps_from_ref": int(np.median(np.abs(g - ref)))})
+        cat = lambda k: fwd[k] + bwd[k]      # noqa: E731
+        nc, ne, ni, nei = cat("n_corners"), cat("n_edge"), cat("inl"), cat("n_edge_inl")
+        out[nm] = {"kp": kp, "box": tb, "use": use, "n_use": int(use.sum()), "breaks": fwd["breaks"] + bwd["breaks"],
+                   "corners_per_step": float(np.median(nc)) if nc else None, "edge_share": float(np.sum(ne) / max(1, np.sum(nc))),
+                   "inliers_per_step": float(np.median(ni)) if ni else None, "edge_share_inl": float(np.sum(nei) / max(1, np.sum(ni))) if ni else None,
+                   "drift_j16_median": float(np.nanmedian(dj)) if np.isfinite(dj).any() else None, "drift_wrist_median": float(np.nanmedian(dw)) if np.isfinite(dw).any() else None,
+                   "drift_j16_p90": float(np.nanpercentile(dj, 90)) if np.isfinite(dj).any() else None, "pauses": pz,
+                   "series": {"t": times, "drift_j16": dj, "drift_wrist": dw, "angle": ang}}
+        o = out[nm]
+        log(f"  {v} {nm}: 끊김 {o['breaks']}, 사용 {o['n_use']} / {n}, 특징점/단계 {o['corners_per_step']}, 경계 점 비율 {100 * o['edge_share']:.0f}% (inlier 중 "
+            + ("-" if o["edge_share_inl"] is None else f"{100 * o['edge_share_inl']:.0f}%") + f"), 거리 j16 {o['drift_j16_median']:.1f}% 손목 {o['drift_wrist_median']:.1f}%, 멈춤 {len(pz)}개")
+    out["size"] = (W, H)
+    out["ref"] = ref
+    out["ref_t"] = float(times[ref])
+    return out, lines
+
+
+def eg_main(argv=None):
+    ap = argparse.ArgumentParser()
+    ap.add_argument("--config", default=str(hf.PROJECT_ROOT / "configs/87_edge_corners.yaml"))
+    sub = ap.add_subparsers(dest="cmd")
+    ry = sub.add_parser("results-yaml")
+    ry.add_argument("--run", required=True)
+    ap.add_argument("--out", default=None)
+    ap.add_argument("--videos", type=int, default=None, help="dry run: last N videos, one estimate")
+    a = ap.parse_args(argv)
+    text = Path(a.config).read_text()
+    own = yaml.safe_load(text)
+    cfg, o74 = ck_cfg(own, ("experiment", "workers", "video_workers", "output", "previous_run", "run_81", "joint_set", "edge"))
+    cfg["videos"] = [e for e in cfg["videos"] if e["file"] in own["videos"]]
+    cfg["joint_sets"] = {own["joint_set"]: cfg["joint_sets"][own["joint_set"]]}
+    prev = json.loads((hf.resolve(own["previous_run"]) / "results.json").read_text())["real"]
+    if a.cmd == "results-yaml":
+        print(eg_results_yaml(hf.resolve(a.run), cfg))
+        return None
+    todo = [("ramp_11", "ramp_fixed", 11.0)] + [(f"free_{r:g}", "ramp_free", float(r)) for r in cfg["free_starts_deg"]]
+    if a.videos:
+        cfg["videos"] = cfg["videos"][-a.videos:]
+        todo = todo[:1]
+    run_root, log = x70_head(None, a.out, cfg, f"87 경계 특징점: 영상 {len(cfg['videos'])}개")
+    t0 = time.time()
+    shutil.copytree(hf.resolve(own["run_81"]) / "detection_cache", run_root / "detection_cache")
+    import multiprocessing as mp
+    from concurrent.futures import ProcessPoolExecutor
+    vid = {}
+    with ProcessPoolExecutor(max_workers=int(cfg["video_workers"]), mp_context=mp.get_context("spawn")) as ex:
+        for e, (x, lines) in zip(cfg["videos"], ex.map(eg_video_job, [(e, cfg, str(run_root)) for e in cfg["videos"]])):
+            vid[e["file"]] = x
+            for s_ in lines:
+                log(s_)
+    log(f"  영상 처리: {time.time() - t0:.0f} s")
+    js = next(iter(cfg["joint_sets"]))
+    ecfg = cfg["pipeline"]["estimate"]
+    res = {f: {"ref_t": x["ref_t"], **{nm: {k: v for k, v in x[nm].items() if k not in ("kp", "box", "use")} for nm in ("all", "no_edge")}} for f, x in vid.items()}
+    keys_t = list(vid)
+    jobs_t = [(y["kp"], np.isfinite(y["kp"]).all(2), np.flatnonzero(y["use"]), y["box"], tuple(vid[f]["size"]), ecfg, cfg["joint_sets"][js]) for f in keys_t for y in [vid[f]["no_edge"]]]
+    with ProcessPoolExecutor(max_workers=int(cfg["workers"]), mp_context=mp.get_context("spawn")) as ex:
+        fts = dict(zip(keys_t, ex.map(hf.tl_template_job, jobs_t, chunksize=1)))
+    jobs, keys = [], []
+    for f in keys_t:
+        e = next(v for v in cfg["videos"] if v["file"] == f)
+        res[f]["no_edge"]["free_template"] = tl_ft_entry(fts[f], ecfg, vid[f]["size"])
+        if "A" not in fts[f]:
+            continue
+        for mk, mode, r in todo:
+            jobs.append(tl_args(cfg, {f: {"size": vid[f]["size"], "tracked": vid[f]["no_edge"]}}, e, js, fts[f]["A"]) + (mode, r))
+            keys.append((f, mk))
+    log(f"  추정 {len(jobs)}건")
+    with ProcessPoolExecutor(max_workers=int(cfg["workers"]), mp_context=mp.get_context("spawn")) as ex:
+        for (f, mk), o in zip(keys, ex.map(hf.ms2_job, jobs, chunksize=1)):
+            res[f]["no_edge"][mk] = o
+    log(f"  추정 끝: {time.time() - t0:.0f} s")
+    (run_root / "results.json").write_text(json.dumps(hf.jsonable({"real": res}), ensure_ascii=False, indent=1))
+    try:
+        eg_figure(run_root / "drift_over_time.png", res, cfg)
+    except Exception as ex_:
+        log(f"  그림 실패: {type(ex_).__name__}: {ex_}")
+    try:
+        (run_root / "summary.md").write_text(eg_summary(res, prev, cfg))
+    except Exception as ex_:                                          # the results are already saved; a summary failure is logged
+        log(f"  summary 실패: {type(ex_).__name__}: {ex_}")
+    x70_finish(run_root, {"real": res}, text, a.config, "code_87", own, t0, log)
+    return run_root, res
+
+
+def eg_figure(path: Path, res: dict, cfg: dict):
+    """Per video: the hand direction (top) and the drift of j16 and the wrist for both chains (bottom) over time; the reference frame marked."""
+    plt = _plt()
+    vids = [e for e in cfg["videos"] if e["file"] in res]
+    fig, axs = plt.subplots(2, len(vids), figsize=(4.2 * len(vids), 6.2), sharex="col", gridspec_kw={"height_ratios": [1, 1.4]})
+    axs = np.atleast_2d(axs).reshape(2, -1)
+    for k, e in enumerate(vids):
+        r = res[e["file"]]
+        s = r["all"]["series"]
+        t = np.asarray(s["t"], float)
+        an = np.asarray(s["angle"], float)
+        axs[0, k].plot(t, an - an[np.isfinite(an)][0], color="#5f5e5a", lw=1.2)
+        axs[0, k].set_title(f"{e['file']} ({'본인' if e['person'] == 'self' else '팀원'})", fontsize=9, loc="left")
+        for nm, c, lab in (("all", "#2a78d6", "기존 사슬"), ("no_edge", "#eb6834", "경계 점 뺀 사슬")):
+            ss = r[nm]["series"]
+            axs[1, k].plot(t, ss["drift_j16"], color=c, lw=1.4, label=f"{lab} j16")
+            axs[1, k].plot(t, ss["drift_wrist"], color=c, lw=1.0, ls="--", label=f"{lab} 손목")
+        for ax in axs[:, k]:
+            ax.axvline(r["ref_t"], color="#8a8a85", lw=0.8, ls=":")
+            ax.grid(alpha=0.25, lw=0.5)
+            for sp in ("top", "right"):
+                ax.spines[sp].set_visible(False)
+        axs[1, k].set_xlabel("시간 (s)")
+    axs[0, 0].set_ylabel("손 방향 (시작 대비, °)")
+    axs[1, 0].set_ylabel("검출 관절과의 거리 (손 상자 %)")
+    h, lb = axs[1, 0].get_legend_handles_labels()
+    fig.legend(h, lb, loc="upper center", ncol=4, frameon=False, fontsize=8)
+    fig.tight_layout(rect=(0, 0, 1, 0.95))
+    fig.savefig(path, dpi=120, metadata={"Software": None})
+    plt.close(fig)
+
+
+def eg_summary(res: dict, prev: dict, cfg: dict) -> str:
+    fe = lambda x, e: ck_fe(x, e, cfg)      # noqa: E731
+    js = next(iter(cfg["joint_sets"]))
+    best_free = lambda d: min([d[k] for k in d if k.startswith("free_") and k != "free_template" and isinstance(d[k], dict) and d[k].get("cost") is not None], key=lambda x: x["cost"], default=None)      # noqa: E731
+    fr = lambda b, e: "-" if not b or "f" not in b else f"{fe(b, e)} ({b['pitch_deg']:.1f}°)"      # noqa: E731
+    vids = [e for e in cfg["videos"] if e["file"] in res]
+    who = lambda e: "본인" if e["person"] == "self" else "팀원"      # noqa: E731
+    ec = cfg["edge"]
+    nf = lambda x, n=1: "-" if x is None else f"{x:.{n}f}"      # noqa: E731
+    L = ["# 실험 87 summary", "", f"**{EG_NOTE}**", "", "- 기준 f: 새 핸드폰 " + ", ".join(sorted({f'{x70_ref(e, cfg):g} px' for e in vids})) + ". 기준 f는 이 파일에만 적는다. * = f 탐색 범위 끝.",
+         f"- 경계 점 = 추적 창({cfg['tracking']['win']}×{cfg['tracking']['win']}) 안 종이 픽셀(HSV 채도 ≤ {ec['paper_s_max']}, 명도 ≥ {ec['paper_v_min']}) 비율 ≥ {100 * float(ec['edge_frac']):g}%.",
+         "- 거리 = 추적 관절과 검출 관절의 거리(손 상자 긴 변 대비 %). 그림: drift_over_time.png.", "",
+         "## 1. 특징점과 추적 오차", "", "| 영상 | 손 주인 | 사슬 | 끊김 | 특징점/단계 | 경계 점 비율 | inlier 중 경계 점 | j16 거리 중앙값 | j16 거리 90% | 손목 거리 중앙값 |", "|---|---|---|---|---|---|---|---|---|---|"]
+    for e in vids:
+        for nm, lab in (("all", "기존"), ("no_edge", "경계 점 뺌")):
+            o = res[e["file"]][nm]
+            L.append(f"| {e['file']} | {who(e)} | {lab} | {o['breaks']} | {nf(o['corners_per_step'], 0)} | {100 * o['edge_share']:.0f}% | " + ("-" if o["edge_share_inl"] is None else f"{100 * o['edge_share_inl']:.0f}%") +
+                     f" | {nf(o['drift_j16_median'])}% | {nf(o['drift_j16_p90'])}% | {nf(o['drift_wrist_median'])}% |")
+    L += ["", "## 2. 멈춤 구간마다 손 방향과 추적 오차 (기존 사슬 / 경계 점 뺀 사슬)", "", "이웃한 멈춤 사이의 변화: 손이 돈 각도와 그 사이 거리(j16) 증가.", ""]
+    for e in vids:
+        pa, pn = res[e["file"]]["all"]["pauses"], res[e["file"]]["no_edge"]["pauses"]
+        L += [f"### {e['file']} ({who(e)}), 기준 프레임 {res[e['file']]['ref_t']:.1f} s", "", "| 멈춤 | 시각 | 기준에서 단계 | 손 방향 | j16 거리 기존 | j16 거리 경계 뺌 | 손목 거리 기존 | 손목 거리 경계 뺌 | 직전 멈춤 대비 회전 | j16 거리 변화 기존 | j16 거리 변화 경계 뺌 |", "|---|---|---|---|---|---|---|---|---|---|---|"]
+        a0 = next((p["angle_deg"] for p in pa if p["angle_deg"] is not None), 0.0)
+        for k, (p, q) in enumerate(zip(pa, pn)):
+            rot = dja = djn = "-"
+            if k > 0 and p["angle_deg"] is not None and pa[k - 1]["angle_deg"] is not None:
+                rot = f"{p['angle_deg'] - pa[k - 1]['angle_deg']:+.0f}°"
+            if k > 0 and None not in (p["drift_j16"], pa[k - 1]["drift_j16"]):
+                dja = f"{p['drift_j16'] - pa[k - 1]['drift_j16']:+.1f}"
+            if k > 0 and None not in (q["drift_j16"], pn[k - 1]["drift_j16"]):
+                djn = f"{q['drift_j16'] - pn[k - 1]['drift_j16']:+.1f}"
+            L.append(f"| {k + 1} | {p['t'][0]:.1f}~{p['t'][1]:.1f} s | {p['steps_from_ref']} | " + ("-" if p["angle_deg"] is None else f"{p['angle_deg'] - a0:+.0f}°") +
+                     f" | {nf(p['drift_j16'])} | {nf(q['drift_j16'])} | {nf(p['drift_wrist'])} | {nf(q['drift_wrist'])} | {rot} | {dja} | {djn} |")
+        L.append("")
+    L += [f"## 3. f ({js})", "", "| 영상 | 손 주인 | 추정 | 기존 사슬 (74b) | 경계 점 뺀 사슬 |", "|---|---|---|---|---|"]
+    for e in vids:
+        full, ne = prev.get(f"{e['file']}|{js}") or {}, res[e["file"]]["no_edge"]
+        for nm, get, show in (("free_template", lambda d: d.get("free_template"), fe), ("경사 11°", lambda d: d.get("ramp_11"), fe), ("함께 추정 (경사)", best_free, fr)):
+            L.append(f"| {e['file']} | {who(e)} | {nm} | {show(get(full), e)} | {show(get(ne), e)} |")
+    L += ["", "## 한계", "", "- 경계 점은 흰 종이와 맞닿은 윤곽만 잡는다(손가락끼리의 경계, 책상과의 경계는 아님). 피부의 밝은 반사가 종이로 잡힐 수 있다.",
+          "- 거리는 검출 관절과 비교한 값이라 검출기 자체의 오차가 섞인다. 영상은 4개뿐이다.", ""]
+    return "\n".join(L) + "\n"
+
+
+def eg_results_yaml(run_dir: Path, cfg: dict):
+    """Values only (no reference f or errors; no per-frame series)."""
+    r = json.loads((run_dir / "results.json").read_text())["real"]
+    m = json.loads((run_dir / "metadata.json").read_text())
+    out = {"experiment": cfg["experiment"]["name"], "run": str(run_dir.resolve().relative_to(hf.PROJECT_ROOT)), "code_commit": m["git"]["commit"][:7],
+           "git_dirty_at_run": m["git"]["git_dirty"], "note": EG_NOTE, "edge": cfg["edge"], "videos": {}}
+    keys = ("f", "rms_px", "pitch_deg", "roll_deg", "desk_tilt_deg", "boundary", "start")
+    for e in cfg["videos"]:
+        d = r.get(e["file"]) or {}
+        o = out["videos"][e["file"]] = {"person": e["person"], "ref_t": ry_value(d.get("ref_t"), 2)}
+        for nm in ("all", "no_edge"):
+            x = d.get(nm) or {}
+            o[nm] = {**{k: ry_value(x[k], 3) for k in ("n_use", "breaks", "corners_per_step", "edge_share", "inliers_per_step", "edge_share_inl", "drift_j16_median", "drift_j16_p90",
+                                                        "drift_wrist_median") if k in x},
+                     "pauses": [{k: ([ry_value(q, 2) for q in v] if isinstance(v, list) else ry_value(v, 2)) for k, v in p.items()} for p in x.get("pauses", [])],
+                     **ry_tracked({k: v for k, v in x.items() if k in ("free_template", "ramp_11", "free_5", "free_12", "free_19")}, keys)}
+    p = hf.resolve(cfg["output"]["results_yaml"])
+    p.write_text(yaml.safe_dump(hf.jsonable(out), allow_unicode=True, sort_keys=False))
+    return p
+
+
+COMMANDS = {"protocol": protocol_main, "frame-filter": ff_main, "same-session": session_main, "overlay": overlay_main, "phase-segmentation": pseg_main, "guide-revision": grev_main, "f-response": fresp_main, "error-factors": ferr_main, "long-video-check": long_main, "generalization": gen_main, "main-camera-extension": ext_main, "wide-60cm": wide_main, "jointset-sets": jset_main, "verdict-calibration": cal_main, "printed-hand": pr_main, "hand-markers": mk_main, "markers-only": mo_main, "free-template": ft_main, "free-shape3d": s3_main, "free-shape3d-hand": h3_main, "free-shape3d-27": e3_main, "free-shape3d-new": e4_main, "mmpose-hand": mm_main, "mmpose-hand-46": mm2_main, "free-shape3d-new2": e5_main, "mmpose-hand-src": mm3_main, "free-shape3d-detectors": fs_main, "free-shape3d-hand-sets": h4_main, "free-shape3d-hand-sets-42track": h4b_main, "oblique-desk": od_main, "oblique-synthetic": sy_main, "oblique-fixed-template": fx_main, "oblique-desk-videos": om_main, "pause-stabilized": ps_main, "continuous-klt": kt_main, "continuous-klt-palm": kp_main, "klt-paper-dorsum": pp_main, "paper-parallax": hp_main, "segment-template": sg_main, "turn-synthetic": tr_main, "window-f": wd_main, "anycalib-videos": ac_main, "error-sources": ec_main, "hand-deformation": dm_main, "joint-combos": fc_main, "points-video": pv_main, "desk-motion": dk_main, "ramp-sensitivity": rs_main, "teammate-hands": tm_main, "finger-ramp": fr_main, "contact-points": ct_main, "wilor-ramp": wl_main, "ramp-identifiability": id_main, "new-phone-hands": nc_main, "multistart": ms_main, "multistart-rerun": ms2_main, "known-tilt": tl_main, "results-yaml-74b-75": ry_main, "free-from-fixed": ch_main, "klt-features": kf_main, "wrist-drift": dr_main, "free-from-multistart": cm_main, "restart-tracking": rt_main, "detected-joints": dt_main, "detected-ramp-sweep": ds_main, "teammate-points-video": pv2_main, "wrist-balanced": wb_main, "hand-shape": hs_main, "no-return": nr_main, "klt-steps-figure": kv_main, "edge-corners": eg_main}
 
 
 def main(argv=None):

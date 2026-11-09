@@ -7292,6 +7292,75 @@ def kv_step(g0: np.ndarray, g1: np.ndarray, kp_prev: np.ndarray, box_prev: np.nd
     return {"mask": m, "score": score, "score_max": float(score.max()), "p0": p0, "p1": p1, "fb": fb, "ok": ok, "H": Hs, "inl": inl.ravel() > 0, "res": res}
 
 
+# ----------------------------------------------------------------------------------------------------
+# 87 (user 2026-11-09: "추적오차가 왜 팀원 손에서 유독 쌓이는 걸까?" -> "진행해줘"): 56's chain drifts slowly in the teammate's videos while every step fits (77). One candidate: corners on
+# the fingers' outline against the white paper, which slide over the skin as the hand turns. kt_chain with the corners whose LK window holds paper logged, or left out (eg_chain).
+# ----------------------------------------------------------------------------------------------------
+def eg_paper(img_bgr: np.ndarray, s_max: int, v_min: int) -> np.ndarray:
+    """Paper-like pixels (white: HSV saturation <= s_max and value >= v_min, OpenCV 0-255 scales) as uint8 0/1."""
+    hsv = cv2.cvtColor(img_bgr, cv2.COLOR_BGR2HSV)
+    return ((hsv[:, :, 1] <= int(s_max)) & (hsv[:, :, 2] >= int(v_min))).astype(np.uint8)
+
+
+def eg_window_frac(binary: np.ndarray, pts: np.ndarray, win: int) -> np.ndarray:
+    """Share of 1-pixels of binary in the win x win window around each point (clipped at the image border)."""
+    ii = cv2.integral(binary)
+    h, w = binary.shape
+    r = int(win) // 2
+    x = np.clip(np.round(pts[:, 0]).astype(int), 0, w - 1)
+    y = np.clip(np.round(pts[:, 1]).astype(int), 0, h - 1)
+    x0, x1, y0, y1 = np.clip(x - r, 0, w), np.clip(x + r + 1, 0, w), np.clip(y - r, 0, h), np.clip(y + r + 1, 0, h)
+    s = ii[y1, x1] - ii[y0, x1] - ii[y1, x0] + ii[y0, x0]
+    return s / np.maximum(1, (x1 - x0) * (y1 - y0))
+
+
+def eg_chain(pngs: list, kps: np.ndarray, boxes: np.ndarray, order: list, kcfg: dict, ecfg: dict, exclude: bool) -> dict:
+    """kt_chain's steps (same calls and settings); each corner's paper share in its LK window (eg_window_frac on eg_paper of the previous frame); an edge corner = share >= ecfg.edge_frac.
+    exclude: edge corners are dropped before LK (the rest unchanged). Returns kt_chain's dict plus per step the corner count, the edge count and the edge count among the inliers."""
+    lk = dict(winSize=(int(kcfg["win"]), int(kcfg["win"])), maxLevel=int(kcfg["levels"]), criteria=(cv2.TERM_CRITERIA_EPS | cv2.TERM_CRITERIA_COUNT, 30, 0.01))
+    Hc = {order[0]: np.eye(3)}
+    inls, n_c, n_e, n_ei = [], [], [], []
+    breaks, broken = 0, False
+    im0 = cv2.imread(pngs[order[0]], cv2.IMREAD_COLOR)
+    g0 = cv2.cvtColor(im0, cv2.COLOR_BGR2GRAY)
+    for prev, cur in zip(order[:-1], order[1:]):
+        im1 = cv2.imread(pngs[cur], cv2.IMREAD_COLOR)
+        g1 = cv2.cvtColor(im1, cv2.COLOR_BGR2GRAY)
+        if broken:
+            Hc[cur] = None
+            im0, g0 = im1, g1
+            continue
+        m = kt_hand_mask(kps[prev], boxes[prev], g0.shape, kcfg["dilate_frac"])
+        c = cv2.goodFeaturesToTrack(g0, int(kcfg["max_corners"]), float(kcfg["quality"]), float(kcfg["min_distance"]), mask=m, blockSize=int(kcfg["block"]))
+        Hs = None
+        if c is not None:
+            p0 = c.reshape(-1, 2).astype(np.float32)
+            edge = eg_window_frac(eg_paper(im0, ecfg["paper_s_max"], ecfg["paper_v_min"]), p0, int(kcfg["win"])) >= float(ecfg["edge_frac"])
+            n_c.append(int(len(p0)))
+            n_e.append(int(edge.sum()))
+            if exclude:
+                p0, edge = p0[~edge], edge[~edge]
+            if len(p0) >= 8:
+                p1, s1, _ = cv2.calcOpticalFlowPyrLK(g0, g1, p0.reshape(-1, 1, 2), None, **lk)
+                pb, s2, _ = cv2.calcOpticalFlowPyrLK(g1, g0, p1, None, **lk)
+                ok = (s1.ravel() == 1) & (s2.ravel() == 1) & (np.linalg.norm(pb.reshape(-1, 2) - p0, axis=1) < float(kcfg["fb_px"]))
+                if ok.sum() >= int(kcfg["min_inliers"]):
+                    Hs, inl = cv2.findHomography(p0[ok].astype(np.float64), p1.reshape(-1, 2)[ok].astype(np.float64), cv2.USAC_MAGSAC, float(kcfg["threshold_px"]))
+                    if Hs is None or inl is None or int(inl.sum()) < int(kcfg["min_inliers"]):
+                        Hs = None
+                    else:
+                        inls.append(int(inl.sum()))
+                        n_ei.append(int(edge[ok][inl.ravel() > 0].sum()))
+        if Hs is None:
+            breaks += 1
+            broken = True
+            Hc[cur] = None
+        else:
+            Hc[cur] = Hs @ Hc[prev]
+        im0, g0 = im1, g1
+    return {"H": Hc, "breaks": breaks, "inl": inls, "n_corners": n_c, "n_edge": n_e, "n_edge_inl": n_ei}
+
+
 def od_fix_lines(path=None) -> list:
     """Where the six corrections to the supervisor's code sit in handfocal_estimate.py (line numbers of the corrected spellings inside section 5)."""
     p = Path(path) if path else Path(__file__).resolve().parent / "handfocal_estimate.py"
