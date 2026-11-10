@@ -12,6 +12,7 @@
   python optical_flow/experiments.py shape-change    --config configs/106_shape_change.yaml
   python optical_flow/experiments.py pip-axis        --config configs/111_pip_axis_j16.yaml
   python optical_flow/experiments.py pause-plane2    --config configs/113_pause_plane2.yaml
+  python optical_flow/experiments.py desk3d          --config configs/114_desk3d.yaml
   python optical_flow/experiments.py <명령> --config <설정> results-yaml --run <실행 폴더>
 
 tracking-plane (90): 추적 사슬이 손의 어느 평면을 따라가는지 본다. 기준 프레임 -> 각 프레임의 사슬 변환을, 같은 두 프레임의 검출 관절로 맞춘
@@ -19,6 +20,7 @@ tracking-plane (90): 추적 사슬이 손의 어느 평면을 따라가는지 �
 dorsum-corners (91): 특징점을 손등 몸통에서만 고르기, 특징점을 고를 때만 대비 보정(CLAHE), 둘 다. 추적점과 검출 관절의 거리, 책상 운동 추정기의 f.
 geometry-synth (96): 영상의 카메라 기울기·손 모양·프레임별 움직임을 그대로 둔 합성 장면을 참 f 로 만들어 같은 추정을 돌린다 (촬영 구도·동작 탓인지, 실제 점 탓인지).
 pause-plane (97): 멈춤 구간마다 손 평면 방향을 알려진 f 로 호모그래피 분해해 손 경사가 자세마다 바뀌는지 본다 (실제 점, 합성 없음).
+desk3d (114): 책상 운동 + 입체 손 모양 추정기(optical_flow/desk3d.py)를 저장된 관절별 추적점에 돌린다 (경사 가정 없음).
 pip-axis (111, 112): 손 축 뿌리를 PIP 줄로 바꿔(MCP 없이도) 책상 운동 추정기를 돌린다. pause-plane2 (113): 97 을 고쳐 멈춤 자세마다 손 평면 방향을 잰다.
 shape-change (106): 저장된 관절별 추적점이 평평한 단단한 손(호모그래피 하나)에서 얼마나 벗어나는지 (f 없음).
 side-consistency (103): 저장된 추적점으로 회전 방향별 f 가 같아지는 경사를 고른다 (기준 f 없이 경사 정하기).
@@ -1588,6 +1590,75 @@ def pq_results_yaml(run_dir: Path, own: dict) -> Path:
 
 
 # ----------------------------------------------------------------------------------------------------
+# 114: 책상 운동 + 입체 손 모양 (optical_flow.desk3d), 저장된 관절별 추적점
+# ----------------------------------------------------------------------------------------------------
+def d3_run(cfg: dict, own: dict, log) -> dict:
+    """114: 영상마다 저장된 추적점(desk3d.points) -> 방식(desk3d.variants: 관절, z_rel)마다 free_template -> dk3_job."""
+    import multiprocessing as mp
+    from concurrent.futures import ProcessPoolExecutor
+    from optical_flow import desk3d
+    dc = cfg["desk3d"]
+    items = []
+    for e in cfg["videos"]:
+        x = load_points(dc["points"][e["file"]], e["file"])
+        for v in dc["variants"]:
+            items.append((e["file"], v["name"], x, [int(j) for j in v["joint_ids"]], v.get("z_rel")))
+    with ProcessPoolExecutor(max_workers=int(cfg["workers"]), mp_context=mp.get_context("spawn")) as ex:
+        fts = list(ex.map(hf.tl_template_job, [(x["kp"], np.isfinite(x["kp"]).all(2), np.flatnonzero(x["use"]), x["box"], tuple(x["size"]), cfg["pipeline"]["estimate"], ids)
+                                                for _, _, x, ids, _ in items], chunksize=1))
+    jobs, keys, res = [], [], {}
+    for (f, nm, x, ids, zr), ft in zip(items, fts):
+        A = ft.get("A")
+        res.setdefault(f, {})[nm] = {"free_template": {"failed": ft.get("failed")} if A is None else {"f": float(A["f"])}}
+        if A is None:
+            continue
+        jobs.append((x["kp"], np.isfinite(x["kp"]).all(2), np.flatnonzero(x["use"]), x["box"], tuple(x["size"]), cfg["pipeline"]["estimate"], ids, A, float(dc["ramp_init"]), zr))
+        keys.append((f, nm))
+    log(f"  추정 {len(jobs)}건")
+    with ProcessPoolExecutor(max_workers=int(cfg["workers"]), mp_context=mp.get_context("spawn")) as ex:
+        for (f, nm), o in zip(keys, ex.map(desk3d.dk3_job, jobs, chunksize=1)):
+            res[f][nm]["desk3d"] = o
+    return res
+
+
+def d3_summary(res: dict, cfg: dict, own: dict) -> str:
+    dc = cfg["desk3d"]
+    vids = {e["file"]: e for e in cfg["videos"]}
+    cmp_ = {k: json.loads((hf.resolve(v) / "results.json").read_text())["real"] for k, v in dc.get("compare_runs", {}).items()}
+    L = ["# 114 책상 운동 + 입체 손 모양 summary", "",
+         "**저장된 CoTracker3 관절별 추적점에, 손을 평면 + 경사가 아니라 관절마다 높이를 가진 단단한 3D 모양으로 둔 책상 운동 추정기(optical_flow.desk3d)를 돌린다. 경사 가정 없음"
+         f"(시작값만 경사 {dc['ramp_init']:g}° 평면). 비교 = 같은 점의 평면 손·경사 11° 고정(98/105). 판정 없음.**", "",
+         "- 기준 f 는 이 파일에만. * = f 탐색 범위 끝. 높이 = 찾은 손 모양의 높이 범위 / 손 크기. z_rel 없음 = 높이 제약 없음.", "",
+         "| 영상 | 묶음 | 기준 f | 평면 손 경사 11° (98/105) | " + " | ".join(f"3D {v['name']}" for v in dc["variants"]) + " |", "|---|---|---|---|" + "---|" * len(dc["variants"])]
+    for f, d in res.items():
+        e = vids[f]
+        rf = float(e.get("ref_f_px") or cfg["ref_f"]["value"])
+        fmt = lambda x: "-" if not x or "f" not in x else f"{x['f']:.0f} ({100 * (x['f'] / rf - 1):+.1f}%)" + ("*" if x.get("boundary") else "")      # noqa: E731
+        base = next((c[f].get("ramp_11") for c in cmp_.values() if f in c), None)
+        cells = []
+        for v in dc["variants"]:
+            o = (d.get(v["name"]) or {}).get("desk3d") or {}
+            cells.append(f"실패: {o['failed'][:40]}" if "failed" in o else f"{fmt(o)}, 기울기 {o['desk_tilt_deg']:.0f}°, 높이 {o['height_rel']:.2f}, RMS {o['rms_px']:.1f}")
+        L.append(f"| {f} | {e['person']} | {rf:g} | {fmt(base)} | " + " | ".join(cells) + " |")
+    L += ["", "## 한계", "", "- 손이 실제로 변형되면 단단한 3D 모양으로도 다 맞지 않는다. CoTracker3 점은 2 프레임마다(15 fps).", ""]
+    return "\n".join(L) + "\n"
+
+
+def d3_results_yaml(run_dir: Path, own: dict) -> Path:
+    """114 의 값만 (기준 f, 오차 없음): 영상 x 방식별 f, 카메라 기울기, 높이, RMS, 비용."""
+    r = json.loads((run_dir / "results.json").read_text())["real"]
+    m = json.loads((run_dir / "metadata.json").read_text())
+    rv = lambda x: x if not isinstance(x, float) else (round(x, 3) if np.isfinite(x) else None)      # noqa: E731
+    keys = ("f", "desk_tilt_deg", "height_rel", "rms_px", "cost", "boundary", "failed")
+    out = {"experiment": own["experiment"]["name"], "run": str(run_dir.resolve().relative_to(hf.PROJECT_ROOT)), "code_commit": m["git"]["commit"][:7],
+           "git_dirty_at_run": m["git"]["git_dirty"],
+           "videos": {f: {nm: {k: {kk: rv(o[kk]) for kk in keys if kk in o} for k, o in dd.items()} for nm, dd in d.items()} for f, d in r.items()}}
+    p = hf.resolve(own["output"]["results_yaml"])
+    p.write_text(yaml.safe_dump(hf.jsonable(out), allow_unicode=True, sort_keys=False))
+    return p
+
+
+# ----------------------------------------------------------------------------------------------------
 # 실행
 # ----------------------------------------------------------------------------------------------------
 def results_yaml(cmd: str, run_dir: Path, own: dict) -> Path:
@@ -1651,7 +1722,7 @@ class _nullpool:
 
 def main(argv=None):
     ap = argparse.ArgumentParser(description="광류 방식 원인 확인 실험")
-    ap.add_argument("cmd", choices=["tracking-plane", "dorsum-corners", "two-plane", "joint-track-video", "geometry-synth", "pause-plane", "cotracker", "rotation-side", "points-video", "shape3d", "side-consistency", "shape-change", "pip-axis", "pause-plane2"])
+    ap.add_argument("cmd", choices=["tracking-plane", "dorsum-corners", "two-plane", "joint-track-video", "geometry-synth", "pause-plane", "cotracker", "rotation-side", "points-video", "shape3d", "side-consistency", "shape-change", "pip-axis", "pause-plane2", "desk3d"])
     ap.add_argument("--config", required=True)
     ap.add_argument("--out", default=None)
     ap.add_argument("--videos", type=int, default=None, help="시험 실행: 앞의 N 개 영상만, 추정 1건씩")
@@ -1666,7 +1737,8 @@ def main(argv=None):
               else ct_results_yaml(hf.resolve(a.run), own) if a.cmd == "cotracker" else rs_results_yaml(hf.resolve(a.run), own) if a.cmd == "rotation-side"
               else s3_results_yaml(hf.resolve(a.run), own) if a.cmd == "shape3d" else sc_results_yaml(hf.resolve(a.run), own) if a.cmd == "side-consistency"
               else sh_results_yaml(hf.resolve(a.run), own) if a.cmd == "shape-change"
-              else sc_results_yaml(hf.resolve(a.run), own) if a.cmd == "pip-axis" else pq_results_yaml(hf.resolve(a.run), own) if a.cmd == "pause-plane2" else jt_results_yaml(hf.resolve(a.run), own) if a.cmd == "joint-track-video"
+              else sc_results_yaml(hf.resolve(a.run), own) if a.cmd == "pip-axis" else pq_results_yaml(hf.resolve(a.run), own) if a.cmd == "pause-plane2"
+              else d3_results_yaml(hf.resolve(a.run), own) if a.cmd == "desk3d" else jt_results_yaml(hf.resolve(a.run), own) if a.cmd == "joint-track-video"
               else results_yaml(a.cmd, hf.resolve(a.run), own))
         return None
     cfg = rof.load_settings({**own, "joint_set": "j16"} if own.get("joint_ids") else own)      # joint_ids 를 직접 적으면 joint_set 은 이름일 뿐이라 기본 묶음으로 읽고 아래에서 바꿈
@@ -1674,7 +1746,7 @@ def main(argv=None):
     cfg["videos"] = cfg["videos"] + [dict(v) for v in own.get("extra_videos", [])]      # 기본 설정 목록에 없는 새 영상 (file, person, ref_f_px)
     if own.get("joint_ids"):                                           # 기본 설정의 관절 묶음(j16, j21) 대신 직접 적은 관절 번호 (joint_set 은 이름으로만 씀)
         cfg["joint_ids"] = [int(j) for j in own["joint_ids"]]
-    cfg.update({k: own[k] for k in ("variants", "clahe", "two_plane", "joint_track", "render", "reference", "geometry_synth", "pause_plane", "cotracker", "rotation_side", "points_video", "shape3d", "side_consistency", "shape_change", "axis_base_joints", "pause_plane2") if k in own})
+    cfg.update({k: own[k] for k in ("variants", "clahe", "two_plane", "joint_track", "render", "reference", "geometry_synth", "pause_plane", "cotracker", "rotation_side", "points_video", "shape3d", "side_consistency", "shape_change", "axis_base_joints", "pause_plane2", "desk3d") if k in own})
     if a.videos:
         cfg["videos"] = cfg["videos"][:a.videos]
         cfg["free_starts_deg"] = []
@@ -1701,6 +1773,9 @@ def main(argv=None):
     elif a.cmd == "shape3d":                                           # 저장된 점만 읽음 (영상 처리 없음)
         res = s3_run(cfg, own, log)
         job = None
+    elif a.cmd == "desk3d":
+        res = d3_run(cfg, own, log)
+        job = None
     with ProcessPoolExecutor(max_workers=int(cfg["video_workers"]), mp_context=mp.get_context("spawn")) if job else _nullpool() as ex:
         for e, (x, lines) in (zip(cfg["videos"], ex.map(job, [(e, cfg, str(run_root)) for e in cfg["videos"]])) if job else []):
             vid[e["file"]] = x
@@ -1711,6 +1786,8 @@ def main(argv=None):
         text_sum = ct_summary(res, cfg, own)
     elif a.cmd == "shape3d":
         text_sum = s3_summary(res, cfg, own)
+    elif a.cmd == "desk3d":
+        text_sum = d3_summary(res, cfg, own)
     elif a.cmd == "points-video":
         res = vid
         text_sum = pv_summary(res, cfg)
