@@ -1486,7 +1486,8 @@ def main(argv=None):
               else sh_results_yaml(hf.resolve(a.run), own) if a.cmd == "shape-change" else jt_results_yaml(hf.resolve(a.run), own) if a.cmd == "joint-track-video"
               else results_yaml(a.cmd, hf.resolve(a.run), own))
         return None
-    cfg = rof.load_settings(own)
+    cfg = rof.load_settings({**own, "joint_set": "j16"} if own.get("joint_ids") else own)      # joint_ids 를 직접 적으면 joint_set 은 이름일 뿐이라 기본 묶음으로 읽고 아래에서 바꿈
+    cfg["joint_set"] = own["joint_set"]
     cfg["videos"] = cfg["videos"] + [dict(v) for v in own.get("extra_videos", [])]      # 기본 설정 목록에 없는 새 영상 (file, person, ref_f_px)
     if own.get("joint_ids"):                                           # 기본 설정의 관절 묶음(j16, j21) 대신 직접 적은 관절 번호 (joint_set 은 이름으로만 씀)
         cfg["joint_ids"] = [int(j) for j in own["joint_ids"]]
