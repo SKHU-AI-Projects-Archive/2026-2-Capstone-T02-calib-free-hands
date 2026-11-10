@@ -1,0 +1,23 @@
+# 101: 정확한 점 + 손 3D 모양 (사용자 2026-11-10: "정확한 점 + 3D 모양으로 확인해줘."), 기록용, 판정 없음.
+# 98 이 저장한 CoTracker3 추적점(관절 21개, 첫 정지 구간 기준, 2 프레임마다)에 교수님 코드의 free_template(평면 손)과 free_shape3d(손 3D 모양을 f 와 함께 품, z_rel 0.2,
+# alt_iters 3, max_frames 120 = 실험 49 의 값)를 od_estimate 로 그대로 돌린다. 책상 제약·경사 가정 없음. 관절 j16 과 j21(3D 모양이면 손목·엄지도 평면 밖으로 놓일 수 있음).
+# 광류 사슬 점은 평면 변환으로 옮긴 점이라 3D 모양이 의미 없어 넣지 않는다. 영상 16개. 기준 f 는 summary.md 에만.
+experiment:
+  name: 101_cotracker_shape3d
+  seed: 42
+settings_config: configs/74b_multistart_rerun.yaml
+joint_set: j16
+code: {branch: optical_flow, commit: f9b0eca, modules: [HandCalib/optical_flow/experiments.py]}
+ramps_deg: [11]
+videos: []
+shape3d:
+  points_runs: {cotracker: runs/98_cotracker/20261110T023248Z}
+  joint_sets:
+    j16: [5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20]
+    j21: [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20]
+  free_shape3d: {z_rel: 0.2, alt_iters: 3, max_frames: 120}
+workers: 32
+video_workers: 1
+output:
+  root: runs/101_cotracker_shape3d
+  results_yaml: results/101_cotracker_shape3d.yaml

@@ -1,0 +1,25 @@
+# 102: 새로 찍은 영상(100)의 점 영상 (사용자 2026-11-10: "실험 끝나면 결과보고와 함께 점을 투영한 영상을 만들어줘."). 기록용.
+# 100 이 저장한 추적점(광류 사슬, 첫 정지 구간 기준; 파랑, 추정에 안 쓰는 프레임은 속 빈 점)과 MediaPipe 검출 관절(주황)을 원본 프레임(30 fps)에 그린다. 화면 구성은 93 과 같다.
+# 검출은 100 실행의 캐시 재사용. 영상(mp4)은 runs 에만 두고 커밋하지 않는다(메타데이터 제거).
+experiment:
+  name: 102_points_video_new_pair
+  seed: 42
+settings_config: configs/74b_multistart_rerun.yaml
+detection_cache_from: runs/100_new_pair_shoot/20261110T032637Z/detection_cache
+joint_set: j16
+code: {branch: optical_flow, commit: f9b0eca, modules: [HandCalib/optical_flow/experiments.py]}
+ramps_deg: [11]
+reference: {mode: first_pause, pause_gap_frames: 15, min_pause_frames: 5}
+videos: ["__none__"]
+extra_videos:
+  - {file: IMG_7384.MOV, person: teammate, ref_f_px: 1672}
+  - {file: IMG_7385.MOV, person: self, ref_f_px: 1672}
+  - {file: IMG_7387.MOV, person: teammate, ref_f_px: 1672}
+  - {file: IMG_7388.MOV, person: self, ref_f_px: 1672}
+points_video:
+  points_run: runs/100_new_pair_shoot/20261110T032637Z
+render: {font: /usr/share/fonts/opentype/noto/NotoSansCJK-Regular.ttc, font_index: 1, left_width: 1280, zoom_size: 720, crop_margin: 1.35, every: 1}
+workers: 4
+video_workers: 4
+output:
+  root: runs/102_points_video_new_pair
