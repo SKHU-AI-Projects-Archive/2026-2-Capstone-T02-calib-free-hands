@@ -1,0 +1,27 @@
+# 96: 영상 구도 그대로의 합성 장면 (사용자 2026-11-10: "일단 진행은 해보는데" - 팀원 오차가 촬영 구도·동작(A) 탓인지 실제 점(B) 탓인지 가르기), 기록용, 판정 없음.
+# 94(첫 정지 구간 기준) 의 추적점을 같은 설정으로 다시 만들고, 책상 운동 모델을 94 의 f(경사 11° 고정, j16)에서 맞춘다(dk_solve, f 고정). 그 해의 카메라 기울기, 손 템플릿, 프레임별 회전·미끄러짐을
+# 그대로 두고 참 f 로 다시 투영한다(카메라-책상 거리만 참 f / 94 f 배, 화면 속 손 크기 유지). 장면: 실제 점 확인용(모델 + 실제 잔차, 94 와 같아야 함), 잡음 없음, 정규 잡음(손 상자 긴 변 x 0.005,
+# 시드 3개), 실제 잔차를 얹은 것. 각 장면에 94 와 같은 추정(free_template -> 경사 11° 고정, 함께 추정 시작 5·12·19° 중 비용 최소). 영상 = 새 폰 4개(본인 2, 팀원 2). 검출은 81 캐시 재사용.
+# 읽는 법(실행 전에 정함): 팀원 장면의 잡음 없음·정규 잡음에서 참 f 근처(±5%)면 구도·동작 탓이 아님. 실제 잔차를 얹은 장면이 94 처럼 낮으면 실제 점이 모델에서 벗어난 모양이 f 를 민다.
+# 기준 f 는 summary.md 에만.
+experiment:
+  name: 96_geometry_synth
+  seed: 42
+settings_config: configs/74b_multistart_rerun.yaml
+detection_cache_from: runs/81_detected_joints/20261106T055430Z/detection_cache
+joint_set: j16
+code: {branch: optical_flow, commit: e8e11be, modules: [HandCalib/optical_flow/experiments.py]}
+ramps_deg: [11]
+reference: {mode: first_pause, pause_gap_frames: 15, min_pause_frames: 5}
+videos: ["IMG_7354 - 복사본.MOV", "IMG_7355 - 복사본.MOV", "IMG_7351 - 복사본.MOV", "IMG_7352 - 복사본.MOV"]
+geometry_synth:
+  fit_run: runs/94_reference_first_pause/20261109T051805Z
+  ramp_deg: 11
+  max_frames: 120
+  noise_rel: 0.005
+  noise_seeds: [0, 1, 2]
+workers: 64
+video_workers: 4
+output:
+  root: runs/96_geometry_synth
+  results_yaml: results/96_geometry_synth.yaml
