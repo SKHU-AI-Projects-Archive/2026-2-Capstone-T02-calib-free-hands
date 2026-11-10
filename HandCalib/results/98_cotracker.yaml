@@ -1,0 +1,821 @@
+experiment: 98_cotracker
+run: runs/98_cotracker/20261110T023248Z
+code_commit: 0f4e2d1
+git_dirty_at_run: false
+videos:
+  IMG_7346.MOV:
+    info:
+      ref_t: 1.3
+      n_tracked: 339
+      n_support: 92
+      n_use: 339
+      visible_frac: 1.0
+      drift_pct:
+        wrist: 8.282
+        thumb: 4.255
+        j16: 1.763
+      track_s: 25.591
+      device: cuda:2
+    ref: 39
+    n_use: 339
+    free_template:
+      f: 887.984
+      rms_px: 3.556
+      boundary: false
+    ramp_11:
+      f: 1592.035
+      rms_px: 5.332
+      pitch_deg: 11.0
+      roll_deg: 0.0
+      desk_tilt_deg: 46.561
+      boundary: false
+      start: free_template
+    free_5:
+      f: 1517.629
+      rms_px: 5.298
+      pitch_deg: 8.532
+      roll_deg: -0.865
+      desk_tilt_deg: 48.042
+      boundary: false
+      start: profile_4
+    free_12:
+      f: 1517.629
+      rms_px: 5.298
+      pitch_deg: 8.532
+      roll_deg: -0.865
+      desk_tilt_deg: 48.042
+      boundary: false
+      start: profile_4
+    free_19:
+      f: 1517.629
+      rms_px: 5.298
+      pitch_deg: 8.525
+      roll_deg: -0.939
+      desk_tilt_deg: 48.042
+      boundary: false
+      start: profile_4
+  IMG_7347.MOV:
+    info:
+      ref_t: 1.367
+      n_tracked: 329
+      n_support: 88
+      n_use: 329
+      visible_frac: 1.0
+      drift_pct:
+        wrist: 11.355
+        thumb: 1.374
+        j16: 0.981
+      track_s: 24.383
+      device: cuda:3
+    ref: 41
+    n_use: 329
+    free_template:
+      f: 1442.249
+      rms_px: 3.225
+      boundary: false
+    ramp_11:
+      f: 1279.859
+      rms_px: 6.599
+      pitch_deg: 11.0
+      roll_deg: 0.0
+      desk_tilt_deg: 41.979
+      boundary: false
+      start: profile_3
+    free_5:
+      f: 1806.926
+      rms_px: 4.793
+      pitch_deg: 12.183
+      roll_deg: -11.813
+      desk_tilt_deg: 46.823
+      boundary: false
+      start: profile_6
+    free_12:
+      f: 1806.926
+      rms_px: 4.793
+      pitch_deg: 12.183
+      roll_deg: -11.813
+      desk_tilt_deg: 46.823
+      boundary: false
+      start: profile_6
+    free_19:
+      f: 1806.926
+      rms_px: 4.793
+      pitch_deg: 12.183
+      roll_deg: -11.813
+      desk_tilt_deg: 46.823
+      boundary: false
+      start: profile_6
+  IMG_7348.MOV:
+    info:
+      ref_t: 1.833
+      n_tracked: 309
+      n_support: 89
+      n_use: 309
+      visible_frac: 1.0
+      drift_pct:
+        wrist: 5.574
+        thumb: 3.144
+        j16: 1.522
+      track_s: 22.964
+      device: cuda:1
+    ref: 55
+    n_use: 309
+    free_template:
+      f: 1975.173
+      rms_px: 3.819
+      boundary: false
+    ramp_11:
+      f: 1808.663
+      rms_px: 5.573
+      pitch_deg: 11.0
+      roll_deg: 0.0
+      desk_tilt_deg: 47.46
+      boundary: false
+      start: profile_4
+    free_5:
+      f: 1593.514
+      rms_px: 5.502
+      pitch_deg: 7.912
+      roll_deg: -1.651
+      desk_tilt_deg: 49.025
+      boundary: false
+      start: profile_5
+    free_12:
+      f: 1593.514
+      rms_px: 5.502
+      pitch_deg: 7.912
+      roll_deg: -1.651
+      desk_tilt_deg: 49.025
+      boundary: false
+      start: profile_5
+    free_19:
+      f: 1593.514
+      rms_px: 5.502
+      pitch_deg: 7.912
+      roll_deg: -1.651
+      desk_tilt_deg: 49.025
+      boundary: false
+      start: profile_5
+  IMG_7349.MOV:
+    info:
+      ref_t: 1.767
+      n_tracked: 341
+      n_support: 79
+      n_use: 341
+      visible_frac: 0.999
+      drift_pct:
+        wrist: 9.2
+        thumb: 1.245
+        j16: 0.993
+      track_s: 24.878
+      device: cuda:0
+    ref: 53
+    n_use: 341
+    free_template:
+      f: 1461.251
+      rms_px: 3.613
+      boundary: false
+    ramp_11:
+      f: 1295.882
+      rms_px: 7.055
+      pitch_deg: 11.0
+      roll_deg: 0.0
+      desk_tilt_deg: 41.64
+      boundary: false
+      start: free_template
+    free_5:
+      f: 1730.507
+      rms_px: 5.418
+      pitch_deg: 10.627
+      roll_deg: -12.018
+      desk_tilt_deg: 47.594
+      boundary: false
+      start: free_template
+    free_12:
+      f: 1730.507
+      rms_px: 5.418
+      pitch_deg: 10.627
+      roll_deg: -12.018
+      desk_tilt_deg: 47.594
+      boundary: false
+      start: free_template
+    free_19:
+      f: 1730.507
+      rms_px: 5.418
+      pitch_deg: 10.627
+      roll_deg: -12.018
+      desk_tilt_deg: 47.594
+      boundary: false
+      start: free_template
+  IMG_7350.MOV:
+    info:
+      ref_t: 1.633
+      n_tracked: 350
+      n_support: 96
+      n_use: 350
+      visible_frac: 1.0
+      drift_pct:
+        wrist: 5.288
+        thumb: 2.529
+        j16: 1.857
+      track_s: 27.011
+      device: cuda:1
+    ref: 49
+    n_use: 350
+    free_template:
+      f: 1608.164
+      rms_px: 2.732
+      boundary: false
+    ramp_11:
+      f: 1672.357
+      rms_px: 4.222
+      pitch_deg: 11.0
+      roll_deg: 0.0
+      desk_tilt_deg: 47.295
+      boundary: false
+      start: free_template
+    free_5:
+      f: 1370.341
+      rms_px: 4.1
+      pitch_deg: 5.159
+      roll_deg: -2.338
+      desk_tilt_deg: 49.143
+      boundary: false
+      start: profile_3
+    free_12:
+      f: 1370.34
+      rms_px: 4.1
+      pitch_deg: 5.495
+      roll_deg: -1.368
+      desk_tilt_deg: 49.143
+      boundary: false
+      start: profile_3
+    free_19:
+      f: 1370.331
+      rms_px: 4.1
+      pitch_deg: 5.495
+      roll_deg: -1.368
+      desk_tilt_deg: 49.143
+      boundary: false
+      start: profile_3
+  IMG_7351.MOV:
+    info:
+      ref_t: 1.733
+      n_tracked: 323
+      n_support: 87
+      n_use: 323
+      visible_frac: 1.0
+      drift_pct:
+        wrist: 16.365
+        thumb: 1.208
+        j16: 1.808
+      track_s: 24.805
+      device: cuda:3
+    ref: 52
+    n_use: 323
+    free_template:
+      f: 1301.6
+      rms_px: 2.8
+      boundary: false
+    ramp_11:
+      f: 1203.829
+      rms_px: 5.53
+      pitch_deg: 11.0
+      roll_deg: 0.0
+      desk_tilt_deg: 40.453
+      boundary: false
+      start: profile_4
+    free_5:
+      f: 1571.286
+      rms_px: 4.021
+      pitch_deg: 9.08
+      roll_deg: -13.109
+      desk_tilt_deg: 47.406
+      boundary: false
+      start: free_template
+    free_12:
+      f: 1571.286
+      rms_px: 4.021
+      pitch_deg: 9.08
+      roll_deg: -13.109
+      desk_tilt_deg: 47.406
+      boundary: false
+      start: free_template
+    free_19:
+      f: 1571.286
+      rms_px: 4.021
+      pitch_deg: 9.08
+      roll_deg: -13.109
+      desk_tilt_deg: 47.406
+      boundary: false
+      start: free_template
+  IMG_7352.MOV:
+    info:
+      ref_t: 1.867
+      n_tracked: 354
+      n_support: 96
+      n_use: 354
+      visible_frac: 1.0
+      drift_pct:
+        wrist: 5.826
+        thumb: 2.282
+        j16: 1.632
+      track_s: 26.864
+      device: cuda:0
+    ref: 56
+    n_use: 354
+    free_template:
+      f: 1589.132
+      rms_px: 2.489
+      boundary: false
+    ramp_11:
+      f: 1454.847
+      rms_px: 4.425
+      pitch_deg: 11.0
+      roll_deg: 0.0
+      desk_tilt_deg: 45.427
+      boundary: false
+      start: profile_5
+    free_5:
+      f: 1285.41
+      rms_px: 3.857
+      pitch_deg: 4.499
+      roll_deg: -5.515
+      desk_tilt_deg: 49.531
+      boundary: false
+      start: free_template
+    free_12:
+      f: 1285.41
+      rms_px: 3.857
+      pitch_deg: 4.499
+      roll_deg: -5.515
+      desk_tilt_deg: 49.531
+      boundary: false
+      start: free_template
+    free_19:
+      f: 1285.41
+      rms_px: 3.857
+      pitch_deg: 4.499
+      roll_deg: -5.515
+      desk_tilt_deg: 49.531
+      boundary: false
+      start: free_template
+  IMG_7353.MOV:
+    info:
+      ref_t: 2.033
+      n_tracked: 340
+      n_support: 88
+      n_use: 340
+      visible_frac: 1.0
+      drift_pct:
+        wrist: 10.186
+        thumb: 0.861
+        j16: 1.302
+      track_s: 24.957
+      device: cuda:2
+    ref: 61
+    n_use: 340
+    free_template:
+      f: 1242.158
+      rms_px: 2.773
+      boundary: false
+    ramp_11:
+      f: 1246.293
+      rms_px: 5.801
+      pitch_deg: 11.0
+      roll_deg: 0.0
+      desk_tilt_deg: 41.731
+      boundary: false
+      start: profile_3
+    free_5:
+      f: 1545.591
+      rms_px: 4.005
+      pitch_deg: 7.481
+      roll_deg: -13.481
+      desk_tilt_deg: 49.174
+      boundary: false
+      start: free_template
+    free_12:
+      f: 1545.591
+      rms_px: 4.005
+      pitch_deg: 7.481
+      roll_deg: -13.481
+      desk_tilt_deg: 49.174
+      boundary: false
+      start: free_template
+    free_19:
+      f: 1545.591
+      rms_px: 4.005
+      pitch_deg: 7.481
+      roll_deg: -13.481
+      desk_tilt_deg: 49.174
+      boundary: false
+      start: free_template
+  IMG_7354.MOV:
+    info:
+      ref_t: 2.033
+      n_tracked: 312
+      n_support: 78
+      n_use: 312
+      visible_frac: 1.0
+      drift_pct:
+        wrist: 6.09
+        thumb: 1.884
+        j16: 1.815
+      track_s: 24.938
+      device: cuda:3
+    ref: 61
+    n_use: 312
+    free_template:
+      f: 1212.211
+      rms_px: 1.938
+      boundary: false
+    ramp_11:
+      f: 1134.967
+      rms_px: 4.295
+      pitch_deg: 11.0
+      roll_deg: 0.0
+      desk_tilt_deg: 44.402
+      boundary: false
+      start: profile_2
+    free_5:
+      f: 834.566
+      rms_px: 3.326
+      pitch_deg: 2.775
+      roll_deg: -9.924
+      desk_tilt_deg: 48.32
+      boundary: false
+      start: profile_0
+    free_12:
+      f: 834.566
+      rms_px: 3.326
+      pitch_deg: 2.775
+      roll_deg: -9.924
+      desk_tilt_deg: 48.32
+      boundary: false
+      start: profile_0
+    free_19:
+      f: 834.566
+      rms_px: 3.326
+      pitch_deg: 2.775
+      roll_deg: -9.924
+      desk_tilt_deg: 48.32
+      boundary: false
+      start: profile_0
+  IMG_7355.MOV:
+    info:
+      ref_t: 1.667
+      n_tracked: 305
+      n_support: 89
+      n_use: 305
+      visible_frac: 1.0
+      drift_pct:
+        wrist: 4.786
+        thumb: 1.573
+        j16: 1.499
+      track_s: 24.325
+      device: cuda:2
+    ref: 50
+    n_use: 305
+    free_template:
+      f: 1536.547
+      rms_px: 2.305
+      boundary: false
+    ramp_11:
+      f: 907.949
+      rms_px: 5.941
+      pitch_deg: 11.0
+      roll_deg: 0.0
+      desk_tilt_deg: 37.916
+      boundary: false
+      start: profile_3
+    free_5:
+      f: 1664.532
+      rms_px: 3.629
+      pitch_deg: 10.971
+      roll_deg: -18.11
+      desk_tilt_deg: 49.191
+      boundary: false
+      start: profile_4
+    free_12:
+      f: 1664.532
+      rms_px: 3.629
+      pitch_deg: 10.971
+      roll_deg: -18.11
+      desk_tilt_deg: 49.191
+      boundary: false
+      start: profile_4
+    free_19:
+      f: 1664.532
+      rms_px: 3.629
+      pitch_deg: 10.971
+      roll_deg: -18.11
+      desk_tilt_deg: 49.191
+      boundary: false
+      start: profile_4
+  IMG_7356.MOV:
+    info:
+      ref_t: 1.9
+      n_tracked: 313
+      n_support: 82
+      n_use: 313
+      visible_frac: 1.0
+      drift_pct:
+        wrist: 7.388
+        thumb: 1.834
+        j16: 2.067
+      track_s: 23.585
+      device: cuda:1
+    ref: 57
+    n_use: 313
+    free_template:
+      f: 2765.692
+      rms_px: 1.915
+      boundary: false
+    ramp_11:
+      f: 1311.318
+      rms_px: 3.443
+      pitch_deg: 11.0
+      roll_deg: 0.0
+      desk_tilt_deg: 47.25
+      boundary: false
+      start: free_template
+    free_5:
+      f: 1022.094
+      rms_px: 3.212
+      pitch_deg: 5.192
+      roll_deg: -3.892
+      desk_tilt_deg: 48.569
+      boundary: false
+      start: profile_1
+    free_12:
+      f: 1022.094
+      rms_px: 3.212
+      pitch_deg: 5.192
+      roll_deg: -3.892
+      desk_tilt_deg: 48.569
+      boundary: false
+      start: profile_1
+    free_19:
+      f: 1022.094
+      rms_px: 3.212
+      pitch_deg: 5.192
+      roll_deg: -3.892
+      desk_tilt_deg: 48.569
+      boundary: false
+      start: profile_1
+  IMG_7357.MOV:
+    info:
+      ref_t: 1.533
+      n_tracked: 301
+      n_support: 82
+      n_use: 301
+      visible_frac: 1.0
+      drift_pct:
+        wrist: 3.18
+        thumb: 1.376
+        j16: 1.701
+      track_s: 22.296
+      device: cuda:0
+    ref: 46
+    n_use: 301
+    free_template:
+      f: 1069.011
+      rms_px: 2.244
+      boundary: false
+    ramp_11:
+      f: 1093.478
+      rms_px: 5.664
+      pitch_deg: 11.0
+      roll_deg: 0.0
+      desk_tilt_deg: 38.564
+      boundary: false
+      start: profile_4
+    free_5:
+      f: 1380.952
+      rms_px: 3.389
+      pitch_deg: 6.993
+      roll_deg: -16.871
+      desk_tilt_deg: 49.179
+      boundary: false
+      start: profile_3
+    free_12:
+      f: 1380.952
+      rms_px: 3.389
+      pitch_deg: 6.993
+      roll_deg: -16.871
+      desk_tilt_deg: 49.179
+      boundary: false
+      start: profile_3
+    free_19:
+      f: 1380.952
+      rms_px: 3.389
+      pitch_deg: 6.993
+      roll_deg: -16.871
+      desk_tilt_deg: 49.179
+      boundary: false
+      start: profile_3
+  IMG_7354 - 복사본.MOV:
+    info:
+      ref_t: 1.133
+      n_tracked: 282
+      n_support: 82
+      n_use: 282
+      visible_frac: 1.0
+      drift_pct:
+        wrist: 6.105
+        thumb: 2.461
+        j16: 1.992
+      track_s: 20.781
+      device: cuda:2
+    ref: 34
+    n_use: 282
+    free_template:
+      f: 1337.604
+      rms_px: 2.983
+      boundary: false
+    ramp_11:
+      f: 1521.901
+      rms_px: 4.648
+      pitch_deg: 11.0
+      roll_deg: 0.0
+      desk_tilt_deg: 58.736
+      boundary: false
+      start: profile_3
+    free_5:
+      f: 1454.29
+      rms_px: 4.429
+      pitch_deg: 8.715
+      roll_deg: -4.211
+      desk_tilt_deg: 61.015
+      boundary: false
+      start: profile_5
+    free_12:
+      f: 1454.29
+      rms_px: 4.429
+      pitch_deg: 8.658
+      roll_deg: -4.327
+      desk_tilt_deg: 61.015
+      boundary: false
+      start: profile_5
+    free_19:
+      f: 1454.29
+      rms_px: 4.429
+      pitch_deg: 8.658
+      roll_deg: -4.327
+      desk_tilt_deg: 61.015
+      boundary: false
+      start: profile_5
+  IMG_7355 - 복사본.MOV:
+    info:
+      ref_t: 1.1
+      n_tracked: 249
+      n_support: 82
+      n_use: 249
+      visible_frac: 1.0
+      drift_pct:
+        wrist: 6.266
+        thumb: 2.405
+        j16: 1.381
+      track_s: 18.949
+      device: cuda:3
+    ref: 33
+    n_use: 249
+    free_template:
+      f: 1583.602
+      rms_px: 2.437
+      boundary: false
+    ramp_11:
+      f: 1665.635
+      rms_px: 3.969
+      pitch_deg: 11.0
+      roll_deg: 0.0
+      desk_tilt_deg: 58.307
+      boundary: false
+      start: free_template
+    free_5:
+      f: 1331.687
+      rms_px: 3.625
+      pitch_deg: 5.821
+      roll_deg: -4.861
+      desk_tilt_deg: 62.284
+      boundary: false
+      start: free_template
+    free_12:
+      f: 1331.687
+      rms_px: 3.625
+      pitch_deg: 5.821
+      roll_deg: -4.861
+      desk_tilt_deg: 62.284
+      boundary: false
+      start: free_template
+    free_19:
+      f: 1331.686
+      rms_px: 3.625
+      pitch_deg: 5.858
+      roll_deg: -4.817
+      desk_tilt_deg: 62.284
+      boundary: false
+      start: profile_6
+  IMG_7351 - 복사본.MOV:
+    info:
+      ref_t: 1.033
+      n_tracked: 193
+      n_support: 95
+      n_use: 193
+      visible_frac: 1.0
+      drift_pct:
+        wrist: 9.082
+        thumb: 3.213
+        j16: 1.406
+      track_s: 14.313
+      device: cuda:1
+    ref: 31
+    n_use: 193
+    free_template:
+      f: 1835.108
+      rms_px: 3.598
+      boundary: false
+    ramp_11:
+      f: 1288.642
+      rms_px: 6.034
+      pitch_deg: 11.0
+      roll_deg: 0.0
+      desk_tilt_deg: 50.965
+      boundary: false
+      start: profile_2
+    free_5:
+      f: 3072.0
+      rms_px: 6.294
+      pitch_deg: -79.933
+      roll_deg: -87.23
+      desk_tilt_deg: 2.545
+      boundary: true
+      start: profile_7
+    free_12:
+      f: 3072.0
+      rms_px: 6.201
+      pitch_deg: -30.874
+      roll_deg: 9.196
+      desk_tilt_deg: 43.88
+      boundary: true
+      start: free_template
+    free_19:
+      f: 3072.0
+      rms_px: 6.201
+      pitch_deg: -30.874
+      roll_deg: 9.196
+      desk_tilt_deg: 43.88
+      boundary: true
+      start: free_template
+  IMG_7352 - 복사본.MOV:
+    info:
+      ref_t: 1.0
+      n_tracked: 184
+      n_support: 96
+      n_use: 184
+      visible_frac: 1.0
+      drift_pct:
+        wrist: 8.4
+        thumb: 3.059
+        j16: 1.855
+      track_s: 13.516
+      device: cuda:0
+    ref: 30
+    n_use: 184
+    free_template:
+      f: 2013.144
+      rms_px: 3.42
+      boundary: false
+    ramp_11:
+      f: 1205.986
+      rms_px: 5.667
+      pitch_deg: 11.0
+      roll_deg: 0.0
+      desk_tilt_deg: 50.13
+      boundary: false
+      start: free_template
+    free_5:
+      f: 3072.0
+      rms_px: 6.045
+      pitch_deg: -28.896
+      roll_deg: 6.667
+      desk_tilt_deg: 44.829
+      boundary: true
+      start: free_template
+    free_12:
+      f: 3072.0
+      rms_px: 6.045
+      pitch_deg: -28.896
+      roll_deg: 6.667
+      desk_tilt_deg: 44.829
+      boundary: true
+      start: free_template
+    free_19:
+      f: 3072.0
+      rms_px: 6.045
+      pitch_deg: -28.896
+      roll_deg: 6.667
+      desk_tilt_deg: 44.829
+      boundary: true
+      start: free_template
