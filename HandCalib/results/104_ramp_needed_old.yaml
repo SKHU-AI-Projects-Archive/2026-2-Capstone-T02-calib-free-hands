@@ -1,0 +1,533 @@
+experiment: 104_ramp_needed_old
+run: runs/104_ramp_needed_old/20261110T040727Z
+code_commit: be7481e
+git_dirty_at_run: false
+videos:
+  IMG_7346.MOV:
+    info:
+      angle_min: -59.964
+      angle_max: 46.318
+      sym_limit: 46.318
+      n_all: 678
+      n_plus: 429
+      n_minus: 441
+      n_symmetric: 503
+    all:
+      free_template:
+        f: 1950.717
+      ramp_7:
+        f: 1327.394
+        rms_px: 4.354
+        pitch_deg: 7.0
+        roll_deg: 0.0
+        desk_tilt_deg: 47.346
+        boundary: false
+        start: profile_3
+      ramp_11:
+        f: 1458.003
+        rms_px: 4.127
+        pitch_deg: 11.0
+        roll_deg: 0.0
+        desk_tilt_deg: 45.666
+        boundary: false
+        start: profile_3
+      ramp_15:
+        f: 1605.732
+        rms_px: 4.163
+        pitch_deg: 15.0
+        roll_deg: 0.0
+        desk_tilt_deg: 43.92
+        boundary: false
+        start: profile_3
+      ramp_19:
+        f: 1782.453
+        rms_px: 4.397
+        pitch_deg: 19.0
+        roll_deg: 0.0
+        desk_tilt_deg: 42.241
+        boundary: false
+        start: profile_6
+  IMG_7347.MOV:
+    info:
+      angle_min: -50.762
+      angle_max: 97.907
+      sym_limit: 50.762
+      n_all: 658
+      n_plus: 302
+      n_minus: 442
+      n_symmetric: 483
+    all:
+      free_template:
+        f: 2256.318
+      ramp_7:
+        f: 1478.934
+        rms_px: 5.014
+        pitch_deg: 7.0
+        roll_deg: 0.0
+        desk_tilt_deg: 47.171
+        boundary: false
+        start: profile_3
+      ramp_11:
+        f: 1810.21
+        rms_px: 4.793
+        pitch_deg: 11.0
+        roll_deg: 0.0
+        desk_tilt_deg: 45.63
+        boundary: false
+        start: profile_4
+      ramp_15:
+        f: 2329.022
+        rms_px: 4.819
+        pitch_deg: 15.0
+        roll_deg: 0.0
+        desk_tilt_deg: 44.031
+        boundary: false
+        start: profile_7
+      ramp_19:
+        f: 3072.0
+        rms_px: 5.064
+        pitch_deg: 19.0
+        roll_deg: 0.0
+        desk_tilt_deg: 42.272
+        boundary: true
+        start: profile_6
+  IMG_7348.MOV:
+    info:
+      angle_min: -56.553
+      angle_max: 43.098
+      sym_limit: 43.098
+      n_all: 618
+      n_plus: 380
+      n_minus: 384
+      n_symmetric: 421
+    all:
+      free_template:
+        f: 2845.04
+      ramp_7:
+        f: 1331.811
+        rms_px: 4.52
+        pitch_deg: 7.0
+        roll_deg: 0.0
+        desk_tilt_deg: 47.288
+        boundary: false
+        start: free_template
+      ramp_11:
+        f: 1565.492
+        rms_px: 4.253
+        pitch_deg: 11.0
+        roll_deg: 0.0
+        desk_tilt_deg: 46.226
+        boundary: false
+        start: profile_4
+      ramp_15:
+        f: 1888.933
+        rms_px: 4.249
+        pitch_deg: 15.0
+        roll_deg: 0.0
+        desk_tilt_deg: 45.185
+        boundary: false
+        start: free_template
+      ramp_19:
+        f: 2345.872
+        rms_px: 4.502
+        pitch_deg: 19.0
+        roll_deg: 0.0
+        desk_tilt_deg: 44.006
+        boundary: false
+        start: profile_6
+  IMG_7349.MOV:
+    info:
+      angle_min: -42.326
+      angle_max: 66.741
+      sym_limit: 42.326
+      n_all: 683
+      n_plus: 311
+      n_minus: 468
+      n_symmetric: 508
+    all:
+      free_template:
+        f: 3072.0
+      ramp_7:
+        f: 1378.188
+        rms_px: 8.83
+        pitch_deg: 7.0
+        roll_deg: 0.0
+        desk_tilt_deg: 46.99
+        boundary: false
+        start: profile_3
+      ramp_11:
+        f: 1759.764
+        rms_px: 8.761
+        pitch_deg: 11.0
+        roll_deg: 0.0
+        desk_tilt_deg: 46.543
+        boundary: false
+        start: profile_6
+      ramp_15:
+        f: 2452.538
+        rms_px: 8.923
+        pitch_deg: 15.0
+        roll_deg: 0.0
+        desk_tilt_deg: 46.042
+        boundary: false
+        start: profile_6
+      ramp_19:
+        f: 3072.0
+        rms_px: 9.241
+        pitch_deg: 19.0
+        roll_deg: 0.0
+        desk_tilt_deg: 44.963
+        boundary: true
+        start: profile_5
+  IMG_7350.MOV:
+    info:
+      angle_min: -57.75
+      angle_max: 44.285
+      sym_limit: 44.285
+      n_all: 700
+      n_plus: 453
+      n_minus: 481
+      n_symmetric: 519
+    all:
+      free_template:
+        f: 3072.0
+      ramp_7:
+        f: 1361.644
+        rms_px: 3.418
+        pitch_deg: 7.0
+        roll_deg: 0.0
+        desk_tilt_deg: 46.901
+        boundary: false
+        start: free_template
+      ramp_11:
+        f: 1583.192
+        rms_px: 3.276
+        pitch_deg: 11.0
+        roll_deg: 0.0
+        desk_tilt_deg: 46.184
+        boundary: false
+        start: free_template
+      ramp_15:
+        f: 1881.415
+        rms_px: 3.335
+        pitch_deg: 15.0
+        roll_deg: 0.0
+        desk_tilt_deg: 45.407
+        boundary: false
+        start: profile_6
+      ramp_19:
+        f: 2296.398
+        rms_px: 3.581
+        pitch_deg: 19.0
+        roll_deg: 0.0
+        desk_tilt_deg: 44.474
+        boundary: false
+        start: profile_6
+  IMG_7351.MOV:
+    info:
+      angle_min: -56.707
+      angle_max: 104.04
+      sym_limit: 56.707
+      n_all: 645
+      n_plus: 435
+      n_minus: 448
+      n_symmetric: 482
+    all:
+      free_template:
+        f: 2143.174
+      ramp_7:
+        f: 1494.126
+        rms_px: 4.318
+        pitch_deg: 7.0
+        roll_deg: 0.0
+        desk_tilt_deg: 46.955
+        boundary: false
+        start: free_template
+      ramp_11:
+        f: 1771.22
+        rms_px: 4.194
+        pitch_deg: 11.0
+        roll_deg: 0.0
+        desk_tilt_deg: 45.785
+        boundary: false
+        start: profile_5
+      ramp_15:
+        f: 2168.576
+        rms_px: 4.181
+        pitch_deg: 15.0
+        roll_deg: 0.0
+        desk_tilt_deg: 44.419
+        boundary: false
+        start: profile_7
+      ramp_19:
+        f: 2780.053
+        rms_px: 4.28
+        pitch_deg: 19.0
+        roll_deg: 0.0
+        desk_tilt_deg: 42.771
+        boundary: false
+        start: profile_7
+  IMG_7352.MOV:
+    info:
+      angle_min: -69.26
+      angle_max: 54.446
+      sym_limit: 54.446
+      n_all: 707
+      n_plus: 479
+      n_minus: 461
+      n_symmetric: 548
+    all:
+      free_template:
+        f: 2437.811
+      ramp_7:
+        f: 1418.334
+        rms_px: 3.425
+        pitch_deg: 7.0
+        roll_deg: 0.0
+        desk_tilt_deg: 46.855
+        boundary: false
+        start: profile_3
+      ramp_11:
+        f: 1667.587
+        rms_px: 3.278
+        pitch_deg: 11.0
+        roll_deg: 0.0
+        desk_tilt_deg: 45.821
+        boundary: false
+        start: profile_5
+      ramp_15:
+        f: 1999.283
+        rms_px: 3.37
+        pitch_deg: 15.0
+        roll_deg: 0.0
+        desk_tilt_deg: 44.553
+        boundary: false
+        start: profile_6
+      ramp_19:
+        f: 2477.904
+        rms_px: 3.639
+        pitch_deg: 19.0
+        roll_deg: 0.0
+        desk_tilt_deg: 43.174
+        boundary: false
+        start: profile_4
+  IMG_7353.MOV:
+    info:
+      angle_min: -51.33
+      angle_max: 94.927
+      sym_limit: 51.33
+      n_all: 681
+      n_plus: 465
+      n_minus: 472
+      n_symmetric: 510
+    all:
+      free_template:
+        f: 1832.479
+      ramp_7:
+        f: 1446.796
+        rms_px: 4.023
+        pitch_deg: 7.0
+        roll_deg: 0.0
+        desk_tilt_deg: 46.729
+        boundary: false
+        start: free_template
+      ramp_11:
+        f: 1812.309
+        rms_px: 3.813
+        pitch_deg: 11.0
+        roll_deg: 0.0
+        desk_tilt_deg: 45.38
+        boundary: false
+        start: profile_6
+      ramp_15:
+        f: 2420.262
+        rms_px: 3.761
+        pitch_deg: 15.0
+        roll_deg: 0.0
+        desk_tilt_deg: 43.82
+        boundary: false
+        start: profile_6
+      ramp_19:
+        f: 3072.0
+        rms_px: 3.878
+        pitch_deg: 19.0
+        roll_deg: 0.0
+        desk_tilt_deg: 42.068
+        boundary: true
+        start: profile_7
+  IMG_7354.MOV:
+    info:
+      angle_min: -57.879
+      angle_max: 53.085
+      sym_limit: 53.085
+      n_all: 624
+      n_plus: 446
+      n_minus: 405
+      n_symmetric: 523
+    all:
+      free_template:
+        f: 3072.0
+      ramp_7:
+        f: 1197.521
+        rms_px: 3.481
+        pitch_deg: 7.0
+        roll_deg: 0.0
+        desk_tilt_deg: 44.198
+        boundary: false
+        start: profile_2
+      ramp_11:
+        f: 1560.871
+        rms_px: 3.451
+        pitch_deg: 11.0
+        roll_deg: 0.0
+        desk_tilt_deg: 43.515
+        boundary: false
+        start: profile_3
+      ramp_15:
+        f: 2078.393
+        rms_px: 3.759
+        pitch_deg: 15.0
+        roll_deg: 0.0
+        desk_tilt_deg: 42.07
+        boundary: false
+        start: profile_6
+      ramp_19:
+        f: 3072.0
+        rms_px: 3.798
+        pitch_deg: 19.0
+        roll_deg: 0.0
+        desk_tilt_deg: 41.198
+        boundary: true
+        start: profile_6
+  IMG_7355.MOV:
+    info:
+      angle_min: -52.211
+      angle_max: 123.183
+      sym_limit: 52.211
+      n_all: 609
+      n_plus: 435
+      n_minus: 409
+      n_symmetric: 442
+    all:
+      free_template:
+        f: 1578.856
+      ramp_7:
+        f: 1540.97
+        rms_px: 4.471
+        pitch_deg: 7.0
+        roll_deg: 0.0
+        desk_tilt_deg: 45.931
+        boundary: false
+        start: profile_0
+      ramp_11:
+        f: 2131.034
+        rms_px: 4.448
+        pitch_deg: 11.0
+        roll_deg: 0.0
+        desk_tilt_deg: 45.319
+        boundary: false
+        start: profile_1
+      ramp_15:
+        f: 3072.0
+        rms_px: 4.516
+        pitch_deg: 15.0
+        roll_deg: 0.0
+        desk_tilt_deg: 44.208
+        boundary: true
+        start: free_template
+      ramp_19:
+        f: 3072.0
+        rms_px: 4.758
+        pitch_deg: 19.0
+        roll_deg: 0.0
+        desk_tilt_deg: 41.934
+        boundary: true
+        start: profile_7
+  IMG_7356.MOV:
+    info:
+      angle_min: -63.642
+      angle_max: 50.282
+      sym_limit: 50.282
+      n_all: 627
+      n_plus: 420
+      n_minus: 438
+      n_symmetric: 477
+    all:
+      free_template:
+        f: 3072.0
+      ramp_7:
+        f: 1407.944
+        rms_px: 3.286
+        pitch_deg: 7.0
+        roll_deg: 0.0
+        desk_tilt_deg: 44.243
+        boundary: false
+        start: profile_3
+      ramp_11:
+        f: 1757.861
+        rms_px: 3.354
+        pitch_deg: 11.0
+        roll_deg: 0.0
+        desk_tilt_deg: 43.442
+        boundary: false
+        start: profile_3
+      ramp_15:
+        f: 2342.083
+        rms_px: 3.541
+        pitch_deg: 15.0
+        roll_deg: 0.0
+        desk_tilt_deg: 42.419
+        boundary: false
+        start: profile_7
+      ramp_19:
+        f: 3072.0
+        rms_px: 3.825
+        pitch_deg: 19.0
+        roll_deg: 0.0
+        desk_tilt_deg: 40.936
+        boundary: true
+        start: profile_7
+  IMG_7357.MOV:
+    info:
+      angle_min: -54.665
+      angle_max: 123.998
+      sym_limit: 54.665
+      n_all: 601
+      n_plus: 397
+      n_minus: 412
+      n_symmetric: 447
+    all:
+      free_template:
+        f: 1833.053
+      ramp_7:
+        f: 1531.406
+        rms_px: 4.122
+        pitch_deg: 7.0
+        roll_deg: 0.0
+        desk_tilt_deg: 46.044
+        boundary: false
+        start: profile_5
+      ramp_11:
+        f: 2052.316
+        rms_px: 4.135
+        pitch_deg: 11.0
+        roll_deg: 0.0
+        desk_tilt_deg: 45.903
+        boundary: false
+        start: profile_6
+      ramp_15:
+        f: 3061.329
+        rms_px: 4.247
+        pitch_deg: 15.0
+        roll_deg: 0.0
+        desk_tilt_deg: 45.525
+        boundary: true
+        start: profile_3
+      ramp_19:
+        f: 3072.0
+        rms_px: 4.519
+        pitch_deg: 19.0
+        roll_deg: 0.0
+        desk_tilt_deg: 43.723
+        boundary: true
+        start: profile_3
