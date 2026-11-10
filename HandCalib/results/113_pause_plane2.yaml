@@ -1,0 +1,303 @@
+experiment: 113_pause_plane2
+run: runs/113_pause_plane2/20261110T044634Z
+code_commit: 78af763
+git_dirty_at_run: false
+videos:
+  IMG_7354 - 복사본.MOV:
+    klt:
+      pauses:
+      - t0: 0.033
+        t1: 8.2
+        hand_angle_deg: 48.939
+      - t0: 10.6
+        t1: 14.5
+        hand_angle_deg: -61.749
+      - t0: 15.533
+        t1: 18.767
+        hand_angle_deg: -3.755
+      fit:
+        f: 1737.866
+        desk_tilt_deg: 52.357
+        hand_desk_deg:
+        - 33.279
+        - 54.994
+        - 48.508
+        turn_deg:
+        - 0.0
+        - 147.222
+        - 53.112
+        spread_deg: 65.302
+        fit_rms_px:
+        - 0.0
+        - 0.226
+        - 0.207
+    cotracker:
+      pauses: []
+      fit:
+        failed: 멈춤 0개
+  IMG_7355 - 복사본.MOV:
+    klt:
+      pauses:
+      - t0: 0.033
+        t1: 2.267
+        hand_angle_deg: 0.587
+      - t0: 3.367
+        t1: 6.8
+        hand_angle_deg: 36.988
+      - t0: 9.1
+        t1: 12.1
+        hand_angle_deg: -58.321
+      - t0: 12.933
+        t1: 16.567
+        hand_angle_deg: -0.502
+      fit:
+        f: 1636.976
+        desk_tilt_deg: 67.888
+        hand_desk_deg:
+        - 59.446
+        - 54.732
+        - 66.456
+        - 70.411
+        turn_deg:
+        - 0.0
+        - 44.304
+        - 124.464
+        - 25.557
+        spread_deg: 103.312
+        fit_rms_px:
+        - 0.0
+        - 0.037
+        - 0.065
+        - 0.099
+    cotracker:
+      pauses: []
+      fit:
+        failed: 멈춤 0개
+  IMG_7351 - 복사본.MOV:
+    klt:
+      pauses:
+      - t0: 0.033
+        t1: 2.1
+        hand_angle_deg: 0.154
+      - t0: 3.9
+        t1: 6.833
+        hand_angle_deg: 75.355
+      - t0: 8.333
+        t1: 8.967
+        hand_angle_deg: -14.498
+      - t0: 9.633
+        t1: 12.833
+        hand_angle_deg: -43.799
+      fit:
+        f: 1249.037
+        desk_tilt_deg: 20.125
+        hand_desk_deg:
+        - 60.726
+        - 58.356
+        - 61.538
+        - 69.368
+        turn_deg:
+        - 0.0
+        - 58.477
+        - 17.887
+        - 48.617
+        spread_deg: 37.816
+        fit_rms_px:
+        - 0.0
+        - 0.044
+        - 0.465
+        - 0.039
+    cotracker:
+      pauses: []
+      fit:
+        failed: 멈춤 0개
+  IMG_7352 - 복사본.MOV:
+    klt:
+      pauses:
+      - t0: 0.033
+        t1: 2.6
+        hand_angle_deg: -0.246
+      - t0: 3.367
+        t1: 6.167
+        hand_angle_deg: 54.429
+      - t0: 7.9
+        t1: 8.733
+        hand_angle_deg: -16.198
+      - t0: 9.567
+        t1: 12.233
+        hand_angle_deg: -54.477
+      fit:
+        f: 1102.019
+        desk_tilt_deg: 50.441
+        hand_desk_deg:
+        - 52.68
+        - 30.601
+        - 57.776
+        - 51.118
+        turn_deg:
+        - 0.0
+        - 48.298
+        - 41.181
+        - 95.232
+        spread_deg: 63.99
+        fit_rms_px:
+        - 0.0
+        - 0.031
+        - 0.409
+        - 0.032
+    cotracker:
+      pauses: []
+      fit:
+        failed: 멈춤 0개
+  IMG_7384.MOV:
+    klt:
+      pauses:
+      - t0: 0.033
+        t1: 3.467
+        hand_angle_deg: 3.011
+      - t0: 4.667
+        t1: 9.333
+        hand_angle_deg: 63.467
+      - t0: 11.833
+        t1: 15.0
+        hand_angle_deg: -109.322
+      - t0: 17.267
+        t1: 21.167
+        hand_angle_deg: -0.868
+      fit:
+        f: 1508.881
+        desk_tilt_deg: 60.479
+        hand_desk_deg:
+        - 31.719
+        - 15.289
+        - 30.608
+        - 34.709
+        turn_deg:
+        - 0.0
+        - 57.425
+        - 138.517
+        - 3.622
+        spread_deg: 105.092
+        fit_rms_px:
+        - 0.0
+        - 0.09
+        - 0.168
+        - 0.734
+    cotracker:
+      pauses: []
+      fit:
+        failed: 멈춤 0개
+  IMG_7385.MOV:
+    klt:
+      pauses:
+      - t0: 0.033
+        t1: 2.8
+        hand_angle_deg: 0.849
+      - t0: 3.4
+        t1: 7.033
+        hand_angle_deg: 73.567
+      - t0: 10.433
+        t1: 14.333
+        hand_angle_deg: -60.481
+      - t0: 15.633
+        t1: 18.933
+        hand_angle_deg: 1.151
+      fit:
+        f: 1717.805
+        desk_tilt_deg: 59.568
+        hand_desk_deg:
+        - 42.308
+        - 42.606
+        - 51.425
+        - 56.87
+        turn_deg:
+        - 0.0
+        - 59.998
+        - 119.212
+        - 38.164
+        spread_deg: 90.777
+        fit_rms_px:
+        - 0.0
+        - 0.158
+        - 0.281
+        - 0.212
+    cotracker:
+      pauses: []
+      fit:
+        failed: 멈춤 0개
+  IMG_7387.MOV:
+    klt:
+      pauses:
+      - t0: 0.033
+        t1: 2.867
+        hand_angle_deg: 5.914
+      - t0: 3.4
+        t1: 6.233
+        hand_angle_deg: 42.645
+      - t0: 9.667
+        t1: 12.533
+        hand_angle_deg: -93.072
+      - t0: 15.067
+        t1: 18.8
+        hand_angle_deg: -4.373
+      fit:
+        f: 1378.161
+        desk_tilt_deg: 51.023
+        hand_desk_deg:
+        - 48.691
+        - 12.596
+        - 57.513
+        - 42.642
+        turn_deg:
+        - 0.0
+        - 59.026
+        - 124.147
+        - 16.7
+        spread_deg: 104.152
+        fit_rms_px:
+        - 0.0
+        - 0.133
+        - 0.194
+        - 0.15
+    cotracker:
+      pauses: []
+      fit:
+        failed: 멈춤 0개
+  IMG_7388.MOV:
+    klt:
+      pauses:
+      - t0: 0.033
+        t1: 3.9
+        hand_angle_deg: -1.582
+      - t0: 5.133
+        t1: 9.067
+        hand_angle_deg: 48.278
+      - t0: 12.667
+        t1: 16.5
+        hand_angle_deg: -68.17
+      - t0: 17.733
+        t1: 21.133
+        hand_angle_deg: -1.103
+      fit:
+        f: 1667.632
+        desk_tilt_deg: 56.27
+        hand_desk_deg:
+        - 47.441
+        - 37.482
+        - 51.011
+        - 58.935
+        turn_deg:
+        - 0.0
+        - 51.052
+        - 113.278
+        - 23.595
+        spread_deg: 100.435
+        fit_rms_px:
+        - 0.0
+        - 0.069
+        - 0.192
+        - 0.061
+    cotracker:
+      pauses: []
+      fit:
+        failed: 멈춤 0개

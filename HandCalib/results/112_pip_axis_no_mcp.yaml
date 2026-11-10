@@ -1,0 +1,149 @@
+experiment: 112_pip_axis_no_mcp
+run: runs/112_pip_axis_no_mcp/20261110T044634Z
+code_commit: 78af763
+git_dirty_at_run: false
+videos:
+  IMG_7354 - 복사본.MOV:
+    info:
+      angle_min: -63.133
+      angle_max: 64.922
+      sym_limit: 63.133
+      n_all: 564
+      n_plus: 384
+      n_minus: 376
+      n_symmetric: 562
+    crossing:
+      ramp_deg: null
+      f: null
+      crossed: false
+    all:
+      ramp_11:
+        f: 1719.374
+        rms_px: 2.822
+        boundary: false
+  IMG_7355 - 복사본.MOV:
+    info:
+      angle_min: -59.156
+      angle_max: 39.337
+      sym_limit: 39.337
+      n_all: 498
+      n_plus: 349
+      n_minus: 348
+      n_symmetric: 388
+    crossing:
+      ramp_deg: null
+      f: null
+      crossed: false
+    all:
+      ramp_11:
+        f: 1755.777
+        rms_px: 2.123
+        boundary: false
+  IMG_7351 - 복사본.MOV:
+    info:
+      angle_min: -44.293
+      angle_max: 81.827
+      sym_limit: 44.293
+      n_all: 386
+      n_plus: 259
+      n_minus: 215
+      n_symmetric: 271
+    crossing:
+      ramp_deg: null
+      f: null
+      crossed: false
+    all:
+      ramp_11:
+        f: 1161.414
+        rms_px: 2.232
+        boundary: false
+  IMG_7352 - 복사본.MOV:
+    info:
+      angle_min: -55.053
+      angle_max: 57.595
+      sym_limit: 55.053
+      n_all: 368
+      n_plus: 247
+      n_minus: 203
+      n_symmetric: 342
+    crossing:
+      ramp_deg: null
+      f: null
+      crossed: false
+    all:
+      ramp_11:
+        f: 970.48
+        rms_px: 2.912
+        boundary: false
+  IMG_7384.MOV:
+    info:
+      angle_min: -109.912
+      angle_max: 67.206
+      sym_limit: 67.206
+      n_all: 636
+      n_plus: 407
+      n_minus: 414
+      n_symmetric: 504
+    crossing:
+      ramp_deg: null
+      f: null
+      crossed: false
+    all:
+      ramp_11:
+        f: 1489.182
+        rms_px: 2.566
+        boundary: false
+  IMG_7385.MOV:
+    info:
+      angle_min: -61.214
+      angle_max: 75.916
+      sym_limit: 61.214
+      n_all: 569
+      n_plus: 371
+      n_minus: 395
+      n_symmetric: 470
+    crossing:
+      ramp_deg: null
+      f: null
+      crossed: false
+    all:
+      ramp_11:
+        f: 1607.361
+        rms_px: 2.846
+        boundary: false
+  IMG_7387.MOV:
+    info:
+      angle_min: -93.603
+      angle_max: 43.7
+      sym_limit: 43.7
+      n_all: 565
+      n_plus: 356
+      n_minus: 389
+      n_symmetric: 416
+    crossing:
+      ramp_deg: null
+      f: null
+      crossed: false
+    all:
+      ramp_11:
+        f: 1341.699
+        rms_px: 2.461
+        boundary: false
+  IMG_7388.MOV:
+    info:
+      angle_min: -69.73
+      angle_max: 51.23
+      sym_limit: 51.23
+      n_all: 635
+      n_plus: 429
+      n_minus: 450
+      n_symmetric: 496
+    crossing:
+      ramp_deg: null
+      f: null
+      crossed: false
+    all:
+      ramp_11:
+        f: 1714.36
+        rms_px: 3.067
+        boundary: false
