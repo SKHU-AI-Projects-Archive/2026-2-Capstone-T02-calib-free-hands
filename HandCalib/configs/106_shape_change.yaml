@@ -1,0 +1,47 @@
+# 106: 평평한 단단한 손에서 벗어나는 정도 (사용자 2026-11-10: "확인 순서 제안에서 1번 항목으로 진행해줘."), 기록용, 판정 없음.
+# 98(16개)·105(새 4개)가 저장한 CoTracker3 관절별 추적점(j16)에서, 프레임마다 기준 프레임 관절 -> 그 프레임 관절의 최소제곱 호모그래피를 구하고 남는 거리를 손 상자 긴 변 대비 % 로 낸다.
+# 회전 각도 구간 0-20, 20-40, 40-60, 60-200° 와, 30° 넘게 돈 프레임의 관절별 중앙값. f 를 쓰지 않는다. 앞선 탐색(98 점, 저장 안 함)에서 팀원 2개가 너클·바깥 손가락 끝에서 크게 벗어났다.
+# 읽는 법(실행 전에 정함): 새로 찍은 팀원 영상 2개도 본인 영상들보다 뚜렷이 크고 같은 관절(MCP)에서 벗어나면 그 패턴이 팀원 손의 특징이라는 근거.
+experiment:
+  name: 106_shape_change
+  seed: 42
+settings_config: configs/74b_multistart_rerun.yaml
+joint_set: j16
+code: {branch: optical_flow, commit: 67ef907, modules: [HandCalib/optical_flow/experiments.py]}
+ramps_deg: [11]
+videos: []
+extra_videos:
+  - {file: IMG_7384.MOV, person: teammate, ref_f_px: 1672}
+  - {file: IMG_7385.MOV, person: self, ref_f_px: 1672}
+  - {file: IMG_7387.MOV, person: teammate, ref_f_px: 1672}
+  - {file: IMG_7388.MOV, person: self, ref_f_px: 1672}
+shape_change:
+  angle_bins_deg: [[0, 20], [20, 40], [40, 60], [60, 200]]
+  angle_min_deg: 30
+  min_frames: 5
+  points:
+    IMG_7346.MOV: runs/98_cotracker/20261110T023248Z
+    IMG_7347.MOV: runs/98_cotracker/20261110T023248Z
+    IMG_7348.MOV: runs/98_cotracker/20261110T023248Z
+    IMG_7349.MOV: runs/98_cotracker/20261110T023248Z
+    IMG_7350.MOV: runs/98_cotracker/20261110T023248Z
+    IMG_7351.MOV: runs/98_cotracker/20261110T023248Z
+    IMG_7352.MOV: runs/98_cotracker/20261110T023248Z
+    IMG_7353.MOV: runs/98_cotracker/20261110T023248Z
+    IMG_7354.MOV: runs/98_cotracker/20261110T023248Z
+    IMG_7355.MOV: runs/98_cotracker/20261110T023248Z
+    IMG_7356.MOV: runs/98_cotracker/20261110T023248Z
+    IMG_7357.MOV: runs/98_cotracker/20261110T023248Z
+    "IMG_7354 - 복사본.MOV": runs/98_cotracker/20261110T023248Z
+    "IMG_7355 - 복사본.MOV": runs/98_cotracker/20261110T023248Z
+    "IMG_7351 - 복사본.MOV": runs/98_cotracker/20261110T023248Z
+    "IMG_7352 - 복사본.MOV": runs/98_cotracker/20261110T023248Z
+    IMG_7384.MOV: runs/105_cotracker_new_pair/20261110T042149Z
+    IMG_7385.MOV: runs/105_cotracker_new_pair/20261110T042149Z
+    IMG_7387.MOV: runs/105_cotracker_new_pair/20261110T042149Z
+    IMG_7388.MOV: runs/105_cotracker_new_pair/20261110T042149Z
+workers: 8
+video_workers: 8
+output:
+  root: runs/106_shape_change
+  results_yaml: results/106_shape_change.yaml
