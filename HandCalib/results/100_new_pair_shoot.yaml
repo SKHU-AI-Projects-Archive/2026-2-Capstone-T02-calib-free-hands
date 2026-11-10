@@ -1,0 +1,217 @@
+experiment: 100_new_pair_shoot
+run: runs/100_new_pair_shoot/20261110T032637Z
+code_commit: 92e575e
+git_dirty_at_run: false
+videos:
+  IMG_7384.MOV:
+    info:
+      angle_min: -109.912
+      angle_max: 67.206
+      sym_limit: 67.206
+      n_all: 636
+      n_plus: 407
+      n_minus: 414
+      n_symmetric: 504
+    all:
+      free_template:
+        f: 1514.802
+      ramp_11:
+        f: 1508.881
+        rms_px: 3.339
+        pitch_deg: 11.0
+        roll_deg: 0.0
+        desk_tilt_deg: 45.168
+        boundary: false
+        start: profile_6
+    plus:
+      free_template:
+        f: 2272.621
+      ramp_11:
+        f: 1268.169
+        rms_px: 1.677
+        pitch_deg: 11.0
+        roll_deg: 0.0
+        desk_tilt_deg: 44.056
+        boundary: false
+        start: free_template
+    minus:
+      free_template:
+        f: 2312.487
+      ramp_11:
+        f: 1505.132
+        rms_px: 3.211
+        pitch_deg: 11.0
+        roll_deg: 0.0
+        desk_tilt_deg: 45.3
+        boundary: false
+        start: profile_6
+    symmetric:
+      free_template:
+        f: 2238.444
+      ramp_11:
+        f: 1551.938
+        rms_px: 2.242
+        pitch_deg: 11.0
+        roll_deg: 0.0
+        desk_tilt_deg: 44.441
+        boundary: false
+        start: profile_3
+  IMG_7385.MOV:
+    info:
+      angle_min: -61.214
+      angle_max: 75.916
+      sym_limit: 61.214
+      n_all: 569
+      n_plus: 371
+      n_minus: 395
+      n_symmetric: 470
+    all:
+      free_template:
+        f: 3072.0
+      ramp_11:
+        f: 1717.805
+        rms_px: 3.471
+        pitch_deg: 11.0
+        roll_deg: 0.0
+        desk_tilt_deg: 45.954
+        boundary: false
+        start: profile_4
+    plus:
+      free_template:
+        f: 3072.0
+      ramp_11:
+        f: 1557.525
+        rms_px: 1.427
+        pitch_deg: 11.0
+        roll_deg: 0.0
+        desk_tilt_deg: 44.849
+        boundary: false
+        start: free_template
+    minus:
+      free_template:
+        f: 3072.0
+      ramp_11:
+        f: 1695.333
+        rms_px: 3.321
+        pitch_deg: 11.0
+        roll_deg: 0.0
+        desk_tilt_deg: 47.201
+        boundary: false
+        start: profile_4
+    symmetric:
+      free_template:
+        f: 3072.0
+      ramp_11:
+        f: 1699.386
+        rms_px: 3.412
+        pitch_deg: 11.0
+        roll_deg: 0.0
+        desk_tilt_deg: 46.555
+        boundary: false
+        start: free_template
+  IMG_7387.MOV:
+    info:
+      angle_min: -93.603
+      angle_max: 43.7
+      sym_limit: 43.7
+      n_all: 565
+      n_plus: 356
+      n_minus: 389
+      n_symmetric: 416
+    all:
+      free_template:
+        f: 2988.432
+      ramp_11:
+        f: 1378.161
+        rms_px: 3.38
+        pitch_deg: 11.0
+        roll_deg: 0.0
+        desk_tilt_deg: 46.018
+        boundary: false
+        start: profile_4
+    plus:
+      free_template:
+        f: 3072.0
+      ramp_11:
+        f: 1314.494
+        rms_px: 1.267
+        pitch_deg: 11.0
+        roll_deg: 0.0
+        desk_tilt_deg: 43.857
+        boundary: false
+        start: free_template
+    minus:
+      free_template:
+        f: 2143.416
+      ramp_11:
+        f: 1420.864
+        rms_px: 2.821
+        pitch_deg: 11.0
+        roll_deg: 0.0
+        desk_tilt_deg: 48.488
+        boundary: false
+        start: free_template
+    symmetric:
+      free_template:
+        f: 3072.0
+      ramp_11:
+        f: 1424.964
+        rms_px: 1.701
+        pitch_deg: 11.0
+        roll_deg: 0.0
+        desk_tilt_deg: 44.229
+        boundary: false
+        start: profile_4
+  IMG_7388.MOV:
+    info:
+      angle_min: -69.73
+      angle_max: 51.23
+      sym_limit: 51.23
+      n_all: 635
+      n_plus: 429
+      n_minus: 450
+      n_symmetric: 496
+    all:
+      free_template:
+        f: 3072.0
+      ramp_11:
+        f: 1667.632
+        rms_px: 4.214
+        pitch_deg: 11.0
+        roll_deg: 0.0
+        desk_tilt_deg: 44.042
+        boundary: false
+        start: profile_4
+    plus:
+      free_template:
+        f: 3072.0
+      ramp_11:
+        f: 1590.195
+        rms_px: 1.707
+        pitch_deg: 11.0
+        roll_deg: 0.0
+        desk_tilt_deg: 44.365
+        boundary: false
+        start: profile_5
+    minus:
+      free_template:
+        f: 3072.0
+      ramp_11:
+        f: 1821.593
+        rms_px: 3.51
+        pitch_deg: 11.0
+        roll_deg: 0.0
+        desk_tilt_deg: 48.017
+        boundary: false
+        start: profile_4
+    symmetric:
+      free_template:
+        f: 3072.0
+      ramp_11:
+        f: 1764.254
+        rms_px: 2.569
+        pitch_deg: 11.0
+        roll_deg: 0.0
+        desk_tilt_deg: 44.7
+        boundary: false
+        start: free_template
