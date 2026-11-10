@@ -1,0 +1,35 @@
+# 107: 중지 MCP(9)·약지 끝(16)을 뺀 관절 14개로 추정 (광류 사슬 추적점, 99·100 저장) (사용자 2026-11-10: "진행해줘."), 기록용, 판정 없음.
+# 106: 손을 30° 넘게 돌린 프레임에서 중지 MCP 와 약지 끝이 팀원 영상 4개 모두에서 본인 영상 16개 전부보다 평평한 손에서 크게 벗어났다. 이 두 관절을 빼면 팀원 오차가 줄어드는지 본다.
+# 점 = 광류 사슬 추적점, 99·100 저장 (첫 정지 구간 기준). 추정 = free_template -> 경사 11° 고정 (side-consistency 명령, 부분집합 all, 경사 하나). j16 결과(같은 점)는 각 점 실행의 결과와 비교.
+# 읽는 법(실행 전에 정함): 팀원 영상 오차가 j16 보다 뚜렷이 줄고(절댓값 10%p 이상) 본인 영상이 크게 나빠지지 않으면 두 관절이 원인이라는 근거. 기준 f 는 summary.md 에만.
+experiment:
+  name: 107_drop_two_joints_klt
+  seed: 42
+settings_config: configs/74b_multistart_rerun.yaml
+joint_set: j14_no_mMCP_rTIP
+joint_ids: [5, 6, 7, 8, 10, 11, 12, 13, 14, 15, 17, 18, 19, 20]
+code: {branch: optical_flow, commit: 48c9501, modules: [HandCalib/optical_flow/experiments.py]}
+ramps_deg: [11]
+videos: ["IMG_7354 - 복사본.MOV", "IMG_7355 - 복사본.MOV", "IMG_7351 - 복사본.MOV", "IMG_7352 - 복사본.MOV"]
+extra_videos:
+  - {file: IMG_7384.MOV, person: teammate, ref_f_px: 1672}
+  - {file: IMG_7385.MOV, person: self, ref_f_px: 1672}
+  - {file: IMG_7387.MOV, person: teammate, ref_f_px: 1672}
+  - {file: IMG_7388.MOV, person: self, ref_f_px: 1672}
+side_consistency:
+  margin_deg: 10
+  subsets: [all]
+  points:
+    "IMG_7354 - 복사본.MOV": runs/99_rotation_side/20261110T023248Z
+    "IMG_7355 - 복사본.MOV": runs/99_rotation_side/20261110T023248Z
+    "IMG_7351 - 복사본.MOV": runs/99_rotation_side/20261110T023248Z
+    "IMG_7352 - 복사본.MOV": runs/99_rotation_side/20261110T023248Z
+    IMG_7384.MOV: runs/100_new_pair_shoot/20261110T032637Z
+    IMG_7385.MOV: runs/100_new_pair_shoot/20261110T032637Z
+    IMG_7387.MOV: runs/100_new_pair_shoot/20261110T032637Z
+    IMG_7388.MOV: runs/100_new_pair_shoot/20261110T032637Z
+workers: 32
+video_workers: 8
+output:
+  root: runs/107_drop_two_joints_klt
+  results_yaml: results/107_drop_two_joints_klt.yaml
