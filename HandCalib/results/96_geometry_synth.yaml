@@ -1,0 +1,181 @@
+experiment: 96_geometry_synth
+run: runs/96_geometry_synth/20261110T014314Z
+code_commit: 4f926e0
+git_dirty_at_run: false
+videos:
+  IMG_7354 - 복사본.MOV:
+    info:
+      fit_rms_px: 3.09
+      n_frames: 120
+      residual_rms_px: 3.09
+      desk_tilt_deg: 57.613
+      turn_range_deg: 125.224
+      f_fit: 1737.866
+      ref: 34
+    real_check:
+      free_template:
+        f: 2196.685
+      ramp_11:
+        f: 1737.866
+        rms_px: 3.045
+        pitch_deg: 11.0
+        roll_deg: 0.0
+        desk_tilt_deg: 57.736
+        boundary: false
+        start: profile_6
+      free_5:
+        f: 1785.154
+        rms_px: 2.679
+        pitch_deg: 11.028
+        roll_deg: -4.108
+        desk_tilt_deg: 59.41
+        boundary: false
+        start: free_template
+      free_12:
+        f: 1785.154
+        rms_px: 2.679
+        pitch_deg: 11.028
+        roll_deg: -4.108
+        desk_tilt_deg: 59.41
+        boundary: false
+        start: free_template
+      free_19:
+        f: 1785.154
+        rms_px: 2.679
+        pitch_deg: 11.028
+        roll_deg: -4.108
+        desk_tilt_deg: 59.41
+        boundary: false
+        start: free_template
+  IMG_7355 - 복사본.MOV:
+    info:
+      fit_rms_px: 2.927
+      n_frames: 120
+      residual_rms_px: 2.927
+      desk_tilt_deg: 57.375
+      turn_range_deg: 116.139
+      f_fit: 1636.976
+      ref: 33
+    real_check:
+      free_template:
+        f: 3072.0
+      ramp_11:
+        f: 1636.976
+        rms_px: 2.92
+        pitch_deg: 11.0
+        roll_deg: 0.0
+        desk_tilt_deg: 57.4
+        boundary: false
+        start: profile_7
+      free_5:
+        f: 1573.759
+        rms_px: 2.552
+        pitch_deg: 9.764
+        roll_deg: -4.903
+        desk_tilt_deg: 60.036
+        boundary: false
+        start: profile_5
+      free_12:
+        f: 1573.759
+        rms_px: 2.552
+        pitch_deg: 9.572
+        roll_deg: -5.27
+        desk_tilt_deg: 60.036
+        boundary: false
+        start: profile_5
+      free_19:
+        f: 1573.759
+        rms_px: 2.552
+        pitch_deg: 9.764
+        roll_deg: -4.903
+        desk_tilt_deg: 60.036
+        boundary: false
+        start: profile_5
+  IMG_7351 - 복사본.MOV:
+    info:
+      fit_rms_px: 3.019
+      n_frames: 120
+      residual_rms_px: 3.019
+      desk_tilt_deg: 48.345
+      turn_range_deg: 125.466
+      f_fit: 1249.037
+      ref: 31
+    real_check:
+      free_template:
+        f: 1479.912
+      ramp_11:
+        f: 1249.037
+        rms_px: 2.987
+        pitch_deg: 11.0
+        roll_deg: 0.0
+        desk_tilt_deg: 48.396
+        boundary: false
+        start: profile_4
+      free_5:
+        f: 1264.17
+        rms_px: 1.727
+        pitch_deg: 7.264
+        roll_deg: -7.105
+        desk_tilt_deg: 53.114
+        boundary: false
+        start: profile_3
+      free_12:
+        f: 1264.17
+        rms_px: 1.727
+        pitch_deg: 7.217
+        roll_deg: -7.152
+        desk_tilt_deg: 53.114
+        boundary: false
+        start: profile_3
+      free_19:
+        f: 1264.17
+        rms_px: 1.727
+        pitch_deg: 7.264
+        roll_deg: -7.105
+        desk_tilt_deg: 53.114
+        boundary: false
+        start: profile_3
+  IMG_7352 - 복사본.MOV:
+    info:
+      fit_rms_px: 3.417
+      n_frames: 120
+      residual_rms_px: 3.417
+      desk_tilt_deg: 47.345
+      turn_range_deg: 128.746
+      f_fit: 1102.019
+      ref: 30
+    real_check:
+      free_template:
+        f: 3071.991
+      ramp_11:
+        f: 1102.019
+        rms_px: 3.314
+        pitch_deg: 11.0
+        roll_deg: 0.0
+        desk_tilt_deg: 47.546
+        boundary: false
+        start: profile_2
+      free_5:
+        f: 1210.416
+        rms_px: 2.185
+        pitch_deg: 9.118
+        roll_deg: -7.628
+        desk_tilt_deg: 51.903
+        boundary: false
+        start: profile_4
+      free_12:
+        f: 1210.416
+        rms_px: 2.185
+        pitch_deg: 8.697
+        roll_deg: -8.105
+        desk_tilt_deg: 51.903
+        boundary: false
+        start: profile_4
+      free_19:
+        f: 1210.416
+        rms_px: 2.185
+        pitch_deg: 9.118
+        roll_deg: -7.628
+        desk_tilt_deg: 51.903
+        boundary: false
+        start: profile_4
