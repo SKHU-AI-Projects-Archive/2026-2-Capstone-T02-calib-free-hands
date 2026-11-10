@@ -1,0 +1,51 @@
+# 114: 책상 운동 + 입체 손 모양 (사용자 2026-11-10: "진행해봐." - 본인 손에 맞춰진 두 부분, 점 종류(광류 사슬 = 평면으로 눌린 점)와 평면 손 모델을 함께 없애기), 기록용, 판정 없음.
+# 점 = CoTracker3 관절별 추적점(98: 16개, 105: 새 4개, 첫 정지 구간 기준, 2 프레임마다). 추정기 = optical_flow.desk3d: 책상 자세 + 프레임별 책상 법선 둘레 회전·책상 면 미끄러짐(기존과 같음),
+# 손 = 관절마다 높이를 가진 단단한 3D 모양(경사 가정 없음, 시작값만 경사 11° 평면), f. f 격자 8곳 고정 풀이 -> 이웃 해로 다시 풀기 -> 비용 낮은 3곳에서 f 까지 (dk_estimate_ms 와 같은 짜임).
+# 방식: j16 높이 제약 없음 / j16 z_rel 1.0 (손 높이 ~ 손 크기 정도까지) / j21 높이 제약 없음(입체 모양이면 손목·엄지도 씀). 코드 점검(합성, 결과로 쓰지 않음)은 커밋 메시지에.
+# 읽는 법(실행 전에 정함): 경사 가정 없이 본인 영상(16)과 팀원 영상(4)이 모두 대부분 ±10% 안이면 본인 손에 맞춰진 부분을 없앤 것. 팀원만 계속 낮으면 남은 원인은 손 변형 쪽. 기준 f 는 summary.md 에만.
+experiment:
+  name: 114_desk3d
+  seed: 42
+settings_config: configs/74b_multistart_rerun.yaml
+joint_set: j16
+code: {branch: optical_flow, commit: e6e1635, modules: [HandCalib/optical_flow/desk3d.py, HandCalib/optical_flow/experiments.py]}
+ramps_deg: [11]
+videos: []
+extra_videos:
+  - {file: IMG_7384.MOV, person: teammate, ref_f_px: 1672}
+  - {file: IMG_7385.MOV, person: self, ref_f_px: 1672}
+  - {file: IMG_7387.MOV, person: teammate, ref_f_px: 1672}
+  - {file: IMG_7388.MOV, person: self, ref_f_px: 1672}
+desk3d:
+  ramp_init: 11
+  variants:
+    - {name: j16, joint_ids: [5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20], z_rel: null}
+    - {name: j16_zrel1, joint_ids: [5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20], z_rel: 1.0}
+    - {name: j21, joint_ids: [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20], z_rel: null}
+  compare_runs: {cotracker_old: runs/98_cotracker/20261110T023248Z, cotracker_new: runs/105_cotracker_new_pair/20261110T042149Z}
+  points:
+    IMG_7346.MOV: runs/98_cotracker/20261110T023248Z
+    IMG_7347.MOV: runs/98_cotracker/20261110T023248Z
+    IMG_7348.MOV: runs/98_cotracker/20261110T023248Z
+    IMG_7349.MOV: runs/98_cotracker/20261110T023248Z
+    IMG_7350.MOV: runs/98_cotracker/20261110T023248Z
+    IMG_7351.MOV: runs/98_cotracker/20261110T023248Z
+    IMG_7352.MOV: runs/98_cotracker/20261110T023248Z
+    IMG_7353.MOV: runs/98_cotracker/20261110T023248Z
+    IMG_7354.MOV: runs/98_cotracker/20261110T023248Z
+    IMG_7355.MOV: runs/98_cotracker/20261110T023248Z
+    IMG_7356.MOV: runs/98_cotracker/20261110T023248Z
+    IMG_7357.MOV: runs/98_cotracker/20261110T023248Z
+    "IMG_7354 - 복사본.MOV": runs/98_cotracker/20261110T023248Z
+    "IMG_7355 - 복사본.MOV": runs/98_cotracker/20261110T023248Z
+    "IMG_7351 - 복사본.MOV": runs/98_cotracker/20261110T023248Z
+    "IMG_7352 - 복사본.MOV": runs/98_cotracker/20261110T023248Z
+    IMG_7384.MOV: runs/105_cotracker_new_pair/20261110T042149Z
+    IMG_7385.MOV: runs/105_cotracker_new_pair/20261110T042149Z
+    IMG_7387.MOV: runs/105_cotracker_new_pair/20261110T042149Z
+    IMG_7388.MOV: runs/105_cotracker_new_pair/20261110T042149Z
+workers: 64
+video_workers: 1
+output:
+  root: runs/114_desk3d
+  results_yaml: results/114_desk3d.yaml
