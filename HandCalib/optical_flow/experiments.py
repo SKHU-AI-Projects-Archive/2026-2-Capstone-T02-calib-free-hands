@@ -3,12 +3,18 @@
   python optical_flow/experiments.py tracking-plane  --config configs/90_tracking_plane.yaml
   python optical_flow/experiments.py dorsum-corners  --config configs/91_dorsum_clahe.yaml
   python optical_flow/experiments.py geometry-synth  --config configs/96_geometry_synth.yaml
+  python optical_flow/experiments.py pause-plane     --config configs/97_pause_plane.yaml
+  python optical_flow/experiments.py cotracker       --config configs/98_cotracker.yaml
+  python optical_flow/experiments.py rotation-side   --config configs/99_rotation_side.yaml
   python optical_flow/experiments.py <명령> --config <설정> results-yaml --run <실행 폴더>
 
 tracking-plane (90): 추적 사슬이 손의 어느 평면을 따라가는지 본다. 기준 프레임 -> 각 프레임의 사슬 변환을, 같은 두 프레임의 검출 관절로 맞춘
                      세 변환(손등 몸통 관절 / 손가락 관절 / j16)과 비교한다. 손 회전 각도 구간별로도 나눈다. f 추정 없음.
 dorsum-corners (91): 특징점을 손등 몸통에서만 고르기, 특징점을 고를 때만 대비 보정(CLAHE), 둘 다. 추적점과 검출 관절의 거리, 책상 운동 추정기의 f.
 geometry-synth (96): 영상의 카메라 기울기·손 모양·프레임별 움직임을 그대로 둔 합성 장면을 참 f 로 만들어 같은 추정을 돌린다 (촬영 구도·동작 탓인지, 실제 점 탓인지).
+pause-plane (97): 멈춤 구간마다 손 평면 방향을 알려진 f 로 호모그래피 분해해 손 경사가 자세마다 바뀌는지 본다 (실제 점, 합성 없음).
+rotation-side (99): 97 이 저장한 추적점을 손 방향으로 나눠(한쪽만 / 대칭으로 자름) 경사 고정 추정만 다시 돌린다.
+cotracker (98): 광류 사슬 대신 CoTracker3 로 기준 프레임의 관절을 직접 추적해 같은 추정을 돌린다.
 설정은 run_optical_flow.load_settings 로 74b 의 설정 사슬을 읽는다. 기준 f 와 오차는 summary.md 에만 적는다.
 """
 import argparse
@@ -672,6 +678,390 @@ def gs_real_results_yaml(run_dir: Path, own: dict) -> Path:
     return p
 
 # ----------------------------------------------------------------------------------------------------
+# 추적점 저장 (97 부터: 다음 실험이 프레임 추출·검출·추적을 다시 하지 않고 읽어 씀)
+# ----------------------------------------------------------------------------------------------------
+def save_points(run_root, file: str, x: dict, size_wh, ang: np.ndarray, times: np.ndarray):
+    """run_root/points/<영상 이름>.npz: 추적점 kp, 상자 box, 사용 프레임 use, 기준 프레임 ref, 크기, 프레임별 손 방향(검출, 도), 시각."""
+    d = Path(run_root) / "points"
+    d.mkdir(exist_ok=True)
+    np.savez_compressed(d / f"{Path(file).stem}.npz", kp=x["kp"], box=x["box"], use=x["use"], ref=int(x["ref"]), size=np.asarray(size_wh), hand_angle=ang, times=times)
+
+
+def load_points(points_run: str, file: str) -> dict:
+    """save_points 로 저장한 한 영상의 추적점 (estimate_args 가 받는 모양 + hand_angle, times)."""
+    z = np.load(hf.resolve(points_run) / "points" / f"{Path(file).stem}.npz")
+    return {"kp": z["kp"], "box": z["box"], "use": z["use"].astype(bool), "ref": int(z["ref"]), "size": tuple(int(v) for v in z["size"]), "hand_angle": z["hand_angle"], "times": z["times"]}
+
+# ----------------------------------------------------------------------------------------------------
+# 97: 멈춤 구간마다 손 평면의 기울기 (실제 점, 알려진 f)
+# ----------------------------------------------------------------------------------------------------
+def pp_pauses(tr: dict, size_wh, cfg: dict) -> list:
+    """멈춤 구간 목록 (choose_reference_pose 와 같은 규칙: still 규칙, 간격 pause_gap_frames 이하, min_pause_frames 개 이상)."""
+    rule = cfg["reference"]
+    motion = hf.od_select(tr["kp"], tr["mask"], tr["present"], tr["box"], tuple(size_wh), cfg["selection"])["motion"]
+    still = np.isfinite(motion) & (motion < float(cfg["selection"]["still_frac"])) & tr["present"]
+    return [np.asarray(g) for g in hf.hp_groups(np.flatnonzero(still), int(rule["pause_gap_frames"])) if len(g) >= int(rule["min_pause_frames"])]
+
+
+def pp_normals(P: list, K: np.ndarray) -> dict:
+    """멈춤마다의 점 P[k] (같은 관절, 픽셀) 로 첫 멈춤 -> 각 멈춤의 호모그래피를 구해 알려진 K 로 분해 (cv2.decomposeHomographyMat).
+    해 후보 중 두 시점 모두 점이 카메라 앞에 있는 것만 남기고, 첫 멈춤의 평면 법선이 쌍들 사이에서 가장 많이 일치하는 후보를 고른다.
+    반환: 첫 멈춤 기준 회전 R[k], 멈춤별 평면 법선 n[k] (카메라 좌표, 카메라 쪽을 향하게), 호모그래피 맞춤 잔차(px)."""
+    import cv2
+    Ki = np.linalg.inv(K)
+    cands, fitres = [], []
+    for k in range(1, len(P)):
+        Hm, _ = cv2.findHomography(P[0].astype(np.float64), P[k].astype(np.float64), 0)
+        y = np.c_[P[0], np.ones(len(P[0]))] @ Hm.T
+        fitres.append(float(np.sqrt(np.mean(np.sum((y[:, :2] / y[:, 2:3] - P[k]) ** 2, 1)))))
+        _, Rs, ts, ns = cv2.decomposeHomographyMat(Hm, K)
+        m0 = (np.c_[P[0], np.ones(len(P[0]))] @ Ki.T)
+        ok = []
+        for R, t, n in zip(Rs, ts, ns):
+            n, t = n.ravel(), t.ravel()
+            d = m0 @ n                                                  # 평면 n.X = 1 위의 점 X = m / (n.m): 앞에 있으려면 n.m > 0
+            if (d <= 0).any():
+                continue
+            X1 = (m0 / d[:, None]) @ R.T + t
+            if (X1[:, 2] <= 0).any():
+                continue
+            ok.append((R, n / np.linalg.norm(n)))
+        cands.append(ok)
+    allc = [c[1] for cs in cands for c in cs]
+    if not allc or any(not cs for cs in cands):
+        return {"failed": "호모그래피 분해에서 앞에 있는 해가 없음"}
+    score = [sum(min(np.degrees(np.arccos(np.clip(abs(a @ b[1]), -1, 1))) for b in cs) for cs in cands) for a in allc]
+    n0 = allc[int(np.argmin(score))]
+    Rk = [np.eye(3)] + [min(cs, key=lambda c: np.arccos(np.clip(abs(n0 @ c[1]), -1, 1)))[0] for cs in cands]
+    ns = [R @ n0 for R in Rk]
+    ns = [n if n[2] < 0 else -n for n in ns]                            # 카메라 쪽(-z)을 향하게
+    return {"R": Rk, "n": ns, "fit_rms_px": fitres}
+
+
+def pp_angles(out: dict) -> dict:
+    """책상 법선 = 첫 멈춤 대비 회전들의 회전축(회전각 가중 평균, dk_init 과 같은 방식). 멈춤마다: 손 평면과 책상 사이 각(손 경사), 손 평면과 카메라 광축 사이 각.
+    책상과 광축 사이 각(카메라 기울기)."""
+    import cv2
+    acc = np.zeros(3)
+    for R in out["R"][1:]:
+        rv = cv2.Rodrigues(R)[0].ravel()
+        acc += rv if acc @ rv >= 0 else -rv
+    a = acc / np.linalg.norm(acc)
+    if a[2] > 0:
+        a = -a
+    ang = lambda u, v: float(np.degrees(np.arccos(np.clip(abs(u @ v), -1.0, 1.0))))      # noqa: E731
+    z = np.array([0.0, 0.0, 1.0])
+    return {"desk_tilt_deg": ang(a, z), "hand_desk_deg": [ang(n, a) for n in out["n"]], "hand_cam_deg": [ang(n, z) for n in out["n"]],
+            "turn_deg": [float(np.degrees(np.linalg.norm(cv2.Rodrigues(R)[0]))) for R in out["R"]], "fit_rms_px": [0.0] + out["fit_rms_px"]}
+
+
+def pp_job(args):
+    """한 영상: 프레임·검출·광류 사슬(첫 정지 구간 기준) -> 멈춤 구간마다 j 관절의 중앙값(추적점 / 검출 관절) -> f 마다 손 평면 기울기.
+    f = 기준 f(reference) 와 fit_run 의 fit_key 추정 f(fit_run)."""
+    e, cfg, run_root = args
+    import cv2 as _cv2
+    _cv2.setNumThreads(1)
+    pc = cfg["pause_plane"]
+    fit = json.loads((hf.resolve(pc["fit_run"]) / "results.json").read_text())["real"][e["file"]][pc["fit_key"]]["f"]
+    fs = {"reference": float(e.get("ref_f_px") or cfg["ref_f"]["value"]), "fit_run": float(fit)}
+    fs = {k: fs[k] for k in pc["f_sources"]}
+    pngs, times, tr, (W, H), tmp = prepare(e, cfg, run_root)
+    try:
+        ref = rof.choose_reference_pose(tr, (W, H), cfg)
+        x = of.track_hand(pngs, tr["kp"], tr["present"], tr["box"], (W, H), cfg["tracking"], ref=ref)
+    finally:
+        shutil.rmtree(tmp, ignore_errors=True)
+    ids = cfg["joint_ids"]
+    ang = hand_angle(tr)
+    save_points(run_root, e["file"], x, (W, H), ang, times)
+    pauses = pp_pauses(tr, (W, H), cfg)
+    out = {"ref_t": float(times[ref]), "pauses": [], "by_points": {}}
+    P = {"tracked": [], "detected": []}
+    for g in pauses:
+        gt = g[x["use"][g] & np.isfinite(x["kp"][g][:, ids]).all((1, 2))]
+        gd = g[tr["present"][g] & np.isfinite(tr["kp"][g][:, ids]).all((1, 2))]
+        if len(gt) == 0 or len(gd) == 0:
+            continue
+        out["pauses"].append({"t0": float(times[g[0]]), "t1": float(times[g[-1]]), "hand_angle_deg": med(ang[g] - ang[np.isfinite(ang)][0])})
+        P["tracked"].append(np.median(x["kp"][gt][:, ids], 0))
+        P["detected"].append(np.median(tr["kp"][gd][:, ids], 0))
+    for src, Q in P.items():
+        out["by_points"][src] = {}
+        for name, f in fs.items():
+            K = np.array([[f, 0, W / 2.0], [0, f, H / 2.0], [0, 0, 1.0]])
+            r = pp_normals(Q, K) if len(Q) >= 3 else {"failed": f"멈춤 {len(Q)}개"}
+            out["by_points"][src][name] = r if "failed" in r else {"f": float(f), **pp_angles(r)}
+    return out, [f"  {e['file']}: 기준 {times[ref]:.1f} s, 멈춤 {len(out['pauses'])}개"]
+
+
+def pp_summary(res: dict, cfg: dict, own: dict) -> str:
+    pc = cfg["pause_plane"]
+    L = ["# 97 멈춤 구간마다 손 평면 기울기 summary", "",
+         f"**94 와 같은 광류 사슬(첫 정지 구간 기준)의 추적점과 MediaPipe 검출 관절({cfg['joint_set']})을 멈춤 구간마다 중앙값으로 모은다. 첫 멈춤 -> 각 멈춤의 호모그래피를 알려진 f 로 분해해 "
+         "멈춤마다 손 평면의 방향을 구하고, 첫 멈춤 대비 회전들의 회전축을 책상 법선으로 둔다. 손 경사 = 손 평면과 책상 사이 각. 기준 f(촬영 기기 체커보드)와 94 의 추정 f(경사 11° 고정) 두 가지로 계산. "
+         "합성 장면 없음, 판정 없음.**", "",
+         "- 손 경사가 멈춤마다 거의 같으면 '손을 돌리는 동안 기울기가 변한다'는 가설은 맞지 않는다. 카메라 기울기 = 책상 법선과 광축 사이 각(촬영 때 수평계 45°).",
+         "- 호모그래피 잔차 = 첫 멈춤 -> 그 멈춤의 평면 맞춤 잔차(px, 검출 관절은 평면이 아닌 만큼 커짐). 기준 f 는 이 파일에만.", ""]
+    for src, lab in (("tracked", "광류 추적점"), ("detected", "MediaPipe 검출 관절")):
+        L += [f"## {lab}", "", "| 영상 | 묶음 | f | 카메라 기울기 | 멈춤별 손 각도 | 멈춤별 손 경사 | 경사 범위 | 호모그래피 잔차 (px) |", "|---|---|---|---|---|---|---|---|"]
+        for e in cfg["videos"]:
+            d = res.get(e["file"]) or {}
+            for name in pc["f_sources"]:
+                x = (d.get("by_points", {}).get(src) or {}).get(name) or {}
+                lab_f = "기준 f" if name == "reference" else "94 추정 f"
+                if "hand_desk_deg" not in x:
+                    L.append(f"| {e['file']} | {e['person']} | {lab_f} | 실패: {x.get('failed')} | | | | |")
+                    continue
+                hd = x["hand_desk_deg"]
+                fv = f"{x['f']:.0f} ({lab_f})"
+                L.append(f"| {e['file']} | {e['person']} | {fv} | {x['desk_tilt_deg']:.1f}° | " + ", ".join(f"{p['hand_angle_deg']:+.0f}°" for p in d["pauses"]) + " | "
+                         + ", ".join(f"{v:.1f}°" for v in hd) + f" | {max(hd) - min(hd):.1f}° | " + ", ".join(f"{v:.1f}" for v in x["fit_rms_px"][1:]) + " |")
+        L.append("")
+    L += ["## 한계", "", "- 멈춤 구간 3~5개뿐이고, 호모그래피 분해는 점 16개의 작은 손에서 잡음에 민감하다. 손 평면 하나로 본 값이라 손가락 굽힘은 평균된다.",
+          "- 책상 법선은 손 회전축에서 구하므로, 손 경사가 멈춤마다 다르면 회전축도 조금 기운다.", ""]
+    return "\n".join(L) + "\n"
+
+
+def pp_results_yaml(run_dir: Path, own: dict) -> Path:
+    """97 의 값만: 영상·점 종류별, 94 추정 f 로 계산한 각도만 (기준 f 로 계산한 행은 f 값이 기준 f 라 넣지 않음, summary.md 에)."""
+    r = json.loads((run_dir / "results.json").read_text())["real"]
+    m = json.loads((run_dir / "metadata.json").read_text())
+    rv = lambda x: x if not isinstance(x, float) else (round(x, 3) if np.isfinite(x) else None)      # noqa: E731
+    deep = lambda d: {k: (deep(v) if isinstance(v, dict) else [rv(q) for q in v] if isinstance(v, list) else rv(v)) for k, v in d.items()}      # noqa: E731
+    out = {"experiment": own["experiment"]["name"], "run": str(run_dir.resolve().relative_to(hf.PROJECT_ROOT)), "code_commit": m["git"]["commit"][:7],
+           "git_dirty_at_run": m["git"]["git_dirty"], "videos": {}}
+    for f, d in r.items():
+        out["videos"][f] = {"ref_t": rv(d["ref_t"]), "pauses": [deep(p) for p in d["pauses"]],
+                            "by_points": {src: {k: deep(v) for k, v in x.items() if k != "reference"} for src, x in d["by_points"].items()}}
+    p = hf.resolve(own["output"]["results_yaml"])
+    p.write_text(yaml.safe_dump(hf.jsonable(out), allow_unicode=True, sort_keys=False))
+    return p
+
+
+# ----------------------------------------------------------------------------------------------------
+# 98: CoTracker3 로 관절 직접 추적 -> 같은 추정
+# ----------------------------------------------------------------------------------------------------
+def ct_job(args):
+    """한 영상: 프레임·검출 -> 기준 프레임(첫 정지 구간) -> CoTracker3 로 관절 21개 + 보조점 추적 (stride 프레임마다) -> 사용 프레임.
+    GPU = 작업 프로세스마다 하나 고정 (프로세스 번호 % GPU 수, 한 GPU 에 두 영상이 겹치지 않게 gpu_workers <= GPU 수). 사용 프레임 = 첫~마지막 검출 범위, 추적한 프레임, joint_ids 중 보이는 관절이 min_visible 개 이상, 보이는 점의 상자가 가장자리에 닿지 않음."""
+    i, e, cfg, run_root = args
+    import torch
+    from optical_flow import cotracker as ct
+    cc = cfg["cotracker"]
+    import multiprocessing as mp
+    dev = f"cuda:{(mp.current_process()._identity[0] - 1) % torch.cuda.device_count()}"
+    pngs, times, tr, (W, H), tmp = prepare(e, cfg, run_root)
+    try:
+        ref = rof.choose_reference_pose(tr, (W, H), cfg)
+        st = int(cc["stride"])
+        sel = np.arange(ref % st, len(pngs), st)
+        sp = ct.support_points(tr["kp"][ref], tr["box"][ref], (H, W), float(cfg["tracking"]["dilate_frac"]), float(cc["support_step_frac"]))
+        t0 = time.time()
+        model = ct.load_model(cc["hub_dir"], dev)
+        k, v = ct.track_points(model, [pngs[j] for j in sel], int(np.flatnonzero(sel == ref)[0]), np.r_[tr["kp"][ref], sp], float(cc["scale"]), dev)
+        el = time.time() - t0
+    finally:
+        shutil.rmtree(tmp, ignore_errors=True)
+    n = len(pngs)
+    kp = np.full((n, 21, 2), np.nan)
+    vis = np.zeros((n, 21), bool)
+    kp[sel], vis[sel] = k[:, :21], v[:, :21]
+    kp[~vis] = np.nan
+    ids = cfg["joint_ids"]
+    pres = np.flatnonzero(tr["present"])
+    inside = np.zeros(n, bool)
+    inside[pres[0]:pres[-1] + 1] = True
+    enough = vis[:, ids].sum(1) >= int(cc["min_visible"])
+    box = np.full((n, 4), np.nan)
+    hv = vis.any(1)
+    box[hv] = np.c_[np.nanmin(kp[hv], 1), np.nanmax(kp[hv], 1)]
+    edge = np.zeros(n, bool)
+    edge[hv] = of.edge_flags(box[hv], np.ones(hv.sum(), bool), W, H)
+    use = inside & enough & ~edge & hv
+    dr = {g: med(region_drift(kp, tr["kp"], tr["box"], use & tr["present"], j)) for g, j in (("wrist", [0]), ("thumb", [1, 2, 3, 4]), ("j16", list(range(5, 21))))}
+    x = {"kp": kp, "box": box, "use": use, "size": (W, H), "ref": ref, "breaks": 0}
+    save_points(run_root, e["file"], x, (W, H), hand_angle(tr), times)
+    return x, {"ref_t": float(times[ref]), "n_tracked": int(len(sel)), "n_support": int(len(sp)), "n_use": int(use.sum()), "visible_frac": vis[sel][:, ids].mean().item(),
+               "drift_pct": dr, "track_s": el, "device": dev}
+
+
+def ct_run(cfg: dict, own: dict, log, run_root: Path) -> dict:
+    """98: 영상마다 ct_job (GPU 수만큼 동시에), 그다음 94 와 같은 추정 (free_template -> 경사 고정, 함께 추정)."""
+    import multiprocessing as mp
+    from concurrent.futures import ProcessPoolExecutor
+    pts, info = {}, {}
+    with ProcessPoolExecutor(max_workers=int(cfg["cotracker"]["gpu_workers"]), mp_context=mp.get_context("spawn")) as ex:
+        for e, (x, inf) in zip(cfg["videos"], ex.map(ct_job, [(i, e, cfg, str(run_root)) for i, e in enumerate(cfg["videos"])])):
+            pts[e["file"]], info[e["file"]] = x, inf
+            log(f"  {e['file']}: 기준 {inf['ref_t']:.1f} s, 추적 프레임 {inf['n_tracked']}, 보조점 {inf['n_support']}, 사용 {inf['n_use']}, 보임 {inf['visible_frac']:.2f}, "
+                f"검출 관절과 거리 손목 {inf['drift_pct']['wrist']}, j16 {inf['drift_pct']['j16']} ({inf['track_s']:.0f} s, {inf['device']})")
+    files = [e["file"] for e in cfg["videos"]]
+    with ProcessPoolExecutor(max_workers=int(cfg["workers"]), mp_context=mp.get_context("spawn")) as ex:
+        fts = dict(zip(files, ex.map(hf.tl_template_job, [rof.estimate_args(cfg, pts[f]) for f in files], chunksize=1)))
+    todo = [(f"ramp_{r:g}", "ramp_fixed", r) for r in cfg["ramps_deg"]] + [(f"free_{r:g}", "ramp_free", r) for r in cfg["free_starts_deg"]]
+    res, jobs, keys = {}, [], []
+    for f in files:
+        x = pts[f]
+        grid = hf.f_grid(cfg["pipeline"]["estimate"], max(*x["size"]))
+        A = fts[f].get("A")
+        res[f] = {"info": info[f], "ref": x["ref"], "n_use": int(x["use"].sum()),
+                  "free_template": {"failed": fts[f].get("failed")} if A is None else {"f": float(A["f"]), "boundary": hf.od_boundary(float(A["f"]), grid), "rms_px": float((A.get("ba") or {}).get("rms_px", np.nan))}}
+        if A is None:
+            continue
+        for mk, mode, r in todo:
+            jobs.append(rof.estimate_args(cfg, x, A) + (mode, r))
+            keys.append((f, mk))
+    log(f"  추정 {len(jobs)}건")
+    with ProcessPoolExecutor(max_workers=int(cfg["workers"]), mp_context=mp.get_context("spawn")) as ex:
+        for (f, mk), o in zip(keys, ex.map(hf.ms2_job, jobs, chunksize=1)):
+            res[f][mk] = o
+    return res
+
+
+def ct_summary(res: dict, cfg: dict, own: dict) -> str:
+    cc = cfg["cotracker"]
+    prev = json.loads((hf.resolve(own["compare_run"]) / "results.json").read_text())["real"]
+    best = lambda d: min([d[k] for k in d if k.startswith("free_") and isinstance(d[k], dict) and d[k].get("cost") not in (None, float("inf"))], key=lambda x: x["cost"], default=None)      # noqa: E731
+    head = ["", f"- 점: {cfg['joint_set']}, 경사 고정 {cfg['ramps_deg']}, 함께 추정 시작 {cfg['free_starts_deg']} 중 비용 최소. 기준 f 는 이 파일에만. * = f 탐색 범위 끝.",
+            f"- 비교: {own['compare_run']} (94, 광류 사슬, 같은 추정)", "",
+            "| 영상 | 묶음 | 기준 f | 추정 | CoTracker3 f (오차) | 94 광류 사슬 f (오차) |", "|---|---|---|---|---|---|"]
+    for e in cfg["videos"]:
+        r, p = res.get(e["file"]) or {}, prev.get(e["file"]) or {}
+        rf = float(e.get("ref_f_px") or cfg["ref_f"]["value"])
+        fmt = lambda x: "-" if not x or "f" not in x else f"{x['f']:.1f} ({100 * (x['f'] / rf - 1):+.1f}%)" + ("*" if x.get("boundary") else "") + (f", 경사 {x['pitch_deg']:.1f}°" if "pitch_deg" in x and x is not None and x.get("start") and False else "")      # noqa: E731
+        for k in ["free_template"] + [f"ramp_{r_:g}" for r_ in cfg["ramps_deg"]] + ["free_best"]:
+            x, y = (best(r), best(p)) if k == "free_best" else (r.get(k), p.get(k))
+            ex_ = lambda z: "" if k != "free_best" or not z or "pitch_deg" not in z else f", 경사 {z['pitch_deg']:.1f}°"      # noqa: E731
+            head.append(f"| {e['file']} | {e['person']} | {rf:g} | {'함께 추정' if k == 'free_best' else k} | {fmt(x)}{ex_(x)} | {fmt(y)}{ex_(y)} |")
+    L = ["# 98 CoTracker3 관절 추적 summary", "",
+         f"**94 와 같은 기준 프레임(첫 정지 구간)의 MediaPipe 관절 21개를 광류 사슬 대신 CoTracker3(오프라인, {cc['stride']} 프레임마다, 보조점 손 영역 격자)로 직접 추적하고, 94 와 같은 추정을 돌린다. "
+         "비교 실행 = 94(광류 사슬). 판정 없음.**", "",
+         "## 추적 정보", "", "| 영상 | 기준 시각 | 추적 프레임 | 보조점 | 사용 프레임 | 관절 보임 비율 | 검출 관절과 거리 손목 (%) | 엄지 (%) | j16 (%) |", "|---|---|---|---|---|---|---|---|---|"]
+    for f, d in res.items():
+        i = d["info"]
+        fm = lambda v: "-" if v is None else f"{v:.1f}"      # noqa: E731
+        L.append(f"| {f} | {i['ref_t']:.1f} s | {i['n_tracked']} | {i['n_support']} | {i['n_use']} | {i['visible_frac']:.2f} | {fm(i['drift_pct']['wrist'])} | {fm(i['drift_pct']['thumb'])} | {fm(i['drift_pct']['j16'])} |")
+    L += ["", "- 거리 = 추적점과 그 프레임 검출 관절의 거리 중앙값, 검출 손 상자 긴 변 대비 %. 검출기 오차가 섞인다.", "", "## f"] + head
+    return "\n".join(L) + "\n"
+
+
+def ct_results_yaml(run_dir: Path, own: dict) -> Path:
+    """98 의 값만 (기준 f, 오차 없음): run_optical_flow.results_yaml 과 같은 항목 + 추적 정보."""
+    r = json.loads((run_dir / "results.json").read_text())["real"]
+    m = json.loads((run_dir / "metadata.json").read_text())
+    rv = lambda x: x if not isinstance(x, float) else (round(x, 3) if np.isfinite(x) else None)      # noqa: E731
+    deep = lambda d: {k: (deep(v) if isinstance(v, dict) else rv(v)) for k, v in d.items()}      # noqa: E731
+    keys = ("f", "rms_px", "pitch_deg", "roll_deg", "desk_tilt_deg", "boundary", "start")
+    out = {"experiment": own["experiment"]["name"], "run": str(run_dir.resolve().relative_to(hf.PROJECT_ROOT)), "code_commit": m["git"]["commit"][:7],
+           "git_dirty_at_run": m["git"]["git_dirty"], "videos": {}}
+    for f, d in r.items():
+        out["videos"][f] = {k: (deep(v) if k == "info" else {kk: rv(v[kk]) for kk in keys if kk in v} if isinstance(v, dict) and "f" in v else v if not isinstance(v, float) else rv(v))
+                            for k, v in d.items()}
+    p = hf.resolve(own["output"]["results_yaml"])
+    p.write_text(yaml.safe_dump(hf.jsonable(out), allow_unicode=True, sort_keys=False))
+    return p
+
+
+# ----------------------------------------------------------------------------------------------------
+# 99: 회전 방향 비대칭 (저장된 추적점, 한쪽만 / 대칭으로 자르기)
+# ----------------------------------------------------------------------------------------------------
+def rs_subsets(x: dict, margin: float) -> dict:
+    """손 방향(첫 검출 대비, 도)으로 사용 프레임을 나눈다. all = 그대로, plus = 각도 >= -margin (정면 + '+' 쪽), minus = 각도 <= margin (정면 + '-' 쪽),
+    symmetric = |각도| <= L, L = 사용 프레임의 '+' 쪽 최대와 '-' 쪽 최대(절댓값) 중 작은 것 (많이 돈 쪽을 잘라 양쪽 범위를 같게)."""
+    a = x["hand_angle"] - x["hand_angle"][np.isfinite(x["hand_angle"])][0]
+    u = x["use"] & np.isfinite(a)
+    L = float(min(np.max(a[u]), -np.min(a[u])))
+    return {"all": x["use"], "plus": u & (a >= -margin), "minus": u & (a <= margin), "symmetric": u & (np.abs(a) <= L)}, \
+        {"angle_min": float(np.min(a[u])), "angle_max": float(np.max(a[u])), "sym_limit": L}
+
+
+def rs_load(args):
+    """한 영상: points_run 이 있으면 저장된 추적점을 읽고(프레임 추출·검출·추적 없음), 없으면 94 와 같은 광류 사슬(첫 정지 구간 기준)을 만들어 이 실행에 저장한다."""
+    e, cfg, run_root = args
+    pr = cfg["rotation_side"].get("points_run")
+    if pr:
+        x = load_points(pr, e["file"])
+        return x, [f"  {e['file']}: 저장된 추적점, 기준 {x['times'][x['ref']]:.1f} s, 사용 {int(x['use'].sum())}"]
+    import cv2
+    cv2.setNumThreads(1)
+    pngs, times, tr, (W, H), tmp = prepare(e, cfg, run_root)
+    try:
+        ref = rof.choose_reference_pose(tr, (W, H), cfg)
+        x = of.track_hand(pngs, tr["kp"], tr["present"], tr["box"], (W, H), cfg["tracking"], ref=ref)
+    finally:
+        shutil.rmtree(tmp, ignore_errors=True)
+    save_points(run_root, e["file"], x, (W, H), hand_angle(tr), times)
+    x = load_points(str(run_root), e["file"])
+    return x, [f"  {e['file']}: 추적 (저장), 기준 {times[ref]:.1f} s, 사용 {int(x['use'].sum())}"]
+
+
+def rs_run(cfg: dict, vid: dict, log) -> dict:
+    """99: 영상 x 부분집합마다 free_template -> 경사 고정 추정만 (함께 추정 없음, 시간 단축)."""
+    import multiprocessing as mp
+    from concurrent.futures import ProcessPoolExecutor
+    rc = cfg["rotation_side"]
+    res, items = {}, []
+    for f, x in vid.items():
+        subs, info = rs_subsets(x, float(rc["margin_deg"]))
+        res[f] = {"info": {**info, **{f"n_{k}": int(v.sum()) for k, v in subs.items()}}}
+        for k in rc["subsets"]:
+            items.append((f, k, {**x, "use": subs[k]}))
+    with ProcessPoolExecutor(max_workers=int(cfg["workers"]), mp_context=mp.get_context("spawn")) as ex:
+        fts = list(ex.map(hf.tl_template_job, [rof.estimate_args(cfg, y) for _, _, y in items], chunksize=1))
+    jobs, keys = [], []
+    for (f, k, y), ft in zip(items, fts):
+        A = ft.get("A")
+        res[f][k] = {"free_template": {"failed": ft.get("failed")} if A is None else {"f": float(A["f"])}}
+        if A is None:
+            continue
+        for r in cfg["ramps_deg"]:
+            jobs.append(rof.estimate_args(cfg, y, A) + ("ramp_fixed", r))
+            keys.append((f, k, f"ramp_{r:g}"))
+    log(f"  추정 {len(jobs)}건")
+    with ProcessPoolExecutor(max_workers=int(cfg["workers"]), mp_context=mp.get_context("spawn")) as ex:
+        for (f, k, mk), o in zip(keys, ex.map(hf.ms2_job, jobs, chunksize=1)):
+            res[f][k][mk] = o
+    return res
+
+
+def rs_summary(res: dict, cfg: dict, own: dict) -> str:
+    rc = cfg["rotation_side"]
+    rk = [f"ramp_{r:g}" for r in cfg["ramps_deg"]]
+    vids = {e["file"]: e for e in cfg["videos"]}
+    lab = {"all": "전체 (94 와 같아야 함)", "plus": "정면 + '+' 쪽", "minus": "정면 + '-' 쪽", "symmetric": "양쪽 같은 각도까지"}
+    L = ["# 99 회전 방향 비대칭 summary", "",
+         f"**{rc['points_run']} 에 저장된 추적점(94 와 같은 광류 사슬, 첫 정지 구간 기준)을 손 방향(검출 손목 -> 중지 MCP, 첫 검출 대비)으로 나눠, 같은 추정(free_template -> 경사 "
+         f"{cfg['ramps_deg']}° 고정)을 따로 돌린다. 한쪽 = 그쪽 + 정면(반대쪽 {rc['margin_deg']}° 까지). 대칭 = 덜 돈 쪽의 최대 각도까지 양쪽을 자름. 함께 추정은 돌리지 않음(시간 단축). 판정 없음.**", "",
+         "- 기준 f 는 이 파일에만. * = f 탐색 범위 끝. 각도의 +/- 는 화면 속 손 방향 기준(실제 좌우와의 대응은 영상으로 확인).", "",
+         "| 영상 | 묶음 | 기준 f | 손 방향 범위 | 부분집합 | 사용 프레임 | " + " | ".join(f"경사 {k[5:]}° 고정" for k in rk) + " | free_template |", "|---|---|---|---|---|---|" + "---|" * len(rk) + "---|"]
+    for f, d in res.items():
+        e, i = vids[f], d["info"]
+        rf = float(e.get("ref_f_px") or cfg["ref_f"]["value"])
+        fmt = lambda x: "-" if not x or "f" not in x else f"{x['f']:.0f} ({100 * (x['f'] / rf - 1):+.1f}%)" + ("*" if x.get("boundary") else "")      # noqa: E731
+        for k in rc["subsets"]:
+            o = d.get(k) or {}
+            rng = f"{i['angle_min']:+.0f}° ~ {i['angle_max']:+.0f}°" + (f" (대칭 ±{i['sym_limit']:.0f}°)" if k == "symmetric" else "")
+            L.append(f"| {f} | {e['person']} | {rf:g} | {rng} | {lab[k]} | {i['n_' + k]} | " + " | ".join(fmt(o.get(m)) for m in rk) + f" | {fmt(o.get('free_template'))} |")
+    L += ["", "## 한계", "", "- 한쪽만 쓰면 회전 범위가 반으로 줄어 f 정보도 줄어든다(흩어짐이 커질 수 있음). 영상 4개.", ""]
+    return "\n".join(L) + "\n"
+
+
+def rs_results_yaml(run_dir: Path, own: dict) -> Path:
+    """99 의 값만: 영상·부분집합별 f, RMS, 사용 프레임 (기준 f, 오차 없음)."""
+    r = json.loads((run_dir / "results.json").read_text())["real"]
+    m = json.loads((run_dir / "metadata.json").read_text())
+    rv = lambda x: x if not isinstance(x, float) else (round(x, 3) if np.isfinite(x) else None)      # noqa: E731
+    keys = ("f", "rms_px", "pitch_deg", "roll_deg", "desk_tilt_deg", "boundary", "start")
+    out = {"experiment": own["experiment"]["name"], "run": str(run_dir.resolve().relative_to(hf.PROJECT_ROOT)), "code_commit": m["git"]["commit"][:7],
+           "git_dirty_at_run": m["git"]["git_dirty"], "videos": {}}
+    for f, d in r.items():
+        out["videos"][f] = {k: ({kk: rv(vv) for kk, vv in v.items()} if k == "info" else {mk: {kk: rv(o[kk]) for kk in keys if kk in o} for mk, o in v.items()}) for k, v in d.items()}
+    p = hf.resolve(own["output"]["results_yaml"])
+    p.write_text(yaml.safe_dump(hf.jsonable(out), allow_unicode=True, sort_keys=False))
+    return p
+
+
+# ----------------------------------------------------------------------------------------------------
 # 실행
 # ----------------------------------------------------------------------------------------------------
 def results_yaml(cmd: str, run_dir: Path, own: dict) -> Path:
@@ -724,9 +1114,18 @@ def jt_results_yaml(run_dir: Path, own: dict) -> Path:
     return p
 
 
+class _nullpool:
+    """작업 풀이 필요 없는 명령용 (with 문 자리 채우기)."""
+    def __enter__(self):
+        return None
+
+    def __exit__(self, *a):
+        return False
+
+
 def main(argv=None):
     ap = argparse.ArgumentParser(description="광류 방식 원인 확인 실험")
-    ap.add_argument("cmd", choices=["tracking-plane", "dorsum-corners", "two-plane", "joint-track-video", "geometry-synth"])
+    ap.add_argument("cmd", choices=["tracking-plane", "dorsum-corners", "two-plane", "joint-track-video", "geometry-synth", "pause-plane", "cotracker", "rotation-side"])
     ap.add_argument("--config", required=True)
     ap.add_argument("--out", default=None)
     ap.add_argument("--videos", type=int, default=None, help="시험 실행: 앞의 N 개 영상만, 추정 1건씩")
@@ -737,11 +1136,12 @@ def main(argv=None):
     text = Path(a.config).read_text()
     own = yaml.safe_load(text)
     if a.sub == "results-yaml":
-        print(tw_results_yaml(hf.resolve(a.run), own) if a.cmd == "two-plane" else gs_real_results_yaml(hf.resolve(a.run), own) if a.cmd == "geometry-synth" else jt_results_yaml(hf.resolve(a.run), own) if a.cmd == "joint-track-video"
+        print(tw_results_yaml(hf.resolve(a.run), own) if a.cmd == "two-plane" else gs_real_results_yaml(hf.resolve(a.run), own) if a.cmd == "geometry-synth" else pp_results_yaml(hf.resolve(a.run), own) if a.cmd == "pause-plane"
+              else ct_results_yaml(hf.resolve(a.run), own) if a.cmd == "cotracker" else rs_results_yaml(hf.resolve(a.run), own) if a.cmd == "rotation-side" else jt_results_yaml(hf.resolve(a.run), own) if a.cmd == "joint-track-video"
               else results_yaml(a.cmd, hf.resolve(a.run), own))
         return None
     cfg = rof.load_settings(own)
-    cfg.update({k: own[k] for k in ("variants", "clahe", "two_plane", "joint_track", "render", "reference", "geometry_synth") if k in own})
+    cfg.update({k: own[k] for k in ("variants", "clahe", "two_plane", "joint_track", "render", "reference", "geometry_synth", "pause_plane", "cotracker", "rotation_side") if k in own})
     if a.videos:
         cfg["videos"] = cfg["videos"][:a.videos]
         cfg["free_starts_deg"] = []
@@ -760,15 +1160,26 @@ def main(argv=None):
         shutil.copytree(hf.resolve(own["detection_cache_from"]), run_root / "detection_cache")
     import multiprocessing as mp
     from concurrent.futures import ProcessPoolExecutor
-    job = {"tracking-plane": tp_job, "dorsum-corners": dc_job, "two-plane": tw_points, "joint-track-video": jt_job, "geometry-synth": rof.video_points}[a.cmd]
+    job = {"tracking-plane": tp_job, "dorsum-corners": dc_job, "two-plane": tw_points, "joint-track-video": jt_job, "geometry-synth": rof.video_points, "pause-plane": pp_job, "rotation-side": rs_load}.get(a.cmd)
     vid = {}
-    with ProcessPoolExecutor(max_workers=int(cfg["video_workers"]), mp_context=mp.get_context("spawn")) as ex:
-        for e, (x, lines) in zip(cfg["videos"], ex.map(job, [(e, cfg, str(run_root)) for e in cfg["videos"]])):
+    if a.cmd == "cotracker":                                           # GPU 작업 + 추정을 ct_run 이 한꺼번에
+        res = ct_run(cfg, own, log, run_root)
+        job = None
+    with ProcessPoolExecutor(max_workers=int(cfg["video_workers"]), mp_context=mp.get_context("spawn")) if job else _nullpool() as ex:
+        for e, (x, lines) in (zip(cfg["videos"], ex.map(job, [(e, cfg, str(run_root)) for e in cfg["videos"]])) if job else []):
             vid[e["file"]] = x
             for s in lines:
                 log(s)
     log(f"  추적: {time.time() - t0:.0f} s")
-    if a.cmd == "tracking-plane":
+    if a.cmd == "cotracker":
+        text_sum = ct_summary(res, cfg, own)
+    elif a.cmd == "rotation-side":
+        res = rs_run(cfg, vid, log)
+        text_sum = rs_summary(res, cfg, own)
+    elif a.cmd == "pause-plane":
+        res = vid
+        text_sum = pp_summary(res, cfg, own)
+    elif a.cmd == "tracking-plane":
         res = vid
         text_sum = tp_summary(res, cfg)
     elif a.cmd == "joint-track-video":
