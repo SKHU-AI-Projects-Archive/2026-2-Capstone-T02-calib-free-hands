@@ -656,6 +656,21 @@ def gs_results_yaml(run_dir: Path, own: dict) -> Path:
     return p
 
 
+def gs_real_results_yaml(run_dir: Path, own: dict) -> Path:
+    """96 의 값만, 실제 점 장면(real_check)과 장면 정보만. 합성 장면은 참 f 를 기준 f 로 두어 그 f 값이 기준 f 를 드러내므로 넣지 않는다 (92 와 같은 규칙, 값은 summary.md)."""
+    r = json.loads((run_dir / "results.json").read_text())["real"]
+    m = json.loads((run_dir / "metadata.json").read_text())
+    rv = lambda x: x if not isinstance(x, float) else (round(x, 3) if np.isfinite(x) else None)      # noqa: E731
+    keys = ("f", "rms_px", "pitch_deg", "roll_deg", "desk_tilt_deg", "boundary", "start")
+    out = {"experiment": own["experiment"]["name"], "run": str(run_dir.resolve().relative_to(hf.PROJECT_ROOT)), "code_commit": m["git"]["commit"][:7],
+           "git_dirty_at_run": m["git"]["git_dirty"], "videos": {}}
+    for f, d in r.items():
+        out["videos"][f] = {"info": {k: rv(v) for k, v in d["info"].items()},
+                            "real_check": {mk: ({kk: rv(v[kk]) for kk in keys if kk in v} if isinstance(v, dict) else v) for mk, v in d.get("real_check", {}).items()}}
+    p = hf.resolve(own["output"]["results_yaml"])
+    p.write_text(yaml.safe_dump(hf.jsonable(out), allow_unicode=True, sort_keys=False))
+    return p
+
 # ----------------------------------------------------------------------------------------------------
 # 실행
 # ----------------------------------------------------------------------------------------------------
@@ -722,7 +737,7 @@ def main(argv=None):
     text = Path(a.config).read_text()
     own = yaml.safe_load(text)
     if a.sub == "results-yaml":
-        print(tw_results_yaml(hf.resolve(a.run), own) if a.cmd == "two-plane" else gs_results_yaml(hf.resolve(a.run), own) if a.cmd == "geometry-synth" else jt_results_yaml(hf.resolve(a.run), own) if a.cmd == "joint-track-video"
+        print(tw_results_yaml(hf.resolve(a.run), own) if a.cmd == "two-plane" else gs_real_results_yaml(hf.resolve(a.run), own) if a.cmd == "geometry-synth" else jt_results_yaml(hf.resolve(a.run), own) if a.cmd == "joint-track-video"
               else results_yaml(a.cmd, hf.resolve(a.run), own))
         return None
     cfg = rof.load_settings(own)
