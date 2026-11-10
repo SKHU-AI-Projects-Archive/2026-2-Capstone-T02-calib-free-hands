@@ -6,6 +6,8 @@
   python optical_flow/experiments.py pause-plane     --config configs/97_pause_plane.yaml
   python optical_flow/experiments.py cotracker       --config configs/98_cotracker.yaml
   python optical_flow/experiments.py rotation-side   --config configs/99_rotation_side.yaml
+  python optical_flow/experiments.py shape3d         --config configs/101_cotracker_shape3d.yaml
+  python optical_flow/experiments.py points-video    --config configs/102_points_video_new_pair.yaml
   python optical_flow/experiments.py <명령> --config <설정> results-yaml --run <실행 폴더>
 
 tracking-plane (90): 추적 사슬이 손의 어느 평면을 따라가는지 본다. 기준 프레임 -> 각 프레임의 사슬 변환을, 같은 두 프레임의 검출 관절로 맞춘
@@ -13,6 +15,7 @@ tracking-plane (90): 추적 사슬이 손의 어느 평면을 따라가는지 �
 dorsum-corners (91): 특징점을 손등 몸통에서만 고르기, 특징점을 고를 때만 대비 보정(CLAHE), 둘 다. 추적점과 검출 관절의 거리, 책상 운동 추정기의 f.
 geometry-synth (96): 영상의 카메라 기울기·손 모양·프레임별 움직임을 그대로 둔 합성 장면을 참 f 로 만들어 같은 추정을 돌린다 (촬영 구도·동작 탓인지, 실제 점 탓인지).
 pause-plane (97): 멈춤 구간마다 손 평면 방향을 알려진 f 로 호모그래피 분해해 손 경사가 자세마다 바뀌는지 본다 (실제 점, 합성 없음).
+shape3d (101): 저장된 점에 free_template / free_shape3d(손 3D 모양 + f)를 돌린다. points-video: 저장된 추적점과 검출 관절을 그린 점 영상.
 rotation-side (99): 97 이 저장한 추적점을 손 방향으로 나눠(한쪽만 / 대칭으로 자름) 경사 고정 추정만 다시 돌린다.
 cotracker (98): 광류 사슬 대신 CoTracker3 로 기준 프레임의 관절을 직접 추적해 같은 추정을 돌린다.
 설정은 run_optical_flow.load_settings 로 74b 의 설정 사슬을 읽는다. 기준 f 와 오차는 summary.md 에만 적는다.
@@ -1062,6 +1065,169 @@ def rs_results_yaml(run_dir: Path, own: dict) -> Path:
 
 
 # ----------------------------------------------------------------------------------------------------
+# 점 영상 (저장된 추적점 + MediaPipe 검출 관절을 원본 프레임에 그림)
+# ----------------------------------------------------------------------------------------------------
+def pv_render(path: Path, pngs: list, times: np.ndarray, frames: np.ndarray, kd: np.ndarray, kc: np.ndarray, use: np.ndarray, rc: dict, title: str):
+    """점 영상: 왼쪽 전체 화면, 오른쪽 손 확대. 주황 = MediaPipe 검출 관절, 파랑 = 추적점(f 추정에 쓰는 점, 기준 프레임 관절을 광류 사슬로 옮긴 것; 속 빈 점 = 그 프레임은 추정에 안 씀).
+    jt_render 와 같은 화면 구성. 프레임 이미지는 임시 폴더에 그린 뒤 ffmpeg 로 묶고(메타데이터 제거) 지운다."""
+    import subprocess
+    import tempfile
+    import cv2
+    from PIL import Image, ImageDraw, ImageFont
+    font = lambda s: ImageFont.truetype(rc["font"], s, index=int(rc.get("font_index", 0)))      # noqa: E731
+    LW, RW, HD = int(rc["left_width"]), int(rc["zoom_size"]), 70
+    ORANGE, BLUE = (235, 104, 52), (42, 120, 214)
+    with tempfile.TemporaryDirectory(dir=str(path.parent)) as td:
+        for n_out, i in enumerate(frames):
+            img = cv2.imread(pngs[i])[:, :, ::-1]
+            H, W = img.shape[:2]
+            sc = LW / W
+            left = Image.fromarray(img).resize((LW, int(round(H * sc))))
+            pts = np.concatenate([x[np.isfinite(x).all(1)] for x in (kd[i], kc[i])] or [np.zeros((0, 2))])
+            if len(pts):
+                cx, cy = (pts.min(0) + pts.max(0)) / 2
+                half = max(60.0, float((pts.max(0) - pts.min(0)).max()) * float(rc["crop_margin"]) / 2)
+            else:
+                cx, cy, half = W / 2, H / 2, H / 4
+            box = (int(cx - half), int(cy - half), int(cx + half), int(cy + half))
+            zoom = Image.fromarray(img).crop(box).resize((RW, RW))
+            zs = RW / (2 * half)
+            canvas = Image.new("RGB", (LW + RW, max(left.height, RW) + HD), (255, 255, 255))
+            canvas.paste(left, (0, HD))
+            canvas.paste(zoom, (LW, HD))
+            d = ImageDraw.Draw(canvas)
+            for kp, col, rad, hollow in ((kd[i], ORANGE, 4, False), (kc[i], BLUE, 5, not bool(use[i]))):
+                for j in range(len(kp)):
+                    if not np.isfinite(kp[j]).all():
+                        continue
+                    for (ox, oy, s_, r_) in ((0, HD, sc, rad - 1), (LW, HD, zs, rad + 2)):
+                        x = ox + (kp[j][0] - (0 if ox == 0 else box[0])) * s_
+                        y = oy + (kp[j][1] - (0 if ox == 0 else box[1])) * s_
+                        if hollow:
+                            d.ellipse((x - r_, y - r_, x + r_, y + r_), outline=col, width=2)
+                        else:
+                            d.ellipse((x - r_, y - r_, x + r_, y + r_), fill=col, outline=(255, 255, 255))
+            d.text((10, 6), f"{title}   {times[i]:.2f} s   프레임 {i}", fill=(0, 0, 0), font=font(22))
+            x0 = 10
+            for col, lab in ((ORANGE, "MediaPipe 검출 관절"), (BLUE, "추적점 (f 추정에 쓰는 점, 속 빈 점 = 이 프레임은 안 씀)")):
+                d.ellipse((x0, 44, x0 + 14, 58), fill=col)
+                d.text((x0 + 20, 38), lab, fill=(0, 0, 0), font=font(18))
+                x0 += 30 + int(d.textlength(lab, font=font(18)))
+            canvas.save(Path(td) / f"{n_out:06d}.png")
+        subprocess.run(["ffmpeg", "-hide_banner", "-loglevel", "error", "-y", "-framerate", f"{float(rc['fps']):.4f}", "-i", str(Path(td) / "%06d.png"), "-c:v", "libx264", "-crf", "20",
+                        "-pix_fmt", "yuv420p", "-vf", "pad=ceil(iw/2)*2:ceil(ih/2)*2", "-map_metadata", "-1", str(path)], check=True)
+
+
+def pv_job(args):
+    """한 영상: 프레임·검출 (검출 캐시 재사용) + points_run 에 저장된 추적점 -> 점 영상 (render.every 프레임마다)."""
+    e, cfg, run_root = args
+    import cv2
+    cv2.setNumThreads(1)
+    rc = cfg["render"]
+    x = load_points(cfg["points_video"]["points_run"], e["file"])
+    pngs, times, tr, (W, H), tmp = prepare(e, cfg, run_root)
+    try:
+        if len(pngs) != len(x["kp"]):
+            raise ValueError(f"프레임 수가 저장된 추적점과 다름: {len(pngs)} / {len(x['kp'])}")
+        fr = np.arange(0, len(pngs), int(rc["every"]))
+        out = Path(run_root) / f"{Path(e['file']).stem}_points.mp4"
+        pv_render(out, pngs, times, fr, np.where(tr["present"][:, None, None], tr["kp"], np.nan), x["kp"], x["use"], {**rc, "fps": 30.0 / int(rc["every"])}, f"{e['file']} ({e['person']})")
+    finally:
+        shutil.rmtree(tmp, ignore_errors=True)
+    return {"video": out.name, "n_frames": int(len(fr))}, [f"  {e['file']}: 점 영상 {out.name} ({len(fr)} 프레임)"]
+
+
+def pv_summary(res: dict, cfg: dict) -> str:
+    L = ["# 점 영상", "", f"**{cfg['points_video']['points_run']} 에 저장된 추적점(파랑)과 MediaPipe 검출 관절(주황)을 원본 프레임에 그림. 왼쪽 전체 화면, 오른쪽 손 확대. 영상은 커밋하지 않음.**", "",
+         "| 영상 | 점 영상 | 프레임 |", "|---|---|---|"]
+    for f, x in res.items():
+        L.append(f"| {f} | {x['video']} | {x['n_frames']} |")
+    return "\n".join(L) + "\n"
+
+
+
+# ----------------------------------------------------------------------------------------------------
+# 101: 저장된 점(CoTracker3 등) + 손 3D 모양(free_shape3d) -> f
+# ----------------------------------------------------------------------------------------------------
+def s3_job(args):
+    """(영상, 점 출처, 관절 묶음) 하나: 저장된 추적점 -> od_bridge -> free_template 과 free_shape3d (od_estimate, 책상 제약 없음, 손 3D 모양을 f 와 함께 품)."""
+    key, x, cfg, ids = args
+    import os
+    os.environ.setdefault("OMP_NUM_THREADS", "1")
+    import cv2
+    cv2.setNumThreads(1)
+    sc = cfg["shape3d"]
+    grid = hf.f_grid(cfg["pipeline"]["estimate"], max(*x["size"]))
+    t0 = time.time()
+    try:
+        pb = hf.od_bridge(x["kp"], np.isfinite(x["kp"]).all(2), np.flatnonzero(x["use"]), x["box"], tuple(x["size"]), cfg["pipeline"]["estimate"], ids)
+        r = hf.od_estimate(pb, grid, sc["free_shape3d"])
+        A, B = r["free_template"], r["free_shape3d"]
+        out = {"free_template": {"f": float(A["f"]), "boundary": hf.od_boundary(float(A["f"]), grid)},
+               "free_shape3d": {"f": float(B["f"]), "boundary": bool(B["at_bound"]) or hf.od_boundary(float(B["f"]), grid), "relief_rel": float(B["relief_rel"]),
+                                "rms_px": float(B["ba"]["rms_px"]), "success": bool(B["ba"]["success"])}}
+    except Exception as ex:                                            # 실패도 결과로 남김
+        out = {"failed": f"{type(ex).__name__}: {ex}"}
+    out["elapsed_s"] = time.time() - t0
+    return key, out
+
+
+def s3_run(cfg: dict, own: dict, log) -> dict:
+    """101: 점 출처(points_runs)마다 저장된 추적점을 읽어 관절 묶음마다 s3_job."""
+    import multiprocessing as mp
+    from concurrent.futures import ProcessPoolExecutor
+    sc = cfg["shape3d"]
+    jobs = []
+    for src, run in sc["points_runs"].items():
+        for e in cfg["videos"]:
+            x = load_points(run, e["file"])
+            for js, ids in sc["joint_sets"].items():
+                jobs.append(((e["file"], src, js), x, cfg, [int(j) for j in ids]))
+    log(f"  추정 {len(jobs)}건")
+    res = {}
+    with ProcessPoolExecutor(max_workers=int(cfg["workers"]), mp_context=mp.get_context("spawn")) as ex:
+        for (f, src, js), o in ex.map(s3_job, jobs, chunksize=1):
+            res.setdefault(f, {}).setdefault(src, {})[js] = o
+    return res
+
+
+def s3_summary(res: dict, cfg: dict, own: dict) -> str:
+    sc = cfg["shape3d"]
+    vids = {e["file"]: e for e in cfg["videos"]}
+    L = ["# 101 정확한 점 + 손 3D 모양 summary", "",
+         f"**저장된 추적점({', '.join(f'{k} = {v}' for k, v in sc['points_runs'].items())})에 교수님 코드의 free_template(평면 손)과 free_shape3d(손 3D 모양을 f 와 함께 품, "
+         f"z_rel {sc['free_shape3d']['z_rel']})를 그대로 돌린다. 책상 제약·경사 가정 없음. 판정 없음.**", "",
+         "- 기준 f 는 이 파일에만. * = f 탐색 범위 끝. 높이 = free_shape3d 가 찾은 손 모양의 높이(relief_rel, 손 크기 대비).", "",
+         "| 영상 | 묶음 | 기준 f | 점 | 관절 | free_template f (오차) | free_shape3d f (오차) | 높이 | RMS (px) |", "|---|---|---|---|---|---|---|---|---|"]
+    for f, d in res.items():
+        e = vids[f]
+        rf = float(e.get("ref_f_px") or cfg["ref_f"]["value"])
+        fmt = lambda x: "-" if not x or "f" not in x else f"{x['f']:.0f} ({100 * (x['f'] / rf - 1):+.1f}%)" + ("*" if x.get("boundary") else "")      # noqa: E731
+        for src, dd in d.items():
+            for js, o in dd.items():
+                if "failed" in o:
+                    L.append(f"| {f} | {e['person']} | {rf:g} | {src} | {js} | 실패: {o['failed']} | | | |")
+                    continue
+                b = o["free_shape3d"]
+                L.append(f"| {f} | {e['person']} | {rf:g} | {src} | {js} | {fmt(o['free_template'])} | {fmt(b)} | {b['relief_rel']:.3f} | {b['rms_px']:.2f} |")
+    L += ["", "## 한계", "", "- free_shape3d 는 손 높이를 z_rel 로 약하게 눌러 둔다(완전히 자유롭지 않음). 책상 위 회전만으로는 손 높이와 f 가 서로 맞바꿔질 수 있다.", ""]
+    return "\n".join(L) + "\n"
+
+
+def s3_results_yaml(run_dir: Path, own: dict) -> Path:
+    """101 의 값만: 영상·점 출처·관절 묶음별 f, 높이, RMS (기준 f, 오차 없음)."""
+    r = json.loads((run_dir / "results.json").read_text())["real"]
+    m = json.loads((run_dir / "metadata.json").read_text())
+    rv = lambda x: x if not isinstance(x, float) else (round(x, 3) if np.isfinite(x) else None)      # noqa: E731
+    deep = lambda d: {k: (deep(v) if isinstance(v, dict) else rv(v)) for k, v in d.items()}      # noqa: E731
+    out = {"experiment": own["experiment"]["name"], "run": str(run_dir.resolve().relative_to(hf.PROJECT_ROOT)), "code_commit": m["git"]["commit"][:7],
+           "git_dirty_at_run": m["git"]["git_dirty"], "videos": {f: deep(d) for f, d in r.items()}}
+    p = hf.resolve(own["output"]["results_yaml"])
+    p.write_text(yaml.safe_dump(hf.jsonable(out), allow_unicode=True, sort_keys=False))
+    return p
+
+
+# ----------------------------------------------------------------------------------------------------
 # 실행
 # ----------------------------------------------------------------------------------------------------
 def results_yaml(cmd: str, run_dir: Path, own: dict) -> Path:
@@ -1125,7 +1291,7 @@ class _nullpool:
 
 def main(argv=None):
     ap = argparse.ArgumentParser(description="광류 방식 원인 확인 실험")
-    ap.add_argument("cmd", choices=["tracking-plane", "dorsum-corners", "two-plane", "joint-track-video", "geometry-synth", "pause-plane", "cotracker", "rotation-side"])
+    ap.add_argument("cmd", choices=["tracking-plane", "dorsum-corners", "two-plane", "joint-track-video", "geometry-synth", "pause-plane", "cotracker", "rotation-side", "points-video", "shape3d"])
     ap.add_argument("--config", required=True)
     ap.add_argument("--out", default=None)
     ap.add_argument("--videos", type=int, default=None, help="시험 실행: 앞의 N 개 영상만, 추정 1건씩")
@@ -1137,12 +1303,13 @@ def main(argv=None):
     own = yaml.safe_load(text)
     if a.sub == "results-yaml":
         print(tw_results_yaml(hf.resolve(a.run), own) if a.cmd == "two-plane" else gs_real_results_yaml(hf.resolve(a.run), own) if a.cmd == "geometry-synth" else pp_results_yaml(hf.resolve(a.run), own) if a.cmd == "pause-plane"
-              else ct_results_yaml(hf.resolve(a.run), own) if a.cmd == "cotracker" else rs_results_yaml(hf.resolve(a.run), own) if a.cmd == "rotation-side" else jt_results_yaml(hf.resolve(a.run), own) if a.cmd == "joint-track-video"
+              else ct_results_yaml(hf.resolve(a.run), own) if a.cmd == "cotracker" else rs_results_yaml(hf.resolve(a.run), own) if a.cmd == "rotation-side"
+              else s3_results_yaml(hf.resolve(a.run), own) if a.cmd == "shape3d" else jt_results_yaml(hf.resolve(a.run), own) if a.cmd == "joint-track-video"
               else results_yaml(a.cmd, hf.resolve(a.run), own))
         return None
     cfg = rof.load_settings(own)
     cfg["videos"] = cfg["videos"] + [dict(v) for v in own.get("extra_videos", [])]      # 기본 설정 목록에 없는 새 영상 (file, person, ref_f_px)
-    cfg.update({k: own[k] for k in ("variants", "clahe", "two_plane", "joint_track", "render", "reference", "geometry_synth", "pause_plane", "cotracker", "rotation_side") if k in own})
+    cfg.update({k: own[k] for k in ("variants", "clahe", "two_plane", "joint_track", "render", "reference", "geometry_synth", "pause_plane", "cotracker", "rotation_side", "points_video", "shape3d") if k in own})
     if a.videos:
         cfg["videos"] = cfg["videos"][:a.videos]
         cfg["free_starts_deg"] = []
@@ -1161,10 +1328,13 @@ def main(argv=None):
         shutil.copytree(hf.resolve(own["detection_cache_from"]), run_root / "detection_cache")
     import multiprocessing as mp
     from concurrent.futures import ProcessPoolExecutor
-    job = {"tracking-plane": tp_job, "dorsum-corners": dc_job, "two-plane": tw_points, "joint-track-video": jt_job, "geometry-synth": rof.video_points, "pause-plane": pp_job, "rotation-side": rs_load}.get(a.cmd)
+    job = {"tracking-plane": tp_job, "dorsum-corners": dc_job, "two-plane": tw_points, "joint-track-video": jt_job, "geometry-synth": rof.video_points, "pause-plane": pp_job, "rotation-side": rs_load, "points-video": pv_job}.get(a.cmd)
     vid = {}
     if a.cmd == "cotracker":                                           # GPU 작업 + 추정을 ct_run 이 한꺼번에
         res = ct_run(cfg, own, log, run_root)
+        job = None
+    elif a.cmd == "shape3d":                                           # 저장된 점만 읽음 (영상 처리 없음)
+        res = s3_run(cfg, own, log)
         job = None
     with ProcessPoolExecutor(max_workers=int(cfg["video_workers"]), mp_context=mp.get_context("spawn")) if job else _nullpool() as ex:
         for e, (x, lines) in (zip(cfg["videos"], ex.map(job, [(e, cfg, str(run_root)) for e in cfg["videos"]])) if job else []):
@@ -1174,6 +1344,11 @@ def main(argv=None):
     log(f"  추적: {time.time() - t0:.0f} s")
     if a.cmd == "cotracker":
         text_sum = ct_summary(res, cfg, own)
+    elif a.cmd == "shape3d":
+        text_sum = s3_summary(res, cfg, own)
+    elif a.cmd == "points-video":
+        res = vid
+        text_sum = pv_summary(res, cfg)
     elif a.cmd == "rotation-side":
         res = rs_run(cfg, vid, log)
         text_sum = rs_summary(res, cfg, own)
