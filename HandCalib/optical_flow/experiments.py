@@ -8,6 +8,7 @@
   python optical_flow/experiments.py rotation-side   --config configs/99_rotation_side.yaml
   python optical_flow/experiments.py shape3d         --config configs/101_cotracker_shape3d.yaml
   python optical_flow/experiments.py points-video    --config configs/102_points_video_new_pair.yaml
+  python optical_flow/experiments.py side-consistency --config configs/103_side_consistency.yaml
   python optical_flow/experiments.py <명령> --config <설정> results-yaml --run <실행 폴더>
 
 tracking-plane (90): 추적 사슬이 손의 어느 평면을 따라가는지 본다. 기준 프레임 -> 각 프레임의 사슬 변환을, 같은 두 프레임의 검출 관절로 맞춘
@@ -15,6 +16,7 @@ tracking-plane (90): 추적 사슬이 손의 어느 평면을 따라가는지 �
 dorsum-corners (91): 특징점을 손등 몸통에서만 고르기, 특징점을 고를 때만 대비 보정(CLAHE), 둘 다. 추적점과 검출 관절의 거리, 책상 운동 추정기의 f.
 geometry-synth (96): 영상의 카메라 기울기·손 모양·프레임별 움직임을 그대로 둔 합성 장면을 참 f 로 만들어 같은 추정을 돌린다 (촬영 구도·동작 탓인지, 실제 점 탓인지).
 pause-plane (97): 멈춤 구간마다 손 평면 방향을 알려진 f 로 호모그래피 분해해 손 경사가 자세마다 바뀌는지 본다 (실제 점, 합성 없음).
+side-consistency (103): 저장된 추적점으로 회전 방향별 f 가 같아지는 경사를 고른다 (기준 f 없이 경사 정하기).
 shape3d (101): 저장된 점에 free_template / free_shape3d(손 3D 모양 + f)를 돌린다. points-video: 저장된 추적점과 검출 관절을 그린 점 영상.
 rotation-side (99): 97 이 저장한 추적점을 손 방향으로 나눠(한쪽만 / 대칭으로 자름) 경사 고정 추정만 다시 돌린다.
 cotracker (98): 광류 사슬 대신 CoTracker3 로 기준 프레임의 관절을 직접 추적해 같은 추정을 돌린다.
@@ -1228,6 +1230,106 @@ def s3_results_yaml(run_dir: Path, own: dict) -> Path:
 
 
 # ----------------------------------------------------------------------------------------------------
+# 103: 회전 방향별 f 가 같아지는 경사 (저장된 추적점)
+# ----------------------------------------------------------------------------------------------------
+def sc_load(args):
+    """한 영상: side_consistency.points 에 적힌 실행에서 저장된 추적점 읽기."""
+    e, cfg, run_root = args
+    x = load_points(cfg["side_consistency"]["points"][e["file"]], e["file"])
+    return x, [f"  {e['file']}: 저장된 추적점, 사용 {int(x['use'].sum())}"]
+
+
+def sc_run(cfg: dict, vid: dict, log) -> dict:
+    """103: 영상 x 부분집합(all, plus, minus; rs_subsets) x 경사(ramps_deg) 마다 free_template -> 경사 고정 추정."""
+    import multiprocessing as mp
+    from concurrent.futures import ProcessPoolExecutor
+    sc = cfg["side_consistency"]
+    res, items = {}, []
+    for f, x in vid.items():
+        subs, info = rs_subsets(x, float(sc["margin_deg"]))
+        res[f] = {"info": {**info, **{f"n_{k}": int(v.sum()) for k, v in subs.items()}}}
+        for k in sc["subsets"]:
+            items.append((f, k, {**x, "use": subs[k]}))
+    with ProcessPoolExecutor(max_workers=int(cfg["workers"]), mp_context=mp.get_context("spawn")) as ex:
+        fts = list(ex.map(hf.tl_template_job, [rof.estimate_args(cfg, y) for _, _, y in items], chunksize=1))
+    jobs, keys = [], []
+    for (f, k, y), ft in zip(items, fts):
+        A = ft.get("A")
+        res[f][k] = {}
+        if A is None:
+            res[f][k]["failed"] = ft.get("failed")
+            continue
+        for r in cfg["ramps_deg"]:
+            jobs.append(rof.estimate_args(cfg, y, A) + ("ramp_fixed", r))
+            keys.append((f, k, f"ramp_{r:g}"))
+    log(f"  추정 {len(jobs)}건")
+    with ProcessPoolExecutor(max_workers=int(cfg["workers"]), mp_context=mp.get_context("spawn")) as ex:
+        for (f, k, mk), o in zip(keys, ex.map(hf.ms2_job, jobs, chunksize=1)):
+            res[f][k][mk] = o
+    for f, d in res.items():
+        d["crossing"] = sc_crossing(d, cfg["ramps_deg"])
+    return res
+
+
+def sc_crossing(d: dict, ramps) -> dict:
+    """plus 와 minus 의 log f 차이가 부호를 바꾸는 경사(선형 보간)와, 그 경사에서 all 의 f (log f 선형 보간). 부호가 안 바뀌면 차이가 가장 작은 경사."""
+    rs = np.array([float(r) for r in ramps])
+    g = lambda k: np.array([np.log(d[k][f"ramp_{r:g}"]["f"]) if "f" in d.get(k, {}).get(f"ramp_{r:g}", {}) else np.nan for r in ramps])      # noqa: E731
+    dp, fa = g("plus") - g("minus"), g("all")
+    ok = np.isfinite(dp) & np.isfinite(fa)
+    rs, dp, fa = rs[ok], dp[ok], fa[ok]
+    if len(rs) < 2:
+        return {"ramp_deg": None, "f": None, "crossed": False}
+    for i in range(len(rs) - 1):
+        if dp[i] == 0 or dp[i] * dp[i + 1] < 0:
+            t = 0.0 if dp[i] == 0 else dp[i] / (dp[i] - dp[i + 1])
+            return {"ramp_deg": float(rs[i] + t * (rs[i + 1] - rs[i])), "f": float(np.exp(fa[i] + t * (fa[i + 1] - fa[i]))), "crossed": True}
+    i = int(np.argmin(np.abs(dp)))
+    return {"ramp_deg": float(rs[i]), "f": float(np.exp(fa[i])), "crossed": False}
+
+
+def sc_summary(res: dict, cfg: dict, own: dict) -> str:
+    sc = cfg["side_consistency"]
+    vids = {e["file"]: e for e in cfg["videos"]}
+    L = ["# 103 회전 방향별 f 가 같아지는 경사 summary", "",
+         f"**저장된 광류 사슬 추적점(94 와 같은 계산, 첫 정지 구간 기준, {cfg['joint_set']})을 손 방향으로 나눠(정면 + '+' 쪽 / 정면 + '-' 쪽, 반대쪽 {sc['margin_deg']}° 까지; 99 와 같음), 경사 "
+         f"{cfg['ramps_deg']}° 고정으로 각각 추정한다. 두 쪽의 f 가 같아지는 경사(선형 보간)를 고르고, 그 경사에서 전체 프레임의 f 를 읽는다. 기준 f 를 쓰지 않고 경사를 정하는 방법. 판정 없음.**", "",
+         "- 기준 f 는 이 파일에만. * = f 탐색 범위 끝. 교차 없음 = 시험한 경사 안에서 두 쪽 차이의 부호가 안 바뀜(차이가 가장 작은 경사).", "",
+         "## 고른 경사와 f", "", "| 영상 | 묶음 | 기준 f | 고른 경사 | 교차 | 그 경사의 전체 f (오차) | 경사 11° 전체 f (오차) |", "|---|---|---|---|---|---|---|"]
+    for f, d in res.items():
+        e = vids[f]
+        rf = float(e.get("ref_f_px") or cfg["ref_f"]["value"])
+        c = d["crossing"]
+        a11 = (d.get("all") or {}).get("ramp_11") or {}
+        L.append(f"| {f} | {e['person']} | {rf:g} | " + ("-" if c["ramp_deg"] is None else f"{c['ramp_deg']:.1f}°") + f" | {'예' if c['crossed'] else '아니오'} | "
+                 + ("-" if c["f"] is None else f"{c['f']:.0f} ({100 * (c['f'] / rf - 1):+.1f}%)") + " | " + ("-" if "f" not in a11 else f"{a11['f']:.0f} ({100 * (a11['f'] / rf - 1):+.1f}%)") + " |")
+    L += ["", "## 경사별 f 오차 (전체 / '+' 쪽 / '-' 쪽)", "", "| 영상 | 묶음 | " + " | ".join(f"{r:g}°" for r in cfg["ramps_deg"]) + " |", "|---|---|" + "---|" * len(cfg["ramps_deg"])]
+    for f, d in res.items():
+        e = vids[f]
+        rf = float(e.get("ref_f_px") or cfg["ref_f"]["value"])
+        cell = lambda k, r: "-" if "f" not in (d.get(k) or {}).get(f"ramp_{r:g}", {}) else f"{100 * (d[k][f'ramp_{r:g}']['f'] / rf - 1):+.0f}" + ("*" if d[k][f"ramp_{r:g}"].get("boundary") else "")      # noqa: E731
+        L.append(f"| {f} | {e['person']} | " + " | ".join(f"{cell('all', r)} / {cell('plus', r)} / {cell('minus', r)}" for r in cfg["ramps_deg"]) + " |")
+    L += ["", "## 한계", "", "- 한쪽만 쓰면 회전 범위가 반이라 f 가 흩어진다. 옆 기울기(roll)는 0 으로 고정(경사만 바꿈). 영상 8개.", ""]
+    return "\n".join(L) + "\n"
+
+
+def sc_results_yaml(run_dir: Path, own: dict) -> Path:
+    """103 의 값만: 영상별 고른 경사, 그 경사의 f, 부분집합 x 경사별 f (기준 f, 오차 없음)."""
+    r = json.loads((run_dir / "results.json").read_text())["real"]
+    m = json.loads((run_dir / "metadata.json").read_text())
+    rv = lambda x: x if not isinstance(x, float) else (round(x, 3) if np.isfinite(x) else None)      # noqa: E731
+    out = {"experiment": own["experiment"]["name"], "run": str(run_dir.resolve().relative_to(hf.PROJECT_ROOT)), "code_commit": m["git"]["commit"][:7],
+           "git_dirty_at_run": m["git"]["git_dirty"], "videos": {}}
+    for f, d in r.items():
+        out["videos"][f] = {"info": {k: rv(v) for k, v in d["info"].items()}, "crossing": {k: rv(v) for k, v in d["crossing"].items()},
+                            **{k: {mk: ({kk: rv(o[kk]) for kk in ("f", "rms_px", "boundary") if kk in o} if isinstance(o, dict) else o) for mk, o in d[k].items()}
+                               for k in d if k not in ("info", "crossing")}}
+    p = hf.resolve(own["output"]["results_yaml"])
+    p.write_text(yaml.safe_dump(hf.jsonable(out), allow_unicode=True, sort_keys=False))
+    return p
+
+
+# ----------------------------------------------------------------------------------------------------
 # 실행
 # ----------------------------------------------------------------------------------------------------
 def results_yaml(cmd: str, run_dir: Path, own: dict) -> Path:
@@ -1291,7 +1393,7 @@ class _nullpool:
 
 def main(argv=None):
     ap = argparse.ArgumentParser(description="광류 방식 원인 확인 실험")
-    ap.add_argument("cmd", choices=["tracking-plane", "dorsum-corners", "two-plane", "joint-track-video", "geometry-synth", "pause-plane", "cotracker", "rotation-side", "points-video", "shape3d"])
+    ap.add_argument("cmd", choices=["tracking-plane", "dorsum-corners", "two-plane", "joint-track-video", "geometry-synth", "pause-plane", "cotracker", "rotation-side", "points-video", "shape3d", "side-consistency"])
     ap.add_argument("--config", required=True)
     ap.add_argument("--out", default=None)
     ap.add_argument("--videos", type=int, default=None, help="시험 실행: 앞의 N 개 영상만, 추정 1건씩")
@@ -1304,12 +1406,12 @@ def main(argv=None):
     if a.sub == "results-yaml":
         print(tw_results_yaml(hf.resolve(a.run), own) if a.cmd == "two-plane" else gs_real_results_yaml(hf.resolve(a.run), own) if a.cmd == "geometry-synth" else pp_results_yaml(hf.resolve(a.run), own) if a.cmd == "pause-plane"
               else ct_results_yaml(hf.resolve(a.run), own) if a.cmd == "cotracker" else rs_results_yaml(hf.resolve(a.run), own) if a.cmd == "rotation-side"
-              else s3_results_yaml(hf.resolve(a.run), own) if a.cmd == "shape3d" else jt_results_yaml(hf.resolve(a.run), own) if a.cmd == "joint-track-video"
+              else s3_results_yaml(hf.resolve(a.run), own) if a.cmd == "shape3d" else sc_results_yaml(hf.resolve(a.run), own) if a.cmd == "side-consistency" else jt_results_yaml(hf.resolve(a.run), own) if a.cmd == "joint-track-video"
               else results_yaml(a.cmd, hf.resolve(a.run), own))
         return None
     cfg = rof.load_settings(own)
     cfg["videos"] = cfg["videos"] + [dict(v) for v in own.get("extra_videos", [])]      # 기본 설정 목록에 없는 새 영상 (file, person, ref_f_px)
-    cfg.update({k: own[k] for k in ("variants", "clahe", "two_plane", "joint_track", "render", "reference", "geometry_synth", "pause_plane", "cotracker", "rotation_side", "points_video", "shape3d") if k in own})
+    cfg.update({k: own[k] for k in ("variants", "clahe", "two_plane", "joint_track", "render", "reference", "geometry_synth", "pause_plane", "cotracker", "rotation_side", "points_video", "shape3d", "side_consistency") if k in own})
     if a.videos:
         cfg["videos"] = cfg["videos"][:a.videos]
         cfg["free_starts_deg"] = []
@@ -1328,7 +1430,7 @@ def main(argv=None):
         shutil.copytree(hf.resolve(own["detection_cache_from"]), run_root / "detection_cache")
     import multiprocessing as mp
     from concurrent.futures import ProcessPoolExecutor
-    job = {"tracking-plane": tp_job, "dorsum-corners": dc_job, "two-plane": tw_points, "joint-track-video": jt_job, "geometry-synth": rof.video_points, "pause-plane": pp_job, "rotation-side": rs_load, "points-video": pv_job}.get(a.cmd)
+    job = {"tracking-plane": tp_job, "dorsum-corners": dc_job, "two-plane": tw_points, "joint-track-video": jt_job, "geometry-synth": rof.video_points, "pause-plane": pp_job, "rotation-side": rs_load, "points-video": pv_job, "side-consistency": sc_load}.get(a.cmd)
     vid = {}
     if a.cmd == "cotracker":                                           # GPU 작업 + 추정을 ct_run 이 한꺼번에
         res = ct_run(cfg, own, log, run_root)
@@ -1349,6 +1451,9 @@ def main(argv=None):
     elif a.cmd == "points-video":
         res = vid
         text_sum = pv_summary(res, cfg)
+    elif a.cmd == "side-consistency":
+        res = sc_run(cfg, vid, log)
+        text_sum = sc_summary(res, cfg, own)
     elif a.cmd == "rotation-side":
         res = rs_run(cfg, vid, log)
         text_sum = rs_summary(res, cfg, own)
