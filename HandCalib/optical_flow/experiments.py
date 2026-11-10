@@ -9,6 +9,7 @@
   python optical_flow/experiments.py shape3d         --config configs/101_cotracker_shape3d.yaml
   python optical_flow/experiments.py points-video    --config configs/102_points_video_new_pair.yaml
   python optical_flow/experiments.py side-consistency --config configs/103_side_consistency.yaml
+  python optical_flow/experiments.py shape-change    --config configs/106_shape_change.yaml
   python optical_flow/experiments.py <명령> --config <설정> results-yaml --run <실행 폴더>
 
 tracking-plane (90): 추적 사슬이 손의 어느 평면을 따라가는지 본다. 기준 프레임 -> 각 프레임의 사슬 변환을, 같은 두 프레임의 검출 관절로 맞춘
@@ -16,6 +17,7 @@ tracking-plane (90): 추적 사슬이 손의 어느 평면을 따라가는지 �
 dorsum-corners (91): 특징점을 손등 몸통에서만 고르기, 특징점을 고를 때만 대비 보정(CLAHE), 둘 다. 추적점과 검출 관절의 거리, 책상 운동 추정기의 f.
 geometry-synth (96): 영상의 카메라 기울기·손 모양·프레임별 움직임을 그대로 둔 합성 장면을 참 f 로 만들어 같은 추정을 돌린다 (촬영 구도·동작 탓인지, 실제 점 탓인지).
 pause-plane (97): 멈춤 구간마다 손 평면 방향을 알려진 f 로 호모그래피 분해해 손 경사가 자세마다 바뀌는지 본다 (실제 점, 합성 없음).
+shape-change (106): 저장된 관절별 추적점이 평평한 단단한 손(호모그래피 하나)에서 얼마나 벗어나는지 (f 없음).
 side-consistency (103): 저장된 추적점으로 회전 방향별 f 가 같아지는 경사를 고른다 (기준 f 없이 경사 정하기).
 shape3d (101): 저장된 점에 free_template / free_shape3d(손 3D 모양 + f)를 돌린다. points-video: 저장된 추적점과 검출 관절을 그린 점 영상.
 rotation-side (99): 97 이 저장한 추적점을 손 방향으로 나눠(한쪽만 / 대칭으로 자름) 경사 고정 추정만 다시 돌린다.
@@ -1330,6 +1332,80 @@ def sc_results_yaml(run_dir: Path, own: dict) -> Path:
 
 
 # ----------------------------------------------------------------------------------------------------
+# 106: 평평한 단단한 손에서 벗어나는 정도 (저장된 관절별 추적점, 예: CoTracker3)
+# ----------------------------------------------------------------------------------------------------
+SH_NAMES = {5: "검지 MCP", 6: "검지 PIP", 7: "검지 DIP", 8: "검지 끝", 9: "중지 MCP", 10: "중지 PIP", 11: "중지 DIP", 12: "중지 끝", 13: "약지 MCP", 14: "약지 PIP",
+            15: "약지 DIP", 16: "약지 끝", 17: "소지 MCP", 18: "소지 PIP", 19: "소지 DIP", 20: "소지 끝"}
+
+
+def sh_job(args):
+    """한 영상: 저장된 추적점에서 프레임마다 기준 프레임 관절(joint_ids) -> 그 프레임 관절의 최소제곱 호모그래피(평평하고 단단한 판이면 정확히 맞음)를 구하고,
+    남는 거리(관절별, RMS)를 기준 프레임 손 상자 긴 변 대비 % 로. 손 방향(첫 검출 대비) 절댓값 구간별 중앙값과, angle_min_deg 넘게 돈 프레임의 관절별 중앙값."""
+    e, cfg, run_root = args
+    import cv2
+    sc = cfg["shape_change"]
+    x = load_points(sc["points"][e["file"]], e["file"])
+    ids = [int(j) for j in cfg["joint_ids"]]
+    kp, u, r = x["kp"], x["use"], x["ref"]
+    a = x["hand_angle"] - x["hand_angle"][np.isfinite(x["hand_angle"])][0]
+    P0 = kp[r][ids]
+    bl = float(np.max(P0.max(0) - P0.min(0)))
+    rms, per, ang = [], [], []
+    for i in np.flatnonzero(u):
+        P = kp[i][ids]
+        if not np.isfinite(P).all() or not np.isfinite(a[i]):
+            continue
+        Hm, _ = cv2.findHomography(P0.astype(np.float64), P.astype(np.float64), 0)
+        y = np.c_[P0, np.ones(len(P0))] @ Hm.T
+        d = np.linalg.norm(y[:, :2] / y[:, 2:3] - P, axis=1) / bl * 100.0
+        rms.append(float(np.sqrt(np.mean(d ** 2))))
+        per.append(d)
+        ang.append(abs(float(a[i])))
+    rms, per, ang = np.array(rms), np.array(per), np.array(ang)
+    bins = {}
+    for lo, hi in sc["angle_bins_deg"]:
+        k = (ang >= lo) & (ang < hi)
+        bins[f"{lo}-{hi}"] = {"n": int(k.sum()), "rms_pct": med(rms[k]) if k.sum() >= int(sc["min_frames"]) else None}
+    k = ang > float(sc["angle_min_deg"])
+    joint = {str(j): (med(per[k][:, n]) if k.sum() >= int(sc["min_frames"]) else None) for n, j in enumerate(ids)}
+    out = {"box_px": bl, "n_frames": int(len(rms)), "rms_pct_all": med(rms), "bins": bins, "joint_pct_turned": joint, "n_turned": int(k.sum())}
+    return out, [f"  {e['file']}: 프레임 {len(rms)}, 전체 중앙값 {med(rms):.2f}%"]
+
+
+def sh_summary(res: dict, cfg: dict, own: dict) -> str:
+    sc = cfg["shape_change"]
+    ids = [int(j) for j in cfg["joint_ids"]]
+    vids = {e["file"]: e for e in cfg["videos"]}
+    fm = lambda v: "-" if v is None else f"{v:.2f}"      # noqa: E731
+    bk = [f"{lo}-{hi}" for lo, hi in sc["angle_bins_deg"]]
+    L = ["# 106 평평한 단단한 손에서 벗어나는 정도 summary", "",
+         f"**저장된 관절별 추적점({cfg['joint_set']})에서 프레임마다 기준 프레임 관절 -> 그 프레임 관절의 최소제곱 호모그래피를 구한다. 평평하고 단단한 판은 어느 방향에서 봐도 호모그래피 하나로 "
+         "정확히 옮겨지므로, 남는 거리는 손이 평면이 아니거나(입체 모양, 예: 솟은 너클) 모양이 바뀐 만큼이다(둘은 구분하지 않음). 기준 프레임 손 상자 긴 변 대비 %. f 를 쓰지 않음. 판정 없음.**", "",
+         "## 손 회전 각도별 (프레임 RMS 의 중앙값, %)", "", "| 영상 | 묶음 | 점 | 손 크기 (px) | " + " | ".join(f"{b}°" for b in bk) + " | 전체 |", "|---|---|---|---|" + "---|" * len(bk) + "---|"]
+    for f, x in res.items():
+        e = vids[f]
+        L.append(f"| {f} | {e['person']} | {Path(sc['points'][f]).parts[1]} | {x['box_px']:.0f} | " + " | ".join(fm(x["bins"][b]["rms_pct"]) for b in bk) + f" | {fm(x['rms_pct_all'])} |")
+    L += ["", f"## 관절별 ({sc['angle_min_deg']}° 넘게 돈 프레임의 중앙값, %)", "", "| 영상 | 묶음 | " + " | ".join(SH_NAMES.get(j, str(j)) for j in ids) + " |", "|---|---|" + "---|" * len(ids)]
+    for f, x in res.items():
+        L.append(f"| {f} | {vids[f]['person']} | " + " | ".join(fm(x["joint_pct_turned"][str(j)]) for j in ids) + " |")
+    L += ["", "## 한계", "", "- 입체적이지만 단단한 손과 모양이 바뀌는 손을 구분하지 못한다. 추적점 자체의 오차도 섞인다(CoTracker3 는 관절 위치의 피부 점을 따라감).", ""]
+    return "\n".join(L) + "\n"
+
+
+def sh_results_yaml(run_dir: Path, own: dict) -> Path:
+    """106 의 값만 (f 를 쓰지 않음)."""
+    r = json.loads((run_dir / "results.json").read_text())["real"]
+    m = json.loads((run_dir / "metadata.json").read_text())
+    rv = lambda x: x if not isinstance(x, float) else (round(x, 3) if np.isfinite(x) else None)      # noqa: E731
+    deep = lambda d: {k: (deep(v) if isinstance(v, dict) else rv(v)) for k, v in d.items()}      # noqa: E731
+    out = {"experiment": own["experiment"]["name"], "run": str(run_dir.resolve().relative_to(hf.PROJECT_ROOT)), "code_commit": m["git"]["commit"][:7],
+           "git_dirty_at_run": m["git"]["git_dirty"], "videos": {f: deep(d) for f, d in r.items()}}
+    p = hf.resolve(own["output"]["results_yaml"])
+    p.write_text(yaml.safe_dump(hf.jsonable(out), allow_unicode=True, sort_keys=False))
+    return p
+
+
+# ----------------------------------------------------------------------------------------------------
 # 실행
 # ----------------------------------------------------------------------------------------------------
 def results_yaml(cmd: str, run_dir: Path, own: dict) -> Path:
@@ -1393,7 +1469,7 @@ class _nullpool:
 
 def main(argv=None):
     ap = argparse.ArgumentParser(description="광류 방식 원인 확인 실험")
-    ap.add_argument("cmd", choices=["tracking-plane", "dorsum-corners", "two-plane", "joint-track-video", "geometry-synth", "pause-plane", "cotracker", "rotation-side", "points-video", "shape3d", "side-consistency"])
+    ap.add_argument("cmd", choices=["tracking-plane", "dorsum-corners", "two-plane", "joint-track-video", "geometry-synth", "pause-plane", "cotracker", "rotation-side", "points-video", "shape3d", "side-consistency", "shape-change"])
     ap.add_argument("--config", required=True)
     ap.add_argument("--out", default=None)
     ap.add_argument("--videos", type=int, default=None, help="시험 실행: 앞의 N 개 영상만, 추정 1건씩")
@@ -1406,12 +1482,13 @@ def main(argv=None):
     if a.sub == "results-yaml":
         print(tw_results_yaml(hf.resolve(a.run), own) if a.cmd == "two-plane" else gs_real_results_yaml(hf.resolve(a.run), own) if a.cmd == "geometry-synth" else pp_results_yaml(hf.resolve(a.run), own) if a.cmd == "pause-plane"
               else ct_results_yaml(hf.resolve(a.run), own) if a.cmd == "cotracker" else rs_results_yaml(hf.resolve(a.run), own) if a.cmd == "rotation-side"
-              else s3_results_yaml(hf.resolve(a.run), own) if a.cmd == "shape3d" else sc_results_yaml(hf.resolve(a.run), own) if a.cmd == "side-consistency" else jt_results_yaml(hf.resolve(a.run), own) if a.cmd == "joint-track-video"
+              else s3_results_yaml(hf.resolve(a.run), own) if a.cmd == "shape3d" else sc_results_yaml(hf.resolve(a.run), own) if a.cmd == "side-consistency"
+              else sh_results_yaml(hf.resolve(a.run), own) if a.cmd == "shape-change" else jt_results_yaml(hf.resolve(a.run), own) if a.cmd == "joint-track-video"
               else results_yaml(a.cmd, hf.resolve(a.run), own))
         return None
     cfg = rof.load_settings(own)
     cfg["videos"] = cfg["videos"] + [dict(v) for v in own.get("extra_videos", [])]      # 기본 설정 목록에 없는 새 영상 (file, person, ref_f_px)
-    cfg.update({k: own[k] for k in ("variants", "clahe", "two_plane", "joint_track", "render", "reference", "geometry_synth", "pause_plane", "cotracker", "rotation_side", "points_video", "shape3d", "side_consistency") if k in own})
+    cfg.update({k: own[k] for k in ("variants", "clahe", "two_plane", "joint_track", "render", "reference", "geometry_synth", "pause_plane", "cotracker", "rotation_side", "points_video", "shape3d", "side_consistency", "shape_change") if k in own})
     if a.videos:
         cfg["videos"] = cfg["videos"][:a.videos]
         cfg["free_starts_deg"] = []
@@ -1430,7 +1507,7 @@ def main(argv=None):
         shutil.copytree(hf.resolve(own["detection_cache_from"]), run_root / "detection_cache")
     import multiprocessing as mp
     from concurrent.futures import ProcessPoolExecutor
-    job = {"tracking-plane": tp_job, "dorsum-corners": dc_job, "two-plane": tw_points, "joint-track-video": jt_job, "geometry-synth": rof.video_points, "pause-plane": pp_job, "rotation-side": rs_load, "points-video": pv_job, "side-consistency": sc_load}.get(a.cmd)
+    job = {"tracking-plane": tp_job, "dorsum-corners": dc_job, "two-plane": tw_points, "joint-track-video": jt_job, "geometry-synth": rof.video_points, "pause-plane": pp_job, "rotation-side": rs_load, "points-video": pv_job, "side-consistency": sc_load, "shape-change": sh_job}.get(a.cmd)
     vid = {}
     if a.cmd == "cotracker":                                           # GPU 작업 + 추정을 ct_run 이 한꺼번에
         res = ct_run(cfg, own, log, run_root)
@@ -1451,6 +1528,9 @@ def main(argv=None):
     elif a.cmd == "points-video":
         res = vid
         text_sum = pv_summary(res, cfg)
+    elif a.cmd == "shape-change":
+        res = vid
+        text_sum = sh_summary(res, cfg, own)
     elif a.cmd == "side-consistency":
         res = sc_run(cfg, vid, log)
         text_sum = sc_summary(res, cfg, own)
