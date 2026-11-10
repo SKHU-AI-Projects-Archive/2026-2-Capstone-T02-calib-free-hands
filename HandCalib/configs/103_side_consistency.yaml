@@ -1,0 +1,35 @@
+# 103: 회전 방향별 f 가 같아지는 경사 (사용자 2026-11-10: "2번을 먼저 진행해줘."), 기록용, 판정 없음.
+# 99/100: '+' 쪽만 쓰면 f 가 낮고 '-' 쪽만 쓰면 높다(두 사람 모두). 경사(와 옆 기울기)가 손에 맞지 않을 때 생기는 쏠림으로 보고, 두 쪽의 f 가 같아지는 경사를 고르면 기준 f 없이
+# 사람마다 경사를 정할 수 있는지 본다. 점 = 99(예전 새 폰 4개)와 100(새로 찍은 4개)이 저장한 광류 사슬 추적점(94 와 같은 계산, j16). 부분집합 = 99 와 같음(margin 10°).
+# 경사 7, 11, 15, 19° 고정(옆 기울기 0), 부분집합 all / plus / minus 마다 free_template -> 경사 고정 추정. plus - minus 의 log f 차이가 부호를 바꾸는 경사를 선형 보간으로 고르고, 그 경사의 all f 를 읽는다.
+# 읽는 법(실행 전에 정함): 고른 경사에서 팀원 영상 오차가 경사 11° 보다 뚜렷이 줄고 본인 영상이 나빠지지 않으면 이 방법이 쓸모 있음. 기준 f 는 summary.md 에만.
+experiment:
+  name: 103_side_consistency
+  seed: 42
+settings_config: configs/74b_multistart_rerun.yaml
+joint_set: j16
+code: {branch: optical_flow, commit: 4111ea2, modules: [HandCalib/optical_flow/experiments.py]}
+ramps_deg: [7, 11, 15, 19]
+videos: ["IMG_7354 - 복사본.MOV", "IMG_7355 - 복사본.MOV", "IMG_7351 - 복사본.MOV", "IMG_7352 - 복사본.MOV"]
+extra_videos:
+  - {file: IMG_7384.MOV, person: teammate, ref_f_px: 1672}
+  - {file: IMG_7385.MOV, person: self, ref_f_px: 1672}
+  - {file: IMG_7387.MOV, person: teammate, ref_f_px: 1672}
+  - {file: IMG_7388.MOV, person: self, ref_f_px: 1672}
+side_consistency:
+  margin_deg: 10
+  subsets: [all, plus, minus]
+  points:
+    "IMG_7354 - 복사본.MOV": runs/99_rotation_side/20261110T023248Z
+    "IMG_7355 - 복사본.MOV": runs/99_rotation_side/20261110T023248Z
+    "IMG_7351 - 복사본.MOV": runs/99_rotation_side/20261110T023248Z
+    "IMG_7352 - 복사본.MOV": runs/99_rotation_side/20261110T023248Z
+    IMG_7384.MOV: runs/100_new_pair_shoot/20261110T032637Z
+    IMG_7385.MOV: runs/100_new_pair_shoot/20261110T032637Z
+    IMG_7387.MOV: runs/100_new_pair_shoot/20261110T032637Z
+    IMG_7388.MOV: runs/100_new_pair_shoot/20261110T032637Z
+workers: 64
+video_workers: 8
+output:
+  root: runs/103_side_consistency
+  results_yaml: results/103_side_consistency.yaml
