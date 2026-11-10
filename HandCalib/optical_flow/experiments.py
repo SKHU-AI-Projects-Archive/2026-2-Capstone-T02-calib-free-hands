@@ -1488,6 +1488,8 @@ def main(argv=None):
         return None
     cfg = rof.load_settings(own)
     cfg["videos"] = cfg["videos"] + [dict(v) for v in own.get("extra_videos", [])]      # 기본 설정 목록에 없는 새 영상 (file, person, ref_f_px)
+    if own.get("joint_ids"):                                           # 기본 설정의 관절 묶음(j16, j21) 대신 직접 적은 관절 번호 (joint_set 은 이름으로만 씀)
+        cfg["joint_ids"] = [int(j) for j in own["joint_ids"]]
     cfg.update({k: own[k] for k in ("variants", "clahe", "two_plane", "joint_track", "render", "reference", "geometry_synth", "pause_plane", "cotracker", "rotation_side", "points_video", "shape3d", "side_consistency", "shape_change") if k in own})
     if a.videos:
         cfg["videos"] = cfg["videos"][:a.videos]
