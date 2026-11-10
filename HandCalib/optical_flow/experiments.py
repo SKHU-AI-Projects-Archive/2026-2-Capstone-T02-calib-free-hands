@@ -2,11 +2,13 @@
 
   python optical_flow/experiments.py tracking-plane  --config configs/90_tracking_plane.yaml
   python optical_flow/experiments.py dorsum-corners  --config configs/91_dorsum_clahe.yaml
+  python optical_flow/experiments.py geometry-synth  --config configs/96_geometry_synth.yaml
   python optical_flow/experiments.py <명령> --config <설정> results-yaml --run <실행 폴더>
 
 tracking-plane (90): 추적 사슬이 손의 어느 평면을 따라가는지 본다. 기준 프레임 -> 각 프레임의 사슬 변환을, 같은 두 프레임의 검출 관절로 맞춘
                      세 변환(손등 몸통 관절 / 손가락 관절 / j16)과 비교한다. 손 회전 각도 구간별로도 나눈다. f 추정 없음.
 dorsum-corners (91): 특징점을 손등 몸통에서만 고르기, 특징점을 고를 때만 대비 보정(CLAHE), 둘 다. 추적점과 검출 관절의 거리, 책상 운동 추정기의 f.
+geometry-synth (96): 영상의 카메라 기울기·손 모양·프레임별 움직임을 그대로 둔 합성 장면을 참 f 로 만들어 같은 추정을 돌린다 (촬영 구도·동작 탓인지, 실제 점 탓인지).
 설정은 run_optical_flow.load_settings 로 74b 의 설정 사슬을 읽는다. 기준 f 와 오차는 summary.md 에만 적는다.
 """
 import argparse
@@ -497,6 +499,164 @@ def jt_summary(res: dict, cfg: dict) -> str:
 
 
 # ----------------------------------------------------------------------------------------------------
+# 96: 영상의 구도·동작 그대로의 합성 장면 (원인 A 촬영 구도·동작 / B 실제 점 가르기)
+# ----------------------------------------------------------------------------------------------------
+def gs_fit(x: dict, cfg: dict, A: dict, f_fit: float) -> dict:
+    """한 영상의 추적점에 책상 운동 모델(경사 ramp_deg 고정)을 f_fit 에서 맞춘 상태 (dk_solve, f 고정, 프로파일 한 점과 같은 시작).
+    반환: 제한된 문제 pr, 모델 상태, 쓴 프레임(원래 프레임 번호), 관절 번호, RMS."""
+    gc = cfg["geometry_synth"]
+    pb = hf.od_bridge(x["kp"], np.isfinite(x["kp"]).all(2), np.flatnonzero(x["use"]), x["box"], tuple(x["size"]), cfg["pipeline"]["estimate"], cfg["joint_ids"])
+    pr, _ = hf._restrict(pb, max_frames=int(gc["max_frames"]))
+    jid = [int(j) for j in A["joint_ids"]]
+    T2 = np.asarray(A["template"], float)
+    grid = hf.f_grid(cfg["pipeline"]["estimate"], max(*x["size"]))
+    s = hf.dk_solve(pr, float(f_fit), T2, jid, np.radians(float(gc["ramp_deg"])), 0.0, False, False, (grid[0], grid[-1]))
+    return {"pr": pr, "state": s["state"], "rms_px": s["rms_px"], "T2": T2, "jid": jid, "frames": np.flatnonzero(x["use"])[pr.keep]}
+
+
+def gs_render(fit: dict, f: float, depth_scale: float, axes_from: str = "fit") -> np.ndarray:
+    """모델 상태를 f 로 투영 (dk_solve.proj 와 같은 식). 카메라와 책상 원점 사이 거리(td)만 depth_scale 배 -> 화면 속 손 크기는 거의 그대로, 원근만 f 에 맞게 바뀜.
+    axes_from = "fit": 손 경사 축을 맞추기 전 템플릿(fit['T2'])에서 = dk_solve 가 쓴 모델 그대로 (실제 잔차 계산용).
+    axes_from = "solved": 맞춘 뒤의 손 모양에서 = 합성 장면의 free_template 이 되찾는 모양과 같은 축 (합성 장면용).
+    반환 (프레임, 관절, 2) 픽셀, 관절 순서 = fit['jid']."""
+    st, pr = fit["state"], fit["pr"]
+    u, w = hf.dk_axes(fit["T2"] if axes_from == "fit" else st["T"], fit["jid"])
+    Hd = np.c_[st["T"], np.zeros(len(st["T"]))] @ hf.dk_hand_rot(u, w, st["up"] * st["pitch"], st["roll"]).T
+    out = np.zeros((len(st["theta"]), len(st["T"]), 2))
+    for k, (th, xy) in enumerate(zip(st["theta"], st["xy"])):
+        c, s_ = np.cos(th), np.sin(th)
+        Xd = np.c_[c * Hd[:, 0] - s_ * Hd[:, 1] + xy[0], s_ * Hd[:, 0] + c * Hd[:, 1] + xy[1], Hd[:, 2]]
+        X = Xd @ st["Rd"].T + depth_scale * np.asarray(st["td"])
+        out[k] = np.c_[f * X[:, 0] / X[:, 2] + pr.cx, f * X[:, 1] / X[:, 2] + pr.cy]
+    return out
+
+
+def gs_scenes(x: dict, cfg: dict, A: dict, f_fit: float, f_true: float) -> tuple:
+    """한 영상의 합성 장면들 (각각 estimate_args 가 받는 x 모양: kp (프레임, 21, 2), use, box, size).
+    - real_check: 모델(f_fit) + 실제 잔차 = 실제 점 그대로 (확인용, 실제 결과와 같아야 함)
+    - clean: 같은 구도·동작·손 모양을 참 f 로 (td 만 f_true / f_fit 배), 잡음 없음
+    - noise_s<시드>: clean + 손 상자 긴 변 x noise_rel 의 정규 잡음
+    - residual: clean + 실제 잔차 (실제 점이 모델에서 벗어난 모양을 그대로 얹음)"""
+    gc = cfg["geometry_synth"]
+    fit = gs_fit(x, cfg, A, f_fit)
+    pr, jid = fit["pr"], fit["jid"]
+    vis = np.array([pr.frames[i][1] for i in pr.keep])
+    obs = np.array([pr.frames[i][0] for i in pr.keep])
+    m_fit = gs_render(fit, f_fit, 1.0)
+    m_true = gs_render(fit, f_true, f_true / f_fit, axes_from="solved")
+    res = np.where(vis[..., None], obs - m_fit, 0.0)
+    box = x["box"][fit["frames"]]
+    bl = np.maximum(box[:, 2] - box[:, 0], box[:, 3] - box[:, 1])
+
+    def pack(P):
+        kp = np.full((len(P), 21, 2), np.nan)
+        kp[:, jid] = np.where(vis[..., None], P, np.nan)
+        return {"kp": kp, "use": np.ones(len(P), bool), "box": box, "size": x["size"]}
+    sc = {"real_check": pack(m_fit + res), "clean": pack(m_true)}
+    for sd in gc["noise_seeds"]:
+        g = np.random.default_rng([int(sd), 96])
+        sc[f"noise_s{sd}"] = pack(m_true + g.normal(size=m_true.shape) * (float(gc["noise_rel"]) * bl)[:, None, None])
+    sc["residual"] = pack(m_true + res)
+    info = {"fit_rms_px": fit["rms_px"], "n_frames": int(len(pr.keep)), "residual_rms_px": float(np.sqrt(np.mean(np.sum(res[vis] ** 2, 1)))),
+            "desk_tilt_deg": float(np.degrees(np.arccos(min(abs(fit["state"]["Rd"][2, 2]), 1.0)))), "turn_range_deg": float(np.degrees(np.ptp(fit["state"]["theta"])))}
+    return sc, info
+
+
+def gs_scene_job(args):
+    """한 영상: 실제 추적점의 free_template, 94 의 f(경사 고정)에서 모델 맞추기, 합성 장면 만들기 (작업 프로세스)."""
+    f, x, cfg, f_fit, f_true = args
+    import os
+    os.environ.setdefault("OMP_NUM_THREADS", "1")
+    import cv2
+    cv2.setNumThreads(1)
+    A = hf.tl_template_job(rof.estimate_args(cfg, x))["A"]
+    sc, info = gs_scenes(x, cfg, A, f_fit, f_true)
+    return f, sc, info
+
+
+def gs_run(cfg: dict, own: dict, vid: dict, log) -> dict:
+    """96: 영상마다 합성 장면을 만들고, 각 장면에 94 와 같은 추정(free_template -> 경사 고정, 함께 추정)을 돌린다."""
+    import multiprocessing as mp
+    from concurrent.futures import ProcessPoolExecutor
+    gc = cfg["geometry_synth"]
+    prev = json.loads((hf.resolve(gc["fit_run"]) / "results.json").read_text())["real"]
+    rk = f"ramp_{float(gc['ramp_deg']):g}"
+    ref_old = float(cfg["ref_f"]["value"])
+    args = [(e["file"], vid[e["file"]], cfg, float(prev[e["file"]][rk]["f"]), float(e.get("ref_f_px") or ref_old)) for e in cfg["videos"]]
+    res = {}
+    with ProcessPoolExecutor(max_workers=int(cfg["workers"]), mp_context=mp.get_context("spawn")) as ex:
+        scenes = {f: (sc, info) for f, sc, info in ex.map(gs_scene_job, args, chunksize=1)}
+    for (f, _, _, f_fit, _), e in zip(args, cfg["videos"]):
+        res[f] = {"info": {**scenes[f][1], "f_fit": f_fit, "ref": vid[f]["ref"]}}
+        log(f"  {f}: 모델 RMS {scenes[f][1]['fit_rms_px']:.2f} px (94 {prev[f][rk]['rms_px']:.2f}), 잔차 RMS {scenes[f][1]['residual_rms_px']:.2f} px, 장면 {len(scenes[f][0])}개")
+    keys = [(f, s) for f in scenes for s in scenes[f][0]]
+    with ProcessPoolExecutor(max_workers=int(cfg["workers"]), mp_context=mp.get_context("spawn")) as ex:
+        fts = dict(zip(keys, ex.map(hf.tl_template_job, [rof.estimate_args(cfg, scenes[f][0][s]) for f, s in keys], chunksize=1)))
+    todo = [(rk, "ramp_fixed", float(gc["ramp_deg"]))] + [(f"free_{r:g}", "ramp_free", r) for r in cfg["free_starts_deg"]]
+    jobs, jk = [], []
+    for f, s in keys:
+        x = scenes[f][0][s]
+        A = fts[(f, s)].get("A")
+        res[f][s] = {"free_template": {"failed": fts[(f, s)].get("failed")} if A is None else {"f": float(A["f"])}}
+        if A is None:
+            continue
+        for mk, mode, r in todo:
+            jobs.append(rof.estimate_args(cfg, x, A) + (mode, r))
+            jk.append((f, s, mk))
+    log(f"  추정 {len(jobs)}건")
+    with ProcessPoolExecutor(max_workers=int(cfg["workers"]), mp_context=mp.get_context("spawn")) as ex:
+        for (f, s, mk), o in zip(jk, ex.map(hf.ms2_job, jobs, chunksize=1)):
+            res[f][s][mk] = o
+    return res
+
+
+def gs_summary(res: dict, cfg: dict, own: dict) -> str:
+    gc = cfg["geometry_synth"]
+    rk = f"ramp_{float(gc['ramp_deg']):g}"
+    best = lambda d: min([d[k] for k in d if k.startswith("free_") and isinstance(d[k], dict) and d[k].get("cost") not in (None, float("inf"))], key=lambda x: x["cost"], default=None)      # noqa: E731
+    vids = {e["file"]: e for e in cfg["videos"]}
+    lab = {"real_check": "실제 점 (모델 + 실제 잔차, 확인용)", "clean": "합성: 같은 구도·동작·손 모양, 참 f, 잡음 없음", "residual": "합성 + 실제 잔차"}
+    L = ["# 96 영상 구도 그대로의 합성 장면 summary", "",
+         f"**94 의 추적점(첫 정지 구간 기준, {cfg['joint_set']})에 책상 운동 모델을 94 의 f(경사 {gc['ramp_deg']:g}° 고정)로 맞춘 뒤, 그 카메라 기울기·손 모양(템플릿)·프레임별 회전과 미끄러짐을 그대로 두고 "
+         "참 f 로 다시 투영한 합성 장면에 같은 추정을 돌린다. 카메라와 책상 사이 거리만 참 f / 94 f 배(화면 속 손 크기 유지). 합성에서 참 f 가 나오면 구도·동작 탓(A)이 아니다. "
+         "실제 잔차를 얹은 장면에서 다시 틀리면 실제 점이 모델에서 벗어난 모양(B)이 f 를 민다. 판정 없음.**", "",
+         f"- 정규 잡음 = 손 상자 긴 변 x {gc['noise_rel']}, 시드 {gc['noise_seeds']}. 프레임 최대 {gc['max_frames']}개(94 와 같음). 기준 f 는 이 파일에만. * = f 탐색 범위 끝.", "",
+         "## 장면 정보", "", "| 영상 | 94 f (경사 고정) | 모델 RMS (px) | 실제 잔차 RMS (px) | 카메라 기울기 | 회전 범위 | 프레임 |", "|---|---|---|---|---|---|---|"]
+    for f, d in res.items():
+        i = d["info"]
+        L.append(f"| {f} | {i['f_fit']:.0f} | {i['fit_rms_px']:.2f} | {i['residual_rms_px']:.2f} | {i['desk_tilt_deg']:.1f}° | {i['turn_range_deg']:.0f}° | {i['n_frames']} |")
+    L += ["", "## f 오차", "", f"| 영상 | 묶음 | 기준 f | 장면 | 경사 {gc['ramp_deg']:g}° 고정 | 경사 함께 추정 (경사) | free_template |", "|---|---|---|---|---|---|---|"]
+    for f, d in res.items():
+        e = vids[f]
+        rf = float(e.get("ref_f_px") or cfg["ref_f"]["value"])
+        fmt = lambda x: "-" if not x or "f" not in x else f"{x['f']:.0f} ({100 * (x['f'] / rf - 1):+.1f}%)" + ("*" if x.get("boundary") else "")      # noqa: E731
+        for s, o in d.items():
+            if s == "info":
+                continue
+            b = best(o)
+            L.append(f"| {f} | {e['person']} | {rf:g} | {lab.get(s, '합성 + 정규 잡음 ' + s[7:])} | {fmt(o.get(rk))} | {fmt(b)}" + ("" if not b else f" ({b['pitch_deg']:.1f}°)") + f" | {fmt(o.get('free_template'))} |")
+    L += ["", "## 한계", "", "- 합성 장면의 손은 94 의 해에서 온 평면(경사 고정) 손이다. 실제 손의 두께나 손가락 굽힘은 '실제 잔차' 장면에만 들어 있다.",
+          "- 실제 잔차는 94 의 f 에서 맞춘 모델 기준이라, 참 f 의 모델 기준 잔차와는 조금 다르다. 영상 4개.", ""]
+    return "\n".join(L) + "\n"
+
+
+def gs_results_yaml(run_dir: Path, own: dict) -> Path:
+    """96 의 값만: 영상·장면별 f, 경사, RMS (기준 f, 오차 없음)."""
+    r = json.loads((run_dir / "results.json").read_text())["real"]
+    m = json.loads((run_dir / "metadata.json").read_text())
+    rv = lambda x: x if not isinstance(x, float) else (round(x, 3) if np.isfinite(x) else None)      # noqa: E731
+    keys = ("f", "rms_px", "pitch_deg", "roll_deg", "desk_tilt_deg", "boundary", "start")
+    out = {"experiment": own["experiment"]["name"], "run": str(run_dir.resolve().relative_to(hf.PROJECT_ROOT)), "code_commit": m["git"]["commit"][:7],
+           "git_dirty_at_run": m["git"]["git_dirty"], "videos": {}}
+    for f, d in r.items():
+        out["videos"][f] = {s: ({k: rv(v) for k, v in o.items()} if s == "info" else
+                                {mk: ({kk: rv(v[kk]) for kk in keys if kk in v} if isinstance(v, dict) else v) for mk, v in o.items()}) for s, o in d.items()}
+    p = hf.resolve(own["output"]["results_yaml"])
+    p.write_text(yaml.safe_dump(hf.jsonable(out), allow_unicode=True, sort_keys=False))
+    return p
+
+
+# ----------------------------------------------------------------------------------------------------
 # 실행
 # ----------------------------------------------------------------------------------------------------
 def results_yaml(cmd: str, run_dir: Path, own: dict) -> Path:
@@ -551,7 +711,7 @@ def jt_results_yaml(run_dir: Path, own: dict) -> Path:
 
 def main(argv=None):
     ap = argparse.ArgumentParser(description="광류 방식 원인 확인 실험")
-    ap.add_argument("cmd", choices=["tracking-plane", "dorsum-corners", "two-plane", "joint-track-video"])
+    ap.add_argument("cmd", choices=["tracking-plane", "dorsum-corners", "two-plane", "joint-track-video", "geometry-synth"])
     ap.add_argument("--config", required=True)
     ap.add_argument("--out", default=None)
     ap.add_argument("--videos", type=int, default=None, help="시험 실행: 앞의 N 개 영상만, 추정 1건씩")
@@ -562,11 +722,11 @@ def main(argv=None):
     text = Path(a.config).read_text()
     own = yaml.safe_load(text)
     if a.sub == "results-yaml":
-        print(tw_results_yaml(hf.resolve(a.run), own) if a.cmd == "two-plane" else jt_results_yaml(hf.resolve(a.run), own) if a.cmd == "joint-track-video"
+        print(tw_results_yaml(hf.resolve(a.run), own) if a.cmd == "two-plane" else gs_results_yaml(hf.resolve(a.run), own) if a.cmd == "geometry-synth" else jt_results_yaml(hf.resolve(a.run), own) if a.cmd == "joint-track-video"
               else results_yaml(a.cmd, hf.resolve(a.run), own))
         return None
     cfg = rof.load_settings(own)
-    cfg.update({k: own[k] for k in ("variants", "clahe", "two_plane", "joint_track", "render", "reference") if k in own})
+    cfg.update({k: own[k] for k in ("variants", "clahe", "two_plane", "joint_track", "render", "reference", "geometry_synth") if k in own})
     if a.videos:
         cfg["videos"] = cfg["videos"][:a.videos]
         cfg["free_starts_deg"] = []
@@ -585,7 +745,7 @@ def main(argv=None):
         shutil.copytree(hf.resolve(own["detection_cache_from"]), run_root / "detection_cache")
     import multiprocessing as mp
     from concurrent.futures import ProcessPoolExecutor
-    job = {"tracking-plane": tp_job, "dorsum-corners": dc_job, "two-plane": tw_points, "joint-track-video": jt_job}[a.cmd]
+    job = {"tracking-plane": tp_job, "dorsum-corners": dc_job, "two-plane": tw_points, "joint-track-video": jt_job, "geometry-synth": rof.video_points}[a.cmd]
     vid = {}
     with ProcessPoolExecutor(max_workers=int(cfg["video_workers"]), mp_context=mp.get_context("spawn")) as ex:
         for e, (x, lines) in zip(cfg["videos"], ex.map(job, [(e, cfg, str(run_root)) for e in cfg["videos"]])):
@@ -599,6 +759,9 @@ def main(argv=None):
     elif a.cmd == "joint-track-video":
         res = vid
         text_sum = jt_summary(res, cfg)
+    elif a.cmd == "geometry-synth":
+        res = gs_run(cfg, own, vid, log)
+        text_sum = gs_summary(res, cfg, own)
     elif a.cmd == "two-plane":
         res = tw_run(cfg, vid, log)
         text_sum = tw_summary(res, cfg, own)
