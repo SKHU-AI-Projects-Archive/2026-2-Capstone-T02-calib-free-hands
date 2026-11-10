@@ -1,0 +1,23 @@
+# 104: 기존 폰 본인 영상 12개의 경사별 f (사용자 2026-11-10: "경사를 손 생김새에서 예측하는 방향으로 진행해줘."), 기록용, 판정 없음.
+# 103 에서 정답 f 가 나오는 경사가 사람마다 일정했다(본인 10~11°, 팀원 14~18.5°, 영상 8개). 손 생김새 단서와 맞춰 보려면 같은 사람 안의 흔들림도 알아야 해서, 기존 폰 본인 영상 12개도
+# 같은 계산(94 와 같은 광류 사슬, 첫 정지 구간 기준, j16; 경사 7, 11, 15, 19° 고정, 전체 프레임)을 한다. rotation-side 명령(99)을 부분집합 all 만으로 쓰고, 추적점은 이 실행에 저장(points/).
+# 검출은 81 캐시 재사용. 기준 f 는 summary.md 에만.
+experiment:
+  name: 104_ramp_needed_old
+  seed: 42
+settings_config: configs/74b_multistart_rerun.yaml
+detection_cache_from: runs/81_detected_joints/20261106T055430Z/detection_cache
+joint_set: j16
+code: {branch: optical_flow, commit: 4111ea2, modules: [HandCalib/optical_flow/experiments.py]}
+ramps_deg: [7, 11, 15, 19]
+reference: {mode: first_pause, pause_gap_frames: 15, min_pause_frames: 5}
+videos: [IMG_7346.MOV, IMG_7347.MOV, IMG_7348.MOV, IMG_7349.MOV, IMG_7350.MOV, IMG_7351.MOV, IMG_7352.MOV, IMG_7353.MOV, IMG_7354.MOV, IMG_7355.MOV, IMG_7356.MOV, IMG_7357.MOV]
+rotation_side:
+  points_run: null
+  margin_deg: 10
+  subsets: [all]
+workers: 64
+video_workers: 8
+output:
+  root: runs/104_ramp_needed_old
+  results_yaml: results/104_ramp_needed_old.yaml
