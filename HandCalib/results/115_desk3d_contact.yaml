@@ -1,0 +1,425 @@
+experiment: 115_desk3d_contact
+run: runs/115_desk3d_contact/20261110T053053Z
+code_commit: 62bd804
+git_dirty_at_run: false
+videos:
+  IMG_7346.MOV:
+    j16_tips:
+      free_template:
+        f: 887.984
+      desk3d:
+        f: 1351.394
+        desk_tilt_deg: 47.564
+        height_rel: 0.35
+        rms_px: 3.781
+        cost: 14.253
+        boundary: false
+    j16_tips_dip:
+      free_template:
+        f: 887.984
+      desk3d:
+        f: 1283.441
+        desk_tilt_deg: 48.382
+        height_rel: 0.325
+        rms_px: 4.097
+        cost: 16.699
+        boundary: false
+  IMG_7347.MOV:
+    j16_tips:
+      free_template:
+        f: 1442.249
+      desk3d:
+        f: 1849.916
+        desk_tilt_deg: 45.173
+        height_rel: 0.665
+        rms_px: 3.335
+        cost: 11.12
+        boundary: false
+    j16_tips_dip:
+      free_template:
+        f: 1442.249
+      desk3d:
+        f: 1241.957
+        desk_tilt_deg: 45.627
+        height_rel: 0.391
+        rms_px: 5.054
+        cost: 24.34
+        boundary: false
+  IMG_7348.MOV:
+    j16_tips:
+      free_template:
+        f: 1975.173
+      desk3d:
+        f: 1323.038
+        desk_tilt_deg: 48.466
+        height_rel: 0.306
+        rms_px: 4.337
+        cost: 18.288
+        boundary: false
+    j16_tips_dip:
+      free_template:
+        f: 1975.173
+      desk3d:
+        f: 1193.928
+        desk_tilt_deg: 49.069
+        height_rel: 0.264
+        rms_px: 4.703
+        cost: 21.319
+        boundary: false
+  IMG_7349.MOV:
+    j16_tips:
+      free_template:
+        f: 1461.251
+      desk3d:
+        f: 1847.634
+        desk_tilt_deg: 45.952
+        height_rel: 0.651
+        rms_px: 3.492
+        cost: 11.894
+        boundary: false
+    j16_tips_dip:
+      free_template:
+        f: 1461.251
+      desk3d:
+        f: 1303.507
+        desk_tilt_deg: 45.391
+        height_rel: 0.454
+        rms_px: 4.808
+        cost: 21.942
+        boundary: false
+  IMG_7350.MOV:
+    j16_tips:
+      free_template:
+        f: 1608.164
+      desk3d:
+        f: 1267.395
+        desk_tilt_deg: 47.95
+        height_rel: 0.292
+        rms_px: 3.065
+        cost: 9.378
+        boundary: false
+    j16_tips_dip:
+      free_template:
+        f: 1608.164
+      desk3d:
+        f: 1148.55
+        desk_tilt_deg: 48.591
+        height_rel: 0.225
+        rms_px: 3.342
+        cost: 11.106
+        boundary: false
+  IMG_7351.MOV:
+    j16_tips:
+      free_template:
+        f: 1301.6
+      desk3d:
+        f: 1704.346
+        desk_tilt_deg: 45.291
+        height_rel: 0.643
+        rms_px: 2.823
+        cost: 7.964
+        boundary: false
+    j16_tips_dip:
+      free_template:
+        f: 1301.6
+      desk3d:
+        f: 1283.093
+        desk_tilt_deg: 44.713
+        height_rel: 0.421
+        rms_px: 3.921
+        cost: 15.107
+        boundary: false
+  IMG_7352.MOV:
+    j16_tips:
+      free_template:
+        f: 1589.132
+      desk3d:
+        f: 1201.341
+        desk_tilt_deg: 48.783
+        height_rel: 0.2
+        rms_px: 3.847
+        cost: 14.752
+        boundary: false
+    j16_tips_dip:
+      free_template:
+        f: 1589.132
+      desk3d:
+        f: 1094.324
+        desk_tilt_deg: 49.386
+        height_rel: 0.138
+        rms_px: 4.103
+        cost: 16.758
+        boundary: false
+  IMG_7353.MOV:
+    j16_tips:
+      free_template:
+        f: 1242.158
+      desk3d:
+        f: 1756.663
+        desk_tilt_deg: 46.142
+        height_rel: 0.568
+        rms_px: 3.25
+        cost: 10.415
+        boundary: false
+    j16_tips_dip:
+      free_template:
+        f: 1242.158
+      desk3d:
+        f: 1204.684
+        desk_tilt_deg: 45.67
+        height_rel: 0.353
+        rms_px: 4.487
+        cost: 19.31
+        boundary: false
+  IMG_7354.MOV:
+    j16_tips:
+      free_template:
+        f: 1212.211
+      desk3d:
+        f: 677.39
+        desk_tilt_deg: 47.324
+        height_rel: 0.243
+        rms_px: 3.538
+        cost: 12.096
+        boundary: false
+    j16_tips_dip:
+      free_template:
+        f: 1212.211
+      desk3d:
+        f: 672.0
+        desk_tilt_deg: 46.136
+        height_rel: 0.206
+        rms_px: 3.971
+        cost: 15.185
+        boundary: true
+  IMG_7355.MOV:
+    j16_tips:
+      free_template:
+        f: 1536.547
+      desk3d:
+        f: 1948.843
+        desk_tilt_deg: 46.817
+        height_rel: 0.711
+        rms_px: 2.848
+        cost: 8.071
+        boundary: false
+    j16_tips_dip:
+      free_template:
+        f: 1536.547
+      desk3d:
+        f: 1277.112
+        desk_tilt_deg: 44.579
+        height_rel: 0.551
+        rms_px: 3.697
+        cost: 12.962
+        boundary: false
+  IMG_7356.MOV:
+    j16_tips:
+      free_template:
+        f: 2765.692
+      desk3d:
+        f: 827.551
+        desk_tilt_deg: 47.126
+        height_rel: 0.171
+        rms_px: 3.084
+        cost: 9.437
+        boundary: false
+    j16_tips_dip:
+      free_template:
+        f: 2765.692
+      desk3d:
+        f: 840.538
+        desk_tilt_deg: 46.339
+        height_rel: 0.173
+        rms_px: 3.232
+        cost: 10.416
+        boundary: false
+  IMG_7357.MOV:
+    j16_tips:
+      free_template:
+        f: 1069.011
+      desk3d:
+        f: 1724.194
+        desk_tilt_deg: 46.748
+        height_rel: 0.637
+        rms_px: 2.823
+        cost: 7.937
+        boundary: false
+    j16_tips_dip:
+      free_template:
+        f: 1069.011
+      desk3d:
+        f: 1294.219
+        desk_tilt_deg: 44.248
+        height_rel: 0.519
+        rms_px: 3.836
+        cost: 13.912
+        boundary: false
+  IMG_7354 - 복사본.MOV:
+    j16_tips:
+      free_template:
+        f: 1337.604
+      desk3d:
+        f: 1104.691
+        desk_tilt_deg: 62.932
+        height_rel: 0.292
+        rms_px: 3.503
+        cost: 12.059
+        boundary: false
+    j16_tips_dip:
+      free_template:
+        f: 1337.604
+      desk3d:
+        f: 1059.607
+        desk_tilt_deg: 62.805
+        height_rel: 0.24
+        rms_px: 4.152
+        cost: 17.101
+        boundary: false
+  IMG_7355 - 복사본.MOV:
+    j16_tips:
+      free_template:
+        f: 1583.602
+      desk3d:
+        f: 1173.032
+        desk_tilt_deg: 62.448
+        height_rel: 0.308
+        rms_px: 2.635
+        cost: 6.931
+        boundary: false
+    j16_tips_dip:
+      free_template:
+        f: 1583.602
+      desk3d:
+        f: 1083.854
+        desk_tilt_deg: 62.181
+        height_rel: 0.231
+        rms_px: 3.218
+        cost: 10.286
+        boundary: false
+  IMG_7351 - 복사본.MOV:
+    j16_tips:
+      free_template:
+        f: 1835.108
+      desk3d:
+        f: 1228.914
+        desk_tilt_deg: 52.672
+        height_rel: 0.559
+        rms_px: 3.547
+        cost: 12.345
+        boundary: false
+    j16_tips_dip:
+      free_template:
+        f: 1835.108
+      desk3d:
+        f: 1064.077
+        desk_tilt_deg: 52.944
+        height_rel: 0.415
+        rms_px: 4.063
+        cost: 16.059
+        boundary: false
+  IMG_7352 - 복사본.MOV:
+    j16_tips:
+      free_template:
+        f: 2013.144
+      desk3d:
+        f: 1239.511
+        desk_tilt_deg: 50.776
+        height_rel: 0.607
+        rms_px: 3.516
+        cost: 12.002
+        boundary: false
+    j16_tips_dip:
+      free_template:
+        f: 2013.144
+      desk3d:
+        f: 1042.624
+        desk_tilt_deg: 50.537
+        height_rel: 0.462
+        rms_px: 4.074
+        cost: 16.043
+        boundary: false
+  IMG_7384.MOV:
+    j16_tips:
+      free_template:
+        f: 3072.0
+      desk3d:
+        f: 1388.09
+        desk_tilt_deg: 42.777
+        height_rel: 0.689
+        rms_px: 4.695
+        cost: 19.951
+        boundary: false
+    j16_tips_dip:
+      free_template:
+        f: 3072.0
+      desk3d:
+        f: 1334.697
+        desk_tilt_deg: 43.247
+        height_rel: 0.595
+        rms_px: 5.175
+        cost: 23.702
+        boundary: false
+  IMG_7385.MOV:
+    j16_tips:
+      free_template:
+        f: 1442.884
+      desk3d:
+        f: 1659.994
+        desk_tilt_deg: 46.768
+        height_rel: 0.513
+        rms_px: 3.764
+        cost: 14.153
+        boundary: false
+    j16_tips_dip:
+      free_template:
+        f: 1442.884
+      desk3d:
+        f: 1387.749
+        desk_tilt_deg: 48.571
+        height_rel: 0.26
+        rms_px: 4.92
+        cost: 23.871
+        boundary: false
+  IMG_7387.MOV:
+    j16_tips:
+      free_template:
+        f: 3072.0
+      desk3d:
+        f: 1499.115
+        desk_tilt_deg: 44.31
+        height_rel: 0.769
+        rms_px: 3.576
+        cost: 12.748
+        boundary: false
+    j16_tips_dip:
+      free_template:
+        f: 3072.0
+      desk3d:
+        f: 1401.628
+        desk_tilt_deg: 45.173
+        height_rel: 0.615
+        rms_px: 4.592
+        cost: 20.128
+        boundary: false
+  IMG_7388.MOV:
+    j16_tips:
+      free_template:
+        f: 1692.101
+      desk3d:
+        f: 1768.98
+        desk_tilt_deg: 47.326
+        height_rel: 0.44
+        rms_px: 3.34
+        cost: 11.154
+        boundary: false
+    j16_tips_dip:
+      free_template:
+        f: 1692.101
+      desk3d:
+        f: 1572.79
+        desk_tilt_deg: 48.258
+        height_rel: 0.265
+        rms_px: 4.152
+        cost: 17.227
+        boundary: false
