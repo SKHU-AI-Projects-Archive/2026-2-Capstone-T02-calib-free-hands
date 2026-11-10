@@ -1,0 +1,35 @@
+# 110: MCP 4개(5, 9, 13, 17)를 모두 뺀 관절 12개(손가락 마디와 끝)로 추정 (CoTracker3 추적점, 98·105 저장) (사용자 2026-11-10: "진행해줘."), 기록용, 판정 없음.
+# 107·108: 중지 MCP·약지 끝만 빼서는 f 가 거의 안 바뀜(1~2%p). 사용자: "중지 MCP만 빼? 다른 MCP는?" -> 너클 줄 전체가 손가락 면에서 벗어났을 수 있어 MCP 4개를 모두 뺀다.
+# 점 = CoTracker3 추적점, 98·105 저장 (첫 정지 구간 기준). 추정 = free_template -> 경사 11° 고정 (side-consistency 명령, 부분집합 all, 경사 하나). j16 결과(같은 점)는 각 점 실행의 결과와 비교.
+# 읽는 법(실행 전에 정함): 팀원 영상 오차가 j16 보다 뚜렷이 줄고(절댓값 10%p 이상) 본인 영상이 크게 나빠지지 않으면 두 관절이 원인이라는 근거. 기준 f 는 summary.md 에만.
+experiment:
+  name: 110_drop_mcps_cotracker
+  seed: 42
+settings_config: configs/74b_multistart_rerun.yaml
+joint_set: j12_no_mcp
+joint_ids: [6, 7, 8, 10, 11, 12, 14, 15, 16, 18, 19, 20]
+code: {branch: optical_flow, commit: 02c60c0, modules: [HandCalib/optical_flow/experiments.py]}
+ramps_deg: [11]
+videos: ["IMG_7354 - 복사본.MOV", "IMG_7355 - 복사본.MOV", "IMG_7351 - 복사본.MOV", "IMG_7352 - 복사본.MOV"]
+extra_videos:
+  - {file: IMG_7384.MOV, person: teammate, ref_f_px: 1672}
+  - {file: IMG_7385.MOV, person: self, ref_f_px: 1672}
+  - {file: IMG_7387.MOV, person: teammate, ref_f_px: 1672}
+  - {file: IMG_7388.MOV, person: self, ref_f_px: 1672}
+side_consistency:
+  margin_deg: 10
+  subsets: [all]
+  points:
+    "IMG_7354 - 복사본.MOV": runs/98_cotracker/20261110T023248Z
+    "IMG_7355 - 복사본.MOV": runs/98_cotracker/20261110T023248Z
+    "IMG_7351 - 복사본.MOV": runs/98_cotracker/20261110T023248Z
+    "IMG_7352 - 복사본.MOV": runs/98_cotracker/20261110T023248Z
+    IMG_7384.MOV: runs/105_cotracker_new_pair/20261110T042149Z
+    IMG_7385.MOV: runs/105_cotracker_new_pair/20261110T042149Z
+    IMG_7387.MOV: runs/105_cotracker_new_pair/20261110T042149Z
+    IMG_7388.MOV: runs/105_cotracker_new_pair/20261110T042149Z
+workers: 32
+video_workers: 8
+output:
+  root: runs/110_drop_mcps_cotracker
+  results_yaml: results/110_drop_mcps_cotracker.yaml
