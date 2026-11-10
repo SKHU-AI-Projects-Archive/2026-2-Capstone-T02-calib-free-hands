@@ -1,0 +1,517 @@
+experiment: 103_side_consistency
+run: runs/103_side_consistency/20261110T035400Z
+code_commit: 3ff2948
+git_dirty_at_run: false
+videos:
+  IMG_7354 - 복사본.MOV:
+    info:
+      angle_min: -63.133
+      angle_max: 64.922
+      sym_limit: 63.133
+      n_all: 564
+      n_plus: 384
+      n_minus: 376
+      n_symmetric: 562
+    crossing:
+      ramp_deg: 7.0
+      f: 1417.9
+      crossed: false
+    all:
+      ramp_7:
+        f: 1417.9
+        rms_px: 3.316
+        boundary: false
+      ramp_11:
+        f: 1737.866
+        rms_px: 3.045
+        boundary: false
+      ramp_15:
+        f: 2268.628
+        rms_px: 3.065
+        boundary: false
+      ramp_19:
+        f: 3072.0
+        rms_px: 3.382
+        boundary: true
+    plus:
+      ramp_7:
+        f: 1188.836
+        rms_px: 1.762
+        boundary: false
+      ramp_11:
+        f: 1337.105
+        rms_px: 1.415
+        boundary: false
+      ramp_15:
+        f: 1492.834
+        rms_px: 1.18
+        boundary: false
+      ramp_19:
+        f: 1667.331
+        rms_px: 1.041
+        boundary: false
+    minus:
+      ramp_7:
+        f: 1637.421
+        rms_px: 2.716
+        boundary: false
+      ramp_11:
+        f: 1961.496
+        rms_px: 2.615
+        boundary: false
+      ramp_15:
+        f: 2451.064
+        rms_px: 2.58
+        boundary: false
+      ramp_19:
+        f: 3072.0
+        rms_px: 2.633
+        boundary: true
+  IMG_7355 - 복사본.MOV:
+    info:
+      angle_min: -59.156
+      angle_max: 39.337
+      sym_limit: 39.337
+      n_all: 498
+      n_plus: 349
+      n_minus: 348
+      n_symmetric: 388
+    crossing:
+      ramp_deg: 7.0
+      f: 1322.197
+      crossed: false
+    all:
+      ramp_7:
+        f: 1322.197
+        rms_px: 3.079
+        boundary: false
+      ramp_11:
+        f: 1636.976
+        rms_px: 2.92
+        boundary: false
+      ramp_15:
+        f: 2143.996
+        rms_px: 2.966
+        boundary: false
+      ramp_19:
+        f: 3072.0
+        rms_px: 3.208
+        boundary: true
+    plus:
+      ramp_7:
+        f: 1009.61
+        rms_px: 1.49
+        boundary: false
+      ramp_11:
+        f: 1148.529
+        rms_px: 1.311
+        boundary: false
+      ramp_15:
+        f: 1319.212
+        rms_px: 1.176
+        boundary: false
+      ramp_19:
+        f: 1531.568
+        rms_px: 1.087
+        boundary: false
+    minus:
+      ramp_7:
+        f: 1544.103
+        rms_px: 2.332
+        boundary: false
+      ramp_11:
+        f: 1884.816
+        rms_px: 2.236
+        boundary: false
+      ramp_15:
+        f: 2420.803
+        rms_px: 2.201
+        boundary: false
+      ramp_19:
+        f: 3072.0
+        rms_px: 2.249
+        boundary: true
+  IMG_7351 - 복사본.MOV:
+    info:
+      angle_min: -44.293
+      angle_max: 81.827
+      sym_limit: 44.293
+      n_all: 386
+      n_plus: 259
+      n_minus: 215
+      n_symmetric: 271
+    crossing:
+      ramp_deg: 7.0
+      f: 1036.489
+      crossed: false
+    all:
+      ramp_7:
+        f: 1036.489
+        rms_px: 3.047
+        boundary: false
+      ramp_11:
+        f: 1249.037
+        rms_px: 2.987
+        boundary: false
+      ramp_15:
+        f: 1565.062
+        rms_px: 3.093
+        boundary: false
+      ramp_19:
+        f: 2047.538
+        rms_px: 3.396
+        boundary: false
+    plus:
+      ramp_7:
+        f: 799.771
+        rms_px: 1.88
+        boundary: false
+      ramp_11:
+        f: 887.205
+        rms_px: 1.696
+        boundary: false
+      ramp_15:
+        f: 996.139
+        rms_px: 1.568
+        boundary: false
+      ramp_19:
+        f: 1123.047
+        rms_px: 1.507
+        boundary: false
+    minus:
+      ramp_7:
+        f: 1179.076
+        rms_px: 1.374
+        boundary: false
+      ramp_11:
+        f: 1406.204
+        rms_px: 1.372
+        boundary: false
+      ramp_15:
+        f: 1743.339
+        rms_px: 1.431
+        boundary: false
+      ramp_19:
+        f: 2299.047
+        rms_px: 1.543
+        boundary: false
+  IMG_7352 - 복사본.MOV:
+    info:
+      angle_min: -55.053
+      angle_max: 57.595
+      sym_limit: 55.053
+      n_all: 368
+      n_plus: 247
+      n_minus: 203
+      n_symmetric: 342
+    crossing:
+      ramp_deg: 7.0
+      f: 912.988
+      crossed: false
+    all:
+      ramp_7:
+        f: 912.988
+        rms_px: 3.443
+        boundary: false
+      ramp_11:
+        f: 1102.019
+        rms_px: 3.314
+        boundary: false
+      ramp_15:
+        f: 1387.086
+        rms_px: 3.438
+        boundary: false
+      ramp_19:
+        f: 1876.942
+        rms_px: 3.736
+        boundary: false
+    plus:
+      ramp_7:
+        f: 825.248
+        rms_px: 1.759
+        boundary: false
+      ramp_11:
+        f: 985.187
+        rms_px: 1.463
+        boundary: false
+      ramp_15:
+        f: 1222.373
+        rms_px: 1.239
+        boundary: false
+      ramp_19:
+        f: 1601.292
+        rms_px: 1.09
+        boundary: false
+    minus:
+      ramp_7:
+        f: 974.644
+        rms_px: 1.733
+        boundary: false
+      ramp_11:
+        f: 1171.399
+        rms_px: 1.677
+        boundary: false
+      ramp_15:
+        f: 1464.853
+        rms_px: 1.722
+        boundary: false
+      ramp_19:
+        f: 1949.828
+        rms_px: 1.86
+        boundary: false
+  IMG_7384.MOV:
+    info:
+      angle_min: -109.912
+      angle_max: 67.206
+      sym_limit: 67.206
+      n_all: 636
+      n_plus: 407
+      n_minus: 414
+      n_symmetric: 504
+    crossing:
+      ramp_deg: 16.346
+      f: 1829.637
+      crossed: true
+    all:
+      ramp_7:
+        f: 1349.984
+        rms_px: 3.724
+        boundary: false
+      ramp_11:
+        f: 1508.881
+        rms_px: 3.339
+        boundary: false
+      ramp_15:
+        f: 1723.315
+        rms_px: 3.672
+        boundary: false
+      ramp_19:
+        f: 2058.981
+        rms_px: 4.566
+        boundary: false
+    plus:
+      ramp_7:
+        f: 1090.236
+        rms_px: 1.997
+        boundary: false
+      ramp_11:
+        f: 1268.169
+        rms_px: 1.677
+        boundary: false
+      ramp_15:
+        f: 1551.007
+        rms_px: 1.434
+        boundary: false
+      ramp_19:
+        f: 1987.405
+        rms_px: 1.316
+        boundary: false
+    minus:
+      ramp_7:
+        f: 1404.763
+        rms_px: 3.379
+        boundary: false
+      ramp_11:
+        f: 1505.132
+        rms_px: 3.211
+        boundary: false
+      ramp_15:
+        f: 1630.468
+        rms_px: 3.225
+        boundary: false
+      ramp_19:
+        f: 1800.879
+        rms_px: 3.505
+        boundary: false
+  IMG_7385.MOV:
+    info:
+      angle_min: -61.214
+      angle_max: 75.916
+      sym_limit: 61.214
+      n_all: 569
+      n_plus: 371
+      n_minus: 395
+      n_symmetric: 470
+    crossing:
+      ramp_deg: 16.489
+      f: 2252.1
+      crossed: true
+    all:
+      ramp_7:
+        f: 1465.985
+        rms_px: 3.751
+        boundary: false
+      ramp_11:
+        f: 1717.805
+        rms_px: 3.471
+        boundary: false
+      ramp_15:
+        f: 2065.622
+        rms_px: 3.504
+        boundary: false
+      ramp_19:
+        f: 2605.582
+        rms_px: 3.795
+        boundary: false
+    plus:
+      ramp_7:
+        f: 1310.853
+        rms_px: 1.652
+        boundary: false
+      ramp_11:
+        f: 1557.525
+        rms_px: 1.427
+        boundary: false
+      ramp_15:
+        f: 1892.178
+        rms_px: 1.323
+        boundary: false
+      ramp_19:
+        f: 2373.638
+        rms_px: 1.321
+        boundary: false
+    minus:
+      ramp_7:
+        f: 1491.136
+        rms_px: 3.516
+        boundary: false
+      ramp_11:
+        f: 1695.333
+        rms_px: 3.321
+        boundary: false
+      ramp_15:
+        f: 1927.639
+        rms_px: 3.276
+        boundary: false
+      ramp_19:
+        f: 2300.45
+        rms_px: 3.184
+        boundary: false
+  IMG_7387.MOV:
+    info:
+      angle_min: -93.603
+      angle_max: 43.7
+      sym_limit: 43.7
+      n_all: 565
+      n_plus: 356
+      n_minus: 389
+      n_symmetric: 416
+    crossing:
+      ramp_deg: 12.956
+      f: 1445.73
+      crossed: true
+    all:
+      ramp_7:
+        f: 1256.43
+        rms_px: 3.323
+        boundary: false
+      ramp_11:
+        f: 1378.161
+        rms_px: 3.38
+        boundary: false
+      ramp_15:
+        f: 1519.914
+        rms_px: 3.86
+        boundary: false
+      ramp_19:
+        f: 1693.552
+        rms_px: 4.669
+        boundary: false
+    plus:
+      ramp_7:
+        f: 1068.131
+        rms_px: 1.544
+        boundary: false
+      ramp_11:
+        f: 1314.494
+        rms_px: 1.267
+        boundary: false
+      ramp_15:
+        f: 1683.341
+        rms_px: 1.141
+        boundary: false
+      ramp_19:
+        f: 2292.598
+        rms_px: 1.141
+        boundary: false
+    minus:
+      ramp_7:
+        f: 1311.2
+        rms_px: 2.885
+        boundary: false
+      ramp_11:
+        f: 1420.864
+        rms_px: 2.821
+        boundary: false
+      ramp_15:
+        f: 1551.824
+        rms_px: 2.906
+        boundary: false
+      ramp_19:
+        f: 1713.557
+        rms_px: 3.177
+        boundary: false
+  IMG_7388.MOV:
+    info:
+      angle_min: -69.73
+      angle_max: 51.23
+      sym_limit: 51.23
+      n_all: 635
+      n_plus: 429
+      n_minus: 450
+      n_symmetric: 496
+    crossing:
+      ramp_deg: 17.047
+      f: 1923.952
+      crossed: true
+    all:
+      ramp_7:
+        f: 1529.956
+        rms_px: 4.277
+        boundary: false
+      ramp_11:
+        f: 1667.632
+        rms_px: 4.214
+        boundary: false
+      ramp_15:
+        f: 1829.372
+        rms_px: 4.347
+        boundary: false
+      ramp_19:
+        f: 2018.773
+        rms_px: 4.632
+        boundary: false
+    plus:
+      ramp_7:
+        f: 1342.128
+        rms_px: 1.927
+        boundary: false
+      ramp_11:
+        f: 1590.195
+        rms_px: 1.707
+        boundary: false
+      ramp_15:
+        f: 1927.825
+        rms_px: 1.563
+        boundary: false
+      ramp_19:
+        f: 2416.782
+        rms_px: 1.487
+        boundary: false
+    minus:
+      ramp_7:
+        f: 1648.266
+        rms_px: 3.654
+        boundary: false
+      ramp_11:
+        f: 1821.593
+        rms_px: 3.51
+        boundary: false
+      ramp_15:
+        f: 2033.193
+        rms_px: 3.418
+        boundary: false
+      ramp_19:
+        f: 2297.108
+        rms_px: 3.383
+        boundary: false
