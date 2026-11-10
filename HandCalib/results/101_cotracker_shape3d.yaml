@@ -1,0 +1,389 @@
+experiment: 101_cotracker_shape3d
+run: runs/101_cotracker_shape3d/20261110T033257Z
+code_commit: c12a0f4
+git_dirty_at_run: false
+videos:
+  IMG_7346.MOV:
+    cotracker:
+      j16:
+        free_template:
+          f: 887.984
+          boundary: false
+        free_shape3d:
+          f: 1373.926
+          boundary: false
+          relief_rel: 0.056
+          rms_px: 2.371
+          success: true
+        elapsed_s: 1.804
+      j21:
+        free_template:
+          f: 1747.402
+          boundary: false
+        free_shape3d:
+          f: 1751.083
+          boundary: false
+          relief_rel: 0.059
+          rms_px: 3.47
+          success: true
+        elapsed_s: 2.348
+  IMG_7347.MOV:
+    cotracker:
+      j16:
+        free_template:
+          f: 1442.249
+          boundary: false
+        free_shape3d:
+          f: 1424.585
+          boundary: false
+          relief_rel: 0.049
+          rms_px: 2.295
+          success: true
+        elapsed_s: 1.251
+      j21:
+        free_template:
+          f: 3072.0
+          boundary: true
+        free_shape3d:
+          f: 3072.0
+          boundary: true
+          relief_rel: 0.081
+          rms_px: 9.752
+          success: false
+        elapsed_s: 5.135
+  IMG_7348.MOV:
+    cotracker:
+      j16:
+        free_template:
+          f: 1975.173
+          boundary: false
+        free_shape3d:
+          f: 2025.938
+          boundary: false
+          relief_rel: 0.056
+          rms_px: 2.81
+          success: true
+        elapsed_s: 1.4
+      j21:
+        free_template:
+          f: 2098.522
+          boundary: false
+        free_shape3d:
+          f: 2073.629
+          boundary: false
+          relief_rel: 0.056
+          rms_px: 3.757
+          success: true
+        elapsed_s: 1.957
+  IMG_7349.MOV:
+    cotracker:
+      j16:
+        free_template:
+          f: 1461.251
+          boundary: false
+        free_shape3d:
+          f: 1555.396
+          boundary: false
+          relief_rel: 0.056
+          rms_px: 2.651
+          success: true
+        elapsed_s: 2.545
+      j21:
+        free_template:
+          f: 3072.0
+          boundary: true
+        free_shape3d:
+          f: 3072.0
+          boundary: true
+          relief_rel: 0.033
+          rms_px: 9.441
+          success: false
+        elapsed_s: 4.849
+  IMG_7350.MOV:
+    cotracker:
+      j16:
+        free_template:
+          f: 1608.164
+          boundary: false
+        free_shape3d:
+          f: 1427.42
+          boundary: false
+          relief_rel: 0.054
+          rms_px: 1.889
+          success: true
+        elapsed_s: 1.737
+      j21:
+        free_template:
+          f: 1877.251
+          boundary: false
+        free_shape3d:
+          f: 1914.021
+          boundary: false
+          relief_rel: 0.072
+          rms_px: 2.966
+          success: true
+        elapsed_s: 3.118
+  IMG_7351.MOV:
+    cotracker:
+      j16:
+        free_template:
+          f: 1301.6
+          boundary: false
+        free_shape3d:
+          f: 1425.85
+          boundary: false
+          relief_rel: 0.049
+          rms_px: 2.059
+          success: true
+        elapsed_s: 1.474
+      j21:
+        free_template:
+          f: 3072.0
+          boundary: true
+        free_shape3d:
+          f: 3072.0
+          boundary: true
+          relief_rel: 0.025
+          rms_px: 9.894
+          success: false
+        elapsed_s: 5.451
+  IMG_7352.MOV:
+    cotracker:
+      j16:
+        free_template:
+          f: 1589.132
+          boundary: false
+        free_shape3d:
+          f: 2149.697
+          boundary: false
+          relief_rel: 0.037
+          rms_px: 2.526
+          success: true
+        elapsed_s: 2.433
+      j21:
+        free_template:
+          f: 1578.096
+          boundary: false
+        free_shape3d:
+          f: 2281.558
+          boundary: false
+          relief_rel: 0.061
+          rms_px: 5.719
+          success: true
+        elapsed_s: 3.011
+  IMG_7353.MOV:
+    cotracker:
+      j16:
+        free_template:
+          f: 1242.158
+          boundary: false
+        free_shape3d:
+          f: 1506.872
+          boundary: false
+          relief_rel: 0.049
+          rms_px: 2.278
+          success: true
+        elapsed_s: 1.352
+      j21:
+        free_template:
+          f: 3072.0
+          boundary: true
+        free_shape3d:
+          f: 3072.0
+          boundary: true
+          relief_rel: 0.022
+          rms_px: 9.565
+          success: false
+        elapsed_s: 5.168
+  IMG_7354.MOV:
+    cotracker:
+      j16:
+        free_template:
+          f: 1212.211
+          boundary: false
+        free_shape3d:
+          f: 1430.418
+          boundary: false
+          relief_rel: 0.033
+          rms_px: 1.894
+          success: true
+        elapsed_s: 1.733
+      j21:
+        free_template:
+          f: 1867.021
+          boundary: false
+        free_shape3d:
+          f: 1515.069
+          boundary: false
+          relief_rel: 0.044
+          rms_px: 5.104
+          success: true
+        elapsed_s: 3.301
+  IMG_7355.MOV:
+    cotracker:
+      j16:
+        free_template:
+          f: 1536.547
+          boundary: false
+        free_shape3d:
+          f: 3072.0
+          boundary: true
+          relief_rel: 0.047
+          rms_px: 1.769
+          success: true
+        elapsed_s: 2.776
+      j21:
+        free_template:
+          f: 3072.0
+          boundary: true
+        free_shape3d:
+          f: 3072.0
+          boundary: true
+          relief_rel: 0.019
+          rms_px: 5.999
+          success: false
+        elapsed_s: 5.078
+  IMG_7356.MOV:
+    cotracker:
+      j16:
+        free_template:
+          f: 2765.692
+          boundary: false
+        free_shape3d:
+          f: 1513.437
+          boundary: false
+          relief_rel: 0.033
+          rms_px: 1.848
+          success: true
+        elapsed_s: 2.145
+      j21:
+        free_template:
+          f: 2052.265
+          boundary: false
+        free_shape3d:
+          f: 1468.0
+          boundary: false
+          relief_rel: 0.055
+          rms_px: 3.935
+          success: true
+        elapsed_s: 3.085
+  IMG_7357.MOV:
+    cotracker:
+      j16:
+        free_template:
+          f: 1069.011
+          boundary: false
+        free_shape3d:
+          f: 1817.59
+          boundary: false
+          relief_rel: 0.051
+          rms_px: 1.592
+          success: true
+        elapsed_s: 2.864
+      j21:
+        free_template:
+          f: 3072.0
+          boundary: true
+        free_shape3d:
+          f: 3072.0
+          boundary: true
+          relief_rel: 0.057
+          rms_px: 4.613
+          success: false
+        elapsed_s: 5.354
+  IMG_7354 - 복사본.MOV:
+    cotracker:
+      j16:
+        free_template:
+          f: 1337.604
+          boundary: false
+        free_shape3d:
+          f: 2093.936
+          boundary: false
+          relief_rel: 0.063
+          rms_px: 2.424
+          success: true
+        elapsed_s: 2.595
+      j21:
+        free_template:
+          f: 1834.14
+          boundary: false
+        free_shape3d:
+          f: 3072.0
+          boundary: true
+          relief_rel: 0.06
+          rms_px: 3.005
+          success: false
+        elapsed_s: 4.361
+  IMG_7355 - 복사본.MOV:
+    cotracker:
+      j16:
+        free_template:
+          f: 1583.602
+          boundary: false
+        free_shape3d:
+          f: 1340.289
+          boundary: false
+          relief_rel: 0.054
+          rms_px: 1.957
+          success: true
+        elapsed_s: 3.261
+      j21:
+        free_template:
+          f: 1783.764
+          boundary: false
+        free_shape3d:
+          f: 2973.43
+          boundary: false
+          relief_rel: 0.051
+          rms_px: 2.867
+          success: true
+        elapsed_s: 3.032
+  IMG_7351 - 복사본.MOV:
+    cotracker:
+      j16:
+        free_template:
+          f: 1835.108
+          boundary: false
+        free_shape3d:
+          f: 3072.0
+          boundary: true
+          relief_rel: 0.013
+          rms_px: 4.542
+          success: true
+        elapsed_s: 3.499
+      j21:
+        free_template:
+          f: 3072.0
+          boundary: true
+        free_shape3d:
+          f: 2979.527
+          boundary: false
+          relief_rel: 0.09
+          rms_px: 4.63
+          success: true
+        elapsed_s: 4.465
+  IMG_7352 - 복사본.MOV:
+    cotracker:
+      j16:
+        free_template:
+          f: 2013.144
+          boundary: false
+        free_shape3d:
+          f: 3072.0
+          boundary: true
+          relief_rel: 0.012
+          rms_px: 4.339
+          success: true
+        elapsed_s: 3.378
+      j21:
+        free_template:
+          f: 3072.0
+          boundary: true
+        free_shape3d:
+          f: 1800.195
+          boundary: false
+          relief_rel: 0.085
+          rms_px: 3.475
+          success: true
+        elapsed_s: 3.915
