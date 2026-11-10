@@ -1,0 +1,27 @@
+# 100: 같은 카메라·같은 장소에서 새로 찍은 영상 (사용자 2026-11-10: "팀원과 내 영상을 각각 2개씩 촬영했어. 7384, 7387이 팀원 영상이고, 7385, 7388이 내영상이야."), 기록용, 판정 없음.
+# 목적: 같은 촬영 조건에서도 팀원 영상만 f 가 낮게 나오는지. 계산은 99 와 같다: 94 와 같은 광류 사슬(첫 정지 구간 기준, j16)을 만들어 저장하고, 손 방향으로 나눈 부분집합
+# (all = 94 와 같은 계산, plus / minus = 정면 + 한쪽, symmetric = 양쪽 같은 각도까지)마다 free_template -> 경사 11° 고정 추정. 기준 f = 새 폰 체커보드 값(73 과 같은 폰, 사용자: 같은 카메라).
+# 영상은 기본 설정 목록에 없어 extra_videos 로 넣는다(input_dir 은 기본 설정과 같음). 검출 캐시 없음(새 영상). 기준 f 는 summary.md 에만.
+experiment:
+  name: 100_new_pair_shoot
+  seed: 42
+settings_config: configs/74b_multistart_rerun.yaml
+joint_set: j16
+code: {branch: optical_flow, commit: 58151ea, modules: [HandCalib/optical_flow/experiments.py]}
+ramps_deg: [11]
+reference: {mode: first_pause, pause_gap_frames: 15, min_pause_frames: 5}
+videos: ["__none__"]
+extra_videos:
+  - {file: IMG_7384.MOV, person: teammate, ref_f_px: 1672}
+  - {file: IMG_7385.MOV, person: self, ref_f_px: 1672}
+  - {file: IMG_7387.MOV, person: teammate, ref_f_px: 1672}
+  - {file: IMG_7388.MOV, person: self, ref_f_px: 1672}
+rotation_side:
+  points_run: null
+  margin_deg: 10
+  subsets: [all, plus, minus, symmetric]
+workers: 16
+video_workers: 4
+output:
+  root: runs/100_new_pair_shoot
+  results_yaml: results/100_new_pair_shoot.yaml
