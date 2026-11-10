@@ -1,0 +1,20 @@
+# 95: 94 를 관절 j21 로 다시 집계 (사용자 2026-11-10: "일단은 21점으로 다시 집계해보자."), 기록용, 판정 없음.
+# 이유: j16 은 검출기 방식(53)의 주 관절을 56 이후 그대로 물려받은 것이고, 광류 방식에서 j16 / j21 을 다시 정한 적이 없다. 74b(예전 기준 프레임)에서 경사 11° 고정은 기존 폰 12개
+# 절대 오차 중앙값 j21 4.1% / j16 7.2% 였다. 바꾸는 것은 joint_set 하나(j21 = 관절 0~20 전부). 나머지는 94 와 같다: 기준 프레임 first_pause, 광류 추적점, 책상 운동 추정기,
+# 경사 11° 고정과 함께 추정(시작 5·12·19° 중 비용 최소), 영상 16개 전부. 비교: 74b 의 j21(예전 기준 프레임). 검출은 81 실행의 캐시 재사용. 기준 f 는 summary.md 에만. 실행 전에 정함.
+experiment:
+  name: 95_reference_first_pause_j21
+  seed: 42
+settings_config: configs/74b_multistart_rerun.yaml
+compare_run: runs/74b_multistart_rerun/20261105T044422Z
+detection_cache_from: runs/81_detected_joints/20261106T055430Z/detection_cache
+joint_set: j21
+code_95: {branch: optical_flow, commit: e720477, modules: [HandCalib/optical_flow/run_optical_flow.py]}
+ramps_deg: [11]
+reference: {mode: first_pause, pause_gap_frames: 15, min_pause_frames: 5}
+videos: []
+workers: 64
+video_workers: 8
+output:
+  root: runs/95_reference_first_pause_j21
+  results_yaml: results/95_reference_first_pause_j21.yaml
