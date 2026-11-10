@@ -13,6 +13,7 @@
   python optical_flow/experiments.py pip-axis        --config configs/111_pip_axis_j16.yaml
   python optical_flow/experiments.py pause-plane2    --config configs/113_pause_plane2.yaml
   python optical_flow/experiments.py desk3d          --config configs/114_desk3d.yaml
+  python optical_flow/experiments.py desk3d-contact  --config configs/115_desk3d_contact.yaml
   python optical_flow/experiments.py <명령> --config <설정> results-yaml --run <실행 폴더>
 
 tracking-plane (90): 추적 사슬이 손의 어느 평면을 따라가는지 본다. 기준 프레임 -> 각 프레임의 사슬 변환을, 같은 두 프레임의 검출 관절로 맞춘
@@ -20,6 +21,7 @@ tracking-plane (90): 추적 사슬이 손의 어느 평면을 따라가는지 �
 dorsum-corners (91): 특징점을 손등 몸통에서만 고르기, 특징점을 고를 때만 대비 보정(CLAHE), 둘 다. 추적점과 검출 관절의 거리, 책상 운동 추정기의 f.
 geometry-synth (96): 영상의 카메라 기울기·손 모양·프레임별 움직임을 그대로 둔 합성 장면을 참 f 로 만들어 같은 추정을 돌린다 (촬영 구도·동작 탓인지, 실제 점 탓인지).
 pause-plane (97): 멈춤 구간마다 손 평면 방향을 알려진 f 로 호모그래피 분해해 손 경사가 자세마다 바뀌는지 본다 (실제 점, 합성 없음).
+desk3d-contact (115): 114 + 책상에 닿는 손가락 끝 쪽 관절의 높이를 같게 고정.
 desk3d (114): 책상 운동 + 입체 손 모양 추정기(optical_flow/desk3d.py)를 저장된 관절별 추적점에 돌린다 (경사 가정 없음).
 pip-axis (111, 112): 손 축 뿌리를 PIP 줄로 바꿔(MCP 없이도) 책상 운동 추정기를 돌린다. pause-plane2 (113): 97 을 고쳐 멈춤 자세마다 손 평면 방향을 잰다.
 shape-change (106): 저장된 관절별 추적점이 평평한 단단한 손(호모그래피 하나)에서 얼마나 벗어나는지 (f 없음).
@@ -1659,6 +1661,38 @@ def d3_results_yaml(run_dir: Path, own: dict) -> Path:
 
 
 # ----------------------------------------------------------------------------------------------------
+# 115: 114 + 닿는 관절 높이 고정 (optical_flow.desk3d.dk3c_job)
+# ----------------------------------------------------------------------------------------------------
+def d3c_run(cfg: dict, own: dict, log) -> dict:
+    """115: d3_run 과 같고, 방식마다 contact(높이를 같게 고정할 관절)를 넘겨 dk3c_job 으로 푼다. 결과 모양이 d3_run 과 같아 d3_summary / d3_results_yaml 로 적는다."""
+    import multiprocessing as mp
+    from concurrent.futures import ProcessPoolExecutor
+    from optical_flow import desk3d
+    dc = cfg["desk3d"]
+    items = []
+    for e in cfg["videos"]:
+        x = load_points(dc["points"][e["file"]], e["file"])
+        for v in dc["variants"]:
+            items.append((e["file"], v["name"], x, [int(j) for j in v["joint_ids"]], v.get("z_rel"), [int(j) for j in v["contact"]]))
+    with ProcessPoolExecutor(max_workers=int(cfg["workers"]), mp_context=mp.get_context("spawn")) as ex:
+        fts = list(ex.map(hf.tl_template_job, [(x["kp"], np.isfinite(x["kp"]).all(2), np.flatnonzero(x["use"]), x["box"], tuple(x["size"]), cfg["pipeline"]["estimate"], ids)
+                                                for _, _, x, ids, _, _ in items], chunksize=1))
+    jobs, keys, res = [], [], {}
+    for (f, nm, x, ids, zr, ct), ft in zip(items, fts):
+        A = ft.get("A")
+        res.setdefault(f, {})[nm] = {"free_template": {"failed": ft.get("failed")} if A is None else {"f": float(A["f"])}}
+        if A is None:
+            continue
+        jobs.append((x["kp"], np.isfinite(x["kp"]).all(2), np.flatnonzero(x["use"]), x["box"], tuple(x["size"]), cfg["pipeline"]["estimate"], ids, A, float(dc["ramp_init"]), zr, ct))
+        keys.append((f, nm))
+    log(f"  추정 {len(jobs)}건")
+    with ProcessPoolExecutor(max_workers=int(cfg["workers"]), mp_context=mp.get_context("spawn")) as ex:
+        for (f, nm), o in zip(keys, ex.map(desk3d.dk3c_job, jobs, chunksize=1)):
+            res[f][nm]["desk3d"] = o
+    return res
+
+
+# ----------------------------------------------------------------------------------------------------
 # 실행
 # ----------------------------------------------------------------------------------------------------
 def results_yaml(cmd: str, run_dir: Path, own: dict) -> Path:
@@ -1722,7 +1756,7 @@ class _nullpool:
 
 def main(argv=None):
     ap = argparse.ArgumentParser(description="광류 방식 원인 확인 실험")
-    ap.add_argument("cmd", choices=["tracking-plane", "dorsum-corners", "two-plane", "joint-track-video", "geometry-synth", "pause-plane", "cotracker", "rotation-side", "points-video", "shape3d", "side-consistency", "shape-change", "pip-axis", "pause-plane2", "desk3d"])
+    ap.add_argument("cmd", choices=["tracking-plane", "dorsum-corners", "two-plane", "joint-track-video", "geometry-synth", "pause-plane", "cotracker", "rotation-side", "points-video", "shape3d", "side-consistency", "shape-change", "pip-axis", "pause-plane2", "desk3d", "desk3d-contact"])
     ap.add_argument("--config", required=True)
     ap.add_argument("--out", default=None)
     ap.add_argument("--videos", type=int, default=None, help="시험 실행: 앞의 N 개 영상만, 추정 1건씩")
@@ -1738,7 +1772,7 @@ def main(argv=None):
               else s3_results_yaml(hf.resolve(a.run), own) if a.cmd == "shape3d" else sc_results_yaml(hf.resolve(a.run), own) if a.cmd == "side-consistency"
               else sh_results_yaml(hf.resolve(a.run), own) if a.cmd == "shape-change"
               else sc_results_yaml(hf.resolve(a.run), own) if a.cmd == "pip-axis" else pq_results_yaml(hf.resolve(a.run), own) if a.cmd == "pause-plane2"
-              else d3_results_yaml(hf.resolve(a.run), own) if a.cmd == "desk3d" else jt_results_yaml(hf.resolve(a.run), own) if a.cmd == "joint-track-video"
+              else d3_results_yaml(hf.resolve(a.run), own) if a.cmd in ("desk3d", "desk3d-contact") else jt_results_yaml(hf.resolve(a.run), own) if a.cmd == "joint-track-video"
               else results_yaml(a.cmd, hf.resolve(a.run), own))
         return None
     cfg = rof.load_settings({**own, "joint_set": "j16"} if own.get("joint_ids") else own)      # joint_ids 를 직접 적으면 joint_set 은 이름일 뿐이라 기본 묶음으로 읽고 아래에서 바꿈
@@ -1776,6 +1810,9 @@ def main(argv=None):
     elif a.cmd == "desk3d":
         res = d3_run(cfg, own, log)
         job = None
+    elif a.cmd == "desk3d-contact":
+        res = d3c_run(cfg, own, log)
+        job = None
     with ProcessPoolExecutor(max_workers=int(cfg["video_workers"]), mp_context=mp.get_context("spawn")) if job else _nullpool() as ex:
         for e, (x, lines) in (zip(cfg["videos"], ex.map(job, [(e, cfg, str(run_root)) for e in cfg["videos"]])) if job else []):
             vid[e["file"]] = x
@@ -1786,7 +1823,7 @@ def main(argv=None):
         text_sum = ct_summary(res, cfg, own)
     elif a.cmd == "shape3d":
         text_sum = s3_summary(res, cfg, own)
-    elif a.cmd == "desk3d":
+    elif a.cmd in ("desk3d", "desk3d-contact"):
         text_sum = d3_summary(res, cfg, own)
     elif a.cmd == "points-video":
         res = vid
