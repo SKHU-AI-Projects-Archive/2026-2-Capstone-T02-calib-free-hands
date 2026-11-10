@@ -1,0 +1,25 @@
+# 99: 회전 방향 비대칭 (사용자 2026-11-10: "팀원은 오른쪽으로의 회전이 왼쪽의 회전에 비해서 많고, 나는 팀원과 반대의 양상을 보이는데, 이게 이유가 될 수도 있을까?"), 기록용, 판정 없음.
+# 가설: 손이 옆(엄지·새끼 쪽)으로 조금 기울어 있으면 그 효과가 회전 방향에 따라 부호가 반대라, 한쪽으로 더 많이 돌리면 상쇄되지 않고 f 를 민다. 실제 점만 씀(합성 없음).
+# 94 와 같은 광류 사슬(첫 정지 구간 기준)을 만들어 이 실행에 저장(points/)하고, 손 방향(검출 손목 -> 중지 MCP, 첫 검출 대비)으로 사용 프레임을 나눈다:
+# all(= 94, 확인용), plus = 정면 + '+' 쪽(반대쪽 10° 까지), minus = 정면 + '-' 쪽, symmetric = 덜 돈 쪽의 최대 각도까지 양쪽을 자름. 추정 = free_template -> 경사 11° 고정만(함께 추정 없음, 시간 단축).
+# 영상 = 새 폰 4개(본인 2, 팀원 2). 읽는 법(실행 전에 정함): 팀원 영상에서 많이 돈 쪽('+')만 쓴 f 가 낮고 반대쪽이 정답에 가깝거나 높으면, 또는 symmetric 에서 오차가 크게 줄면 가설을 지지.
+# 검출은 81 캐시 재사용. 기준 f 는 summary.md 에만.
+experiment:
+  name: 99_rotation_side
+  seed: 42
+settings_config: configs/74b_multistart_rerun.yaml
+detection_cache_from: runs/81_detected_joints/20261106T055430Z/detection_cache
+joint_set: j16
+code: {branch: optical_flow, commit: 066e2c9, modules: [HandCalib/optical_flow/experiments.py]}
+ramps_deg: [11]
+reference: {mode: first_pause, pause_gap_frames: 15, min_pause_frames: 5}
+videos: ["IMG_7354 - 복사본.MOV", "IMG_7355 - 복사본.MOV", "IMG_7351 - 복사본.MOV", "IMG_7352 - 복사본.MOV"]
+rotation_side:
+  points_run: null
+  margin_deg: 10
+  subsets: [all, plus, minus, symmetric]
+workers: 16
+video_workers: 4
+output:
+  root: runs/99_rotation_side
+  results_yaml: results/99_rotation_side.yaml

@@ -1,0 +1,29 @@
+# 98: CoTracker3 로 관절 직접 추적 (사용자 2026-11-10: "앞의 두 실험이 끝나면 진행해봐", "그럼 동시에 진행해줘."), 기록용, 판정 없음.
+# 광류 사슬은 손 무늬점의 움직임을 평면 변환 하나로 요약해 관절을 옮기므로 평면 밖 관절이 어긋난다. CoTracker3(오프라인, facebookresearch/co-tracker cotracker3_offline, 가중치는 사용자가
+# 받아 둔 torch hub 캐시)는 처음 찍은 점을 직접 따라간다. 기준 프레임 = 94 와 같은 첫 정지 구간. 질의점 = 기준 프레임 MediaPipe 관절 21개 + 손 영역(관절 볼록 껍질, tracking.dilate_frac) 안의
+# 격자 보조점(간격 = 손 상자 긴 변 x 0.06, 함께 추적만 하고 쓰지 않음). 앞뒤로 추적(backward_tracking). GPU 메모리(386 프레임에 21.6 GB, 시험) 때문에 2 프레임마다(15 fps) 추적, 입력 0.5 배.
+# 사용 프레임 = 첫~마지막 검출 범위의 추적 프레임 중 j16 에서 보이는 관절 12개 이상, 보이는 점의 상자가 가장자리에 닿지 않음. 안 보이는 관절은 비움.
+# 추정은 94 와 같다: j16, free_template -> 경사 11° 고정, 함께 추정(시작 5·12·19° 중 비용 최소). 비교: 94(광류 사슬). 영상 16개 전부. 검출은 81 캐시 재사용. 기준 f 는 summary.md 에만.
+experiment:
+  name: 98_cotracker
+  seed: 42
+settings_config: configs/74b_multistart_rerun.yaml
+compare_run: runs/94_reference_first_pause/20261109T051805Z
+detection_cache_from: runs/81_detected_joints/20261106T055430Z/detection_cache
+joint_set: j16
+code: {branch: optical_flow, commit: 066e2c9, modules: [HandCalib/optical_flow/cotracker.py, HandCalib/optical_flow/experiments.py]}
+ramps_deg: [11]
+reference: {mode: first_pause, pause_gap_frames: 15, min_pause_frames: 5}
+videos: []
+cotracker:
+  hub_dir: ~/.cache/torch/hub/facebookresearch_co-tracker_main
+  stride: 2
+  scale: 0.5
+  support_step_frac: 0.06
+  min_visible: 12
+  gpu_workers: 4
+workers: 64
+video_workers: 4
+output:
+  root: runs/98_cotracker
+  results_yaml: results/98_cotracker.yaml
