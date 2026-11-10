@@ -1,0 +1,36 @@
+# 112: 손 축 뿌리를 PIP(둘째 마디: 6, 10, 14, 18)로 바꾼 책상 운동 추정기, 관절 12개 (MCP 4개 뺌) (사용자 2026-11-10: "남은거 다 해봐.", "PIP가 뭔데, 그걸 기준으로 해"), 기록용, 판정 없음.
+# 109·110 은 MCP 를 모두 빼면 손 축(MCP 줄 -> 손가락 끝)을 정할 수 없어 실패했다. 손 축 뿌리만 PIP 줄로 바꾸고(작업 프로세스 안에서 handfocal_report.DK_MCPS 를 바꿈, 파일은 그대로),
+# 111 = j16(축만 바꾼 비교 기준), 112 = MCP 4개를 뺀 12개. 점 = 광류 사슬 추적점(99·100 저장, 첫 정지 구간 기준). 추정 = free_template -> 경사 11° 고정.
+# 읽는 법(실행 전에 정함): 112 가 111 보다 팀원 영상 오차를 뚜렷이(절댓값 10%p 이상) 줄이고 본인 영상이 크게 나빠지지 않으면 MCP 줄이 원인이라는 근거. 기준 f 는 summary.md 에만.
+experiment:
+  name: 112_pip_axis_no_mcp
+  seed: 42
+settings_config: configs/74b_multistart_rerun.yaml
+joint_set: j12_pip_axis
+joint_ids: [6, 7, 8, 10, 11, 12, 14, 15, 16, 18, 19, 20]
+axis_base_joints: [6, 10, 14, 18]
+code: {branch: optical_flow, commit: 9a89caf, modules: [HandCalib/optical_flow/experiments.py]}
+ramps_deg: [11]
+videos: ["IMG_7354 - 복사본.MOV", "IMG_7355 - 복사본.MOV", "IMG_7351 - 복사본.MOV", "IMG_7352 - 복사본.MOV"]
+extra_videos:
+  - {file: IMG_7384.MOV, person: teammate, ref_f_px: 1672}
+  - {file: IMG_7385.MOV, person: self, ref_f_px: 1672}
+  - {file: IMG_7387.MOV, person: teammate, ref_f_px: 1672}
+  - {file: IMG_7388.MOV, person: self, ref_f_px: 1672}
+side_consistency:
+  margin_deg: 10
+  subsets: [all]
+  points:
+    "IMG_7354 - 복사본.MOV": runs/99_rotation_side/20261110T023248Z
+    "IMG_7355 - 복사본.MOV": runs/99_rotation_side/20261110T023248Z
+    "IMG_7351 - 복사본.MOV": runs/99_rotation_side/20261110T023248Z
+    "IMG_7352 - 복사본.MOV": runs/99_rotation_side/20261110T023248Z
+    IMG_7384.MOV: runs/100_new_pair_shoot/20261110T032637Z
+    IMG_7385.MOV: runs/100_new_pair_shoot/20261110T032637Z
+    IMG_7387.MOV: runs/100_new_pair_shoot/20261110T032637Z
+    IMG_7388.MOV: runs/100_new_pair_shoot/20261110T032637Z
+workers: 32
+video_workers: 8
+output:
+  root: runs/112_pip_axis_no_mcp
+  results_yaml: results/112_pip_axis_no_mcp.yaml

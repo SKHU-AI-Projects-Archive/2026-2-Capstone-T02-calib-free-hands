@@ -1,0 +1,65 @@
+# 113: 멈춤 자세마다 손 평면 방향 (97 고침) (사용자 2026-11-10: "남은거 다 해봐."), 기록용, 판정 없음.
+# 97 은 호모그래피 분해의 해를 첫 멈춤 법선 일치만으로 골라 카메라 기울기 4~89°처럼 맞지 않는 값이 나왔다. 해 조합을 첫 멈춤 법선과 회전축이 모든 멈춤에서 가장 잘 일치하는 것으로
+# 고치고(정답을 아는 장면에서 기울기 45·60°, 경사 11·17° 를 오차 없이 되찾음, 코드 점검), 저장된 점으로 계산한다. 멈춤 = 관절 중심의 프레임 사이 이동 < 손 크기 x 0.004, 간격 15 이하, 5 프레임 이상.
+# 점 = 광류 사슬(99·100) 과 CoTracker3(98·105). f = 기준 f 와 그 점의 경사 11° 추정 f(fit_f, 94·100·98·105 결과에서 옮겨 적음).
+# 읽는 법(실행 전에 정함): 기준 f 에서 카메라 기울기가 45° 근처이고, 팀원 영상의 손 경사가 멈춤마다 본인보다 뚜렷이 크게 바뀌거나(손이 자세마다 들림) 흩어짐이 크면 모델 가정이 팀원 영상에서 깨진다는 근거. 기준 f 는 summary.md 에만.
+experiment:
+  name: 113_pause_plane2
+  seed: 42
+settings_config: configs/74b_multistart_rerun.yaml
+joint_set: j16
+code: {branch: optical_flow, commit: 9a89caf, modules: [HandCalib/optical_flow/experiments.py]}
+ramps_deg: [11]
+videos: ["IMG_7354 - 복사본.MOV", "IMG_7355 - 복사본.MOV", "IMG_7351 - 복사본.MOV", "IMG_7352 - 복사본.MOV"]
+extra_videos:
+  - {file: IMG_7384.MOV, person: teammate, ref_f_px: 1672}
+  - {file: IMG_7385.MOV, person: self, ref_f_px: 1672}
+  - {file: IMG_7387.MOV, person: teammate, ref_f_px: 1672}
+  - {file: IMG_7388.MOV, person: self, ref_f_px: 1672}
+pause_plane2:
+  still_frac: 0.004
+  pause_gap_frames: 15
+  min_pause_frames: 5
+  points:
+    klt:
+      "IMG_7354 - 복사본.MOV": runs/99_rotation_side/20261110T023248Z
+      "IMG_7355 - 복사본.MOV": runs/99_rotation_side/20261110T023248Z
+      "IMG_7351 - 복사본.MOV": runs/99_rotation_side/20261110T023248Z
+      "IMG_7352 - 복사본.MOV": runs/99_rotation_side/20261110T023248Z
+      "IMG_7384.MOV": runs/100_new_pair_shoot/20261110T032637Z
+      "IMG_7385.MOV": runs/100_new_pair_shoot/20261110T032637Z
+      "IMG_7387.MOV": runs/100_new_pair_shoot/20261110T032637Z
+      "IMG_7388.MOV": runs/100_new_pair_shoot/20261110T032637Z
+    cotracker:
+      "IMG_7354 - 복사본.MOV": runs/98_cotracker/20261110T023248Z
+      "IMG_7355 - 복사본.MOV": runs/98_cotracker/20261110T023248Z
+      "IMG_7351 - 복사본.MOV": runs/98_cotracker/20261110T023248Z
+      "IMG_7352 - 복사본.MOV": runs/98_cotracker/20261110T023248Z
+      "IMG_7384.MOV": runs/105_cotracker_new_pair/20261110T042149Z
+      "IMG_7385.MOV": runs/105_cotracker_new_pair/20261110T042149Z
+      "IMG_7387.MOV": runs/105_cotracker_new_pair/20261110T042149Z
+      "IMG_7388.MOV": runs/105_cotracker_new_pair/20261110T042149Z
+  fit_f:
+    klt:
+      "IMG_7354 - 복사본.MOV": 1737.866
+      "IMG_7355 - 복사본.MOV": 1636.976
+      "IMG_7351 - 복사본.MOV": 1249.037
+      "IMG_7352 - 복사본.MOV": 1102.019
+      "IMG_7384.MOV": 1508.881
+      "IMG_7385.MOV": 1717.805
+      "IMG_7387.MOV": 1378.161
+      "IMG_7388.MOV": 1667.632
+    cotracker:
+      "IMG_7354 - 복사본.MOV": 1521.901
+      "IMG_7355 - 복사본.MOV": 1665.635
+      "IMG_7351 - 복사본.MOV": 1288.642
+      "IMG_7352 - 복사본.MOV": 1205.986
+      "IMG_7384.MOV": 1399.87
+      "IMG_7385.MOV": 1859.498
+      "IMG_7387.MOV": 1451.343
+      "IMG_7388.MOV": 1983.692
+workers: 8
+video_workers: 8
+output:
+  root: runs/113_pause_plane2
+  results_yaml: results/113_pause_plane2.yaml
