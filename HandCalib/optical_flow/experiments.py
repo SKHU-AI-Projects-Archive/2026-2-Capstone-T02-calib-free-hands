@@ -3585,9 +3585,122 @@ def rv2_summary(res: dict, cfg: dict, own: dict) -> str:
     i = s.index("- 기준 f 는")
     return s[:i] + extra + "\n" + s[i:].replace("- 변형은 마커 영상 4개(126)를 보고 골랐다.", "- 변형은 마커 영상 4개(126, 128)를 보고 골랐다.")
 
+
+# ----------------------------------------------------------------------------------------------------
+# 130: 손가락마다 변환을 따로 구하는 사슬
+# ----------------------------------------------------------------------------------------------------
+def pf_track(pngs: list, kps: np.ndarray, boxes: np.ndarray, order: list, kcfg: dict, pc: dict, Hglob: dict) -> dict:
+    """order[0] 에서 뒤 프레임들까지, 손가락(검지~소지)마다 따로 만든 변환 사슬. 단계마다(prev -> cur) 손가락마다:
+    그 손가락 관절 4개(MCP, PIP, DIP, 끝)의 볼록 껍질을 finger_dilate_frac x 손 상자만큼 넓힌 영역에서 특징점(최대 max_corners) -> 피라미드 LK, 전후방 검사(사슬과 같은 값) ->
+    아핀(estimateAffine2D, RANSAC threshold_px)과 닮음(estimateAffinePartial2D) 변환. inlier 가 min_inliers 미만이면 그 단계는 손 전체 사슬(Hglob: 프레임 -> 기준에서의 3x3)의 단계 변환으로 대신한다.
+    반환: {affine: {손가락: {프레임: 3x3}}, sim: {...}, fallback: {손가락: 대신한 단계 수}, inl: {손가락: 단계별 아핀 inlier 수}}."""
+    import cv2
+    lk = dict(winSize=(int(kcfg["win"]), int(kcfg["win"])), maxLevel=int(kcfg["levels"]), criteria=(cv2.TERM_CRITERIA_EPS | cv2.TERM_CRITERIA_COUNT, 30, 0.01))
+    gray = lambda i: cv2.cvtColor(cv2.imread(pngs[i], cv2.IMREAD_COLOR), cv2.COLOR_BGR2GRAY)      # noqa: E731
+    to3 = lambda A: np.vstack([A, [0.0, 0.0, 1.0]])      # noqa: E731
+    out = {"affine": {k: {order[0]: np.eye(3)} for k in CDX_FINGERS}, "sim": {k: {order[0]: np.eye(3)} for k in CDX_FINGERS}, "fallback": {k: 0 for k in CDX_FINGERS}, "inl": {k: [] for k in CDX_FINGERS}}
+    g0 = gray(order[0])
+    for prev, cur in zip(order[:-1], order[1:]):
+        g1 = gray(cur)
+        Hs = None if Hglob.get(prev) is None or Hglob.get(cur) is None else Hglob[cur] @ np.linalg.inv(Hglob[prev])
+        for k, js in CDX_FINGERS.items():
+            Ta = Ts = None
+            m = np.zeros(g0.shape, np.uint8)
+            p = kps[prev][list(js)]
+            if np.isfinite(p).all():
+                cv2.fillConvexPoly(m, cv2.convexHull(p.astype(np.float32)).astype(np.int32), 255)
+                r = max(1, int(round(float(pc["finger_dilate_frac"]) * float(of.box_long(np.asarray(boxes[prev], float)[None])[0]))))
+                m = cv2.dilate(m, np.ones((2 * r + 1, 2 * r + 1), np.uint8))
+                c = cv2.goodFeaturesToTrack(g0, int(pc["max_corners"]), float(kcfg["quality"]), float(kcfg["min_distance"]), mask=m, blockSize=int(kcfg["block"]))
+                if c is not None and len(c) >= int(pc["min_inliers"]):
+                    p0 = c.reshape(-1, 2).astype(np.float32)
+                    p1, s1, _ = cv2.calcOpticalFlowPyrLK(g0, g1, p0.reshape(-1, 1, 2), None, **lk)
+                    pb, s2, _ = cv2.calcOpticalFlowPyrLK(g1, g0, p1, None, **lk)
+                    ok = (s1.ravel() == 1) & (s2.ravel() == 1) & (np.linalg.norm(pb.reshape(-1, 2) - p0, axis=1) < float(kcfg["fb_px"]))
+                    if ok.sum() >= int(pc["min_inliers"]):
+                        q0, q1 = p0[ok].astype(np.float64), p1.reshape(-1, 2)[ok].astype(np.float64)
+                        A, ia = cv2.estimateAffine2D(q0, q1, method=cv2.RANSAC, ransacReprojThreshold=float(kcfg["threshold_px"]))
+                        B, ib = cv2.estimateAffinePartial2D(q0, q1, method=cv2.RANSAC, ransacReprojThreshold=float(kcfg["threshold_px"]))
+                        if A is not None and ia is not None and int(ia.sum()) >= int(pc["min_inliers"]):
+                            Ta = to3(A)
+                            out["inl"][k].append(int(ia.sum()))
+                        if B is not None and ib is not None and int(ib.sum()) >= int(pc["min_inliers"]):
+                            Ts = to3(B)
+            if Ta is None or Ts is None:
+                out["fallback"][k] += 1
+            for name, T in (("affine", Ta), ("sim", Ts)):
+                T = Hs if T is None else T
+                Tp = out[name][k][prev]
+                out[name][k][cur] = None if T is None or Tp is None else T @ Tp
+        g0 = g1
+    return out
+
+
+def pf_job(args):
+    """한 영상: 프레임·검출·track -> 첫 정지 구간 기준. 손 전체 사슬(엄지 제외 영역, dc_chain) + pf_track 앞뒤. 변형 세 가지의 추적점:
+    no_thumb = 손 전체 사슬로 옮긴 기준 관절, pf_affine / pf_sim = 손가락 관절(5~20)은 그 손가락의 아핀 / 닮음 사슬로, 나머지(손목·엄지)는 손 전체 사슬로 옮긴 것."""
+    e, cfg, run_root = args
+    import cv2
+    cv2.setNumThreads(1)
+    pc = cfg["per_finger"]
+    pngs, times, tr, (W, H), tmp = prepare(e, cfg, run_root)
+    out, lines = {}, []
+    try:
+        n = len(pngs)
+        pres = np.flatnonzero(tr["present"])
+        a, b = int(pres[0]), int(pres[-1])
+        ref = rof.choose_reference_pose(tr, (W, H), cfg)
+        kps = np.stack([of.kt_carry(tr["present"], tr["kp"][:, j, k]) for j in range(21) for k in range(2)], axis=1).reshape(n, 21, 2)
+        boxes = np.stack([of.kt_carry(tr["present"], tr["box"][:, k]) for k in range(4)], axis=1)
+        of_, ob = list(range(ref, b + 1)), list(range(ref, a - 1, -1))
+        gf, gb = of.dc_chain(pngs, kps, boxes, of_, cfg["tracking"], pc["mask_global"], None), of.dc_chain(pngs, kps, boxes, ob, cfg["tracking"], pc["mask_global"], None)
+        Hall = {**gb["H"], **gf["H"]}
+        kp, tb, valid, edge = of.chain_points(tr["kp"][ref], Hall, n, W, H)
+        use = valid & ~edge
+        ginfo = {"breaks": int(gf["breaks"] + gb["breaks"]), "n_use": int(use.sum()), "n_frames": int(n), "inliers_median": sv_pct(gf["inl"] + gb["inl"], 50), "drift_j16_pct": med(region_drift(kp, tr["kp"], tr["box"], use, cfg["joint_ids"]))}
+        out["no_thumb"] = {"kp": kp, "box": tb, "use": use, "ref": int(ref), "size": (W, H), "info": ginfo}
+        pf, pb_ = pf_track(pngs, kps, boxes, of_, cfg["tracking"], pc, Hall), pf_track(pngs, kps, boxes, ob, cfg["tracking"], pc, Hall)
+        for name in ("affine", "sim"):
+            k2 = kp.copy()
+            for fk, js in CDX_FINGERS.items():
+                Tm = {**pb_[name][fk], **pf[name][fk]}
+                for i in range(n):
+                    k2[i, list(js)] = of.kt_map(tr["kp"][ref][list(js)], Tm.get(i))
+            v2 = np.isfinite(k2).all((1, 2))
+            b2 = np.full((n, 4), np.nan)
+            b2[v2] = np.c_[k2[v2].min(1), k2[v2].max(1)]
+            e2 = np.zeros(n, bool)
+            e2[v2] = of.edge_flags(b2[v2], np.ones(v2.sum(), bool), W, H)
+            u2 = v2 & ~e2
+            fb = {fk: int(pf["fallback"][fk] + pb_["fallback"][fk]) for fk in CDX_FINGERS}
+            out[f"pf_{name}"] = {"kp": k2, "box": b2, "use": u2, "ref": int(ref), "size": (W, H),
+                                 "info": {"breaks": ginfo["breaks"], "n_use": int(u2.sum()), "n_frames": int(n), "inliers_median": sv_pct(sum((pf["inl"][fk] + pb_["inl"][fk] for fk in CDX_FINGERS), []), 50),
+                                          "fallback_steps": fb, "drift_j16_pct": med(region_drift(k2, tr["kp"], tr["box"], u2, cfg["joint_ids"]))}}
+        lines.append(f"  {e['file']}: 프레임 {n}, 기준 {ref}, 사용 {int(use.sum())}, 손가락 inlier 중앙값 {out['pf_affine']['info']['inliers_median']}, 대신한 단계 {out['pf_affine']['info']['fallback_steps']}")
+    finally:
+        shutil.rmtree(tmp, ignore_errors=True)
+    return out, lines
+
+
+def pf_summary(res: dict, cfg: dict, own: dict) -> str:
+    """rv_summary 의 표 + 130 의 머리말과 손가락 사슬 정보."""
+    c2 = {**cfg, "region_variants": {"variants": {k: None for k in ("no_thumb", "pf_affine", "pf_sim")}, "groups": cfg["per_finger"]["groups"]}}
+    s = rv_summary(res, c2, own)
+    i, j = s.index("- 변형:"), s.index("- 기준 f 는")
+    head = (f"# 130 손가락마다 변환을 따로 구하는 사슬 summary\n\n**영상 {len(res)}개(첫 정지 구간 기준, j16, 경사 {cfg['ramps_deg'][0]:g}° 고정). 판정 없음.**\n\n"
+            "- 변형: no_thumb = 손 전체 변환 하나(엄지 제외 영역; 127 과 같음) ; pf_affine = 손가락 관절은 그 손가락 주변 특징점의 아핀 변환 사슬로 ; pf_sim = 같은 방식, 닮음 변환(회전·크기·이동)\n")
+    tail = ["## 손가락 사슬 정보 (pf_affine)", "", "| 영상 | 손가락 inlier 중앙값 | 손 전체 변환으로 대신한 단계 수 (검지 / 중지 / 약지 / 새끼) | 프레임 |", "|---|---|---|---|"]
+    for f, d in res.items():
+        inf = d["pf_affine"]["info"]
+        tail.append(f"| {f} | {inf['inliers_median']} | " + " / ".join(str(inf["fallback_steps"][k]) for k in CDX_FINGERS) + f" | {inf['n_frames']} |")
+    k = s.index("## 한계")
+    return head + s[j:k] + "\n".join(tail) + "\n\n" + s[k:].replace("- 변형은 마커 영상 4개(126)를 보고 골랐다. 여기의 영상은 그 선택에 쓰이지 않았다.", "- 손가락 사슬의 값(넓히는 양, 특징점 수, 최소 inlier)은 결과를 보지 않고 정했다.")
+
+
+
 def main(argv=None):
     ap = argparse.ArgumentParser(description="광류 방식 원인 확인 실험")
-    ap.add_argument("cmd", choices=["tracking-plane", "dorsum-corners", "two-plane", "joint-track-video", "geometry-synth", "pause-plane", "cotracker", "rotation-side", "points-video", "shape3d", "side-consistency", "shape-change", "pip-axis", "pause-plane2", "desk3d", "desk3d-contact", "stage-values", "stage-inputs", "cost-decompose", "lens-model", "repeatability", "marker-track", "marker-track2", "chain-vs-marker", "tracker-eval", "chain-vs-marker2", "tracker-eval2", "region-variants", "tracker-eval3", "region-variants2"])
+    ap.add_argument("cmd", choices=["tracking-plane", "dorsum-corners", "two-plane", "joint-track-video", "geometry-synth", "pause-plane", "cotracker", "rotation-side", "points-video", "shape3d", "side-consistency", "shape-change", "pip-axis", "pause-plane2", "desk3d", "desk3d-contact", "stage-values", "stage-inputs", "cost-decompose", "lens-model", "repeatability", "marker-track", "marker-track2", "chain-vs-marker", "tracker-eval", "chain-vs-marker2", "tracker-eval2", "region-variants", "tracker-eval3", "region-variants2", "per-finger"])
     ap.add_argument("--config", required=True)
     ap.add_argument("--out", default=None)
     ap.add_argument("--videos", type=int, default=None, help="시험 실행: 앞의 N 개 영상만, 추정 1건씩")
@@ -3603,7 +3716,7 @@ def main(argv=None):
               else s3_results_yaml(hf.resolve(a.run), own) if a.cmd == "shape3d" else sc_results_yaml(hf.resolve(a.run), own) if a.cmd == "side-consistency"
               else sh_results_yaml(hf.resolve(a.run), own) if a.cmd == "shape-change"
               else sc_results_yaml(hf.resolve(a.run), own) if a.cmd == "pip-axis" else pq_results_yaml(hf.resolve(a.run), own) if a.cmd == "pause-plane2"
-              else d3_results_yaml(hf.resolve(a.run), own) if a.cmd in ("desk3d", "desk3d-contact") else sv_results_yaml(hf.resolve(a.run), own) if a.cmd in ("stage-values", "stage-inputs") else cdx_results_yaml(hf.resolve(a.run), own) if a.cmd == "cost-decompose" else lm_results_yaml(hf.resolve(a.run), own) if a.cmd in ("lens-model", "repeatability", "marker-track", "marker-track2", "chain-vs-marker", "tracker-eval", "chain-vs-marker2", "tracker-eval2", "region-variants", "tracker-eval3", "region-variants2") else jt_results_yaml(hf.resolve(a.run), own) if a.cmd == "joint-track-video"
+              else d3_results_yaml(hf.resolve(a.run), own) if a.cmd in ("desk3d", "desk3d-contact") else sv_results_yaml(hf.resolve(a.run), own) if a.cmd in ("stage-values", "stage-inputs") else cdx_results_yaml(hf.resolve(a.run), own) if a.cmd == "cost-decompose" else lm_results_yaml(hf.resolve(a.run), own) if a.cmd in ("lens-model", "repeatability", "marker-track", "marker-track2", "chain-vs-marker", "tracker-eval", "chain-vs-marker2", "tracker-eval2", "region-variants", "tracker-eval3", "region-variants2", "per-finger") else jt_results_yaml(hf.resolve(a.run), own) if a.cmd == "joint-track-video"
               else results_yaml(a.cmd, hf.resolve(a.run), own))
         return None
     cfg = rof.load_settings({**own, "joint_set": "j16"} if own.get("joint_ids") else own)      # joint_ids 를 직접 적으면 joint_set 은 이름일 뿐이라 기본 묶음으로 읽고 아래에서 바꿈
@@ -3611,7 +3724,7 @@ def main(argv=None):
     cfg["videos"] = cfg["videos"] + [dict(v) for v in own.get("extra_videos", [])]      # 기본 설정 목록에 없는 새 영상 (file, person, ref_f_px)
     if own.get("joint_ids"):                                           # 기본 설정의 관절 묶음(j16, j21) 대신 직접 적은 관절 번호 (joint_set 은 이름으로만 씀)
         cfg["joint_ids"] = [int(j) for j in own["joint_ids"]]
-    cfg.update({k: own[k] for k in ("variants", "clahe", "two_plane", "joint_track", "render", "reference", "geometry_synth", "pause_plane", "cotracker", "rotation_side", "points_video", "shape3d", "side_consistency", "shape_change", "axis_base_joints", "pause_plane2", "desk3d", "stage_values", "stage_inputs", "cost_decompose", "lens_model", "repeatability", "marker_track", "chain_vs_marker", "tracker_eval", "region_variants") if k in own})
+    cfg.update({k: own[k] for k in ("variants", "clahe", "two_plane", "joint_track", "render", "reference", "geometry_synth", "pause_plane", "cotracker", "rotation_side", "points_video", "shape3d", "side_consistency", "shape_change", "axis_base_joints", "pause_plane2", "desk3d", "stage_values", "stage_inputs", "cost_decompose", "lens_model", "repeatability", "marker_track", "chain_vs_marker", "tracker_eval", "region_variants", "per_finger") if k in own})
     if a.videos:
         cfg["videos"] = cfg["videos"][:a.videos]
         cfg["free_starts_deg"] = []
@@ -3630,7 +3743,7 @@ def main(argv=None):
         shutil.copytree(hf.resolve(own["detection_cache_from"]), run_root / "detection_cache")
     import multiprocessing as mp
     from concurrent.futures import ProcessPoolExecutor
-    job = {"tracking-plane": tp_job, "dorsum-corners": dc_job, "two-plane": tw_points, "joint-track-video": jt_job, "geometry-synth": rof.video_points, "pause-plane": pp_job, "rotation-side": rs_load, "points-video": pv_job, "side-consistency": sc_load, "shape-change": sh_job, "pip-axis": sc_load, "pause-plane2": pq_job, "stage-values": sv_job, "stage-inputs": si_job, "marker-track": mt_job, "marker-track2": mt2_job, "chain-vs-marker": cm_load, "tracker-eval": te_job, "chain-vs-marker2": cm2_load, "tracker-eval2": te2_job, "region-variants": rv_job, "tracker-eval3": te3_job, "region-variants2": rv2_job}.get(a.cmd)
+    job = {"tracking-plane": tp_job, "dorsum-corners": dc_job, "two-plane": tw_points, "joint-track-video": jt_job, "geometry-synth": rof.video_points, "pause-plane": pp_job, "rotation-side": rs_load, "points-video": pv_job, "side-consistency": sc_load, "shape-change": sh_job, "pip-axis": sc_load, "pause-plane2": pq_job, "stage-values": sv_job, "stage-inputs": si_job, "marker-track": mt_job, "marker-track2": mt2_job, "chain-vs-marker": cm_load, "tracker-eval": te_job, "chain-vs-marker2": cm2_load, "tracker-eval2": te2_job, "region-variants": rv_job, "tracker-eval3": te3_job, "region-variants2": rv2_job, "per-finger": pf_job}.get(a.cmd)
     vid = {}
     if a.cmd == "cotracker":                                           # GPU 작업 + 추정을 ct_run 이 한꺼번에
         res = ct_run(cfg, own, log, run_root)
@@ -3695,6 +3808,9 @@ def main(argv=None):
     elif a.cmd == "region-variants2":
         res = rv_run(cfg, vid, log)
         text_sum = rv2_summary(res, cfg, own)
+    elif a.cmd == "per-finger":
+        res = rv_run(cfg, vid, log)
+        text_sum = pf_summary(res, cfg, own)
     elif a.cmd in ("tracker-eval", "tracker-eval2", "tracker-eval3"):
         res = te_run(cfg, vid, log)
         text_sum = te_summary(res, cfg, own)
