@@ -1,0 +1,48 @@
+# 120: 같은 자세의 반복성 (사용자 2026-11-11: "진행해봐." - 119 뒤 남은 후보(손 쪽)의 확인), 기록용, 판정 없음.
+# 116~119: 팀원 영상의 f 오차는 0.5~1.4 px 의 체계적 어긋남에 해당하고, 추적 방식·렌즈 모델로는 설명되지 않았다. 남은 후보는 "회전하는 동안 달라지는 것"(추적의 밀림, 손 모양·기울기 변화).
+# 카메라 모델 없이 같은 각도의 두 프레임을 직접 비교하면 책상 위 위치 차이만으로도 모양이 1% 안팎 달라져 0.5 px 수준을 잴 수 없다. 그래서 책상 모델(경사 11° 고정)을 f 고정으로 맞춰
+# 프레임마다 잔차(예측 - 추적점)를 구하고, 같은 자세(모델의 회전·이동 기준)로 돌아온 두 시점의 잔차를 뺀다. 모델이 틀린 부분은 같은 자세에서 같으므로 빠지고 시간에 따라 달라진 부분만 남는다.
+# 영상 = 119 와 같은 새 폰 8개(팀원 4, 나 4), 저장된 추적점(99, 100). 모든 사용 프레임의 회전·이동을 프레임마다 다시 풀어(책상 자세·손 모양·f 고정) 쌍을 만든다.
+# f 는 기준 f(ref_f_px; 진단용)와 격자의 1280 두 가지로 고정해, 결과가 모델에 따라 달라지는지 본다. 허용 범위와 구간은 실행 전에 정함.
+# 시험 실행 뒤 추가(결과를 본 뒤의 변경): 시간 차 2 s 이상인 쌍의 대부분이 같은 정지 구간 안의 쌍이어서, 먼 쌍을 "돌았다 돌아온 쌍"(사이에 20° 이상 회전)과 "멈춰 있던 쌍"(5° 미만)으로 나눠 센다.
+# 아래 읽는 법은 그대로이고, 비교 대상은 돌았다 돌아온 쌍의 D 다.
+# 읽는 법(실행 전에 정함): 먼 쌍의 D 가 가까운 쌍보다 뚜렷이 크고 팀원 영상에서 내 영상보다 뚜렷이 크면(둘 다 팀원 > 나) "시간에 따라 달라지는 것"이 팀원 오차의 후보.
+# 팀원과 내가 비슷하면 팀원 오차는 자세에 따라 되풀이되는 어긋남(손 모양·모델 불일치)이지 밀림이나 변형이 아님. 기준 f 는 summary.md 에만.
+experiment:
+  name: 120_repeatability
+  seed: 42
+settings_config: configs/74b_multistart_rerun.yaml
+joint_set: j16
+code: {branch: optical_flow, commit: 588e99d, modules: [HandCalib/optical_flow/experiments.py]}
+ramps_deg: [11]
+videos: ["IMG_7354 - 복사본.MOV", "IMG_7355 - 복사본.MOV", "IMG_7351 - 복사본.MOV", "IMG_7352 - 복사본.MOV"]
+extra_videos:
+  - {file: IMG_7384.MOV, person: teammate, ref_f_px: 1672}
+  - {file: IMG_7385.MOV, person: self, ref_f_px: 1672}
+  - {file: IMG_7387.MOV, person: teammate, ref_f_px: 1672}
+  - {file: IMG_7388.MOV, person: self, ref_f_px: 1672}
+repeatability:
+  points:
+    "IMG_7354 - 복사본.MOV": runs/99_rotation_side/20261110T023248Z
+    "IMG_7355 - 복사본.MOV": runs/99_rotation_side/20261110T023248Z
+    "IMG_7351 - 복사본.MOV": runs/99_rotation_side/20261110T023248Z
+    "IMG_7352 - 복사본.MOV": runs/99_rotation_side/20261110T023248Z
+    IMG_7384.MOV: runs/100_new_pair_shoot/20261110T032637Z
+    IMG_7385.MOV: runs/100_new_pair_shoot/20261110T032637Z
+    IMG_7387.MOV: runs/100_new_pair_shoot/20261110T032637Z
+    IMG_7388.MOV: runs/100_new_pair_shoot/20261110T032637Z
+  ramp_deg: 11
+  low_f: 1280
+  pose_tol_deg: 1.5
+  pose_tol_slide: 0.15
+  near_s: 0.5
+  far_s: 2.0
+  excursion_deg: 20        # 돌았다 돌아온 쌍: 두 프레임 사이에 손이 이만큼 이상 돌았음
+  still_deg: 5             # 멈춰 있던 쌍: 사이에 이만큼 미만으로만 움직임
+  gap_bins_s: [2, 5, 10, 1000]
+  angle_bins_deg: [-180, -60, -20, 20, 60, 180]
+workers: 8
+video_workers: 8
+output:
+  root: runs/120_repeatability
+  results_yaml: results/120_repeatability.yaml
