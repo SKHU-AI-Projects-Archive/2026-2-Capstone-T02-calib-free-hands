@@ -1,0 +1,37 @@
+# 127: 특징점 영역을 좁힌 사슬, 마커 없는 영상 (사용자 2026-11-11: "그래 2번부터 진행해줘." 의 이어지는 단계 - 126 에서 효과가 있으면 마커 없는 영상에서 확인), 기록용, 판정 없음.
+# 126(마커 영상 4개): 특징점 영역에서 엄지·손목을 빼면(관절 5~20) 실제 추적점의 f 가 팀원 -11.1 / -10.4% -> -2.5 / -6.6%, 나 +7.2 / +11.3% -> +4.4 / +6.2%. 엄지만 빼도 팀원 -7.7 / -0.4%.
+# 마커는 그 자체가 특징점이 되므로, 마커 없는 손에서도 같은지 본다. 영상 = 기본 설정의 16개(이전 폰 내 손 12, 새 폰 '복사본' 4) + 새로 찍은 마커 없는 영상 8개(7384·7385·7387·7388, 7401~7404).
+# 변형 = chain(관절 21개 전부 = 지금 사슬; dc_chain 에 영역 없음), fingers_mcp(관절 5~20), no_thumb(손목 + 5~20). 첫 정지 구간 기준, j16, 경사 11° 고정만(시간 단축; 함께 추정 없음).
+# 읽는 법(실행 전에 정함): 새 폰의 팀원 6개에서 오차 절댓값 중앙값이 지금 사슬보다 뚜렷이 줄고, 내 영상(새 폰 6, 이전 폰 12)의 절댓값 중앙값이 2%p 넘게 나빠지지 않으면 그 변형을 새 기본 사슬 후보로 본다.
+# 기준 f 는 summary.md 에만.
+experiment:
+  name: 127_region_variants
+  seed: 42
+settings_config: configs/74b_multistart_rerun.yaml
+joint_set: j16
+code: {branch: optical_flow, commit: 7fe64aa, modules: [HandCalib/optical_flow/experiments.py]}
+ramps_deg: [11]
+reference: {mode: first_pause, pause_gap_frames: 15, min_pause_frames: 5}
+extra_videos:
+  - {file: IMG_7384.MOV, person: teammate, ref_f_px: 1672}
+  - {file: IMG_7385.MOV, person: self, ref_f_px: 1672}
+  - {file: IMG_7387.MOV, person: teammate, ref_f_px: 1672}
+  - {file: IMG_7388.MOV, person: self, ref_f_px: 1672}
+  - {file: IMG_7401.MOV, person: self, ref_f_px: 1672}
+  - {file: IMG_7402.MOV, person: self, ref_f_px: 1672}
+  - {file: IMG_7403.MOV, person: teammate, ref_f_px: 1672}
+  - {file: IMG_7404.MOV, person: teammate, ref_f_px: 1672}
+region_variants:
+  variants:
+    chain: null
+    fingers_mcp: [5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20]
+    no_thumb: [0, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20]
+  groups:
+    새 폰 팀원: ["IMG_7351 - 복사본.MOV", "IMG_7352 - 복사본.MOV", IMG_7384.MOV, IMG_7387.MOV, IMG_7403.MOV, IMG_7404.MOV]
+    새 폰 나: ["IMG_7354 - 복사본.MOV", "IMG_7355 - 복사본.MOV", IMG_7385.MOV, IMG_7388.MOV, IMG_7401.MOV, IMG_7402.MOV]
+    이전 폰 나: [IMG_7346.MOV, IMG_7347.MOV, IMG_7348.MOV, IMG_7349.MOV, IMG_7350.MOV, IMG_7351.MOV, IMG_7352.MOV, IMG_7353.MOV, IMG_7354.MOV, IMG_7355.MOV, IMG_7356.MOV, IMG_7357.MOV]
+workers: 56
+video_workers: 12
+output:
+  root: runs/127_region_variants
+  results_yaml: results/127_region_variants.yaml
