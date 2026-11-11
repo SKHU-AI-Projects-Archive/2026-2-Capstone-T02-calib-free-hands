@@ -2521,10 +2521,205 @@ def lm_results_yaml(run_dir: Path, own: dict) -> Path:
     return p
 
 
+# ----------------------------------------------------------------------------------------------------
+# 120: 같은 자세로 돌아왔을 때 어긋남이 같은지 (반복성) - 책상 모델의 잔차를 같은 자세의 두 시점끼리 비교
+# ----------------------------------------------------------------------------------------------------
+def rp_frame_pred(c: dict, th: float, xy) -> np.ndarray:
+    """책상 모델의 한 프레임 예측점 (J, 2). c = rp_consts 의 값(영상 하나에 고정), th·xy = 그 프레임의 회전·이동. dk_solve 의 proj 와 같은 식."""
+    co, si = np.cos(th), np.sin(th)
+    Hd = c["Hd"]
+    Xd = np.c_[co * Hd[:, 0] - si * Hd[:, 1] + xy[0], si * Hd[:, 0] + co * Hd[:, 1] + xy[1], Hd[:, 2]]
+    X = Xd @ c["Rd"].T + c["td"]
+    return np.c_[c["f"] * X[:, 0] / X[:, 2] + c["cx"], c["f"] * X[:, 1] / X[:, 2] + c["cy"]]
+
+
+def rp_consts(pr, T2: np.ndarray, jid: list, st: dict) -> dict:
+    u, w = hf.dk_axes(T2, jid)
+    T = np.asarray(st["T"], float)
+    return {"Hd": np.c_[T, np.zeros(len(T))] @ hf.dk_hand_rot(u, w, float(st["up"]) * float(st["pitch"]), float(st["roll"])).T,
+            "Rd": np.asarray(st["Rd"], float), "td": np.asarray(st["td"], float), "f": float(st["f"]), "cx": float(pr.cx), "cy": float(pr.cy), "T": T}
+
+
+def rp_all_frames(pb, pr, c: dict, st: dict, hp: float) -> tuple:
+    """추정에 쓴 프레임(pr.keep)의 해에서 출발해, 모든 사용 프레임(pb.keep)의 회전·이동만 프레임마다 다시 푼다(책상 자세·손 모양·f 는 고정). 반환: th (n,), xy (n, 2), 잔차 pred - obs (n, J, 2; 안 보이면 NaN)."""
+    from scipy.optimize import least_squares
+    keep_all, keep_fit = np.asarray(pb.keep, int), np.asarray(pr.keep, int)
+    th0 = np.interp(keep_all, keep_fit, np.asarray(st["theta"], float))
+    xy0 = np.c_[np.interp(keep_all, keep_fit, np.asarray(st["xy"], float)[:, 0]), np.interp(keep_all, keep_fit, np.asarray(st["xy"], float)[:, 1])]
+    J = len(c["T"])
+    th, xy, res = np.zeros(len(keep_all)), np.zeros((len(keep_all), 2)), np.full((len(keep_all), J, 2), np.nan)
+    for n, i in enumerate(keep_all):
+        o, v = pr.frames[i]
+        fun = lambda p: (rp_frame_pred(c, p[0], p[1:])[v] - o[v]).ravel()      # noqa: E731
+        s = least_squares(fun, np.r_[th0[n], xy0[n]], loss="huber", f_scale=hp, method="trf")
+        th[n], xy[n] = s.x[0], s.x[1:]
+        res[n][v] = rp_frame_pred(c, s.x[0], s.x[1:])[v] - o[v]
+    return th, xy, res
+
+
+def rp_pairs(t: np.ndarray, th_deg: np.ndarray, xy: np.ndarray, res: np.ndarray, ang: np.ndarray, pw: float, lr: np.ndarray, wr: np.ndarray, rc: dict) -> dict:
+    """같은 자세(회전 차이 <= pose_tol_deg, 이동 차이 <= pose_tol_slide x 손바닥 폭)의 프레임 쌍마다 잔차 차이의 RMS (px). 가까운 쌍(시간 차 <= near_s) = 잡음 바닥, 먼 쌍(>= far_s) = 다시 돌아온 자세."""
+    n = len(t)
+    i, j = np.triu_indices(n, 1)
+    ok = (np.abs(th_deg[i] - th_deg[j]) <= float(rc["pose_tol_deg"])) & (np.linalg.norm(xy[i] - xy[j], axis=1) <= float(rc["pose_tol_slide"]) * pw)
+    i, j = i[ok], j[ok]
+    dt = t[j] - t[i]
+    D = np.sqrt(np.nanmean(((res[i] - res[j]) ** 2).sum(2), axis=1))
+    dl, dw = 100 * (lr[j] / lr[i] - 1), 100 * (wr[j] / wr[i] - 1)                # 관측/예측 비의 변화 (%, 나중 - 먼저)
+    near, far = dt <= float(rc["near_s"]), dt >= float(rc["far_s"])
+    exc = np.zeros(len(i))                                             # 두 프레임 사이에 손이 돈 최대 각도 (먼저 프레임 대비, 도)
+    for a in np.unique(i[far]):
+        cm = np.maximum.accumulate(np.abs(th_deg[a:] - th_deg[a]))
+        m = far & (i == a)
+        exc[m] = cm[j[m] - a]
+    ret, still = far & (exc >= float(rc["excursion_deg"])), far & (exc < float(rc["still_deg"]))
+    st = lambda m: {"n_pairs": int(m.sum()), "D_median_px": sv_pct(D[m], 50), "D_p90_px": sv_pct(D[m], 90)}      # noqa: E731
+    out = {"n_frames": int(n), "near": st(near), "far": st(far), "far_by_gap_s": {}, "far_by_angle_deg": {},
+           "far_length_change_pct": {"median": sv_pct(dl[far], 50), "p25": sv_pct(dl[far], 25), "p75": sv_pct(dl[far], 75), "abs_median": sv_pct(np.abs(dl[far]), 50)},
+           "far_width_change_pct": {"median": sv_pct(dw[far], 50), "p25": sv_pct(dw[far], 25), "p75": sv_pct(dw[far], 75), "abs_median": sv_pct(np.abs(dw[far]), 50)},
+           "near_length_change_abs_median_pct": sv_pct(np.abs(dl[near]), 50), "near_width_change_abs_median_pct": sv_pct(np.abs(dw[near]), 50),
+           "far_frames_covered": int(len(np.unique(np.r_[i[far], j[far]]))),
+           "return": {**st(ret), "frames_covered": int(len(np.unique(np.r_[i[ret], j[ret]]))), "gap_s_median": sv_pct(dt[ret], 50),
+                      "length_change_pct_median": sv_pct(dl[ret], 50), "length_change_pct_abs_median": sv_pct(np.abs(dl[ret]), 50),
+                      "width_change_pct_median": sv_pct(dw[ret], 50), "width_change_pct_abs_median": sv_pct(np.abs(dw[ret]), 50), "by_angle_deg": {}},
+           "still": {**st(still), "gap_s_median": sv_pct(dt[still], 50), "length_change_pct_abs_median": sv_pct(np.abs(dl[still]), 50), "width_change_pct_abs_median": sv_pct(np.abs(dw[still]), 50)}}
+    g = [float(v) for v in rc["gap_bins_s"]]
+    for a, b in zip(g[:-1], g[1:]):
+        out["far_by_gap_s"][f"{a:g}~{b:g}"] = st(far & (dt >= a) & (dt < b))
+    bins = [float(v) for v in rc["angle_bins_deg"]]
+    am = (ang[i] + ang[j]) / 2
+    for a, b in zip(bins[:-1], bins[1:]):
+        out["far_by_angle_deg"][f"{a:g}~{b:g}"] = st(far & (am >= a) & (am < b))
+        out["return"]["by_angle_deg"][f"{a:g}~{b:g}"] = st(ret & (am >= a) & (am < b))
+    return out
+
+
+def rp_job(args) -> dict:
+    """한 영상: 저장된 추적점 -> od_bridge -> free_template -> 경사 고정 f 곡선(f 8개 + 따뜻한 재풀이) -> f 를 평가 값(기준 f, 격자의 낮은 f)에 고정한 해 -> 모든 사용 프레임의 자세와 잔차 -> 같은 자세 쌍의 잔차 차이."""
+    file, x, cfg, f_ref, run_root = args
+    import os
+    os.environ.setdefault("OMP_NUM_THREADS", "1")
+    import cv2
+    cv2.setNumThreads(1)
+    ecfg, ids = cfg["pipeline"]["estimate"], cfg["joint_ids"]
+    rc = cfg["repeatability"]
+    grid = hf.f_grid(ecfg, max(*x["size"]))
+    used = np.flatnonzero(x["use"])
+    pb = hf.od_bridge(x["kp"], np.isfinite(x["kp"]).all(2), used, x["box"], tuple(x["size"]), ecfg, ids)
+    A = hf.free_template(pb, grid)
+    pr, rid = hf._restrict(pb, max_frames=120)
+    jid = [int(j) for j in A["joint_ids"]]
+    T2 = np.asarray(A["template"], float)
+    g = grid[np.unique(np.linspace(0, len(grid) - 1, 8).round().astype(int))]
+    p0 = np.radians(float(rc["ramp_deg"]))
+    fb = (grid[0], grid[-1])
+    prof = [hf.dk_solve(pr, float(f), T2, jid, p0, 0.0, False, False, fb) for f in g]
+    for d, idx in ((-1, range(1, len(g))), (1, range(len(g) - 2, -1, -1))):
+        for k in idx:
+            s = prof[k + d]["state"]
+            y = hf.dk_solve(pr, float(g[k]), T2, jid, s["pitch"], s["roll"], False, False, fb, init=dict(s, f=float(g[k])))
+            if y["cost"] < prof[k]["cost"]:
+                prof[k] = y
+    hp = float(np.median(pr.huber[pr.keep]))
+    keep_all = np.asarray(pb.keep, int)
+    fr = used[keep_all]
+    t = x["times"][fr]
+    ang = (x["hand_angle"] - x["hand_angle"][x["ref"]])[fr]
+    tips, mcps = [jid.index(j) for j in CDX_ROWS["TIP"]], [jid.index(j) for j in CDX_ROWS["MCP"]]
+    a5, a17 = jid.index(5), jid.index(17)
+    obs = np.stack([np.where(pr.frames[i][1][:, None], pr.frames[i][0], np.nan) for i in keep_all])
+    ln = lambda P: np.linalg.norm(np.nanmean(P[:, tips], axis=1) - np.nanmean(P[:, mcps], axis=1), axis=1)      # noqa: E731
+    wd = lambda P: np.linalg.norm(P[:, a5] - P[:, a17], axis=1)      # noqa: E731
+    out = {"n_use": int(len(fr)), "duration_s": float(t[-1] - t[0]), "huber_px": hp, "eval": {}}
+    save = {"frames": fr, "times": t, "angle_deg": ang}
+    for name, fe in (("ref_f", float(f_ref)), ("low_f", float(g[int(np.argmin(np.abs(g - float(rc["low_f"]))))]))):
+        k = int(np.argmin(np.abs(np.log(g) - np.log(fe))))
+        s = prof[k]["state"]
+        B = hf.dk_solve(pr, fe, T2, jid, s["pitch"], s["roll"], False, False, fb, init=dict(s, f=fe))
+        st = B["state"]
+        c = rp_consts(pr, T2, jid, st)
+        th, xy, res = rp_all_frames(pb, pr, c, st, hp)
+        pred = obs + res
+        pw = float(np.linalg.norm(c["T"][a5] - c["T"][a17]))
+        e = np.linalg.norm(res, axis=2)
+        d = rp_pairs(t, np.degrees(th), xy, res, ang, pw, ln(obs) / ln(pred), wd(obs) / wd(pred), rc)
+        d.update({"cost_fit_frames": float(B["cost"]), "rms_all_frames_px": float(np.sqrt(np.nanmean(e ** 2))), "theta_range_deg": float(np.degrees(th.max() - th.min()))})
+        out["eval"][name] = d
+        save.update({f"{name}_theta_deg": np.degrees(th), f"{name}_xy": xy, f"{name}_res": res.astype(np.float32)})
+    dd = Path(run_root) / "frames"
+    dd.mkdir(exist_ok=True)
+    np.savez_compressed(dd / f"{Path(file).stem}.npz", **save)
+    return out
+
+
+def rp_run(cfg: dict, own: dict, log, run_root) -> dict:
+    import multiprocessing as mp
+    from concurrent.futures import ProcessPoolExecutor
+    rc = cfg["repeatability"]
+    jobs = [(e["file"], load_points(rc["points"][e["file"]], e["file"]), cfg, float(e.get("ref_f_px") or cfg["ref_f"]["value"]), str(run_root)) for e in cfg["videos"]]
+    log(f"  영상 {len(jobs)}건")
+    with ProcessPoolExecutor(max_workers=int(cfg["workers"]), mp_context=mp.get_context("spawn")) as ex:
+        return {j[0]: o for j, o in zip(jobs, ex.map(rp_job, jobs, chunksize=1))}
+
+
+def rp_summary(res: dict, cfg: dict, own: dict) -> str:
+    rc = cfg["repeatability"]
+    vids = {e["file"]: e for e in cfg["videos"]}
+    order = sorted(res, key=lambda f: (vids[f]["person"] != "teammate", f))
+    who = {"teammate": "팀원", "self": "나"}
+    names = " | ".join(f"{Path(f).stem.replace(' - 복사본', '')} {who.get(vids[f]['person'], '')}" for f in order)
+    sep = "---|" * len(order)
+    fm = lambda v, nd=2: "-" if v is None else f"{v:.{nd}f}"      # noqa: E731
+    fs = lambda v, nd=2: "-" if v is None else f"{v:+.{nd}f}"      # noqa: E731
+    L = ["# 120 같은 자세의 반복성 summary", "",
+         f"**저장된 추적점에 책상 모델(경사 {rc['ramp_deg']}° 고정)을 f 를 고정해 맞추고, 모든 사용 프레임의 잔차(예측 - 추적점)를 구한 뒤, 같은 자세(회전 차이 <= {rc['pose_tol_deg']}°, 이동 차이 <= 손바닥 폭의 {rc['pose_tol_slide']}배)인 "
+         f"두 프레임의 잔차를 뺀다. 모델이 틀린 부분은 같은 자세에서 같으므로 빠지고, 시간이 지나 달라진 부분(추적의 밀림, 손 모양 변화)이 남는다. 판정 없음.**", "",
+         f"- D = 두 프레임의 잔차 차이의 관절 RMS (px). 가까운 쌍 = 시간 차 {rc['near_s']} s 이하 (잡음 바닥), 먼 쌍 = {rc['far_s']} s 이상.",
+         f"- 먼 쌍을 둘로 나눔: 돌았다 돌아온 쌍 = 두 프레임 사이에 손이 {rc['excursion_deg']}° 이상 돌았다가 같은 자세로 온 것, 멈춰 있던 쌍 = 사이에 {rc['still_deg']}° 미만으로만 움직인 것(같은 정지 구간).",
+         "- 길이·폭 변화 = (관측/예측)의 나중 프레임 / 먼저 프레임 - 1 (%). 길이 = MCP 평균 -> 손끝 평균, 폭 = 관절 5 - 17.",
+         "- 기준 f 는 이 파일에만 (ref_f = 1672 px 에 고정한 해, low_f = 격자의 1280 px 에 고정한 해)."]
+    for name, title in (("ref_f", "f 를 기준 f 에 고정"), ("low_f", "f 를 1280 에 고정 (모델이 달라도 결과가 같은지)")):
+        g = lambda f, *p: (lambda d: d)(__import__("functools").reduce(lambda d, k: d.get(k) if isinstance(d, dict) else None, p, res[f]["eval"][name]))      # noqa: E731
+        L += ["", f"## {title}", "", f"| 값 | {names} |", "|---|" + sep,
+              "| 사용 프레임 | " + " | ".join(str(g(f, "n_frames")) for f in order) + " |",
+              "| 전체 프레임 잔차 RMS (px) | " + " | ".join(fm(g(f, "rms_all_frames_px")) for f in order) + " |",
+              "| 가까운 쌍 수 | " + " | ".join(str(g(f, "near", "n_pairs")) for f in order) + " |",
+              "| 가까운 쌍 D 중앙값 (px) | " + " | ".join(fm(g(f, "near", "D_median_px")) for f in order) + " |",
+              "| 먼 쌍 수 | " + " | ".join(str(g(f, "far", "n_pairs")) for f in order) + " |",
+              "| 먼 쌍에 들어간 프레임 수 | " + " | ".join(str(g(f, "far_frames_covered")) for f in order) + " |",
+              "| **돌았다 돌아온 쌍** 수 (쌍에 들어간 프레임 수) | " + " | ".join(f"{g(f, 'return', 'n_pairs')} ({g(f, 'return', 'frames_covered')})" for f in order) + " |",
+              "| 돌았다 돌아온 쌍의 시간 차 중앙값 (s) | " + " | ".join(fm(g(f, "return", "gap_s_median"), 1) for f in order) + " |",
+              "| **돌았다 돌아온 쌍 D 중앙값 (px)** | " + " | ".join(fm(g(f, "return", "D_median_px")) for f in order) + " |",
+              "| 돌았다 돌아온 쌍 D 상위 10% (px) | " + " | ".join(fm(g(f, "return", "D_p90_px")) for f in order) + " |",
+              "| 돌았다 돌아온 쌍 길이 변화 중앙값 / 절댓값 중앙값 (%) | " + " | ".join(f"{fs(g(f, 'return', 'length_change_pct_median'))} / {fm(g(f, 'return', 'length_change_pct_abs_median'))}" for f in order) + " |",
+              "| 돌았다 돌아온 쌍 폭 변화 중앙값 / 절댓값 중앙값 (%) | " + " | ".join(f"{fs(g(f, 'return', 'width_change_pct_median'))} / {fm(g(f, 'return', 'width_change_pct_abs_median'))}" for f in order) + " |",
+              "| **멈춰 있던 쌍** 수 | " + " | ".join(str(g(f, "still", "n_pairs")) for f in order) + " |",
+              "| 멈춰 있던 쌍의 시간 차 중앙값 (s) | " + " | ".join(fm(g(f, "still", "gap_s_median"), 1) for f in order) + " |",
+              "| **멈춰 있던 쌍 D 중앙값 (px)** | " + " | ".join(fm(g(f, "still", "D_median_px")) for f in order) + " |",
+              "| 멈춰 있던 쌍 길이 / 폭 변화 절댓값 중앙값 (%) | " + " | ".join(f"{fm(g(f, 'still', 'length_change_pct_abs_median'))} / {fm(g(f, 'still', 'width_change_pct_abs_median'))}" for f in order) + " |",
+              "| 먼 쌍 전체 D 중앙값 (px) | " + " | ".join(fm(g(f, "far", "D_median_px")) for f in order) + " |",
+              "| 먼 쌍 D 상위 10% (px) | " + " | ".join(fm(g(f, "far", "D_p90_px")) for f in order) + " |"]
+        for lab in res[order[0]]["eval"][name]["far_by_gap_s"]:
+            L.append(f"| 먼 쌍 D 중앙값, 시간 차 {lab} s (쌍 수) | " + " | ".join(f"{fm(g(f, 'far_by_gap_s', lab, 'D_median_px'))} ({g(f, 'far_by_gap_s', lab, 'n_pairs')})" for f in order) + " |")
+        for lab in res[order[0]]["eval"][name]["far_by_angle_deg"]:
+            L.append(f"| 돌았다 돌아온 쌍 D 중앙값, 손 방향 {lab}° (쌍 수) | " + " | ".join(f"{fm(g(f, 'return', 'by_angle_deg', lab, 'D_median_px'))} ({g(f, 'return', 'by_angle_deg', lab, 'n_pairs')})" for f in order) + " |")
+        for lab in res[order[0]]["eval"][name]["far_by_angle_deg"]:
+            L.append(f"| 먼 쌍 D 중앙값, 손 방향 {lab}° (쌍 수) | " + " | ".join(f"{fm(g(f, 'far_by_angle_deg', lab, 'D_median_px'))} ({g(f, 'far_by_angle_deg', lab, 'n_pairs')})" for f in order) + " |")
+        L += ["| 먼 쌍 길이 변화 중앙값 (%) [25% ~ 75%] | " + " | ".join(f"{fs(g(f, 'far_length_change_pct', 'median'))} [{fs(g(f, 'far_length_change_pct', 'p25'))} ~ {fs(g(f, 'far_length_change_pct', 'p75'))}]" for f in order) + " |",
+              "| 먼 쌍 길이 변화 절댓값 중앙값 (%) | " + " | ".join(fm(g(f, "far_length_change_pct", "abs_median")) for f in order) + " |",
+              "| 가까운 쌍 길이 변화 절댓값 중앙값 (%) | " + " | ".join(fm(g(f, "near_length_change_abs_median_pct")) for f in order) + " |",
+              "| 먼 쌍 폭 변화 중앙값 (%) [25% ~ 75%] | " + " | ".join(f"{fs(g(f, 'far_width_change_pct', 'median'))} [{fs(g(f, 'far_width_change_pct', 'p25'))} ~ {fs(g(f, 'far_width_change_pct', 'p75'))}]" for f in order) + " |",
+              "| 먼 쌍 폭 변화 절댓값 중앙값 (%) | " + " | ".join(fm(g(f, "far_width_change_pct", "abs_median")) for f in order) + " |",
+              "| 가까운 쌍 폭 변화 절댓값 중앙값 (%) | " + " | ".join(fm(g(f, "near_width_change_abs_median_pct")) for f in order) + " |"]
+    L += ["", "## 한계", "", "- 같은 자세의 기준은 책상 모델이 준 회전·이동이다. 모델이 자세를 조금 틀리게 주면 쌍이 덜 정확히 맞는다(허용 범위 안의 자세 차이도 D 에 조금 들어간다).",
+          "- D 는 추적의 밀림과 손 모양 변화를 구분하지 못한다. 둘의 합이다.", "- 먼 쌍은 손이 실제로 같은 자세로 돌아온 구간에서만 생긴다(주로 정지 구간). 영상마다 쌍이 생긴 자세가 다르다.", ""]
+    return "\n".join(L) + "\n"
+
+
 
 def main(argv=None):
     ap = argparse.ArgumentParser(description="광류 방식 원인 확인 실험")
-    ap.add_argument("cmd", choices=["tracking-plane", "dorsum-corners", "two-plane", "joint-track-video", "geometry-synth", "pause-plane", "cotracker", "rotation-side", "points-video", "shape3d", "side-consistency", "shape-change", "pip-axis", "pause-plane2", "desk3d", "desk3d-contact", "stage-values", "stage-inputs", "cost-decompose", "lens-model"])
+    ap.add_argument("cmd", choices=["tracking-plane", "dorsum-corners", "two-plane", "joint-track-video", "geometry-synth", "pause-plane", "cotracker", "rotation-side", "points-video", "shape3d", "side-consistency", "shape-change", "pip-axis", "pause-plane2", "desk3d", "desk3d-contact", "stage-values", "stage-inputs", "cost-decompose", "lens-model", "repeatability"])
     ap.add_argument("--config", required=True)
     ap.add_argument("--out", default=None)
     ap.add_argument("--videos", type=int, default=None, help="시험 실행: 앞의 N 개 영상만, 추정 1건씩")
@@ -2540,7 +2735,7 @@ def main(argv=None):
               else s3_results_yaml(hf.resolve(a.run), own) if a.cmd == "shape3d" else sc_results_yaml(hf.resolve(a.run), own) if a.cmd == "side-consistency"
               else sh_results_yaml(hf.resolve(a.run), own) if a.cmd == "shape-change"
               else sc_results_yaml(hf.resolve(a.run), own) if a.cmd == "pip-axis" else pq_results_yaml(hf.resolve(a.run), own) if a.cmd == "pause-plane2"
-              else d3_results_yaml(hf.resolve(a.run), own) if a.cmd in ("desk3d", "desk3d-contact") else sv_results_yaml(hf.resolve(a.run), own) if a.cmd in ("stage-values", "stage-inputs") else cdx_results_yaml(hf.resolve(a.run), own) if a.cmd == "cost-decompose" else lm_results_yaml(hf.resolve(a.run), own) if a.cmd == "lens-model" else jt_results_yaml(hf.resolve(a.run), own) if a.cmd == "joint-track-video"
+              else d3_results_yaml(hf.resolve(a.run), own) if a.cmd in ("desk3d", "desk3d-contact") else sv_results_yaml(hf.resolve(a.run), own) if a.cmd in ("stage-values", "stage-inputs") else cdx_results_yaml(hf.resolve(a.run), own) if a.cmd == "cost-decompose" else lm_results_yaml(hf.resolve(a.run), own) if a.cmd in ("lens-model", "repeatability") else jt_results_yaml(hf.resolve(a.run), own) if a.cmd == "joint-track-video"
               else results_yaml(a.cmd, hf.resolve(a.run), own))
         return None
     cfg = rof.load_settings({**own, "joint_set": "j16"} if own.get("joint_ids") else own)      # joint_ids 를 직접 적으면 joint_set 은 이름일 뿐이라 기본 묶음으로 읽고 아래에서 바꿈
@@ -2548,7 +2743,7 @@ def main(argv=None):
     cfg["videos"] = cfg["videos"] + [dict(v) for v in own.get("extra_videos", [])]      # 기본 설정 목록에 없는 새 영상 (file, person, ref_f_px)
     if own.get("joint_ids"):                                           # 기본 설정의 관절 묶음(j16, j21) 대신 직접 적은 관절 번호 (joint_set 은 이름으로만 씀)
         cfg["joint_ids"] = [int(j) for j in own["joint_ids"]]
-    cfg.update({k: own[k] for k in ("variants", "clahe", "two_plane", "joint_track", "render", "reference", "geometry_synth", "pause_plane", "cotracker", "rotation_side", "points_video", "shape3d", "side_consistency", "shape_change", "axis_base_joints", "pause_plane2", "desk3d", "stage_values", "stage_inputs", "cost_decompose", "lens_model") if k in own})
+    cfg.update({k: own[k] for k in ("variants", "clahe", "two_plane", "joint_track", "render", "reference", "geometry_synth", "pause_plane", "cotracker", "rotation_side", "points_video", "shape3d", "side_consistency", "shape_change", "axis_base_joints", "pause_plane2", "desk3d", "stage_values", "stage_inputs", "cost_decompose", "lens_model", "repeatability") if k in own})
     if a.videos:
         cfg["videos"] = cfg["videos"][:a.videos]
         cfg["free_starts_deg"] = []
@@ -2587,6 +2782,9 @@ def main(argv=None):
     elif a.cmd == "lens-model":
         res = lm_run(cfg, own, log)
         job = None
+    elif a.cmd == "repeatability":
+        res = rp_run(cfg, own, log, run_root)
+        job = None
     with ProcessPoolExecutor(max_workers=int(cfg["video_workers"]), mp_context=mp.get_context("spawn")) if job else _nullpool() as ex:
         for e, (x, lines) in (zip(cfg["videos"], ex.map(job, [(e, cfg, str(run_root)) for e in cfg["videos"]])) if job else []):
             vid[e["file"]] = x
@@ -2603,6 +2801,8 @@ def main(argv=None):
         text_sum = cdx_summary(res, cfg, own)
     elif a.cmd == "lens-model":
         text_sum = lm_summary(res, cfg, own)
+    elif a.cmd == "repeatability":
+        text_sum = rp_summary(res, cfg, own)
     elif a.cmd == "points-video":
         res = vid
         text_sum = pv_summary(res, cfg)
