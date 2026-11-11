@@ -2231,10 +2231,177 @@ def si_summary(res: dict, cfg: dict, own: dict) -> str:
     return "\n".join(L) + "\n"
 
 
+# ----------------------------------------------------------------------------------------------------
+# 118: f 를 고정했을 때의 비용을 회전 각도·관절별로 쪼갬 (팀원 영상과 내 영상의 비용 곡선이 어디서 달라지는지)
+# ----------------------------------------------------------------------------------------------------
+CDX_ROWS = {"MCP": (5, 9, 13, 17), "PIP": (6, 10, 14, 18), "DIP": (7, 11, 15, 19), "TIP": (8, 12, 16, 20)}
+CDX_FINGERS = {"index": (5, 6, 7, 8), "middle": (9, 10, 11, 12), "ring": (13, 14, 15, 16), "pinky": (17, 18, 19, 20)}
+
+
+def cdx_predict(pr, T2: np.ndarray, jid: list, st: dict) -> tuple:
+    """dk_solve 의 해 st 로 줄인 문제 pr 의 사용 프레임마다 모델이 예측한 점 (N, J, 2) 과 관측점 (N, J, 2; 안 보이면 NaN). dk_solve 의 proj 와 같은 식."""
+    frames = [pr.frames[i] for i in pr.keep]
+    u, w = hf.dk_axes(T2, jid)
+    T = np.asarray(st["T"], float)
+    Hd = np.c_[T, np.zeros(len(T))] @ hf.dk_hand_rot(u, w, float(st["up"]) * float(st["pitch"]), float(st["roll"])).T
+    Rd, td = np.asarray(st["Rd"], float), np.asarray(st["td"], float)
+    pred = np.full((len(frames), len(T), 2), np.nan)
+    obs = np.full((len(frames), len(T), 2), np.nan)
+    for n, (o, v) in enumerate(frames):
+        c, s = np.cos(st["theta"][n]), np.sin(st["theta"][n])
+        Xd = np.c_[c * Hd[:, 0] - s * Hd[:, 1] + st["xy"][n][0], s * Hd[:, 0] + c * Hd[:, 1] + st["xy"][n][1], Hd[:, 2]]
+        X = Xd @ Rd.T + td
+        pred[n] = np.c_[float(st["f"]) * X[:, 0] / X[:, 2] + pr.cx, float(st["f"]) * X[:, 1] / X[:, 2] + pr.cy]
+        obs[n][v] = o[v]
+    return pred, obs
+
+
+def cdx_job(args) -> dict:
+    """한 영상: 저장된 추적점 -> od_bridge -> free_template -> 경사 고정 f 곡선(dk_estimate_ms 의 1, 2 단계: f 8개 고정 풀이 + 따뜻한 재풀이) -> f 마다 점별 Huber 손실, 손 길이·폭의 예측/관측 비."""
+    file, x, cfg = args
+    import os
+    os.environ.setdefault("OMP_NUM_THREADS", "1")
+    import cv2
+    cv2.setNumThreads(1)
+    ecfg, ids = cfg["pipeline"]["estimate"], cfg["joint_ids"]
+    cd = cfg["cost_decompose"]
+    grid = hf.f_grid(ecfg, max(*x["size"]))
+    used = np.flatnonzero(x["use"])
+    pb = hf.od_bridge(x["kp"], np.isfinite(x["kp"]).all(2), used, x["box"], tuple(x["size"]), ecfg, ids)
+    A = hf.free_template(pb, grid)
+    pr, rid = hf._restrict(pb, max_frames=120)
+    jid = [int(j) for j in A["joint_ids"]]
+    T2 = np.asarray(A["template"], float)
+    g = grid[np.unique(np.linspace(0, len(grid) - 1, 8).round().astype(int))]
+    p0 = np.radians(float(cd["ramp_deg"]))
+    fb = (grid[0], grid[-1])
+    prof = [hf.dk_solve(pr, float(f), T2, jid, p0, 0.0, False, False, fb) for f in g]
+    for d, idx in ((-1, range(1, len(g))), (1, range(len(g) - 2, -1, -1))):
+        for i in idx:
+            s = prof[i + d]["state"]
+            y = hf.dk_solve(pr, float(g[i]), T2, jid, s["pitch"], s["roll"], False, False, fb, init=dict(s, f=float(g[i])))
+            if y["cost"] < prof[i]["cost"]:
+                prof[i] = y
+    hp = float(np.median(pr.huber[pr.keep]))
+    fr = used[np.asarray(pr.keep, int)]
+    ang = x["hand_angle"] - x["hand_angle"][x["ref"]]
+    tips, mcps = [jid.index(j) for j in CDX_ROWS["TIP"]], [jid.index(j) for j in CDX_ROWS["MCP"]]
+    a5, a17 = jid.index(5), jid.index(17)
+    out = {"frames": [int(i) for i in fr], "angle_deg": [float(a) for a in ang[fr]], "joint_ids": jid, "huber_px": hp, "f": [float(f) for f in g], "per_f": []}
+    for k in range(len(g)):
+        pred, obs = cdx_predict(pr, T2, jid, prof[k]["state"])
+        e = np.linalg.norm(pred - obs, axis=2)
+        loss = np.where(e <= hp, e * e, 2 * hp * e - hp * hp)
+        ln = lambda P: np.linalg.norm(np.nanmean(P[:, tips], axis=1) - np.nanmean(P[:, mcps], axis=1), axis=1)      # noqa: E731
+        wd = lambda P: np.linalg.norm(P[:, a5] - P[:, a17], axis=1)      # noqa: E731
+        out["per_f"].append({"f": float(g[k]), "cost": float(prof[k]["cost"]), "cost_recomputed": float(np.nanmean(loss)), "desk_tilt_deg": float(prof[k]["desk_tilt_deg"]),
+                             "loss": [[None if not np.isfinite(v) else round(float(v), 3) for v in row] for row in loss],
+                             "length_pred_over_obs": [float(v) for v in ln(pred) / ln(obs)], "width_pred_over_obs": [float(v) for v in wd(pred) / wd(obs)]})
+    return out
+
+
+def cdx_run(cfg: dict, own: dict, log) -> dict:
+    import multiprocessing as mp
+    from concurrent.futures import ProcessPoolExecutor
+    cd = cfg["cost_decompose"]
+    jobs = [(e["file"], load_points(cd["points_run"], e["file"]), cfg) for e in cfg["videos"]]
+    log(f"  f 곡선 {len(jobs)}건")
+    with ProcessPoolExecutor(max_workers=int(cfg["workers"]), mp_context=mp.get_context("spawn")) as ex:
+        return {j[0]: o for j, o in zip(jobs, ex.map(cdx_job, jobs, chunksize=1))}
+
+
+def cdx_tables(d: dict, cd: dict) -> dict:
+    """한 영상의 결과 -> 비교 쌍(낮은 f, 높은 f)마다: 전체 비용 차이, 회전 각도 구간·관절 줄·손가락별 기여(합 = 전체 차이)와 구간 안 평균 차이, 길이·폭 예측/관측 비의 구간 평균."""
+    fs = np.asarray(d["f"], float)
+    ang = np.asarray(d["angle_deg"], float)
+    jid = d["joint_ids"]
+    L = {k: np.asarray([[np.nan if v is None else v for v in row] for row in p["loss"]], float) for k, p in enumerate(d["per_f"])}
+    bins = [float(b) for b in cd["angle_bins_deg"]]
+    bl = [f"{bins[i]:g}~{bins[i + 1]:g}" for i in range(len(bins) - 1)]
+    bi = np.clip(np.digitize(ang, bins) - 1, 0, len(bl) - 1)
+    out = {"n_frames_by_angle": {bl[i]: int((bi == i).sum()) for i in range(len(bl))}, "angle_min": float(ang.min()), "angle_max": float(ang.max()), "pairs": {}}
+    for lo, hi in cd["pairs"]:
+        a, b = int(np.argmin(np.abs(fs - lo))), int(np.argmin(np.abs(fs - hi)))
+        D = L[a] - L[b]
+        n = np.isfinite(D).sum()
+        t = {"f_low": float(fs[a]), "f_high": float(fs[b]), "cost_low": float(np.nanmean(L[a])), "cost_high": float(np.nanmean(L[b])), "delta": float(np.nansum(D) / n),
+             "by_angle": {}, "by_row": {}, "by_finger": {}, "length_ratio_low": {}, "length_ratio_high": {}, "width_ratio_low": {}, "width_ratio_high": {}}
+        for i, lab in enumerate(bl):
+            m = bi == i
+            t["by_angle"][lab] = {"contribution": float(np.nansum(D[m]) / n), "mean_delta": float(np.nanmean(D[m])) if m.any() else None,
+                                  "mean_loss_low": float(np.nanmean(L[a][m])) if m.any() else None, "mean_loss_high": float(np.nanmean(L[b][m])) if m.any() else None}
+            for key, src, k in (("length_ratio_low", "length_pred_over_obs", a), ("length_ratio_high", "length_pred_over_obs", b), ("width_ratio_low", "width_pred_over_obs", a), ("width_ratio_high", "width_pred_over_obs", b)):
+                v = np.asarray(d["per_f"][k][src], float)[m]
+                t[key][lab] = float(np.nanmean(v)) if m.any() else None
+        for name, grp, key in [(k, v, "by_row") for k, v in CDX_ROWS.items()] + [(k, v, "by_finger") for k, v in CDX_FINGERS.items()]:
+            c = [jid.index(j) for j in grp if j in jid]
+            t[key][name] = {"contribution": float(np.nansum(D[:, c]) / n), "mean_delta": float(np.nanmean(D[:, c]))}
+        out["pairs"][f"{lo:g}_vs_{hi:g}"] = t
+    return out
+
+
+def cdx_summary(res: dict, cfg: dict, own: dict) -> str:
+    cd = cfg["cost_decompose"]
+    vids = {e["file"]: e for e in cfg["videos"]}
+    order = sorted(res, key=lambda f: (vids[f]["person"] != "teammate", f))
+    who = {"teammate": "팀원", "self": "나"}
+    names = " | ".join(f"{Path(f).stem} {who.get(vids[f]['person'], '')}" for f in order)
+    sep = "---|" * len(order)
+    T = {f: cdx_tables(res[f], cd) for f in order}
+    fm = lambda v, nd=2: "-" if v is None else f"{v:+.{nd}f}"      # noqa: E731
+    L = ["# 118 비용 곡선 쪼개기 summary", "",
+         f"**저장된 추적점(100)으로 경사 {cd['ramp_deg']}° 고정 f 곡선(f 8개 고정 풀이 + 따뜻한 재풀이)을 다시 만들고, f 마다 점별 Huber 손실(px²)을 회전 각도·관절별로 나눈다. 판정 없음.**", "",
+         "- 각도 = 검출 손 방향(손목 -> 중지 MCP), 기준 프레임 대비. 기여 = 그 구간 점들의 (낮은 f 손실 - 높은 f 손실) 합 / 전체 점 수 (구간 기여의 합 = 전체 비용 차이).",
+         "- 길이 = 손끝 4개 평균 - MCP 4개 평균 사이 거리, 폭 = 관절 5 - 17 거리 (화면 px). 예측/관측 - 1 을 % 로.", "",
+         "## f 마다 비용 (다시 계산한 값, px²)", "", f"| f | {names} |", "|---|" + sep]
+    for k, fv in enumerate(res[order[0]]["f"]):
+        L.append(f"| {fv:.0f} | " + " | ".join(f"{res[f]['per_f'][k]['cost_recomputed']:.3f}" for f in order) + " |")
+    L += ["", "## 각도 구간별 프레임 수 (추정에 쓴 120 프레임)", "", f"| 각도 (도) | {names} |", "|---|" + sep]
+    for lab in T[order[0]]["n_frames_by_angle"]:
+        L.append(f"| {lab} | " + " | ".join(str(T[f]["n_frames_by_angle"][lab]) for f in order) + " |")
+    L.append("| 최소 ~ 최대 | " + " | ".join(f"{T[f]['angle_min']:.0f} ~ {T[f]['angle_max']:.0f}" for f in order) + " |")
+    for pk in T[order[0]]["pairs"]:
+        t0 = T[order[0]]["pairs"][pk]
+        L += ["", f"## f {t0['f_low']:.0f} 대 {t0['f_high']:.0f}", "", f"| 값 | {names} |", "|---|" + sep,
+              f"| 비용 (f {t0['f_low']:.0f}) | " + " | ".join(f"{T[f]['pairs'][pk]['cost_low']:.3f}" for f in order) + " |",
+              f"| 비용 (f {t0['f_high']:.0f}) | " + " | ".join(f"{T[f]['pairs'][pk]['cost_high']:.3f}" for f in order) + " |",
+              "| 차이 (낮은 f - 높은 f) | " + " | ".join(fm(T[f]["pairs"][pk]["delta"], 3) for f in order) + " |"]
+        for key, title in (("by_angle", "각도"), ("by_row", "관절 줄"), ("by_finger", "손가락")):
+            L += ["", f"### {title}별 기여 (합 = 차이) / 구간 안 평균 차이", "", f"| {title} | {names} |", "|---|" + sep]
+            for lab in t0[key]:
+                L.append(f"| {lab} | " + " | ".join(f"{fm(T[f]['pairs'][pk][key][lab]['contribution'], 3)} / {fm(T[f]['pairs'][pk][key][lab]['mean_delta'])}" for f in order) + " |")
+        L += ["", "### 각도별 평균 손실 (낮은 f / 높은 f, px²)", "", f"| 각도 | {names} |", "|---|" + sep]
+        for lab in t0["by_angle"]:
+            c = lambda f: T[f]["pairs"][pk]["by_angle"][lab]      # noqa: E731
+            L.append(f"| {lab} | " + " | ".join("-" if c(f)["mean_loss_low"] is None else f"{c(f)['mean_loss_low']:.2f} / {c(f)['mean_loss_high']:.2f}" for f in order) + " |")
+        for key, title in (("length_ratio", "손 길이"), ("width_ratio", "손 폭")):
+            L += ["", f"### {title} 예측/관측 - 1 (%, 낮은 f / 높은 f)", "", f"| 각도 | {names} |", "|---|" + sep]
+            for lab in t0["by_angle"]:
+                c = lambda f, s: T[f]["pairs"][pk][f"{key}_{s}"][lab]      # noqa: E731
+                L.append(f"| {lab} | " + " | ".join("-" if c(f, "low") is None else f"{100 * (c(f, 'low') - 1):+.2f} / {100 * (c(f, 'high') - 1):+.2f}" for f in order) + " |")
+    L += ["", "## 한계", "", "- 영상 4개. 각도 구간마다 프레임 수가 달라 구간 평균의 흩어짐이 다르다.", "- f 고정 풀이가 비용이 큰 해에서 멈춘 f(7384 의 1983, 3072)는 비교 쌍에서 뺐다.", ""]
+    return "\n".join(L) + "\n"
+
+
+def cdx_results_yaml(run_dir: Path, own: dict) -> Path:
+    """118 의 값만: 영상별 f 곡선 비용과 cdx_tables (점별 손실 행렬은 results.json 에만)."""
+    r = json.loads((run_dir / "results.json").read_text())["real"]
+    m = json.loads((run_dir / "metadata.json").read_text())
+    rv = lambda x: x if not isinstance(x, float) else (round(x, 4) if np.isfinite(x) else None)      # noqa: E731
+    deep = lambda d: {k: (deep(v) if isinstance(v, dict) else rv(v)) for k, v in d.items()}      # noqa: E731
+    vid = {f: {"f": [rv(v) for v in d["f"]], "cost": [rv(p["cost"]) for p in d["per_f"]], "cost_recomputed": [rv(p["cost_recomputed"]) for p in d["per_f"]],
+               "huber_px": rv(d["huber_px"]), **deep(cdx_tables(d, own["cost_decompose"]))} for f, d in r.items()}
+    out = {"experiment": own["experiment"]["name"], "run": str(run_dir.resolve().relative_to(hf.PROJECT_ROOT)), "code_commit": m["git"]["commit"][:7],
+           "git_dirty_at_run": m["git"]["git_dirty"], "videos": vid}
+    p = hf.resolve(own["output"]["results_yaml"])
+    p.write_text(yaml.safe_dump(hf.jsonable(out), allow_unicode=True, sort_keys=False))
+    return p
+
+
 
 def main(argv=None):
     ap = argparse.ArgumentParser(description="광류 방식 원인 확인 실험")
-    ap.add_argument("cmd", choices=["tracking-plane", "dorsum-corners", "two-plane", "joint-track-video", "geometry-synth", "pause-plane", "cotracker", "rotation-side", "points-video", "shape3d", "side-consistency", "shape-change", "pip-axis", "pause-plane2", "desk3d", "desk3d-contact", "stage-values", "stage-inputs"])
+    ap.add_argument("cmd", choices=["tracking-plane", "dorsum-corners", "two-plane", "joint-track-video", "geometry-synth", "pause-plane", "cotracker", "rotation-side", "points-video", "shape3d", "side-consistency", "shape-change", "pip-axis", "pause-plane2", "desk3d", "desk3d-contact", "stage-values", "stage-inputs", "cost-decompose"])
     ap.add_argument("--config", required=True)
     ap.add_argument("--out", default=None)
     ap.add_argument("--videos", type=int, default=None, help="시험 실행: 앞의 N 개 영상만, 추정 1건씩")
@@ -2250,7 +2417,7 @@ def main(argv=None):
               else s3_results_yaml(hf.resolve(a.run), own) if a.cmd == "shape3d" else sc_results_yaml(hf.resolve(a.run), own) if a.cmd == "side-consistency"
               else sh_results_yaml(hf.resolve(a.run), own) if a.cmd == "shape-change"
               else sc_results_yaml(hf.resolve(a.run), own) if a.cmd == "pip-axis" else pq_results_yaml(hf.resolve(a.run), own) if a.cmd == "pause-plane2"
-              else d3_results_yaml(hf.resolve(a.run), own) if a.cmd in ("desk3d", "desk3d-contact") else sv_results_yaml(hf.resolve(a.run), own) if a.cmd in ("stage-values", "stage-inputs") else jt_results_yaml(hf.resolve(a.run), own) if a.cmd == "joint-track-video"
+              else d3_results_yaml(hf.resolve(a.run), own) if a.cmd in ("desk3d", "desk3d-contact") else sv_results_yaml(hf.resolve(a.run), own) if a.cmd in ("stage-values", "stage-inputs") else cdx_results_yaml(hf.resolve(a.run), own) if a.cmd == "cost-decompose" else jt_results_yaml(hf.resolve(a.run), own) if a.cmd == "joint-track-video"
               else results_yaml(a.cmd, hf.resolve(a.run), own))
         return None
     cfg = rof.load_settings({**own, "joint_set": "j16"} if own.get("joint_ids") else own)      # joint_ids 를 직접 적으면 joint_set 은 이름일 뿐이라 기본 묶음으로 읽고 아래에서 바꿈
@@ -2258,7 +2425,7 @@ def main(argv=None):
     cfg["videos"] = cfg["videos"] + [dict(v) for v in own.get("extra_videos", [])]      # 기본 설정 목록에 없는 새 영상 (file, person, ref_f_px)
     if own.get("joint_ids"):                                           # 기본 설정의 관절 묶음(j16, j21) 대신 직접 적은 관절 번호 (joint_set 은 이름으로만 씀)
         cfg["joint_ids"] = [int(j) for j in own["joint_ids"]]
-    cfg.update({k: own[k] for k in ("variants", "clahe", "two_plane", "joint_track", "render", "reference", "geometry_synth", "pause_plane", "cotracker", "rotation_side", "points_video", "shape3d", "side_consistency", "shape_change", "axis_base_joints", "pause_plane2", "desk3d", "stage_values", "stage_inputs") if k in own})
+    cfg.update({k: own[k] for k in ("variants", "clahe", "two_plane", "joint_track", "render", "reference", "geometry_synth", "pause_plane", "cotracker", "rotation_side", "points_video", "shape3d", "side_consistency", "shape_change", "axis_base_joints", "pause_plane2", "desk3d", "stage_values", "stage_inputs", "cost_decompose") if k in own})
     if a.videos:
         cfg["videos"] = cfg["videos"][:a.videos]
         cfg["free_starts_deg"] = []
@@ -2291,6 +2458,9 @@ def main(argv=None):
     elif a.cmd == "desk3d-contact":
         res = d3c_run(cfg, own, log)
         job = None
+    elif a.cmd == "cost-decompose":
+        res = cdx_run(cfg, own, log)
+        job = None
     with ProcessPoolExecutor(max_workers=int(cfg["video_workers"]), mp_context=mp.get_context("spawn")) if job else _nullpool() as ex:
         for e, (x, lines) in (zip(cfg["videos"], ex.map(job, [(e, cfg, str(run_root)) for e in cfg["videos"]])) if job else []):
             vid[e["file"]] = x
@@ -2303,6 +2473,8 @@ def main(argv=None):
         text_sum = s3_summary(res, cfg, own)
     elif a.cmd in ("desk3d", "desk3d-contact"):
         text_sum = d3_summary(res, cfg, own)
+    elif a.cmd == "cost-decompose":
+        text_sum = cdx_summary(res, cfg, own)
     elif a.cmd == "points-video":
         res = vid
         text_sum = pv_summary(res, cfg)
