@@ -1,0 +1,28 @@
+# 118: 비용 곡선 쪼개기 (사용자 2026-11-11: "팀원 비용 곡선과 내 비용 곡선이 다른 이유가 있을까?"), 기록용, 판정 없음.
+# 116/117: 경사 11° 고정 f 곡선에서 f 1613 의 비용은 네 영상이 비슷한데, f 1280 으로 낮추면 내 영상만 크게 오른다(팀원 1.16배 / 0.90배, 나 1.61배 / 1.49배).
+# 그 차이가 데이터의 어느 부분(회전 각도, 관절)에서 생기는지 본다: 100 에 저장된 추적점(94 와 같은 광류 사슬, j16)으로 같은 f 곡선(f 8개 고정 dk_solve + 따뜻한 재풀이)을 다시 만들고,
+# f 마다 점별 Huber 손실을 계산해 비교 쌍(낮은 f, 높은 f)의 차이를 각도 구간·관절 줄·손가락별로 나눈다. 손 길이·폭의 예측/관측 비도 각도 구간별로 적는다.
+# 각도 구간은 실행 전에 정함(-180, -60, -20, 20, 60, 180). 기준 f 는 어디에도 쓰지 않는다(격자 f 끼리만 비교).
+experiment:
+  name: 118_cost_decompose
+  seed: 42
+settings_config: configs/74b_multistart_rerun.yaml
+joint_set: j16
+code: {branch: optical_flow, commit: f7fffdf, modules: [HandCalib/optical_flow/experiments.py]}
+ramps_deg: [11]
+videos: ["__none__"]
+extra_videos:
+  - {file: IMG_7384.MOV, person: teammate, ref_f_px: 1672}
+  - {file: IMG_7385.MOV, person: self, ref_f_px: 1672}
+  - {file: IMG_7387.MOV, person: teammate, ref_f_px: 1672}
+  - {file: IMG_7388.MOV, person: self, ref_f_px: 1672}
+cost_decompose:
+  points_run: runs/100_new_pair_shoot/20261110T032637Z
+  ramp_deg: 11
+  pairs: [[1280, 1613], [1041, 1613], [2500, 1613]]
+  angle_bins_deg: [-180, -60, -20, 20, 60, 180]
+workers: 16
+video_workers: 4
+output:
+  root: runs/118_cost_decompose
+  results_yaml: results/118_cost_decompose.yaml
