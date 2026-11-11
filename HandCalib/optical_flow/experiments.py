@@ -3407,10 +3407,96 @@ def te2_job(args):
     return out, lines
 
 
+# ----------------------------------------------------------------------------------------------------
+# 127: 특징점 영역을 좁힌 사슬을 마커 없는 영상에서 (126 의 변형, 경사 고정 추정)
+# ----------------------------------------------------------------------------------------------------
+def rv_job(args):
+    """한 영상: 프레임·검출·track -> 첫 정지 구간 기준 프레임에서 변형(region_variants.variants: 이름 -> 특징점 영역의 관절 번호 목록, null = 21개 전부 = 지금 사슬)마다 dc_chain 앞뒤 -> 기준 관절을 옮긴 추적점."""
+    e, cfg, run_root = args
+    import cv2
+    cv2.setNumThreads(1)
+    pngs, times, tr, (W, H), tmp = prepare(e, cfg, run_root)
+    out, lines = {}, []
+    try:
+        n = len(pngs)
+        pres = np.flatnonzero(tr["present"])
+        a, b = int(pres[0]), int(pres[-1])
+        ref = rof.choose_reference_pose(tr, (W, H), cfg)
+        kps = np.stack([of.kt_carry(tr["present"], tr["kp"][:, j, k]) for j in range(21) for k in range(2)], axis=1).reshape(n, 21, 2)
+        boxes = np.stack([of.kt_carry(tr["present"], tr["box"][:, k]) for k in range(4)], axis=1)
+        for nm, mj in cfg["region_variants"]["variants"].items():
+            fwd = of.dc_chain(pngs, kps, boxes, list(range(ref, b + 1)), cfg["tracking"], mj, None)
+            bwd = of.dc_chain(pngs, kps, boxes, list(range(ref, a - 1, -1)), cfg["tracking"], mj, None)
+            kp, tb, valid, edge = of.chain_points(tr["kp"][ref], {**bwd["H"], **fwd["H"]}, n, W, H)
+            use = valid & ~edge
+            out[nm] = {"kp": kp, "box": tb, "use": use, "ref": int(ref), "size": (W, H),
+                       "info": {"breaks": int(fwd["breaks"] + bwd["breaks"]), "n_use": int(use.sum()), "n_frames": int(n), "inliers_median": sv_pct(fwd["inl"] + bwd["inl"], 50),
+                                "drift_j16_pct": med(region_drift(kp, tr["kp"], tr["box"], use, cfg["joint_ids"]))}}
+            lines.append(f"  {e['file']} {nm}: 끊김 {out[nm]['info']['breaks']}, 사용 {int(use.sum())} / {n}, inlier {out[nm]['info']['inliers_median']}")
+    finally:
+        shutil.rmtree(tmp, ignore_errors=True)
+    return out, lines
+
+
+def rv_run(cfg: dict, vid: dict, log) -> dict:
+    """127: (영상, 변형)마다 free_template(tl_template_job) -> 경사 고정(ms2_job)."""
+    import multiprocessing as mp
+    from concurrent.futures import ProcessPoolExecutor
+    items = [(f, nm, x) for f, d in vid.items() for nm, x in d.items()]
+    with ProcessPoolExecutor(max_workers=int(cfg["workers"]), mp_context=mp.get_context("spawn")) as ex:
+        fts = list(ex.map(hf.tl_template_job, [rof.estimate_args(cfg, x) for *_, x in items], chunksize=1))
+    keep = ("f", "pitch_deg", "roll_deg", "desk_tilt_deg", "turn_range_deg", "rms_px", "cost", "boundary", "start")
+    res, jobs, keys = {}, [], []
+    for (f, nm, x), ft in zip(items, fts):
+        A = ft.get("A")
+        res.setdefault(f, {})[nm] = {"info": x["info"]}
+        if A is None:
+            res[f][nm]["failed"] = ft.get("failed")
+            continue
+        for r in cfg["ramps_deg"]:
+            jobs.append(rof.estimate_args(cfg, x, A) + ("ramp_fixed", r))
+            keys.append((f, nm, f"ramp_{r:g}"))
+    log(f"  추정 {len(jobs)}건")
+    with ProcessPoolExecutor(max_workers=int(cfg["workers"]), mp_context=mp.get_context("spawn")) as ex:
+        for (f, nm, mk), o in zip(keys, ex.map(hf.ms2_job, jobs, chunksize=1)):
+            res[f][nm][mk] = {kk: o[kk] for kk in keep if kk in o} if "failed" not in o else o
+    return res
+
+
+def rv_summary(res: dict, cfg: dict, own: dict) -> str:
+    vids = {e["file"]: e for e in cfg["videos"]}
+    var = list(cfg["region_variants"]["variants"])
+    grp = cfg["region_variants"]["groups"]
+    rf = lambda f: float(vids[f].get("ref_f_px") or cfg["ref_f"]["value"])      # noqa: E731
+    k11 = f"ramp_{cfg['ramps_deg'][0]:g}"
+    err = lambda f, nm: (100 * (res[f][nm][k11]["f"] / rf(f) - 1)) if "f" in (res[f][nm].get(k11) or {}) else np.nan      # noqa: E731
+    L = ["# 127 특징점 영역을 좁힌 사슬 (마커 없는 영상) summary", "",
+         f"**마커 없는 영상 {len(res)}개에 사슬 변형(특징점을 뽑는 영역만 다름; 첫 정지 구간 기준, j16)을 돌리고 경사 {cfg['ramps_deg'][0]:g}° 고정으로 추정한다. 판정 없음.**", "",
+         "- 변형: " + " ; ".join(f"{k} = {'관절 21개 전부(지금 사슬)' if v is None else '관절 ' + str(v)}" for k, v in cfg["region_variants"]["variants"].items()),
+         "- 기준 f 는 이 파일에만 (이전 폰 1553, 새 폰 1672). * = f 탐색 범위 끝.", "", "## 묶음별 오차", "", "| 묶음 | 영상 수 | 변형 | 중앙값 | 절댓값 중앙값 | 최소 ~ 최대 | ±10% 안 |", "|---|---|---|---|---|---|---|"]
+    for g, fl in grp.items():
+        fl = [f for f in fl if f in res]
+        for nm in var:
+            e = np.array([err(f, nm) for f in fl])
+            L.append(f"| {g} | {len(fl)} | {nm} | {np.nanmedian(e):+.1f}% | {np.nanmedian(np.abs(e)):.1f}% | {np.nanmin(e):+.1f} ~ {np.nanmax(e):+.1f}% | {int((np.abs(e) <= 10).sum())}/{len(fl)} |")
+    L += ["", "## 영상별 f (오차)", "", "| 영상 | 묶음 | " + " | ".join(var) + " | 끊김 (변형별) | 사용 프레임 (변형별) |", "|---|---|" + "---|" * (len(var) + 2)]
+    for g, fl in grp.items():
+        for f in fl:
+            if f not in res:
+                continue
+            cells = []
+            for nm in var:
+                d = res[f][nm].get(k11) or {}
+                cells.append("-" if "f" not in d else f"{d['f']:.0f} ({err(f, nm):+.1f}%)" + ("*" if d.get("boundary") else ""))
+            L.append(f"| {f} | {g} | " + " | ".join(cells) + " | " + " / ".join(str(res[f][nm]["info"]["breaks"]) for nm in var) + " | " + " / ".join(str(res[f][nm]["info"]["n_use"]) for nm in var) + " |")
+    L += ["", "## 한계", "", "- 경사 고정만 돌렸다(함께 추정 없음).", "- 변형은 마커 영상 4개(126)를 보고 골랐다. 여기의 영상은 그 선택에 쓰이지 않았다.", ""]
+    return "\n".join(L) + "\n"
+
+
 
 def main(argv=None):
     ap = argparse.ArgumentParser(description="광류 방식 원인 확인 실험")
-    ap.add_argument("cmd", choices=["tracking-plane", "dorsum-corners", "two-plane", "joint-track-video", "geometry-synth", "pause-plane", "cotracker", "rotation-side", "points-video", "shape3d", "side-consistency", "shape-change", "pip-axis", "pause-plane2", "desk3d", "desk3d-contact", "stage-values", "stage-inputs", "cost-decompose", "lens-model", "repeatability", "marker-track", "marker-track2", "chain-vs-marker", "tracker-eval", "chain-vs-marker2", "tracker-eval2"])
+    ap.add_argument("cmd", choices=["tracking-plane", "dorsum-corners", "two-plane", "joint-track-video", "geometry-synth", "pause-plane", "cotracker", "rotation-side", "points-video", "shape3d", "side-consistency", "shape-change", "pip-axis", "pause-plane2", "desk3d", "desk3d-contact", "stage-values", "stage-inputs", "cost-decompose", "lens-model", "repeatability", "marker-track", "marker-track2", "chain-vs-marker", "tracker-eval", "chain-vs-marker2", "tracker-eval2", "region-variants"])
     ap.add_argument("--config", required=True)
     ap.add_argument("--out", default=None)
     ap.add_argument("--videos", type=int, default=None, help="시험 실행: 앞의 N 개 영상만, 추정 1건씩")
@@ -3426,7 +3512,7 @@ def main(argv=None):
               else s3_results_yaml(hf.resolve(a.run), own) if a.cmd == "shape3d" else sc_results_yaml(hf.resolve(a.run), own) if a.cmd == "side-consistency"
               else sh_results_yaml(hf.resolve(a.run), own) if a.cmd == "shape-change"
               else sc_results_yaml(hf.resolve(a.run), own) if a.cmd == "pip-axis" else pq_results_yaml(hf.resolve(a.run), own) if a.cmd == "pause-plane2"
-              else d3_results_yaml(hf.resolve(a.run), own) if a.cmd in ("desk3d", "desk3d-contact") else sv_results_yaml(hf.resolve(a.run), own) if a.cmd in ("stage-values", "stage-inputs") else cdx_results_yaml(hf.resolve(a.run), own) if a.cmd == "cost-decompose" else lm_results_yaml(hf.resolve(a.run), own) if a.cmd in ("lens-model", "repeatability", "marker-track", "marker-track2", "chain-vs-marker", "tracker-eval", "chain-vs-marker2", "tracker-eval2") else jt_results_yaml(hf.resolve(a.run), own) if a.cmd == "joint-track-video"
+              else d3_results_yaml(hf.resolve(a.run), own) if a.cmd in ("desk3d", "desk3d-contact") else sv_results_yaml(hf.resolve(a.run), own) if a.cmd in ("stage-values", "stage-inputs") else cdx_results_yaml(hf.resolve(a.run), own) if a.cmd == "cost-decompose" else lm_results_yaml(hf.resolve(a.run), own) if a.cmd in ("lens-model", "repeatability", "marker-track", "marker-track2", "chain-vs-marker", "tracker-eval", "chain-vs-marker2", "tracker-eval2", "region-variants") else jt_results_yaml(hf.resolve(a.run), own) if a.cmd == "joint-track-video"
               else results_yaml(a.cmd, hf.resolve(a.run), own))
         return None
     cfg = rof.load_settings({**own, "joint_set": "j16"} if own.get("joint_ids") else own)      # joint_ids 를 직접 적으면 joint_set 은 이름일 뿐이라 기본 묶음으로 읽고 아래에서 바꿈
@@ -3434,7 +3520,7 @@ def main(argv=None):
     cfg["videos"] = cfg["videos"] + [dict(v) for v in own.get("extra_videos", [])]      # 기본 설정 목록에 없는 새 영상 (file, person, ref_f_px)
     if own.get("joint_ids"):                                           # 기본 설정의 관절 묶음(j16, j21) 대신 직접 적은 관절 번호 (joint_set 은 이름으로만 씀)
         cfg["joint_ids"] = [int(j) for j in own["joint_ids"]]
-    cfg.update({k: own[k] for k in ("variants", "clahe", "two_plane", "joint_track", "render", "reference", "geometry_synth", "pause_plane", "cotracker", "rotation_side", "points_video", "shape3d", "side_consistency", "shape_change", "axis_base_joints", "pause_plane2", "desk3d", "stage_values", "stage_inputs", "cost_decompose", "lens_model", "repeatability", "marker_track", "chain_vs_marker", "tracker_eval") if k in own})
+    cfg.update({k: own[k] for k in ("variants", "clahe", "two_plane", "joint_track", "render", "reference", "geometry_synth", "pause_plane", "cotracker", "rotation_side", "points_video", "shape3d", "side_consistency", "shape_change", "axis_base_joints", "pause_plane2", "desk3d", "stage_values", "stage_inputs", "cost_decompose", "lens_model", "repeatability", "marker_track", "chain_vs_marker", "tracker_eval", "region_variants") if k in own})
     if a.videos:
         cfg["videos"] = cfg["videos"][:a.videos]
         cfg["free_starts_deg"] = []
@@ -3453,7 +3539,7 @@ def main(argv=None):
         shutil.copytree(hf.resolve(own["detection_cache_from"]), run_root / "detection_cache")
     import multiprocessing as mp
     from concurrent.futures import ProcessPoolExecutor
-    job = {"tracking-plane": tp_job, "dorsum-corners": dc_job, "two-plane": tw_points, "joint-track-video": jt_job, "geometry-synth": rof.video_points, "pause-plane": pp_job, "rotation-side": rs_load, "points-video": pv_job, "side-consistency": sc_load, "shape-change": sh_job, "pip-axis": sc_load, "pause-plane2": pq_job, "stage-values": sv_job, "stage-inputs": si_job, "marker-track": mt_job, "marker-track2": mt2_job, "chain-vs-marker": cm_load, "tracker-eval": te_job, "chain-vs-marker2": cm2_load, "tracker-eval2": te2_job}.get(a.cmd)
+    job = {"tracking-plane": tp_job, "dorsum-corners": dc_job, "two-plane": tw_points, "joint-track-video": jt_job, "geometry-synth": rof.video_points, "pause-plane": pp_job, "rotation-side": rs_load, "points-video": pv_job, "side-consistency": sc_load, "shape-change": sh_job, "pip-axis": sc_load, "pause-plane2": pq_job, "stage-values": sv_job, "stage-inputs": si_job, "marker-track": mt_job, "marker-track2": mt2_job, "chain-vs-marker": cm_load, "tracker-eval": te_job, "chain-vs-marker2": cm2_load, "tracker-eval2": te2_job, "region-variants": rv_job}.get(a.cmd)
     vid = {}
     if a.cmd == "cotracker":                                           # GPU 작업 + 추정을 ct_run 이 한꺼번에
         res = ct_run(cfg, own, log, run_root)
@@ -3512,6 +3598,9 @@ def main(argv=None):
     elif a.cmd in ("chain-vs-marker", "chain-vs-marker2"):
         res = cm_run(cfg, vid, log)
         text_sum = cm_summary(res, cfg, own)
+    elif a.cmd == "region-variants":
+        res = rv_run(cfg, vid, log)
+        text_sum = rv_summary(res, cfg, own)
     elif a.cmd in ("tracker-eval", "tracker-eval2"):
         res = te_run(cfg, vid, log)
         text_sum = te_summary(res, cfg, own)
