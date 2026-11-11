@@ -1,0 +1,26 @@
+# 125: 새끼 MCP(17) 를 뺀 비교 (사용자 2026-11-11: "그래 1번 해보고" - 124 뒤 제안한 "팀원의 새끼 MCP 마커를 빼고 다시 비교"), 기록용, 판정 없음.
+# 123 / 124: 팀원 손은 '+' 쪽에서 사슬이 손 폭(5 - 17)을 18~21% 좁게 옮긴다. 그런데 내 손은 17 마커가 없어 폭을 5 - 13 으로 쟀고, 팀원의 17 마커는 손 옆면 가까이에 있다.
+# 사람 사이 차이가 17 하나에서 오는지 보려고, 네 영상 모두 관절 묶음에서 17 을 뺀 15개(5~16, 18~20)로 123 과 같은 계산을 한다(폭은 모두 5 - 13). 사슬이 옮긴 MediaPipe 기준 관절(실제 추적점)의 f 도 같은 15개로 구한다.
+# 읽는 법(실행 전에 정함): 17 을 빼면 팀원의 "사슬로 옮긴 마커" f 가 마커 그대로의 값 근처로 올라오고 폭 치우침이 내 손 수준(-4 ~ -7%)이 되면 차이는 17 하나의 문제. 그대로 낮으면 17 의 문제가 아님. 기준 f 는 summary.md 에만.
+experiment:
+  name: 125_chain_vs_marker_no17
+  seed: 42
+settings_config: configs/74b_multistart_rerun.yaml
+joint_set: j15_no17
+joint_ids: [5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 18, 19, 20]
+code: {branch: optical_flow, commit: c665a80, modules: [HandCalib/optical_flow/experiments.py]}
+ramps_deg: [11]
+videos: ["__none__"]
+extra_videos:
+  - {file: IMG_7399.MOV, person: teammate, ref_f_px: 1672}
+  - {file: IMG_7400.MOV, person: teammate, ref_f_px: 1672}
+  - {file: IMG_7405.MOV, person: self, ref_f_px: 1672}
+  - {file: IMG_7406.MOV, person: self, ref_f_px: 1672}
+chain_vs_marker:
+  points_run: runs/122_marker_track_both/20261111T092735Z
+  angle_bins_deg: [-180, -60, -20, 20, 60, 180]
+workers: 48
+video_workers: 4
+output:
+  root: runs/125_chain_vs_marker_no17
+  results_yaml: results/125_chain_vs_marker_no17.yaml
