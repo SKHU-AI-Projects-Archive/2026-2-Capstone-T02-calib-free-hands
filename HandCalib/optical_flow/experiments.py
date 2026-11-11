@@ -3355,9 +3355,62 @@ def cm2_load(args):
     return x, lines
 
 
+# ----------------------------------------------------------------------------------------------------
+# 126: 특징점 영역을 관절 번호 목록으로 정하는 사슬 변형의 채점
+# ----------------------------------------------------------------------------------------------------
+def te2_job(args):
+    """te_job 과 같되 dc 변형의 mask 에 관절 번호 목록을 직접 적을 수 있다(그 관절들의 볼록 껍질에서만 특징점을 뽑음). 한 영상: 프레임·검출·track -> 첫 정지 구간 기준 프레임에서 사슬 변형(tracker_eval.variants)마다 앞뒤 사슬 -> (1) 기준 관절을 옮긴 점(실제 파이프라인의 추적점), (2) 기준 프레임의 마커를 옮긴 점.
+    마커는 tracker_eval.points_run 에 저장된 마커 점(122). 변형: kind = chain (kt_chain) | balanced (bc_chain, body_joints) | dc (dc_chain, mask dorsum|hand, clahe)."""
+    e, cfg, run_root = args
+    import cv2
+    cv2.setNumThreads(1)
+    te = cfg["tracker_eval"]
+    x0, _ = cm_load((e, {**cfg, "chain_vs_marker": {"points_run": te["points_run"]}}, run_root))
+    pngs, times, tr, (W, H), tmp = prepare(e, cfg, run_root)
+    out, lines = {"base": x0, "variants": {}}, []
+    try:
+        n = len(pngs)
+        pres = np.flatnonzero(tr["present"])
+        a, b = int(pres[0]), int(pres[-1])
+        ref = rof.choose_reference_pose(tr, (W, H), cfg)
+        if ref != x0["ref"]:
+            raise ValueError(f"기준 프레임이 저장된 점과 다름: {ref} / {x0['ref']}")
+        kps = np.stack([of.kt_carry(tr["present"], tr["kp"][:, j, k]) for j in range(21) for k in range(2)], axis=1).reshape(n, 21, 2)
+        boxes = np.stack([of.kt_carry(tr["present"], tr["box"][:, k]) for k in range(4)], axis=1)
+        jj = x0["joints"]
+        M0 = x0["pts"]["marker"]["kp"][ref]
+        for nm, v in te["variants"].items():
+            if v["kind"] == "chain":
+                run = lambda order: of.kt_chain(pngs, kps, boxes, order, cfg["tracking"])      # noqa: E731
+            elif v["kind"] == "balanced":
+                run = lambda order: of.bc_chain(pngs, kps, boxes, order, cfg["tracking"], v["body_joints"])      # noqa: E731
+            else:
+                run = lambda order: of.dc_chain(pngs, kps, boxes, order, cfg["tracking"], DORSUM if v["mask"] == "dorsum" else None if v["mask"] == "hand" else [int(j) for j in v["mask"]], te["clahe"] if v.get("clahe") else None)      # noqa: E731
+            fwd, bwd = run(list(range(ref, b + 1))), run(list(range(ref, a - 1, -1)))
+            Hall = {**bwd["H"], **fwd["H"]}
+            kp, tb, valid, edge = of.chain_points(tr["kp"][ref], Hall, n, W, H)
+            con = np.full((n, 21, 2), np.nan)
+            for i, Hm in Hall.items():
+                if Hm is not None:
+                    con[i][jj] = of.kt_map(M0[jj], Hm)
+            use_m = x0["use"] & np.isfinite(con[:, jj[0], 0])
+            cb = np.full((n, 4), np.nan)
+            cb[use_m] = np.c_[np.nanmin(con[use_m][:, jj], axis=1), np.nanmax(con[use_m][:, jj], axis=1)]
+            out["variants"][nm] = {"joints_pts": {"kp": kp, "box": tb, "use": valid & ~edge, "ref": ref, "size": (W, H)},
+                                   "on_marker": {"kp": con, "box": cb, "use": use_m, "ref": ref, "size": (W, H)},
+                                   "info": {"breaks": int(fwd["breaks"] + bwd["breaks"]), "inliers_median": sv_pct(fwd["inl"] + bwd["inl"], 50), "n_use": int((valid & ~edge).sum()),
+                                            "n_body_median": sv_pct(fwd.get("n_body", []) + bwd.get("n_body", []), 50) if "n_body" in fwd else None,
+                                            "n_finger_median": sv_pct(fwd.get("n_finger", []) + bwd.get("n_finger", []), 50) if "n_finger" in fwd else None}}
+            lines.append(f"  {e['file']} {nm}: 끊김 {out['variants'][nm]['info']['breaks']}, 사용 {out['variants'][nm]['info']['n_use']} / {n}, inlier {out['variants'][nm]['info']['inliers_median']}")
+    finally:
+        shutil.rmtree(tmp, ignore_errors=True)
+    return out, lines
+
+
+
 def main(argv=None):
     ap = argparse.ArgumentParser(description="광류 방식 원인 확인 실험")
-    ap.add_argument("cmd", choices=["tracking-plane", "dorsum-corners", "two-plane", "joint-track-video", "geometry-synth", "pause-plane", "cotracker", "rotation-side", "points-video", "shape3d", "side-consistency", "shape-change", "pip-axis", "pause-plane2", "desk3d", "desk3d-contact", "stage-values", "stage-inputs", "cost-decompose", "lens-model", "repeatability", "marker-track", "marker-track2", "chain-vs-marker", "tracker-eval", "chain-vs-marker2"])
+    ap.add_argument("cmd", choices=["tracking-plane", "dorsum-corners", "two-plane", "joint-track-video", "geometry-synth", "pause-plane", "cotracker", "rotation-side", "points-video", "shape3d", "side-consistency", "shape-change", "pip-axis", "pause-plane2", "desk3d", "desk3d-contact", "stage-values", "stage-inputs", "cost-decompose", "lens-model", "repeatability", "marker-track", "marker-track2", "chain-vs-marker", "tracker-eval", "chain-vs-marker2", "tracker-eval2"])
     ap.add_argument("--config", required=True)
     ap.add_argument("--out", default=None)
     ap.add_argument("--videos", type=int, default=None, help="시험 실행: 앞의 N 개 영상만, 추정 1건씩")
@@ -3373,7 +3426,7 @@ def main(argv=None):
               else s3_results_yaml(hf.resolve(a.run), own) if a.cmd == "shape3d" else sc_results_yaml(hf.resolve(a.run), own) if a.cmd == "side-consistency"
               else sh_results_yaml(hf.resolve(a.run), own) if a.cmd == "shape-change"
               else sc_results_yaml(hf.resolve(a.run), own) if a.cmd == "pip-axis" else pq_results_yaml(hf.resolve(a.run), own) if a.cmd == "pause-plane2"
-              else d3_results_yaml(hf.resolve(a.run), own) if a.cmd in ("desk3d", "desk3d-contact") else sv_results_yaml(hf.resolve(a.run), own) if a.cmd in ("stage-values", "stage-inputs") else cdx_results_yaml(hf.resolve(a.run), own) if a.cmd == "cost-decompose" else lm_results_yaml(hf.resolve(a.run), own) if a.cmd in ("lens-model", "repeatability", "marker-track", "marker-track2", "chain-vs-marker", "tracker-eval", "chain-vs-marker2") else jt_results_yaml(hf.resolve(a.run), own) if a.cmd == "joint-track-video"
+              else d3_results_yaml(hf.resolve(a.run), own) if a.cmd in ("desk3d", "desk3d-contact") else sv_results_yaml(hf.resolve(a.run), own) if a.cmd in ("stage-values", "stage-inputs") else cdx_results_yaml(hf.resolve(a.run), own) if a.cmd == "cost-decompose" else lm_results_yaml(hf.resolve(a.run), own) if a.cmd in ("lens-model", "repeatability", "marker-track", "marker-track2", "chain-vs-marker", "tracker-eval", "chain-vs-marker2", "tracker-eval2") else jt_results_yaml(hf.resolve(a.run), own) if a.cmd == "joint-track-video"
               else results_yaml(a.cmd, hf.resolve(a.run), own))
         return None
     cfg = rof.load_settings({**own, "joint_set": "j16"} if own.get("joint_ids") else own)      # joint_ids 를 직접 적으면 joint_set 은 이름일 뿐이라 기본 묶음으로 읽고 아래에서 바꿈
@@ -3400,7 +3453,7 @@ def main(argv=None):
         shutil.copytree(hf.resolve(own["detection_cache_from"]), run_root / "detection_cache")
     import multiprocessing as mp
     from concurrent.futures import ProcessPoolExecutor
-    job = {"tracking-plane": tp_job, "dorsum-corners": dc_job, "two-plane": tw_points, "joint-track-video": jt_job, "geometry-synth": rof.video_points, "pause-plane": pp_job, "rotation-side": rs_load, "points-video": pv_job, "side-consistency": sc_load, "shape-change": sh_job, "pip-axis": sc_load, "pause-plane2": pq_job, "stage-values": sv_job, "stage-inputs": si_job, "marker-track": mt_job, "marker-track2": mt2_job, "chain-vs-marker": cm_load, "tracker-eval": te_job, "chain-vs-marker2": cm2_load}.get(a.cmd)
+    job = {"tracking-plane": tp_job, "dorsum-corners": dc_job, "two-plane": tw_points, "joint-track-video": jt_job, "geometry-synth": rof.video_points, "pause-plane": pp_job, "rotation-side": rs_load, "points-video": pv_job, "side-consistency": sc_load, "shape-change": sh_job, "pip-axis": sc_load, "pause-plane2": pq_job, "stage-values": sv_job, "stage-inputs": si_job, "marker-track": mt_job, "marker-track2": mt2_job, "chain-vs-marker": cm_load, "tracker-eval": te_job, "chain-vs-marker2": cm2_load, "tracker-eval2": te2_job}.get(a.cmd)
     vid = {}
     if a.cmd == "cotracker":                                           # GPU 작업 + 추정을 ct_run 이 한꺼번에
         res = ct_run(cfg, own, log, run_root)
@@ -3459,7 +3512,7 @@ def main(argv=None):
     elif a.cmd in ("chain-vs-marker", "chain-vs-marker2"):
         res = cm_run(cfg, vid, log)
         text_sum = cm_summary(res, cfg, own)
-    elif a.cmd == "tracker-eval":
+    elif a.cmd in ("tracker-eval", "tracker-eval2"):
         res = te_run(cfg, vid, log)
         text_sum = te_summary(res, cfg, own)
     elif a.cmd == "pip-axis":
