@@ -1,0 +1,34 @@
+# 126: 특징점 영역을 좁힌 사슬의 채점 (사용자 2026-11-11: "그래 2번부터 진행해줘." - 125 뒤 제안한 "추정에 쓰는 관절 주변의 특징점만으로 변환을 구하는 사슬"), 기록용, 판정 없음.
+# 124: 손등 쪽(손목·엄지 뿌리·MCP)만 쓰면 크게 나빠지고, 반씩 나눠도 그대로였다. 125: 팀원의 치우침은 새끼 MCP 하나의 문제가 아니다.
+# 지금 사슬의 특징점 영역은 관절 21개의 볼록 껍질(엄지·손목 포함)이다. 추정에 쓰는 것은 관절 5~20 이므로, 영역을 그쪽으로 좁힌 변형을 124 와 같은 방법으로 마커와 비교한다:
+#   chain = 지금 사슬(비교용), fingers_mcp = 관절 5~20 의 껍질(엄지·손목 제외), fingers = 손가락 마디 PIP·DIP·끝 12개의 껍질(MCP 줄 제외), no_thumb = 손목 + 5~20 (엄지만 제외).
+# 넓히는 양(dilate_frac)과 나머지 설정은 그대로. 읽는 법은 124 와 같다(팀원의 '+' 쪽 손 폭 치우침이 뚜렷이 줄고, 옮긴 마커의 f 가 +8% 근처로 오르며, 내 영상이 나빠지지 않는 변형). 기준 f 는 summary.md 에만.
+experiment:
+  name: 126_tracker_eval_region
+  seed: 42
+settings_config: configs/74b_multistart_rerun.yaml
+joint_set: j16
+code: {branch: optical_flow, commit: d8e9ac9, modules: [HandCalib/optical_flow/experiments.py]}
+ramps_deg: [11]
+reference: {mode: first_pause, pause_gap_frames: 15, min_pause_frames: 5}
+videos: ["__none__"]
+extra_videos:
+  - {file: IMG_7399.MOV, person: teammate, ref_f_px: 1672}
+  - {file: IMG_7400.MOV, person: teammate, ref_f_px: 1672}
+  - {file: IMG_7405.MOV, person: self, ref_f_px: 1672}
+  - {file: IMG_7406.MOV, person: self, ref_f_px: 1672}
+detection_cache_from: runs/122_marker_track_both/20261111T092735Z/detection_cache
+tracker_eval:
+  points_run: runs/122_marker_track_both/20261111T092735Z
+  angle_bins_deg: [-180, -60, -20, 20, 60, 180]
+  clahe: {clip: 2.0, tile: 8}
+  variants:
+    chain: {kind: chain}
+    fingers_mcp: {kind: dc, mask: [5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20], clahe: false}
+    fingers: {kind: dc, mask: [6, 7, 8, 10, 11, 12, 14, 15, 16, 18, 19, 20], clahe: false}
+    no_thumb: {kind: dc, mask: [0, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20], clahe: false}
+workers: 50
+video_workers: 4
+output:
+  root: runs/126_tracker_eval_region
+  results_yaml: results/126_tracker_eval_region.yaml
