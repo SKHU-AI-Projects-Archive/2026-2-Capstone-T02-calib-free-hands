@@ -1,0 +1,26 @@
+# 116: 함수(단계)별 중간값 비교 (사용자 2026-11-11: 교수님께서 "함수별로 값이 어떻게 얼마나 다른지 확인해 보라"고 하심 - 광류 f 추정 파이프라인의 함수마다 팀원 영상과 내 영상의 값을 나란히), 기록용, 판정 없음.
+# 영상 = 100 의 새 영상 4개(같은 카메라·같은 장소; 팀원 7384·7387, 나 7385·7388). 설정 = 94 / 100 과 같다(첫 정지 구간 기준, j16, 경사 11° 고정 + 함께 추정 시작 5/12/19°).
+# 앞 단계(프레임 추출, MediaPipe 검출(100 의 검출 캐시 재사용), track, 기준 프레임, 광류 사슬)는 같은 함수로 다시 돌리고, 추적점이 100 에 저장된 점과 같은지도 적는다.
+# 뒤 단계(od_bridge, _restrict, free_template, od_poses, dk_estimate_ms)는 그 추적점으로. 기준 f 는 summary.md 에만.
+experiment:
+  name: 116_stage_values
+  seed: 42
+settings_config: configs/74b_multistart_rerun.yaml
+joint_set: j16
+code: {branch: optical_flow, commit: f672fab, modules: [HandCalib/optical_flow/experiments.py]}
+ramps_deg: [11]
+reference: {mode: first_pause, pause_gap_frames: 15, min_pause_frames: 5}
+videos: ["__none__"]
+extra_videos:
+  - {file: IMG_7384.MOV, person: teammate, ref_f_px: 1672}
+  - {file: IMG_7385.MOV, person: self, ref_f_px: 1672}
+  - {file: IMG_7387.MOV, person: teammate, ref_f_px: 1672}
+  - {file: IMG_7388.MOV, person: self, ref_f_px: 1672}
+detection_cache_from: runs/100_new_pair_shoot/20261110T032637Z/detection_cache
+stage_values:
+  points_run: runs/100_new_pair_shoot/20261110T032637Z
+workers: 16
+video_workers: 4
+output:
+  root: runs/116_stage_values
+  results_yaml: results/116_stage_values.yaml
