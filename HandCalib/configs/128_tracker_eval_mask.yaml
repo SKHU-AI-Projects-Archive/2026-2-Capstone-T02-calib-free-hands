@@ -1,0 +1,35 @@
+# 128: 엄지를 뺀 사슬에서 넓히는 양과 특징점 간격 (사용자 2026-11-11: "남은 간격을 줄여보자."), 기록용, 판정 없음.
+# 126 / 127: 특징점 영역에서 엄지를 빼면(no_thumb) 팀원 오차가 절반으로 줄지만 간격이 약 10%p 남는다. 마커에 가장 잘 맞는 평면 변환은 팀원 +8% 를 내므로 평면 변환 하나로도 여지가 있다.
+# 값만 바꾸는 후보를 마커 영상 4개에서 126 과 같은 방법으로 채점한다(모두 no_thumb 영역 = 손목 + 관절 5~20):
+#   no_thumb = 126 과 같음(비교용; dilate_frac 0.03, min_distance 7),  d0 = 영역을 넓히지 않음(dilate_frac 0: 손 윤곽선·그림자 경계의 특징점을 줄임),
+#   md12 = 특징점 사이 최소 간격 12 px(무늬 많은 곳에 몰리지 않게),  d0_md12 = 둘 다.
+# 읽는 법(실행 전에 정함): 팀원 영상에서 실제 추적점의 f 와 옮긴 마커의 f 가 no_thumb 보다 마커 값(+8%) 쪽으로 뚜렷이 오르고, 내 영상이 나빠지지 않는 변형이 있으면 127 과 같이 마커 없는 영상에서 확인할 후보.
+experiment:
+  name: 128_tracker_eval_mask
+  seed: 42
+settings_config: configs/74b_multistart_rerun.yaml
+joint_set: j16
+code: {branch: optical_flow, commit: 77dcd37, modules: [HandCalib/optical_flow/experiments.py]}
+ramps_deg: [11]
+reference: {mode: first_pause, pause_gap_frames: 15, min_pause_frames: 5}
+videos: ["__none__"]
+extra_videos:
+  - {file: IMG_7399.MOV, person: teammate, ref_f_px: 1672}
+  - {file: IMG_7400.MOV, person: teammate, ref_f_px: 1672}
+  - {file: IMG_7405.MOV, person: self, ref_f_px: 1672}
+  - {file: IMG_7406.MOV, person: self, ref_f_px: 1672}
+detection_cache_from: runs/122_marker_track_both/20261111T092735Z/detection_cache
+tracker_eval:
+  points_run: runs/122_marker_track_both/20261111T092735Z
+  angle_bins_deg: [-180, -60, -20, 20, 60, 180]
+  clahe: {clip: 2.0, tile: 8}
+  variants:
+    no_thumb: {kind: dc, mask: [0, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20], clahe: false}
+    d0: {kind: dc, mask: [0, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20], clahe: false, tracking: {dilate_frac: 0.0}}
+    md12: {kind: dc, mask: [0, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20], clahe: false, tracking: {min_distance: 12}}
+    d0_md12: {kind: dc, mask: [0, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20], clahe: false, tracking: {dilate_frac: 0.0, min_distance: 12}}
+workers: 50
+video_workers: 4
+output:
+  root: runs/128_tracker_eval_mask
+  results_yaml: results/128_tracker_eval_mask.yaml
