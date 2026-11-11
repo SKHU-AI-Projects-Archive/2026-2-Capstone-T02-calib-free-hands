@@ -1,0 +1,1141 @@
+experiment: 118_cost_decompose
+run: runs/118_cost_decompose/20261111T065747Z
+code_commit: 2f8bd67
+git_dirty_at_run: false
+videos:
+  IMG_7384.MOV:
+    f:
+    - 672.0
+    - 825.7866
+    - 1041.2469
+    - 1279.5354
+    - 1613.3856
+    - 1982.6075
+    - 2499.9
+    - 3072.0
+    cost:
+    - 64.5349
+    - 42.0933
+    - 22.6268
+    - 13.1643
+    - 11.3346
+    - 486.25
+    - 22.1152
+    - 506.6896
+    cost_recomputed:
+    - 64.5349
+    - 42.0933
+    - 22.6268
+    - 13.1643
+    - 11.3346
+    - 486.25
+    - 22.1152
+    - 506.6896
+    huber_px: 8.5609
+    n_frames_by_angle:
+      -180~-60: 30
+      -60~-20: 14
+      -20~20: 50
+      20~60: 26
+      60~180: 0
+    angle_min: -120.496
+    angle_max: 56.2305
+    pairs:
+      1280_vs_1613:
+        f_low: 1279.5354
+        f_high: 1613.3856
+        cost_low: 13.1643
+        cost_high: 11.3346
+        delta: 1.8296
+        by_angle:
+          -180~-60:
+            contribution: 0.3862
+            mean_delta: 1.5449
+            mean_loss_low: 27.4376
+            mean_loss_high: 25.8927
+          -60~-20:
+            contribution: -0.0709
+            mean_delta: -0.6074
+            mean_loss_low: 3.0442
+            mean_loss_high: 3.6516
+          -20~20:
+            contribution: 1.4656
+            mean_delta: 3.5173
+            mean_loss_low: 8.7088
+            mean_loss_high: 5.1914
+          20~60:
+            contribution: 0.0487
+            mean_delta: 0.2248
+            mean_loss_low: 10.7126
+            mean_loss_high: 10.4878
+          60~180:
+            contribution: 0.0
+            mean_delta: null
+            mean_loss_low: null
+            mean_loss_high: null
+        by_row:
+          MCP:
+            contribution: -0.615
+            mean_delta: -2.4601
+          PIP:
+            contribution: -0.162
+            mean_delta: -0.6479
+          DIP:
+            contribution: 0.518
+            mean_delta: 2.0718
+          TIP:
+            contribution: 2.0887
+            mean_delta: 8.3547
+        by_finger:
+          index:
+            contribution: 2.4327
+            mean_delta: 9.7308
+          middle:
+            contribution: 1.7588
+            mean_delta: 7.0351
+          ring:
+            contribution: -0.6454
+            mean_delta: -2.5814
+          pinky:
+            contribution: -1.7165
+            mean_delta: -6.8659
+        length_ratio_low:
+          -180~-60: 1.0261
+          -60~-20: 1.0054
+          -20~20: 0.9805
+          20~60: 1.0008
+          60~180: null
+        length_ratio_high:
+          -180~-60: 0.9961
+          -60~-20: 1.0111
+          -20~20: 0.9956
+          20~60: 1.0118
+          60~180: null
+        width_ratio_low:
+          -180~-60: 0.9557
+          -60~-20: 0.9979
+          -20~20: 1.0115
+          20~60: 1.0508
+          60~180: null
+        width_ratio_high:
+          -180~-60: 0.9516
+          -60~-20: 0.9769
+          -20~20: 1.0062
+          20~60: 1.0733
+          60~180: null
+      1041_vs_1613:
+        f_low: 1041.2469
+        f_high: 1613.3856
+        cost_low: 22.6268
+        cost_high: 11.3346
+        delta: 11.2922
+        by_angle:
+          -180~-60:
+            contribution: 5.1971
+            mean_delta: 20.7883
+            mean_loss_low: 46.681
+            mean_loss_high: 25.8927
+          -60~-20:
+            contribution: 0.3319
+            mean_delta: 2.8452
+            mean_loss_low: 6.4968
+            mean_loss_high: 3.6516
+          -20~20:
+            contribution: 4.7739
+            mean_delta: 11.4573
+            mean_loss_low: 16.6487
+            mean_loss_high: 5.1914
+          20~60:
+            contribution: 0.9893
+            mean_delta: 4.566
+            mean_loss_low: 15.0538
+            mean_loss_high: 10.4878
+          60~180:
+            contribution: 0.0
+            mean_delta: null
+            mean_loss_low: null
+            mean_loss_high: null
+        by_row:
+          MCP:
+            contribution: 1.3614
+            mean_delta: 5.4457
+          PIP:
+            contribution: 0.6578
+            mean_delta: 2.6313
+          DIP:
+            contribution: 2.3227
+            mean_delta: 9.2907
+          TIP:
+            contribution: 6.9503
+            mean_delta: 27.8011
+        by_finger:
+          index:
+            contribution: 6.3189
+            mean_delta: 25.2756
+          middle:
+            contribution: 5.6366
+            mean_delta: 22.5463
+          ring:
+            contribution: 0.3505
+            mean_delta: 1.4018
+          pinky:
+            contribution: -1.0137
+            mean_delta: -4.055
+        length_ratio_low:
+          -180~-60: 1.0579
+          -60~-20: 0.999
+          -20~20: 0.9658
+          20~60: 1.0006
+          60~180: null
+        length_ratio_high:
+          -180~-60: 0.9961
+          -60~-20: 1.0111
+          -20~20: 0.9956
+          20~60: 1.0118
+          60~180: null
+        width_ratio_low:
+          -180~-60: 0.953
+          -60~-20: 1.0184
+          -20~20: 1.0201
+          20~60: 1.0254
+          60~180: null
+        width_ratio_high:
+          -180~-60: 0.9516
+          -60~-20: 0.9769
+          -20~20: 1.0062
+          20~60: 1.0733
+          60~180: null
+      2500_vs_1613:
+        f_low: 2499.9
+        f_high: 1613.3856
+        cost_low: 22.1152
+        cost_high: 11.3346
+        delta: 10.7806
+        by_angle:
+          -180~-60:
+            contribution: 7.4359
+            mean_delta: 29.7436
+            mean_loss_low: 55.6363
+            mean_loss_high: 25.8927
+          -60~-20:
+            contribution: 0.5961
+            mean_delta: 5.1098
+            mean_loss_low: 8.7614
+            mean_loss_high: 3.6516
+          -20~20:
+            contribution: 0.4687
+            mean_delta: 1.1248
+            mean_loss_low: 6.3162
+            mean_loss_high: 5.1914
+          20~60:
+            contribution: 2.2799
+            mean_delta: 10.5225
+            mean_loss_low: 21.0103
+            mean_loss_high: 10.4878
+          60~180:
+            contribution: 0.0
+            mean_delta: null
+            mean_loss_low: null
+            mean_loss_high: null
+        by_row:
+          MCP:
+            contribution: 4.7334
+            mean_delta: 18.9338
+          PIP:
+            contribution: 2.2608
+            mean_delta: 9.0432
+          DIP:
+            contribution: 1.4575
+            mean_delta: 5.83
+          TIP:
+            contribution: 2.3288
+            mean_delta: 9.3153
+        by_finger:
+          index:
+            contribution: -0.52
+            mean_delta: -2.08
+          middle:
+            contribution: 1.6072
+            mean_delta: 6.429
+          ring:
+            contribution: 3.7159
+            mean_delta: 14.8638
+          pinky:
+            contribution: 5.9774
+            mean_delta: 23.9096
+        length_ratio_low:
+          -180~-60: 0.9467
+          -60~-20: 1.0106
+          -20~20: 1.0118
+          20~60: 1.0375
+          60~180: null
+        length_ratio_high:
+          -180~-60: 0.9961
+          -60~-20: 1.0111
+          -20~20: 0.9956
+          20~60: 1.0118
+          60~180: null
+        width_ratio_low:
+          -180~-60: 0.9387
+          -60~-20: 0.9528
+          -20~20: 1.0043
+          20~60: 1.0996
+          60~180: null
+        width_ratio_high:
+          -180~-60: 0.9516
+          -60~-20: 0.9769
+          -20~20: 1.0062
+          20~60: 1.0733
+          60~180: null
+  IMG_7385.MOV:
+    f:
+    - 672.0
+    - 825.7866
+    - 1041.2469
+    - 1279.5354
+    - 1613.3856
+    - 1982.6075
+    - 2499.9
+    - 3072.0
+    cost:
+    - 96.2511
+    - 65.3131
+    - 36.2055
+    - 19.7618
+    - 12.2547
+    - 13.2829
+    - 19.3038
+    - 26.3774
+    cost_recomputed:
+    - 96.2511
+    - 65.3131
+    - 36.2055
+    - 19.7618
+    - 12.2547
+    - 13.2829
+    - 19.3038
+    - 26.3774
+    huber_px: 8.6507
+    n_frames_by_angle:
+      -180~-60: 23
+      -60~-20: 15
+      -20~20: 51
+      20~60: 10
+      60~180: 21
+    angle_min: -62.7331
+    angle_max: 73.5648
+    pairs:
+      1280_vs_1613:
+        f_low: 1279.5354
+        f_high: 1613.3856
+        cost_low: 19.7618
+        cost_high: 12.2547
+        delta: 7.5071
+        by_angle:
+          -180~-60:
+            contribution: 3.2264
+            mean_delta: 16.8336
+            mean_loss_low: 43.5852
+            mean_loss_high: 26.7515
+          -60~-20:
+            contribution: 0.9052
+            mean_delta: 7.2417
+            mean_loss_low: 17.9634
+            mean_loss_high: 10.7217
+          -20~20:
+            contribution: 2.1347
+            mean_delta: 5.0228
+            mean_loss_low: 12.5947
+            mean_loss_high: 7.5718
+          20~60:
+            contribution: 0.3881
+            mean_delta: 4.6574
+            mean_loss_low: 13.2203
+            mean_loss_high: 8.563
+          60~180:
+            contribution: 0.8527
+            mean_delta: 4.8724
+            mean_loss_low: 15.4751
+            mean_loss_high: 10.6026
+        by_row:
+          MCP:
+            contribution: -0.2896
+            mean_delta: -1.1583
+          PIP:
+            contribution: 0.332
+            mean_delta: 1.3278
+          DIP:
+            contribution: 1.7794
+            mean_delta: 7.1174
+          TIP:
+            contribution: 5.6854
+            mean_delta: 22.7416
+        by_finger:
+          index:
+            contribution: 4.4023
+            mean_delta: 17.609
+          middle:
+            contribution: 3.2012
+            mean_delta: 12.8047
+          ring:
+            contribution: 0.6516
+            mean_delta: 2.6063
+          pinky:
+            contribution: -0.7479
+            mean_delta: -2.9915
+        length_ratio_low:
+          -180~-60: 1.0318
+          -60~-20: 1.016
+          -20~20: 0.9848
+          20~60: 0.984
+          60~180: 0.9863
+        length_ratio_high:
+          -180~-60: 1.0049
+          -60~-20: 1.0049
+          -20~20: 0.9949
+          20~60: 0.9944
+          60~180: 0.9973
+        width_ratio_low:
+          -180~-60: 0.9505
+          -60~-20: 0.9777
+          -20~20: 1.019
+          20~60: 1.0242
+          60~180: 1.028
+        width_ratio_high:
+          -180~-60: 0.9409
+          -60~-20: 0.9619
+          -20~20: 1.0138
+          20~60: 1.0511
+          60~180: 1.0532
+      1041_vs_1613:
+        f_low: 1041.2469
+        f_high: 1613.3856
+        cost_low: 36.2055
+        cost_high: 12.2547
+        delta: 23.9508
+        by_angle:
+          -180~-60:
+            contribution: 10.726
+            mean_delta: 55.9616
+            mean_loss_low: 82.7132
+            mean_loss_high: 26.7515
+          -60~-20:
+            contribution: 3.4095
+            mean_delta: 27.2762
+            mean_loss_low: 37.9979
+            mean_loss_high: 10.7217
+          -20~20:
+            contribution: 6.0447
+            mean_delta: 14.2228
+            mean_loss_low: 21.7947
+            mean_loss_high: 7.5718
+          20~60:
+            contribution: 1.3062
+            mean_delta: 15.6745
+            mean_loss_low: 24.2374
+            mean_loss_high: 8.563
+          60~180:
+            contribution: 2.4644
+            mean_delta: 14.0823
+            mean_loss_low: 24.685
+            mean_loss_high: 10.6026
+        by_row:
+          MCP:
+            contribution: 1.9271
+            mean_delta: 7.7083
+          PIP:
+            contribution: 2.0097
+            mean_delta: 8.0387
+          DIP:
+            contribution: 5.8863
+            mean_delta: 23.5453
+          TIP:
+            contribution: 14.1277
+            mean_delta: 56.511
+        by_finger:
+          index:
+            contribution: 11.2735
+            mean_delta: 45.0939
+          middle:
+            contribution: 8.4769
+            mean_delta: 33.9078
+          ring:
+            contribution: 2.6333
+            mean_delta: 10.5333
+          pinky:
+            contribution: 1.5671
+            mean_delta: 6.2684
+        length_ratio_low:
+          -180~-60: 1.0638
+          -60~-20: 1.0298
+          -20~20: 0.9742
+          20~60: 0.9777
+          60~180: 0.9858
+        length_ratio_high:
+          -180~-60: 1.0049
+          -60~-20: 1.0049
+          -20~20: 0.9949
+          20~60: 0.9944
+          60~180: 0.9973
+        width_ratio_low:
+          -180~-60: 0.9522
+          -60~-20: 0.988
+          -20~20: 1.0273
+          20~60: 0.9968
+          60~180: 0.9998
+        width_ratio_high:
+          -180~-60: 0.9409
+          -60~-20: 0.9619
+          -20~20: 1.0138
+          20~60: 1.0511
+          60~180: 1.0532
+      2500_vs_1613:
+        f_low: 2499.9
+        f_high: 1613.3856
+        cost_low: 19.3038
+        cost_high: 12.2547
+        delta: 7.0492
+        by_angle:
+          -180~-60:
+            contribution: 3.9729
+            mean_delta: 20.7283
+            mean_loss_low: 47.4798
+            mean_loss_high: 26.7515
+          -60~-20:
+            contribution: 1.5272
+            mean_delta: 12.2175
+            mean_loss_low: 22.9392
+            mean_loss_high: 10.7217
+          -20~20:
+            contribution: -0.5163
+            mean_delta: -1.2148
+            mean_loss_low: 6.3571
+            mean_loss_high: 7.5718
+          20~60:
+            contribution: 0.618
+            mean_delta: 7.4157
+            mean_loss_low: 15.9786
+            mean_loss_high: 8.563
+          60~180:
+            contribution: 1.4474
+            mean_delta: 8.2706
+            mean_loss_low: 18.8733
+            mean_loss_high: 10.6026
+        by_row:
+          MCP:
+            contribution: 4.0114
+            mean_delta: 16.0457
+          PIP:
+            contribution: 2.5555
+            mean_delta: 10.2221
+          DIP:
+            contribution: 1.4145
+            mean_delta: 5.6579
+          TIP:
+            contribution: -0.9323
+            mean_delta: -3.7291
+        by_finger:
+          index:
+            contribution: -0.8812
+            mean_delta: -3.5246
+          middle:
+            contribution: -0.4048
+            mean_delta: -1.6194
+          ring:
+            contribution: 1.5868
+            mean_delta: 6.347
+          pinky:
+            contribution: 6.7484
+            mean_delta: 26.9937
+        length_ratio_low:
+          -180~-60: 0.9702
+          -60~-20: 0.9897
+          -20~20: 1.0058
+          20~60: 1.0131
+          60~180: 1.0271
+        length_ratio_high:
+          -180~-60: 1.0049
+          -60~-20: 1.0049
+          -20~20: 0.9949
+          20~60: 0.9944
+          60~180: 0.9973
+        width_ratio_low:
+          -180~-60: 0.9109
+          -60~-20: 0.9269
+          -20~20: 1.0014
+          20~60: 1.074
+          60~180: 1.0717
+        width_ratio_high:
+          -180~-60: 0.9409
+          -60~-20: 0.9619
+          -20~20: 1.0138
+          20~60: 1.0511
+          60~180: 1.0532
+  IMG_7387.MOV:
+    f:
+    - 672.0
+    - 825.7866
+    - 1041.2469
+    - 1279.5354
+    - 1613.3856
+    - 1982.6075
+    - 2499.9
+    - 3072.0
+    cost:
+    - 69.359
+    - 41.7218
+    - 20.1897
+    - 11.9722
+    - 13.3743
+    - 19.8921
+    - 29.0855
+    - 37.0322
+    cost_recomputed:
+    - 69.359
+    - 41.7218
+    - 20.1897
+    - 11.9722
+    - 13.3743
+    - 19.8921
+    - 29.0855
+    - 37.0322
+    huber_px: 8.5359
+    n_frames_by_angle:
+      -180~-60: 27
+      -60~-20: 12
+      -20~20: 50
+      20~60: 31
+      60~180: 0
+    angle_min: -93.6506
+    angle_max: 43.6139
+    pairs:
+      1280_vs_1613:
+        f_low: 1279.5354
+        f_high: 1613.3856
+        cost_low: 11.9722
+        cost_high: 13.3743
+        delta: -1.4021
+        by_angle:
+          -180~-60:
+            contribution: -0.9905
+            mean_delta: -4.4022
+            mean_loss_low: 23.6079
+            mean_loss_high: 28.01
+          -60~-20:
+            contribution: 0.1165
+            mean_delta: 1.1653
+            mean_loss_low: 6.3782
+            mean_loss_high: 5.213
+          -20~20:
+            contribution: 0.8266
+            mean_delta: 1.9839
+            mean_loss_low: 6.3137
+            mean_loss_high: 4.3298
+          20~60:
+            contribution: -1.3548
+            mean_delta: -5.2442
+            mean_loss_low: 13.13
+            mean_loss_high: 18.3742
+          60~180:
+            contribution: 0.0
+            mean_delta: null
+            mean_loss_low: null
+            mean_loss_high: null
+        by_row:
+          MCP:
+            contribution: -1.0141
+            mean_delta: -4.0565
+          PIP:
+            contribution: -0.9794
+            mean_delta: -3.9177
+          DIP:
+            contribution: -0.4439
+            mean_delta: -1.7755
+          TIP:
+            contribution: 1.0353
+            mean_delta: 4.1413
+        by_finger:
+          index:
+            contribution: 1.7008
+            mean_delta: 6.8033
+          middle:
+            contribution: 1.0499
+            mean_delta: 4.1997
+          ring:
+            contribution: -0.7446
+            mean_delta: -2.9785
+          pinky:
+            contribution: -3.4082
+            mean_delta: -13.6329
+        length_ratio_low:
+          -180~-60: 1.0187
+          -60~-20: 1.0181
+          -20~20: 0.9879
+          20~60: 0.9886
+          60~180: null
+        length_ratio_high:
+          -180~-60: 0.9858
+          -60~-20: 1.0117
+          -20~20: 1.0024
+          20~60: 1.006
+          60~180: null
+        width_ratio_low:
+          -180~-60: 0.9425
+          -60~-20: 1.0009
+          -20~20: 1.014
+          20~60: 1.0621
+          60~180: null
+        width_ratio_high:
+          -180~-60: 0.9394
+          -60~-20: 0.9878
+          -20~20: 1.0104
+          20~60: 1.0862
+          60~180: null
+      1041_vs_1613:
+        f_low: 1041.2469
+        f_high: 1613.3856
+        cost_low: 20.1897
+        cost_high: 13.3743
+        delta: 6.8154
+        by_angle:
+          -180~-60:
+            contribution: 3.777
+            mean_delta: 16.7866
+            mean_loss_low: 44.7967
+            mean_loss_high: 28.01
+          -60~-20:
+            contribution: 0.9448
+            mean_delta: 9.4481
+            mean_loss_low: 14.661
+            mean_loss_high: 5.213
+          -20~20:
+            contribution: 3.2986
+            mean_delta: 7.9166
+            mean_loss_low: 12.2464
+            mean_loss_high: 4.3298
+          20~60:
+            contribution: -1.205
+            mean_delta: -4.6644
+            mean_loss_low: 13.7098
+            mean_loss_high: 18.3742
+          60~180:
+            contribution: 0.0
+            mean_delta: null
+            mean_loss_low: null
+            mean_loss_high: null
+        by_row:
+          MCP:
+            contribution: 0.6822
+            mean_delta: 2.7288
+          PIP:
+            contribution: -0.7065
+            mean_delta: -2.826
+          DIP:
+            contribution: 0.7246
+            mean_delta: 2.8984
+          TIP:
+            contribution: 6.1151
+            mean_delta: 24.4603
+        by_finger:
+          index:
+            contribution: 5.3302
+            mean_delta: 21.3206
+          middle:
+            contribution: 4.9672
+            mean_delta: 19.8686
+          ring:
+            contribution: 0.2626
+            mean_delta: 1.0503
+          pinky:
+            contribution: -3.7445
+            mean_delta: -14.9779
+        length_ratio_low:
+          -180~-60: 1.0569
+          -60~-20: 1.0257
+          -20~20: 0.9731
+          20~60: 0.9767
+          60~180: null
+        length_ratio_high:
+          -180~-60: 0.9858
+          -60~-20: 1.0117
+          -20~20: 1.0024
+          20~60: 1.006
+          60~180: null
+        width_ratio_low:
+          -180~-60: 0.9393
+          -60~-20: 1.0132
+          -20~20: 1.0243
+          20~60: 1.0366
+          60~180: null
+        width_ratio_high:
+          -180~-60: 0.9394
+          -60~-20: 0.9878
+          -20~20: 1.0104
+          20~60: 1.0862
+          60~180: null
+      2500_vs_1613:
+        f_low: 2499.9
+        f_high: 1613.3856
+        cost_low: 29.0855
+        cost_high: 13.3743
+        delta: 15.7112
+        by_angle:
+          -180~-60:
+            contribution: 9.7703
+            mean_delta: 43.4236
+            mean_loss_low: 71.4337
+            mean_loss_high: 28.01
+          -60~-20:
+            contribution: 0.7403
+            mean_delta: 7.4028
+            mean_loss_low: 12.6158
+            mean_loss_high: 5.213
+          -20~20:
+            contribution: 0.6716
+            mean_delta: 1.6119
+            mean_loss_low: 5.9417
+            mean_loss_high: 4.3298
+          20~60:
+            contribution: 4.529
+            mean_delta: 17.5316
+            mean_loss_low: 35.9057
+            mean_loss_high: 18.3742
+          60~180:
+            contribution: 0.0
+            mean_delta: null
+            mean_loss_low: null
+            mean_loss_high: null
+        by_row:
+          MCP:
+            contribution: 4.644
+            mean_delta: 18.5761
+          PIP:
+            contribution: 3.1579
+            mean_delta: 12.6317
+          DIP:
+            contribution: 3.108
+            mean_delta: 12.4319
+          TIP:
+            contribution: 4.8013
+            mean_delta: 19.2051
+        by_finger:
+          index:
+            contribution: 0.8787
+            mean_delta: 3.515
+          middle:
+            contribution: 2.6182
+            mean_delta: 10.4726
+          ring:
+            contribution: 3.7141
+            mean_delta: 14.8562
+          pinky:
+            contribution: 8.5002
+            mean_delta: 34.001
+        length_ratio_low:
+          -180~-60: 0.9366
+          -60~-20: 0.9952
+          -20~20: 1.0145
+          20~60: 1.0313
+          60~180: null
+        length_ratio_high:
+          -180~-60: 0.9858
+          -60~-20: 1.0117
+          -20~20: 1.0024
+          20~60: 1.006
+          60~180: null
+        width_ratio_low:
+          -180~-60: 0.925
+          -60~-20: 0.9682
+          -20~20: 1.0112
+          20~60: 1.1117
+          60~180: null
+        width_ratio_high:
+          -180~-60: 0.9394
+          -60~-20: 0.9878
+          -20~20: 1.0104
+          20~60: 1.0862
+          60~180: null
+  IMG_7388.MOV:
+    f:
+    - 672.0
+    - 825.7866
+    - 1041.2469
+    - 1279.5354
+    - 1613.3856
+    - 1982.6075
+    - 2499.9
+    - 3072.0
+    cost:
+    - 115.0313
+    - 80.3079
+    - 45.9432
+    - 26.2285
+    - 17.6105
+    - 20.1931
+    - 29.2889
+    - 39.437
+    cost_recomputed:
+    - 115.0313
+    - 80.3079
+    - 45.9432
+    - 26.2285
+    - 17.6105
+    - 20.1931
+    - 29.2889
+    - 39.437
+    huber_px: 9.6325
+    n_frames_by_angle:
+      -180~-60: 23
+      -60~-20: 12
+      -20~20: 54
+      20~60: 31
+      60~180: 0
+    angle_min: -68.1098
+    angle_max: 52.7717
+    pairs:
+      1280_vs_1613:
+        f_low: 1279.5354
+        f_high: 1613.3856
+        cost_low: 26.2284
+        cost_high: 17.6105
+        delta: 8.618
+        by_angle:
+          -180~-60:
+            contribution: 4.7912
+            mean_delta: 24.9976
+            mean_loss_low: 56.8246
+            mean_loss_high: 31.827
+          -60~-20:
+            contribution: 0.7384
+            mean_delta: 7.3837
+            mean_loss_low: 21.3189
+            mean_loss_high: 13.9352
+          -20~20:
+            contribution: 3.6597
+            mean_delta: 8.1326
+            mean_loss_low: 18.1088
+            mean_loss_high: 9.9762
+          20~60:
+            contribution: -0.5713
+            mean_delta: -2.2113
+            mean_loss_low: 19.5725
+            mean_loss_high: 21.7838
+          60~180:
+            contribution: 0.0
+            mean_delta: null
+            mean_loss_low: null
+            mean_loss_high: null
+        by_row:
+          MCP:
+            contribution: 0.1095
+            mean_delta: 0.4378
+          PIP:
+            contribution: -0.1301
+            mean_delta: -0.5205
+          DIP:
+            contribution: 1.9084
+            mean_delta: 7.6334
+          TIP:
+            contribution: 6.7303
+            mean_delta: 26.9211
+        by_finger:
+          index:
+            contribution: 4.7853
+            mean_delta: 19.1412
+          middle:
+            contribution: 4.0854
+            mean_delta: 16.3416
+          ring:
+            contribution: 1.0666
+            mean_delta: 4.2666
+          pinky:
+            contribution: -1.3194
+            mean_delta: -5.2775
+        length_ratio_low:
+          -180~-60: 1.0465
+          -60~-20: 1.0223
+          -20~20: 0.9724
+          20~60: 1.0119
+          60~180: null
+        length_ratio_high:
+          -180~-60: 1.0142
+          -60~-20: 1.0121
+          -20~20: 0.9846
+          20~60: 1.0218
+          60~180: null
+        width_ratio_low:
+          -180~-60: 0.9564
+          -60~-20: 0.968
+          -20~20: 1.002
+          20~60: 1.0409
+          60~180: null
+        width_ratio_high:
+          -180~-60: 0.9483
+          -60~-20: 0.952
+          -20~20: 1.0016
+          20~60: 1.0788
+          60~180: null
+      1041_vs_1613:
+        f_low: 1041.2469
+        f_high: 1613.3856
+        cost_low: 45.9432
+        cost_high: 17.6105
+        delta: 28.3327
+        by_angle:
+          -180~-60:
+            contribution: 15.151
+            mean_delta: 79.0486
+            mean_loss_low: 110.8756
+            mean_loss_high: 31.827
+          -60~-20:
+            contribution: 2.9827
+            mean_delta: 29.8274
+            mean_loss_low: 43.7626
+            mean_loss_high: 13.9352
+          -20~20:
+            contribution: 9.1766
+            mean_delta: 20.3924
+            mean_loss_low: 30.3686
+            mean_loss_high: 9.9762
+          20~60:
+            contribution: 1.0224
+            mean_delta: 3.9578
+            mean_loss_low: 25.7416
+            mean_loss_high: 21.7838
+          60~180:
+            contribution: 0.0
+            mean_delta: null
+            mean_loss_low: null
+            mean_loss_high: null
+        by_row:
+          MCP:
+            contribution: 3.5282
+            mean_delta: 14.1127
+          PIP:
+            contribution: 1.4014
+            mean_delta: 5.6057
+          DIP:
+            contribution: 6.9014
+            mean_delta: 27.6057
+          TIP:
+            contribution: 16.5017
+            mean_delta: 66.0069
+        by_finger:
+          index:
+            contribution: 12.2399
+            mean_delta: 48.9596
+          middle:
+            contribution: 10.4454
+            mean_delta: 41.7816
+          ring:
+            contribution: 4.0069
+            mean_delta: 16.0278
+          pinky:
+            contribution: 1.6405
+            mean_delta: 6.5619
+        length_ratio_low:
+          -180~-60: 1.0829
+          -60~-20: 1.0346
+          -20~20: 0.9613
+          20~60: 1.0116
+          60~180: null
+        length_ratio_high:
+          -180~-60: 1.0142
+          -60~-20: 1.0121
+          -20~20: 0.9846
+          20~60: 1.0218
+          60~180: null
+        width_ratio_low:
+          -180~-60: 0.959
+          -60~-20: 0.9833
+          -20~20: 1.0131
+          20~60: 1.0053
+          60~180: null
+        width_ratio_high:
+          -180~-60: 0.9483
+          -60~-20: 0.952
+          -20~20: 1.0016
+          20~60: 1.0788
+          60~180: null
+      2500_vs_1613:
+        f_low: 2499.9
+        f_high: 1613.3856
+        cost_low: 29.2889
+        cost_high: 17.6105
+        delta: 11.6784
+        by_angle:
+          -180~-60:
+            contribution: 6.3013
+            mean_delta: 32.8763
+            mean_loss_low: 64.7033
+            mean_loss_high: 31.827
+          -60~-20:
+            contribution: 1.8598
+            mean_delta: 18.5984
+            mean_loss_low: 32.5336
+            mean_loss_high: 13.9352
+          -20~20:
+            contribution: -1.6971
+            mean_delta: -3.7714
+            mean_loss_low: 6.2048
+            mean_loss_high: 9.9762
+          20~60:
+            contribution: 5.2144
+            mean_delta: 20.1847
+            mean_loss_low: 41.9685
+            mean_loss_high: 21.7838
+          60~180:
+            contribution: 0.0
+            mean_delta: null
+            mean_loss_low: null
+            mean_loss_high: null
+        by_row:
+          MCP:
+            contribution: 5.3982
+            mean_delta: 21.5926
+          PIP:
+            contribution: 3.8471
+            mean_delta: 15.3884
+          DIP:
+            contribution: 2.6204
+            mean_delta: 10.4815
+          TIP:
+            contribution: -0.1872
+            mean_delta: -0.749
+        by_finger:
+          index:
+            contribution: -0.5774
+            mean_delta: -2.3097
+          middle:
+            contribution: -0.2947
+            mean_delta: -1.1787
+          ring:
+            contribution: 2.3292
+            mean_delta: 9.3169
+          pinky:
+            contribution: 10.2213
+            mean_delta: 40.8851
+        length_ratio_low:
+          -180~-60: 0.968
+          -60~-20: 0.9944
+          -20~20: 0.9969
+          20~60: 1.0483
+          60~180: null
+        length_ratio_high:
+          -180~-60: 1.0142
+          -60~-20: 1.0121
+          -20~20: 0.9846
+          20~60: 1.0218
+          60~180: null
+        width_ratio_low:
+          -180~-60: 0.916
+          -60~-20: 0.914
+          -20~20: 0.994
+          20~60: 1.1102
+          60~180: null
+        width_ratio_high:
+          -180~-60: 0.9483
+          -60~-20: 0.952
+          -20~20: 1.0016
+          20~60: 1.0788
+          60~180: null
