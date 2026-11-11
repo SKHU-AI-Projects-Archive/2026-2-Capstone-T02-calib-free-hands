@@ -3052,10 +3052,162 @@ def mt2_summary(res: dict, cfg: dict, own: dict) -> str:
     return head + s[i:].replace("- 영상 6개(마커 2, 나 2, 팀원 2). ", "- 영상 4개(사람당 2개). ")
 
 
+# ----------------------------------------------------------------------------------------------------
+# 123: 광류 사슬이 마커를 얼마나 정확히 옮기는지 (마커 영상, 저장된 점)
+# ----------------------------------------------------------------------------------------------------
+def cm_load(args):
+    """한 영상: points_run 에 저장된 광류 사슬 점과 마커 점. 사슬의 기준 -> 각 프레임 호모그래피는 사슬 점 21개(정확히 호모그래피 하나로 옮긴 점)에서 되찾는다.
+    세 가지 점을 만든다(j 관절 번호 자리에): marker = 마커 그대로, chain_on_marker = 기준 프레임의 마커를 사슬의 호모그래피로 옮긴 것, planar_marker = 기준 프레임의 마커를 그 프레임 마커에 가장 잘 맞는 호모그래피(최소제곱)로 옮긴 것."""
+    e, cfg, run_root = args
+    import cv2
+    cm = cfg["chain_vs_marker"]
+    c = load_points(cm["points_run"], e["file"])
+    m = load_points(cm["points_run"], Path(e["file"]).stem + "_marker.MOV")
+    ids = [int(j) for j in cfg["joint_ids"]]
+    n = len(c["kp"])
+    r = int(c["ref"])
+    if not m["use"][r]:
+        raise ValueError("사슬의 기준 프레임에 마커가 없음")
+    M0 = m["kp"][r]
+    have = np.isfinite(M0[:, 0])
+    jj = [j for j in ids if have[j]]
+    mv = lambda P, Hm: cv2.perspectiveTransform(P.reshape(-1, 1, 2).astype(np.float64), Hm).reshape(-1, 2)      # noqa: E731
+    con, pla = np.full((n, 21, 2), np.nan), np.full((n, 21, 2), np.nan)
+    for i in range(n):
+        if not (c["use"][i] and m["use"][i]):
+            continue
+        Hc, _ = cv2.findHomography(c["kp"][r].astype(np.float64), c["kp"][i].astype(np.float64), 0)
+        con[i][jj] = mv(M0[jj], Hc)
+        v = [j for j in jj if np.isfinite(m["kp"][i][j, 0])]
+        if len(v) >= 8:
+            Hb, _ = cv2.findHomography(M0[v].astype(np.float64), m["kp"][i][v].astype(np.float64), 0)
+            pla[i][jj] = mv(M0[jj], Hb)
+    use = c["use"] & m["use"] & np.isfinite(con[:, jj[0], 0]) & np.isfinite(pla[:, jj[0], 0])
+    box = lambda K: np.c_[np.nanmin(K[:, jj], axis=1), np.nanmax(K[:, jj], axis=1)]      # noqa: E731
+    out = {"joints": jj, "angle": c["hand_angle"] - c["hand_angle"][r], "times": c["times"], "ref": r, "size": c["size"], "use": use, "marker_box": m["box"],
+           "pts": {"marker": {"kp": m["kp"], "box": m["box"], "use": use, "ref": r, "size": c["size"]},
+                   "chain_on_marker": {"kp": con, "box": np.where(use[:, None], box(np.where(use[:, None, None], con, 0.0)), np.nan), "use": use, "ref": r, "size": c["size"]},
+                   "planar_marker": {"kp": pla, "box": np.where(use[:, None], box(np.where(use[:, None, None], pla, 0.0)), np.nan), "use": use, "ref": r, "size": c["size"]}}}
+    return out, [f"  {e['file']}: 프레임 {n}, 함께 쓰는 프레임 {int(use.sum())}, 관절 {len(jj)}"]
+
+
+def cm_stats(x: dict, cm: dict) -> dict:
+    """프레임·관절별 거리(px, 마커 상자 긴 변 대비 %)의 요약: total = 사슬로 옮긴 마커 - 실제 마커, nonplanar = 가장 잘 맞는 호모그래피로 옮긴 마커 - 실제 마커, chain_h = 사슬 - 가장 잘 맞는 호모그래피.
+    전체, 손 방향 구간별, 관절 줄별. 그리고 손 길이(MCP 평균 -> 손끝 평균)·폭(가장 바깥 두 MCP)의 예측/실제 - 1 (%)을 구간별로."""
+    jj, u = x["joints"], x["use"]
+    M, C, P = x["pts"]["marker"]["kp"][:, jj], x["pts"]["chain_on_marker"]["kp"][:, jj], x["pts"]["planar_marker"]["kp"][:, jj]
+    bl = of.box_long(np.asarray(x["marker_box"], float))
+    d = {"total": np.linalg.norm(C - M, axis=2), "nonplanar": np.linalg.norm(P - M, axis=2), "chain_h": np.linalg.norm(C - P, axis=2)}
+    ang = x["angle"]
+    bins = [float(b) for b in cm["angle_bins_deg"]]
+    labs = [f"{a:g}~{b:g}" for a, b in zip(bins[:-1], bins[1:])]
+    bi = np.clip(np.digitize(ang, bins) - 1, 0, len(labs) - 1)
+    rms = lambda A, m: float(np.sqrt(np.nanmean(A[m] ** 2))) if m.any() else None      # noqa: E731
+    out = {"n_frames": int(u.sum()), "box_long_px_median": sv_pct(bl[u], 50), "angle_min": float(np.nanmin(ang[u])), "angle_max": float(np.nanmax(ang[u])),
+           "n_frames_by_angle": {labs[k]: int((u & (bi == k)).sum()) for k in range(len(labs))}, "rms_px": {}, "rms_pct_box": {}, "rms_px_by_angle": {}, "rms_px_by_row": {}, "length_pct_by_angle": {}, "width_pct_by_angle": {}}
+    for k, A in d.items():
+        out["rms_px"][k] = rms(A, u)
+        out["rms_pct_box"][k] = float(np.sqrt(np.nanmean((A[u] / bl[u][:, None] * 100.0) ** 2)))
+        out["rms_px_by_angle"][k] = {labs[b]: rms(A, u & (bi == b)) for b in range(len(labs))}
+        out["rms_px_by_row"][k] = {name: (float(np.sqrt(np.nanmean(A[u][:, [jj.index(j) for j in grp if j in jj]] ** 2))) if any(j in jj for j in grp) else None) for name, grp in CDX_ROWS.items()}
+    tips, mcps = [jj.index(j) for j in CDX_ROWS["TIP"] if j in jj], [jj.index(j) for j in CDX_ROWS["MCP"] if j in jj]
+    w0, w1 = mcps[0], mcps[-1]
+    ln = lambda K: np.linalg.norm(np.nanmean(K[:, tips], axis=1) - np.nanmean(K[:, mcps], axis=1), axis=1)      # noqa: E731
+    wd = lambda K: np.linalg.norm(K[:, w0] - K[:, w1], axis=1)      # noqa: E731
+    out["width_joints"] = [int(jj[w0]), int(jj[w1])]
+    with np.errstate(invalid="ignore", divide="ignore"):
+        for k, K in (("chain", C), ("planar", P)):
+            lr, wr = 100 * (ln(K) / ln(M) - 1), 100 * (wd(K) / wd(M) - 1)
+            out["length_pct_by_angle"][k] = {labs[b]: sv_pct(lr[u & (bi == b)], 50) for b in range(len(labs))}
+            out["width_pct_by_angle"][k] = {labs[b]: sv_pct(wr[u & (bi == b)], 50) for b in range(len(labs))}
+    return out
+
+
+def cm_run(cfg: dict, vid: dict, log) -> dict:
+    """123: 영상마다 cm_stats, 그리고 세 가지 점(marker, chain_on_marker, planar_marker)으로 free_template -> 경사 고정·함께 추정."""
+    import multiprocessing as mp
+    from concurrent.futures import ProcessPoolExecutor
+    cm = cfg["chain_vs_marker"]
+    res = {f: {"stats": cm_stats(x, cm), "f": {}} for f, x in vid.items()}
+    items = [(f, v, {**y, "info": {}}) for f, x in vid.items() for v, y in x["pts"].items()]
+    with ProcessPoolExecutor(max_workers=int(cfg["workers"]), mp_context=mp.get_context("spawn")) as ex:
+        fts = list(ex.map(hf.tl_template_job, [rof.estimate_args(cfg, y) for _, _, y in items], chunksize=1))
+    todo = [(f"ramp_{r:g}", "ramp_fixed", r) for r in cfg["ramps_deg"]] + [(f"free_{r:g}", "ramp_free", r) for r in cfg["free_starts_deg"]]
+    keep = ("f", "pitch_deg", "roll_deg", "desk_tilt_deg", "turn_range_deg", "rms_px", "cost", "boundary", "start")
+    jobs, keys = [], []
+    for (f, v, y), ft in zip(items, fts):
+        A = ft.get("A")
+        res[f]["f"][v] = {"n_use": int(y["use"].sum())}
+        if A is None:
+            res[f]["f"][v]["failed"] = ft.get("failed")
+            continue
+        for mk, mode, r in todo:
+            jobs.append(rof.estimate_args(cfg, y, A) + (mode, r))
+            keys.append((f, v, mk))
+    log(f"  추정 {len(jobs)}건")
+    with ProcessPoolExecutor(max_workers=int(cfg["workers"]), mp_context=mp.get_context("spawn")) as ex:
+        for (f, v, mk), o in zip(keys, ex.map(hf.ms2_job, jobs, chunksize=1)):
+            res[f]["f"][v][mk] = {kk: o[kk] for kk in keep if kk in o} if "failed" not in o else o
+    for f in res:
+        for v, d in res[f]["f"].items():
+            free = {k: y for k, y in d.items() if k.startswith("free_") and isinstance(y, dict) and "cost" in y}
+            if free:
+                bk = min(free, key=lambda k: free[k]["cost"])
+                d["ramp_free"] = {**free[bk], "best_start": bk}
+    return res
+
+
+def cm_summary(res: dict, cfg: dict, own: dict) -> str:
+    vids = {e["file"]: e for e in cfg["videos"]}
+    order = sorted(res, key=lambda f: (vids[f]["person"] != "teammate", f))
+    who = {"teammate": "팀원", "self": "나"}
+    names = " | ".join(f"{Path(f).stem} {who.get(vids[f]['person'], '')}" for f in order)
+    sep = "---|" * len(order)
+    rf = lambda f: float(vids[f].get("ref_f_px") or cfg["ref_f"]["value"])      # noqa: E731
+    fm = lambda v, nd=2: "-" if v is None else f"{v:.{nd}f}"      # noqa: E731
+    fs = lambda v, nd=2: "-" if v is None else f"{v:+.{nd}f}"      # noqa: E731
+    S = lambda f: res[f]["stats"]      # noqa: E731
+    lab = {"total": "사슬로 옮긴 마커 - 실제 마커 (전체)", "nonplanar": "가장 잘 맞는 평면 변환 - 실제 마커 (손이 평면이 아닌 부분)", "chain_h": "사슬 - 가장 잘 맞는 평면 변환 (사슬의 평면 변환이 틀린 부분)"}
+    L = ["# 123 광류 사슬 대 마커 summary", "",
+         "**마커 영상 4개(122 의 저장된 점). 기준 프레임의 마커를 광류 사슬의 호모그래피로 옮긴 위치를 그 프레임의 실제 마커와 비교한다. 오차를 손이 평면이 아닌 부분과 사슬의 평면 변환이 틀린 부분으로 나누고, "
+         "세 가지 점(마커 그대로 / 마커를 가장 잘 맞는 평면 변환으로 옮긴 것 / 마커를 사슬로 옮긴 것)으로 같은 추정을 돌린다. 판정 없음.**", "",
+         "- 기준 f 는 이 파일에만. 거리는 관절 묶음(j16 중 마커가 있는 것)의 RMS, px. 손 방향 = 검출 손 방향, 사슬의 기준 프레임 대비.", "",
+         "## 거리 RMS (px)", "", f"| 값 | {names} |", "|---|" + sep,
+         "| 함께 쓰는 프레임 | " + " | ".join(str(S(f)["n_frames"]) for f in order) + " |", "| 마커 상자 긴 변 중앙값 (px) | " + " | ".join(fm(S(f)["box_long_px_median"], 0) for f in order) + " |"]
+    for k in ("total", "nonplanar", "chain_h"):
+        L.append(f"| {lab[k]} | " + " | ".join(f"{fm(S(f)['rms_px'][k])} ({fm(S(f)['rms_pct_box'][k])}%)" for f in order) + " |")
+    for k in ("total", "nonplanar", "chain_h"):
+        L += ["", f"### 손 방향 구간별: {lab[k]}", "", f"| 손 방향 (도) (프레임 수) | {names} |", "|---|" + sep]
+        for b in S(order[0])["n_frames_by_angle"]:
+            L.append(f"| {b} | " + " | ".join(f"{fm(S(f)['rms_px_by_angle'][k][b])} ({S(f)['n_frames_by_angle'][b]})" for f in order) + " |")
+    L += ["", "### 관절 줄별: 사슬의 평면 변환이 틀린 부분 / 손이 평면이 아닌 부분", "", f"| 관절 줄 | {names} |", "|---|" + sep]
+    for r in CDX_ROWS:
+        L.append(f"| {r} | " + " | ".join(f"{fm(S(f)['rms_px_by_row']['chain_h'][r])} / {fm(S(f)['rms_px_by_row']['nonplanar'][r])}" for f in order) + " |")
+    for key, title in (("length_pct_by_angle", "손 길이 (MCP 평균 -> 손끝 평균)"), ("width_pct_by_angle", "손 폭 (가장 바깥 두 MCP)")):
+        L += ["", f"### {title}: 예측 / 실제 마커 - 1 (%, 중앙값), 사슬 / 가장 잘 맞는 평면 변환", "", f"| 손 방향 (도) | {names} |", "|---|" + sep]
+        for b in S(order[0])["n_frames_by_angle"]:
+            L.append(f"| {b} | " + " | ".join(f"{fs(S(f)[key]['chain'][b])} / {fs(S(f)[key]['planar'][b])}" for f in order) + " |")
+    k11 = f"ramp_{cfg['ramps_deg'][0]:g}"
+    vl = {"marker": "마커 그대로", "planar_marker": "마커를 가장 잘 맞는 평면 변환으로 옮김", "chain_on_marker": "마커를 사슬로 옮김"}
+
+    def cell(f, v, key):
+        d = res[f]["f"][v].get(key) or {}
+        if "f" not in d:
+            return "-"
+        return f"{d['f']:.0f} ({100 * (d['f'] / rf(f) - 1):+.1f}%)" + ("*" if d.get("boundary") else "") + (f", {d['pitch_deg']:.1f}°" if key == "ramp_free" else "")
+    for key, title in ((k11, f"경사 {cfg['ramps_deg'][0]:g}° 고정"), ("ramp_free", "경사 함께 추정")):
+        L += ["", f"## f: {title}", "", f"| 점 | {names} |", "|---|" + sep]
+        for v in ("marker", "planar_marker", "chain_on_marker"):
+            L.append(f"| {vl[v]} | " + " | ".join(cell(f, v, key) for f in order) + " |")
+    L += ["", "## 한계", "", "- 영상 4개(사람당 2개). 마커 중심의 검출 규칙에 따라 f 가 몇 %p 달라진다(121 대 122).", "- 사슬의 호모그래피는 저장된 사슬 점 21개에서 되찾았다(사슬 점은 호모그래피 하나로 옮긴 점이라 정확히 되찾아진다).",
+          "- 내 손은 새끼 MCP(17) 마커가 없어 폭을 5 - 13 으로 쟀다(팀원은 5 - 17).", ""]
+    return "\n".join(L) + "\n"
+
+
 
 def main(argv=None):
     ap = argparse.ArgumentParser(description="광류 방식 원인 확인 실험")
-    ap.add_argument("cmd", choices=["tracking-plane", "dorsum-corners", "two-plane", "joint-track-video", "geometry-synth", "pause-plane", "cotracker", "rotation-side", "points-video", "shape3d", "side-consistency", "shape-change", "pip-axis", "pause-plane2", "desk3d", "desk3d-contact", "stage-values", "stage-inputs", "cost-decompose", "lens-model", "repeatability", "marker-track", "marker-track2"])
+    ap.add_argument("cmd", choices=["tracking-plane", "dorsum-corners", "two-plane", "joint-track-video", "geometry-synth", "pause-plane", "cotracker", "rotation-side", "points-video", "shape3d", "side-consistency", "shape-change", "pip-axis", "pause-plane2", "desk3d", "desk3d-contact", "stage-values", "stage-inputs", "cost-decompose", "lens-model", "repeatability", "marker-track", "marker-track2", "chain-vs-marker"])
     ap.add_argument("--config", required=True)
     ap.add_argument("--out", default=None)
     ap.add_argument("--videos", type=int, default=None, help="시험 실행: 앞의 N 개 영상만, 추정 1건씩")
@@ -3071,7 +3223,7 @@ def main(argv=None):
               else s3_results_yaml(hf.resolve(a.run), own) if a.cmd == "shape3d" else sc_results_yaml(hf.resolve(a.run), own) if a.cmd == "side-consistency"
               else sh_results_yaml(hf.resolve(a.run), own) if a.cmd == "shape-change"
               else sc_results_yaml(hf.resolve(a.run), own) if a.cmd == "pip-axis" else pq_results_yaml(hf.resolve(a.run), own) if a.cmd == "pause-plane2"
-              else d3_results_yaml(hf.resolve(a.run), own) if a.cmd in ("desk3d", "desk3d-contact") else sv_results_yaml(hf.resolve(a.run), own) if a.cmd in ("stage-values", "stage-inputs") else cdx_results_yaml(hf.resolve(a.run), own) if a.cmd == "cost-decompose" else lm_results_yaml(hf.resolve(a.run), own) if a.cmd in ("lens-model", "repeatability", "marker-track", "marker-track2") else jt_results_yaml(hf.resolve(a.run), own) if a.cmd == "joint-track-video"
+              else d3_results_yaml(hf.resolve(a.run), own) if a.cmd in ("desk3d", "desk3d-contact") else sv_results_yaml(hf.resolve(a.run), own) if a.cmd in ("stage-values", "stage-inputs") else cdx_results_yaml(hf.resolve(a.run), own) if a.cmd == "cost-decompose" else lm_results_yaml(hf.resolve(a.run), own) if a.cmd in ("lens-model", "repeatability", "marker-track", "marker-track2", "chain-vs-marker") else jt_results_yaml(hf.resolve(a.run), own) if a.cmd == "joint-track-video"
               else results_yaml(a.cmd, hf.resolve(a.run), own))
         return None
     cfg = rof.load_settings({**own, "joint_set": "j16"} if own.get("joint_ids") else own)      # joint_ids 를 직접 적으면 joint_set 은 이름일 뿐이라 기본 묶음으로 읽고 아래에서 바꿈
@@ -3079,7 +3231,7 @@ def main(argv=None):
     cfg["videos"] = cfg["videos"] + [dict(v) for v in own.get("extra_videos", [])]      # 기본 설정 목록에 없는 새 영상 (file, person, ref_f_px)
     if own.get("joint_ids"):                                           # 기본 설정의 관절 묶음(j16, j21) 대신 직접 적은 관절 번호 (joint_set 은 이름으로만 씀)
         cfg["joint_ids"] = [int(j) for j in own["joint_ids"]]
-    cfg.update({k: own[k] for k in ("variants", "clahe", "two_plane", "joint_track", "render", "reference", "geometry_synth", "pause_plane", "cotracker", "rotation_side", "points_video", "shape3d", "side_consistency", "shape_change", "axis_base_joints", "pause_plane2", "desk3d", "stage_values", "stage_inputs", "cost_decompose", "lens_model", "repeatability", "marker_track") if k in own})
+    cfg.update({k: own[k] for k in ("variants", "clahe", "two_plane", "joint_track", "render", "reference", "geometry_synth", "pause_plane", "cotracker", "rotation_side", "points_video", "shape3d", "side_consistency", "shape_change", "axis_base_joints", "pause_plane2", "desk3d", "stage_values", "stage_inputs", "cost_decompose", "lens_model", "repeatability", "marker_track", "chain_vs_marker") if k in own})
     if a.videos:
         cfg["videos"] = cfg["videos"][:a.videos]
         cfg["free_starts_deg"] = []
@@ -3098,7 +3250,7 @@ def main(argv=None):
         shutil.copytree(hf.resolve(own["detection_cache_from"]), run_root / "detection_cache")
     import multiprocessing as mp
     from concurrent.futures import ProcessPoolExecutor
-    job = {"tracking-plane": tp_job, "dorsum-corners": dc_job, "two-plane": tw_points, "joint-track-video": jt_job, "geometry-synth": rof.video_points, "pause-plane": pp_job, "rotation-side": rs_load, "points-video": pv_job, "side-consistency": sc_load, "shape-change": sh_job, "pip-axis": sc_load, "pause-plane2": pq_job, "stage-values": sv_job, "stage-inputs": si_job, "marker-track": mt_job, "marker-track2": mt2_job}.get(a.cmd)
+    job = {"tracking-plane": tp_job, "dorsum-corners": dc_job, "two-plane": tw_points, "joint-track-video": jt_job, "geometry-synth": rof.video_points, "pause-plane": pp_job, "rotation-side": rs_load, "points-video": pv_job, "side-consistency": sc_load, "shape-change": sh_job, "pip-axis": sc_load, "pause-plane2": pq_job, "stage-values": sv_job, "stage-inputs": si_job, "marker-track": mt_job, "marker-track2": mt2_job, "chain-vs-marker": cm_load}.get(a.cmd)
     vid = {}
     if a.cmd == "cotracker":                                           # GPU 작업 + 추정을 ct_run 이 한꺼번에
         res = ct_run(cfg, own, log, run_root)
@@ -3154,6 +3306,9 @@ def main(argv=None):
     elif a.cmd == "marker-track2":
         res = mt_run(cfg, vid, log)
         text_sum = mt2_summary(res, cfg, own)
+    elif a.cmd == "chain-vs-marker":
+        res = cm_run(cfg, vid, log)
+        text_sum = cm_summary(res, cfg, own)
     elif a.cmd == "pip-axis":
         res = pa_run(cfg, vid, log)
         text_sum = sc_summary(res, cfg, own)
