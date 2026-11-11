@@ -1,0 +1,45 @@
+# 121: 마커 추적 (사용자 2026-11-11: "팀원 손에 검출기 및 추적기가 정말 맞지 않는 것인지 확인하기 위해서 영상을 새로 촬영하였어. 7399, 7400 은 팀원 손에 빨간 마커를 찍은 영상이고,
+# 7401, 7402는 마커 없는 내 손, 7403, 7404는 마커 없는 팀원 손이야. 마커가 있는 영상은 손을 추적하는것이 아니라 빨간색 마커를 추적해서 f를 추정하도록 해주고 나머지 영상을 이전과 같은 방식으로"), 기록용, 판정 없음.
+# 마커 없는 영상 = 94 / 100 과 같은 계산(광류 사슬, 첫 정지 구간 기준, j16, 경사 11° 고정 + 함께 추정 시작 5/12/19°). 마커 영상 = 마커 중심을 프레임마다 색으로 검출(handfocal.mk_blobs, 35 의 함수)하고
+# 새 함수 mt_track 으로 매칭한 점을 같은 추정에 넣는다. MediaPipe 는 찾을 영역(손 상자 + 30%)과 기준 프레임에서 마커에 관절 번호를 붙이는 데만 쓴다. 마커 영상에는 광류 사슬도 함께 돌려 비교한다(추가 계산, 요청 밖).
+# 실행 전에 본 것: 7399 의 1 s·8 s, 7400 의 1 s 프레임 세 장과 그 위의 검출 결과. 거기서 색 규칙(색상 0~8 / 172~179, 채도 120 이상, 밝기 110 이상; 35c 의 규칙으로는 15개 안팎만 잡힘), 넓이 15~1500, 둥근 정도 0.3 이상,
+# 가까운 조각 합치기(손 상자의 1.8%)를 골랐다(세 장에서 20~27개 검출). 시험 실행에서 35c 의 mk_track_reacquire(기준 -> 현재 프레임 호모그래피 검사, 평평한 그림용)는 손을 50° 넘게 돌린 구간 전체를 버려서(7399 프레임 337~490, 7400 은 절반),
+# 검사를 직전 프레임 -> 현재 프레임으로 바꾼 mt_track 을 추가했다(move_frac·gap_cap·min_markers_ratio 는 35c 값, step_ransac_frac 0.012·min_inlier_ratio 0.8 은 여기서 정함). 이 변경은 f 결과를 본 뒤가 아니라 버려진 프레임을 본 뒤에 했다. 기준 f = 새 폰 체커보드 값(같은 폰으로 찍었다고 보고 적용), summary.md 에만.
+experiment:
+  name: 121_marker_track
+  seed: 42
+settings_config: configs/74b_multistart_rerun.yaml
+joint_set: j16
+code: {branch: optical_flow, commit: 950f6b7, modules: [HandCalib/optical_flow/experiments.py]}
+ramps_deg: [11]
+reference: {mode: first_pause, pause_gap_frames: 15, min_pause_frames: 5}
+videos: ["__none__"]
+extra_videos:
+  - {file: IMG_7399.MOV, person: teammate, ref_f_px: 1672, markers: true}
+  - {file: IMG_7400.MOV, person: teammate, ref_f_px: 1672, markers: true}
+  - {file: IMG_7401.MOV, person: self, ref_f_px: 1672}
+  - {file: IMG_7402.MOV, person: self, ref_f_px: 1672}
+  - {file: IMG_7403.MOV, person: teammate, ref_f_px: 1672}
+  - {file: IMG_7404.MOV, person: teammate, ref_f_px: 1672}
+marker_track:
+  markers:
+    hue_ranges: [[0, 8], [172, 179]]
+    s_min: 120
+    v_min: 110
+    area_min: 15
+    area_max: 1500
+    circularity_min: 0.3
+    region_margin: 0.30
+    merge_frac: 0.018
+    naming_radius_frac: 0.08
+    min_joints: 12             # 한 프레임에 j16 마커가 이만큼 이상 있어야 사용
+    min_markers_ratio: 0.75
+    move_frac: 0.03
+    gap_cap: 5
+    step_ransac_frac: 0.012    # 직전 프레임 -> 현재 프레임 호모그래피의 RANSAC 문턱 (손 상자 대비; 약 6 px)
+    min_inlier_ratio: 0.8
+workers: 40
+video_workers: 6
+output:
+  root: runs/121_marker_track
+  results_yaml: results/121_marker_track.yaml
