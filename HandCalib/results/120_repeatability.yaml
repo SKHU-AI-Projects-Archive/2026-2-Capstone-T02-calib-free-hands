@@ -1,0 +1,1613 @@
+experiment: 120_repeatability
+run: runs/120_repeatability/20261111T074947Z
+code_commit: 95183cd
+git_dirty_at_run: false
+videos:
+  IMG_7354 - 복사본.MOV:
+    n_use: 564
+    duration_s: 18.7667
+    huber_px: 7.0401
+    eval:
+      ref_f:
+        n_frames: 564
+        near:
+          n_pairs: 5342
+          D_median_px: 0.0798
+          D_p90_px: 0.2133
+        far:
+          n_pairs: 2848
+          D_median_px: 0.4037
+          D_p90_px: 1.1963
+        far_by_gap_s:
+          2~5:
+            n_pairs: 2847
+            D_median_px: 0.4037
+            D_p90_px: 1.195
+          5~10:
+            n_pairs: 1
+            D_median_px: 1.421
+            D_p90_px: 1.421
+          10~1000:
+            n_pairs: 0
+            D_median_px: null
+            D_p90_px: null
+        far_by_angle_deg:
+          -180~-60:
+            n_pairs: 881
+            D_median_px: 0.2678
+            D_p90_px: 0.364
+          -60~-20:
+            n_pairs: 90
+            D_median_px: 0.3849
+            D_p90_px: 0.4549
+          -20~20:
+            n_pairs: 507
+            D_median_px: 1.2233
+            D_p90_px: 1.5011
+          20~60:
+            n_pairs: 1306
+            D_median_px: 0.4327
+            D_p90_px: 0.6906
+          60~180:
+            n_pairs: 64
+            D_median_px: 0.4912
+            D_p90_px: 0.538
+        far_length_change_pct:
+          median: -0.2543
+          p25: -0.4152
+          p75: 0.0078
+          abs_median: 0.2557
+        far_width_change_pct:
+          median: 0.0063
+          p25: -0.5418
+          p75: 0.4481
+          abs_median: 0.498
+        near_length_change_abs_median_pct: 0.0409
+        near_width_change_abs_median_pct: 0.0753
+        far_frames_covered: 347
+        return:
+          n_pairs: 7
+          D_median_px: 0.4593
+          D_p90_px: 0.6037
+          frames_covered: 10
+          gap_s_median: 4.6667
+          length_change_pct_median: 0.2973
+          length_change_pct_abs_median: 0.2973
+          width_change_pct_median: -0.3847
+          width_change_pct_abs_median: 0.3847
+          by_angle_deg:
+            -180~-60:
+              n_pairs: 0
+              D_median_px: null
+              D_p90_px: null
+            -60~-20:
+              n_pairs: 7
+              D_median_px: 0.4593
+              D_p90_px: 0.6037
+            -20~20:
+              n_pairs: 0
+              D_median_px: null
+              D_p90_px: null
+            20~60:
+              n_pairs: 0
+              D_median_px: null
+              D_p90_px: null
+            60~180:
+              n_pairs: 0
+              D_median_px: null
+              D_p90_px: null
+        still:
+          n_pairs: 2767
+          D_median_px: 0.4024
+          D_p90_px: 1.1354
+          gap_s_median: 2.4
+          length_change_pct_abs_median: 0.2555
+          width_change_pct_abs_median: 0.4981
+        cost_fit_frames: 9.2499
+        rms_all_frames_px: 3.0683
+        theta_range_deg: 125.3416
+      low_f:
+        n_frames: 564
+        near:
+          n_pairs: 5336
+          D_median_px: 0.0811
+          D_p90_px: 0.2196
+        far:
+          n_pairs: 2856
+          D_median_px: 0.4098
+          D_p90_px: 1.2199
+        far_by_gap_s:
+          2~5:
+            n_pairs: 2855
+            D_median_px: 0.4098
+            D_p90_px: 1.2183
+          5~10:
+            n_pairs: 1
+            D_median_px: 1.4611
+            D_p90_px: 1.4611
+          10~1000:
+            n_pairs: 0
+            D_median_px: null
+            D_p90_px: null
+        far_by_angle_deg:
+          -180~-60:
+            n_pairs: 888
+            D_median_px: 0.2833
+            D_p90_px: 0.3878
+          -60~-20:
+            n_pairs: 93
+            D_median_px: 0.4039
+            D_p90_px: 0.4711
+          -20~20:
+            n_pairs: 507
+            D_median_px: 1.2506
+            D_p90_px: 1.5392
+          20~60:
+            n_pairs: 1304
+            D_median_px: 0.4336
+            D_p90_px: 0.6909
+          60~180:
+            n_pairs: 64
+            D_median_px: 0.4916
+            D_p90_px: 0.5384
+        far_length_change_pct:
+          median: -0.2719
+          p25: -0.456
+          p75: 0.0233
+          abs_median: 0.2737
+        far_width_change_pct:
+          median: -0.0157
+          p25: -0.6166
+          p75: 0.4466
+          abs_median: 0.5358
+        near_length_change_abs_median_pct: 0.0424
+        near_width_change_abs_median_pct: 0.0783
+        far_frames_covered: 349
+        return:
+          n_pairs: 8
+          D_median_px: 0.4341
+          D_p90_px: 0.4768
+          frames_covered: 11
+          gap_s_median: 4.7167
+          length_change_pct_median: -0.1017
+          length_change_pct_abs_median: 0.1017
+          width_change_pct_median: -0.6104
+          width_change_pct_abs_median: 0.6104
+          by_angle_deg:
+            -180~-60:
+              n_pairs: 0
+              D_median_px: null
+              D_p90_px: null
+            -60~-20:
+              n_pairs: 8
+              D_median_px: 0.4341
+              D_p90_px: 0.4768
+            -20~20:
+              n_pairs: 0
+              D_median_px: null
+              D_p90_px: null
+            20~60:
+              n_pairs: 0
+              D_median_px: null
+              D_p90_px: null
+            60~180:
+              n_pairs: 0
+              D_median_px: null
+              D_p90_px: null
+        still:
+          n_pairs: 2773
+          D_median_px: 0.4089
+          D_p90_px: 1.152
+          gap_s_median: 2.4333
+          length_change_pct_abs_median: 0.2752
+          width_change_pct_abs_median: 0.5344
+        cost_fit_frames: 14.4809
+        rms_all_frames_px: 3.9577
+        theta_range_deg: 124.7198
+  IMG_7355 - 복사본.MOV:
+    n_use: 498
+    duration_s: 16.5667
+    huber_px: 7.5974
+    eval:
+      ref_f:
+        n_frames: 498
+        near:
+          n_pairs: 4789
+          D_median_px: 0.0867
+          D_p90_px: 0.2341
+        far:
+          n_pairs: 2035
+          D_median_px: 0.6463
+          D_p90_px: 1.141
+        far_by_gap_s:
+          2~5:
+            n_pairs: 2009
+            D_median_px: 0.6391
+            D_p90_px: 1.1184
+          5~10:
+            n_pairs: 26
+            D_median_px: 1.3303
+            D_p90_px: 1.4735
+          10~1000:
+            n_pairs: 0
+            D_median_px: null
+            D_p90_px: null
+        far_by_angle_deg:
+          -180~-60:
+            n_pairs: 176
+            D_median_px: 0.2889
+            D_p90_px: 0.4504
+          -60~-20:
+            n_pairs: 298
+            D_median_px: 0.2865
+            D_p90_px: 0.5097
+          -20~20:
+            n_pairs: 917
+            D_median_px: 0.92
+            D_p90_px: 1.3769
+          20~60:
+            n_pairs: 644
+            D_median_px: 0.5536
+            D_p90_px: 0.7165
+          60~180:
+            n_pairs: 0
+            D_median_px: null
+            D_p90_px: null
+        far_length_change_pct:
+          median: -0.1663
+          p25: -0.4287
+          p75: -0.0714
+          abs_median: 0.1674
+        far_width_change_pct:
+          median: -0.4319
+          p25: -1.1706
+          p75: 0.5386
+          abs_median: 0.8617
+        near_length_change_abs_median_pct: 0.042
+        near_width_change_abs_median_pct: 0.0808
+        far_frames_covered: 344
+        return:
+          n_pairs: 74
+          D_median_px: 0.9583
+          D_p90_px: 1.374
+          frames_covered: 82
+          gap_s_median: 4.6333
+          length_change_pct_median: -0.3664
+          length_change_pct_abs_median: 0.3664
+          width_change_pct_median: 0.9719
+          width_change_pct_abs_median: 1.2846
+          by_angle_deg:
+            -180~-60:
+              n_pairs: 0
+              D_median_px: null
+              D_p90_px: null
+            -60~-20:
+              n_pairs: 18
+              D_median_px: 0.5776
+              D_p90_px: 0.6834
+            -20~20:
+              n_pairs: 55
+              D_median_px: 1.0514
+              D_p90_px: 1.436
+            20~60:
+              n_pairs: 1
+              D_median_px: 0.9291
+              D_p90_px: 0.9291
+            60~180:
+              n_pairs: 0
+              D_median_px: null
+              D_p90_px: null
+        still:
+          n_pairs: 1915
+          D_median_px: 0.6336
+          D_p90_px: 1.1331
+          gap_s_median: 2.3333
+          length_change_pct_abs_median: 0.1575
+          width_change_pct_abs_median: 0.8452
+        cost_fit_frames: 8.4822
+        rms_all_frames_px: 2.9219
+        theta_range_deg: 116.1421
+      low_f:
+        n_frames: 498
+        near:
+          n_pairs: 4790
+          D_median_px: 0.0885
+          D_p90_px: 0.2408
+        far:
+          n_pairs: 1993
+          D_median_px: 0.6625
+          D_p90_px: 1.1645
+        far_by_gap_s:
+          2~5:
+            n_pairs: 1964
+            D_median_px: 0.6555
+            D_p90_px: 1.1472
+          5~10:
+            n_pairs: 29
+            D_median_px: 1.3548
+            D_p90_px: 1.4816
+          10~1000:
+            n_pairs: 0
+            D_median_px: null
+            D_p90_px: null
+        far_by_angle_deg:
+          -180~-60:
+            n_pairs: 176
+            D_median_px: 0.2865
+            D_p90_px: 0.4553
+          -60~-20:
+            n_pairs: 286
+            D_median_px: 0.2897
+            D_p90_px: 0.5874
+          -20~20:
+            n_pairs: 920
+            D_median_px: 0.9307
+            D_p90_px: 1.4048
+          20~60:
+            n_pairs: 611
+            D_median_px: 0.553
+            D_p90_px: 0.7213
+          60~180:
+            n_pairs: 0
+            D_median_px: null
+            D_p90_px: null
+        far_length_change_pct:
+          median: -0.2058
+          p25: -0.4488
+          p75: -0.0962
+          abs_median: 0.2072
+        far_width_change_pct:
+          median: -0.5135
+          p25: -1.2184
+          p75: 0.5073
+          abs_median: 0.872
+        near_length_change_abs_median_pct: 0.0471
+        near_width_change_abs_median_pct: 0.0877
+        far_frames_covered: 334
+        return:
+          n_pairs: 65
+          D_median_px: 1.0605
+          D_p90_px: 1.4428
+          frames_covered: 73
+          gap_s_median: 4.8333
+          length_change_pct_median: -0.4154
+          length_change_pct_abs_median: 0.4154
+          width_change_pct_median: 1.2537
+          width_change_pct_abs_median: 1.78
+          by_angle_deg:
+            -180~-60:
+              n_pairs: 0
+              D_median_px: null
+              D_p90_px: null
+            -60~-20:
+              n_pairs: 6
+              D_median_px: 0.8411
+              D_p90_px: 0.9647
+            -20~20:
+              n_pairs: 58
+              D_median_px: 1.0817
+              D_p90_px: 1.4477
+            20~60:
+              n_pairs: 1
+              D_median_px: 0.9346
+              D_p90_px: 0.9346
+            60~180:
+              n_pairs: 0
+              D_median_px: null
+              D_p90_px: null
+        still:
+          n_pairs: 1884
+          D_median_px: 0.6448
+          D_p90_px: 1.1558
+          gap_s_median: 2.3333
+          length_change_pct_abs_median: 0.1955
+          width_change_pct_abs_median: 0.8552
+        cost_fit_frames: 10.9912
+        rms_all_frames_px: 11.5517
+        theta_range_deg: 1167.2184
+  IMG_7351 - 복사본.MOV:
+    n_use: 386
+    duration_s: 12.8333
+    huber_px: 6.7572
+    eval:
+      ref_f:
+        n_frames: 386
+        near:
+          n_pairs: 3424
+          D_median_px: 0.0456
+          D_p90_px: 0.1732
+        far:
+          n_pairs: 1363
+          D_median_px: 0.196
+          D_p90_px: 1.3192
+        far_by_gap_s:
+          2~5:
+            n_pairs: 1181
+            D_median_px: 0.1446
+            D_p90_px: 0.4356
+          5~10:
+            n_pairs: 182
+            D_median_px: 1.3721
+            D_p90_px: 1.5248
+          10~1000:
+            n_pairs: 0
+            D_median_px: null
+            D_p90_px: null
+        far_by_angle_deg:
+          -180~-60:
+            n_pairs: 0
+            D_median_px: null
+            D_p90_px: null
+          -60~-20:
+            n_pairs: 741
+            D_median_px: 0.1149
+            D_p90_px: 0.1817
+          -20~20:
+            n_pairs: 178
+            D_median_px: 1.375
+            D_p90_px: 1.5254
+          20~60:
+            n_pairs: 49
+            D_median_px: 0.9767
+            D_p90_px: 1.2154
+          60~180:
+            n_pairs: 395
+            D_median_px: 0.3883
+            D_p90_px: 0.4611
+        far_length_change_pct:
+          median: 0.0224
+          p25: -0.4888
+          p75: 0.0889
+          abs_median: 0.1385
+        far_width_change_pct:
+          median: 0.1262
+          p25: 0.0076
+          p75: 0.3418
+          abs_median: 0.1702
+        near_length_change_abs_median_pct: 0.0308
+        near_width_change_abs_median_pct: 0.0486
+        far_frames_covered: 294
+        return:
+          n_pairs: 212
+          D_median_px: 1.3599
+          D_p90_px: 1.5188
+          frames_covered: 132
+          gap_s_median: 6.6833
+          length_change_pct_median: -1.2462
+          length_change_pct_abs_median: 1.2462
+          width_change_pct_median: -1.868
+          width_change_pct_abs_median: 1.868
+          by_angle_deg:
+            -180~-60:
+              n_pairs: 0
+              D_median_px: null
+              D_p90_px: null
+            -60~-20:
+              n_pairs: 0
+              D_median_px: null
+              D_p90_px: null
+            -20~20:
+              n_pairs: 178
+              D_median_px: 1.375
+              D_p90_px: 1.5254
+            20~60:
+              n_pairs: 34
+              D_median_px: 1.0657
+              D_p90_px: 1.2713
+            60~180:
+              n_pairs: 0
+              D_median_px: null
+              D_p90_px: null
+        still:
+          n_pairs: 1124
+          D_median_px: 0.1394
+          D_p90_px: 0.4131
+          gap_s_median: 2.3
+          length_change_pct_abs_median: 0.1111
+          width_change_pct_abs_median: 0.1508
+        cost_fit_frames: 11.7135
+        rms_all_frames_px: 3.4273
+        theta_range_deg: 124.6331
+      low_f:
+        n_frames: 386
+        near:
+          n_pairs: 3423
+          D_median_px: 0.0469
+          D_p90_px: 0.1724
+        far:
+          n_pairs: 1376
+          D_median_px: 0.199
+          D_p90_px: 1.3769
+        far_by_gap_s:
+          2~5:
+            n_pairs: 1162
+            D_median_px: 0.1503
+            D_p90_px: 0.4295
+          5~10:
+            n_pairs: 214
+            D_median_px: 1.3933
+            D_p90_px: 1.5466
+          10~1000:
+            n_pairs: 0
+            D_median_px: null
+            D_p90_px: null
+        far_by_angle_deg:
+          -180~-60:
+            n_pairs: 0
+            D_median_px: null
+            D_p90_px: null
+          -60~-20:
+            n_pairs: 741
+            D_median_px: 0.1211
+            D_p90_px: 0.1779
+          -20~20:
+            n_pairs: 210
+            D_median_px: 1.3947
+            D_p90_px: 1.5473
+          20~60:
+            n_pairs: 48
+            D_median_px: 1.0323
+            D_p90_px: 1.259
+          60~180:
+            n_pairs: 377
+            D_median_px: 0.3875
+            D_p90_px: 0.4537
+        far_length_change_pct:
+          median: 0.0195
+          p25: -0.5566
+          p75: 0.1012
+          abs_median: 0.1648
+        far_width_change_pct:
+          median: 0.0896
+          p25: -0.0448
+          p75: 0.3181
+          abs_median: 0.1517
+        near_length_change_abs_median_pct: 0.0321
+        near_width_change_abs_median_pct: 0.0469
+        far_frames_covered: 294
+        return:
+          n_pairs: 244
+          D_median_px: 1.3857
+          D_p90_px: 1.5408
+          frames_covered: 132
+          gap_s_median: 6.9
+          length_change_pct_median: -1.2651
+          length_change_pct_abs_median: 1.2651
+          width_change_pct_median: -1.8955
+          width_change_pct_abs_median: 1.8955
+          by_angle_deg:
+            -180~-60:
+              n_pairs: 0
+              D_median_px: null
+              D_p90_px: null
+            -60~-20:
+              n_pairs: 0
+              D_median_px: null
+              D_p90_px: null
+            -20~20:
+              n_pairs: 210
+              D_median_px: 1.3947
+              D_p90_px: 1.5473
+            20~60:
+              n_pairs: 34
+              D_median_px: 1.1151
+              D_p90_px: 1.3175
+            60~180:
+              n_pairs: 0
+              D_median_px: null
+              D_p90_px: null
+        still:
+          n_pairs: 1105
+          D_median_px: 0.145
+          D_p90_px: 0.413
+          gap_s_median: 2.3
+          length_change_pct_abs_median: 0.127
+          width_change_pct_abs_median: 0.1195
+        cost_fit_frames: 8.9166
+        rms_all_frames_px: 2.9907
+        theta_range_deg: 125.3762
+  IMG_7352 - 복사본.MOV:
+    n_use: 368
+    duration_s: 12.2333
+    huber_px: 6.4154
+    eval:
+      ref_f:
+        n_frames: 368
+        near:
+          n_pairs: 2786
+          D_median_px: 0.0591
+          D_p90_px: 0.2047
+        far:
+          n_pairs: 408
+          D_median_px: 0.1652
+          D_p90_px: 0.5094
+        far_by_gap_s:
+          2~5:
+            n_pairs: 408
+            D_median_px: 0.1652
+            D_p90_px: 0.5094
+          5~10:
+            n_pairs: 0
+            D_median_px: null
+            D_p90_px: null
+          10~1000:
+            n_pairs: 0
+            D_median_px: null
+            D_p90_px: null
+        far_by_angle_deg:
+          -180~-60:
+            n_pairs: 0
+            D_median_px: null
+            D_p90_px: null
+          -60~-20:
+            n_pairs: 276
+            D_median_px: 0.1354
+            D_p90_px: 0.2274
+          -20~20:
+            n_pairs: 0
+            D_median_px: null
+            D_p90_px: null
+          20~60:
+            n_pairs: 132
+            D_median_px: 0.4751
+            D_p90_px: 0.5912
+          60~180:
+            n_pairs: 0
+            D_median_px: null
+            D_p90_px: null
+        far_length_change_pct:
+          median: -0.1134
+          p25: -0.2098
+          p75: -0.0533
+          abs_median: 0.1147
+        far_width_change_pct:
+          median: 0.114
+          p25: 0.0697
+          p75: 0.2686
+          abs_median: 0.114
+        near_length_change_abs_median_pct: 0.0339
+        near_width_change_abs_median_pct: 0.0322
+        far_frames_covered: 118
+        return:
+          n_pairs: 16
+          D_median_px: 0.4955
+          D_p90_px: 0.5642
+          frames_covered: 18
+          gap_s_median: 3.7167
+          length_change_pct_median: -0.2663
+          length_change_pct_abs_median: 0.2663
+          width_change_pct_median: 1.1515
+          width_change_pct_abs_median: 1.1515
+          by_angle_deg:
+            -180~-60:
+              n_pairs: 0
+              D_median_px: null
+              D_p90_px: null
+            -60~-20:
+              n_pairs: 0
+              D_median_px: null
+              D_p90_px: null
+            -20~20:
+              n_pairs: 0
+              D_median_px: null
+              D_p90_px: null
+            20~60:
+              n_pairs: 16
+              D_median_px: 0.4955
+              D_p90_px: 0.5642
+            60~180:
+              n_pairs: 0
+              D_median_px: null
+              D_p90_px: null
+        still:
+          n_pairs: 356
+          D_median_px: 0.1533
+          D_p90_px: 0.4661
+          gap_s_median: 2.2
+          length_change_pct_abs_median: 0.1064
+          width_change_pct_abs_median: 0.101
+        cost_fit_frames: 15.1802
+        rms_all_frames_px: 3.9984
+        theta_range_deg: 128.0288
+      low_f:
+        n_frames: 368
+        near:
+          n_pairs: 2786
+          D_median_px: 0.059
+          D_p90_px: 0.2007
+        far:
+          n_pairs: 406
+          D_median_px: 0.1674
+          D_p90_px: 0.5023
+        far_by_gap_s:
+          2~5:
+            n_pairs: 406
+            D_median_px: 0.1674
+            D_p90_px: 0.5023
+          5~10:
+            n_pairs: 0
+            D_median_px: null
+            D_p90_px: null
+          10~1000:
+            n_pairs: 0
+            D_median_px: null
+            D_p90_px: null
+        far_by_angle_deg:
+          -180~-60:
+            n_pairs: 0
+            D_median_px: null
+            D_p90_px: null
+          -60~-20:
+            n_pairs: 276
+            D_median_px: 0.1369
+            D_p90_px: 0.2349
+          -20~20:
+            n_pairs: 0
+            D_median_px: null
+            D_p90_px: null
+          20~60:
+            n_pairs: 130
+            D_median_px: 0.4715
+            D_p90_px: 0.5767
+          60~180:
+            n_pairs: 0
+            D_median_px: null
+            D_p90_px: null
+        far_length_change_pct:
+          median: -0.1094
+          p25: -0.2045
+          p75: -0.0462
+          abs_median: 0.1126
+        far_width_change_pct:
+          median: 0.0978
+          p25: 0.0579
+          p75: 0.2904
+          abs_median: 0.0978
+        near_length_change_abs_median_pct: 0.0336
+        near_width_change_abs_median_pct: 0.0325
+        far_frames_covered: 118
+        return:
+          n_pairs: 18
+          D_median_px: 0.503
+          D_p90_px: 0.5624
+          frames_covered: 20
+          gap_s_median: 3.6833
+          length_change_pct_median: -0.0522
+          length_change_pct_abs_median: 0.1597
+          width_change_pct_median: 1.187
+          width_change_pct_abs_median: 1.187
+          by_angle_deg:
+            -180~-60:
+              n_pairs: 0
+              D_median_px: null
+              D_p90_px: null
+            -60~-20:
+              n_pairs: 0
+              D_median_px: null
+              D_p90_px: null
+            -20~20:
+              n_pairs: 0
+              D_median_px: null
+              D_p90_px: null
+            20~60:
+              n_pairs: 18
+              D_median_px: 0.503
+              D_p90_px: 0.5624
+            60~180:
+              n_pairs: 0
+              D_median_px: null
+              D_p90_px: null
+        still:
+          n_pairs: 354
+          D_median_px: 0.1543
+          D_p90_px: 0.4586
+          gap_s_median: 2.2
+          length_change_pct_abs_median: 0.1107
+          width_change_pct_abs_median: 0.0872
+        cost_fit_frames: 11.3758
+        rms_all_frames_px: 3.4256
+        theta_range_deg: 128.521
+  IMG_7384.MOV:
+    n_use: 636
+    duration_s: 21.1667
+    huber_px: 8.5609
+    eval:
+      ref_f:
+        n_frames: 636
+        near:
+          n_pairs: 3745
+          D_median_px: 0.0993
+          D_p90_px: 0.2174
+        far:
+          n_pairs: 1598
+          D_median_px: 0.5104
+          D_p90_px: 1.7119
+        far_by_gap_s:
+          2~5:
+            n_pairs: 982
+            D_median_px: 0.4011
+            D_p90_px: 0.5596
+          5~10:
+            n_pairs: 286
+            D_median_px: 0.7982
+            D_p90_px: 0.8896
+          10~1000:
+            n_pairs: 330
+            D_median_px: 1.7083
+            D_p90_px: 1.7698
+        far_by_angle_deg:
+          -180~-60:
+            n_pairs: 110
+            D_median_px: 0.602
+            D_p90_px: 0.9299
+          -60~-20:
+            n_pairs: 0
+            D_median_px: null
+            D_p90_px: null
+          -20~20:
+            n_pairs: 1338
+            D_median_px: 0.525
+            D_p90_px: 1.7256
+          20~60:
+            n_pairs: 150
+            D_median_px: 0.464
+            D_p90_px: 0.5783
+          60~180:
+            n_pairs: 0
+            D_median_px: null
+            D_p90_px: null
+        far_length_change_pct:
+          median: -0.0413
+          p25: -0.408
+          p75: 0.0696
+          abs_median: 0.1312
+        far_width_change_pct:
+          median: 0.2815
+          p25: -0.4136
+          p75: 0.3921
+          abs_median: 0.3962
+        near_length_change_abs_median_pct: 0.0473
+        near_width_change_abs_median_pct: 0.0678
+        far_frames_covered: 395
+        return:
+          n_pairs: 789
+          D_median_px: 0.8724
+          D_p90_px: 1.7532
+          frames_covered: 291
+          gap_s_median: 8.6
+          length_change_pct_median: -0.2009
+          length_change_pct_abs_median: 0.5338
+          width_change_pct_median: -0.3773
+          width_change_pct_abs_median: 0.5146
+          by_angle_deg:
+            -180~-60:
+              n_pairs: 85
+              D_median_px: 0.6615
+              D_p90_px: 0.9739
+            -60~-20:
+              n_pairs: 0
+              D_median_px: null
+              D_p90_px: null
+            -20~20:
+              n_pairs: 633
+              D_median_px: 1.3629
+              D_p90_px: 1.7577
+            20~60:
+              n_pairs: 71
+              D_median_px: 0.467
+              D_p90_px: 0.5522
+            60~180:
+              n_pairs: 0
+              D_median_px: null
+              D_p90_px: null
+        still:
+          n_pairs: 714
+          D_median_px: 0.3927
+          D_p90_px: 0.4992
+          gap_s_median: 2.3333
+          length_change_pct_abs_median: 0.0701
+          width_change_pct_abs_median: 0.3231
+        cost_fit_frames: 11.7015
+        rms_all_frames_px: 3.4786
+        theta_range_deg: 178.4725
+      low_f:
+        n_frames: 636
+        near:
+          n_pairs: 3737
+          D_median_px: 0.1022
+          D_p90_px: 0.2119
+        far:
+          n_pairs: 1756
+          D_median_px: 0.5763
+          D_p90_px: 1.8
+        far_by_gap_s:
+          2~5:
+            n_pairs: 986
+            D_median_px: 0.4327
+            D_p90_px: 0.5822
+          5~10:
+            n_pairs: 280
+            D_median_px: 0.8344
+            D_p90_px: 0.9409
+          10~1000:
+            n_pairs: 490
+            D_median_px: 1.7687
+            D_p90_px: 1.846
+        far_by_angle_deg:
+          -180~-60:
+            n_pairs: 109
+            D_median_px: 0.6092
+            D_p90_px: 0.9121
+          -60~-20:
+            n_pairs: 0
+            D_median_px: null
+            D_p90_px: null
+          -20~20:
+            n_pairs: 1502
+            D_median_px: 0.7217
+            D_p90_px: 1.8117
+          20~60:
+            n_pairs: 145
+            D_median_px: 0.4621
+            D_p90_px: 0.5958
+          60~180:
+            n_pairs: 0
+            D_median_px: null
+            D_p90_px: null
+        far_length_change_pct:
+          median: -0.0869
+          p25: -0.4075
+          p75: 0.0802
+          abs_median: 0.226
+        far_width_change_pct:
+          median: 0.2239
+          p25: -0.8474
+          p75: 0.3432
+          abs_median: 0.4067
+        near_length_change_abs_median_pct: 0.0487
+        near_width_change_abs_median_pct: 0.0703
+        far_frames_covered: 396
+        return:
+          n_pairs: 943
+          D_median_px: 1.3493
+          D_p90_px: 1.8241
+          frames_covered: 294
+          gap_s_median: 10.5
+          length_change_pct_median: -0.3584
+          length_change_pct_abs_median: 0.3993
+          width_change_pct_median: -0.8158
+          width_change_pct_abs_median: 0.8158
+          by_angle_deg:
+            -180~-60:
+              n_pairs: 84
+              D_median_px: 0.667
+              D_p90_px: 0.9577
+            -60~-20:
+              n_pairs: 0
+              D_median_px: null
+              D_p90_px: null
+            -20~20:
+              n_pairs: 787
+              D_median_px: 1.4633
+              D_p90_px: 1.8303
+            20~60:
+              n_pairs: 72
+              D_median_px: 0.483
+              D_p90_px: 0.5905
+            60~180:
+              n_pairs: 0
+              D_median_px: null
+              D_p90_px: null
+        still:
+          n_pairs: 723
+          D_median_px: 0.4266
+          D_p90_px: 0.5396
+          gap_s_median: 2.3333
+          length_change_pct_abs_median: 0.0817
+          width_change_pct_abs_median: 0.3206
+        cost_fit_frames: 13.1643
+        rms_all_frames_px: 3.6569
+        theta_range_deg: 178.3555
+  IMG_7385.MOV:
+    n_use: 569
+    duration_s: 18.9333
+    huber_px: 8.6507
+    eval:
+      ref_f:
+        n_frames: 569
+        near:
+          n_pairs: 5062
+          D_median_px: 0.1161
+          D_p90_px: 0.3973
+        far:
+          n_pairs: 2118
+          D_median_px: 0.5606
+          D_p90_px: 0.952
+        far_by_gap_s:
+          2~5:
+            n_pairs: 2066
+            D_median_px: 0.5638
+            D_p90_px: 0.9562
+          5~10:
+            n_pairs: 52
+            D_median_px: 0.2751
+            D_p90_px: 0.491
+          10~1000:
+            n_pairs: 0
+            D_median_px: null
+            D_p90_px: null
+        far_by_angle_deg:
+          -180~-60:
+            n_pairs: 1248
+            D_median_px: 0.5313
+            D_p90_px: 0.6024
+          -60~-20:
+            n_pairs: 99
+            D_median_px: 0.3862
+            D_p90_px: 0.5879
+          -20~20:
+            n_pairs: 443
+            D_median_px: 0.8281
+            D_p90_px: 1.0944
+          20~60:
+            n_pairs: 41
+            D_median_px: 1.4917
+            D_p90_px: 1.7369
+          60~180:
+            n_pairs: 287
+            D_median_px: 0.8121
+            D_p90_px: 0.9286
+        far_length_change_pct:
+          median: -0.0018
+          p25: -0.1356
+          p75: 0.1652
+          abs_median: 0.1475
+        far_width_change_pct:
+          median: -0.0834
+          p25: -0.2824
+          p75: 0.1595
+          abs_median: 0.2497
+        near_length_change_abs_median_pct: 0.0408
+        near_width_change_abs_median_pct: 0.0962
+        far_frames_covered: 350
+        return:
+          n_pairs: 64
+          D_median_px: 0.3075
+          D_p90_px: 1.3099
+          frames_covered: 68
+          gap_s_median: 5.65
+          length_change_pct_median: -0.2136
+          length_change_pct_abs_median: 0.2136
+          width_change_pct_median: 0.0319
+          width_change_pct_abs_median: 0.1287
+          by_angle_deg:
+            -180~-60:
+              n_pairs: 0
+              D_median_px: null
+              D_p90_px: null
+            -60~-20:
+              n_pairs: 39
+              D_median_px: 0.2514
+              D_p90_px: 0.3361
+            -20~20:
+              n_pairs: 18
+              D_median_px: 0.4787
+              D_p90_px: 0.5266
+            20~60:
+              n_pairs: 7
+              D_median_px: 1.7373
+              D_p90_px: 1.807
+            60~180:
+              n_pairs: 0
+              D_median_px: null
+              D_p90_px: null
+        still:
+          n_pairs: 1986
+          D_median_px: 0.5637
+          D_p90_px: 0.9278
+          gap_s_median: 2.4
+          length_change_pct_abs_median: 0.146
+          width_change_pct_abs_median: 0.249
+        cost_fit_frames: 12.005
+        rms_all_frames_px: 3.4794
+        theta_range_deg: 129.0343
+      low_f:
+        n_frames: 569
+        near:
+          n_pairs: 5059
+          D_median_px: 0.1224
+          D_p90_px: 0.4015
+        far:
+          n_pairs: 2089
+          D_median_px: 0.5901
+          D_p90_px: 0.953
+        far_by_gap_s:
+          2~5:
+            n_pairs: 2036
+            D_median_px: 0.5915
+            D_p90_px: 0.9588
+          5~10:
+            n_pairs: 53
+            D_median_px: 0.4102
+            D_p90_px: 0.7176
+          10~1000:
+            n_pairs: 0
+            D_median_px: null
+            D_p90_px: null
+        far_by_angle_deg:
+          -180~-60:
+            n_pairs: 1230
+            D_median_px: 0.5584
+            D_p90_px: 0.6359
+          -60~-20:
+            n_pairs: 100
+            D_median_px: 0.3792
+            D_p90_px: 0.5779
+          -20~20:
+            n_pairs: 444
+            D_median_px: 0.8307
+            D_p90_px: 1.0931
+          20~60:
+            n_pairs: 39
+            D_median_px: 1.4726
+            D_p90_px: 1.693
+          60~180:
+            n_pairs: 276
+            D_median_px: 0.8193
+            D_p90_px: 0.9312
+        far_length_change_pct:
+          median: -0.0252
+          p25: -0.1398
+          p75: 0.2328
+          abs_median: 0.1703
+        far_width_change_pct:
+          median: -0.134
+          p25: -0.337
+          p75: 0.1551
+          abs_median: 0.28
+        near_length_change_abs_median_pct: 0.0468
+        near_width_change_abs_median_pct: 0.1004
+        far_frames_covered: 349
+        return:
+          n_pairs: 67
+          D_median_px: 0.4428
+          D_p90_px: 1.6089
+          frames_covered: 70
+          gap_s_median: 5.6333
+          length_change_pct_median: -0.3818
+          length_change_pct_abs_median: 0.3818
+          width_change_pct_median: -0.2081
+          width_change_pct_abs_median: 0.2402
+          by_angle_deg:
+            -180~-60:
+              n_pairs: 0
+              D_median_px: null
+              D_p90_px: null
+            -60~-20:
+              n_pairs: 39
+              D_median_px: 0.3131
+              D_p90_px: 0.4648
+            -20~20:
+              n_pairs: 19
+              D_median_px: 0.6719
+              D_p90_px: 0.7871
+            20~60:
+              n_pairs: 9
+              D_median_px: 1.6905
+              D_p90_px: 1.7629
+            60~180:
+              n_pairs: 0
+              D_median_px: null
+              D_p90_px: null
+        still:
+          n_pairs: 1957
+          D_median_px: 0.5916
+          D_p90_px: 0.9313
+          gap_s_median: 2.4
+          length_change_pct_abs_median: 0.1671
+          width_change_pct_abs_median: 0.2744
+        cost_fit_frames: 19.7618
+        rms_all_frames_px: 4.5541
+        theta_range_deg: 128.9894
+  IMG_7387.MOV:
+    n_use: 565
+    duration_s: 18.8
+    huber_px: 8.5359
+    eval:
+      ref_f:
+        n_frames: 565
+        near:
+          n_pairs: 4105
+          D_median_px: 0.0801
+          D_p90_px: 0.2307
+        far:
+          n_pairs: 2061
+          D_median_px: 0.1212
+          D_p90_px: 1.1221
+        far_by_gap_s:
+          2~5:
+            n_pairs: 1912
+            D_median_px: 0.1173
+            D_p90_px: 0.9284
+          5~10:
+            n_pairs: 149
+            D_median_px: 1.2422
+            D_p90_px: 1.4217
+          10~1000:
+            n_pairs: 0
+            D_median_px: null
+            D_p90_px: null
+        far_by_angle_deg:
+          -180~-60:
+            n_pairs: 125
+            D_median_px: 0.6062
+            D_p90_px: 0.8585
+          -60~-20:
+            n_pairs: 39
+            D_median_px: 0.5987
+            D_p90_px: 0.97
+          -20~20:
+            n_pairs: 1675
+            D_median_px: 0.1102
+            D_p90_px: 0.1983
+          20~60:
+            n_pairs: 222
+            D_median_px: 1.066
+            D_p90_px: 1.2621
+          60~180:
+            n_pairs: 0
+            D_median_px: null
+            D_p90_px: null
+        far_length_change_pct:
+          median: -0.0206
+          p25: -0.1678
+          p75: 0.0519
+          abs_median: 0.0813
+        far_width_change_pct:
+          median: 0.0946
+          p25: 0.0133
+          p75: 0.1513
+          abs_median: 0.1188
+        near_length_change_abs_median_pct: 0.0418
+        near_width_change_abs_median_pct: 0.0474
+        far_frames_covered: 396
+        return:
+          n_pairs: 255
+          D_median_px: 1.1648
+          D_p90_px: 1.4148
+          frames_covered: 169
+          gap_s_median: 5.2333
+          length_change_pct_median: -0.966
+          length_change_pct_abs_median: 0.966
+          width_change_pct_median: 0.1263
+          width_change_pct_abs_median: 0.338
+          by_angle_deg:
+            -180~-60:
+              n_pairs: 27
+              D_median_px: 0.4502
+              D_p90_px: 0.5872
+            -60~-20:
+              n_pairs: 39
+              D_median_px: 0.5987
+              D_p90_px: 0.97
+            -20~20:
+              n_pairs: 143
+              D_median_px: 1.2475
+              D_p90_px: 1.4218
+            20~60:
+              n_pairs: 46
+              D_median_px: 1.1247
+              D_p90_px: 1.2705
+            60~180:
+              n_pairs: 0
+              D_median_px: null
+              D_p90_px: null
+        still:
+          n_pairs: 1691
+          D_median_px: 0.1107
+          D_p90_px: 0.2103
+          gap_s_median: 2.4667
+          length_change_pct_abs_median: 0.0648
+          width_change_pct_abs_median: 0.106
+        cost_fit_frames: 14.2592
+        rms_all_frames_px: 3.8251
+        theta_range_deg: 146.347
+      low_f:
+        n_frames: 565
+        near:
+          n_pairs: 4106
+          D_median_px: 0.0796
+          D_p90_px: 0.2177
+        far:
+          n_pairs: 2065
+          D_median_px: 0.1209
+          D_p90_px: 1.1188
+        far_by_gap_s:
+          2~5:
+            n_pairs: 1915
+            D_median_px: 0.117
+            D_p90_px: 0.9231
+          5~10:
+            n_pairs: 150
+            D_median_px: 1.2363
+            D_p90_px: 1.5016
+          10~1000:
+            n_pairs: 0
+            D_median_px: null
+            D_p90_px: null
+        far_by_angle_deg:
+          -180~-60:
+            n_pairs: 129
+            D_median_px: 0.5429
+            D_p90_px: 0.8249
+          -60~-20:
+            n_pairs: 42
+            D_median_px: 0.4645
+            D_p90_px: 0.8652
+          -20~20:
+            n_pairs: 1674
+            D_median_px: 0.1105
+            D_p90_px: 0.2028
+          20~60:
+            n_pairs: 220
+            D_median_px: 1.0713
+            D_p90_px: 1.2698
+          60~180:
+            n_pairs: 0
+            D_median_px: null
+            D_p90_px: null
+        far_length_change_pct:
+          median: -0.0146
+          p25: -0.1293
+          p75: 0.055
+          abs_median: 0.0768
+        far_width_change_pct:
+          median: 0.0994
+          p25: 0.0286
+          p75: 0.1569
+          abs_median: 0.1256
+        near_length_change_abs_median_pct: 0.0401
+        near_width_change_abs_median_pct: 0.0464
+        far_frames_covered: 399
+        return:
+          n_pairs: 259
+          D_median_px: 1.166
+          D_p90_px: 1.4834
+          frames_covered: 173
+          gap_s_median: 5.2
+          length_change_pct_median: -0.9484
+          length_change_pct_abs_median: 0.9484
+          width_change_pct_median: 0.1105
+          width_change_pct_abs_median: 0.3554
+          by_angle_deg:
+            -180~-60:
+              n_pairs: 27
+              D_median_px: 0.3874
+              D_p90_px: 0.5079
+            -60~-20:
+              n_pairs: 42
+              D_median_px: 0.4645
+              D_p90_px: 0.8652
+            -20~20:
+              n_pairs: 142
+              D_median_px: 1.2515
+              D_p90_px: 1.5028
+            20~60:
+              n_pairs: 48
+              D_median_px: 1.1287
+              D_p90_px: 1.28
+            60~180:
+              n_pairs: 0
+              D_median_px: null
+              D_p90_px: null
+        still:
+          n_pairs: 1695
+          D_median_px: 0.1111
+          D_p90_px: 0.2277
+          gap_s_median: 2.4667
+          length_change_pct_abs_median: 0.0623
+          width_change_pct_abs_median: 0.1119
+        cost_fit_frames: 11.9722
+        rms_all_frames_px: 3.4672
+        theta_range_deg: 145.7963
+  IMG_7388.MOV:
+    n_use: 635
+    duration_s: 21.1333
+    huber_px: 9.6325
+    eval:
+      ref_f:
+        n_frames: 635
+        near:
+          n_pairs: 5791
+          D_median_px: 0.1348
+          D_p90_px: 0.3368
+        far:
+          n_pairs: 8537
+          D_median_px: 3.3233
+          D_p90_px: 3.6648
+        far_by_gap_s:
+          2~5:
+            n_pairs: 3487
+            D_median_px: 0.9097
+            D_p90_px: 1.2331
+          5~10:
+            n_pairs: 175
+            D_median_px: 1.188
+            D_p90_px: 1.4541
+          10~1000:
+            n_pairs: 4875
+            D_median_px: 3.4167
+            D_p90_px: 3.7335
+        far_by_angle_deg:
+          -180~-60:
+            n_pairs: 1212
+            D_median_px: 0.7919
+            D_p90_px: 0.9552
+          -60~-20:
+            n_pairs: 72
+            D_median_px: 1.0949
+            D_p90_px: 1.2303
+          -20~20:
+            n_pairs: 6395
+            D_median_px: 3.3782
+            D_p90_px: 3.7078
+          20~60:
+            n_pairs: 858
+            D_median_px: 0.9256
+            D_p90_px: 1.4793
+          60~180:
+            n_pairs: 0
+            D_median_px: null
+            D_p90_px: null
+        far_length_change_pct:
+          median: -2.3213
+          p25: -2.463
+          p75: -0.0814
+          abs_median: 2.3213
+        far_width_change_pct:
+          median: 2.5576
+          p25: 0.2978
+          p75: 3.5053
+          abs_median: 2.5576
+        near_length_change_abs_median_pct: 0.0419
+        near_width_change_abs_median_pct: 0.1048
+        far_frames_covered: 531
+        return:
+          n_pairs: 5055
+          D_median_px: 3.4095
+          D_p90_px: 3.731
+          frames_covered: 281
+          gap_s_median: 17.2667
+          length_change_pct_median: -2.4272
+          length_change_pct_abs_median: 2.4272
+          width_change_pct_median: 3.4019
+          width_change_pct_abs_median: 3.4019
+          by_angle_deg:
+            -180~-60:
+              n_pairs: 0
+              D_median_px: null
+              D_p90_px: null
+            -60~-20:
+              n_pairs: 36
+              D_median_px: 1.1526
+              D_p90_px: 1.2416
+            -20~20:
+              n_pairs: 5019
+              D_median_px: 3.4114
+              D_p90_px: 3.7316
+            20~60:
+              n_pairs: 0
+              D_median_px: null
+              D_p90_px: null
+            60~180:
+              n_pairs: 0
+              D_median_px: null
+              D_p90_px: null
+        still:
+          n_pairs: 3388
+          D_median_px: 0.9014
+          D_p90_px: 1.2166
+          gap_s_median: 2.4
+          length_change_pct_abs_median: 0.2457
+          width_change_pct_abs_median: 0.6814
+        cost_fit_frames: 17.4943
+        rms_all_frames_px: 4.2193
+        theta_range_deg: 126.6415
+      low_f:
+        n_frames: 635
+        near:
+          n_pairs: 5791
+          D_median_px: 0.1375
+          D_p90_px: 0.3413
+        far:
+          n_pairs: 9320
+          D_median_px: 3.3925
+          D_p90_px: 3.7659
+        far_by_gap_s:
+          2~5:
+            n_pairs: 3470
+            D_median_px: 0.9293
+            D_p90_px: 1.2471
+          5~10:
+            n_pairs: 199
+            D_median_px: 1.3946
+            D_p90_px: 1.6569
+          10~1000:
+            n_pairs: 5651
+            D_median_px: 3.4861
+            D_p90_px: 3.8277
+        far_by_angle_deg:
+          -180~-60:
+            n_pairs: 1236
+            D_median_px: 0.8145
+            D_p90_px: 1.0183
+          -60~-20:
+            n_pairs: 75
+            D_median_px: 1.137
+            D_p90_px: 1.3269
+          -20~20:
+            n_pairs: 7193
+            D_median_px: 3.4397
+            D_p90_px: 3.8043
+          20~60:
+            n_pairs: 816
+            D_median_px: 0.929
+            D_p90_px: 1.4789
+          60~180:
+            n_pairs: 0
+            D_median_px: null
+            D_p90_px: null
+        far_length_change_pct:
+          median: -2.4049
+          p25: -2.5474
+          p75: -0.1438
+          abs_median: 2.4049
+        far_width_change_pct:
+          median: 2.655
+          p25: 0.4969
+          p75: 3.3412
+          abs_median: 2.655
+        near_length_change_abs_median_pct: 0.0448
+        near_width_change_abs_median_pct: 0.106
+        far_frames_covered: 520
+        return:
+          n_pairs: 5855
+          D_median_px: 3.4762
+          D_p90_px: 3.8239
+          frames_covered: 274
+          gap_s_median: 17.4
+          length_change_pct_median: -2.5009
+          length_change_pct_abs_median: 2.5009
+          width_change_pct_median: 3.1789
+          width_change_pct_abs_median: 3.1789
+          by_angle_deg:
+            -180~-60:
+              n_pairs: 0
+              D_median_px: null
+              D_p90_px: null
+            -60~-20:
+              n_pairs: 38
+              D_median_px: 1.2611
+              D_p90_px: 1.3562
+            -20~20:
+              n_pairs: 5817
+              D_median_px: 3.478
+              D_p90_px: 3.8245
+            20~60:
+              n_pairs: 0
+              D_median_px: null
+              D_p90_px: null
+            60~180:
+              n_pairs: 0
+              D_median_px: null
+              D_p90_px: null
+        still:
+          n_pairs: 3373
+          D_median_px: 0.9205
+          D_p90_px: 1.2319
+          gap_s_median: 2.4
+          length_change_pct_abs_median: 0.2485
+          width_change_pct_abs_median: 0.7224
+        cost_fit_frames: 26.2285
+        rms_all_frames_px: 5.2644
+        theta_range_deg: 126.1525
