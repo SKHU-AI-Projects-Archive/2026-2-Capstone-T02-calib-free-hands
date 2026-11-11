@@ -1,0 +1,41 @@
+# 122: 두 사람의 마커 영상 (사용자 2026-11-11: "7405, 7406이 내 손에 마킹을 한 영상이고, 해당 영상들로 실험해줘."), 기록용, 판정 없음.
+# 121: 팀원 손은 마커 추적점으로 +2.2% / +4.6% (같은 영상의 광류 사슬 -11.1% / -10.4%). 내 손도 마커에서 기준값 근처인지, 아니면 마커가 누구든 13~15%p 올리는지 본다.
+# 121 의 HSV 색 규칙은 팀원 영상에서 고른 값이라 내 손 영상(마커가 흐리고 피부가 어두움)에서는 21개 중 14개만 잡혔다(7405 의 1 s 프레임). 그래서 검출을 39 의 "주변보다 붉은 정도"(handfocal.mo_blobs)로 바꾼다.
+# 실행 전에 본 것: 7405·7406 의 1·7·13 s 프레임, 7399 의 1 s, 7400 의 1 s 프레임에서 contrast_min 8 / 10 / 12, median_ksize 31 / 41 의 검출 수(손 영역 안 16~22개)와 검출 그림 두 장. 거기서 contrast_min 10, median_ksize 31 을 골랐다
+# (여덟 프레임에서 18~21개). f 결과는 보지 않고 정함. 넓이·둥근 정도·합치기·추적 값은 121 과 같음. 두 사람에 같은 규칙을 쓰려고 팀원 마커 영상(7399, 7400)도 이 규칙으로 다시 돌린다.
+# 나머지는 121 과 같다(첫 정지 구간 기준, j16, 경사 11° 고정 + 함께 추정, 마커 영상에 광류 사슬도 함께). 기준 f = 새 폰 체커보드 값(같은 폰으로 찍었다고 보고 적용), summary.md 에만.
+experiment:
+  name: 122_marker_track_both
+  seed: 42
+settings_config: configs/74b_multistart_rerun.yaml
+joint_set: j16
+code: {branch: optical_flow, commit: 8f269de, modules: [HandCalib/optical_flow/experiments.py]}
+ramps_deg: [11]
+reference: {mode: first_pause, pause_gap_frames: 15, min_pause_frames: 5}
+videos: ["__none__"]
+extra_videos:
+  - {file: IMG_7399.MOV, person: teammate, ref_f_px: 1672, markers: true}
+  - {file: IMG_7400.MOV, person: teammate, ref_f_px: 1672, markers: true}
+  - {file: IMG_7405.MOV, person: self, ref_f_px: 1672, markers: true}
+  - {file: IMG_7406.MOV, person: self, ref_f_px: 1672, markers: true}
+marker_track:
+  markers:
+    contrast_min: 10
+    median_ksize: 31
+    area_min: 15
+    area_max: 1500
+    circularity_min: 0.3
+    region_margin: 0.30
+    merge_frac: 0.018
+    naming_radius_frac: 0.08
+    min_joints: 12
+    min_markers_ratio: 0.75
+    move_frac: 0.03
+    gap_cap: 5
+    step_ransac_frac: 0.012
+    min_inlier_ratio: 0.8
+workers: 40
+video_workers: 4
+output:
+  root: runs/122_marker_track_both
+  results_yaml: results/122_marker_track_both.yaml
