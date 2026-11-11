@@ -2716,10 +2716,230 @@ def rp_summary(res: dict, cfg: dict, own: dict) -> str:
     return "\n".join(L) + "\n"
 
 
+# ----------------------------------------------------------------------------------------------------
+# 121: 손에 찍은 빨간 마커를 따라가 f 추정 (마커 영상) + 마커 없는 영상은 지금까지와 같은 광류 사슬
+# ----------------------------------------------------------------------------------------------------
+def mt_detect(bgr: np.ndarray, region: tuple, mc: dict, box_long_px: float) -> np.ndarray:
+    """한 프레임의 마커 중심 (k, 2): handfocal.mk_blobs (HSV 색, 넓이, 둥근 정도; 채도 가중 중심) 뒤, 서로 merge_frac x 손 상자 긴 변 안에 있는 조각은 넓이 가중 평균으로 합친다(번진 점이 둘로 나뉜 것)."""
+    b = hf.mk_blobs(bgr, region, mc)
+    xy, ar = b["xy"], b["area"]
+    lim = float(mc["merge_frac"]) * float(box_long_px)
+    lab = np.arange(len(xy))
+    for i in range(len(xy)):
+        for j in range(i + 1, len(xy)):
+            if np.linalg.norm(xy[i] - xy[j]) <= lim:
+                lab[lab == lab[j]] = lab[i]
+    out = [(xy[lab == g] * ar[lab == g][:, None]).sum(0) / ar[lab == g].sum() for g in np.unique(lab)]
+    return np.array(out, float).reshape(-1, 2)
+
+
+def mt_track(dets_xy: list, ref_index: int, ref_xy: np.ndarray, box_long_px: np.ndarray, mc: dict, used: list) -> dict:
+    """기준 프레임의 마커를 앞뒤로 따라간다. handfocal.mk_track_reacquire 는 기준 -> 현재 프레임의 호모그래피 하나로 검사해서(평평한 그림용) 입체인 실제 손을 크게 돌리면 프레임을 버린다.
+    여기서는 검사를 직전에 받아들인 프레임 -> 현재 프레임으로 한다(이웃 프레임 사이는 입체 손도 거의 호모그래피로 움직임).
+    프레임마다: 예측 위치 = 직전 위치를 직전 단계의 호모그래피로 한 번 더 옮긴 것(등속 가정). 예측 위치와 검출을 헝가리안으로 매칭(거리 <= move_frac x 손 상자 x min(건너뛴 프레임 수, gap_cap)).
+    매칭된 쌍으로 직전 -> 현재 호모그래피(RANSAC, step_ransac_frac x 손 상자). inlier 가 매칭의 min_inlier_ratio 이상이고 used 마커의 inlier 가 min_markers_ratio 이상이면 그 프레임을 받아들인다(outlier 마커는 그 프레임에서 비움).
+    보이지 않은 마커의 '직전 위치'는 그 호모그래피로 옮겨 둔다(다시 보이면 이어 붙음). 반환: {xy (n, m, 2), ok (n,), reason (n,)}."""
+    import cv2
+    from scipy.optimize import linear_sum_assignment
+    n, m = len(dets_xy), len(ref_xy)
+    xy = np.full((n, m, 2), np.nan)
+    ok = np.zeros(n, bool)
+    reason = np.array([""] * n, dtype=object)
+    xy[ref_index], ok[ref_index] = ref_xy, True
+    used = [int(j) for j in used]
+    need = int(np.ceil(float(mc["min_markers_ratio"]) * len(used) - 1e-9))
+    mv = lambda P, Hm: cv2.perspectiveTransform(P.reshape(-1, 1, 2).astype(np.float64), Hm).reshape(-1, 2)      # noqa: E731
+    for order in (range(ref_index + 1, n), range(ref_index - 1, -1, -1)):
+        last, last_i, H_step = ref_xy.copy(), ref_index, np.eye(3)
+        for i in order:
+            d = dets_xy[i]
+            if d is None or len(d) < need:
+                reason[i] = "too_few_markers"
+                continue
+            gap = abs(i - last_i)
+            pred = last.copy()
+            for _ in range(min(gap, int(mc["gap_cap"]))):
+                pred = mv(pred, H_step)
+            lim = float(mc["move_frac"]) * float(box_long_px[i]) * min(gap, int(mc["gap_cap"]))
+            cost = np.linalg.norm(pred[:, None, :] - d[None, :, :], axis=-1)
+            r, c = linear_sum_assignment(np.where(cost <= lim, cost, 1e9))
+            good = cost[r, c] <= lim
+            r, c = r[good], c[good]
+            if np.isin(r, used).sum() < need:
+                reason[i] = "match_failed"
+                continue
+            Hm, inl = hf.mk_homography(last[r], d[c], float(mc["step_ransac_frac"]) * float(box_long_px[i]))
+            if Hm is None or inl is None or inl.sum() < float(mc["min_inlier_ratio"]) * len(r) or np.isin(r[inl], used).sum() < need:
+                reason[i] = "homography_failed"
+                continue
+            cur = np.full((m, 2), np.nan)
+            cur[r[inl]] = d[c[inl]]
+            xy[i], ok[i] = cur, True
+            Hs = Hm if gap == 1 else np.eye(3)                         # 건너뛴 뒤에는 등속 예측을 쓰지 않음
+            last, last_i, H_step = np.where(np.isnan(cur), mv(last, Hm), cur), i, Hs
+    return {"xy": xy, "ok": ok, "reason": reason}
+
+
+def mt_markers(pngs: list, tr: dict, size_wh, cfg: dict) -> dict:
+    """마커 추적점. MediaPipe 는 (1) 찾을 영역(손 상자를 region_margin 만큼 넓힌 것)과 (2) 기준 프레임에서 마커에 관절 번호를 붙이는 데만 쓴다(가장 가까운 관절, naming_radius_frac x 상자 안). 좌표는 모두 마커 중심이다.
+    기준 프레임 = 첫 정지 구간에서 관절 묶음(joint_ids)의 마커가 가장 많이 이름 붙은 프레임(같으면 구간 가운데에 가까운 것). 추적 = mt_track (직전 프레임 기준 매칭과 호모그래피 검사).
+    반환: track_hand 와 같은 모양 {kp (n, 21, 2), box, use, ref, breaks, inl} + info."""
+    import cv2
+    mc = cfg["marker_track"]["markers"]
+    W, H = size_wh
+    n = len(pngs)
+    ids = [int(j) for j in cfg["joint_ids"]]
+    boxes = np.stack([of.kt_carry(tr["present"], tr["box"][:, k]) for k in range(4)], axis=1)
+    bl = of.box_long(boxes)
+    det = [mt_detect(cv2.imread(pngs[i], cv2.IMREAD_COLOR), hf.mk_region(boxes[i], float(mc["region_margin"]), W, H), mc, bl[i]) for i in range(n)]
+    pauses = pp_pauses(tr, (W, H), cfg)
+    cand = [int(i) for i in (pauses[0] if pauses else np.flatnonzero(tr["present"]))]
+    best = None
+    for i in cand:
+        if len(det[i]) < 4:
+            continue
+        nm = hf.mk_assign_names(det[i], tr["kp"][i])
+        d = np.linalg.norm(det[i] - tr["kp"][i][np.maximum(nm, 0)], axis=1)
+        nm = np.where((nm >= 0) & (d <= float(mc["naming_radius_frac"]) * bl[i]), nm, -1)
+        key = (int(np.isin(nm, ids).sum()), -abs(i - (cand[0] + cand[-1]) / 2))
+        if best is None or key > best[0]:
+            best = (key, i, nm)
+    if best is None:
+        raise ValueError("기준 프레임에서 마커를 찾지 못함")
+    _, ref, names = best
+    used = [j for j, x in enumerate(names) if int(x) in ids]
+    trk = mt_track(det, ref, det[ref], bl, mc, used)
+    resid = []                                                         # 기준 -> 각 프레임을 호모그래피 하나로 맞췄을 때의 잔차 (마커가 한 평면처럼 움직이는 정도; 추적에는 쓰지 않음)
+    for i in np.flatnonzero(trk["ok"]):
+        v = np.isfinite(trk["xy"][i][:, 0])
+        Hm, _ = hf.mk_homography(det[ref][v], trk["xy"][i][v]) if v.sum() >= 8 else (None, None)
+        if Hm is not None:
+            q = cv2.perspectiveTransform(det[ref][v].reshape(-1, 1, 2).astype(np.float64), Hm).reshape(-1, 2)
+            resid.append(float(np.sqrt(np.mean(((q - trk["xy"][i][v]) ** 2).sum(1))) / bl[i] * 100.0))
+    kp = np.full((n, 21, 2), np.nan)
+    for j, x in enumerate(names):
+        if x >= 0:
+            kp[:, int(x)] = trk["xy"][:, j]
+    cnt = np.isfinite(kp[:, ids, 0]).sum(1)
+    valid = trk["ok"] & (cnt >= int(mc["min_joints"]))
+    tb = np.full((n, 4), np.nan)
+    tb[valid] = np.c_[np.nanmin(kp[valid][:, ids], axis=1), np.nanmax(kp[valid][:, ids], axis=1)]
+    edge = np.zeros(n, bool)
+    edge[valid] = of.edge_flags(tb[valid], np.ones(valid.sum(), bool), W, H)
+    reasons = {}
+    for r in trk["reason"]:
+        if r:
+            reasons[str(r)] = reasons.get(str(r), 0) + 1
+    both = valid[:, None] & np.isfinite(kp[:, ids, 0]) & tr["present"][:, None]
+    dist = np.where(both, np.linalg.norm(kp[:, ids] - tr["kp"][:, ids], axis=2) / bl[:, None] * 100.0, np.nan)
+    info = {"detections_median": float(np.median([len(d) for d in det])), "ref_detections": int(len(det[ref])), "ref_named_in_joint_set": int(len(used)), "named_joints": sorted(int(x) for x in names if x >= 0),
+            "missing_joints": [j for j in ids if j not in set(int(x) for x in names)], "valid_ratio": float(valid.mean()), "reasons": reasons, "joints_per_valid_frame_median": float(np.median(cnt[valid])) if valid.any() else None,
+            "joint_visible_ratio_min": float(np.isfinite(kp[valid][:, [j for j in ids if j in set(int(x) for x in names)], 0]).mean(0).min()) if valid.any() else None,
+            "marker_to_mediapipe_median_pct": sv_pct(dist, 50), "ref_homography_rms_pct_median": sv_pct(resid, 50), "ref_homography_rms_pct_max": sv_pct(resid, 100)}
+    return {"kp": kp, "box": tb, "use": valid & ~edge, "ref": int(ref), "breaks": 0, "inl": [], "info": info}
+
+
+def mt_job(args):
+    """한 영상: 프레임·MediaPipe 검출·track -> 광류 사슬 추적점(지금까지와 같음: 첫 정지 구간 기준). markers: true 인 영상은 마커 추적점도 만든다. 추적점은 run 폴더의 points/ 에 저장."""
+    e, cfg, run_root = args
+    import cv2
+    cv2.setNumThreads(1)
+    pngs, times, tr, (W, H), tmp = prepare(e, cfg, run_root)
+    out, lines = {}, []
+    try:
+        ang = hand_angle(tr)
+        x = of.track_hand(pngs, tr["kp"], tr["present"], tr["box"], (W, H), cfg["tracking"], ref=rof.choose_reference_pose(tr, (W, H), cfg))
+        x["size"] = (W, H)
+        save_points(run_root, e["file"], x, (W, H), ang, times)
+        out["chain"] = {"kp": x["kp"], "box": x["box"], "use": x["use"], "ref": x["ref"], "size": (W, H), "info": {"breaks": int(x["breaks"]), "inliers_median": sv_pct(x["inl"], 50)}}
+        lines.append(f"  {e['file']} 광류 사슬: 프레임 {len(times)}, 기준 {x['ref']}, 끊김 {x['breaks']}, 사용 {int(x['use'].sum())}")
+        if e.get("markers"):
+            m = mt_markers(pngs, tr, (W, H), cfg)
+            m["size"] = (W, H)
+            save_points(run_root, Path(e["file"]).stem + "_marker.MOV", m, (W, H), ang, times)
+            out["marker"] = {"kp": m["kp"], "box": m["box"], "use": m["use"], "ref": m["ref"], "size": (W, H), "info": m["info"]}
+            lines.append(f"  {e['file']} 마커: 기준 {m['ref']}, 기준 프레임 마커 {m['info']['ref_detections']}개 중 관절 묶음 {m['info']['ref_named_in_joint_set']}개, 사용 {int(m['use'].sum())} ({m['info']['valid_ratio']:.2f}), {m['info']['reasons']}")
+    finally:
+        shutil.rmtree(tmp, ignore_errors=True)
+    return out, lines
+
+
+def mt_run(cfg: dict, vid: dict, log) -> dict:
+    """121: (영상, 점 출처)마다 free_template(tl_template_job) -> 경사 고정·함께 추정(ms2_job)."""
+    import multiprocessing as mp
+    from concurrent.futures import ProcessPoolExecutor
+    items = [(f, v, x) for f, d in vid.items() for v, x in d.items()]
+    with ProcessPoolExecutor(max_workers=int(cfg["workers"]), mp_context=mp.get_context("spawn")) as ex:
+        fts = list(ex.map(hf.tl_template_job, [rof.estimate_args(cfg, x) for _, _, x in items], chunksize=1))
+    todo = [(f"ramp_{r:g}", "ramp_fixed", r) for r in cfg["ramps_deg"]] + [(f"free_{r:g}", "ramp_free", r) for r in cfg["free_starts_deg"]]
+    keep = ("f", "pitch_deg", "roll_deg", "desk_tilt_deg", "turn_range_deg", "rms_px", "cost", "boundary", "start")
+    res, jobs, keys = {}, [], []
+    for (f, v, x), ft in zip(items, fts):
+        A = ft.get("A")
+        grid = hf.f_grid(cfg["pipeline"]["estimate"], max(*x["size"]))
+        d = res.setdefault(f, {}).setdefault(v, {})
+        d.update({"ref": int(x["ref"]), "n_use": int(x["use"].sum()), "info": x["info"],
+                  "free_template": {"failed": ft.get("failed")} if A is None else {"f": float(A["f"]), "boundary": hf.od_boundary(float(A["f"]), grid), "rms_px": float((A.get("ba") or {}).get("rms_px", np.nan))}})
+        if A is None:
+            continue
+        for mk, mode, r in todo:
+            jobs.append(rof.estimate_args(cfg, x, A) + (mode, r))
+            keys.append((f, v, mk))
+    log(f"  추정 {len(jobs)}건")
+    with ProcessPoolExecutor(max_workers=int(cfg["workers"]), mp_context=mp.get_context("spawn")) as ex:
+        for (f, v, mk), o in zip(keys, ex.map(hf.ms2_job, jobs, chunksize=1)):
+            res[f][v][mk] = {kk: o[kk] for kk in keep if kk in o} if "failed" not in o else o
+    for f in res:
+        for v, d in res[f].items():
+            free = {k: y for k, y in d.items() if k.startswith("free_") and k != "free_template" and isinstance(y, dict) and "cost" in y}
+            if free:
+                bk = min(free, key=lambda k: free[k]["cost"])
+                d["ramp_free"] = {**free[bk], "best_start": bk}
+    return res
+
+
+def mt_summary(res: dict, cfg: dict, own: dict) -> str:
+    vids = {e["file"]: e for e in cfg["videos"]}
+    who = {"teammate": "팀원", "self": "나"}
+    src = {"marker": "마커", "chain": "광류 사슬"}
+    rf = lambda f: float(vids[f].get("ref_f_px") or cfg["ref_f"]["value"])      # noqa: E731
+
+    def cell(f, v, key):
+        d = res[f][v].get(key) or {}
+        if "f" not in d:
+            return "실패" if d.get("failed") else "-"
+        return f"{d['f']:.0f} ({100 * (d['f'] / rf(f) - 1):+.1f}%)" + ("*" if d.get("boundary") else "") + (f", {d['pitch_deg']:.1f}°" if key == "ramp_free" else "")
+    k11 = f"ramp_{cfg['ramps_deg'][0]:g}"
+    L = ["# 121 마커 추적 summary", "",
+         "**새로 찍은 영상 6개. 마커 영상(팀원 손에 빨간 마커)은 마커 중심을 프레임마다 검출·매칭한 점으로, 나머지는 지금까지와 같은 광류 사슬(첫 정지 구간 기준)로 같은 추정(j16, free_template -> 경사 고정 / 함께 추정)을 돌린다. "
+         "마커 영상에는 광류 사슬도 함께 돌려 같은 영상에서 두 점 출처를 비교한다. 판정 없음.**", "",
+         "- 기준 f 는 이 파일에만 (새 폰 체커보드 값; 같은 폰으로 찍었다고 보고 적용). * = f 탐색 범위 끝. 함께 추정 칸의 각도 = 추정된 경사.",
+         "- 마커 추적에서 MediaPipe 는 찾을 영역(손 상자)과 기준 프레임에서 마커에 관절 번호를 붙이는 데만 쓴다. 좌표는 모두 마커 중심.", "",
+         "## f", "", f"| 영상 | 손 | 마커 | 점 출처 | 사용 프레임 | 경사 {cfg['ramps_deg'][0]:g}° 고정 | 함께 추정 | free_template | 책상 기울기 (도) | RMS (px) |", "|---|---|---|---|---|---|---|---|---|---|"]
+    for f in res:
+        for v in res[f]:
+            d = res[f][v]
+            g = d.get(k11) or {}
+            L.append(f"| {f} | {who.get(vids[f]['person'], vids[f]['person'])} | {'있음' if vids[f].get('markers') else '없음'} | {src[v]} | {d['n_use']} | {cell(f, v, k11)} | {cell(f, v, 'ramp_free')} | {cell(f, v, 'free_template')} | "
+                     + ("-" if "f" not in g else f"{g['desk_tilt_deg']:.1f}") + " | " + ("-" if "f" not in g else f"{g['rms_px']:.2f}") + " |")
+    L += ["", "## 마커 추적 정보", "", "| 영상 | 기준 프레임 | 기준 프레임 마커 수 | 그중 j16 이름 붙은 수 | 이름 못 붙은 관절 | 사용 프레임 비율 | 프레임당 j16 마커 중앙값 | 마커-검출 관절 거리 중앙값 (상자 %) | 기준 프레임에서 호모그래피 하나로 맞춘 잔차 중앙값 / 최대 (상자 %) | 버린 프레임 이유 |", "|---|---|---|---|---|---|---|---|---|---|"]
+    for f in res:
+        if "marker" in res[f]:
+            i = res[f]["marker"]["info"]
+            L.append(f"| {f} | {res[f]['marker']['ref']} | {i['ref_detections']} | {i['ref_named_in_joint_set']} | {i['missing_joints'] or '없음'} | {i['valid_ratio']:.2f} | {i['joints_per_valid_frame_median']} | {i['marker_to_mediapipe_median_pct']:.2f} | {i['ref_homography_rms_pct_median']:.2f} / {i['ref_homography_rms_pct_max']:.2f} | {i['reasons'] or '없음'} |")
+    L += ["", "## 광류 사슬 정보", "", "| 영상 | 기준 프레임 | 끊김 | inlier 중앙값 |", "|---|---|---|---|"]
+    for f in res:
+        i = res[f]["chain"]["info"]
+        L.append(f"| {f} | {res[f]['chain']['ref']} | {i['breaks']} | {i['inliers_median']:.0f} |")
+    L += ["", "## 한계", "", "- 영상 6개(마커 2, 나 2, 팀원 2). 마커는 피부에 찍은 점이라 피부와 함께 움직인다(뼈 관절의 위치가 아님).",
+          "- 마커 중심의 높이는 피부 표면이다. 책상 모델(평면 손 모양, 경사 고정)은 그대로다.", "- 마커 영상의 광류 사슬은 마커가 만든 무늬도 특징점으로 쓴다(마커 없는 영상과 조건이 다름).", ""]
+    return "\n".join(L) + "\n"
+
+
 
 def main(argv=None):
     ap = argparse.ArgumentParser(description="광류 방식 원인 확인 실험")
-    ap.add_argument("cmd", choices=["tracking-plane", "dorsum-corners", "two-plane", "joint-track-video", "geometry-synth", "pause-plane", "cotracker", "rotation-side", "points-video", "shape3d", "side-consistency", "shape-change", "pip-axis", "pause-plane2", "desk3d", "desk3d-contact", "stage-values", "stage-inputs", "cost-decompose", "lens-model", "repeatability"])
+    ap.add_argument("cmd", choices=["tracking-plane", "dorsum-corners", "two-plane", "joint-track-video", "geometry-synth", "pause-plane", "cotracker", "rotation-side", "points-video", "shape3d", "side-consistency", "shape-change", "pip-axis", "pause-plane2", "desk3d", "desk3d-contact", "stage-values", "stage-inputs", "cost-decompose", "lens-model", "repeatability", "marker-track"])
     ap.add_argument("--config", required=True)
     ap.add_argument("--out", default=None)
     ap.add_argument("--videos", type=int, default=None, help="시험 실행: 앞의 N 개 영상만, 추정 1건씩")
@@ -2735,7 +2955,7 @@ def main(argv=None):
               else s3_results_yaml(hf.resolve(a.run), own) if a.cmd == "shape3d" else sc_results_yaml(hf.resolve(a.run), own) if a.cmd == "side-consistency"
               else sh_results_yaml(hf.resolve(a.run), own) if a.cmd == "shape-change"
               else sc_results_yaml(hf.resolve(a.run), own) if a.cmd == "pip-axis" else pq_results_yaml(hf.resolve(a.run), own) if a.cmd == "pause-plane2"
-              else d3_results_yaml(hf.resolve(a.run), own) if a.cmd in ("desk3d", "desk3d-contact") else sv_results_yaml(hf.resolve(a.run), own) if a.cmd in ("stage-values", "stage-inputs") else cdx_results_yaml(hf.resolve(a.run), own) if a.cmd == "cost-decompose" else lm_results_yaml(hf.resolve(a.run), own) if a.cmd in ("lens-model", "repeatability") else jt_results_yaml(hf.resolve(a.run), own) if a.cmd == "joint-track-video"
+              else d3_results_yaml(hf.resolve(a.run), own) if a.cmd in ("desk3d", "desk3d-contact") else sv_results_yaml(hf.resolve(a.run), own) if a.cmd in ("stage-values", "stage-inputs") else cdx_results_yaml(hf.resolve(a.run), own) if a.cmd == "cost-decompose" else lm_results_yaml(hf.resolve(a.run), own) if a.cmd in ("lens-model", "repeatability", "marker-track") else jt_results_yaml(hf.resolve(a.run), own) if a.cmd == "joint-track-video"
               else results_yaml(a.cmd, hf.resolve(a.run), own))
         return None
     cfg = rof.load_settings({**own, "joint_set": "j16"} if own.get("joint_ids") else own)      # joint_ids 를 직접 적으면 joint_set 은 이름일 뿐이라 기본 묶음으로 읽고 아래에서 바꿈
@@ -2743,7 +2963,7 @@ def main(argv=None):
     cfg["videos"] = cfg["videos"] + [dict(v) for v in own.get("extra_videos", [])]      # 기본 설정 목록에 없는 새 영상 (file, person, ref_f_px)
     if own.get("joint_ids"):                                           # 기본 설정의 관절 묶음(j16, j21) 대신 직접 적은 관절 번호 (joint_set 은 이름으로만 씀)
         cfg["joint_ids"] = [int(j) for j in own["joint_ids"]]
-    cfg.update({k: own[k] for k in ("variants", "clahe", "two_plane", "joint_track", "render", "reference", "geometry_synth", "pause_plane", "cotracker", "rotation_side", "points_video", "shape3d", "side_consistency", "shape_change", "axis_base_joints", "pause_plane2", "desk3d", "stage_values", "stage_inputs", "cost_decompose", "lens_model", "repeatability") if k in own})
+    cfg.update({k: own[k] for k in ("variants", "clahe", "two_plane", "joint_track", "render", "reference", "geometry_synth", "pause_plane", "cotracker", "rotation_side", "points_video", "shape3d", "side_consistency", "shape_change", "axis_base_joints", "pause_plane2", "desk3d", "stage_values", "stage_inputs", "cost_decompose", "lens_model", "repeatability", "marker_track") if k in own})
     if a.videos:
         cfg["videos"] = cfg["videos"][:a.videos]
         cfg["free_starts_deg"] = []
@@ -2762,7 +2982,7 @@ def main(argv=None):
         shutil.copytree(hf.resolve(own["detection_cache_from"]), run_root / "detection_cache")
     import multiprocessing as mp
     from concurrent.futures import ProcessPoolExecutor
-    job = {"tracking-plane": tp_job, "dorsum-corners": dc_job, "two-plane": tw_points, "joint-track-video": jt_job, "geometry-synth": rof.video_points, "pause-plane": pp_job, "rotation-side": rs_load, "points-video": pv_job, "side-consistency": sc_load, "shape-change": sh_job, "pip-axis": sc_load, "pause-plane2": pq_job, "stage-values": sv_job, "stage-inputs": si_job}.get(a.cmd)
+    job = {"tracking-plane": tp_job, "dorsum-corners": dc_job, "two-plane": tw_points, "joint-track-video": jt_job, "geometry-synth": rof.video_points, "pause-plane": pp_job, "rotation-side": rs_load, "points-video": pv_job, "side-consistency": sc_load, "shape-change": sh_job, "pip-axis": sc_load, "pause-plane2": pq_job, "stage-values": sv_job, "stage-inputs": si_job, "marker-track": mt_job}.get(a.cmd)
     vid = {}
     if a.cmd == "cotracker":                                           # GPU 작업 + 추정을 ct_run 이 한꺼번에
         res = ct_run(cfg, own, log, run_root)
@@ -2812,6 +3032,9 @@ def main(argv=None):
     elif a.cmd == "stage-inputs":
         res = si_run(cfg, vid, log)
         text_sum = si_summary(res, cfg, own)
+    elif a.cmd == "marker-track":
+        res = mt_run(cfg, vid, log)
+        text_sum = mt_summary(res, cfg, own)
     elif a.cmd == "pip-axis":
         res = pa_run(cfg, vid, log)
         text_sum = sc_summary(res, cfg, own)
