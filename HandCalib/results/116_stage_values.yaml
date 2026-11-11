@@ -1,0 +1,617 @@
+experiment: 116_stage_values
+run: runs/116_stage_values/20261111T060509Z
+code_commit: c01a34b
+git_dirty_at_run: false
+videos:
+  IMG_7384.MOV:
+    fresp_prepare:
+      n_frames: 636
+      width: 1920
+      height: 1080
+      duration_s: 21.1667
+    mediapipe_track:
+      n_present: 636
+      detect_rate: 1.0
+      box_long_px_median: 502.3104
+      box_long_over_height: 0.4651
+      kconf_median: 0.9172
+      hand_angle_min_deg: -109.9121
+      hand_angle_max_deg: 67.206
+    od_select:
+      n_still: 285
+      still_motion_median_pct: 0.2244
+      motion_median_pct: 0.5753
+      shape_z_median: 1.7881
+    choose_reference_pose:
+      ref: 50
+      ref_time_s: 1.6667
+      ref_box_long_px: 519.5788
+    track_hand:
+      n_use: 636
+      breaks: 0
+      inliers_median: 205.0
+      inliers_p10: 158.4
+      inliers_min: 130.0
+      drift_median_pct: 1.5941
+      drift_p90_pct: 3.9571
+      max_diff_to_saved_px: 0.0
+    od_bridge:
+      n_frames: 636
+      n_points: 10176
+      cx: 960.0
+      cy: 540.0
+      huber_px_median: 8.5556
+    _restrict:
+      n_frames: 120
+      n_joints: 16
+      n_points: 1920
+    free_template:
+      f: 1514.8017
+      f_grid: 2344.0891
+      at_grid_edge: false
+      rms_px: 1.8326
+      profile_f:
+      - 672.0
+      - 825.7866
+      - 1041.2469
+      - 1279.5354
+      - 1613.3856
+      - 1982.6075
+      - 2499.9
+      - 3072.0
+      profile_cost:
+      - 20.3711
+      - 18.1032
+      - 16.6102
+      - 15.8656
+      - 15.4595
+      - 14.9871
+      - 14.9393
+      - 15.0773
+      profile_max_over_min: 1.3636
+      finger_over_palm_width:
+        index: 0.8706
+        middle: 1.0489
+        ring: 0.9898
+        pinky: 0.7654
+      finger_over_middle:
+        index: 0.83
+        middle: 1.0
+        ring: 0.9437
+        pinky: 0.7297
+    od_poses:
+      tilt_median_deg: 62.0219
+      tilt_p10_deg: 42.0051
+      tilt_p90_deg: 66.2846
+      turn_range_deg: 167.0673
+      res_median_pct: 0.3801
+    dk_estimate_ms:
+      ramp_11:
+        f: 1508.8813
+        pitch_deg: 11.0
+        roll_deg: 0.0
+        desk_tilt_deg: 45.1678
+        turn_range_deg: 178.3795
+        rms_px: 3.3391
+        cost: 11.0587
+        boundary: false
+        start: profile_6
+        profile_f:
+        - 672.0
+        - 825.7866
+        - 1041.2469
+        - 1279.5354
+        - 1613.3856
+        - 1982.6075
+        - 2499.9
+        - 3072.0
+        profile_cost:
+        - 64.5349
+        - 42.0933
+        - 22.6268
+        - 13.1643
+        - 11.3346
+        - 486.25
+        - 22.1152
+        - 506.6896
+      ramp_free:
+        f: 1511.7291
+        pitch_deg: 11.0061
+        roll_deg: -0.5577
+        desk_tilt_deg: 45.4311
+        turn_range_deg: 178.4862
+        rms_px: 3.3309
+        cost: 11.0123
+        boundary: false
+        start: profile_6
+        profile_f:
+        - 672.0
+        - 825.7866
+        - 1041.2469
+        - 1279.5354
+        - 1613.3856
+        - 1982.6075
+        - 2499.9
+        - 3072.0
+        profile_cost:
+        - 55.1451
+        - 40.7865
+        - 21.1495
+        - 12.6406
+        - 11.1779
+        - 447.0031
+        - 17.1501
+        - 499.0077
+        best_start: free_19
+        all_starts:
+          free_5:
+            f: 1511.7291
+            pitch_deg: 11.0061
+            cost: 11.0123
+          free_12:
+            f: 1511.7291
+            pitch_deg: 11.0061
+            cost: 11.0123
+          free_19:
+            f: 1511.7291
+            pitch_deg: 11.0061
+            cost: 11.0123
+  IMG_7385.MOV:
+    fresp_prepare:
+      n_frames: 569
+      width: 1920
+      height: 1080
+      duration_s: 18.9333
+    mediapipe_track:
+      n_present: 569
+      detect_rate: 1.0
+      box_long_px_median: 548.1039
+      box_long_over_height: 0.5075
+      kconf_median: 0.947
+      hand_angle_min_deg: -61.2141
+      hand_angle_max_deg: 75.9155
+    od_select:
+      n_still: 293
+      still_motion_median_pct: 0.2229
+      motion_median_pct: 0.4794
+      shape_z_median: 1.8681
+    choose_reference_pose:
+      ref: 40
+      ref_time_s: 1.3333
+      ref_box_long_px: 617.9622
+    track_hand:
+      n_use: 569
+      breaks: 0
+      inliers_median: 385.0
+      inliers_p10: 295.0
+      inliers_min: 232.0
+      drift_median_pct: 2.2474
+      drift_p90_pct: 4.2466
+      max_diff_to_saved_px: 0.0
+    od_bridge:
+      n_frames: 569
+      n_points: 9104
+      cx: 960.0
+      cy: 540.0
+      huber_px_median: 8.6462
+    _restrict:
+      n_frames: 120
+      n_joints: 16
+      n_points: 1920
+    free_template:
+      f: 3072.0
+      f_grid: 3072.0
+      at_grid_edge: true
+      rms_px: 0.9174
+      profile_f:
+      - 672.0
+      - 825.7866
+      - 1041.2469
+      - 1279.5354
+      - 1613.3856
+      - 1982.6075
+      - 2499.9
+      - 3072.0
+      profile_cost:
+      - 25.8567
+      - 19.218
+      - 14.3584
+      - 11.5314
+      - 9.2459
+      - 8.4641
+      - 8.0692
+      - 8.028
+      profile_max_over_min: 3.2208
+      finger_over_palm_width:
+        index: 0.9423
+        middle: 0.991
+        ring: 0.873
+        pinky: 0.6788
+      finger_over_middle:
+        index: 0.9509
+        middle: 1.0
+        ring: 0.881
+        pinky: 0.685
+    od_poses:
+      tilt_median_deg: 65.3475
+      tilt_p10_deg: 51.335
+      tilt_p90_deg: 69.8041
+      turn_range_deg: 83.2259
+      res_median_pct: 0.2442
+    dk_estimate_ms:
+      ramp_11:
+        f: 1717.8048
+        pitch_deg: 11.0
+        roll_deg: 0.0
+        desk_tilt_deg: 45.9539
+        turn_range_deg: 128.9748
+        rms_px: 3.4709
+        cost: 11.9495
+        boundary: false
+        start: profile_4
+        profile_f:
+        - 672.0
+        - 825.7866
+        - 1041.2469
+        - 1279.5354
+        - 1613.3856
+        - 1982.6075
+        - 2499.9
+        - 3072.0
+        profile_cost:
+        - 96.2511
+        - 65.3131
+        - 36.2055
+        - 19.7618
+        - 12.2547
+        - 13.2829
+        - 19.3038
+        - 26.3774
+      ramp_free:
+        f: 1797.2434
+        pitch_deg: 11.5996
+        roll_deg: 2.0712
+        desk_tilt_deg: 46.2484
+        turn_range_deg: 435.6352
+        rms_px: 3.43
+        cost: 11.6953
+        boundary: false
+        start: profile_4
+        profile_f:
+        - 672.0
+        - 825.7866
+        - 1041.2469
+        - 1279.5354
+        - 1613.3856
+        - 1982.6075
+        - 2499.9
+        - 3072.0
+        profile_cost:
+        - 70.6122
+        - 41.901
+        - 23.2575
+        - 15.2066
+        - 11.9642
+        - 11.8698
+        - 13.1988
+        - 14.8523
+        best_start: free_19
+        all_starts:
+          free_5:
+            f: 1797.2438
+            pitch_deg: 11.7215
+            cost: 11.6953
+          free_12:
+            f: 1797.2434
+            pitch_deg: 11.5996
+            cost: 11.6953
+          free_19:
+            f: 1797.2434
+            pitch_deg: 11.5996
+            cost: 11.6953
+  IMG_7387.MOV:
+    fresp_prepare:
+      n_frames: 565
+      width: 1920
+      height: 1080
+      duration_s: 18.8
+    mediapipe_track:
+      n_present: 565
+      detect_rate: 1.0
+      box_long_px_median: 526.1819
+      box_long_over_height: 0.4872
+      kconf_median: 0.8584
+      hand_angle_min_deg: -93.6032
+      hand_angle_max_deg: 43.7004
+    od_select:
+      n_still: 297
+      still_motion_median_pct: 0.1949
+      motion_median_pct: 0.428
+      shape_z_median: 2.1025
+    choose_reference_pose:
+      ref: 24
+      ref_time_s: 0.8
+      ref_box_long_px: 537.2544
+    track_hand:
+      n_use: 565
+      breaks: 0
+      inliers_median: 278.0
+      inliers_p10: 205.0
+      inliers_min: 166.0
+      drift_median_pct: 1.4916
+      drift_p90_pct: 2.968
+      max_diff_to_saved_px: 0.0
+    od_bridge:
+      n_frames: 565
+      n_points: 9040
+      cx: 960.0
+      cy: 540.0
+      huber_px_median: 8.5346
+    _restrict:
+      n_frames: 120
+      n_joints: 16
+      n_points: 1920
+    free_template:
+      f: 2988.4317
+      f_grid: 3072.0
+      at_grid_edge: true
+      rms_px: 1.0862
+      profile_f:
+      - 672.0
+      - 825.7866
+      - 1041.2469
+      - 1279.5354
+      - 1613.3856
+      - 1982.6075
+      - 2499.9
+      - 3072.0
+      profile_cost:
+      - 21.7259
+      - 18.9959
+      - 17.4327
+      - 16.8956
+      - 15.841
+      - 14.6465
+      - 14.0914
+      - 13.9632
+      profile_max_over_min: 1.5559
+      finger_over_palm_width:
+        index: 0.7608
+        middle: 0.8603
+        ring: 0.7939
+        pinky: 0.6058
+      finger_over_middle:
+        index: 0.8843
+        middle: 1.0
+        ring: 0.9227
+        pinky: 0.7042
+    od_poses:
+      tilt_median_deg: 70.9628
+      tilt_p10_deg: 58.5474
+      tilt_p90_deg: 73.4393
+      turn_range_deg: 130.5777
+      res_median_pct: 0.2627
+    dk_estimate_ms:
+      ramp_11:
+        f: 1378.1607
+        pitch_deg: 11.0
+        roll_deg: 0.0
+        desk_tilt_deg: 46.0181
+        turn_range_deg: 145.9032
+        rms_px: 3.3803
+        cost: 11.4216
+        boundary: false
+        start: profile_4
+        profile_f:
+        - 672.0
+        - 825.7866
+        - 1041.2469
+        - 1279.5354
+        - 1613.3856
+        - 1982.6075
+        - 2499.9
+        - 3072.0
+        profile_cost:
+        - 69.359
+        - 41.7218
+        - 20.1897
+        - 11.9722
+        - 13.3743
+        - 19.8921
+        - 29.0855
+        - 37.0322
+      ramp_free:
+        f: 1298.6966
+        pitch_deg: 8.909
+        roll_deg: 1.1902
+        desk_tilt_deg: 45.6909
+        turn_range_deg: 144.1769
+        rms_px: 3.2743
+        cost: 10.6774
+        boundary: false
+        start: profile_2
+        profile_f:
+        - 672.0
+        - 825.7866
+        - 1041.2469
+        - 1279.5354
+        - 1613.3856
+        - 1982.6075
+        - 2499.9
+        - 3072.0
+        profile_cost:
+        - 46.3512
+        - 32.6913
+        - 14.9717
+        - 10.6928
+        - 13.081
+        - 17.6401
+        - 23.0643
+        - 27.2839
+        best_start: free_12
+        all_starts:
+          free_5:
+            f: 1298.6967
+            pitch_deg: 8.7854
+            cost: 10.6774
+          free_12:
+            f: 1298.6966
+            pitch_deg: 8.909
+            cost: 10.6774
+          free_19:
+            f: 1298.6967
+            pitch_deg: 8.7854
+            cost: 10.6774
+  IMG_7388.MOV:
+    fresp_prepare:
+      n_frames: 635
+      width: 1920
+      height: 1080
+      duration_s: 21.1333
+    mediapipe_track:
+      n_present: 635
+      detect_rate: 1.0
+      box_long_px_median: 588.9706
+      box_long_over_height: 0.5453
+      kconf_median: 0.9524
+      hand_angle_min_deg: -69.7304
+      hand_angle_max_deg: 51.2299
+    od_select:
+      n_still: 376
+      still_motion_median_pct: 0.206
+      motion_median_pct: 0.3423
+      shape_z_median: 1.8239
+    choose_reference_pose:
+      ref: 56
+      ref_time_s: 1.8667
+      ref_box_long_px: 628.7167
+    track_hand:
+      n_use: 635
+      breaks: 0
+      inliers_median: 394.0
+      inliers_p10: 325.0
+      inliers_min: 232.0
+      drift_median_pct: 1.6733
+      drift_p90_pct: 3.0997
+      max_diff_to_saved_px: 0.0
+    od_bridge:
+      n_frames: 635
+      n_points: 10160
+      cx: 960.0
+      cy: 540.0
+      huber_px_median: 9.6352
+    _restrict:
+      n_frames: 120
+      n_joints: 16
+      n_points: 1920
+    free_template:
+      f: 3072.0
+      f_grid: 2597.5992
+      at_grid_edge: false
+      rms_px: 1.2306
+      profile_f:
+      - 672.0
+      - 825.7866
+      - 1041.2469
+      - 1279.5354
+      - 1613.3856
+      - 1982.6075
+      - 2499.9
+      - 3072.0
+      profile_cost:
+      - 26.9109
+      - 21.596
+      - 16.1692
+      - 12.7613
+      - 11.019
+      - 10.2374
+      - 10.005
+      - 10.0916
+      profile_max_over_min: 2.6898
+      finger_over_palm_width:
+        index: 0.9439
+        middle: 1.0198
+        ring: 0.9062
+        pinky: 0.6795
+      finger_over_middle:
+        index: 0.9256
+        middle: 1.0
+        ring: 0.8886
+        pinky: 0.6664
+    od_poses:
+      tilt_median_deg: 64.3674
+      tilt_p10_deg: 47.5917
+      tilt_p90_deg: 68.7524
+      turn_range_deg: 82.2843
+      res_median_pct: 0.1817
+    dk_estimate_ms:
+      ramp_11:
+        f: 1667.6323
+        pitch_deg: 11.0
+        roll_deg: 0.0
+        desk_tilt_deg: 44.0418
+        turn_range_deg: 126.5141
+        rms_px: 4.2144
+        cost: 17.4934
+        boundary: false
+        start: profile_4
+        profile_f:
+        - 672.0
+        - 825.7866
+        - 1041.2469
+        - 1279.5354
+        - 1613.3856
+        - 1982.6075
+        - 2499.9
+        - 3072.0
+        profile_cost:
+        - 115.0313
+        - 80.3079
+        - 45.9432
+        - 26.2285
+        - 17.6105
+        - 20.1931
+        - 29.2889
+        - 39.437
+      ramp_free:
+        f: 1790.5909
+        pitch_deg: 8.9051
+        roll_deg: -5.5761
+        desk_tilt_deg: 46.7085
+        turn_range_deg: 129.264
+        rms_px: 3.7661
+        cost: 14.1251
+        boundary: false
+        start: profile_5
+        profile_f:
+        - 672.0
+        - 825.7866
+        - 1041.2469
+        - 1279.5354
+        - 1613.3856
+        - 1982.6075
+        - 2499.9
+        - 3072.0
+        profile_cost:
+        - 116.5752
+        - 68.1438
+        - 35.1946
+        - 20.5421
+        - 14.6017
+        - 14.4753
+        - 16.941
+        - 19.8562
+        best_start: free_5
+        all_starts:
+          free_5:
+            f: 1790.5909
+            pitch_deg: 8.9051
+            cost: 14.1251
+          free_12:
+            f: 1790.5909
+            pitch_deg: 8.9051
+            cost: 14.1251
+          free_19:
+            f: 1790.5909
+            pitch_deg: 8.9051
+            cost: 14.1251
