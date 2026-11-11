@@ -1,0 +1,2505 @@
+experiment: 128_tracker_eval_mask
+run: runs/128_tracker_eval_mask/20261111T111650Z
+code_commit: 5a88d19
+git_dirty_at_run: false
+videos:
+  IMG_7399.MOV:
+    no_thumb:
+      info:
+        breaks: 0
+        inliers_median: 192.0
+        n_use: 628
+        n_body_median: null
+        n_finger_median: null
+      stats:
+        n_frames: 628
+        box_long_px_median: 245.3442
+        angle_min: -91.2118
+        angle_max: 41.9917
+        n_frames_by_angle:
+          -180~-60: 136
+          -60~-20: 90
+          -20~20: 250
+          20~60: 152
+          60~180: 0
+        rms_px:
+          total: 7.3213
+          nonplanar: 5.2132
+          chain_h: 5.1452
+        rms_pct_box:
+          total: 2.963
+          nonplanar: 2.1037
+          chain_h: 2.085
+        rms_px_by_angle:
+          total:
+            -180~-60: 12.9439
+            -60~-20: 6.9047
+            -20~20: 1.9281
+            20~60: 6.1033
+            60~180: null
+          nonplanar:
+            -180~-60: 9.3655
+            -60~-20: 5.535
+            -20~20: 1.3055
+            20~60: 3.5893
+            60~180: null
+          chain_h:
+            -180~-60: 9.0566
+            -60~-20: 4.0081
+            -20~20: 1.4012
+            20~60: 4.8214
+            60~180: null
+        rms_px_by_row:
+          total:
+            MCP: 6.1257
+            PIP: 5.5535
+            DIP: 6.7243
+            TIP: 10.0418
+          nonplanar:
+            MCP: 5.2705
+            PIP: 3.8478
+            DIP: 3.923
+            TIP: 7.1236
+          chain_h:
+            MCP: 3.0795
+            PIP: 3.7623
+            DIP: 5.5203
+            TIP: 7.1958
+        length_pct_by_angle:
+          chain:
+            -180~-60: 0.7436
+            -60~-20: 0.363
+            -20~20: -0.5518
+            20~60: -0.407
+            60~180: null
+          planar:
+            -180~-60: -1.5714
+            -60~-20: -1.3336
+            -20~20: -0.0131
+            20~60: 2.2013
+            60~180: null
+        width_pct_by_angle:
+          chain:
+            -180~-60: 3.9393
+            -60~-20: 1.4774
+            -20~20: 1.9649
+            20~60: -5.1309
+            60~180: null
+          planar:
+            -180~-60: 2.9506
+            -60~-20: 2.4575
+            -20~20: 0.9523
+            20~60: 0.3403
+            60~180: null
+        width_joints:
+        - 5
+        - 17
+      f:
+        on_marker:
+          n_use: 628
+          ramp_11:
+            f: 1541.8042
+            pitch_deg: 11.0
+            roll_deg: 0.0
+            desk_tilt_deg: 46.8935
+            turn_range_deg: 141.9466
+            rms_px: 2.3679
+            cost: 5.3841
+            boundary: false
+            start: profile_6
+          free_5:
+            f: 833.4381
+            pitch_deg: -78.6782
+            roll_deg: 71.3303
+            desk_tilt_deg: 16.6048
+            turn_range_deg: 144.5968
+            rms_px: 5.2628
+            cost: 20.1807
+            boundary: false
+            start: profile_3
+          free_12:
+            f: 833.4146
+            pitch_deg: -62.7594
+            roll_deg: -82.1114
+            desk_tilt_deg: 16.6048
+            turn_range_deg: 858.1373
+            rms_px: 5.2628
+            cost: 20.1808
+            boundary: false
+            start: free_template
+          free_19:
+            f: 833.4265
+            pitch_deg: -51.0013
+            roll_deg: -84.2681
+            desk_tilt_deg: 16.6052
+            turn_range_deg: 144.5976
+            rms_px: 5.2628
+            cost: 20.1807
+            boundary: false
+            start: free_template
+          ramp_free:
+            f: 833.4265
+            pitch_deg: -51.0013
+            roll_deg: -84.2681
+            desk_tilt_deg: 16.6052
+            turn_range_deg: 144.5976
+            rms_px: 5.2628
+            cost: 20.1807
+            boundary: false
+            start: free_template
+            best_start: free_19
+        joints_pts:
+          n_use: 628
+          ramp_11:
+            f: 1543.7447
+            pitch_deg: 11.0
+            roll_deg: 0.0
+            desk_tilt_deg: 46.4005
+            turn_range_deg: 140.681
+            rms_px: 2.3782
+            cost: 5.6557
+            boundary: false
+            start: profile_3
+    d0:
+      info:
+        breaks: 0
+        inliers_median: 182.0
+        n_use: 628
+        n_body_median: null
+        n_finger_median: null
+      stats:
+        n_frames: 628
+        box_long_px_median: 245.3442
+        angle_min: -91.2118
+        angle_max: 41.9917
+        n_frames_by_angle:
+          -180~-60: 136
+          -60~-20: 90
+          -20~20: 250
+          20~60: 152
+          60~180: 0
+        rms_px:
+          total: 6.4982
+          nonplanar: 5.2132
+          chain_h: 3.882
+        rms_pct_box:
+          total: 2.6571
+          nonplanar: 2.1037
+          chain_h: 1.6141
+        rms_px_by_angle:
+          total:
+            -180~-60: 10.3377
+            -60~-20: 6.03
+            -20~20: 2.5165
+            20~60: 6.8505
+            60~180: null
+          nonplanar:
+            -180~-60: 9.3655
+            -60~-20: 5.535
+            -20~20: 1.3055
+            20~60: 3.5893
+            60~180: null
+          chain_h:
+            -180~-60: 4.8886
+            -60~-20: 2.3582
+            -20~20: 2.144
+            20~60: 5.4797
+            60~180: null
+        rms_px_by_row:
+          total:
+            MCP: 6.3909
+            PIP: 5.4509
+            DIP: 5.5495
+            TIP: 8.2198
+          nonplanar:
+            MCP: 5.2705
+            PIP: 3.8478
+            DIP: 3.923
+            TIP: 7.1236
+          chain_h:
+            MCP: 5.0179
+            PIP: 3.2576
+            DIP: 3.3238
+            TIP: 3.666
+        length_pct_by_angle:
+          chain:
+            -180~-60: -0.5421
+            -60~-20: -1.2518
+            -20~20: -1.5506
+            20~60: -1.9976
+            60~180: null
+          planar:
+            -180~-60: -1.5714
+            -60~-20: -1.3336
+            -20~20: -0.0131
+            20~60: 2.2013
+            60~180: null
+        width_pct_by_angle:
+          chain:
+            -180~-60: 0.2193
+            -60~-20: -0.3294
+            -20~20: 0.6197
+            20~60: -11.7794
+            60~180: null
+          planar:
+            -180~-60: 2.9506
+            -60~-20: 2.4575
+            -20~20: 0.9523
+            20~60: 0.3403
+            60~180: null
+        width_joints:
+        - 5
+        - 17
+      f:
+        on_marker:
+          n_use: 628
+          ramp_11:
+            f: 1714.0044
+            pitch_deg: 11.0
+            roll_deg: 0.0
+            desk_tilt_deg: 46.4993
+            turn_range_deg: 145.1943
+            rms_px: 2.9827
+            cost: 8.1192
+            boundary: false
+            start: profile_0
+          free_5:
+            f: 1906.5832
+            pitch_deg: 15.0408
+            roll_deg: 4.1143
+            desk_tilt_deg: 43.6376
+            turn_range_deg: 144.5807
+            rms_px: 2.7184
+            cost: 6.5704
+            boundary: false
+            start: profile_2
+          free_12:
+            f: 1906.5836
+            pitch_deg: 15.0409
+            roll_deg: 4.1143
+            desk_tilt_deg: 43.6376
+            turn_range_deg: 144.5807
+            rms_px: 2.7184
+            cost: 6.5704
+            boundary: false
+            start: profile_3
+          free_19:
+            f: 1906.5832
+            pitch_deg: 15.0408
+            roll_deg: 4.1143
+            desk_tilt_deg: 43.6376
+            turn_range_deg: 144.5807
+            rms_px: 2.7184
+            cost: 6.5704
+            boundary: false
+            start: profile_2
+          ramp_free:
+            f: 1906.5832
+            pitch_deg: 15.0408
+            roll_deg: 4.1143
+            desk_tilt_deg: 43.6376
+            turn_range_deg: 144.5807
+            rms_px: 2.7184
+            cost: 6.5704
+            boundary: false
+            start: profile_2
+            best_start: free_5
+        joints_pts:
+          n_use: 628
+          ramp_11:
+            f: 1775.877
+            pitch_deg: 11.0
+            roll_deg: 0.0
+            desk_tilt_deg: 46.066
+            turn_range_deg: 144.1814
+            rms_px: 3.0248
+            cost: 9.0892
+            boundary: false
+            start: profile_5
+    md12:
+      info:
+        breaks: 0
+        inliers_median: 103.0
+        n_use: 628
+        n_body_median: null
+        n_finger_median: null
+      stats:
+        n_frames: 628
+        box_long_px_median: 245.3442
+        angle_min: -91.2118
+        angle_max: 41.9917
+        n_frames_by_angle:
+          -180~-60: 136
+          -60~-20: 90
+          -20~20: 250
+          20~60: 152
+          60~180: 0
+        rms_px:
+          total: 7.7597
+          nonplanar: 5.2132
+          chain_h: 5.7352
+        rms_pct_box:
+          total: 3.1383
+          nonplanar: 2.1037
+          chain_h: 2.3204
+        rms_px_by_angle:
+          total:
+            -180~-60: 13.7862
+            -60~-20: 7.4015
+            -20~20: 2.0476
+            20~60: 6.2798
+            60~180: null
+          nonplanar:
+            -180~-60: 9.3655
+            -60~-20: 5.535
+            -20~20: 1.3055
+            20~60: 3.5893
+            60~180: null
+          chain_h:
+            -180~-60: 10.1995
+            -60~-20: 4.7888
+            -20~20: 1.5503
+            20~60: 5.0284
+            60~180: null
+        rms_px_by_row:
+          total:
+            MCP: 6.4517
+            PIP: 5.8028
+            DIP: 7.2131
+            TIP: 10.6556
+          nonplanar:
+            MCP: 5.2705
+            PIP: 3.8478
+            DIP: 3.923
+            TIP: 7.1236
+          chain_h:
+            MCP: 3.5154
+            PIP: 4.1589
+            DIP: 6.1334
+            TIP: 8.0184
+        length_pct_by_angle:
+          chain:
+            -180~-60: 0.7354
+            -60~-20: 0.5424
+            -20~20: -0.7779
+            20~60: -0.6206
+            60~180: null
+          planar:
+            -180~-60: -1.5714
+            -60~-20: -1.3336
+            -20~20: -0.0131
+            20~60: 2.2013
+            60~180: null
+        width_pct_by_angle:
+          chain:
+            -180~-60: 3.2296
+            -60~-20: 0.4795
+            -20~20: 1.9674
+            20~60: -5.1775
+            60~180: null
+          planar:
+            -180~-60: 2.9506
+            -60~-20: 2.4575
+            -20~20: 0.9523
+            20~60: 0.3403
+            60~180: null
+        width_joints:
+        - 5
+        - 17
+      f:
+        on_marker:
+          n_use: 628
+          ramp_11:
+            f: 1530.1455
+            pitch_deg: 11.0
+            roll_deg: 0.0
+            desk_tilt_deg: 46.8997
+            turn_range_deg: 741.0905
+            rms_px: 2.2942
+            cost: 5.0767
+            boundary: false
+            start: profile_2
+          free_5:
+            f: 1498.4907
+            pitch_deg: 11.5451
+            roll_deg: 2.7494
+            desk_tilt_deg: 45.3821
+            turn_range_deg: 385.1542
+            rms_px: 2.1503
+            cost: 4.4537
+            boundary: false
+            start: profile_1
+          free_12:
+            f: 1498.4926
+            pitch_deg: 11.4428
+            roll_deg: 3.1533
+            desk_tilt_deg: 45.3821
+            turn_range_deg: 1821.1454
+            rms_px: 2.1503
+            cost: 4.4537
+            boundary: false
+            start: free_template
+          free_19:
+            f: 1498.4925
+            pitch_deg: 11.4017
+            roll_deg: 3.3005
+            desk_tilt_deg: 45.3821
+            turn_range_deg: 139.9233
+            rms_px: 2.1503
+            cost: 4.4537
+            boundary: false
+            start: free_template
+          ramp_free:
+            f: 1498.4926
+            pitch_deg: 11.4428
+            roll_deg: 3.1533
+            desk_tilt_deg: 45.3821
+            turn_range_deg: 1821.1454
+            rms_px: 2.1503
+            cost: 4.4537
+            boundary: false
+            start: free_template
+            best_start: free_12
+        joints_pts:
+          n_use: 628
+          ramp_11:
+            f: 1541.3097
+            pitch_deg: 11.0
+            roll_deg: 0.0
+            desk_tilt_deg: 46.5009
+            turn_range_deg: 140.2842
+            rms_px: 2.3096
+            cost: 5.3344
+            boundary: false
+            start: profile_3
+    d0_md12:
+      info:
+        breaks: 0
+        inliers_median: 96.0
+        n_use: 628
+        n_body_median: null
+        n_finger_median: null
+      stats:
+        n_frames: 628
+        box_long_px_median: 245.3442
+        angle_min: -91.2118
+        angle_max: 41.9917
+        n_frames_by_angle:
+          -180~-60: 136
+          -60~-20: 90
+          -20~20: 250
+          20~60: 152
+          60~180: 0
+        rms_px:
+          total: 6.6152
+          nonplanar: 5.2132
+          chain_h: 4.018
+        rms_pct_box:
+          total: 2.7009
+          nonplanar: 2.1037
+          chain_h: 1.6636
+        rms_px_by_angle:
+          total:
+            -180~-60: 10.7188
+            -60~-20: 6.1236
+            -20~20: 2.4286
+            20~60: 6.7918
+            60~180: null
+          nonplanar:
+            -180~-60: 9.3655
+            -60~-20: 5.535
+            -20~20: 1.3055
+            20~60: 3.5893
+            60~180: null
+          chain_h:
+            -180~-60: 5.4832
+            -60~-20: 2.5128
+            -20~20: 2.0331
+            20~60: 5.4095
+            60~180: null
+        rms_px_by_row:
+          total:
+            MCP: 6.3877
+            PIP: 5.4159
+            DIP: 5.7158
+            TIP: 8.4998
+          nonplanar:
+            MCP: 5.2705
+            PIP: 3.8478
+            DIP: 3.923
+            TIP: 7.1236
+          chain_h:
+            MCP: 4.7085
+            PIP: 3.3201
+            DIP: 3.6496
+            TIP: 4.2502
+        length_pct_by_angle:
+          chain:
+            -180~-60: -0.3999
+            -60~-20: -1.0456
+            -20~20: -1.7248
+            20~60: -2.2555
+            60~180: null
+          planar:
+            -180~-60: -1.5714
+            -60~-20: -1.3336
+            -20~20: -0.0131
+            20~60: 2.2013
+            60~180: null
+        width_pct_by_angle:
+          chain:
+            -180~-60: 0.8888
+            -60~-20: -0.0032
+            -20~20: 1.0002
+            20~60: -11.2253
+            60~180: null
+          planar:
+            -180~-60: 2.9506
+            -60~-20: 2.4575
+            -20~20: 0.9523
+            20~60: 0.3403
+            60~180: null
+        width_joints:
+        - 5
+        - 17
+      f:
+        on_marker:
+          n_use: 628
+          ramp_11:
+            f: 1685.1583
+            pitch_deg: 11.0
+            roll_deg: 0.0
+            desk_tilt_deg: 46.4619
+            turn_range_deg: 144.9471
+            rms_px: 3.0403
+            cost: 8.3707
+            boundary: false
+            start: profile_5
+          free_5:
+            f: 1880.5945
+            pitch_deg: 15.3037
+            roll_deg: 3.884
+            desk_tilt_deg: 43.5594
+            turn_range_deg: 144.4262
+            rms_px: 2.784
+            cost: 6.8471
+            boundary: false
+            start: profile_2
+          free_12:
+            f: 1880.5905
+            pitch_deg: 15.2629
+            roll_deg: 4.0447
+            desk_tilt_deg: 43.5594
+            turn_range_deg: 144.4262
+            rms_px: 2.784
+            cost: 6.8471
+            boundary: false
+            start: profile_3
+          free_19:
+            f: 1880.5945
+            pitch_deg: 15.3037
+            roll_deg: 3.884
+            desk_tilt_deg: 43.5594
+            turn_range_deg: 144.4262
+            rms_px: 2.784
+            cost: 6.8471
+            boundary: false
+            start: profile_2
+          ramp_free:
+            f: 1880.5945
+            pitch_deg: 15.3037
+            roll_deg: 3.884
+            desk_tilt_deg: 43.5594
+            turn_range_deg: 144.4262
+            rms_px: 2.784
+            cost: 6.8471
+            boundary: false
+            start: profile_2
+            best_start: free_19
+        joints_pts:
+          n_use: 628
+          ramp_11:
+            f: 1740.0434
+            pitch_deg: 11.0
+            roll_deg: 0.0
+            desk_tilt_deg: 45.7391
+            turn_range_deg: 143.6719
+            rms_px: 3.0784
+            cost: 9.3932
+            boundary: false
+            start: profile_5
+  IMG_7400.MOV:
+    no_thumb:
+      info:
+        breaks: 0
+        inliers_median: 223.0
+        n_use: 625
+        n_body_median: null
+        n_finger_median: null
+      stats:
+        n_frames: 625
+        box_long_px_median: 258.3041
+        angle_min: -91.7363
+        angle_max: 47.2357
+        n_frames_by_angle:
+          -180~-60: 126
+          -60~-20: 79
+          -20~20: 220
+          20~60: 200
+          60~180: 0
+        rms_px:
+          total: 8.1138
+          nonplanar: 5.548
+          chain_h: 5.8663
+        rms_pct_box:
+          total: 3.0961
+          nonplanar: 2.0776
+          chain_h: 2.2678
+        rms_px_by_angle:
+          total:
+            -180~-60: 13.7427
+            -60~-20: 7.2819
+            -20~20: 3.007
+            20~60: 7.4737
+            60~180: null
+          nonplanar:
+            -180~-60: 10.2421
+            -60~-20: 5.8336
+            -20~20: 1.393
+            20~60: 3.811
+            60~180: null
+          chain_h:
+            -180~-60: 9.2534
+            -60~-20: 4.2489
+            -20~20: 2.6475
+            20~60: 6.2256
+            60~180: null
+        rms_px_by_row:
+          total:
+            MCP: 7.1131
+            PIP: 5.7765
+            DIP: 7.2796
+            TIP: 11.2418
+          nonplanar:
+            MCP: 6.0365
+            PIP: 3.775
+            DIP: 3.8233
+            TIP: 7.6036
+          chain_h:
+            MCP: 5.0991
+            PIP: 4.3388
+            DIP: 5.8463
+            TIP: 7.6583
+        length_pct_by_angle:
+          chain:
+            -180~-60: -0.7657
+            -60~-20: -0.8726
+            -20~20: -1.4956
+            20~60: -1.2945
+            60~180: null
+          planar:
+            -180~-60: -1.489
+            -60~-20: -1.1788
+            -20~20: 0.13
+            20~60: 2.06
+            60~180: null
+        width_pct_by_angle:
+          chain:
+            -180~-60: -2.7933
+            -60~-20: -1.4782
+            -20~20: 0.0805
+            20~60: -8.4818
+            60~180: null
+          planar:
+            -180~-60: -0.0543
+            -60~-20: -0.5188
+            -20~20: -1.0382
+            20~60: -1.6075
+            60~180: null
+        width_joints:
+        - 5
+        - 17
+      f:
+        on_marker:
+          n_use: 625
+          ramp_11:
+            f: 1623.8447
+            pitch_deg: 11.0
+            roll_deg: 0.0
+            desk_tilt_deg: 48.0105
+            turn_range_deg: 150.6913
+            rms_px: 2.5458
+            cost: 6.3854
+            boundary: false
+            start: free_template
+          free_5:
+            f: 1614.0081
+            pitch_deg: 12.7321
+            roll_deg: 5.242
+            desk_tilt_deg: 45.0811
+            turn_range_deg: 148.6702
+            rms_px: 1.9624
+            cost: 3.8048
+            boundary: false
+            start: profile_3
+          free_12:
+            f: 1614.0102
+            pitch_deg: 12.7321
+            roll_deg: 5.242
+            desk_tilt_deg: 45.0811
+            turn_range_deg: 148.6703
+            rms_px: 1.9624
+            cost: 3.8048
+            boundary: false
+            start: profile_5
+          free_19:
+            f: 1614.0102
+            pitch_deg: 12.7321
+            roll_deg: 5.242
+            desk_tilt_deg: 45.0811
+            turn_range_deg: 148.6703
+            rms_px: 1.9624
+            cost: 3.8048
+            boundary: false
+            start: profile_5
+          ramp_free:
+            f: 1614.0102
+            pitch_deg: 12.7321
+            roll_deg: 5.242
+            desk_tilt_deg: 45.0811
+            turn_range_deg: 148.6703
+            rms_px: 1.9624
+            cost: 3.8048
+            boundary: false
+            start: profile_5
+            best_start: free_12
+        joints_pts:
+          n_use: 625
+          ramp_11:
+            f: 1665.0596
+            pitch_deg: 11.0
+            roll_deg: 0.0
+            desk_tilt_deg: 48.8198
+            turn_range_deg: 150.8276
+            rms_px: 2.9031
+            cost: 8.4282
+            boundary: false
+            start: profile_3
+    d0:
+      info:
+        breaks: 0
+        inliers_median: 184.0
+        n_use: 625
+        n_body_median: null
+        n_finger_median: null
+      stats:
+        n_frames: 625
+        box_long_px_median: 258.3041
+        angle_min: -91.7363
+        angle_max: 47.2357
+        n_frames_by_angle:
+          -180~-60: 126
+          -60~-20: 79
+          -20~20: 220
+          20~60: 200
+          60~180: 0
+        rms_px:
+          total: 7.6523
+          nonplanar: 5.548
+          chain_h: 5.1015
+        rms_pct_box:
+          total: 2.9627
+          nonplanar: 2.0776
+          chain_h: 2.038
+        rms_px_by_angle:
+          total:
+            -180~-60: 11.738
+            -60~-20: 6.8166
+            -20~20: 3.4824
+            20~60: 8.0311
+            60~180: null
+          nonplanar:
+            -180~-60: 10.2421
+            -60~-20: 5.8336
+            -20~20: 1.393
+            20~60: 3.811
+            60~180: null
+          chain_h:
+            -180~-60: 5.773
+            -60~-20: 3.4039
+            -20~20: 3.1665
+            20~60: 6.6878
+            60~180: null
+        rms_px_by_row:
+          total:
+            MCP: 7.9764
+            PIP: 5.9109
+            DIP: 6.3049
+            TIP: 9.7938
+          nonplanar:
+            MCP: 6.0365
+            PIP: 3.775
+            DIP: 3.8233
+            TIP: 7.6036
+          chain_h:
+            MCP: 6.606
+            PIP: 4.4318
+            DIP: 4.2634
+            TIP: 4.7586
+        length_pct_by_angle:
+          chain:
+            -180~-60: -1.0995
+            -60~-20: -1.4253
+            -20~20: -2.0712
+            20~60: -3.1049
+            60~180: null
+          planar:
+            -180~-60: -1.489
+            -60~-20: -1.1788
+            -20~20: 0.13
+            20~60: 2.06
+            60~180: null
+        width_pct_by_angle:
+          chain:
+            -180~-60: -3.8241
+            -60~-20: -1.6892
+            -20~20: 0.5081
+            20~60: -12.9982
+            60~180: null
+          planar:
+            -180~-60: -0.0543
+            -60~-20: -0.5188
+            -20~20: -1.0382
+            20~60: -1.6075
+            60~180: null
+        width_joints:
+        - 5
+        - 17
+      f:
+        on_marker:
+          n_use: 625
+          ramp_11:
+            f: 1616.7259
+            pitch_deg: 11.0
+            roll_deg: 0.0
+            desk_tilt_deg: 46.7969
+            turn_range_deg: 152.4452
+            rms_px: 2.8247
+            cost: 7.4868
+            boundary: false
+            start: profile_4
+          free_5:
+            f: 1801.753
+            pitch_deg: 16.1904
+            roll_deg: 1.4314
+            desk_tilt_deg: 43.8366
+            turn_range_deg: 152.8161
+            rms_px: 2.535
+            cost: 5.9452
+            boundary: false
+            start: profile_4
+          free_12:
+            f: 1801.753
+            pitch_deg: 16.0774
+            roll_deg: 2.4067
+            desk_tilt_deg: 43.8366
+            turn_range_deg: 152.8161
+            rms_px: 2.535
+            cost: 5.9452
+            boundary: false
+            start: profile_4
+          free_19:
+            f: 1801.753
+            pitch_deg: 16.0774
+            roll_deg: 2.4067
+            desk_tilt_deg: 43.8366
+            turn_range_deg: 152.8161
+            rms_px: 2.535
+            cost: 5.9452
+            boundary: false
+            start: profile_4
+          ramp_free:
+            f: 1801.753
+            pitch_deg: 16.1904
+            roll_deg: 1.4314
+            desk_tilt_deg: 43.8366
+            turn_range_deg: 152.8161
+            rms_px: 2.535
+            cost: 5.9452
+            boundary: false
+            start: profile_4
+            best_start: free_5
+        joints_pts:
+          n_use: 625
+          ramp_11:
+            f: 1661.4645
+            pitch_deg: 11.0
+            roll_deg: 0.0
+            desk_tilt_deg: 46.3592
+            turn_range_deg: 151.5097
+            rms_px: 2.9827
+            cost: 8.8755
+            boundary: false
+            start: free_template
+    md12:
+      info:
+        breaks: 0
+        inliers_median: 115.0
+        n_use: 625
+        n_body_median: null
+        n_finger_median: null
+      stats:
+        n_frames: 625
+        box_long_px_median: 258.3041
+        angle_min: -91.7363
+        angle_max: 47.2357
+        n_frames_by_angle:
+          -180~-60: 126
+          -60~-20: 79
+          -20~20: 220
+          20~60: 200
+          60~180: 0
+        rms_px:
+          total: 8.3476
+          nonplanar: 5.548
+          chain_h: 6.1814
+        rms_pct_box:
+          total: 3.1865
+          nonplanar: 2.0776
+          chain_h: 2.3865
+        rms_px_by_angle:
+          total:
+            -180~-60: 14.194
+            -60~-20: 7.3717
+            -20~20: 2.774
+            20~60: 7.8039
+            60~180: null
+          nonplanar:
+            -180~-60: 10.2421
+            -60~-20: 5.8336
+            -20~20: 1.393
+            20~60: 3.811
+            60~180: null
+          chain_h:
+            -180~-60: 9.9496
+            -60~-20: 4.4065
+            -20~20: 2.3743
+            20~60: 6.5702
+            60~180: null
+        rms_px_by_row:
+          total:
+            MCP: 7.2242
+            PIP: 5.8811
+            DIP: 7.553
+            TIP: 11.6148
+          nonplanar:
+            MCP: 6.0365
+            PIP: 3.775
+            DIP: 3.8233
+            TIP: 7.6036
+          chain_h:
+            MCP: 5.1748
+            PIP: 4.5273
+            DIP: 6.2097
+            TIP: 8.1856
+        length_pct_by_angle:
+          chain:
+            -180~-60: -0.6926
+            -60~-20: -0.6135
+            -20~20: -1.595
+            20~60: -1.7185
+            60~180: null
+          planar:
+            -180~-60: -1.489
+            -60~-20: -1.1788
+            -20~20: 0.13
+            20~60: 2.06
+            60~180: null
+        width_pct_by_angle:
+          chain:
+            -180~-60: -3.7851
+            -60~-20: -2.5999
+            -20~20: -0.0902
+            20~60: -9.0585
+            60~180: null
+          planar:
+            -180~-60: -0.0543
+            -60~-20: -0.5188
+            -20~20: -1.0382
+            20~60: -1.6075
+            60~180: null
+        width_joints:
+        - 5
+        - 17
+      f:
+        on_marker:
+          n_use: 625
+          ramp_11:
+            f: 1612.637
+            pitch_deg: 11.0
+            roll_deg: 0.0
+            desk_tilt_deg: 47.9738
+            turn_range_deg: 150.3729
+            rms_px: 2.3662
+            cost: 5.532
+            boundary: false
+            start: profile_6
+          free_5:
+            f: 1609.5717
+            pitch_deg: 12.723
+            roll_deg: 4.7825
+            desk_tilt_deg: 45.2593
+            turn_range_deg: 379.9312
+            rms_px: 1.8523
+            cost: 3.4058
+            boundary: false
+            start: free_template
+          free_12:
+            f: 1609.5717
+            pitch_deg: 12.723
+            roll_deg: 4.7825
+            desk_tilt_deg: 45.2593
+            turn_range_deg: 148.5979
+            rms_px: 1.8523
+            cost: 3.4058
+            boundary: false
+            start: free_template
+          free_19:
+            f: 1609.5717
+            pitch_deg: 12.723
+            roll_deg: 4.7825
+            desk_tilt_deg: 45.2593
+            turn_range_deg: 148.5979
+            rms_px: 1.8523
+            cost: 3.4058
+            boundary: false
+            start: free_template
+          ramp_free:
+            f: 1609.5717
+            pitch_deg: 12.723
+            roll_deg: 4.7825
+            desk_tilt_deg: 45.2593
+            turn_range_deg: 379.9312
+            rms_px: 1.8523
+            cost: 3.4058
+            boundary: false
+            start: free_template
+            best_start: free_5
+        joints_pts:
+          n_use: 625
+          ramp_11:
+            f: 1651.4798
+            pitch_deg: 11.0
+            roll_deg: 0.0
+            desk_tilt_deg: 48.6406
+            turn_range_deg: 150.4357
+            rms_px: 2.6764
+            cost: 7.1633
+            boundary: false
+            start: profile_3
+    d0_md12:
+      info:
+        breaks: 0
+        inliers_median: 97.0
+        n_use: 625
+        n_body_median: null
+        n_finger_median: null
+      stats:
+        n_frames: 625
+        box_long_px_median: 258.3041
+        angle_min: -91.7363
+        angle_max: 47.2357
+        n_frames_by_angle:
+          -180~-60: 126
+          -60~-20: 79
+          -20~20: 220
+          20~60: 200
+          60~180: 0
+        rms_px:
+          total: 7.6398
+          nonplanar: 5.548
+          chain_h: 5.0355
+        rms_pct_box:
+          total: 2.9508
+          nonplanar: 2.0776
+          chain_h: 2.0045
+        rms_px_by_angle:
+          total:
+            -180~-60: 12.0093
+            -60~-20: 6.8206
+            -20~20: 3.1505
+            20~60: 7.8894
+            60~180: null
+          nonplanar:
+            -180~-60: 10.2421
+            -60~-20: 5.8336
+            -20~20: 1.393
+            20~60: 3.811
+            60~180: null
+          chain_h:
+            -180~-60: 6.1511
+            -60~-20: 3.3719
+            -20~20: 2.7986
+            20~60: 6.5034
+            60~180: null
+        rms_px_by_row:
+          total:
+            MCP: 7.6145
+            PIP: 5.6415
+            DIP: 6.4291
+            TIP: 10.1157
+          nonplanar:
+            MCP: 6.0365
+            PIP: 3.775
+            DIP: 3.8233
+            TIP: 7.6036
+          chain_h:
+            MCP: 6.0465
+            PIP: 4.1666
+            DIP: 4.3837
+            TIP: 5.3186
+        length_pct_by_angle:
+          chain:
+            -180~-60: -0.5569
+            -60~-20: -0.9084
+            -20~20: -1.8358
+            20~60: -2.928
+            60~180: null
+          planar:
+            -180~-60: -1.489
+            -60~-20: -1.1788
+            -20~20: 0.13
+            20~60: 2.06
+            60~180: null
+        width_pct_by_angle:
+          chain:
+            -180~-60: -3.2889
+            -60~-20: -1.4791
+            -20~20: 0.3222
+            20~60: -12.2697
+            60~180: null
+          planar:
+            -180~-60: -0.0543
+            -60~-20: -0.5188
+            -20~20: -1.0382
+            20~60: -1.6075
+            60~180: null
+        width_joints:
+        - 5
+        - 17
+      f:
+        on_marker:
+          n_use: 625
+          ramp_11:
+            f: 1561.3133
+            pitch_deg: 11.0
+            roll_deg: 0.0
+            desk_tilt_deg: 46.5571
+            turn_range_deg: 151.7464
+            rms_px: 2.8492
+            cost: 7.5214
+            boundary: false
+            start: profile_3
+          free_5:
+            f: 1767.4956
+            pitch_deg: 16.5187
+            roll_deg: -0.0979
+            desk_tilt_deg: 43.7683
+            turn_range_deg: 152.7464
+            rms_px: 2.5646
+            cost: 6.0858
+            boundary: false
+            start: profile_5
+          free_12:
+            f: 1767.4984
+            pitch_deg: 16.5084
+            roll_deg: 0.6023
+            desk_tilt_deg: 43.7683
+            turn_range_deg: 152.7464
+            rms_px: 2.5646
+            cost: 6.0858
+            boundary: false
+            start: profile_5
+          free_19:
+            f: 1767.4978
+            pitch_deg: 16.4857
+            roll_deg: 1.064
+            desk_tilt_deg: 43.7683
+            turn_range_deg: 457.2209
+            rms_px: 2.5646
+            cost: 6.0858
+            boundary: false
+            start: profile_5
+          ramp_free:
+            f: 1767.4984
+            pitch_deg: 16.5084
+            roll_deg: 0.6023
+            desk_tilt_deg: 43.7683
+            turn_range_deg: 152.7464
+            rms_px: 2.5646
+            cost: 6.0858
+            boundary: false
+            start: profile_5
+            best_start: free_12
+        joints_pts:
+          n_use: 625
+          ramp_11:
+            f: 1753.8227
+            pitch_deg: 11.0
+            roll_deg: 0.0
+            desk_tilt_deg: 49.2003
+            turn_range_deg: 154.5417
+            rms_px: 3.9829
+            cost: 15.7201
+            boundary: false
+            start: profile_4
+  IMG_7405.MOV:
+    no_thumb:
+      info:
+        breaks: 0
+        inliers_median: 263.0
+        n_use: 576
+        n_body_median: null
+        n_finger_median: null
+      stats:
+        n_frames: 575
+        box_long_px_median: 284.2725
+        angle_min: -81.4796
+        angle_max: 61.785
+        n_frames_by_angle:
+          -180~-60: 101
+          -60~-20: 52
+          -20~20: 257
+          20~60: 158
+          60~180: 7
+        rms_px:
+          total: 8.8914
+          nonplanar: 6.4351
+          chain_h: 6.3867
+        rms_pct_box:
+          total: 3.5128
+          nonplanar: 2.5067
+          chain_h: 2.5124
+        rms_px_by_angle:
+          total:
+            -180~-60: 15.9248
+            -60~-20: 8.6965
+            -20~20: 3.0551
+            20~60: 9.0118
+            60~180: 9.4813
+          nonplanar:
+            -180~-60: 11.7679
+            -60~-20: 7.3718
+            -20~20: 1.7323
+            20~60: 6.1101
+            60~180: 6.416
+          chain_h:
+            -180~-60: 11.6945
+            -60~-20: 4.7627
+            -20~20: 2.5027
+            20~60: 6.4338
+            60~180: 6.675
+        rms_px_by_row:
+          total:
+            MCP: 5.0129
+            PIP: 11.2048
+            DIP: 6.6604
+            TIP: 10.3362
+          nonplanar:
+            MCP: 4.5115
+            PIP: 7.5598
+            DIP: 5.3839
+            TIP: 7.3187
+          chain_h:
+            MCP: 5.3001
+            PIP: 5.8115
+            DIP: 6.3863
+            TIP: 7.5721
+        length_pct_by_angle:
+          chain:
+            -180~-60: 0.0309
+            -60~-20: -0.4153
+            -20~20: -1.1522
+            20~60: -0.7108
+            60~180: -0.6749
+          planar:
+            -180~-60: -1.4069
+            -60~-20: -0.7269
+            -20~20: -0.0211
+            20~60: 1.3402
+            60~180: 1.2748
+        width_pct_by_angle:
+          chain:
+            -180~-60: 14.8461
+            -60~-20: 11.6912
+            -20~20: 2.3408
+            20~60: 1.8835
+            60~180: 2.0424
+          planar:
+            -180~-60: 6.7225
+            -60~-20: 7.0992
+            -20~20: 0.6146
+            20~60: 6.3379
+            60~180: 6.3824
+        width_joints:
+        - 5
+        - 13
+      f:
+        on_marker:
+          n_use: 575
+          ramp_11:
+            f: 1775.7741
+            pitch_deg: 11.0
+            roll_deg: 0.0
+            desk_tilt_deg: 47.4972
+            turn_range_deg: 145.9653
+            rms_px: 3.1257
+            cost: 9.2245
+            boundary: false
+            start: profile_6
+          free_5:
+            f: 1532.433
+            pitch_deg: 8.5056
+            roll_deg: 4.3745
+            desk_tilt_deg: 46.5596
+            turn_range_deg: 142.9536
+            rms_px: 2.1985
+            cost: 4.8332
+            boundary: false
+            start: profile_3
+          free_12:
+            f: 1532.433
+            pitch_deg: 8.4954
+            roll_deg: 4.3944
+            desk_tilt_deg: 46.5596
+            turn_range_deg: 142.9536
+            rms_px: 2.1985
+            cost: 4.8332
+            boundary: false
+            start: profile_3
+          free_19:
+            f: 1532.433
+            pitch_deg: 8.4954
+            roll_deg: 4.3944
+            desk_tilt_deg: 46.5596
+            turn_range_deg: 142.9536
+            rms_px: 2.1985
+            cost: 4.8332
+            boundary: false
+            start: profile_3
+          ramp_free:
+            f: 1532.433
+            pitch_deg: 8.4954
+            roll_deg: 4.3944
+            desk_tilt_deg: 46.5596
+            turn_range_deg: 142.9536
+            rms_px: 2.1985
+            cost: 4.8332
+            boundary: false
+            start: profile_3
+            best_start: free_12
+        joints_pts:
+          n_use: 576
+          ramp_11:
+            f: 1775.2987
+            pitch_deg: 11.0
+            roll_deg: 0.0
+            desk_tilt_deg: 47.876
+            turn_range_deg: 145.9389
+            rms_px: 3.4201
+            cost: 11.6576
+            boundary: false
+            start: profile_5
+    d0:
+      info:
+        breaks: 0
+        inliers_median: 208.0
+        n_use: 576
+        n_body_median: null
+        n_finger_median: null
+      stats:
+        n_frames: 575
+        box_long_px_median: 284.2725
+        angle_min: -81.4796
+        angle_max: 61.785
+        n_frames_by_angle:
+          -180~-60: 101
+          -60~-20: 52
+          -20~20: 257
+          20~60: 158
+          60~180: 7
+        rms_px:
+          total: 8.1721
+          nonplanar: 6.4351
+          chain_h: 5.3068
+        rms_pct_box:
+          total: 3.2958
+          nonplanar: 2.5067
+          chain_h: 2.1816
+        rms_px_by_angle:
+          total:
+            -180~-60: 12.9533
+            -60~-20: 8.5407
+            -20~20: 4.3327
+            20~60: 8.8009
+            60~180: 9.207
+          nonplanar:
+            -180~-60: 11.7679
+            -60~-20: 7.3718
+            -20~20: 1.7323
+            20~60: 6.1101
+            60~180: 6.416
+          chain_h:
+            -180~-60: 7.0165
+            -60~-20: 4.4844
+            -20~20: 3.9826
+            20~60: 6.0763
+            60~180: 6.1589
+        rms_px_by_row:
+          total:
+            MCP: 4.8008
+            PIP: 10.1509
+            DIP: 6.6601
+            TIP: 9.2195
+          nonplanar:
+            MCP: 4.5115
+            PIP: 7.5598
+            DIP: 5.3839
+            TIP: 7.3187
+          chain_h:
+            MCP: 5.3569
+            PIP: 5.7779
+            DIP: 4.9402
+            TIP: 5.1281
+        length_pct_by_angle:
+          chain:
+            -180~-60: -1.5866
+            -60~-20: -1.8537
+            -20~20: -1.4753
+            20~60: -1.3114
+            60~180: -1.2995
+          planar:
+            -180~-60: -1.4069
+            -60~-20: -0.7269
+            -20~20: -0.0211
+            20~60: 1.3402
+            60~180: 1.2748
+        width_pct_by_angle:
+          chain:
+            -180~-60: 9.5151
+            -60~-20: 9.9144
+            -20~20: 3.8843
+            20~60: 1.2005
+            60~180: 1.4783
+          planar:
+            -180~-60: 6.7225
+            -60~-20: 7.0992
+            -20~20: 0.6146
+            20~60: 6.3379
+            60~180: 6.3824
+        width_joints:
+        - 5
+        - 13
+      f:
+        on_marker:
+          n_use: 575
+          ramp_11:
+            f: 1853.2077
+            pitch_deg: 11.0
+            roll_deg: 0.0
+            desk_tilt_deg: 47.3472
+            turn_range_deg: 148.1957
+            rms_px: 2.8857
+            cost: 8.2523
+            boundary: false
+            start: profile_5
+          free_5:
+            f: 1727.2127
+            pitch_deg: 10.9236
+            roll_deg: 4.407
+            desk_tilt_deg: 45.4821
+            turn_range_deg: 146.002
+            rms_px: 2.217
+            cost: 4.914
+            boundary: false
+            start: free_template
+          free_12:
+            f: 1727.2127
+            pitch_deg: 10.9236
+            roll_deg: 4.407
+            desk_tilt_deg: 45.4821
+            turn_range_deg: 146.002
+            rms_px: 2.217
+            cost: 4.914
+            boundary: false
+            start: free_template
+          free_19:
+            f: 1727.2127
+            pitch_deg: 10.9236
+            roll_deg: 4.407
+            desk_tilt_deg: 45.4821
+            turn_range_deg: 146.002
+            rms_px: 2.217
+            cost: 4.914
+            boundary: false
+            start: free_template
+          ramp_free:
+            f: 1727.2127
+            pitch_deg: 10.9236
+            roll_deg: 4.407
+            desk_tilt_deg: 45.4821
+            turn_range_deg: 146.002
+            rms_px: 2.217
+            cost: 4.914
+            boundary: false
+            start: free_template
+            best_start: free_19
+        joints_pts:
+          n_use: 576
+          ramp_11:
+            f: 1870.4316
+            pitch_deg: 11.0
+            roll_deg: 0.0
+            desk_tilt_deg: 47.2293
+            turn_range_deg: 147.9595
+            rms_px: 2.9544
+            cost: 8.7284
+            boundary: false
+            start: profile_4
+    md12:
+      info:
+        breaks: 0
+        inliers_median: 144.0
+        n_use: 576
+        n_body_median: null
+        n_finger_median: null
+      stats:
+        n_frames: 575
+        box_long_px_median: 284.2725
+        angle_min: -81.4796
+        angle_max: 61.785
+        n_frames_by_angle:
+          -180~-60: 101
+          -60~-20: 52
+          -20~20: 257
+          20~60: 158
+          60~180: 7
+        rms_px:
+          total: 9.2794
+          nonplanar: 6.4351
+          chain_h: 6.9655
+        rms_pct_box:
+          total: 3.6189
+          nonplanar: 2.5067
+          chain_h: 2.6752
+        rms_px_by_angle:
+          total:
+            -180~-60: 17.1768
+            -60~-20: 9.0641
+            -20~20: 2.8258
+            20~60: 8.9584
+            60~180: 9.4438
+          nonplanar:
+            -180~-60: 11.7679
+            -60~-20: 7.3718
+            -20~20: 1.7323
+            20~60: 6.1101
+            60~180: 6.416
+          chain_h:
+            -180~-60: 13.4745
+            -60~-20: 5.4382
+            -20~20: 2.2366
+            20~60: 6.3772
+            60~180: 6.6622
+        rms_px_by_row:
+          total:
+            MCP: 5.152
+            PIP: 11.6633
+            DIP: 6.9481
+            TIP: 10.8506
+          nonplanar:
+            MCP: 4.5115
+            PIP: 7.5598
+            DIP: 5.3839
+            TIP: 7.3187
+          chain_h:
+            MCP: 5.394
+            PIP: 6.2509
+            DIP: 7.1116
+            TIP: 8.3947
+        length_pct_by_angle:
+          chain:
+            -180~-60: -0.0602
+            -60~-20: -0.4164
+            -20~20: -1.0023
+            20~60: -0.3275
+            60~180: -0.3091
+          planar:
+            -180~-60: -1.4069
+            -60~-20: -0.7269
+            -20~20: -0.0211
+            20~60: 1.3402
+            60~180: 1.2748
+        width_pct_by_angle:
+          chain:
+            -180~-60: 14.1454
+            -60~-20: 11.3502
+            -20~20: 1.9471
+            20~60: 1.922
+            60~180: 2.1004
+          planar:
+            -180~-60: 6.7225
+            -60~-20: 7.0992
+            -20~20: 0.6146
+            20~60: 6.3379
+            60~180: 6.3824
+        width_joints:
+        - 5
+        - 13
+      f:
+        on_marker:
+          n_use: 575
+          ramp_11:
+            f: 1808.4299
+            pitch_deg: 11.0
+            roll_deg: 0.0
+            desk_tilt_deg: 47.4741
+            turn_range_deg: 145.5614
+            rms_px: 2.9448
+            cost: 8.2166
+            boundary: false
+            start: profile_4
+          free_5:
+            f: 1567.1851
+            pitch_deg: 8.6619
+            roll_deg: 4.3102
+            desk_tilt_deg: 46.5114
+            turn_range_deg: 142.6176
+            rms_px: 2.0304
+            cost: 4.1227
+            boundary: false
+            start: profile_5
+          free_12:
+            f: 1567.1851
+            pitch_deg: 8.6619
+            roll_deg: 4.3102
+            desk_tilt_deg: 46.5114
+            turn_range_deg: 142.6176
+            rms_px: 2.0304
+            cost: 4.1227
+            boundary: false
+            start: profile_5
+          free_19:
+            f: 1567.1851
+            pitch_deg: 8.6619
+            roll_deg: 4.3102
+            desk_tilt_deg: 46.5114
+            turn_range_deg: 142.6176
+            rms_px: 2.0304
+            cost: 4.1227
+            boundary: false
+            start: profile_5
+          ramp_free:
+            f: 1567.1851
+            pitch_deg: 8.6619
+            roll_deg: 4.3102
+            desk_tilt_deg: 46.5114
+            turn_range_deg: 142.6176
+            rms_px: 2.0304
+            cost: 4.1227
+            boundary: false
+            start: profile_5
+            best_start: free_5
+        joints_pts:
+          n_use: 576
+          ramp_11:
+            f: 1795.1142
+            pitch_deg: 11.0
+            roll_deg: 0.0
+            desk_tilt_deg: 47.8543
+            turn_range_deg: 145.5224
+            rms_px: 3.259
+            cost: 10.5763
+            boundary: false
+            start: profile_4
+    d0_md12:
+      info:
+        breaks: 0
+        inliers_median: 111.0
+        n_use: 576
+        n_body_median: null
+        n_finger_median: null
+      stats:
+        n_frames: 575
+        box_long_px_median: 284.2725
+        angle_min: -81.4796
+        angle_max: 61.785
+        n_frames_by_angle:
+          -180~-60: 101
+          -60~-20: 52
+          -20~20: 257
+          20~60: 158
+          60~180: 7
+        rms_px:
+          total: 8.2661
+          nonplanar: 6.4351
+          chain_h: 5.4647
+        rms_pct_box:
+          total: 3.3149
+          nonplanar: 2.5067
+          chain_h: 2.2139
+        rms_px_by_angle:
+          total:
+            -180~-60: 13.5033
+            -60~-20: 8.6595
+            -20~20: 4.0838
+            20~60: 8.7457
+            60~180: 9.1536
+          nonplanar:
+            -180~-60: 11.7679
+            -60~-20: 7.3718
+            -20~20: 1.7323
+            20~60: 6.1101
+            60~180: 6.416
+          chain_h:
+            -180~-60: 8.0482
+            -60~-20: 4.7203
+            -20~20: 3.7144
+            20~60: 5.9879
+            60~180: 6.0917
+        rms_px_by_row:
+          total:
+            MCP: 4.7709
+            PIP: 10.3723
+            DIP: 6.5439
+            TIP: 9.3792
+          nonplanar:
+            MCP: 4.5115
+            PIP: 7.5598
+            DIP: 5.3839
+            TIP: 7.3187
+          chain_h:
+            MCP: 5.3972
+            PIP: 5.9147
+            DIP: 5.1687
+            TIP: 5.333
+        length_pct_by_angle:
+          chain:
+            -180~-60: -1.312
+            -60~-20: -1.7418
+            -20~20: -1.6081
+            20~60: -1.105
+            60~180: -1.0917
+          planar:
+            -180~-60: -1.4069
+            -60~-20: -0.7269
+            -20~20: -0.0211
+            20~60: 1.3402
+            60~180: 1.2748
+        width_pct_by_angle:
+          chain:
+            -180~-60: 8.6309
+            -60~-20: 9.3094
+            -20~20: 2.6479
+            20~60: 1.2773
+            60~180: 1.6024
+          planar:
+            -180~-60: 6.7225
+            -60~-20: 7.0992
+            -20~20: 0.6146
+            20~60: 6.3379
+            60~180: 6.3824
+        width_joints:
+        - 5
+        - 13
+      f:
+        on_marker:
+          n_use: 575
+          ramp_11:
+            f: 1888.3294
+            pitch_deg: 11.0
+            roll_deg: 0.0
+            desk_tilt_deg: 47.3978
+            turn_range_deg: 148.0868
+            rms_px: 2.9511
+            cost: 8.6272
+            boundary: false
+            start: profile_5
+          free_5:
+            f: 1770.1701
+            pitch_deg: 11.3014
+            roll_deg: 4.8731
+            desk_tilt_deg: 45.2346
+            turn_range_deg: 145.8001
+            rms_px: 2.1644
+            cost: 4.6839
+            boundary: false
+            start: profile_6
+          free_12:
+            f: 1770.1701
+            pitch_deg: 11.3014
+            roll_deg: 4.8731
+            desk_tilt_deg: 45.2346
+            turn_range_deg: 145.8001
+            rms_px: 2.1644
+            cost: 4.6839
+            boundary: false
+            start: profile_6
+          free_19:
+            f: 1770.1701
+            pitch_deg: 11.3014
+            roll_deg: 4.8731
+            desk_tilt_deg: 45.2346
+            turn_range_deg: 145.8001
+            rms_px: 2.1644
+            cost: 4.6839
+            boundary: false
+            start: profile_6
+          ramp_free:
+            f: 1770.1701
+            pitch_deg: 11.3014
+            roll_deg: 4.8731
+            desk_tilt_deg: 45.2346
+            turn_range_deg: 145.8001
+            rms_px: 2.1644
+            cost: 4.6839
+            boundary: false
+            start: profile_6
+            best_start: free_12
+        joints_pts:
+          n_use: 576
+          ramp_11:
+            f: 1905.9951
+            pitch_deg: 11.0
+            roll_deg: 0.0
+            desk_tilt_deg: 47.3139
+            turn_range_deg: 147.8804
+            rms_px: 3.029
+            cost: 9.1748
+            boundary: false
+            start: profile_4
+  IMG_7406.MOV:
+    no_thumb:
+      info:
+        breaks: 0
+        inliers_median: 256.0
+        n_use: 661
+        n_body_median: null
+        n_finger_median: null
+      stats:
+        n_frames: 657
+        box_long_px_median: 283.8104
+        angle_min: -82.9934
+        angle_max: 59.7438
+        n_frames_by_angle:
+          -180~-60: 147
+          -60~-20: 58
+          -20~20: 264
+          20~60: 188
+          60~180: 0
+        rms_px:
+          total: 9.0993
+          nonplanar: 7.1049
+          chain_h: 6.2251
+        rms_pct_box:
+          total: 3.7096
+          nonplanar: 2.8307
+          chain_h: 2.5517
+        rms_px_by_angle:
+          total:
+            -180~-60: 14.1528
+            -60~-20: 8.0768
+            -20~20: 3.8605
+            20~60: 9.6742
+            60~180: null
+          nonplanar:
+            -180~-60: 11.87
+            -60~-20: 7.0913
+            -20~20: 1.6445
+            20~60: 6.9327
+            60~180: null
+          chain_h:
+            -180~-60: 9.281
+            -60~-20: 4.0991
+            -20~20: 3.5693
+            20~60: 6.7083
+            60~180: null
+        rms_px_by_row:
+          total:
+            MCP: 5.604
+            PIP: 12.2994
+            DIP: 6.7432
+            TIP: 9.4546
+          nonplanar:
+            MCP: 4.9254
+            PIP: 8.8043
+            DIP: 5.9745
+            TIP: 7.602
+          chain_h:
+            MCP: 6.2526
+            PIP: 5.961
+            DIP: 5.7993
+            TIP: 6.8436
+        length_pct_by_angle:
+          chain:
+            -180~-60: -3.5074
+            -60~-20: -3.4172
+            -20~20: -0.4368
+            20~60: 7.7304
+            60~180: null
+          planar:
+            -180~-60: -2.2125
+            -60~-20: -1.1467
+            -20~20: -0.0075
+            20~60: 10.2653
+            60~180: null
+        width_pct_by_angle:
+          chain:
+            -180~-60: 13.7091
+            -60~-20: 11.2546
+            -20~20: 1.6609
+            20~60: 0.0535
+            60~180: null
+          planar:
+            -180~-60: 5.8715
+            -60~-20: 5.5764
+            -20~20: 0.7445
+            20~60: 7.3882
+            60~180: null
+        width_joints:
+        - 5
+        - 13
+      f:
+        on_marker:
+          n_use: 657
+          ramp_11:
+            f: 1822.3136
+            pitch_deg: 11.0
+            roll_deg: 0.0
+            desk_tilt_deg: 47.67
+            turn_range_deg: 149.0978
+            rms_px: 3.2334
+            cost: 10.0354
+            boundary: false
+            start: profile_5
+          free_5:
+            f: 1566.6327
+            pitch_deg: 8.6362
+            roll_deg: 4.7156
+            desk_tilt_deg: 46.3251
+            turn_range_deg: 146.0406
+            rms_px: 2.278
+            cost: 5.189
+            boundary: false
+            start: free_template
+          free_12:
+            f: 1566.6328
+            pitch_deg: 8.658
+            roll_deg: 4.6754
+            desk_tilt_deg: 46.3251
+            turn_range_deg: 146.0406
+            rms_px: 2.278
+            cost: 5.189
+            boundary: false
+            start: free_template
+          free_19:
+            f: 1566.6328
+            pitch_deg: 8.658
+            roll_deg: 4.6754
+            desk_tilt_deg: 46.3251
+            turn_range_deg: 146.0406
+            rms_px: 2.278
+            cost: 5.189
+            boundary: false
+            start: free_template
+          ramp_free:
+            f: 1566.6327
+            pitch_deg: 8.6362
+            roll_deg: 4.7156
+            desk_tilt_deg: 46.3251
+            turn_range_deg: 146.0406
+            rms_px: 2.278
+            cost: 5.189
+            boundary: false
+            start: free_template
+            best_start: free_5
+        joints_pts:
+          n_use: 661
+          ramp_11:
+            f: 1836.211
+            pitch_deg: 11.0
+            roll_deg: 0.0
+            desk_tilt_deg: 47.9977
+            turn_range_deg: 149.2893
+            rms_px: 3.6225
+            cost: 13.1052
+            boundary: false
+            start: profile_6
+    d0:
+      info:
+        breaks: 0
+        inliers_median: 198.5
+        n_use: 661
+        n_body_median: null
+        n_finger_median: null
+      stats:
+        n_frames: 657
+        box_long_px_median: 283.8104
+        angle_min: -82.9934
+        angle_max: 59.7438
+        n_frames_by_angle:
+          -180~-60: 147
+          -60~-20: 58
+          -20~20: 264
+          20~60: 188
+          60~180: 0
+        rms_px:
+          total: 8.6065
+          nonplanar: 7.1049
+          chain_h: 5.2992
+        rms_pct_box:
+          total: 3.5122
+          nonplanar: 2.8307
+          chain_h: 2.1933
+        rms_px_by_angle:
+          total:
+            -180~-60: 12.4195
+            -60~-20: 8.8529
+            -20~20: 4.8417
+            20~60: 9.083
+            60~180: null
+          nonplanar:
+            -180~-60: 11.87
+            -60~-20: 7.0913
+            -20~20: 1.6445
+            20~60: 6.9327
+            60~180: null
+          chain_h:
+            -180~-60: 5.7776
+            -60~-20: 5.4074
+            -20~20: 4.6011
+            20~60: 5.7695
+            60~180: null
+        rms_px_by_row:
+          total:
+            MCP: 4.7209
+            PIP: 10.7669
+            DIP: 7.5139
+            TIP: 9.4052
+          nonplanar:
+            MCP: 4.9254
+            PIP: 8.8043
+            DIP: 5.9745
+            TIP: 7.602
+          chain_h:
+            MCP: 5.6803
+            PIP: 5.4618
+            DIP: 4.6741
+            TIP: 5.4248
+        length_pct_by_angle:
+          chain:
+            -180~-60: -4.2689
+            -60~-20: -4.1648
+            -20~20: -0.1146
+            20~60: 8.5481
+            60~180: null
+          planar:
+            -180~-60: -2.2125
+            -60~-20: -1.1467
+            -20~20: -0.0075
+            20~60: 10.2653
+            60~180: null
+        width_pct_by_angle:
+          chain:
+            -180~-60: 9.5943
+            -60~-20: 9.4359
+            -20~20: 3.2213
+            20~60: 0.7569
+            60~180: null
+          planar:
+            -180~-60: 5.8715
+            -60~-20: 5.5764
+            -20~20: 0.7445
+            20~60: 7.3882
+            60~180: null
+        width_joints:
+        - 5
+        - 13
+      f:
+        on_marker:
+          n_use: 657
+          ramp_11:
+            f: 1916.4348
+            pitch_deg: 11.0
+            roll_deg: 0.0
+            desk_tilt_deg: 47.2356
+            turn_range_deg: 509.4459
+            rms_px: 3.0565
+            cost: 9.2864
+            boundary: false
+            start: free_template
+          free_5:
+            f: 1753.3766
+            pitch_deg: 10.5572
+            roll_deg: 4.7391
+            desk_tilt_deg: 45.3166
+            turn_range_deg: 148.545
+            rms_px: 2.3277
+            cost: 5.4182
+            boundary: false
+            start: profile_6
+          free_12:
+            f: 1753.3766
+            pitch_deg: 10.7239
+            roll_deg: 4.3449
+            desk_tilt_deg: 45.3166
+            turn_range_deg: 725.7862
+            rms_px: 2.3277
+            cost: 5.4182
+            boundary: false
+            start: profile_6
+          free_19:
+            f: 1753.3765
+            pitch_deg: 10.5126
+            roll_deg: 4.8383
+            desk_tilt_deg: 45.3166
+            turn_range_deg: 148.545
+            rms_px: 2.3277
+            cost: 5.4182
+            boundary: false
+            start: profile_6
+          ramp_free:
+            f: 1753.3765
+            pitch_deg: 10.5126
+            roll_deg: 4.8383
+            desk_tilt_deg: 45.3166
+            turn_range_deg: 148.545
+            rms_px: 2.3277
+            cost: 5.4182
+            boundary: false
+            start: profile_6
+            best_start: free_19
+        joints_pts:
+          n_use: 661
+          ramp_11:
+            f: 1852.5228
+            pitch_deg: 11.0
+            roll_deg: 0.0
+            desk_tilt_deg: 46.2325
+            turn_range_deg: 149.6345
+            rms_px: 2.7487
+            cost: 7.5554
+            boundary: false
+            start: profile_5
+    md12:
+      info:
+        breaks: 0
+        inliers_median: 142.0
+        n_use: 661
+        n_body_median: null
+        n_finger_median: null
+      stats:
+        n_frames: 657
+        box_long_px_median: 283.8104
+        angle_min: -82.9934
+        angle_max: 59.7438
+        n_frames_by_angle:
+          -180~-60: 147
+          -60~-20: 58
+          -20~20: 264
+          20~60: 188
+          60~180: 0
+        rms_px:
+          total: 9.5369
+          nonplanar: 7.1049
+          chain_h: 6.8621
+        rms_pct_box:
+          total: 3.8275
+          nonplanar: 2.8307
+          chain_h: 2.7279
+        rms_px_by_angle:
+          total:
+            -180~-60: 15.329
+            -60~-20: 8.521
+            -20~20: 3.9444
+            20~60: 9.5821
+            60~180: null
+          nonplanar:
+            -180~-60: 11.87
+            -60~-20: 7.0913
+            -20~20: 1.6445
+            20~60: 6.9327
+            60~180: null
+          chain_h:
+            -180~-60: 10.9957
+            -60~-20: 4.9358
+            -20~20: 3.6616
+            20~60: 6.6089
+            60~180: null
+        rms_px_by_row:
+          total:
+            MCP: 5.9871
+            PIP: 12.9646
+            DIP: 6.9888
+            TIP: 9.8117
+          nonplanar:
+            MCP: 4.9254
+            PIP: 8.8043
+            DIP: 5.9745
+            TIP: 7.602
+          chain_h:
+            MCP: 6.6306
+            PIP: 6.7922
+            DIP: 6.5398
+            TIP: 7.3962
+        length_pct_by_angle:
+          chain:
+            -180~-60: -3.5878
+            -60~-20: -3.4015
+            -20~20: -0.3821
+            20~60: 7.9612
+            60~180: null
+          planar:
+            -180~-60: -2.2125
+            -60~-20: -1.1467
+            -20~20: -0.0075
+            20~60: 10.2653
+            60~180: null
+        width_pct_by_angle:
+          chain:
+            -180~-60: 14.1094
+            -60~-20: 11.7582
+            -20~20: 1.7819
+            20~60: 0.2708
+            60~180: null
+          planar:
+            -180~-60: 5.8715
+            -60~-20: 5.5764
+            -20~20: 0.7445
+            20~60: 7.3882
+            60~180: null
+        width_joints:
+        - 5
+        - 13
+      f:
+        on_marker:
+          n_use: 657
+          ramp_11:
+            f: 1876.2406
+            pitch_deg: 11.0
+            roll_deg: 0.0
+            desk_tilt_deg: 47.8188
+            turn_range_deg: 149.057
+            rms_px: 3.3546
+            cost: 10.6789
+            boundary: false
+            start: profile_6
+          free_5:
+            f: 1607.4389
+            pitch_deg: 8.826
+            roll_deg: 5.0194
+            desk_tilt_deg: 46.2808
+            turn_range_deg: 145.8472
+            rms_px: 2.3215
+            cost: 5.3883
+            boundary: false
+            start: profile_5
+          free_12:
+            f: 1607.4389
+            pitch_deg: 8.8406
+            roll_deg: 4.9936
+            desk_tilt_deg: 46.2808
+            turn_range_deg: 145.8472
+            rms_px: 2.3215
+            cost: 5.3883
+            boundary: false
+            start: profile_5
+          free_19:
+            f: 1607.4389
+            pitch_deg: 8.8363
+            roll_deg: 5.0012
+            desk_tilt_deg: 46.2808
+            turn_range_deg: 145.8472
+            rms_px: 2.3215
+            cost: 5.3883
+            boundary: false
+            start: profile_5
+          ramp_free:
+            f: 1607.4389
+            pitch_deg: 8.8363
+            roll_deg: 5.0012
+            desk_tilt_deg: 46.2808
+            turn_range_deg: 145.8472
+            rms_px: 2.3215
+            cost: 5.3883
+            boundary: false
+            start: profile_5
+            best_start: free_19
+        joints_pts:
+          n_use: 661
+          ramp_11:
+            f: 1880.7055
+            pitch_deg: 11.0
+            roll_deg: 0.0
+            desk_tilt_deg: 48.1281
+            turn_range_deg: 149.2349
+            rms_px: 3.7483
+            cost: 13.9982
+            boundary: false
+            start: profile_6
+    d0_md12:
+      info:
+        breaks: 0
+        inliers_median: 108.0
+        n_use: 661
+        n_body_median: null
+        n_finger_median: null
+      stats:
+        n_frames: 657
+        box_long_px_median: 283.8104
+        angle_min: -82.9934
+        angle_max: 59.7438
+        n_frames_by_angle:
+          -180~-60: 147
+          -60~-20: 58
+          -20~20: 264
+          20~60: 188
+          60~180: 0
+        rms_px:
+          total: 8.6932
+          nonplanar: 7.1049
+          chain_h: 5.4874
+        rms_pct_box:
+          total: 3.5413
+          nonplanar: 2.8307
+          chain_h: 2.2515
+        rms_px_by_angle:
+          total:
+            -180~-60: 12.7881
+            -60~-20: 8.8307
+            -20~20: 4.6451
+            20~60: 9.1267
+            60~180: null
+          nonplanar:
+            -180~-60: 11.87
+            -60~-20: 7.0913
+            -20~20: 1.6445
+            20~60: 6.9327
+            60~180: null
+          chain_h:
+            -180~-60: 6.7228
+            -60~-20: 5.4047
+            -20~20: 4.3892
+            20~60: 5.8159
+            60~180: null
+        rms_px_by_row:
+          total:
+            MCP: 5.274
+            PIP: 11.3368
+            DIP: 7.1202
+            TIP: 9.0905
+          nonplanar:
+            MCP: 4.9254
+            PIP: 8.8043
+            DIP: 5.9745
+            TIP: 7.602
+          chain_h:
+            MCP: 6.1488
+            PIP: 5.8889
+            DIP: 4.7179
+            TIP: 5.2558
+        length_pct_by_angle:
+          chain:
+            -180~-60: -4.2263
+            -60~-20: -4.1159
+            -20~20: -0.1266
+            20~60: 8.4008
+            60~180: null
+          planar:
+            -180~-60: -2.2125
+            -60~-20: -1.1467
+            -20~20: -0.0075
+            20~60: 10.2653
+            60~180: null
+        width_pct_by_angle:
+          chain:
+            -180~-60: 10.7373
+            -60~-20: 10.7654
+            -20~20: 3.8092
+            20~60: 0.864
+            60~180: null
+          planar:
+            -180~-60: 5.8715
+            -60~-20: 5.5764
+            -20~20: 0.7445
+            20~60: 7.3882
+            60~180: null
+        width_joints:
+        - 5
+        - 13
+      f:
+        on_marker:
+          n_use: 657
+          ramp_11:
+            f: 1948.65
+            pitch_deg: 11.0
+            roll_deg: 0.0
+            desk_tilt_deg: 47.5462
+            turn_range_deg: 151.0686
+            rms_px: 3.348
+            cost: 10.9992
+            boundary: false
+            start: profile_5
+          free_5:
+            f: 1764.8034
+            pitch_deg: 10.4998
+            roll_deg: 5.364
+            desk_tilt_deg: 45.2803
+            turn_range_deg: 148.3052
+            rms_px: 2.387
+            cost: 5.6968
+            boundary: false
+            start: profile_4
+          free_12:
+            f: 1764.8041
+            pitch_deg: 10.5066
+            roll_deg: 5.3504
+            desk_tilt_deg: 45.2803
+            turn_range_deg: 148.3052
+            rms_px: 2.387
+            cost: 5.6968
+            boundary: false
+            start: profile_4
+          free_19:
+            f: 1764.8037
+            pitch_deg: 10.5188
+            roll_deg: 5.3263
+            desk_tilt_deg: 45.2803
+            turn_range_deg: 148.3052
+            rms_px: 2.387
+            cost: 5.6968
+            boundary: false
+            start: profile_4
+          ramp_free:
+            f: 1764.8034
+            pitch_deg: 10.4998
+            roll_deg: 5.364
+            desk_tilt_deg: 45.2803
+            turn_range_deg: 148.3052
+            rms_px: 2.387
+            cost: 5.6968
+            boundary: false
+            start: profile_4
+            best_start: free_5
+        joints_pts:
+          n_use: 661
+          ramp_11:
+            f: 1991.113
+            pitch_deg: 11.0
+            roll_deg: 0.0
+            desk_tilt_deg: 47.9084
+            turn_range_deg: 151.3453
+            rms_px: 3.8475
+            cost: 14.8031
+            boundary: false
+            start: profile_4
