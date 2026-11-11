@@ -2398,10 +2398,133 @@ def cdx_results_yaml(run_dir: Path, own: dict) -> Path:
     return p
 
 
+# ----------------------------------------------------------------------------------------------------
+# 119: 렌즈 모델 (주점, 왜곡)을 넣었을 때의 f - 저장된 추적점, 같은 추정
+# ----------------------------------------------------------------------------------------------------
+def lm_ecfg(base: dict, var: dict, long_side: float) -> dict:
+    """추정 설정 base 에 렌즈 변형 var 를 넣은 것. var = {principal_point: "center" | [cx, cy], distortion: null | {k1, k2, p1, p2, calib_f_px}}.
+    handfocal.undistort 는 왜곡 계수를 K_d = [[L, 0, cx], [0, L, cy]] (L = 긴 변) 기준으로 받는다. 체커보드 보정의 계수는 보정 f 기준(정규화 좌표 r = r_px / f)이므로
+    k1' = k1 (L / f)^2, k2' = k2 (L / f)^4, p' = p (L / f) 로 바꿔 넣는다 (같은 px 위치에서 같은 왜곡량)."""
+    e = copy.deepcopy(base)
+    e["principal_point"] = var.get("principal_point", "center")
+    d = var.get("distortion")
+    if d:
+        s = float(long_side) / float(d["calib_f_px"])
+        e["distortion"] = [float(d["k1"]) * s ** 2, float(d["k2"]) * s ** 4, float(d.get("p1", 0.0)) * s, float(d.get("p2", 0.0)) * s]
+    else:
+        e["distortion"] = None
+    return e
+
+
+def lm_run(cfg: dict, own: dict, log) -> dict:
+    """119: 영상 x 렌즈 변형마다 free_template(tl_template_job) -> 경사 고정·함께 추정(ms2_job). 추적점은 저장된 점 그대로(왜곡 보정은 free_problem 안의 undistort 가 한다)."""
+    import multiprocessing as mp
+    from concurrent.futures import ProcessPoolExecutor
+    lm = cfg["lens_model"]
+    pts = {e["file"]: load_points(lm["points"][e["file"]], e["file"]) for e in cfg["videos"]}
+    res, items = {}, []
+    for f, x in pts.items():
+        W, H = x["size"]
+        res[f] = {"n_use": int(x["use"].sum()), "variants": {}}
+        for vn, var in lm["variants"].items():
+            ec = lm_ecfg(cfg["pipeline"]["estimate"], var, max(W, H))
+            kp = x["kp"][x["use"]][:, cfg["joint_ids"]]
+            und = hf.undistort(kp, ec, W, H)
+            sh = np.linalg.norm(und - kp, axis=2)
+            res[f]["variants"][vn] = {"principal_point": list(hf.principal_point(ec, W, H)), "distortion_L": ec["distortion"],
+                                      "undistort_shift_px_median": float(np.nanmedian(sh)), "undistort_shift_px_p90": float(np.nanpercentile(sh, 90)), "undistort_shift_px_max": float(np.nanmax(sh))}
+            items.append((f, vn, (x["kp"], np.isfinite(x["kp"]).all(2), np.flatnonzero(x["use"]), x["box"], tuple(x["size"]), ec, cfg["joint_ids"])))
+    log(f"  free_template {len(items)}건")
+    with ProcessPoolExecutor(max_workers=int(cfg["workers"]), mp_context=mp.get_context("spawn")) as ex:
+        fts = list(ex.map(hf.tl_template_job, [a for _, _, a in items], chunksize=1))
+    todo = [(f"ramp_{r:g}", "ramp_fixed", r) for r in cfg["ramps_deg"]] + [(f"free_{r:g}", "ramp_free", r) for r in cfg["free_starts_deg"]]
+    jobs, keys = [], []
+    keep = ("f", "pitch_deg", "roll_deg", "desk_tilt_deg", "turn_range_deg", "rms_px", "cost", "boundary", "start")
+    for (f, vn, a), ft in zip(items, fts):
+        A = ft.get("A")
+        grid = hf.f_grid(a[5], max(*a[4]))
+        res[f]["variants"][vn]["free_template"] = {"failed": ft.get("failed")} if A is None else {"f": float(A["f"]), "boundary": hf.od_boundary(float(A["f"]), grid), "rms_px": float((A.get("ba") or {}).get("rms_px", np.nan))}
+        if A is None:
+            continue
+        for mk, mode, r in todo:
+            jobs.append(a + (A, mode, r))
+            keys.append((f, vn, mk))
+    log(f"  추정 {len(jobs)}건")
+    with ProcessPoolExecutor(max_workers=int(cfg["workers"]), mp_context=mp.get_context("spawn")) as ex:
+        for (f, vn, mk), o in zip(keys, ex.map(hf.ms2_job, jobs, chunksize=1)):
+            res[f]["variants"][vn][mk] = {kk: o[kk] for kk in keep if kk in o} if "failed" not in o else o
+    for f in res:
+        for vn, d in res[f]["variants"].items():
+            free = {k: v for k, v in d.items() if k.startswith("free_") and k != "free_template" and isinstance(v, dict) and "cost" in v}
+            if free:
+                bk = min(free, key=lambda k: free[k]["cost"])
+                d["ramp_free"] = {**free[bk], "best_start": bk}
+    return res
+
+
+def lm_summary(res: dict, cfg: dict, own: dict) -> str:
+    lm = cfg["lens_model"]
+    vids = {e["file"]: e for e in cfg["videos"]}
+    order = sorted(res, key=lambda f: (vids[f]["person"] != "teammate", f))
+    vn = list(lm["variants"])
+    who = {"teammate": "팀원", "self": "나"}
+    rf = lambda f: float(vids[f].get("ref_f_px") or cfg["ref_f"]["value"])      # noqa: E731
+
+    def cell(f, v, key):
+        d = res[f]["variants"][v].get(key) or {}
+        if "f" not in d:
+            return "-"
+        s = f"{d['f']:.0f} ({100 * (d['f'] / rf(f) - 1):+.1f}%)" + ("*" if d.get("boundary") else "")
+        return s + (f", {d['pitch_deg']:.1f}°" if key == "ramp_free" else "")
+    L = ["# 119 렌즈 모델 summary", "",
+         "**같은 폰(새 폰)으로 찍은 영상의 저장된 추적점에, 체커보드 보정의 주점과 왜곡 계수를 넣어 같은 추정(free_template -> 경사 고정 / 함께 추정)을 다시 돌린다. 판정 없음.**", "",
+         "- 기준 f 는 이 파일에만. * = f 탐색 범위 끝. 함께 추정 칸의 각도 = 추정된 경사.",
+         "- 변형: " + " ; ".join(f"{k} = 주점 {v.get('principal_point', 'center')}, 왜곡 {'없음' if not v.get('distortion') else {kk: v['distortion'][kk] for kk in ('k1', 'k2')}}" for k, v in lm["variants"].items()), "",
+         "## 왜곡 보정으로 추적점이 옮겨진 거리 (px, 사용 프레임의 j16 관절)", "", "| 영상 | 묶음 | " + " | ".join(f"{v} 중앙값 / 상위 10% / 최대" for v in vn) + " |", "|---|---|" + "---|" * len(vn)]
+    for f in order:
+        L.append(f"| {f} | {who.get(vids[f]['person'], vids[f]['person'])} | " + " | ".join(
+            f"{res[f]['variants'][v]['undistort_shift_px_median']:.2f} / {res[f]['variants'][v]['undistort_shift_px_p90']:.2f} / {res[f]['variants'][v]['undistort_shift_px_max']:.2f}" for v in vn) + " |")
+    for key, title in [(f"ramp_{r:g}", f"경사 {r:g}° 고정") for r in cfg["ramps_deg"]] + [("ramp_free", "경사 함께 추정"), ("free_template", "free_template")]:
+        L += ["", f"## {title}: f (오차)", "", "| 영상 | 묶음 | " + " | ".join(vn) + " |", "|---|---|" + "---|" * len(vn)]
+        for f in order:
+            L.append(f"| {f} | {who.get(vids[f]['person'], vids[f]['person'])} | " + " | ".join(cell(f, v, key) for v in vn) + " |")
+        if key != "free_template":
+            for grp in ("teammate", "self"):
+                fs = [f for f in order if vids[f]["person"] == grp]
+                if not fs:
+                    continue
+                row = []
+                for v in vn:
+                    e = [100 * ((res[f]["variants"][v].get(key) or {}).get("f", np.nan) / rf(f) - 1) for f in fs]
+                    row.append(f"중앙값 {np.nanmedian(e):+.1f}%, 절댓값 중앙값 {np.nanmedian(np.abs(e)):.1f}%, 범위 {np.nanmin(e):+.1f} ~ {np.nanmax(e):+.1f}%")
+                L.append(f"| {who[grp]} {len(fs)}개 | | " + " | ".join(row) + " |")
+    key = f"ramp_{cfg['ramps_deg'][0]:g}"
+    L += ["", f"## 경사 {cfg['ramps_deg'][0]:g}° 고정: 책상 기울기 (도) / RMS (px)", "", "| 영상 | 묶음 | " + " | ".join(vn) + " |", "|---|---|" + "---|" * len(vn)]
+    for f in order:
+        g = lambda v: res[f]["variants"][v].get(key) or {}      # noqa: E731
+        L.append(f"| {f} | {who.get(vids[f]['person'], '')} | " + " | ".join("-" if "f" not in g(v) else f"{g(v)['desk_tilt_deg']:.1f} / {g(v)['rms_px']:.2f}" for v in vn) + " |")
+    L += ["", "## 한계", "", "- 왜곡 계수를 긴 변 기준으로 바꿀 때 체커보드 보정의 f(기준 f 와 같은 값)를 썼다. 진단용이며, 실제 사용에서는 왜곡 계수가 f 없이 주어지지 않는다.",
+          "- 추적(광류 사슬)은 왜곡이 있는 원래 영상에서 한 그대로다. 보정은 추적점 좌표에만 적용했다.", "- 영상 8개(사람당 4개), 새 폰만.", ""]
+    return "\n".join(L) + "\n"
+
+
+def lm_results_yaml(run_dir: Path, own: dict) -> Path:
+    """119 의 값만 (기준 f, 오차 없음)."""
+    r = json.loads((run_dir / "results.json").read_text())["real"]
+    m = json.loads((run_dir / "metadata.json").read_text())
+    rv = lambda x: x if not isinstance(x, float) else (round(x, 4) if np.isfinite(x) else None)      # noqa: E731
+    deep = lambda d: {k: (deep(v) if isinstance(v, dict) else [rv(t) for t in v] if isinstance(v, list) else rv(v)) for k, v in d.items()}      # noqa: E731
+    out = {"experiment": own["experiment"]["name"], "run": str(run_dir.resolve().relative_to(hf.PROJECT_ROOT)), "code_commit": m["git"]["commit"][:7],
+           "git_dirty_at_run": m["git"]["git_dirty"], "videos": {f: deep(d) for f, d in r.items()}}
+    p = hf.resolve(own["output"]["results_yaml"])
+    p.write_text(yaml.safe_dump(hf.jsonable(out), allow_unicode=True, sort_keys=False))
+    return p
+
+
 
 def main(argv=None):
     ap = argparse.ArgumentParser(description="광류 방식 원인 확인 실험")
-    ap.add_argument("cmd", choices=["tracking-plane", "dorsum-corners", "two-plane", "joint-track-video", "geometry-synth", "pause-plane", "cotracker", "rotation-side", "points-video", "shape3d", "side-consistency", "shape-change", "pip-axis", "pause-plane2", "desk3d", "desk3d-contact", "stage-values", "stage-inputs", "cost-decompose"])
+    ap.add_argument("cmd", choices=["tracking-plane", "dorsum-corners", "two-plane", "joint-track-video", "geometry-synth", "pause-plane", "cotracker", "rotation-side", "points-video", "shape3d", "side-consistency", "shape-change", "pip-axis", "pause-plane2", "desk3d", "desk3d-contact", "stage-values", "stage-inputs", "cost-decompose", "lens-model"])
     ap.add_argument("--config", required=True)
     ap.add_argument("--out", default=None)
     ap.add_argument("--videos", type=int, default=None, help="시험 실행: 앞의 N 개 영상만, 추정 1건씩")
@@ -2417,7 +2540,7 @@ def main(argv=None):
               else s3_results_yaml(hf.resolve(a.run), own) if a.cmd == "shape3d" else sc_results_yaml(hf.resolve(a.run), own) if a.cmd == "side-consistency"
               else sh_results_yaml(hf.resolve(a.run), own) if a.cmd == "shape-change"
               else sc_results_yaml(hf.resolve(a.run), own) if a.cmd == "pip-axis" else pq_results_yaml(hf.resolve(a.run), own) if a.cmd == "pause-plane2"
-              else d3_results_yaml(hf.resolve(a.run), own) if a.cmd in ("desk3d", "desk3d-contact") else sv_results_yaml(hf.resolve(a.run), own) if a.cmd in ("stage-values", "stage-inputs") else cdx_results_yaml(hf.resolve(a.run), own) if a.cmd == "cost-decompose" else jt_results_yaml(hf.resolve(a.run), own) if a.cmd == "joint-track-video"
+              else d3_results_yaml(hf.resolve(a.run), own) if a.cmd in ("desk3d", "desk3d-contact") else sv_results_yaml(hf.resolve(a.run), own) if a.cmd in ("stage-values", "stage-inputs") else cdx_results_yaml(hf.resolve(a.run), own) if a.cmd == "cost-decompose" else lm_results_yaml(hf.resolve(a.run), own) if a.cmd == "lens-model" else jt_results_yaml(hf.resolve(a.run), own) if a.cmd == "joint-track-video"
               else results_yaml(a.cmd, hf.resolve(a.run), own))
         return None
     cfg = rof.load_settings({**own, "joint_set": "j16"} if own.get("joint_ids") else own)      # joint_ids 를 직접 적으면 joint_set 은 이름일 뿐이라 기본 묶음으로 읽고 아래에서 바꿈
@@ -2425,7 +2548,7 @@ def main(argv=None):
     cfg["videos"] = cfg["videos"] + [dict(v) for v in own.get("extra_videos", [])]      # 기본 설정 목록에 없는 새 영상 (file, person, ref_f_px)
     if own.get("joint_ids"):                                           # 기본 설정의 관절 묶음(j16, j21) 대신 직접 적은 관절 번호 (joint_set 은 이름으로만 씀)
         cfg["joint_ids"] = [int(j) for j in own["joint_ids"]]
-    cfg.update({k: own[k] for k in ("variants", "clahe", "two_plane", "joint_track", "render", "reference", "geometry_synth", "pause_plane", "cotracker", "rotation_side", "points_video", "shape3d", "side_consistency", "shape_change", "axis_base_joints", "pause_plane2", "desk3d", "stage_values", "stage_inputs", "cost_decompose") if k in own})
+    cfg.update({k: own[k] for k in ("variants", "clahe", "two_plane", "joint_track", "render", "reference", "geometry_synth", "pause_plane", "cotracker", "rotation_side", "points_video", "shape3d", "side_consistency", "shape_change", "axis_base_joints", "pause_plane2", "desk3d", "stage_values", "stage_inputs", "cost_decompose", "lens_model") if k in own})
     if a.videos:
         cfg["videos"] = cfg["videos"][:a.videos]
         cfg["free_starts_deg"] = []
@@ -2461,6 +2584,9 @@ def main(argv=None):
     elif a.cmd == "cost-decompose":
         res = cdx_run(cfg, own, log)
         job = None
+    elif a.cmd == "lens-model":
+        res = lm_run(cfg, own, log)
+        job = None
     with ProcessPoolExecutor(max_workers=int(cfg["video_workers"]), mp_context=mp.get_context("spawn")) if job else _nullpool() as ex:
         for e, (x, lines) in (zip(cfg["videos"], ex.map(job, [(e, cfg, str(run_root)) for e in cfg["videos"]])) if job else []):
             vid[e["file"]] = x
@@ -2475,6 +2601,8 @@ def main(argv=None):
         text_sum = d3_summary(res, cfg, own)
     elif a.cmd == "cost-decompose":
         text_sum = cdx_summary(res, cfg, own)
+    elif a.cmd == "lens-model":
+        text_sum = lm_summary(res, cfg, own)
     elif a.cmd == "points-video":
         res = vid
         text_sum = pv_summary(res, cfg)
