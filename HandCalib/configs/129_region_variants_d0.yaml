@@ -1,0 +1,36 @@
+# 129: 엄지 제외 + 넓히지 않는 사슬, 마커 없는 영상 (사용자 2026-11-11: "남은 간격을 줄여보자." 의 이어지는 단계), 기록용, 판정 없음.
+# 128(마커 영상 4개): 엄지를 뺀 영역을 넓히지 않으면(dilate_frac 0) 평면 변환의 오차가 네 영상 모두 줄고(5.2~6.4 -> 3.9~5.3 px), 실제 추적점의 f 는 팀원 -7.7 / -0.4% -> +6.2 / -0.6%, 나 +6.2 / +9.8% -> +11.9 / +10.8%.
+# 마커 그대로의 f 는 두 사람 모두 +10~12% 라, 추적이 정확해질수록 f 가 그쪽으로 모인다(공통 치우침은 추정 모델 쪽). 127 과 같은 24개 영상에서 확인한다.
+# 변형 = chain(지금 사슬), no_thumb(127 과 같음; 비교용), no_thumb_d0(엄지 제외 + 넓히지 않음). 경사 11° 고정만.
+# 읽는 법(실행 전에 정함): 보는 것은 (1) 새 폰에서 팀원 중앙값과 내 중앙값의 간격이 no_thumb 보다 줄어드는지, (2) 묶음 안 흩어짐(최소~최대)이 줄어드는지. 오차의 절댓값은 공통 치우침 때문에 커질 수 있다.
+experiment:
+  name: 129_region_variants_d0
+  seed: 42
+settings_config: configs/74b_multistart_rerun.yaml
+joint_set: j16
+code: {branch: optical_flow, commit: 920c048, modules: [HandCalib/optical_flow/experiments.py]}
+ramps_deg: [11]
+reference: {mode: first_pause, pause_gap_frames: 15, min_pause_frames: 5}
+extra_videos:
+  - {file: IMG_7384.MOV, person: teammate, ref_f_px: 1672}
+  - {file: IMG_7385.MOV, person: self, ref_f_px: 1672}
+  - {file: IMG_7387.MOV, person: teammate, ref_f_px: 1672}
+  - {file: IMG_7388.MOV, person: self, ref_f_px: 1672}
+  - {file: IMG_7401.MOV, person: self, ref_f_px: 1672}
+  - {file: IMG_7402.MOV, person: self, ref_f_px: 1672}
+  - {file: IMG_7403.MOV, person: teammate, ref_f_px: 1672}
+  - {file: IMG_7404.MOV, person: teammate, ref_f_px: 1672}
+region_variants:
+  variants:
+    chain: {mask: null}
+    no_thumb: {mask: [0, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20]}
+    no_thumb_d0: {mask: [0, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20], tracking: {dilate_frac: 0.0}}
+  groups:
+    새 폰 팀원: ["IMG_7351 - 복사본.MOV", "IMG_7352 - 복사본.MOV", IMG_7384.MOV, IMG_7387.MOV, IMG_7403.MOV, IMG_7404.MOV]
+    새 폰 나: ["IMG_7354 - 복사본.MOV", "IMG_7355 - 복사본.MOV", IMG_7385.MOV, IMG_7388.MOV, IMG_7401.MOV, IMG_7402.MOV]
+    이전 폰 나: [IMG_7346.MOV, IMG_7347.MOV, IMG_7348.MOV, IMG_7349.MOV, IMG_7350.MOV, IMG_7351.MOV, IMG_7352.MOV, IMG_7353.MOV, IMG_7354.MOV, IMG_7355.MOV, IMG_7356.MOV, IMG_7357.MOV]
+workers: 56
+video_workers: 12
+output:
+  root: runs/129_region_variants_d0
+  results_yaml: results/129_region_variants_d0.yaml
