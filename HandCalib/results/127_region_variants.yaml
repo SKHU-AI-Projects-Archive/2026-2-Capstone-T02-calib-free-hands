@@ -1,0 +1,1253 @@
+experiment: 127_region_variants
+run: runs/127_region_variants/20261111T105224Z
+code_commit: f91e14f
+git_dirty_at_run: false
+videos:
+  IMG_7346.MOV:
+    chain:
+      info:
+        breaks: 0
+        n_use: 678
+        n_frames: 678
+        inliers_median: 400.0
+        drift_j16_pct: 2.6825
+      ramp_11:
+        f: 1458.0026
+        pitch_deg: 11.0
+        roll_deg: 0.0
+        desk_tilt_deg: 45.6659
+        turn_range_deg: 115.9492
+        rms_px: 4.1266
+        cost: 16.9655
+        boundary: false
+        start: profile_3
+    fingers_mcp:
+      info:
+        breaks: 0
+        n_use: 678
+        n_frames: 678
+        inliers_median: 216.0
+        drift_j16_pct: 2.3959
+      ramp_11:
+        f: 1534.7963
+        pitch_deg: 11.0
+        roll_deg: 0.0
+        desk_tilt_deg: 46.8203
+        turn_range_deg: 117.3263
+        rms_px: 3.6183
+        cost: 13.0923
+        boundary: false
+        start: profile_4
+    no_thumb:
+      info:
+        breaks: 0
+        n_use: 678
+        n_frames: 678
+        inliers_median: 351.0
+        drift_j16_pct: 2.4942
+      ramp_11:
+        f: 1593.8549
+        pitch_deg: 11.0
+        roll_deg: 0.0
+        desk_tilt_deg: 47.6383
+        turn_range_deg: 117.5862
+        rms_px: 3.0759
+        cost: 9.4611
+        boundary: false
+        start: profile_3
+  IMG_7347.MOV:
+    chain:
+      info:
+        breaks: 0
+        n_use: 658
+        n_frames: 658
+        inliers_median: 399.0
+        drift_j16_pct: 1.4001
+      ramp_11:
+        f: 1810.21
+        pitch_deg: 11.0
+        roll_deg: 0.0
+        desk_tilt_deg: 45.6304
+        turn_range_deg: 116.2619
+        rms_px: 4.793
+        cost: 22.1926
+        boundary: false
+        start: profile_4
+    fingers_mcp:
+      info:
+        breaks: 0
+        n_use: 658
+        n_frames: 658
+        inliers_median: 289.0
+        drift_j16_pct: 1.0559
+      ramp_11:
+        f: 1279.257
+        pitch_deg: 11.0
+        roll_deg: 0.0
+        desk_tilt_deg: 41.6799
+        turn_range_deg: 116.1731
+        rms_px: 4.5021
+        cost: 20.0881
+        boundary: false
+        start: profile_2
+    no_thumb:
+      info:
+        breaks: 0
+        n_use: 658
+        n_frames: 658
+        inliers_median: 400.0
+        drift_j16_pct: 1.0831
+      ramp_11:
+        f: 1414.8414
+        pitch_deg: 11.0
+        roll_deg: 0.0
+        desk_tilt_deg: 42.3272
+        turn_range_deg: 114.9341
+        rms_px: 4.679
+        cost: 21.5357
+        boundary: false
+        start: profile_4
+  IMG_7348.MOV:
+    chain:
+      info:
+        breaks: 0
+        n_use: 618
+        n_frames: 618
+        inliers_median: 400.0
+        drift_j16_pct: 2.4272
+      ramp_11:
+        f: 1565.4923
+        pitch_deg: 11.0
+        roll_deg: 0.0
+        desk_tilt_deg: 46.2259
+        turn_range_deg: 17646.6392
+        rms_px: 4.2528
+        cost: 17.7352
+        boundary: false
+        start: profile_4
+    fingers_mcp:
+      info:
+        breaks: 0
+        n_use: 618
+        n_frames: 618
+        inliers_median: 204.0
+        drift_j16_pct: 2.199
+      ramp_11:
+        f: 1581.8019
+        pitch_deg: 11.0
+        roll_deg: 0.0
+        desk_tilt_deg: 47.3873
+        turn_range_deg: 449.3707
+        rms_px: 3.3185
+        cost: 11.0123
+        boundary: false
+        start: free_template
+    no_thumb:
+      info:
+        breaks: 0
+        n_use: 618
+        n_frames: 618
+        inliers_median: 330.0
+        drift_j16_pct: 2.8888
+      ramp_11:
+        f: 1721.6043
+        pitch_deg: 11.0
+        roll_deg: 0.0
+        desk_tilt_deg: 48.4275
+        turn_range_deg: 120.6145
+        rms_px: 3.0465
+        cost: 9.2812
+        boundary: false
+        start: profile_6
+  IMG_7349.MOV:
+    chain:
+      info:
+        breaks: 0
+        n_use: 683
+        n_frames: 683
+        inliers_median: 395.0
+        drift_j16_pct: 2.6451
+      ramp_11:
+        f: 1759.7641
+        pitch_deg: 11.0
+        roll_deg: 0.0
+        desk_tilt_deg: 46.5431
+        turn_range_deg: 353.313
+        rms_px: 8.7609
+        cost: 56.2898
+        boundary: false
+        start: profile_6
+    fingers_mcp:
+      info:
+        breaks: 0
+        n_use: 683
+        n_frames: 683
+        inliers_median: 293.5
+        drift_j16_pct: 1.0166
+      ramp_11:
+        f: 1213.8484
+        pitch_deg: 11.0
+        roll_deg: 0.0
+        desk_tilt_deg: 40.9395
+        turn_range_deg: 114.5325
+        rms_px: 5.1665
+        cost: 25.875
+        boundary: false
+        start: profile_3
+    no_thumb:
+      info:
+        breaks: 0
+        n_use: 683
+        n_frames: 683
+        inliers_median: 399.0
+        drift_j16_pct: 2.4683
+      ramp_11:
+        f: 1242.2047
+        pitch_deg: 11.0
+        roll_deg: 0.0
+        desk_tilt_deg: 41.5809
+        turn_range_deg: 410.6468
+        rms_px: 6.6849
+        cost: 38.2729
+        boundary: false
+        start: free_template
+  IMG_7350.MOV:
+    chain:
+      info:
+        breaks: 0
+        n_use: 700
+        n_frames: 700
+        inliers_median: 343.0
+        drift_j16_pct: 1.6998
+      ramp_11:
+        f: 1583.1923
+        pitch_deg: 11.0
+        roll_deg: 0.0
+        desk_tilt_deg: 46.1839
+        turn_range_deg: 118.1873
+        rms_px: 3.2763
+        cost: 10.6987
+        boundary: false
+        start: free_template
+    fingers_mcp:
+      info:
+        breaks: 0
+        n_use: 700
+        n_frames: 700
+        inliers_median: 145.0
+        drift_j16_pct: 1.6227
+      ramp_11:
+        f: 1576.6467
+        pitch_deg: 11.0
+        roll_deg: 0.0
+        desk_tilt_deg: 46.1825
+        turn_range_deg: 116.6565
+        rms_px: 2.7563
+        cost: 7.5971
+        boundary: false
+        start: free_template
+    no_thumb:
+      info:
+        breaks: 0
+        n_use: 700
+        n_frames: 700
+        inliers_median: 242.0
+        drift_j16_pct: 1.8611
+      ramp_11:
+        f: 1640.992
+        pitch_deg: 11.0
+        roll_deg: 0.0
+        desk_tilt_deg: 46.6558
+        turn_range_deg: 413.3389
+        rms_px: 2.9653
+        cost: 8.793
+        boundary: false
+        start: profile_4
+  IMG_7351.MOV:
+    chain:
+      info:
+        breaks: 0
+        n_use: 645
+        n_frames: 645
+        inliers_median: 242.5
+        drift_j16_pct: 2.8422
+      ramp_11:
+        f: 1771.22
+        pitch_deg: 11.0
+        roll_deg: 0.0
+        desk_tilt_deg: 45.7847
+        turn_range_deg: 120.9544
+        rms_px: 4.1937
+        cost: 17.2775
+        boundary: false
+        start: profile_5
+    fingers_mcp:
+      info:
+        breaks: 0
+        n_use: 645
+        n_frames: 645
+        inliers_median: 233.0
+        drift_j16_pct: 2.5502
+      ramp_11:
+        f: 1302.875
+        pitch_deg: 11.0
+        roll_deg: 0.0
+        desk_tilt_deg: 41.2431
+        turn_range_deg: 117.3505
+        rms_px: 4.4048
+        cost: 19.0591
+        boundary: false
+        start: profile_4
+    no_thumb:
+      info:
+        breaks: 0
+        n_use: 645
+        n_frames: 645
+        inliers_median: 340.0
+        drift_j16_pct: 2.5222
+      ramp_11:
+        f: 1281.1326
+        pitch_deg: 11.0
+        roll_deg: 0.0
+        desk_tilt_deg: 41.0138
+        turn_range_deg: 116.7973
+        rms_px: 4.3114
+        cost: 18.412
+        boundary: false
+        start: profile_3
+  IMG_7352.MOV:
+    chain:
+      info:
+        breaks: 0
+        n_use: 707
+        n_frames: 707
+        inliers_median: 290.0
+        drift_j16_pct: 2.7975
+      ramp_11:
+        f: 1667.5874
+        pitch_deg: 11.0
+        roll_deg: 0.0
+        desk_tilt_deg: 45.8211
+        turn_range_deg: 132.0981
+        rms_px: 3.2785
+        cost: 10.7482
+        boundary: false
+        start: profile_5
+    fingers_mcp:
+      info:
+        breaks: 0
+        n_use: 707
+        n_frames: 707
+        inliers_median: 132.5
+        drift_j16_pct: 2.5605
+      ramp_11:
+        f: 1663.2787
+        pitch_deg: 11.0
+        roll_deg: 0.0
+        desk_tilt_deg: 46.2454
+        turn_range_deg: 132.1323
+        rms_px: 3.3341
+        cost: 11.0839
+        boundary: false
+        start: profile_4
+    no_thumb:
+      info:
+        breaks: 0
+        n_use: 707
+        n_frames: 707
+        inliers_median: 230.0
+        drift_j16_pct: 2.7265
+      ramp_11:
+        f: 1891.1718
+        pitch_deg: 11.0
+        roll_deg: 0.0
+        desk_tilt_deg: 47.8545
+        turn_range_deg: 133.4536
+        rms_px: 3.0525
+        cost: 9.318
+        boundary: false
+        start: profile_4
+  IMG_7353.MOV:
+    chain:
+      info:
+        breaks: 0
+        n_use: 681
+        n_frames: 681
+        inliers_median: 398.0
+        drift_j16_pct: 1.5321
+      ramp_11:
+        f: 1812.3094
+        pitch_deg: 11.0
+        roll_deg: 0.0
+        desk_tilt_deg: 45.3797
+        turn_range_deg: 118.4138
+        rms_px: 3.8133
+        cost: 14.094
+        boundary: false
+        start: profile_6
+    fingers_mcp:
+      info:
+        breaks: 0
+        n_use: 681
+        n_frames: 681
+        inliers_median: 258.0
+        drift_j16_pct: 1.5422
+      ramp_11:
+        f: 1290.1886
+        pitch_deg: 11.0
+        roll_deg: 0.0
+        desk_tilt_deg: 42.223
+        turn_range_deg: 116.1425
+        rms_px: 3.7524
+        cost: 14.0262
+        boundary: false
+        start: profile_3
+    no_thumb:
+      info:
+        breaks: 0
+        n_use: 681
+        n_frames: 681
+        inliers_median: 377.5
+        drift_j16_pct: 1.5847
+      ramp_11:
+        f: 1248.082
+        pitch_deg: 11.0
+        roll_deg: 0.0
+        desk_tilt_deg: 41.7265
+        turn_range_deg: 114.1053
+        rms_px: 3.9525
+        cost: 15.5559
+        boundary: false
+        start: profile_3
+  IMG_7354.MOV:
+    chain:
+      info:
+        breaks: 0
+        n_use: 624
+        n_frames: 624
+        inliers_median: 180.0
+        drift_j16_pct: 1.7209
+      ramp_11:
+        f: 1560.8714
+        pitch_deg: 11.0
+        roll_deg: 0.0
+        desk_tilt_deg: 43.5152
+        turn_range_deg: 405.5868
+        rms_px: 3.4514
+        cost: 11.1633
+        boundary: false
+        start: profile_3
+    fingers_mcp:
+      info:
+        breaks: 0
+        n_use: 624
+        n_frames: 624
+        inliers_median: 87.0
+        drift_j16_pct: 1.8349
+      ramp_11:
+        f: 1774.8916
+        pitch_deg: 11.0
+        roll_deg: 0.0
+        desk_tilt_deg: 46.5378
+        turn_range_deg: 128.8087
+        rms_px: 3.034
+        cost: 9.1067
+        boundary: false
+        start: profile_6
+    no_thumb:
+      info:
+        breaks: 0
+        n_use: 624
+        n_frames: 624
+        inliers_median: 142.0
+        drift_j16_pct: 1.7193
+      ramp_11:
+        f: 1486.9765
+        pitch_deg: 11.0
+        roll_deg: 0.0
+        desk_tilt_deg: 44.9616
+        turn_range_deg: 128.1342
+        rms_px: 3.0575
+        cost: 9.1669
+        boundary: false
+        start: profile_4
+  IMG_7355.MOV:
+    chain:
+      info:
+        breaks: 0
+        n_use: 609
+        n_frames: 609
+        inliers_median: 229.5
+        drift_j16_pct: 2.5593
+      ramp_11:
+        f: 2131.0341
+        pitch_deg: 11.0
+        roll_deg: 0.0
+        desk_tilt_deg: 45.3192
+        turn_range_deg: 120.0914
+        rms_px: 4.4478
+        cost: 18.0421
+        boundary: false
+        start: profile_1
+    fingers_mcp:
+      info:
+        breaks: 0
+        n_use: 609
+        n_frames: 609
+        inliers_median: 171.5
+        drift_j16_pct: 1.7644
+      ramp_11:
+        f: 1250.0769
+        pitch_deg: 11.0
+        roll_deg: 0.0
+        desk_tilt_deg: 40.4296
+        turn_range_deg: 118.6075
+        rms_px: 3.7074
+        cost: 13.2965
+        boundary: false
+        start: profile_3
+    no_thumb:
+      info:
+        breaks: 0
+        n_use: 609
+        n_frames: 609
+        inliers_median: 209.0
+        drift_j16_pct: 1.6723
+      ramp_11:
+        f: 1290.1434
+        pitch_deg: 11.0
+        roll_deg: 0.0
+        desk_tilt_deg: 40.6583
+        turn_range_deg: 13438.6648
+        rms_px: 3.8386
+        cost: 13.9911
+        boundary: false
+        start: free_template
+  IMG_7356.MOV:
+    chain:
+      info:
+        breaks: 0
+        n_use: 627
+        n_frames: 627
+        inliers_median: 181.0
+        drift_j16_pct: 1.7912
+      ramp_11:
+        f: 1757.8607
+        pitch_deg: 11.0
+        roll_deg: 0.0
+        desk_tilt_deg: 43.4417
+        turn_range_deg: 466.0678
+        rms_px: 3.3538
+        cost: 10.7905
+        boundary: false
+        start: profile_3
+    fingers_mcp:
+      info:
+        breaks: 0
+        n_use: 627
+        n_frames: 627
+        inliers_median: 85.0
+        drift_j16_pct: 2.0364
+      ramp_11:
+        f: 1845.0945
+        pitch_deg: 11.0
+        roll_deg: 0.0
+        desk_tilt_deg: 46.8961
+        turn_range_deg: 129.1165
+        rms_px: 2.6619
+        cost: 7.0386
+        boundary: false
+        start: profile_4
+    no_thumb:
+      info:
+        breaks: 0
+        n_use: 627
+        n_frames: 627
+        inliers_median: 141.0
+        drift_j16_pct: 1.8808
+      ramp_11:
+        f: 1800.6218
+        pitch_deg: 11.0
+        roll_deg: 0.0
+        desk_tilt_deg: 46.6869
+        turn_range_deg: 128.6231
+        rms_px: 2.5982
+        cost: 6.7495
+        boundary: false
+        start: free_template
+  IMG_7357.MOV:
+    chain:
+      info:
+        breaks: 0
+        n_use: 601
+        n_frames: 601
+        inliers_median: 227.0
+        drift_j16_pct: 2.7409
+      ramp_11:
+        f: 2052.316
+        pitch_deg: 11.0
+        roll_deg: 0.0
+        desk_tilt_deg: 45.9026
+        turn_range_deg: 123.2066
+        rms_px: 4.1352
+        cost: 15.2126
+        boundary: false
+        start: profile_6
+    fingers_mcp:
+      info:
+        breaks: 0
+        n_use: 601
+        n_frames: 601
+        inliers_median: 167.5
+        drift_j16_pct: 2.0267
+      ramp_11:
+        f: 1378.1154
+        pitch_deg: 11.0
+        roll_deg: 0.0
+        desk_tilt_deg: 40.3396
+        turn_range_deg: 120.0076
+        rms_px: 3.853
+        cost: 14.2706
+        boundary: false
+        start: profile_5
+    no_thumb:
+      info:
+        breaks: 0
+        n_use: 601
+        n_frames: 601
+        inliers_median: 210.0
+        drift_j16_pct: 2.136
+      ramp_11:
+        f: 1354.6155
+        pitch_deg: 11.0
+        roll_deg: 0.0
+        desk_tilt_deg: 40.1473
+        turn_range_deg: 120.2056
+        rms_px: 4.0232
+        cost: 15.2809
+        boundary: false
+        start: profile_4
+  IMG_7354 - 복사본.MOV:
+    chain:
+      info:
+        breaks: 0
+        n_use: 564
+        n_frames: 564
+        inliers_median: 258.0
+        drift_j16_pct: 2.1443
+      ramp_11:
+        f: 1737.8657
+        pitch_deg: 11.0
+        roll_deg: 0.0
+        desk_tilt_deg: 57.7356
+        turn_range_deg: 125.267
+        rms_px: 3.0451
+        cost: 9.0996
+        boundary: false
+        start: profile_6
+    fingers_mcp:
+      info:
+        breaks: 0
+        n_use: 564
+        n_frames: 564
+        inliers_median: 117.0
+        drift_j16_pct: 2.3043
+      ramp_11:
+        f: 1638.0222
+        pitch_deg: 11.0
+        roll_deg: 0.0
+        desk_tilt_deg: 58.5526
+        turn_range_deg: 2170797.8658
+        rms_px: 3.2741
+        cost: 10.6523
+        boundary: false
+        start: free_template
+    no_thumb:
+      info:
+        breaks: 0
+        n_use: 564
+        n_frames: 564
+        inliers_median: 187.0
+        drift_j16_pct: 2.2571
+      ramp_11:
+        f: 1649.2149
+        pitch_deg: 11.0
+        roll_deg: 0.0
+        desk_tilt_deg: 59.3443
+        turn_range_deg: 125.3305
+        rms_px: 2.6897
+        cost: 7.2256
+        boundary: false
+        start: profile_3
+  IMG_7355 - 복사본.MOV:
+    chain:
+      info:
+        breaks: 0
+        n_use: 498
+        n_frames: 498
+        inliers_median: 230.0
+        drift_j16_pct: 1.2986
+      ramp_11:
+        f: 1636.9756
+        pitch_deg: 11.0
+        roll_deg: 0.0
+        desk_tilt_deg: 57.4001
+        turn_range_deg: 116.146
+        rms_px: 2.9204
+        cost: 8.476
+        boundary: false
+        start: profile_7
+    fingers_mcp:
+      info:
+        breaks: 0
+        n_use: 498
+        n_frames: 498
+        inliers_median: 105.0
+        drift_j16_pct: 1.4707
+      ramp_11:
+        f: 1577.9221
+        pitch_deg: 11.0
+        roll_deg: 0.0
+        desk_tilt_deg: 57.7639
+        turn_range_deg: 116.1797
+        rms_px: 2.7042
+        cost: 7.3103
+        boundary: false
+        start: profile_4
+    no_thumb:
+      info:
+        breaks: 0
+        n_use: 498
+        n_frames: 498
+        inliers_median: 169.0
+        drift_j16_pct: 1.4127
+      ramp_11:
+        f: 1672.1258
+        pitch_deg: 11.0
+        roll_deg: 0.0
+        desk_tilt_deg: 58.8766
+        turn_range_deg: 115.8882
+        rms_px: 2.6964
+        cost: 7.2708
+        boundary: false
+        start: profile_5
+  IMG_7351 - 복사본.MOV:
+    chain:
+      info:
+        breaks: 0
+        n_use: 386
+        n_frames: 386
+        inliers_median: 161.0
+        drift_j16_pct: 2.5751
+      ramp_11:
+        f: 1249.0368
+        pitch_deg: 11.0
+        roll_deg: 0.0
+        desk_tilt_deg: 48.396
+        turn_range_deg: 125.4285
+        rms_px: 2.9875
+        cost: 8.8907
+        boundary: false
+        start: profile_4
+    fingers_mcp:
+      info:
+        breaks: 0
+        n_use: 386
+        n_frames: 386
+        inliers_median: 108.0
+        drift_j16_pct: 2.2043
+      ramp_11:
+        f: 1491.2202
+        pitch_deg: 11.0
+        roll_deg: 0.0
+        desk_tilt_deg: 51.7792
+        turn_range_deg: 128.9525
+        rms_px: 3.2805
+        cost: 10.6974
+        boundary: false
+        start: free_template
+    no_thumb:
+      info:
+        breaks: 0
+        n_use: 386
+        n_frames: 386
+        inliers_median: 120.0
+        drift_j16_pct: 2.7199
+      ramp_11:
+        f: 1439.6727
+        pitch_deg: 11.0
+        roll_deg: 0.0
+        desk_tilt_deg: 51.442
+        turn_range_deg: 129.4092
+        rms_px: 1.7253
+        cost: 2.9768
+        boundary: false
+        start: profile_5
+  IMG_7352 - 복사본.MOV:
+    chain:
+      info:
+        breaks: 0
+        n_use: 368
+        n_frames: 368
+        inliers_median: 181.0
+        drift_j16_pct: 2.5392
+      ramp_11:
+        f: 1102.0186
+        pitch_deg: 11.0
+        roll_deg: 0.0
+        desk_tilt_deg: 47.5456
+        turn_range_deg: 128.7973
+        rms_px: 3.3139
+        cost: 10.6062
+        boundary: false
+        start: profile_2
+    fingers_mcp:
+      info:
+        breaks: 0
+        n_use: 368
+        n_frames: 368
+        inliers_median: 113.0
+        drift_j16_pct: 2.2956
+      ramp_11:
+        f: 1324.7311
+        pitch_deg: 11.0
+        roll_deg: 0.0
+        desk_tilt_deg: 51.6669
+        turn_range_deg: 132.043
+        rms_px: 3.8683
+        cost: 14.2178
+        boundary: false
+        start: free_template
+    no_thumb:
+      info:
+        breaks: 0
+        n_use: 368
+        n_frames: 368
+        inliers_median: 131.0
+        drift_j16_pct: 2.3594
+      ramp_11:
+        f: 1245.1429
+        pitch_deg: 11.0
+        roll_deg: 0.0
+        desk_tilt_deg: 50.928
+        turn_range_deg: 132.7728
+        rms_px: 1.9298
+        cost: 3.7243
+        boundary: false
+        start: profile_3
+  IMG_7384.MOV:
+    chain:
+      info:
+        breaks: 0
+        n_use: 636
+        n_frames: 636
+        inliers_median: 205.0
+        drift_j16_pct: 1.5941
+      ramp_11:
+        f: 1508.8813
+        pitch_deg: 11.0
+        roll_deg: 0.0
+        desk_tilt_deg: 45.1678
+        turn_range_deg: 178.3795
+        rms_px: 3.3391
+        cost: 11.0587
+        boundary: false
+        start: profile_6
+    fingers_mcp:
+      info:
+        breaks: 0
+        n_use: 636
+        n_frames: 636
+        inliers_median: 141.0
+        drift_j16_pct: 1.6153
+      ramp_11:
+        f: 1467.0922
+        pitch_deg: 11.0
+        roll_deg: 0.0
+        desk_tilt_deg: 45.6815
+        turn_range_deg: 177.2782
+        rms_px: 3.3615
+        cost: 11.0942
+        boundary: false
+        start: free_template
+    no_thumb:
+      info:
+        breaks: 0
+        n_use: 636
+        n_frames: 636
+        inliers_median: 159.0
+        drift_j16_pct: 1.6527
+      ramp_11:
+        f: 1570.8802
+        pitch_deg: 11.0
+        roll_deg: 0.0
+        desk_tilt_deg: 48.1108
+        turn_range_deg: 178.2284
+        rms_px: 2.9238
+        cost: 8.5428
+        boundary: false
+        start: profile_4
+  IMG_7385.MOV:
+    chain:
+      info:
+        breaks: 0
+        n_use: 569
+        n_frames: 569
+        inliers_median: 385.0
+        drift_j16_pct: 2.2474
+      ramp_11:
+        f: 1717.8048
+        pitch_deg: 11.0
+        roll_deg: 0.0
+        desk_tilt_deg: 45.9539
+        turn_range_deg: 128.9748
+        rms_px: 3.4709
+        cost: 11.9495
+        boundary: false
+        start: profile_4
+    fingers_mcp:
+      info:
+        breaks: 0
+        n_use: 569
+        n_frames: 569
+        inliers_median: 194.0
+        drift_j16_pct: 2.0504
+      ramp_11:
+        f: 1743.088
+        pitch_deg: 11.0
+        roll_deg: 0.0
+        desk_tilt_deg: 47.6752
+        turn_range_deg: 130.9113
+        rms_px: 3.6566
+        cost: 13.2352
+        boundary: false
+        start: profile_4
+    no_thumb:
+      info:
+        breaks: 0
+        n_use: 569
+        n_frames: 569
+        inliers_median: 309.0
+        drift_j16_pct: 2.1807
+      ramp_11:
+        f: 1756.6827
+        pitch_deg: 11.0
+        roll_deg: 0.0
+        desk_tilt_deg: 48.4143
+        turn_range_deg: 131.4547
+        rms_px: 3.2785
+        cost: 10.7475
+        boundary: false
+        start: profile_5
+  IMG_7387.MOV:
+    chain:
+      info:
+        breaks: 0
+        n_use: 565
+        n_frames: 565
+        inliers_median: 278.0
+        drift_j16_pct: 1.4916
+      ramp_11:
+        f: 1378.1607
+        pitch_deg: 11.0
+        roll_deg: 0.0
+        desk_tilt_deg: 46.0181
+        turn_range_deg: 145.9032
+        rms_px: 3.3803
+        cost: 11.4216
+        boundary: false
+        start: profile_4
+    fingers_mcp:
+      info:
+        breaks: 0
+        n_use: 565
+        n_frames: 565
+        inliers_median: 200.0
+        drift_j16_pct: 1.3471
+      ramp_11:
+        f: 1498.5145
+        pitch_deg: 11.0
+        roll_deg: 0.0
+        desk_tilt_deg: 50.4958
+        turn_range_deg: 148.3031
+        rms_px: 4.5929
+        cost: 20.2716
+        boundary: false
+        start: profile_3
+    no_thumb:
+      info:
+        breaks: 0
+        n_use: 565
+        n_frames: 565
+        inliers_median: 231.5
+        drift_j16_pct: 1.5006
+      ramp_11:
+        f: 1512.1314
+        pitch_deg: 11.0
+        roll_deg: 0.0
+        desk_tilt_deg: 49.6468
+        turn_range_deg: 147.7821
+        rms_px: 3.0339
+        cost: 9.2022
+        boundary: false
+        start: profile_4
+  IMG_7388.MOV:
+    chain:
+      info:
+        breaks: 0
+        n_use: 635
+        n_frames: 635
+        inliers_median: 394.0
+        drift_j16_pct: 1.6733
+      ramp_11:
+        f: 1667.6323
+        pitch_deg: 11.0
+        roll_deg: 0.0
+        desk_tilt_deg: 44.0418
+        turn_range_deg: 126.5141
+        rms_px: 4.2144
+        cost: 17.4934
+        boundary: false
+        start: profile_4
+    fingers_mcp:
+      info:
+        breaks: 0
+        n_use: 635
+        n_frames: 635
+        inliers_median: 195.0
+        drift_j16_pct: 1.5956
+      ramp_11:
+        f: 1805.7663
+        pitch_deg: 11.0
+        roll_deg: 0.0
+        desk_tilt_deg: 47.3964
+        turn_range_deg: 130.7484
+        rms_px: 3.3773
+        cost: 11.4059
+        boundary: false
+        start: profile_4
+    no_thumb:
+      info:
+        breaks: 0
+        n_use: 635
+        n_frames: 635
+        inliers_median: 320.5
+        drift_j16_pct: 1.6664
+      ramp_11:
+        f: 1816.2968
+        pitch_deg: 11.0
+        roll_deg: 0.0
+        desk_tilt_deg: 47.543
+        turn_range_deg: 472.25
+        rms_px: 3.4201
+        cost: 11.697
+        boundary: false
+        start: profile_5
+  IMG_7401.MOV:
+    chain:
+      info:
+        breaks: 0
+        n_use: 607
+        n_frames: 607
+        inliers_median: 321.0
+        drift_j16_pct: 1.9229
+      ramp_11:
+        f: 1704.3897
+        pitch_deg: 11.0
+        roll_deg: 0.0
+        desk_tilt_deg: 45.4148
+        turn_range_deg: 157.4802
+        rms_px: 3.9013
+        cost: 15.0863
+        boundary: false
+        start: free_template
+    fingers_mcp:
+      info:
+        breaks: 0
+        n_use: 607
+        n_frames: 607
+        inliers_median: 168.0
+        drift_j16_pct: 1.8854
+      ramp_11:
+        f: 1623.4542
+        pitch_deg: 11.0
+        roll_deg: 0.0
+        desk_tilt_deg: 47.0837
+        turn_range_deg: 158.2369
+        rms_px: 3.9596
+        cost: 15.6413
+        boundary: false
+        start: free_template
+    no_thumb:
+      info:
+        breaks: 0
+        n_use: 607
+        n_frames: 607
+        inliers_median: 262.0
+        drift_j16_pct: 1.9747
+      ramp_11:
+        f: 1733.9022
+        pitch_deg: 11.0
+        roll_deg: 0.0
+        desk_tilt_deg: 47.6902
+        turn_range_deg: 159.0705
+        rms_px: 3.8503
+        cost: 14.7499
+        boundary: false
+        start: free_template
+  IMG_7402.MOV:
+    chain:
+      info:
+        breaks: 0
+        n_use: 627
+        n_frames: 627
+        inliers_median: 320.0
+        drift_j16_pct: 2.0421
+      ramp_11:
+        f: 1826.9043
+        pitch_deg: 11.0
+        roll_deg: 0.0
+        desk_tilt_deg: 45.5974
+        turn_range_deg: 154.9339
+        rms_px: 3.7991
+        cost: 14.2452
+        boundary: false
+        start: profile_4
+    fingers_mcp:
+      info:
+        breaks: 0
+        n_use: 627
+        n_frames: 627
+        inliers_median: 162.0
+        drift_j16_pct: 2.1186
+      ramp_11:
+        f: 1670.8238
+        pitch_deg: 11.0
+        roll_deg: 0.0
+        desk_tilt_deg: 46.7027
+        turn_range_deg: 155.2478
+        rms_px: 3.8701
+        cost: 14.9517
+        boundary: false
+        start: profile_4
+    no_thumb:
+      info:
+        breaks: 0
+        n_use: 627
+        n_frames: 627
+        inliers_median: 257.0
+        drift_j16_pct: 2.0964
+      ramp_11:
+        f: 1659.7319
+        pitch_deg: 11.0
+        roll_deg: 0.0
+        desk_tilt_deg: 46.3277
+        turn_range_deg: 6521.8124
+        rms_px: 3.4322
+        cost: 11.768
+        boundary: false
+        start: profile_3
+  IMG_7403.MOV:
+    chain:
+      info:
+        breaks: 0
+        n_use: 646
+        n_frames: 646
+        inliers_median: 280.0
+        drift_j16_pct: 1.6895
+      ramp_11:
+        f: 1363.0449
+        pitch_deg: 11.0
+        roll_deg: 0.0
+        desk_tilt_deg: 44.6925
+        turn_range_deg: 154.0451
+        rms_px: 3.3655
+        cost: 11.2759
+        boundary: false
+        start: profile_4
+    fingers_mcp:
+      info:
+        breaks: 0
+        n_use: 646
+        n_frames: 646
+        inliers_median: 169.0
+        drift_j16_pct: 1.3407
+      ramp_11:
+        f: 1482.6718
+        pitch_deg: 11.0
+        roll_deg: 0.0
+        desk_tilt_deg: 46.3989
+        turn_range_deg: 155.3626
+        rms_px: 3.1483
+        cost: 9.9021
+        boundary: false
+        start: profile_5
+    no_thumb:
+      info:
+        breaks: 0
+        n_use: 646
+        n_frames: 646
+        inliers_median: 200.0
+        drift_j16_pct: 1.3981
+      ramp_11:
+        f: 1554.898
+        pitch_deg: 11.0
+        roll_deg: 0.0
+        desk_tilt_deg: 47.8477
+        turn_range_deg: 156.1895
+        rms_px: 2.7041
+        cost: 7.3121
+        boundary: false
+        start: free_template
+  IMG_7404.MOV:
+    chain:
+      info:
+        breaks: 0
+        n_use: 664
+        n_frames: 664
+        inliers_median: 308.0
+        drift_j16_pct: 1.9402
+      ramp_11:
+        f: 1488.892
+        pitch_deg: 11.0
+        roll_deg: 0.0
+        desk_tilt_deg: 45.3086
+        turn_range_deg: 410.8414
+        rms_px: 3.0261
+        cost: 9.1568
+        boundary: false
+        start: profile_4
+    fingers_mcp:
+      info:
+        breaks: 0
+        n_use: 664
+        n_frames: 664
+        inliers_median: 197.0
+        drift_j16_pct: 2.2209
+      ramp_11:
+        f: 1559.8789
+        pitch_deg: 11.0
+        roll_deg: 0.0
+        desk_tilt_deg: 46.6993
+        turn_range_deg: 367.1324
+        rms_px: 2.8403
+        cost: 8.0673
+        boundary: false
+        start: profile_3
+    no_thumb:
+      info:
+        breaks: 0
+        n_use: 664
+        n_frames: 664
+        inliers_median: 242.0
+        drift_j16_pct: 2.2737
+      ramp_11:
+        f: 1640.629
+        pitch_deg: 11.0
+        roll_deg: 0.0
+        desk_tilt_deg: 47.9371
+        turn_range_deg: 153.6895
+        rms_px: 2.4458
+        cost: 5.9822
+        boundary: false
+        start: profile_3
