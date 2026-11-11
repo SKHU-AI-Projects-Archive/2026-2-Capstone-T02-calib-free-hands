@@ -3204,10 +3204,149 @@ def cm_summary(res: dict, cfg: dict, own: dict) -> str:
     return "\n".join(L) + "\n"
 
 
+# ----------------------------------------------------------------------------------------------------
+# 124: 추적 변형을 마커로 채점 (마커 영상; 어떤 사슬의 평면 변환이 마커와 맞는가)
+# ----------------------------------------------------------------------------------------------------
+def te_job(args):
+    """한 영상: 프레임·검출·track -> 첫 정지 구간 기준 프레임에서 사슬 변형(tracker_eval.variants)마다 앞뒤 사슬 -> (1) 기준 관절을 옮긴 점(실제 파이프라인의 추적점), (2) 기준 프레임의 마커를 옮긴 점.
+    마커는 tracker_eval.points_run 에 저장된 마커 점(122). 변형: kind = chain (kt_chain) | balanced (bc_chain, body_joints) | dc (dc_chain, mask dorsum|hand, clahe)."""
+    e, cfg, run_root = args
+    import cv2
+    cv2.setNumThreads(1)
+    te = cfg["tracker_eval"]
+    x0, _ = cm_load((e, {**cfg, "chain_vs_marker": {"points_run": te["points_run"]}}, run_root))
+    pngs, times, tr, (W, H), tmp = prepare(e, cfg, run_root)
+    out, lines = {"base": x0, "variants": {}}, []
+    try:
+        n = len(pngs)
+        pres = np.flatnonzero(tr["present"])
+        a, b = int(pres[0]), int(pres[-1])
+        ref = rof.choose_reference_pose(tr, (W, H), cfg)
+        if ref != x0["ref"]:
+            raise ValueError(f"기준 프레임이 저장된 점과 다름: {ref} / {x0['ref']}")
+        kps = np.stack([of.kt_carry(tr["present"], tr["kp"][:, j, k]) for j in range(21) for k in range(2)], axis=1).reshape(n, 21, 2)
+        boxes = np.stack([of.kt_carry(tr["present"], tr["box"][:, k]) for k in range(4)], axis=1)
+        jj = x0["joints"]
+        M0 = x0["pts"]["marker"]["kp"][ref]
+        for nm, v in te["variants"].items():
+            if v["kind"] == "chain":
+                run = lambda order: of.kt_chain(pngs, kps, boxes, order, cfg["tracking"])      # noqa: E731
+            elif v["kind"] == "balanced":
+                run = lambda order: of.bc_chain(pngs, kps, boxes, order, cfg["tracking"], v["body_joints"])      # noqa: E731
+            else:
+                run = lambda order: of.dc_chain(pngs, kps, boxes, order, cfg["tracking"], DORSUM if v["mask"] == "dorsum" else None, te["clahe"] if v.get("clahe") else None)      # noqa: E731
+            fwd, bwd = run(list(range(ref, b + 1))), run(list(range(ref, a - 1, -1)))
+            Hall = {**bwd["H"], **fwd["H"]}
+            kp, tb, valid, edge = of.chain_points(tr["kp"][ref], Hall, n, W, H)
+            con = np.full((n, 21, 2), np.nan)
+            for i, Hm in Hall.items():
+                if Hm is not None:
+                    con[i][jj] = of.kt_map(M0[jj], Hm)
+            use_m = x0["use"] & np.isfinite(con[:, jj[0], 0])
+            cb = np.full((n, 4), np.nan)
+            cb[use_m] = np.c_[np.nanmin(con[use_m][:, jj], axis=1), np.nanmax(con[use_m][:, jj], axis=1)]
+            out["variants"][nm] = {"joints_pts": {"kp": kp, "box": tb, "use": valid & ~edge, "ref": ref, "size": (W, H)},
+                                   "on_marker": {"kp": con, "box": cb, "use": use_m, "ref": ref, "size": (W, H)},
+                                   "info": {"breaks": int(fwd["breaks"] + bwd["breaks"]), "inliers_median": sv_pct(fwd["inl"] + bwd["inl"], 50), "n_use": int((valid & ~edge).sum()),
+                                            "n_body_median": sv_pct(fwd.get("n_body", []) + bwd.get("n_body", []), 50) if "n_body" in fwd else None,
+                                            "n_finger_median": sv_pct(fwd.get("n_finger", []) + bwd.get("n_finger", []), 50) if "n_finger" in fwd else None}}
+            lines.append(f"  {e['file']} {nm}: 끊김 {out['variants'][nm]['info']['breaks']}, 사용 {out['variants'][nm]['info']['n_use']} / {n}, inlier {out['variants'][nm]['info']['inliers_median']}")
+    finally:
+        shutil.rmtree(tmp, ignore_errors=True)
+    return out, lines
+
+
+def te_run(cfg: dict, vid: dict, log) -> dict:
+    """124: 변형마다 마커와의 거리(cm_stats: 변형의 변환으로 옮긴 마커 대 실제 마커)와, 두 가지 점(옮긴 마커 / 옮긴 관절)의 f."""
+    import multiprocessing as mp
+    from concurrent.futures import ProcessPoolExecutor
+    te = cfg["tracker_eval"]
+    res, items = {}, []
+    for f, d in vid.items():
+        res[f] = {}
+        for nm, v in d["variants"].items():
+            x = {**d["base"], "use": v["on_marker"]["use"], "pts": {**d["base"]["pts"], "chain_on_marker": v["on_marker"]}}
+            res[f][nm] = {"info": v["info"], "stats": cm_stats(x, {"angle_bins_deg": te["angle_bins_deg"]}), "f": {}}
+            items += [(f, nm, "on_marker", {**v["on_marker"], "info": {}}), (f, nm, "joints_pts", {**v["joints_pts"], "info": {}})]
+    with ProcessPoolExecutor(max_workers=int(cfg["workers"]), mp_context=mp.get_context("spawn")) as ex:
+        fts = list(ex.map(hf.tl_template_job, [rof.estimate_args(cfg, y) for *_, y in items], chunksize=1))
+    keep = ("f", "pitch_deg", "roll_deg", "desk_tilt_deg", "turn_range_deg", "rms_px", "cost", "boundary", "start")
+    jobs, keys = [], []
+    for (f, nm, src, y), ft in zip(items, fts):
+        A = ft.get("A")
+        res[f][nm]["f"][src] = {"n_use": int(y["use"].sum())}
+        if A is None:
+            res[f][nm]["f"][src]["failed"] = ft.get("failed")
+            continue
+        todo = [(f"ramp_{r:g}", "ramp_fixed", r) for r in cfg["ramps_deg"]] + ([(f"free_{r:g}", "ramp_free", r) for r in cfg["free_starts_deg"]] if src == "on_marker" else [])
+        for mk, mode, r in todo:
+            jobs.append(rof.estimate_args(cfg, y, A) + (mode, r))
+            keys.append((f, nm, src, mk))
+    log(f"  추정 {len(jobs)}건")
+    with ProcessPoolExecutor(max_workers=int(cfg["workers"]), mp_context=mp.get_context("spawn")) as ex:
+        for (f, nm, src, mk), o in zip(keys, ex.map(hf.ms2_job, jobs, chunksize=1)):
+            res[f][nm]["f"][src][mk] = {kk: o[kk] for kk in keep if kk in o} if "failed" not in o else o
+    for f in res:
+        for nm in res[f]:
+            d = res[f][nm]["f"]["on_marker"]
+            free = {k: y for k, y in d.items() if k.startswith("free_") and isinstance(y, dict) and "cost" in y}
+            if free:
+                bk = min(free, key=lambda k: free[k]["cost"])
+                d["ramp_free"] = {**free[bk], "best_start": bk}
+    return res
+
+
+def te_summary(res: dict, cfg: dict, own: dict) -> str:
+    vids = {e["file"]: e for e in cfg["videos"]}
+    order = sorted(res, key=lambda f: (vids[f]["person"] != "teammate", f))
+    who = {"teammate": "팀원", "self": "나"}
+    names = " | ".join(f"{Path(f).stem} {who.get(vids[f]['person'], '')}" for f in order)
+    sep = "---|" * len(order)
+    var = list(cfg["tracker_eval"]["variants"])
+    rf = lambda f: float(vids[f].get("ref_f_px") or cfg["ref_f"]["value"])      # noqa: E731
+    fm = lambda v, nd=2: "-" if v is None else f"{v:.{nd}f}"      # noqa: E731
+    fs = lambda v, nd=1: "-" if v is None else f"{v:+.{nd}f}"      # noqa: E731
+    k11 = f"ramp_{cfg['ramps_deg'][0]:g}"
+
+    def fc(f, nm, src, key):
+        d = res[f][nm]["f"][src].get(key) or {}
+        if "f" not in d:
+            return "-"
+        return f"{d['f']:.0f} ({100 * (d['f'] / rf(f) - 1):+.1f}%)" + ("*" if d.get("boundary") else "") + (f", {d['pitch_deg']:.1f}°" if key == "ramp_free" else "")
+    L = ["# 124 추적 변형을 마커로 채점 summary", "",
+         "**마커 영상 4개. 사슬 변형마다 기준 프레임(첫 정지 구간)에서 앞뒤로 사슬을 만들고, 그 평면 변환으로 기준 프레임의 마커를 옮긴 위치를 실제 마커(122 의 점)와 비교한다. 판정 없음.**", "",
+         "- 변형: " + " ; ".join(f"{k} = {v}" for k, v in cfg["tracker_eval"]["variants"].items()),
+         "- 기준 f 는 이 파일에만. 거리 = j16 중 마커가 있는 관절의 RMS (px). 평면 변환이 틀린 부분 = 변형의 변환과 마커에 가장 잘 맞는 변환의 차이.", "",
+         "## 평면 변환이 틀린 부분 RMS (px)", "", f"| 변형 | {names} |", "|---|" + sep]
+    for nm in var:
+        L.append(f"| {nm} | " + " | ".join(fm(res[f][nm]["stats"]["rms_px"]["chain_h"]) for f in order) + " |")
+    for key, title, sub in (("width_pct_by_angle", "손 폭: 옮긴 마커 / 실제 마커 - 1 (%)", "chain"), ("length_pct_by_angle", "손 길이: 옮긴 마커 / 실제 마커 - 1 (%)", "chain")):
+        for b in res[order[0]][var[0]]["stats"]["n_frames_by_angle"]:
+            if all(res[f][var[0]]["stats"][key][sub][b] is None for f in order):
+                continue
+            L += ["", f"### {title}, 손 방향 {b}°", "", f"| 변형 | {names} |", "|---|" + sep]
+            for nm in var:
+                L.append(f"| {nm} | " + " | ".join(fs(res[f][nm]["stats"][key][sub][b]) for f in order) + " |")
+            L.append("| (가장 잘 맞는 평면 변환) | " + " | ".join(fs(res[f][var[0]]["stats"][key]["planar"][b]) for f in order) + " |")
+    L += ["", f"## f, 경사 {cfg['ramps_deg'][0]:g}° 고정: 변형의 변환으로 옮긴 마커", "", f"| 변형 | {names} |", "|---|" + sep]
+    L += [f"| {nm} | " + " | ".join(fc(f, nm, "on_marker", k11) for f in order) + " |" for nm in var]
+    L += ["", "## f, 경사 함께 추정: 변형의 변환으로 옮긴 마커", "", f"| 변형 | {names} |", "|---|" + sep]
+    L += [f"| {nm} | " + " | ".join(fc(f, nm, "on_marker", "ramp_free") for f in order) + " |" for nm in var]
+    L += ["", f"## f, 경사 {cfg['ramps_deg'][0]:g}° 고정: 변형의 변환으로 옮긴 MediaPipe 기준 관절 (마커 없이 쓰는 실제 추적점)", "", f"| 변형 | {names} |", "|---|" + sep]
+    L += [f"| {nm} | " + " | ".join(fc(f, nm, "joints_pts", k11) for f in order) + " |" for nm in var]
+    L += ["", "## 사슬 정보: 끊김 / 사용 프레임 / inlier 중앙값 (손 몸통 / 손가락 특징점 수)", "", f"| 변형 | {names} |", "|---|" + sep]
+    for nm in var:
+        L.append(f"| {nm} | " + " | ".join(f"{res[f][nm]['info']['breaks']} / {res[f][nm]['info']['n_use']} / {fm(res[f][nm]['info']['inliers_median'], 0)}"
+                                           + (f" ({fm(res[f][nm]['info']['n_body_median'], 0)} / {fm(res[f][nm]['info']['n_finger_median'], 0)})" if res[f][nm]['info'].get('n_body_median') is not None else "") for f in order) + " |")
+    L += ["", "## 한계", "", "- 영상 4개(사람당 2개), 모두 마커가 찍힌 손이다. 마커는 특징점이 되므로 마커 없는 손에서의 사슬과 조건이 다르다.",
+          "- 참고값(123): 마커 그대로의 f 는 팀원 +9.7 / +10.9%, 나 +12.0 / +12.4%; 가장 잘 맞는 평면 변환으로 옮긴 마커는 +8.4 / +8.3%, +12.2 / +14.6%.", ""]
+    return "\n".join(L) + "\n"
+
+
 
 def main(argv=None):
     ap = argparse.ArgumentParser(description="광류 방식 원인 확인 실험")
-    ap.add_argument("cmd", choices=["tracking-plane", "dorsum-corners", "two-plane", "joint-track-video", "geometry-synth", "pause-plane", "cotracker", "rotation-side", "points-video", "shape3d", "side-consistency", "shape-change", "pip-axis", "pause-plane2", "desk3d", "desk3d-contact", "stage-values", "stage-inputs", "cost-decompose", "lens-model", "repeatability", "marker-track", "marker-track2", "chain-vs-marker"])
+    ap.add_argument("cmd", choices=["tracking-plane", "dorsum-corners", "two-plane", "joint-track-video", "geometry-synth", "pause-plane", "cotracker", "rotation-side", "points-video", "shape3d", "side-consistency", "shape-change", "pip-axis", "pause-plane2", "desk3d", "desk3d-contact", "stage-values", "stage-inputs", "cost-decompose", "lens-model", "repeatability", "marker-track", "marker-track2", "chain-vs-marker", "tracker-eval"])
     ap.add_argument("--config", required=True)
     ap.add_argument("--out", default=None)
     ap.add_argument("--videos", type=int, default=None, help="시험 실행: 앞의 N 개 영상만, 추정 1건씩")
@@ -3223,7 +3362,7 @@ def main(argv=None):
               else s3_results_yaml(hf.resolve(a.run), own) if a.cmd == "shape3d" else sc_results_yaml(hf.resolve(a.run), own) if a.cmd == "side-consistency"
               else sh_results_yaml(hf.resolve(a.run), own) if a.cmd == "shape-change"
               else sc_results_yaml(hf.resolve(a.run), own) if a.cmd == "pip-axis" else pq_results_yaml(hf.resolve(a.run), own) if a.cmd == "pause-plane2"
-              else d3_results_yaml(hf.resolve(a.run), own) if a.cmd in ("desk3d", "desk3d-contact") else sv_results_yaml(hf.resolve(a.run), own) if a.cmd in ("stage-values", "stage-inputs") else cdx_results_yaml(hf.resolve(a.run), own) if a.cmd == "cost-decompose" else lm_results_yaml(hf.resolve(a.run), own) if a.cmd in ("lens-model", "repeatability", "marker-track", "marker-track2", "chain-vs-marker") else jt_results_yaml(hf.resolve(a.run), own) if a.cmd == "joint-track-video"
+              else d3_results_yaml(hf.resolve(a.run), own) if a.cmd in ("desk3d", "desk3d-contact") else sv_results_yaml(hf.resolve(a.run), own) if a.cmd in ("stage-values", "stage-inputs") else cdx_results_yaml(hf.resolve(a.run), own) if a.cmd == "cost-decompose" else lm_results_yaml(hf.resolve(a.run), own) if a.cmd in ("lens-model", "repeatability", "marker-track", "marker-track2", "chain-vs-marker", "tracker-eval") else jt_results_yaml(hf.resolve(a.run), own) if a.cmd == "joint-track-video"
               else results_yaml(a.cmd, hf.resolve(a.run), own))
         return None
     cfg = rof.load_settings({**own, "joint_set": "j16"} if own.get("joint_ids") else own)      # joint_ids 를 직접 적으면 joint_set 은 이름일 뿐이라 기본 묶음으로 읽고 아래에서 바꿈
@@ -3231,7 +3370,7 @@ def main(argv=None):
     cfg["videos"] = cfg["videos"] + [dict(v) for v in own.get("extra_videos", [])]      # 기본 설정 목록에 없는 새 영상 (file, person, ref_f_px)
     if own.get("joint_ids"):                                           # 기본 설정의 관절 묶음(j16, j21) 대신 직접 적은 관절 번호 (joint_set 은 이름으로만 씀)
         cfg["joint_ids"] = [int(j) for j in own["joint_ids"]]
-    cfg.update({k: own[k] for k in ("variants", "clahe", "two_plane", "joint_track", "render", "reference", "geometry_synth", "pause_plane", "cotracker", "rotation_side", "points_video", "shape3d", "side_consistency", "shape_change", "axis_base_joints", "pause_plane2", "desk3d", "stage_values", "stage_inputs", "cost_decompose", "lens_model", "repeatability", "marker_track", "chain_vs_marker") if k in own})
+    cfg.update({k: own[k] for k in ("variants", "clahe", "two_plane", "joint_track", "render", "reference", "geometry_synth", "pause_plane", "cotracker", "rotation_side", "points_video", "shape3d", "side_consistency", "shape_change", "axis_base_joints", "pause_plane2", "desk3d", "stage_values", "stage_inputs", "cost_decompose", "lens_model", "repeatability", "marker_track", "chain_vs_marker", "tracker_eval") if k in own})
     if a.videos:
         cfg["videos"] = cfg["videos"][:a.videos]
         cfg["free_starts_deg"] = []
@@ -3250,7 +3389,7 @@ def main(argv=None):
         shutil.copytree(hf.resolve(own["detection_cache_from"]), run_root / "detection_cache")
     import multiprocessing as mp
     from concurrent.futures import ProcessPoolExecutor
-    job = {"tracking-plane": tp_job, "dorsum-corners": dc_job, "two-plane": tw_points, "joint-track-video": jt_job, "geometry-synth": rof.video_points, "pause-plane": pp_job, "rotation-side": rs_load, "points-video": pv_job, "side-consistency": sc_load, "shape-change": sh_job, "pip-axis": sc_load, "pause-plane2": pq_job, "stage-values": sv_job, "stage-inputs": si_job, "marker-track": mt_job, "marker-track2": mt2_job, "chain-vs-marker": cm_load}.get(a.cmd)
+    job = {"tracking-plane": tp_job, "dorsum-corners": dc_job, "two-plane": tw_points, "joint-track-video": jt_job, "geometry-synth": rof.video_points, "pause-plane": pp_job, "rotation-side": rs_load, "points-video": pv_job, "side-consistency": sc_load, "shape-change": sh_job, "pip-axis": sc_load, "pause-plane2": pq_job, "stage-values": sv_job, "stage-inputs": si_job, "marker-track": mt_job, "marker-track2": mt2_job, "chain-vs-marker": cm_load, "tracker-eval": te_job}.get(a.cmd)
     vid = {}
     if a.cmd == "cotracker":                                           # GPU 작업 + 추정을 ct_run 이 한꺼번에
         res = ct_run(cfg, own, log, run_root)
@@ -3309,6 +3448,9 @@ def main(argv=None):
     elif a.cmd == "chain-vs-marker":
         res = cm_run(cfg, vid, log)
         text_sum = cm_summary(res, cfg, own)
+    elif a.cmd == "tracker-eval":
+        res = te_run(cfg, vid, log)
+        text_sum = te_summary(res, cfg, own)
     elif a.cmd == "pip-axis":
         res = pa_run(cfg, vid, log)
         text_sum = sc_summary(res, cfg, own)
