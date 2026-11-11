@@ -1,0 +1,43 @@
+# 130: 손가락마다 변환을 따로 구하는 사슬 (사용자 2026-11-11: "일단 1번은 돌려놓고" - 129 뒤 제안한 "손가락마다 변환을 따로 구하기"), 기록용, 판정 없음.
+# 127: 특징점 영역에서 엄지를 빼면 새 폰의 사람 사이 간격이 약 20%p -> 약 10%p. 128 / 129: 넓히는 양·특징점 간격을 바꾸는 것은 마커 없는 영상에서 간격을 줄이지 못함.
+# 123: 마커에 가장 잘 맞는 평면 변환은 맞는 f 를 낸다 -> 변환을 손의 어느 부분에 맞추느냐가 문제. 손 전체를 한 변환으로 묶지 않고 손가락(검지~소지)마다 그 손가락 주변 특징점으로 변환을 따로 구한다.
+# 손가락 영역 = 그 손가락 관절 4개(MCP~끝)의 볼록 껍질을 손 상자의 4% 넓힌 것. 특징점이 적어 호모그래피 대신 아핀(6 자유도)과 닮음(4 자유도) 두 가지. inlier 8개 미만인 단계는 손 전체 사슬(엄지 제외)의 단계 변환으로 대신.
+# 손목·엄지(추정에 쓰지 않음)는 손 전체 사슬로 옮긴다. 값(4%, 손가락당 특징점 120, 최소 inlier 8)은 결과를 보지 않고 정함. 영상 = 127 의 24개 + 마커 영상 4개(추정만; 마커는 쓰지 않음).
+# 읽는 법(실행 전에 정함): 새 폰에서 팀원 중앙값과 내 중앙값의 간격이 no_thumb(약 10%p)보다 뚜렷이 줄고, 묶음 안 흩어짐이 커지지 않으면 효과가 있는 것. 기준 f 는 summary.md 에만.
+experiment:
+  name: 130_per_finger
+  seed: 42
+settings_config: configs/74b_multistart_rerun.yaml
+joint_set: j16
+code: {branch: optical_flow, commit: 9385a54, modules: [HandCalib/optical_flow/experiments.py]}
+ramps_deg: [11]
+reference: {mode: first_pause, pause_gap_frames: 15, min_pause_frames: 5}
+extra_videos:
+  - {file: IMG_7384.MOV, person: teammate, ref_f_px: 1672}
+  - {file: IMG_7385.MOV, person: self, ref_f_px: 1672}
+  - {file: IMG_7387.MOV, person: teammate, ref_f_px: 1672}
+  - {file: IMG_7388.MOV, person: self, ref_f_px: 1672}
+  - {file: IMG_7401.MOV, person: self, ref_f_px: 1672}
+  - {file: IMG_7402.MOV, person: self, ref_f_px: 1672}
+  - {file: IMG_7403.MOV, person: teammate, ref_f_px: 1672}
+  - {file: IMG_7404.MOV, person: teammate, ref_f_px: 1672}
+  - {file: IMG_7399.MOV, person: teammate, ref_f_px: 1672}
+  - {file: IMG_7400.MOV, person: teammate, ref_f_px: 1672}
+  - {file: IMG_7405.MOV, person: self, ref_f_px: 1672}
+  - {file: IMG_7406.MOV, person: self, ref_f_px: 1672}
+per_finger:
+  mask_global: [0, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20]
+  finger_dilate_frac: 0.04
+  max_corners: 120
+  min_inliers: 8
+  groups:
+    새 폰 팀원: ["IMG_7351 - 복사본.MOV", "IMG_7352 - 복사본.MOV", IMG_7384.MOV, IMG_7387.MOV, IMG_7403.MOV, IMG_7404.MOV]
+    새 폰 나: ["IMG_7354 - 복사본.MOV", "IMG_7355 - 복사본.MOV", IMG_7385.MOV, IMG_7388.MOV, IMG_7401.MOV, IMG_7402.MOV]
+    이전 폰 나: [IMG_7346.MOV, IMG_7347.MOV, IMG_7348.MOV, IMG_7349.MOV, IMG_7350.MOV, IMG_7351.MOV, IMG_7352.MOV, IMG_7353.MOV, IMG_7354.MOV, IMG_7355.MOV, IMG_7356.MOV, IMG_7357.MOV]
+    마커 영상 팀원: [IMG_7399.MOV, IMG_7400.MOV]
+    마커 영상 나: [IMG_7405.MOV, IMG_7406.MOV]
+workers: 56
+video_workers: 12
+output:
+  root: runs/130_per_finger
+  results_yaml: results/130_per_finger.yaml
