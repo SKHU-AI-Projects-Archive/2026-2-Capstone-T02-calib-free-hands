@@ -1754,9 +1754,218 @@ class _nullpool:
         return False
 
 
+# ----------------------------------------------------------------------------------------------------
+# 116: 함수(단계)별 중간값 비교 (교수님 제안: "함수별로 값이 어떻게 얼마나 다른지") - 팀원 영상 vs 내 영상
+# ----------------------------------------------------------------------------------------------------
+SV_FINGERS = {"index": (5, 8), "middle": (9, 12), "ring": (13, 16), "pinky": (17, 20)}
+
+
+def sv_pct(x, q):
+    x = np.asarray(x, float)
+    x = x[np.isfinite(x)]
+    return float(np.percentile(x, q)) if len(x) else None
+
+
+def sv_job(args):
+    """한 영상: 앞 단계(프레임 추출 -> MediaPipe 검출 -> track -> 기준 프레임 -> 광류 사슬)를 run.py 와 같은 함수로 다시 돌리며 단계마다 값을 남긴다. 추적점은 저장된 점(stage_values.points_run)과 비교."""
+    e, cfg, run_root = args
+    import cv2
+    cv2.setNumThreads(1)
+    sv = cfg["stage_values"]
+    pngs, times, tr, (W, H), tmp = prepare(e, cfg, run_root)
+    try:
+        ref = rof.choose_reference_pose(tr, (W, H), cfg)
+        x = of.track_hand(pngs, tr["kp"], tr["present"], tr["box"], (W, H), cfg["tracking"], ref=ref)
+    finally:
+        shutil.rmtree(tmp, ignore_errors=True)
+    x["size"] = (W, H)
+    pres = tr["present"]
+    bl = of.box_long(np.asarray(tr["box"], float))
+    sel = hf.od_select(tr["kp"], tr["mask"], pres, tr["box"], (W, H), cfg["selection"])
+    still = np.isfinite(sel["motion"]) & (sel["motion"] < float(cfg["selection"]["still_frac"])) & pres
+    ang = hand_angle(tr)
+    ids = cfg["joint_ids"]
+    drift = region_drift(x["kp"], np.where(pres[:, None, None], tr["kp"], np.nan), tr["box"], x["use"], ids)
+    saved = load_points(sv["points_run"], e["file"])
+    same = saved["kp"].shape == x["kp"].shape
+    dsave = float(np.nanmax(np.abs(saved["kp"] - x["kp"]))) if same and np.isfinite(x["kp"]).any() else None
+    inl = np.asarray(x["inl"], float)
+    out = {
+        "fresp_prepare": {"n_frames": int(len(times)), "width": int(W), "height": int(H), "duration_s": float(times[-1] - times[0])},
+        "mediapipe_track": {"n_present": int(pres.sum()), "detect_rate": float(pres.mean()), "box_long_px_median": sv_pct(bl[pres], 50),
+                            "box_long_over_height": sv_pct(bl[pres] / H, 50), "kconf_median": sv_pct(tr["kconf"][pres][:, ids], 50),
+                            "hand_angle_min_deg": sv_pct(ang - ang[np.isfinite(ang)][0], 0), "hand_angle_max_deg": sv_pct(ang - ang[np.isfinite(ang)][0], 100)},
+        "od_select": {"n_still": int(still.sum()), "still_motion_median_pct": sv_pct(100 * sel["motion"][still], 50), "motion_median_pct": sv_pct(100 * sel["motion"][pres], 50),
+                      "shape_z_median": sv_pct(sel["shape_z"][pres], 50)},
+        "choose_reference_pose": {"ref": int(ref), "ref_time_s": float(times[ref]), "ref_box_long_px": float(bl[ref])},
+        "track_hand": {"n_use": int(x["use"].sum()), "breaks": int(x["breaks"]), "inliers_median": sv_pct(inl, 50), "inliers_p10": sv_pct(inl, 10), "inliers_min": sv_pct(inl, 0),
+                       "drift_median_pct": sv_pct(drift, 50), "drift_p90_pct": sv_pct(drift, 90), "max_diff_to_saved_px": dsave},
+    }
+    pts = {"kp": x["kp"], "box": x["box"], "use": x["use"], "ref": x["ref"], "size": (W, H)}
+    return {"stages": out, "points": pts}, [f"  {e['file']}: 프레임 {len(times)}, 기준 {ref}, 사용 {int(x['use'].sum())}, 저장점과 최대 차이 {dsave}"]
+
+
+def sv_problem_values(x: dict, cfg: dict, A: dict) -> dict:
+    """od_bridge -> free_problem / _restrict 의 값과, free_template 결과(평면 손 모양, 프레임별 자세 od_poses)의 값."""
+    ecfg = cfg["pipeline"]["estimate"]
+    ids = cfg["joint_ids"]
+    pb = hf.od_bridge(x["kp"], np.isfinite(x["kp"]).all(2), np.flatnonzero(x["use"]), x["box"], tuple(x["size"]), ecfg, ids)
+    pr, rid = hf._restrict(pb, max_frames=120)
+    out = {"od_bridge": {"n_frames": int(len(pb.keep)), "n_points": int(pb.n_points), "cx": float(pb.cx), "cy": float(pb.cy), "huber_px_median": sv_pct(pb.huber, 50)},
+           "_restrict": {"n_frames": int(len(pr.keep)), "n_joints": int(len(rid)), "n_points": int(pr.n_points)}}
+    if A is None:
+        return out
+    T = np.asarray(A["template"], float)
+    jid = [int(j) for j in A["joint_ids"]]
+    P = {j: T[jid.index(j)] for j in jid}
+    L = lambda a, b: float(np.linalg.norm(P[a] - P[b])) if a in P and b in P else None      # noqa: E731
+    width = L(5, 17)
+    fin = {k: L(a, b) for k, (a, b) in SV_FINGERS.items()}
+    c = np.asarray(A["profile_cost"], float)
+    out["free_template"] = {"f": float(A["f"]), "f_grid": float(A["f_grid"]), "at_grid_edge": bool(A["at_grid_edge"]), "rms_px": float((A.get("ba") or {}).get("rms_px", np.nan)),
+                            "profile_f": list(map(float, A["profile_f"])), "profile_cost": c.tolist(), "profile_max_over_min": float(c.max() / c.min()),
+                            "finger_over_palm_width": {k: (v / width if v and width else None) for k, v in fin.items()},
+                            "finger_over_middle": {k: (v / fin["middle"] if v and fin["middle"] else None) for k, v in fin.items()}}
+    po = hf.od_poses(pr, float(A["f"]), T, list(range(len(jid))), of.box_long(np.asarray(x["box"], float)[np.flatnonzero(x["use"])]))
+    k = np.asarray(pr.keep, int)
+    tl, tn, rs = po["tilt_deg"][k], po["turn_deg"][k], po["res_pct"][k]
+    out["od_poses"] = {"tilt_median_deg": sv_pct(tl, 50), "tilt_p10_deg": sv_pct(tl, 10), "tilt_p90_deg": sv_pct(tl, 90),
+                       "turn_range_deg": (sv_pct(tn, 100) - sv_pct(tn, 0)) if np.isfinite(tn).any() else None, "res_median_pct": sv_pct(rs, 50)}
+    return out
+
+
+def sv_run(cfg: dict, vid: dict, log) -> dict:
+    """116: 영상마다 free_template(tl_template_job) -> 경사 고정·함께 추정(ms2_job, 실험 94 와 같은 목록)과, 그 사이 함수들의 값."""
+    import multiprocessing as mp
+    from concurrent.futures import ProcessPoolExecutor
+    files = list(vid)
+    pts = {f: vid[f]["points"] for f in files}
+    with ProcessPoolExecutor(max_workers=int(cfg["workers"]), mp_context=mp.get_context("spawn")) as ex:
+        fts = dict(zip(files, ex.map(hf.tl_template_job, [rof.estimate_args(cfg, pts[f]) for f in files], chunksize=1)))
+    todo = [(f"ramp_{r:g}", "ramp_fixed", r) for r in cfg["ramps_deg"]] + [(f"free_{r:g}", "ramp_free", r) for r in cfg["free_starts_deg"]]
+    res, jobs, keys = {}, [], []
+    for f in files:
+        A = fts[f].get("A")
+        res[f] = dict(vid[f]["stages"])
+        res[f].update(sv_problem_values(pts[f], cfg, A))
+        if A is None:
+            res[f]["free_template"] = {"failed": fts[f].get("failed")}
+            continue
+        for mk, mode, r in todo:
+            jobs.append(rof.estimate_args(cfg, pts[f], A) + (mode, r))
+            keys.append((f, mk))
+    log(f"  추정 {len(jobs)}건")
+    ms = {}
+    with ProcessPoolExecutor(max_workers=int(cfg["workers"]), mp_context=mp.get_context("spawn")) as ex:
+        for (f, mk), o in zip(keys, ex.map(hf.ms2_job, jobs, chunksize=1)):
+            ms.setdefault(f, {})[mk] = o
+    keep = ("f", "pitch_deg", "roll_deg", "desk_tilt_deg", "turn_range_deg", "rms_px", "cost", "boundary", "start", "profile_f", "profile_cost")
+    for f, d in ms.items():
+        fixed = {k: v for k, v in d.items() if k.startswith("ramp_")}
+        free = {k: v for k, v in d.items() if k.startswith("free_") and "failed" not in v}
+        res[f]["dk_estimate_ms"] = {**{k: ({kk: v[kk] for kk in keep if kk in v} if "failed" not in v else v) for k, v in fixed.items()}}
+        if free:
+            bk = min(free, key=lambda k: free[k]["cost"])
+            res[f]["dk_estimate_ms"]["ramp_free"] = {**{kk: free[bk][kk] for kk in keep if kk in free[bk]}, "best_start": bk,
+                                                     "all_starts": {k: {kk: v[kk] for kk in ("f", "pitch_deg", "cost")} for k, v in free.items()}}
+    return res
+
+
+def sv_summary(res: dict, cfg: dict, own: dict) -> str:
+    vids = {e["file"]: e for e in cfg["videos"]}
+    order = sorted(res, key=lambda f: (vids[f]["person"] != "teammate", f))
+    who = {"teammate": "팀원", "self": "나"}
+    head = "| 함수 | 값 | " + " | ".join(f"{Path(f).stem} {who.get(vids[f]['person'], vids[f]['person'])}" for f in order) + " |"
+    sep = "|---|---|" + "---|" * len(order)
+
+    def g(d, path):
+        for p in path:
+            if not isinstance(d, dict) or p not in d:
+                return None
+            d = d[p]
+        return d
+
+    def fmt(v, nd):
+        if v is None:
+            return "-"
+        if isinstance(v, bool):
+            return "예" if v else "아니오"
+        return f"{v:.{nd}f}" if isinstance(v, float) else str(v)
+
+    def row(fn, lab, path, nd=1):
+        return f"| {fn} | {lab} | " + " | ".join(fmt(g(res[f], path), nd) for f in order) + " |"
+
+    def frow(fn, lab, path):
+        cells = []
+        for f in order:
+            v = g(res[f], path)
+            rf = float(vids[f].get("ref_f_px") or cfg["ref_f"]["value"])
+            cells.append("-" if v is None else f"{v:.0f} ({100 * (v / rf - 1):+.1f}%)")
+        return f"| {fn} | {lab} | " + " | ".join(cells) + " |"
+    R = [("fresp_prepare", "프레임 수", ["fresp_prepare", "n_frames"], 0), ("fresp_prepare", "길이 (s)", ["fresp_prepare", "duration_s"], 1),
+         ("MediaPipe + track", "검출 프레임", ["mediapipe_track", "n_present"], 0), ("MediaPipe + track", "검출률", ["mediapipe_track", "detect_rate"], 3),
+         ("MediaPipe + track", "손 상자 긴 변 중앙값 (px)", ["mediapipe_track", "box_long_px_median"], 0), ("MediaPipe + track", "손 상자 / 화면 높이", ["mediapipe_track", "box_long_over_height"], 3),
+         ("MediaPipe + track", "관절 신뢰도 중앙값", ["mediapipe_track", "kconf_median"], 3),
+         ("MediaPipe + track", "손 방향 최소 (도, 첫 검출 대비)", ["mediapipe_track", "hand_angle_min_deg"], 0), ("MediaPipe + track", "손 방향 최대 (도)", ["mediapipe_track", "hand_angle_max_deg"], 0),
+         ("od_select", "정지 프레임 수", ["od_select", "n_still"], 0), ("od_select", "정지 중 검출 흔들림 (상자 대비 %)", ["od_select", "still_motion_median_pct"], 3),
+         ("od_select", "움직임 중앙값 (상자 대비 %)", ["od_select", "motion_median_pct"], 2), ("od_select", "손 모양 z 중앙값", ["od_select", "shape_z_median"], 2),
+         ("choose_reference_pose", "기준 프레임", ["choose_reference_pose", "ref"], 0), ("choose_reference_pose", "기준 시각 (s)", ["choose_reference_pose", "ref_time_s"], 2),
+         ("choose_reference_pose", "기준 프레임 손 상자 (px)", ["choose_reference_pose", "ref_box_long_px"], 0),
+         ("track_hand", "사용 프레임", ["track_hand", "n_use"], 0), ("track_hand", "끊김", ["track_hand", "breaks"], 0),
+         ("track_hand", "inlier 중앙값", ["track_hand", "inliers_median"], 0), ("track_hand", "inlier 하위 10%", ["track_hand", "inliers_p10"], 0),
+         ("track_hand", "추적점-검출 관절 거리 중앙값 (상자 %)", ["track_hand", "drift_median_pct"], 2), ("track_hand", "같은 거리 상위 10% (상자 %)", ["track_hand", "drift_p90_pct"], 2),
+         ("track_hand", "저장된 점(100)과 최대 차이 (px)", ["track_hand", "max_diff_to_saved_px"], 3),
+         ("od_bridge", "프레임", ["od_bridge", "n_frames"], 0), ("od_bridge", "Huber 폭 중앙값 (px)", ["od_bridge", "huber_px_median"], 2),
+         ("_restrict", "추정에 쓰는 프레임", ["_restrict", "n_frames"], 0), ("_restrict", "관절", ["_restrict", "n_joints"], 0)]
+    L = ["# 116 함수별 값 비교 summary", "",
+         "**같은 카메라·같은 장소에서 찍은 새 영상 4개(팀원 7384·7387, 나 7385·7388)에 광류 파이프라인(실험 94 와 같은 설정: 첫 정지 구간 기준, j16, 경사 11° 고정 + 함께 추정)을 "
+         "다시 돌리며 함수마다 나온 값을 나란히 적는다. 판정 없음.**", "",
+         "- 기준 f(1672 px, 새 폰 체커보드)는 이 파일에만.", "", "## 앞 단계 (영상 -> 추적점)", "", head, sep]
+    L += [row(*r) for r in R]
+    L += ["", "## 뒤 단계 (추적점 -> f)", "", head, sep,
+          frow("free_template", "f (오차)", ["free_template", "f"]), row("free_template", "탐색 범위 끝 (거친 단계)", ["free_template", "at_grid_edge"]),
+          row("free_template", "RMS (px)", ["free_template", "rms_px"], 2), row("free_template", "f 곡선 최대/최소 비용", ["free_template", "profile_max_over_min"], 2)]
+    for k in SV_FINGERS:
+        L.append(row("free_template 손 모양", f"{k} 길이 / 손바닥 폭(5-17)", ["free_template", "finger_over_palm_width", k], 3))
+    L += [row("od_poses (free_template f)", "손 평면 기울기 중앙값 (도)", ["od_poses", "tilt_median_deg"], 1),
+          row("od_poses", "기울기 하위 10% (도)", ["od_poses", "tilt_p10_deg"], 1),
+          row("od_poses", "기울기 상위 10% (도)", ["od_poses", "tilt_p90_deg"], 1), row("od_poses", "회전 범위 (도)", ["od_poses", "turn_range_deg"], 0),
+          row("od_poses", "재투영 오차 중앙값 (상자 %)", ["od_poses", "res_median_pct"], 2)]
+    for r in cfg["ramps_deg"]:
+        k = f"ramp_{r:g}"
+        L += [frow(f"dk_estimate_ms 경사 {r:g}° 고정", "f (오차)", ["dk_estimate_ms", k, "f"]), row("", "책상 기울기 (도)", ["dk_estimate_ms", k, "desk_tilt_deg"], 1),
+              row("", "회전 범위 (도)", ["dk_estimate_ms", k, "turn_range_deg"], 0), row("", "RMS (px)", ["dk_estimate_ms", k, "rms_px"], 2)]
+    L += [frow("dk_estimate_ms 경사 함께 추정", "f (오차)", ["dk_estimate_ms", "ramp_free", "f"]), row("", "경사 pitch (도)", ["dk_estimate_ms", "ramp_free", "pitch_deg"], 1),
+          row("", "roll (도)", ["dk_estimate_ms", "ramp_free", "roll_deg"], 1), row("", "책상 기울기 (도)", ["dk_estimate_ms", "ramp_free", "desk_tilt_deg"], 1),
+          row("", "RMS (px)", ["dk_estimate_ms", "ramp_free", "rms_px"], 2), row("", "고른 시작", ["dk_estimate_ms", "ramp_free", "best_start"])]
+    L += ["", "## f 곡선 (경사 11° 고정, f 마다 비용 / 최소 비용)", ""]
+    for f in order:
+        d = g(res[f], ["dk_estimate_ms", f"ramp_{cfg['ramps_deg'][0]:g}"]) or {}
+        if d.get("profile_f"):
+            c = np.asarray(d["profile_cost"], float)
+            L.append(f"- {f}: " + ", ".join(f"{pf:.0f}: {cc / c.min():.2f}" for pf, cc in zip(d["profile_f"], c)))
+    L += ["", "## 한계", "", "- 영상 4개(사람당 2개). 차이가 사람 때문인지 그 영상 때문인지는 이 표만으로 가를 수 없다.",
+          "- 손 모양 비율은 free_template 이 f 와 함께 찾은 평면 모양이라 f 가 틀리면 같이 틀어진다.", ""]
+    return "\n".join(L) + "\n"
+
+
+def sv_results_yaml(run_dir: Path, own: dict) -> Path:
+    """116 의 값만 (기준 f, 오차 없음)."""
+    r = json.loads((run_dir / "results.json").read_text())["real"]
+    m = json.loads((run_dir / "metadata.json").read_text())
+    rv = lambda x: x if not isinstance(x, float) else (round(x, 4) if np.isfinite(x) else None)      # noqa: E731
+    deep = lambda d: {k: (deep(v) if isinstance(v, dict) else [rv(t) for t in v] if isinstance(v, list) else rv(v)) for k, v in d.items()}      # noqa: E731
+    out = {"experiment": own["experiment"]["name"], "run": str(run_dir.resolve().relative_to(hf.PROJECT_ROOT)), "code_commit": m["git"]["commit"][:7],
+           "git_dirty_at_run": m["git"]["git_dirty"], "videos": {f: deep(d) for f, d in r.items()}}
+    p = hf.resolve(own["output"]["results_yaml"])
+    p.write_text(yaml.safe_dump(hf.jsonable(out), allow_unicode=True, sort_keys=False))
+    return p
+
+
+
 def main(argv=None):
     ap = argparse.ArgumentParser(description="광류 방식 원인 확인 실험")
-    ap.add_argument("cmd", choices=["tracking-plane", "dorsum-corners", "two-plane", "joint-track-video", "geometry-synth", "pause-plane", "cotracker", "rotation-side", "points-video", "shape3d", "side-consistency", "shape-change", "pip-axis", "pause-plane2", "desk3d", "desk3d-contact"])
+    ap.add_argument("cmd", choices=["tracking-plane", "dorsum-corners", "two-plane", "joint-track-video", "geometry-synth", "pause-plane", "cotracker", "rotation-side", "points-video", "shape3d", "side-consistency", "shape-change", "pip-axis", "pause-plane2", "desk3d", "desk3d-contact", "stage-values"])
     ap.add_argument("--config", required=True)
     ap.add_argument("--out", default=None)
     ap.add_argument("--videos", type=int, default=None, help="시험 실행: 앞의 N 개 영상만, 추정 1건씩")
@@ -1772,7 +1981,7 @@ def main(argv=None):
               else s3_results_yaml(hf.resolve(a.run), own) if a.cmd == "shape3d" else sc_results_yaml(hf.resolve(a.run), own) if a.cmd == "side-consistency"
               else sh_results_yaml(hf.resolve(a.run), own) if a.cmd == "shape-change"
               else sc_results_yaml(hf.resolve(a.run), own) if a.cmd == "pip-axis" else pq_results_yaml(hf.resolve(a.run), own) if a.cmd == "pause-plane2"
-              else d3_results_yaml(hf.resolve(a.run), own) if a.cmd in ("desk3d", "desk3d-contact") else jt_results_yaml(hf.resolve(a.run), own) if a.cmd == "joint-track-video"
+              else d3_results_yaml(hf.resolve(a.run), own) if a.cmd in ("desk3d", "desk3d-contact") else sv_results_yaml(hf.resolve(a.run), own) if a.cmd == "stage-values" else jt_results_yaml(hf.resolve(a.run), own) if a.cmd == "joint-track-video"
               else results_yaml(a.cmd, hf.resolve(a.run), own))
         return None
     cfg = rof.load_settings({**own, "joint_set": "j16"} if own.get("joint_ids") else own)      # joint_ids 를 직접 적으면 joint_set 은 이름일 뿐이라 기본 묶음으로 읽고 아래에서 바꿈
@@ -1780,7 +1989,7 @@ def main(argv=None):
     cfg["videos"] = cfg["videos"] + [dict(v) for v in own.get("extra_videos", [])]      # 기본 설정 목록에 없는 새 영상 (file, person, ref_f_px)
     if own.get("joint_ids"):                                           # 기본 설정의 관절 묶음(j16, j21) 대신 직접 적은 관절 번호 (joint_set 은 이름으로만 씀)
         cfg["joint_ids"] = [int(j) for j in own["joint_ids"]]
-    cfg.update({k: own[k] for k in ("variants", "clahe", "two_plane", "joint_track", "render", "reference", "geometry_synth", "pause_plane", "cotracker", "rotation_side", "points_video", "shape3d", "side_consistency", "shape_change", "axis_base_joints", "pause_plane2", "desk3d") if k in own})
+    cfg.update({k: own[k] for k in ("variants", "clahe", "two_plane", "joint_track", "render", "reference", "geometry_synth", "pause_plane", "cotracker", "rotation_side", "points_video", "shape3d", "side_consistency", "shape_change", "axis_base_joints", "pause_plane2", "desk3d", "stage_values") if k in own})
     if a.videos:
         cfg["videos"] = cfg["videos"][:a.videos]
         cfg["free_starts_deg"] = []
@@ -1799,7 +2008,7 @@ def main(argv=None):
         shutil.copytree(hf.resolve(own["detection_cache_from"]), run_root / "detection_cache")
     import multiprocessing as mp
     from concurrent.futures import ProcessPoolExecutor
-    job = {"tracking-plane": tp_job, "dorsum-corners": dc_job, "two-plane": tw_points, "joint-track-video": jt_job, "geometry-synth": rof.video_points, "pause-plane": pp_job, "rotation-side": rs_load, "points-video": pv_job, "side-consistency": sc_load, "shape-change": sh_job, "pip-axis": sc_load, "pause-plane2": pq_job}.get(a.cmd)
+    job = {"tracking-plane": tp_job, "dorsum-corners": dc_job, "two-plane": tw_points, "joint-track-video": jt_job, "geometry-synth": rof.video_points, "pause-plane": pp_job, "rotation-side": rs_load, "points-video": pv_job, "side-consistency": sc_load, "shape-change": sh_job, "pip-axis": sc_load, "pause-plane2": pq_job, "stage-values": sv_job}.get(a.cmd)
     vid = {}
     if a.cmd == "cotracker":                                           # GPU 작업 + 추정을 ct_run 이 한꺼번에
         res = ct_run(cfg, own, log, run_root)
@@ -1828,6 +2037,9 @@ def main(argv=None):
     elif a.cmd == "points-video":
         res = vid
         text_sum = pv_summary(res, cfg)
+    elif a.cmd == "stage-values":
+        res = sv_run(cfg, vid, log)
+        text_sum = sv_summary(res, cfg, own)
     elif a.cmd == "pip-axis":
         res = pa_run(cfg, vid, log)
         text_sum = sc_summary(res, cfg, own)
