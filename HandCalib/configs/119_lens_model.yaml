@@ -1,0 +1,39 @@
+# 119: 렌즈 모델 (사용자 2026-11-11: "주점은 cx = 955.0, cy = 547.5이고, 왜곡 계수는 k1 = 0.2227, k2 = −0.9121(p1 = p2 = k3 = 0)입니다. 1920×1080 가로 영상 기준"), 기록용, 판정 없음.
+# 지금까지 모든 추정은 주점 = 화면 가운데(960, 540), 왜곡 없음으로 했다. 116~118: f 를 5~10% 틀리게 하는 체계적 점 오차는 0.4~0.9 px 인데, 위 왜곡은 손 영역에서
+# 0.4 px(주점에서 172 px) ~ 4 px(400 px)다. 팀원은 손이 화면에서 더 넓게 움직였다(손 중심 좌우 이동 242 / 198 px 대 115 / 129 px).
+# 새 폰으로 찍은 영상 8개(73 의 4개 + 100 의 4개; 팀원 4, 나 4)의 저장된 추적점(99, 100: 94 와 같은 광류 사슬, 첫 정지 구간 기준, j16)에 변형 셋을 넣어 같은 추정을 돌린다:
+#   center = 지금까지와 같음, pp = 주점만 보정값, pp_dist = 주점 + 왜곡. 경사 11° 고정 + 함께 추정(시작 5/12/19°).
+# 읽는 법(실행 전에 정함): pp_dist 에서 팀원 영상의 오차가 center 보다 뚜렷이 줄고 내 영상이 나빠지지 않으면 렌즈 모델이 원인의 일부. 양쪽이 같이 움직이거나 변화가 작으면 원인이 아님.
+# 왜곡 계수를 코드의 긴 변 기준으로 바꾸는 데 보정 f(1672)를 쓴다(진단용). 기준 f 는 summary.md 에만.
+experiment:
+  name: 119_lens_model
+  seed: 42
+settings_config: configs/74b_multistart_rerun.yaml
+joint_set: j16
+code: {branch: optical_flow, commit: 8de202e, modules: [HandCalib/optical_flow/experiments.py]}
+ramps_deg: [11]
+videos: ["IMG_7354 - 복사본.MOV", "IMG_7355 - 복사본.MOV", "IMG_7351 - 복사본.MOV", "IMG_7352 - 복사본.MOV"]
+extra_videos:
+  - {file: IMG_7384.MOV, person: teammate, ref_f_px: 1672}
+  - {file: IMG_7385.MOV, person: self, ref_f_px: 1672}
+  - {file: IMG_7387.MOV, person: teammate, ref_f_px: 1672}
+  - {file: IMG_7388.MOV, person: self, ref_f_px: 1672}
+lens_model:
+  points:
+    "IMG_7354 - 복사본.MOV": runs/99_rotation_side/20261110T023248Z
+    "IMG_7355 - 복사본.MOV": runs/99_rotation_side/20261110T023248Z
+    "IMG_7351 - 복사본.MOV": runs/99_rotation_side/20261110T023248Z
+    "IMG_7352 - 복사본.MOV": runs/99_rotation_side/20261110T023248Z
+    IMG_7384.MOV: runs/100_new_pair_shoot/20261110T032637Z
+    IMG_7385.MOV: runs/100_new_pair_shoot/20261110T032637Z
+    IMG_7387.MOV: runs/100_new_pair_shoot/20261110T032637Z
+    IMG_7388.MOV: runs/100_new_pair_shoot/20261110T032637Z
+  variants:
+    center: {principal_point: center, distortion: null}
+    pp: {principal_point: [955.0, 547.5], distortion: null}
+    pp_dist: {principal_point: [955.0, 547.5], distortion: {k1: 0.2227, k2: -0.9121, p1: 0.0, p2: 0.0, calib_f_px: 1672}}
+workers: 56
+video_workers: 8
+output:
+  root: runs/119_lens_model
+  results_yaml: results/119_lens_model.yaml
