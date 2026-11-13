@@ -1,0 +1,24 @@
+schema_version: 1
+base_commit: d78aa150a3fd3994e7ac6611291f37cd5d29a71c
+failure_type: config_relative_checkpoint_path_not_resolved
+raw_checkpoint: runs/02_anycalib_finetune/train/checkpoint_best.pt
+resolved_checkpoint: HandCalib/runs/02_anycalib_finetune/train/checkpoint_best.pt
+checkpoint_exists: true
+checkpoint_sha256: 1b87efa27c847886f5987084a95000bccf2491f1abc719efcfa1c232cd8c2d41
+checkpoint_epoch: 5
+checkpoint_global_step: 31975
+config_path: HandCalib/configs/02h0_interhand_gigahands_finetuned.yaml
+path_resolution_helper: HandCalib/evaluate.py::_path_from_config
+config_driven_build: PASS
+state_dict_missing_keys: []
+state_dict_unexpected_keys: []
+loaded_parameter_coverage: 1.0
+working_directory_independence: PASS
+tiny_smoke_dataset: GigaHands validation p36
+tiny_smoke_frames: 2
+tiny_smoke_status: PASS
+pretrained_result_preserved: true
+interhand_full_inference_run: false
+manifest_metric_sampling_unchanged: true
+legacy_regression: PASS
+final_readiness: FINETUNED_INTERHAND_CONFIG_PATH_READY

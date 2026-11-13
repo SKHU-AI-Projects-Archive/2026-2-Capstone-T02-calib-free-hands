@@ -1,0 +1,1297 @@
+experiment: 02i2_gigahands_focal_balance_protocol_design
+status: design_completed
+analysis_scope: CPU metadata-only protocol design; no final split, bin, sampler, training, inference, RGB decode, or download
+dataset_scope: 'GigaHands only: local demo plus full_hand_poses camera metadata'
+source_metadata:
+  full_root: datasets/gigahands/full_hand_poses
+  demo_manifest: data/manifests/gigahands.csv
+  full_camera_records: 11756
+  full_exact_signatures: 602
+  participants: 56
+  sequences: 236
+source_hashes:
+  optim_params_aggregate_sha256: 8299e9cbc66efed8afa3739a56af837d190464df53871d1899f99678d4753548
+  HandCalib/data/manifests/gigahands.csv: bd803b32f1f17d5c4ae3505ec59a01b63903f6fdb7d20797116412d5ef4ee8d2
+  HandCalib/data/splits/gigahands/train.txt: 8056a182876e16221725874080a6d900893df3e3ecd62f6e284f8ed17e00fe48
+  HandCalib/data/splits/gigahands/val.txt: be8397f8ec23a9255ba44202e75be55f5136e7fc05ec95669de5b7d2536edf17
+  HandCalib/data/splits/gigahands/test.txt: 0c910d6df81fff0051b48db629759a3805484973e4150d959241dcf893201910
+  HandCalib/data/splits/gigahands/split_report.json: 3d8f1cffb973bdf82db7efebeef92559a8dbd90a1f2b37bbbf6db911c265e0ec
+  HandCalib/results/02i0_gigahands_focal_coverage_feasibility.yaml: 801203ecdcdb1d63edfbde27d7ea5a2d209c94d01ada7b2658599dc9fdc05c3e
+  HandCalib/results/02i1_gigahands_full_focal_coverage.yaml: 73bad72a065fe49623205f51cc61ca69e7a50cf70d5208b3dd89f9282b7c1960
+  HandCalib/configs/02_anycalib_finetune.yaml: 8d192855627aadd8fc01edf949b7753b64055551c094f921c417d654b09f900d
+  HandCalib/runs/02_anycalib_finetune/train/checkpoint_best.pt: 1b87efa27c847886f5987084a95000bccf2491f1abc719efcfa1c232cd8c2d41
+  HandCalib/runs/02_gigahands_full_focal_coverage/tables/gigahands_full_camera_metadata.csv: ec221e2f149ef283142c69a0e3ab88318a69b0166a442706bbb075c0c5111d11
+repository_commit: dc0f31b42df1350b94cda2c1a9954d228d64a7b3
+study_questions:
+- Can exclusions yield participant and calibration independent candidates?
+- How much record retention is traded for independence and focal support?
+- How do S0-S4 alter exposure concentration and signature-level ESS?
+analysis_units:
+  camera_record: 11756
+  sequence_camera: 11756
+  exact_intrinsic_signature: 602
+  exact_full_signature: 602
+  participant: 56
+  sequence: 236
+  camera_identifier: 51
+  calibration_set: 12
+  physical_camera: not_verifiable
+independence_definitions:
+  P0: existing demo baseline
+  P1: participant + exact intrinsic/full calibration disjoint
+  P2: exact intrinsic/full calibration disjoint; participant overlap allowed
+  P3: camera identifier disjoint; not physical-camera proof
+  P4: participant + exact intrinsic/full calibration + camera identifier disjoint
+candidate_split_protocols:
+- P0
+- P1
+- P2
+- P3
+- P4
+candidate_sampling_protocols:
+  S0: camera-key proportional
+  S1: unique-calibration equal
+  S2: full focal-bin equal
+  S3: partial alpha=0.5 with 3x clip
+  S4: restricted-support equal
+focal_axis_candidates:
+  fx: priority candidate for metric compatibility; not finalized
+  nfx: same ordering here because every source resolution is 1280x720
+  hfov: geometric monotonic transform of fx at fixed width
+  fy_nfy_vfov: mandatory secondary coverage checks; fx balance is not fy balance
+candidate_bin_definitions:
+  counts:
+  - 3
+  - 5
+  - 7
+  - 10
+  primary_diagnostic: full-range equal-width fx
+  alternatives:
+  - quantile from full metadata
+  - q05-q95 restricted-support equal-width
+  finalized: false
+  metadata_designed_evaluation: true
+  edges:
+    '3':
+    - 743.5654907226562
+    - 876.1192626953125
+    - 1008.6730346679688
+    - 1141.226806640625
+    '5':
+    - 743.5654907226562
+    - 823.09775390625
+    - 902.6300170898437
+    - 982.1622802734375
+    - 1061.6945434570312
+    - 1141.226806640625
+    '7':
+    - 743.5654907226562
+    - 800.374250139509
+    - 857.1830095563616
+    - 913.9917689732142
+    - 970.800528390067
+    - 1027.6092878069196
+    - 1084.4180472237722
+    - 1141.226806640625
+    '10':
+    - 743.5654907226562
+    - 783.3316223144532
+    - 823.09775390625
+    - 862.8638854980469
+    - 902.6300170898437
+    - 942.3961486816406
+    - 982.1622802734375
+    - 1021.9284118652345
+    - 1061.6945434570312
+    - 1101.460675048828
+    - 1141.226806640625
+  comparison:
+    fx/equal_width_full_range/3:
+      counts:
+      - 7
+      - 587
+      - 8
+      minimum: 7
+      empty_bins: 0
+      excluded_signatures: 0
+    fx/quantile_full_metadata/3:
+      counts:
+      - 201
+      - 200
+      - 201
+      minimum: 200
+      empty_bins: 0
+      excluded_signatures: 0
+    fx/equal_width_restricted_q05_q95/3:
+      counts:
+      - 124
+      - 290
+      - 126
+      minimum: 124
+      empty_bins: 0
+      excluded_signatures: 62
+    fx/equal_width_full_range/5:
+      counts:
+      - 2
+      - 61
+      - 527
+      - 10
+      - 2
+      minimum: 2
+      empty_bins: 0
+      excluded_signatures: 0
+    fx/quantile_full_metadata/5:
+      counts:
+      - 121
+      - 120
+      - 120
+      - 120
+      - 121
+      minimum: 120
+      empty_bins: 0
+      excluded_signatures: 0
+    fx/equal_width_restricted_q05_q95/5:
+      counts:
+      - 47
+      - 128
+      - 179
+      - 139
+      - 47
+      minimum: 47
+      empty_bins: 0
+      excluded_signatures: 62
+    fx/equal_width_full_range/7:
+      counts:
+      - 1
+      - 3
+      - 151
+      - 433
+      - 10
+      - 2
+      - 2
+      minimum: 1
+      empty_bins: 0
+      excluded_signatures: 0
+    fx/quantile_full_metadata/7:
+      counts:
+      - 86
+      - 86
+      - 86
+      - 86
+      - 86
+      - 86
+      - 86
+      minimum: 86
+      empty_bins: 0
+      excluded_signatures: 0
+    fx/equal_width_restricted_q05_q95/7:
+      counts:
+      - 33
+      - 59
+      - 118
+      - 128
+      - 105
+      - 67
+      - 30
+      minimum: 30
+      empty_bins: 0
+      excluded_signatures: 62
+    fx/equal_width_full_range/10:
+      counts:
+      - 1
+      - 1
+      - 3
+      - 58
+      - 468
+      - 59
+      - 7
+      - 3
+      - 0
+      - 2
+      minimum: 0
+      empty_bins: 1
+      excluded_signatures: 0
+    fx/quantile_full_metadata/10:
+      counts:
+      - 61
+      - 60
+      - 60
+      - 60
+      - 60
+      - 60
+      - 60
+      - 60
+      - 60
+      - 61
+      minimum: 60
+      empty_bins: 0
+      excluded_signatures: 0
+    fx/equal_width_restricted_q05_q95/10:
+      counts:
+      - 20
+      - 27
+      - 54
+      - 74
+      - 104
+      - 75
+      - 79
+      - 60
+      - 26
+      - 21
+      minimum: 20
+      empty_bins: 0
+      excluded_signatures: 62
+overlap_constraints:
+  always:
+  - camera_key
+  - frame/video when RGB becomes available
+  protocol_specific:
+  - participant
+  - exact intrinsic
+  - exact full
+  - camera identifier
+optimization_objectives:
+- hard constraints
+- minimum split support
+- evaluation focal-bin support
+- train signatures
+- participant/sequence diversity
+- record retention
+search_method: fixed-budget deterministic randomized co-assignment with exact post-hoc record-level validation
+search_budget:
+  iterations_per_joint_search: 12000
+  seed: 42
+  optimality_proven: false
+  P1:
+    budget: 12000
+    seed: 42
+    owner_unit: calibration_set
+  P4:
+    budget: 12000
+    seed: 1042
+    owner_unit: camera_identifier
+feasibility_status:
+  P0_EXISTING_DEMO: PROVEN_FEASIBLE_EXISTING_PROTOCOL
+  P1_RETENTION: CANDIDATE_FOUND_NOT_PROVEN_OPTIMAL
+  P1_COVERAGE: CANDIDATE_FOUND_NOT_PROVEN_OPTIMAL
+  P2_CALIBRATION_STRATIFIED: PROVEN_FEASIBLE
+  P3_IDENTIFIER_STRATIFIED: PROVEN_FEASIBLE
+  P4_RETENTION: CANDIDATE_FOUND_NOT_PROVEN_OPTIMAL
+  P4_COVERAGE: CANDIDATE_FOUND_NOT_PROVEN_OPTIMAL
+candidate_summaries:
+- candidate_id: P0_EXISTING_DEMO
+  split_protocol: P0
+  search_variant: locked_existing_demo
+  feasibility_status: PROVEN_FEASIBLE_EXISTING_PROTOCOL
+  hard_constraints: participant_overlap
+  hard_constraints_pass: true
+  total_calibration_signatures: 147
+  retained_calibration_signatures: 147
+  train_calibration_signatures: 98
+  validation_calibration_signatures: 49
+  test_calibration_signatures: 49
+  excluded_calibration_signatures: 0
+  signature_retention_rate: 1.0
+  used_camera_records: 245
+  excluded_camera_records: 0
+  record_retention_rate: 1.0
+  assigned_participant_definition: not_applicable_participant_overlap_allowed
+  assigned_train_participants: not_applicable
+  assigned_validation_participants: not_applicable
+  assigned_test_participants: not_applicable
+  active_participant_definition: distinct participants with at least one retained camera record
+  active_train_participants: 2
+  active_validation_participants: 1
+  active_test_participants: 1
+  train_participants: 2
+  validation_participants: 1
+  test_participants: 1
+  minimum_active_evaluation_participants: 1
+  active_evaluation_participants_at_least_1: true
+  active_evaluation_participants_at_least_3: false
+  active_evaluation_participants_at_least_5: false
+  active_evaluation_participants_at_least_10: false
+  train_sequences: 3
+  validation_sequences: 1
+  test_sequences: 1
+  train_focal_coverage: 824.945007:1017.04022
+  validation_focal_coverage: 879.872681:975.990295
+  test_focal_coverage: 894.408875:948.404297
+  validation_signatures_outside_train_fx_support: 0
+  test_signatures_outside_train_fx_support: 0
+  minimum_bin_support: 0
+  empty_bin_count: 6
+  participant_overlap: 0
+  sequence_overlap: 0
+  camera_key_overlap: 0
+  exact_intrinsic_overlap: 49
+  exact_full_overlap: 49
+  camera_identifier_overlap: 49
+  physical_camera_identity: not_verifiable
+  academic_limitations: Existing locked demo split; not an independent full-data candidate.
+- candidate_id: P1_RETENTION
+  split_protocol: P1
+  search_variant: retention
+  feasibility_status: CANDIDATE_FOUND_NOT_PROVEN_OPTIMAL
+  hard_constraints: participant_overlap;exact_intrinsic_overlap;exact_full_overlap
+  hard_constraints_pass: true
+  total_calibration_signatures: 602
+  retained_calibration_signatures: 551
+  train_calibration_signatures: 349
+  validation_calibration_signatures: 153
+  test_calibration_signatures: 49
+  excluded_calibration_signatures: 51
+  signature_retention_rate: 0.915282392026578
+  used_camera_records: 11158
+  excluded_camera_records: 598
+  record_retention_rate: 0.9491323579448792
+  assigned_participant_definition: joint-search participant assignment before record exclusion
+  assigned_train_participants: 34
+  assigned_validation_participants: 11
+  assigned_test_participants: 11
+  active_participant_definition: distinct participants with at least one retained camera record
+  active_train_participants: 34
+  active_validation_participants: 8
+  active_test_participants: 11
+  train_participants: 34
+  validation_participants: 8
+  test_participants: 11
+  minimum_active_evaluation_participants: 8
+  active_evaluation_participants_at_least_1: true
+  active_evaluation_participants_at_least_3: true
+  active_evaluation_participants_at_least_5: true
+  active_evaluation_participants_at_least_10: false
+  train_sequences: 146
+  validation_sequences: 54
+  test_sequences: 24
+  train_focal_coverage: 819.70459:1109.11951
+  validation_focal_coverage: 871.82959:1141.22681
+  test_focal_coverage: 743.565491:950.307068
+  validation_signatures_outside_train_fx_support: 1
+  test_signatures_outside_train_fx_support: 1
+  minimum_bin_support: 0
+  empty_bin_count: 3
+  participant_overlap: 0
+  sequence_overlap: 0
+  camera_key_overlap: 0
+  exact_intrinsic_overlap: 0
+  exact_full_overlap: 0
+  camera_identifier_overlap: 51
+  physical_camera_identity: not_verifiable
+  academic_limitations: Participant and calibration-set co-assignment; mismatched records explicitly excluded.
+- candidate_id: P1_COVERAGE
+  split_protocol: P1
+  search_variant: coverage
+  feasibility_status: CANDIDATE_FOUND_NOT_PROVEN_OPTIMAL
+  hard_constraints: participant_overlap;exact_intrinsic_overlap;exact_full_overlap
+  hard_constraints_pass: true
+  total_calibration_signatures: 602
+  retained_calibration_signatures: 602
+  train_calibration_signatures: 351
+  validation_calibration_signatures: 151
+  test_calibration_signatures: 100
+  excluded_calibration_signatures: 0
+  signature_retention_rate: 1.0
+  used_camera_records: 10560
+  excluded_camera_records: 1196
+  record_retention_rate: 0.8982647158897584
+  assigned_participant_definition: joint-search participant assignment before record exclusion
+  assigned_train_participants: 34
+  assigned_validation_participants: 11
+  assigned_test_participants: 11
+  active_participant_definition: distinct participants with at least one retained camera record
+  active_train_participants: 32
+  active_validation_participants: 11
+  active_test_participants: 11
+  train_participants: 32
+  validation_participants: 11
+  test_participants: 11
+  minimum_active_evaluation_participants: 11
+  active_evaluation_participants_at_least_1: true
+  active_evaluation_participants_at_least_3: true
+  active_evaluation_participants_at_least_5: true
+  active_evaluation_participants_at_least_10: true
+  train_sequences: 133
+  validation_sequences: 32
+  test_sequences: 47
+  train_focal_coverage: 824.945007:1022.09723
+  validation_focal_coverage: 819.70459:1109.11951
+  test_focal_coverage: 743.565491:1141.22681
+  validation_signatures_outside_train_fx_support: 4
+  test_signatures_outside_train_fx_support: 2
+  minimum_bin_support: 1
+  empty_bin_count: 0
+  participant_overlap: 0
+  sequence_overlap: 0
+  camera_key_overlap: 0
+  exact_intrinsic_overlap: 0
+  exact_full_overlap: 0
+  camera_identifier_overlap: 51
+  physical_camera_identity: not_verifiable
+  academic_limitations: Participant and calibration-set co-assignment; mismatched records explicitly excluded.
+- candidate_id: P2_CALIBRATION_STRATIFIED
+  split_protocol: P2
+  search_variant: signature_stratified
+  feasibility_status: PROVEN_FEASIBLE
+  hard_constraints: exact_intrinsic_overlap;exact_full_overlap
+  hard_constraints_pass: true
+  total_calibration_signatures: 602
+  retained_calibration_signatures: 602
+  train_calibration_signatures: 361
+  validation_calibration_signatures: 122
+  test_calibration_signatures: 119
+  excluded_calibration_signatures: 0
+  signature_retention_rate: 1.0
+  used_camera_records: 11756
+  excluded_camera_records: 0
+  record_retention_rate: 1.0
+  assigned_participant_definition: not_applicable_participant_overlap_allowed
+  assigned_train_participants: not_applicable
+  assigned_validation_participants: not_applicable
+  assigned_test_participants: not_applicable
+  active_participant_definition: distinct participants with at least one retained camera record
+  active_train_participants: 56
+  active_validation_participants: 56
+  active_test_participants: 56
+  train_participants: 56
+  validation_participants: 56
+  test_participants: 56
+  minimum_active_evaluation_participants: 56
+  active_evaluation_participants_at_least_1: true
+  active_evaluation_participants_at_least_3: true
+  active_evaluation_participants_at_least_5: true
+  active_evaluation_participants_at_least_10: true
+  train_sequences: 236
+  validation_sequences: 236
+  test_sequences: 236
+  train_focal_coverage: 819.70459:1141.22681
+  validation_focal_coverage: 743.565491:1109.11951
+  test_focal_coverage: 857.6828:1028.71594
+  validation_signatures_outside_train_fx_support: 1
+  test_signatures_outside_train_fx_support: 0
+  minimum_bin_support: 0
+  empty_bin_count: 2
+  participant_overlap: 56
+  sequence_overlap: 236
+  camera_key_overlap: 0
+  exact_intrinsic_overlap: 0
+  exact_full_overlap: 0
+  camera_identifier_overlap: 51
+  physical_camera_identity: not_verifiable
+  academic_limitations: Exact signature is assigned to one split; participant overlap is allowed.
+- candidate_id: P3_IDENTIFIER_STRATIFIED
+  split_protocol: P3
+  search_variant: identifier_stratified
+  feasibility_status: PROVEN_FEASIBLE
+  hard_constraints: camera_identifier_overlap
+  hard_constraints_pass: true
+  total_calibration_signatures: 602
+  retained_calibration_signatures: 602
+  train_calibration_signatures: 360
+  validation_calibration_signatures: 122
+  test_calibration_signatures: 120
+  excluded_calibration_signatures: 0
+  signature_retention_rate: 1.0
+  used_camera_records: 11756
+  excluded_camera_records: 0
+  record_retention_rate: 1.0
+  assigned_participant_definition: not_applicable_participant_overlap_allowed
+  assigned_train_participants: not_applicable
+  assigned_validation_participants: not_applicable
+  assigned_test_participants: not_applicable
+  active_participant_definition: distinct participants with at least one retained camera record
+  active_train_participants: 56
+  active_validation_participants: 56
+  active_test_participants: 56
+  train_participants: 56
+  validation_participants: 56
+  test_participants: 56
+  minimum_active_evaluation_participants: 56
+  active_evaluation_participants_at_least_1: true
+  active_evaluation_participants_at_least_3: true
+  active_evaluation_participants_at_least_5: true
+  active_evaluation_participants_at_least_10: true
+  train_sequences: 236
+  validation_sequences: 236
+  test_sequences: 236
+  train_focal_coverage: 743.565491:1141.22681
+  validation_focal_coverage: 819.70459:1028.71594
+  test_focal_coverage: 881.978088:969.103516
+  validation_signatures_outside_train_fx_support: 0
+  test_signatures_outside_train_fx_support: 0
+  minimum_bin_support: 0
+  empty_bin_count: 4
+  participant_overlap: 56
+  sequence_overlap: 236
+  camera_key_overlap: 0
+  exact_intrinsic_overlap: 0
+  exact_full_overlap: 0
+  camera_identifier_overlap: 0
+  physical_camera_identity: not_verifiable
+  academic_limitations: Camera identifier is assigned to one split; identifier is not a verified physical-camera ID.
+- candidate_id: P4_RETENTION
+  split_protocol: P4
+  search_variant: retention
+  feasibility_status: CANDIDATE_FOUND_NOT_PROVEN_OPTIMAL
+  hard_constraints: participant_overlap;exact_intrinsic_overlap;exact_full_overlap;camera_identifier_overlap
+  hard_constraints_pass: true
+  total_calibration_signatures: 602
+  retained_calibration_signatures: 482
+  train_calibration_signatures: 372
+  validation_calibration_signatures: 50
+  test_calibration_signatures: 60
+  excluded_calibration_signatures: 120
+  signature_retention_rate: 0.8006644518272426
+  used_camera_records: 6498
+  excluded_camera_records: 5258
+  record_retention_rate: 0.5527390268798911
+  assigned_participant_definition: joint-search participant assignment before record exclusion
+  assigned_train_participants: 34
+  assigned_validation_participants: 11
+  assigned_test_participants: 11
+  active_participant_definition: distinct participants with at least one retained camera record
+  active_train_participants: 34
+  active_validation_participants: 11
+  active_test_participants: 11
+  train_participants: 34
+  validation_participants: 11
+  test_participants: 11
+  minimum_active_evaluation_participants: 11
+  active_evaluation_participants_at_least_1: true
+  active_evaluation_participants_at_least_3: true
+  active_evaluation_participants_at_least_5: true
+  active_evaluation_participants_at_least_10: true
+  train_sequences: 198
+  validation_sequences: 22
+  test_sequences: 16
+  train_focal_coverage: 819.70459:1048.86523
+  validation_focal_coverage: 892.527466:1019.29865
+  test_focal_coverage: 743.565491:1109.11951
+  validation_signatures_outside_train_fx_support: 0
+  test_signatures_outside_train_fx_support: 2
+  minimum_bin_support: 0
+  empty_bin_count: 2
+  participant_overlap: 0
+  sequence_overlap: 0
+  camera_key_overlap: 0
+  exact_intrinsic_overlap: 0
+  exact_full_overlap: 0
+  camera_identifier_overlap: 0
+  physical_camera_identity: not_verifiable
+  academic_limitations: Participant and camera-identifier co-assignment; mismatched records explicitly excluded.
+- candidate_id: P4_COVERAGE
+  split_protocol: P4
+  search_variant: coverage
+  feasibility_status: CANDIDATE_FOUND_NOT_PROVEN_OPTIMAL
+  hard_constraints: participant_overlap;exact_intrinsic_overlap;exact_full_overlap;camera_identifier_overlap
+  hard_constraints_pass: true
+  total_calibration_signatures: 602
+  retained_calibration_signatures: 492
+  train_calibration_signatures: 367
+  validation_calibration_signatures: 60
+  test_calibration_signatures: 65
+  excluded_calibration_signatures: 110
+  signature_retention_rate: 0.8172757475083057
+  used_camera_records: 6398
+  excluded_camera_records: 5358
+  record_retention_rate: 0.5442327322218442
+  assigned_participant_definition: joint-search participant assignment before record exclusion
+  assigned_train_participants: 34
+  assigned_validation_participants: 11
+  assigned_test_participants: 11
+  active_participant_definition: distinct participants with at least one retained camera record
+  active_train_participants: 34
+  active_validation_participants: 11
+  active_test_participants: 11
+  train_participants: 34
+  validation_participants: 11
+  test_participants: 11
+  minimum_active_evaluation_participants: 11
+  active_evaluation_participants_at_least_1: true
+  active_evaluation_participants_at_least_3: true
+  active_evaluation_participants_at_least_5: true
+  active_evaluation_participants_at_least_10: true
+  train_sequences: 198
+  validation_sequences: 22
+  test_sequences: 16
+  train_focal_coverage: 857.6828:1019.29865
+  validation_focal_coverage: 743.565491:1109.11951
+  test_focal_coverage: 876.842896:1048.86523
+  validation_signatures_outside_train_fx_support: 5
+  test_signatures_outside_train_fx_support: 1
+  minimum_bin_support: 0
+  empty_bin_count: 2
+  participant_overlap: 0
+  sequence_overlap: 0
+  camera_key_overlap: 0
+  exact_intrinsic_overlap: 0
+  exact_full_overlap: 0
+  camera_identifier_overlap: 0
+  physical_camera_identity: not_verifiable
+  academic_limitations: Participant and camera-identifier co-assignment; mismatched records explicitly excluded.
+dataset_retention:
+  P0_EXISTING_DEMO:
+    signature: 1.0
+    camera_record: 1.0
+  P1_RETENTION:
+    signature: 0.915282392026578
+    camera_record: 0.9491323579448792
+  P1_COVERAGE:
+    signature: 1.0
+    camera_record: 0.8982647158897584
+  P2_CALIBRATION_STRATIFIED:
+    signature: 1.0
+    camera_record: 1.0
+  P3_IDENTIFIER_STRATIFIED:
+    signature: 1.0
+    camera_record: 1.0
+  P4_RETENTION:
+    signature: 0.8006644518272426
+    camera_record: 0.5527390268798911
+  P4_COVERAGE:
+    signature: 0.8172757475083057
+    camera_record: 0.5442327322218442
+focal_coverage:
+  P0_EXISTING_DEMO:
+    train: 824.945007:1017.04022
+    validation: 879.872681:975.990295
+    test: 894.408875:948.404297
+    minimum_eval_five_bin_support: 0
+  P1_RETENTION:
+    train: 819.70459:1109.11951
+    validation: 871.82959:1141.22681
+    test: 743.565491:950.307068
+    minimum_eval_five_bin_support: 0
+  P1_COVERAGE:
+    train: 824.945007:1022.09723
+    validation: 819.70459:1109.11951
+    test: 743.565491:1141.22681
+    minimum_eval_five_bin_support: 1
+    full_range_equal_width_sensitivity:
+      '3':
+        train:
+          counts:
+          - 3
+          - 346
+          - 2
+          minimum: 2
+          empty_bins: 0
+        validation:
+          counts:
+          - 3
+          - 143
+          - 5
+          minimum: 3
+          empty_bins: 0
+        test:
+          counts:
+          - 1
+          - 98
+          - 1
+          minimum: 1
+          empty_bins: 0
+      '5':
+        train:
+          counts:
+          - 0
+          - 24
+          - 323
+          - 4
+          - 0
+          minimum: 0
+          empty_bins: 2
+        validation:
+          counts:
+          - 1
+          - 24
+          - 120
+          - 5
+          - 1
+          minimum: 1
+          empty_bins: 0
+        test:
+          counts:
+          - 1
+          - 13
+          - 84
+          - 1
+          - 1
+          minimum: 1
+          empty_bins: 0
+      '7':
+        train:
+          counts:
+          - 0
+          - 1
+          - 76
+          - 268
+          - 6
+          - 0
+          - 0
+          minimum: 0
+          empty_bins: 3
+        validation:
+          counts:
+          - 0
+          - 2
+          - 44
+          - 99
+          - 3
+          - 2
+          - 1
+          minimum: 0
+          empty_bins: 1
+        test:
+          counts:
+          - 1
+          - 0
+          - 31
+          - 66
+          - 1
+          - 0
+          - 1
+          minimum: 0
+          empty_bins: 2
+      '10':
+        train:
+          counts:
+          - 0
+          - 0
+          - 2
+          - 22
+          - 278
+          - 45
+          - 3
+          - 1
+          - 0
+          - 0
+          minimum: 0
+          empty_bins: 4
+        validation:
+          counts:
+          - 0
+          - 1
+          - 1
+          - 23
+          - 110
+          - 10
+          - 3
+          - 2
+          - 0
+          - 1
+          minimum: 0
+          empty_bins: 2
+        test:
+          counts:
+          - 1
+          - 0
+          - 0
+          - 13
+          - 80
+          - 4
+          - 1
+          - 0
+          - 0
+          - 1
+          minimum: 0
+          empty_bins: 4
+  P2_CALIBRATION_STRATIFIED:
+    train: 819.70459:1141.22681
+    validation: 743.565491:1109.11951
+    test: 857.6828:1028.71594
+    minimum_eval_five_bin_support: 0
+    full_range_equal_width_sensitivity:
+      '3':
+        train:
+          counts:
+          - 4
+          - 352
+          - 5
+          minimum: 4
+          empty_bins: 0
+        validation:
+          counts:
+          - 2
+          - 118
+          - 2
+          minimum: 2
+          empty_bins: 0
+        test:
+          counts:
+          - 1
+          - 117
+          - 1
+          minimum: 1
+          empty_bins: 0
+      '5':
+        train:
+          counts:
+          - 1
+          - 37
+          - 316
+          - 6
+          - 1
+          minimum: 1
+          empty_bins: 0
+        validation:
+          counts:
+          - 1
+          - 12
+          - 106
+          - 2
+          - 1
+          minimum: 1
+          empty_bins: 0
+        test:
+          counts:
+          - 0
+          - 12
+          - 105
+          - 2
+          - 0
+          minimum: 0
+          empty_bins: 2
+      '7':
+        train:
+          counts:
+          - 0
+          - 2
+          - 93
+          - 259
+          - 5
+          - 1
+          - 1
+          minimum: 0
+          empty_bins: 1
+        validation:
+          counts:
+          - 1
+          - 1
+          - 28
+          - 89
+          - 2
+          - 0
+          - 1
+          minimum: 0
+          empty_bins: 1
+        test:
+          counts:
+          - 0
+          - 0
+          - 30
+          - 85
+          - 3
+          - 1
+          - 0
+          minimum: 0
+          empty_bins: 3
+      '10':
+        train:
+          counts:
+          - 0
+          - 1
+          - 1
+          - 36
+          - 278
+          - 38
+          - 4
+          - 2
+          - 0
+          - 1
+          minimum: 0
+          empty_bins: 2
+        validation:
+          counts:
+          - 1
+          - 0
+          - 1
+          - 11
+          - 96
+          - 10
+          - 2
+          - 0
+          - 0
+          - 1
+          minimum: 0
+          empty_bins: 3
+        test:
+          counts:
+          - 0
+          - 0
+          - 1
+          - 11
+          - 94
+          - 11
+          - 1
+          - 1
+          - 0
+          - 0
+          minimum: 0
+          empty_bins: 4
+  P3_IDENTIFIER_STRATIFIED:
+    train: 743.565491:1141.22681
+    validation: 819.70459:1028.71594
+    test: 881.978088:969.103516
+    minimum_eval_five_bin_support: 0
+  P4_RETENTION:
+    train: 819.70459:1048.86523
+    validation: 892.527466:1019.29865
+    test: 743.565491:1109.11951
+    minimum_eval_five_bin_support: 0
+    full_range_equal_width_sensitivity:
+      '3':
+        train:
+          counts:
+          - 5
+          - 364
+          - 3
+          minimum: 3
+          empty_bins: 0
+        validation:
+          counts:
+          - 0
+          - 49
+          - 1
+          minimum: 0
+          empty_bins: 1
+        test:
+          counts:
+          - 2
+          - 55
+          - 3
+          minimum: 2
+          empty_bins: 0
+      '5':
+        train:
+          counts:
+          - 1
+          - 38
+          - 328
+          - 5
+          - 0
+          minimum: 0
+          empty_bins: 1
+        validation:
+          counts:
+          - 0
+          - 6
+          - 43
+          - 1
+          - 0
+          minimum: 0
+          empty_bins: 2
+        test:
+          counts:
+          - 1
+          - 8
+          - 47
+          - 3
+          - 1
+          minimum: 1
+          empty_bins: 0
+      '7':
+        train:
+          counts:
+          - 0
+          - 3
+          - 92
+          - 272
+          - 3
+          - 2
+          - 0
+          minimum: 0
+          empty_bins: 2
+        validation:
+          counts:
+          - 0
+          - 0
+          - 14
+          - 35
+          - 1
+          - 0
+          - 0
+          minimum: 0
+          empty_bins: 4
+        test:
+          counts:
+          - 1
+          - 0
+          - 15
+          - 38
+          - 5
+          - 0
+          - 1
+          minimum: 0
+          empty_bins: 2
+      '10':
+        train:
+          counts:
+          - 0
+          - 1
+          - 2
+          - 36
+          - 293
+          - 35
+          - 2
+          - 3
+          - 0
+          - 0
+          minimum: 0
+          empty_bins: 3
+        validation:
+          counts:
+          - 0
+          - 0
+          - 0
+          - 6
+          - 37
+          - 6
+          - 1
+          - 0
+          - 0
+          - 0
+          minimum: 0
+          empty_bins: 6
+        test:
+          counts:
+          - 1
+          - 0
+          - 1
+          - 7
+          - 41
+          - 6
+          - 3
+          - 0
+          - 0
+          - 1
+          minimum: 0
+          empty_bins: 3
+  P4_COVERAGE:
+    train: 857.6828:1019.29865
+    validation: 743.565491:1109.11951
+    test: 876.842896:1048.86523
+    minimum_eval_five_bin_support: 0
+sampling_weight_analysis:
+  P1_COVERAGE/S0:
+    signature_count: 351
+    positive_weight_signature_count: 351
+    effective_sample_size: 223.2260076061251
+    max_over_uniform: 2.075663381349507
+    bin_exposure:
+    - 0.0
+    - 0.10401819560272937
+    - 0.8785443517816569
+    - 0.017437452615617893
+    - 0.0
+  P1_COVERAGE/S1:
+    signature_count: 351
+    positive_weight_signature_count: 351
+    effective_sample_size: 350.9999999999928
+    max_over_uniform: 1.0
+    bin_exposure:
+    - 0.0
+    - 0.06837606837606838
+    - 0.9202279202279142
+    - 0.011396011396011397
+    - 0.0
+  P1_COVERAGE/S2:
+    signature_count: 351
+    positive_weight_signature_count: 351
+    effective_sample_size: 30.53304157549322
+    max_over_uniform: 29.249999999999915
+    bin_exposure:
+    - 0.0
+    - 0.3333333333333322
+    - 0.33333333333333154
+    - 0.33333333333333237
+    - 0.0
+  P1_COVERAGE/S3:
+    signature_count: 351
+    positive_weight_signature_count: 351
+    effective_sample_size: 260.6275862068959
+    max_over_uniform: 3.0
+    bin_exposure:
+    - 0.0
+    - 0.2051282051282051
+    - 0.7606837606837642
+    - 0.03418803418803419
+    - 0.0
+  P1_COVERAGE/S4:
+    signature_count: 351
+    positive_weight_signature_count: 323
+    effective_sample_size: 323.00000000000165
+    max_over_uniform: 1.086687306501548
+    bin_exposure:
+    - 0.0
+    - 0.0
+    - 1.0000000000000044
+    - 0.0
+    - 0.0
+  P1_COVERAGE/ALPHA_0.00:
+    signature_count: 351
+    effective_sample_size: 350.9999999999928
+    max_over_uniform: 1.0
+    bin_exposure:
+    - 0.0
+    - 0.06837606837606838
+    - 0.9202279202279142
+    - 0.011396011396011397
+    - 0.0
+    clipping: none; S3 separately reports alpha=0.5 with 3x clipping
+    status: sensitivity_candidate_not_finalized
+  P1_COVERAGE/ALPHA_0.25:
+    signature_count: 351
+    effective_sample_size: 324.68261705952744
+    max_over_uniform: 2.761941033310511
+    bin_exposure:
+    - 0.0
+    - 0.12066483265426156
+    - 0.8478600558550263
+    - 0.03147511149071808
+    - 0.0
+    clipping: none; S3 separately reports alpha=0.5 with 3x clipping
+    status: sensitivity_candidate_not_finalized
+  P1_COVERAGE/ALPHA_0.50:
+    signature_count: 351
+    effective_sample_size: 206.1918688630474
+    max_over_uniform: 7.056359943443055
+    bin_exposure:
+    - 0.0
+    - 0.1969741459014229
+    - 0.7226114957687324
+    - 0.08041435832983539
+    - 0.0
+    clipping: none; S3 separately reports alpha=0.5 with 3x clipping
+    status: sensitivity_candidate_not_finalized
+  P1_COVERAGE/ALPHA_1.00:
+    signature_count: 351
+    effective_sample_size: 30.53304157549322
+    max_over_uniform: 29.249999999999915
+    bin_exposure:
+    - 0.0
+    - 0.3333333333333322
+    - 0.33333333333333154
+    - 0.33333333333333237
+    - 0.0
+    clipping: none; S3 separately reports alpha=0.5 with 3x clipping
+    status: sensitivity_candidate_not_finalized
+  execution_design:
+    stage_1: sample exact calibration signature from the selected S0-S4 probability
+    stage_2: cycle or sample without replacement across available sequence-camera records for that signature
+    stage_3: sample RGB frames without replacement within a selected video when verified frame counts permit
+    epoch_budget: define by a fixed number of sampled frames or optimizer steps, not by exhausting metadata rows
+    optimizer_step_budget_candidate: 31975
+    optimizer_step_budget_status: legacy-compatible candidate; not finalized for the new data scale
+    duplicate_frame_control: requires RGB inventory before implementation
+    rare_signature_control: S3 caps signature probability at 3x uniform; S2 remains an uncapped diagnostic
+    seed_policy:
+      split_search_seed: 42
+      sampler_seed_candidate: 142
+      training_seed_candidates:
+      - 42
+      - 43
+      - 44
+      training_repeats_status: resource-dependent and not finalized
+    controlled_training_variables:
+    - architecture
+    - pretrained initialization
+    - RGB preprocessing
+    - canonical pinhole supervision
+    - pinhole model
+    - loss
+    - optimizer
+    - learning rate
+    - weight decay
+    - scheduler
+    - batch size
+    - precision
+    - optimizer steps
+    - validation interval
+    - checkpoint rule
+    - evaluation code
+evaluation_metric_definitions:
+  primary: err_max=max(abs(fx_pred-fx_gt)/fx_gt, abs(fy_pred-fy_gt)/fy_gt), camera-key component-wise frame median, existing
+    compatibility
+  camera_key_mean: equal-weight mean across camera keys after within-camera-key frame aggregation
+  M1: equal-weight exact calibration signatures after combining repeated sequence-camera estimates within signature
+  M2: precommitted nonempty focal-bin macro mean
+  M3: per-bin mean, median, within-5%, counts and uncertainty
+  M4: Train-only mean/median constant focal prior; no Validation/Test GT fitting
+  uncertainty: calibration-signature or participant cluster resampling; frames are not independent units
+legacy_checkpoint_leakage_risks:
+  P1_COVERAGE:
+    train:
+      participant_overlap: 0
+      exact_full_calibration_overlap: 0
+      camera_identifier_overlap: 49
+    validation:
+      participant_overlap: 0
+      exact_full_calibration_overlap: 0
+      camera_identifier_overlap: 49
+    test:
+      participant_overlap: 0
+      exact_full_calibration_overlap: 0
+      camera_identifier_overlap: 49
+  P2_CALIBRATION_STRATIFIED:
+    train:
+      participant_overlap: 2
+      exact_full_calibration_overlap: 21
+      camera_identifier_overlap: 43
+    validation:
+      participant_overlap: 1
+      exact_full_calibration_overlap: 10
+      camera_identifier_overlap: 43
+    test:
+      participant_overlap: 1
+      exact_full_calibration_overlap: 6
+      camera_identifier_overlap: 43
+  P4_RETENTION:
+    train:
+      participant_overlap: 0
+      exact_full_calibration_overlap: 16
+      camera_identifier_overlap: 8
+    validation:
+      participant_overlap: 0
+      exact_full_calibration_overlap: 8
+      camera_identifier_overlap: 8
+    test:
+      participant_overlap: 0
+      exact_full_calibration_overlap: 8
+      camera_identifier_overlap: 8
+RGB_requirements:
+  full_hand_poses_rgb: not_present
+  candidate_rows: 58371
+  frame_counts: unknown except existing demo
+  download_size: unknown
+  download_urls: unknown
+  metadata_row_is_not_assumed_to_be_downloadable_video: true
+statistical_limitations:
+- heuristic optimality not proven
+- metadata-designed evaluation selection
+- physical camera identity not verifiable
+- pseudoreplication from repeated calibration
+- sparse-bin uncertainty
+- participant and camera-identifier concentration
+- RGB availability not verified
+- performance improvement not tested
+recommended_candidates:
+  strictest_independence: P4_RETENTION
+  highest_record_retention: P2_CALIBRATION_STRATIFIED
+  widest_test_focal_range: P1_COVERAGE
+  best_evaluation_bin_support: P1_COVERAGE
+  practical_participant_independent_training: P1_COVERAGE
+  practical_sampling_candidate: S3 partial balance with alpha=0.5 and 3x clipping
+  selection_status: recommendations_only_not_finalized
+unresolved_decisions:
+- independence priority
+- primary focal axis
+- bin count and boundaries
+- minimum signatures per evaluation bin
+- acceptable record retention
+- sampling protocols to train
+- RGB sequences to acquire
+- training repeat count
+decision_status: awaiting_researcher_selection
+training_runs: 0
+inference_runs: 0
+original_files_preserved: true

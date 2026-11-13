@@ -1,0 +1,60 @@
+# Image-free preparation record.
+{
+  "protocol_version": "02-H.0-v1",
+  "manifest": "data/manifests/interhand_external_test_v1.csv",
+  "manifest_sha256": "af910a754c3449c258335a3baf574cb2650d8fabe6cc3458ee69cee3f429b750",
+  "official_test_only": true,
+  "calibration_units": 360,
+  "selected_frames": 5760,
+  "max_frames_per_unit": 16,
+  "sampling_rule": "sort (seq_name, frame_idx, image_id); midpoint quantiles round((i+0.5)*N/K-0.5); nearest unused collision resolution",
+  "metric": "per-unit median prediction for fx/fy/cx/cy; max(rel_fx, rel_fy); equal-weight mean over 360 units",
+  "camera_model": "pinhole; distortion metadata unavailable in inspected InterHand annotation",
+  "dataset_paths": {
+    "annotation_root": "datasets/interhand2.6m/raw/annotations",
+    "image_root": "datasets/interhand2.6m/raw/images",
+    "archive_root": "datasets/interhand2.6m/archives"
+  },
+  "expected_image_archive": {
+    "parts": 44,
+    "suffix": "partaa..partbr",
+    "bytes": 81718036480,
+    "asset": "InterHand2.6M.images.5.fps.v1.0.tar"
+  },
+  "checkpoint_identities": {
+    "pretrained_sha256": "e73b174563bcb90dc9a0e348ee64fbb898901d2a1786623e62fc0e3b176a1a38",
+    "finetuned_path": "runs/02_anycalib_finetune/train/checkpoint_best.pt",
+    "finetuned_sha256": "1b87efa27c847886f5987084a95000bccf2491f1abc719efcfa1c232cd8c2d41",
+    "finetuned_epoch": 5,
+    "finetuned_global_step": 31975
+  },
+  "backward_compatibility": "existing GigaHands paths preserved; InterHand selected only when dataset.name is InterHand2.6M",
+  "metadata_round_trip": {
+    "fx": {
+      "max_abs_error": 0.0,
+      "mean_abs_error": 0.0
+    },
+    "fy": {
+      "max_abs_error": 0.0,
+      "mean_abs_error": 0.0
+    },
+    "cx": {
+      "max_abs_error": 2.842170943040401e-14,
+      "mean_abs_error": 4.184307221698368e-15
+    },
+    "cy": {
+      "max_abs_error": 2.842170943040401e-14,
+      "mean_abs_error": 1.0184445879228103e-14
+    }
+  },
+  "readiness_state": "NOT READY: image archive is not present",
+  "remaining_requirements": [
+    "download all 44 official image parts and CHECKSUM",
+    "verify part sizes/checksum",
+    "scan all tar members and match manifest 5760/5760",
+    "selectively extract frozen manifest images",
+    "run image decode and preprocessing smoke tests",
+    "run old GigaHands regression checks"
+  ],
+  "inference_run": false
+}

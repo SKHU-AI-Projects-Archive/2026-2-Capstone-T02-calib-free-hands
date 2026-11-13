@@ -1,0 +1,58 @@
+schema_version: 1
+base_commit: 8e1e190e3a95d9e49dacb8e92c013a04053b958d
+failure_type: checkpoint_suffix_assertion
+failure_root_cause: "The official loader asserted that the path ended in .tar before reading the otherwise compatible HandCalib training payload."
+checkpoint_path: runs/02_anycalib_finetune/train/checkpoint_best.pt
+checkpoint_sha256: 1b87efa27c847886f5987084a95000bccf2491f1abc719efcfa1c232cd8c2d41
+checkpoint_format: handcalib_training_checkpoint
+checkpoint_epoch: 5
+checkpoint_global_step: 31975
+checkpoint_top_level_keys:
+  - anycalib_commit
+  - best_epoch
+  - best_validation_metric
+  - config_sha256
+  - config_snapshot
+  - current_validation_metrics
+  - epoch
+  - global_step
+  - manifest_sha256
+  - model
+  - optimizer
+  - pretrained_weight_sha256
+  - repository_commit
+  - rng_state
+  - scheduler
+  - train_split_sha256
+  - val_split_sha256
+state_dict_key_count: 399
+state_dict_missing_keys: []
+state_dict_unexpected_keys: []
+loaded_parameter_count: 397
+model_parameter_count: 397
+loaded_parameter_coverage: 1.0
+legacy_02f_loading_path: ".pt checkpoint -> /tmp/*.tar symlink -> official load_weights_from_ckpt() -> official AnyCalib inference wrapper"
+new_loading_path: ".pt or .tar training checkpoint -> adapter torch.load(..., weights_only=False) -> payload['model'] -> model.load_state_dict(..., strict=False)"
+semantic_equivalence: PASS
+state_dict_tensor_hash_comparison_keys: 399
+direct_pt_build_status: PASS
+pretrained_path_unchanged: true
+tiny_smoke_dataset: GigaHands validation p36
+tiny_smoke_frames: 2
+tiny_smoke_status: PASS
+pretrained_completed_result_preserved: true
+pretrained_completed_result:
+  path: runs/02_interhand_external_eval/pretrained
+  frames: 5760
+  successful_frames: 5760
+  pairs: 360
+  valid_pairs: 360
+interhand_manifest_unchanged: true
+metric_and_aggregation_unchanged: true
+interhand_full_inference_run: false
+legacy_regression: PASS
+failed_output_directory:
+  path: runs/02_interhand_external_eval/gigahands_finetuned
+  files_found: 0
+  removed: false
+final_readiness: FINETUNED_INTERHAND_READY_FOR_INFERENCE

@@ -119,7 +119,9 @@ smoke 결과는 `HandCalib/runs/01_anycalib_pretrained/smoke_val/`에 저장되�
 
 ```bash
 python HandCalib/evaluate.py --config HandCalib/configs/01_anycalib_pretrained.yaml --test --dry-run
-CUDA_VISIBLE_DEVICES=0 python HandCalib/evaluate.py --config HandCalib/configs/01_anycalib_pretrained.yaml --test
+nvidia-smi
+GPU_ID=<physical GPU number selected by the user>
+CUDA_VISIBLE_DEVICES="$GPU_ID" python HandCalib/evaluate.py --config HandCalib/configs/01_anycalib_pretrained.yaml --test
 ```
 
 최종 결과는 `HandCalib/runs/01_anycalib_pretrained/test/`에 저장됩니다. `config.yaml`은 설정 snapshot, `metadata.json`은 재현 환경 정보, `runtime.json`은 속도와 자원 사용량, `summary.txt`는 사람이 읽는 요약, `metrics.json`은 frame/pair metric, `pair_summary.csv`와 `clip_summary.csv`는 그룹별 통계, `frame_predictions.csv.gz`는 모든 frame의 source of truth, `telemetry.csv.gz`와 `batch_timings.csv.gz`는 GPU 및 batch timing 원자료입니다.
@@ -154,6 +156,12 @@ HandCalib/
 └── evaluate.py     평가 진입점
 ```
 
+## 02-G.1 InterHand annotation audit completion
+
+`results/02g1_interhand_audit_completion.yaml`은 이미지 없이 수행한 CPU-only 보완 감사입니다. 현재 보관한 `InterHand2.6M.annotations.5.fps.zip`의 JSON에서 image/frame과 annotation record를 분리해 확인했고, 공식 공개 수치 `1,361,062 / 380,125 / 849,160`은 [공식 homepage](https://mks0601.github.io/InterHand2.6M/)의 5fps H+M/M frame totals임을 대조했습니다. local archive는 [GitHub v1.0 release asset](https://github.com/facebookresearch/InterHand2.6M/releases/tag/v1.0)으로 2020-11-26에 업로드되었으며, homepage의 2021-03-22 v1.0 image release와 byte-equivalence는 확인하지 않았습니다.
+
+공식 [loader와 projection code](https://github.com/facebookresearch/InterHand2.6M/blob/main/data/InterHand2.6M/dataset.py)의 `world2cam`과 `cam2pixel` convention으로 annotation-only projection을 재현했습니다. `data.json`에는 직접 비교할 2D joint field가 없어 pixel reprojection error는 산출하지 않았지만, `width/height`, focal, principal point 좌표계와 기존 FOV 계산은 일관됩니다. GigaHands Train prior의 약 80% focal error는 **GigaHands-fine-tuned AnyCalib 모델 성능이 아니라 constant calibration prior diagnostic**입니다. 따라서 InterHand 외부 평가는 `GO WITH LIMITATIONS`, Train을 사용한 camera-generalization 주장은 공식 split overlap 때문에 filtered subset을 권장합니다. 이번 감사에서도 이미지 다운로드, model inference, training, fine-tuning은 실행하지 않았습니다.
+
 ## GigaHands 데이터 준비
 
 ```bash
@@ -166,6 +174,122 @@ python tools/download_gigahands_demo.py --check
 기본 데이터 위치는 `datasets/gigahands/`이며, 다운로드 cache는 `data/downloads/gigahands/`입니다. 두 위치 모두 Git에서 제외됩니다. 다른 검증 위치가 필요하면 `--target`과 `--cache-dir`를 사용할 수 있습니다.
 
 공식 출처: [Brown IVL GigaHands](https://github.com/brown-ivl/GigaHands)
+
+## 02-H.0 InterHand external evaluation preparation
+
+InterHand external evaluation은 Official Test만 사용하고, `(capture, camera)` 360개 calibration unit에서 metadata-only deterministic sampling으로 최대 16 frame씩 선택합니다. frozen manifest는 `data/manifests/interhand_external_test_v1.csv`이며 5,760 frames, manifest SHA256은 `af910a754c3449c258335a3baf574cb2650d8fabe6cc3458ee69cee3f429b750`입니다. 두 모델은 이 manifest, preprocessing, metric, batch 설정을 공유하고 checkpoint만 다릅니다. 02-H.1에서 image archive integration과 전체 image readiness 검증을 완료했으며 실제 inference는 실행하지 않았습니다.
+
+Sampling estimand는 Official Test frame distribution 전반의 deterministic subsample이며 sequence-balanced estimator가 아닙니다. Calibration unit을 equal weight로 집계하고 각 unit의 frame은 representative prediction에 사용하므로, sequence imbalance만으로 frozen manifest를 교체하지 않습니다. 이번 integrity completion에서 manifest는 변경하지 않았습니다. Metadata-level intrinsic round-trip은 검증했지만 JPEG decode와 actual-image preprocessing/K consistency는 archive 준비 후 pending입니다.
+
+Image archive를 받은 뒤의 준비 순서는 다음과 같습니다. `gh`가 설치되어 있으면 아래 primary 명령을 사용합니다.
+
+```bash
+cd /home/junghyub/2026-2-Capstone-T02-calib-free-hands
+IMG_DIR="HandCalib/datasets/interhand2.6m/archives/images_5fps_v1.0"
+mkdir -p "$IMG_DIR"
+gh release download v1.0 \
+  --repo facebookresearch/InterHand2.6M \
+  --pattern 'InterHand2.6M.images.5.fps.v1.0.tar.part*' \
+  --pattern 'InterHand2.6M.images.5.fps.v1.0.tar.CHECKSUM' \
+  --dir "$IMG_DIR" \
+  --skip-existing
+```
+
+`gh`가 없는 경우에는 exact suffix를 Python으로 생성하는 curl fallback을 사용합니다. brace expansion을 사용하지 않으며 개수·순서·중복을 확인하고 전송 실패를 반환합니다.
+
+```bash
+cd /home/junghyub/2026-2-Capstone-T02-calib-free-hands
+IMG_DIR="HandCalib/datasets/interhand2.6m/archives/images_5fps_v1.0"
+mkdir -p "$IMG_DIR"
+mapfile -t PARTS < <(.venv/bin/python - <<'PY'
+letters = "abcdefghijklmnopqrstuvwxyz"
+suffixes = [f"part{a}{b}" for a in "ab" for b in letters if not (a == "b" and b > "r")]
+assert len(suffixes) == 44 and suffixes[0] == "partaa" and suffixes[-1] == "partbr"
+assert len(suffixes) == len(set(suffixes))
+print("\n".join(suffixes))
+PY
+)
+test "${#PARTS[@]}" -eq 44
+BASE="https://github.com/facebookresearch/InterHand2.6M/releases/download/v1.0/InterHand2.6M.images.5.fps.v1.0.tar."
+for suffix in "${PARTS[@]}"; do
+  curl -fL --retry 5 --retry-all-errors --connect-timeout 20 --speed-time 60 --speed-limit 1024 -C - \
+    -o "$IMG_DIR/InterHand2.6M.images.5.fps.v1.0.tar.$suffix" "$BASE$suffix"
+done
+curl -fL --retry 5 --retry-all-errors --connect-timeout 20 --speed-time 60 --speed-limit 1024 -C - \
+  -o "$IMG_DIR/InterHand2.6M.images.5.fps.v1.0.tar.CHECKSUM" \
+  "https://github.com/facebookresearch/InterHand2.6M/releases/download/v1.0/InterHand2.6M.images.5.fps.v1.0.tar.CHECKSUM"
+```
+
+```bash
+cd /home/junghyub/2026-2-Capstone-T02-calib-free-hands
+.venv/bin/python HandCalib/tools/verify_interhand_images.py \
+  --archive-dir HandCalib/datasets/interhand2.6m/archives/images_5fps_v1.0 \
+  --manifest HandCalib/data/manifests/interhand_external_test_v1.csv \
+  --full-test-data HandCalib/datasets/interhand2.6m/raw/annotations/all/InterHand2.6M_test_data.json \
+  --scan-members
+.venv/bin/python HandCalib/tools/extract_interhand_subset.py \
+  --archive-dir HandCalib/datasets/interhand2.6m/archives/images_5fps_v1.0 \
+  --manifest HandCalib/data/manifests/interhand_external_test_v1.csv \
+  --output-root HandCalib/datasets/interhand2.6m/raw/images
+.venv/bin/python HandCalib/tools/check_interhand_image_readiness.py
+```
+
+## 02-H.1 InterHand image archive integration
+
+공식 5fps archive는 44개 part, 총 `81,718,036,480` bytes이며 per-part MD5 `44/44 PASS`입니다. deadlock-safe member scan으로 frozen manifest `5,760/5,760`, Official Test annotation `352,897/352,897` mapping을 확인했고, 전체 frozen subset만 selective extraction했습니다. 실제 JPEG `5,760/5,760` decode, annotation resolution/channel/finite pixel 검사, 기존 AnyCalib preprocessing과 intrinsic transform/inverse transform도 통과했습니다. 현재 readiness는 `READY_FOR_INFERENCE`입니다.
+
+상세 기록은 `results/02h1_interhand_image_archive_readiness.yaml`에 있습니다. 이 단계에서도 Pretrained 또는 Giga-finetuned model forward/inference는 실행하지 않았습니다.
+
+Preprocessing은 기존 AnyCalib evaluator 경로를 재사용하며, GT `fx/fy/cx/cy`는 target metric metadata로만 사용합니다. 실제 실행 전에는 다음 dry-run이 `5760/360`을 확인해야 합니다.
+
+```bash
+.venv/bin/python HandCalib/evaluate.py --config HandCalib/configs/02h0_interhand_pretrained.yaml --test --dry-run
+.venv/bin/python HandCalib/evaluate.py --config HandCalib/configs/02h0_interhand_gigahands_finetuned.yaml --test --dry-run
+```
+
+모델 평가는 사용자가 readiness 검증을 끝낸 뒤 직접 실행합니다.
+
+## 02-H.1.1 InterHand final-Test compatibility fix
+
+InterHand loader row의 `calibration_unit`을 공통 `camera_key`로 노출하고, `sequence`/`video_name`/`participant` alias를 추가해 기존 evaluator contract와 연결했습니다. Final Test 검증은 dataset별로 InterHand Official Test `5,760/360`과 GigaHands Test `7,667/49`를 확인하며, InterHand frozen manifest SHA256과 실제 weight source/SHA256도 dry-run metadata에 포함합니다. Summary는 config metadata를 사용하고, 결과 writer에는 기존 primary metric/aggregation을 유지한 채 precommitted secondary distribution 및 threshold statistics를 추가했습니다.
+
+이번 수정의 preflight에서는 두 InterHand config와 기존 GigaHands Test, Validation benchmark, 02 training dry-run, synthetic result schema를 검증했습니다. model build, CUDA inference, full Test 실행은 하지 않았습니다. 상세 기록은 `results/02h1_1_interhand_final_test_compatibility.yaml`입니다.
+
+## 02-H.1.2 Fine-tuned checkpoint inference compatibility
+
+`checkpoint_best.pt`는 official AnyCalib 배포 weight가 아니라 HandCalib training payload이며, 공식 loader의 `.tar` suffix assertion 때문에 build 전에 실패했습니다. adapter가 payload의 `model` state dict를 직접 로드하도록 최소 수정했고, legacy `.tar` symlink 경로와 399개 state key의 tensor hash equivalence를 확인했습니다. canonical checkpoint의 missing/unexpected key는 각각 `0/0`, parameter coverage는 `100%`입니다. GigaHands validation `p36` 2-frame tiny smoke도 통과했으며, InterHand 5,760-frame fine-tuned Test inference는 실행하지 않았습니다.
+
+상세 기록은 `results/02h1_2_finetuned_checkpoint_inference_compatibility.yaml`입니다. 현재 상태는 `FINETUNED_INTERHAND_READY_FOR_INFERENCE`입니다.
+
+## 02-H.1.3 Config-resolved checkpoint path
+
+Fine-tuned config의 `runs/02_anycalib_finetune/train/checkpoint_best.pt`는 `HandCalib` PROJECT_ROOT 기준으로 해석되어야 하므로, evaluator의 기존 `_path_from_config()`를 adapter 전달 전에도 적용했습니다. config-driven build에서 resolved path 존재, checkpoint SHA, epoch/global step, state-dict contract를 다시 확인했고, repository root와 `HandCalib` 내부 실행 위치에서 같은 absolute path가 생성되는 것도 확인했습니다. InterHand full Test inference는 실행하지 않았습니다.
+
+상세 기록은 `results/02h1_3_checkpoint_path_resolution.yaml`입니다. 현재 상태는 `FINETUNED_INTERHAND_CONFIG_PATH_READY`입니다.
+
+## 02-H.2 InterHand external generalization diagnostics
+
+완료된 InterHand Official Test 결과만 읽어 post-hoc 분석했습니다. 360개 calibration unit paired join은 `360/360`이며 fine-tuned focal error가 더 낮은 unit `0`, 동일 `0`, pretrained가 더 낮은 unit `360`입니다. focal mean delta는 `+0.274758` (fine-tuned - pretrained), deterministic bootstrap 95% CI는 `[0.268509, 0.281287]`입니다. Principal-point mean delta는 `+0.000297`로 focal 변화보다 작았고, fine-tuned prediction은 GigaHands Train median normalized-focal prior에 `360/360` unit에서 더 가까웠습니다.
+
+분석은 기존 result를 수정하지 않았고 inference/training을 실행하지 않았습니다. figures와 상세 CSV/JSON/Markdown은 ignored `runs/02_interhand_external_eval/diagnostics/`에, compact 기록은 `results/02h2_interhand_external_generalization.yaml`에 있습니다. 이 결과만으로 fine-tuning의 인과적 원인이나 calibration memorization을 증명하지 않습니다.
+
+```bash
+# Select a physical GPU after inspecting the server; no fixed GPU number is assumed.
+nvidia-smi
+GPU_ID=<physical GPU number selected by the user>
+CUDA_VISIBLE_DEVICES="$GPU_ID" .venv/bin/python HandCalib/evaluate.py --config HandCalib/configs/02h0_interhand_pretrained.yaml --test
+CUDA_VISIBLE_DEVICES="$GPU_ID" .venv/bin/python HandCalib/evaluate.py --config HandCalib/configs/02h0_interhand_gigahands_finetuned.yaml --test
+
+# Select two different idle physical GPUs after inspecting the server.
+GPU_PRE=<physical GPU number selected for pretrained>
+GPU_FIN=<different physical GPU number selected for fine-tuned>
+test "$GPU_PRE" != "$GPU_FIN"
+CUDA_VISIBLE_DEVICES="$GPU_PRE" .venv/bin/python HandCalib/evaluate.py --config HandCalib/configs/02h0_interhand_pretrained.yaml --test &
+CUDA_VISIBLE_DEVICES="$GPU_FIN" .venv/bin/python HandCalib/evaluate.py --config HandCalib/configs/02h0_interhand_gigahands_finetuned.yaml --test &
+wait
+```
+
+결과는 각각 `runs/02_interhand_external_eval/pretrained/`와 `runs/02_interhand_external_eval/gigahands_finetuned/`에 저장됩니다. archive/checksum/member mapping, selective extraction, image decode, preprocessing smoke test, old GigaHands regression이 모두 통과하기 전까지는 `NOT READY`입니다.
 
 ## 확인된 데이터
 
@@ -203,3 +327,27 @@ python tools/download_gigahands_demo.py --check
 추가 학습이나 재추론 없이 기존 p52 Test raw output을 `camera_key`로 matched-pair 분석했습니다. pretrained 대비 fine-tuned pair max focal error는 49개 중 `47개 개선`, `2개 악화`, tie `0개`였습니다. pretrained의 signed focal bias는 양수(`fx 0.163752`, `fy 0.167986`)였고 fine-tuning 후 `fx 0.010564`, `fy 0.012457`로 크게 줄었습니다.
 
 Train-only normalized-intrinsics constant prior도 함께 계산했습니다. Train median prior의 focal mean은 `0.0153451320`으로 fine-tuned `0.0161718921`보다 약간 낮았습니다. 따라서 이번 결과는 GigaHands calibration-distribution prior가 큰 역할을 했을 가능성을 지지하지만, image-based geometry 향상이나 calibration memorization을 단독으로 증명하지 않습니다. unseen physical-camera generalization도 주장하지 않습니다. 상세 pair CSV, figures, 수치 요약은 ignored `runs/02_anycalib_finetune/analysis/`에, tracked 요약은 `results/02e_finetuning_gain_analysis.yaml`에 있습니다.
+
+## 02-I.0 GigaHands focal coverage feasibility audit
+
+현재 GigaHands 데모 248개 video와 245개 `camera_key`를 대상으로 focal 분포와 균형 실험 가능성을 metadata-only로 감사했습니다. Exact intrinsic/full calibration signature는 각각 147개였고, 기존 `fx` 5-bin count는 `[2, 15, 195, 31, 2]`로 재현됐습니다. 물리 카메라 identity와 실제 장치 수는 확인할 수 없으므로 `not_verifiable`로 기록했습니다.
+
+동일 폭 `fx` 5-bin을 맞추면 `camera_key` 기준 최대 10/245개, exact full signature 기준 최대 10/147개를 사용할 수 있습니다. 3-bin에서는 두 기준이 각각 18개와 12개로 달라집니다. 기존 PairBalancedSampler는 `camera_key`마다 174 frame을 뽑으므로 p41의 반복 signature는 epoch당 348 frame, p44 signature는 174 frame에 노출됩니다. 이는 이미지 중복을 뜻하지 않지만 camera-key 균형과 calibration-frequency 균형이 다름을 보여줍니다. Participant 2/1/1 독립 조건에서 5/7/10-bin은 모든 split/bin에 최소 1개를 배치할 후보가 없었고, 3-bin도 최소 1개를 만족하는 6개 후보 모두 exact full calibration 독립성을 만족하지 못했습니다. 따라서 학습 시 bin weighting은 조건부 후보지만, GigaHands 데모만으로 다양한 focal 구간의 신뢰할 만한 독립 균형 평가를 구성하기에는 부족합니다.
+
+분석 도구는 `tools/audit_gigahands_focal_coverage.py`, 핵심 기록은 `results/02i0_gigahands_focal_coverage_feasibility.yaml`, 상세 표·그림·연구 보고서는 ignored `runs/02_gigahands_focal_coverage_audit/`에 있습니다. 새 split과 평가 지표는 확정하지 않았으며 training과 model inference는 실행하지 않았습니다.
+
+## 02-I.1 GigaHands full focal coverage audit
+
+전체 hand-pose metadata의 236개 `optim_params.txt`, 11,756개 camera row를 strict parse했으며 19-field 형식, 숫자 변환, finite/range, 파일 내부 cam ID/name 중복 검사가 모두 통과했습니다. `p041-boxing`에서 의심됐던 `k2`/`p1` 연결 오류는 실제 파일에서 발견되지 않았습니다. 56명, 236개 sequence, 11,756개 `camera_key`에 exact intrinsic/full calibration signature는 각각 602개이며, 기존 데모의 147개 signature는 모두 포함되고 455개가 추가됐습니다. 물리 카메라 identity는 계속 `not_verifiable`입니다.
+
+전체 `fx` 범위는 `743.565–1141.227 px`, `fy`는 `737.099–1146.534 px`로 데모보다 넓어졌습니다. 그러나 equal-width 10-bin에는 빈 구간이 있고, exact calibration 공유 관계로 56명 참가자가 하나의 연결 성분을 이룹니다. 따라서 calibration-level 학습 균형 후보와 사전 고정 bin-macro 기술 평가는 검토할 수 있지만, 참가자와 exact calibration을 동시에 비중복으로 유지하는 엄격한 3-way 평가는 현재 자료로 불가능합니다. 전체 hand-pose 폴더에는 RGB media가 없어서 신규 calibration의 RGB 확보 가능성도 별도 확인이 필요합니다.
+
+분석 도구는 `tools/audit_gigahands_full_focal_coverage.py`, 핵심 기록은 `results/02i1_gigahands_full_focal_coverage.yaml`, metadata manifest·표·그림·보고서는 ignored `runs/02_gigahands_full_focal_coverage/`에 있습니다. 새 split/bin을 확정하지 않았고 training, inference, GPU, 다운로드를 실행하지 않았습니다.
+
+## 02-I.2 GigaHands focal-balanced protocol design
+
+전체 연결 그래프가 하나라는 사실만으로 부분 제외 후보까지 불가능하다고 단정하지 않고, 602개 exact calibration과 11,756개 camera record를 대상으로 P0~P4 분할 조건과 S0~S4 sampling 조건을 metadata-only로 비교했습니다. `P1_COVERAGE`는 참가자·intrinsic·full-calibration overlap을 모두 0으로 유지하면서 602개 signature와 camera record 89.83%를 보존했습니다. 실제 retained participant는 Train/Validation/Test `32/11/11`명입니다. 다만 full-range equal-width 5-bin의 양 끝 signature가 각각 2개뿐이어서 Train·Validation·Test 세 집합이 모두 모든 bin을 포함할 수는 없습니다. 이 후보는 Validation/Test 양끝 coverage를 확보하는 대신 Train 밖 focal 평가 구간이 생깁니다.
+
+가장 엄격한 `P4_RETENTION`은 participant·calibration·camera identifier overlap을 모두 0으로 만들지만 482개 signature와 camera record 55.27%만 유지합니다. `P2_CALIBRATION_STRATIFIED`와 `P3_IDENTIFIER_STRATIFIED`는 전체 metadata record를 보존하지만 참가자 56명이 split 사이에서 반복되므로 participant generalization 평가가 아닙니다. Camera identifier도 확인된 물리 카메라 ID가 아닙니다.
+
+Sampling 후보에서는 S0 camera-key 비례, S1 signature 균등, S2 완전 bin 균형, S3 `alpha=0.5` 부분 균형과 3배 clipping, S4 제한 support를 비교하고, unclipped `alpha=0/0.25/0.5/1.0` 민감도도 기록했습니다. 완전 bin 균형은 희소 signature의 반복과 ESS 감소가 크므로 S3를 실용 후보로 제안하지만 확정하지 않았습니다. 분석 도구는 `tools/design_gigahands_focal_balance_protocol.py`, 핵심 기록은 `results/02i2_gigahands_focal_balance_protocol_design.yaml`, 상세 후보·제외 목록·가중치·RGB 요구·그림·보고서는 ignored `runs/02_gigahands_focal_balance_design/`에 있습니다. 실제 split, bin, sampler, 학습, 추론, RGB 다운로드는 수행하거나 확정하지 않았습니다.

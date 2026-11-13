@@ -1,0 +1,66 @@
+experiment: 02g_interhand_annotation_audit
+status: completed
+analysis_mode: cpu_only_annotation_audit
+images_downloaded: false
+model_or_checkpoint_used: false
+archive:
+  path: HandCalib/datasets/interhand2.6m/archives/InterHand2.6M.annotations.5.fps.zip
+  sha256: b7dae49caf2700597593f8949e286e73af83d3836b10187beac1a313bee2031d
+  unzip_test: PASS
+annotation_root: HandCalib/datasets/interhand2.6m/raw/annotations
+annotation_file_count: 30
+requested_expected_file_count: 31
+annotation_file_count_note: "30 is structurally complete: all=8, human_annot=8, machine_annot=12, skeleton/subject=2."
+canonical_official_split:
+  train: all/InterHand2.6M_train_data.json
+  validation: machine_annot/InterHand2.6M_val_data.json
+  test: all/InterHand2.6M_test_data.json
+split_summary:
+  train: {frames: 738602, annotations: 738602, captures: 27, subjects: 21, sequences: 120, camera_labels: 72, calibration_units: 1114, unique_K: 1114, mapped_images: 738602}
+  validation: {frames: 184287, annotations: 184287, captures: 1, subjects: 1, sequences: 11, camera_labels: 74, calibration_units: 74, unique_K: 74, mapped_images: 184287}
+  test: {frames: 352897, annotations: 352897, captures: 8, subjects: 8, sequences: 134, camera_labels: 143, calibration_units: 360, unique_K: 360, mapped_images: 352897}
+annotation_relations:
+  train_all_equals_human_union_machine: true
+  test_all_equals_human_union_machine: true
+  validation_is_machine_annotation_only: true
+  train_human_machine_image_overlap: 43172
+  test_human_machine_image_overlap: 0
+overlap:
+  train_validation: {same_capture_camera: 0, exact_K: 0, normalized_K: 0}
+  train_test: {same_capture_camera: 176, exact_K: 99, normalized_K: 99}
+  validation_test: {same_capture_camera: 51, exact_K: 0, normalized_K: 0}
+filtered_official_subsets:
+  remove_same_capture_camera:
+    train: {remaining_units: 938, remaining_frames: 514196}
+    validation: {remaining_units: 23, remaining_frames: 56118}
+    test: {remaining_units: 133, remaining_frames: 183300}
+  remove_same_exact_K:
+    train: {remaining_units: 1015, remaining_frames: 632172}
+    validation: {remaining_units: 74, remaining_frames: 184287}
+    test: {remaining_units: 261, remaining_frames: 325187}
+giga_train_to_interhand_test:
+  equal_weight_units: 147
+  mean_prior_normalized: [0.7233268160398314, 1.2850959731698126]
+  median_prior_normalized: [0.7222033977508545, 1.2849658542209201]
+  mean_prior_test_mean_max_rel_f: 0.8016019848393414
+  median_prior_test_mean_max_rel_f: 0.8019101221208383
+  median_prior_test_within_20pct: 0
+distribution_observations:
+  giga_train_nfx_range: [0.644488, 0.794563]
+  interhand_test_nfx_range: [2.455631, 3.861445]
+  giga_train_nfy_range: [1.151299, 1.406790]
+  interhand_test_nfy_range: [2.453164, 3.820287]
+  test_nfx_inside_giga_train_range: 0
+  test_nfy_inside_giga_train_range: 0
+  nearest_train_test_n2_mean: 0.0012898060021437096
+  nearest_train_test_n2_median: 0.000087037930528
+  nearest_train_test_n4_mean: 0.007423935514376365
+  nearest_train_test_n4_median: 0.0012435649688271814
+distortion_metadata: not available in inspected annotation JSON schema
+verdict_A_giga_finetuned_on_interhand_test: GO WITH LIMITATIONS
+verdict_A_note: "Meaningful as external-domain evaluation, but not a clean unseen-camera claim because calibration distributions differ strongly and official units/K overlap across splits."
+verdict_B_interhand_train_to_official_test: OFFICIAL-PRESERVING FILTERED SUBSET RECOMMENDED
+limitations:
+  - physical camera serial identity is unavailable
+  - no InterHand image content was inspected
+  - official Train-Test same capture/camera and exact-K overlaps exist
