@@ -1,0 +1,31 @@
+{
+  "collector": "s01",
+  "date": "2026-11-20",
+  "device": "iPhone 13",
+  "camera": "rear",
+  "lens": "1x",
+  "digital_zoom": 1.0,
+  "resolution": [1920, 1080],
+  "fps": 30,
+  "stabilization": "off",
+  "focus_exposure_locked": true,
+  "checkerboard": {
+    "squares": [8, 8],
+    "inner_corners": [7, 7],
+    "shown_on": "tablet screen",
+    "f_before": null,
+    "f_after": null
+  },
+  "reference_f": null,
+  "videos": [
+    {"file": "hand_twinkle_01.mov", "motion": "twinkle", "f": null, "note": ""},
+    {"file": "hand_twinkle_02.mov", "motion": "twinkle", "f": null, "note": ""},
+    {"file": "hand_nod_01.mov", "motion": "nod", "f": null, "note": ""},
+    {"file": "hand_nod_02.mov", "motion": "nod", "f": null, "note": ""},
+    {"file": "hand_circle_01.mov", "motion": "circle", "f": null, "note": ""},
+    {"file": "hand_circle_02.mov", "motion": "circle", "f": null, "note": ""},
+    {"file": "hand_mix_01.mov", "motion": "mix", "f": null, "note": ""},
+    {"file": "hand_mix_02.mov", "motion": "mix", "f": null, "note": ""}
+  ],
+  "notes": ""
+}

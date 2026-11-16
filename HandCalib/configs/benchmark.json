@@ -1,0 +1,7 @@
+{
+  "data_root": "/public/data/handcalib_data",
+  "output_dir": "runs/benchmark",
+  "include_invalid": false,
+  "probe_videos": true,
+  "thermal": {"pause_c": 70, "resume_c": 65, "poll_s": 30}
+}
