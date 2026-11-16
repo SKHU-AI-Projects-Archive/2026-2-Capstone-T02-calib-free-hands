@@ -118,6 +118,8 @@ def main():
         ap.add_argument(f"--{m}", nargs=2, required=True, metavar=("FILE_01", "FILE_02"))
     ap.add_argument("--stabilization",
                     help='"off", or what was actually used, e.g. "standard (enhanced off)" (only warned about)')
+    ap.add_argument("--stabilization-detail",
+                    help='what the camera actually does, e.g. "iPhone stock camera: standard EIS + OIS, enhanced off"')
     ap.add_argument("--focus-exposure-locked", action="store_true", default=None)
     ap.add_argument("--shown-on", help='checkerboard display, e.g. "tablet screen" or "printed, rigid board"')
     ap.add_argument("--digital-zoom", type=float, help="1.0 if no digital zoom")
@@ -211,6 +213,7 @@ def main():
         "resolution": [w, h],
         "fps": round(fps_session),
         "stabilization": args.stabilization,
+        "stabilization_detail": args.stabilization_detail or "",
         "focus_exposure_locked": args.focus_exposure_locked,
         "checkerboard": {"squares": [8, 8], "inner_corners": [7, 7], "shown_on": args.shown_on,
                          "f_before": None, "f_after": None},
