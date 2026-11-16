@@ -1,0 +1,20 @@
+# 133: 132 와 같은 실험(광류 추적점 + calibrator.py 추정기)을 벤치마크 세션 전부(1x, 0.5x)에 돌림 (사용자 2026-11-16: "새로운 세션 폴더 하나 더 올렸으니까 확인하고 실험 진행해줘."), 기록용, 판정 없음.
+# 0.5x 세션 참값 876.2 (before 877.3, after 875.1). 1x 세션은 132 와 같은 영상이라 재현성도 함께 본다.
+experiment:
+  name: 133_benchmark_flow_calibrator_all
+  seed: 42
+settings_config: configs/74b_multistart_rerun.yaml
+joint_set: j16
+code: {branch: benchmark, commit: bebcdb1, modules: [HandCalib/benchmark/optical_flow_calibrator.py, HandCalib/benchmark/calibrator.py, HandCalib/optical_flow/experiments.py]}
+ramps_deg: [11]
+reference: {mode: first_pause, pause_gap_frames: 15, min_pause_frames: 5}
+data_root: /public/data/handcalib_data
+region_variants:
+  variants:
+    chain: {mask: null}
+    no_thumb: {mask: [0, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20]}
+workers: 32
+video_workers: 8
+output:
+  root: runs/133_benchmark_flow_calibrator_all
+  results_yaml: results/133_benchmark_flow_calibrator_all.yaml
