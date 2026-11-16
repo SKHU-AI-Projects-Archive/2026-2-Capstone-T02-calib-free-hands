@@ -1,0 +1,16 @@
+<!doctype html>
+<html lang="ko"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
+<title>8x8 Checkerboard</title>
+<style>
+html, body { margin: 0; height: 100%; background: #ffffff; }
+body { display: flex; align-items: center; justify-content: center; }
+svg { width: min(100vw, 100vh); height: min(100vw, 100vh); display: block; }
+</style></head>
+<body>
+<!-- HandCalib guide section 3: 8x8 squares (7x7 inner corners) inside a one-square white margin.
+     Open on a tablet, tap to go full screen, set brightness to medium. -->
+<svg viewBox="0 0 10 10" shape-rendering="crispEdges" role="img" aria-label="8x8 checkerboard"><rect x="0" y="0" width="10" height="10" fill="#ffffff"/><rect x="1" y="1" width="1" height="1" fill="#000000"/><rect x="3" y="1" width="1" height="1" fill="#000000"/><rect x="5" y="1" width="1" height="1" fill="#000000"/><rect x="7" y="1" width="1" height="1" fill="#000000"/><rect x="2" y="2" width="1" height="1" fill="#000000"/><rect x="4" y="2" width="1" height="1" fill="#000000"/><rect x="6" y="2" width="1" height="1" fill="#000000"/><rect x="8" y="2" width="1" height="1" fill="#000000"/><rect x="1" y="3" width="1" height="1" fill="#000000"/><rect x="3" y="3" width="1" height="1" fill="#000000"/><rect x="5" y="3" width="1" height="1" fill="#000000"/><rect x="7" y="3" width="1" height="1" fill="#000000"/><rect x="2" y="4" width="1" height="1" fill="#000000"/><rect x="4" y="4" width="1" height="1" fill="#000000"/><rect x="6" y="4" width="1" height="1" fill="#000000"/><rect x="8" y="4" width="1" height="1" fill="#000000"/><rect x="1" y="5" width="1" height="1" fill="#000000"/><rect x="3" y="5" width="1" height="1" fill="#000000"/><rect x="5" y="5" width="1" height="1" fill="#000000"/><rect x="7" y="5" width="1" height="1" fill="#000000"/><rect x="2" y="6" width="1" height="1" fill="#000000"/><rect x="4" y="6" width="1" height="1" fill="#000000"/><rect x="6" y="6" width="1" height="1" fill="#000000"/><rect x="8" y="6" width="1" height="1" fill="#000000"/><rect x="1" y="7" width="1" height="1" fill="#000000"/><rect x="3" y="7" width="1" height="1" fill="#000000"/><rect x="5" y="7" width="1" height="1" fill="#000000"/><rect x="7" y="7" width="1" height="1" fill="#000000"/><rect x="2" y="8" width="1" height="1" fill="#000000"/><rect x="4" y="8" width="1" height="1" fill="#000000"/><rect x="6" y="8" width="1" height="1" fill="#000000"/><rect x="8" y="8" width="1" height="1" fill="#000000"/></svg>
+<script>document.body.addEventListener("click", function () {
+  if (document.documentElement.requestFullscreen) document.documentElement.requestFullscreen().catch(function () {});
+});</script>
+</body></html>

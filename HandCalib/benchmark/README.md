@@ -1,6 +1,6 @@
 # HandCalib benchmark
 
-This folder holds tools for building and scoring the hand-video benchmark described in the HandCalib data-collection guide (`TalkFile_handcalib_guide.html`, 2026-11-14).
+This folder holds tools for building and scoring the hand-video benchmark described in the HandCalib data-collection guide (2026-11-14). The guide's content is kept in [GUIDE.md](GUIDE.md); the original HTML is no longer kept.
 
 `calibrator.py` and `check_session.py` are copied from the guide unchanged. The other files only call them.
 
@@ -13,12 +13,17 @@ This folder holds tools for building and scoring the hand-video benchmark descri
 | measure_reference.py | Measures f_before, f_after and reference_f from the two checkerboard videos. With --write it saves them to session.json. |
 | run_benchmark.py | Runs Calibrator("hand") on every hand video of every valid session and writes metrics against reference_f. |
 | session_template.json | A session.json with all fields from the guide. |
+| create_session.py | Builds a session folder and session.json from the 10 original camera files, using their metadata. |
+| qt_meta.py | Reads QuickTime metadata (device, lens, 35 mm focal length, date) without exiftool; location keys are skipped. |
+| GUIDE.md | The data-collection guide in text form. |
+| checkerboard_8x8.html, checkerboard_8x8.svg | The guide's on-screen board: 8x8 squares, 7x7 inner corners, one-square white margin. |
+| requirements.txt | Pinned environment; install with `pip install --no-deps -r requirements.txt`. |
 
 The config is `configs/benchmark.json`.
 
 ## Environment
 
-Use the venv `/home/juson/venvs/handcalib_bench`:
+Use the venv `/home/juson/venvs/handcalib_bench` (`requirements.txt`, installed with `--no-deps`):
 
 - Python 3.11
 - rtmlib 0.0.15
@@ -37,11 +42,45 @@ cd benchmark
 
 ## Adding one session
 
-The data root is `/public/data/handcalib_data`. Each session is one folder, named as in guide section 6.
+The data root is `/public/data/handcalib_data`. Collector IDs are not assigned yet; s01 (repository owner) and s02 (teammate) are used for now.
 
-1. Copy the original files into `handcalib_data/<session>/` without renaming anything except to the guide names.
-2. Copy `session_template.json` into the session as `session.json` and fill in everything except the f values.
-3. Measure the reference f and write it into session.json:
+1. Create the session from the original files. The folder name and session.json are filled from the metadata:
+
+   | Field | Source |
+   |---|---|
+   | date | creation date |
+   | device | model |
+   | camera | rear/front, from the lens model |
+   | lens | 35 mm equivalent focal length / 25, rounded to a camera-app label |
+   | resolution | displayed width x height |
+   | fps | median of the 10 videos |
+
+   ```bash
+   $PY create_session.py --collector s01 \
+       --before IMG_a.MOV --after IMG_j.MOV \
+       --twinkle IMG_b.MOV IMG_c.MOV --nod IMG_d.MOV IMG_e.MOV \
+       --circle IMG_f.MOV IMG_g.MOV --mix IMG_h.MOV IMG_i.MOV \
+       --stabilization off --focus-exposure-locked --shown-on "tablet screen" \
+       --digital-zoom 1.0 --notes "..." [--dry-run]
+   ```
+
+   The script stops in these cases:
+   - The ten files do not share device, lens model, 35 mm focal length and resolution.
+   - A file was shot in cinematic mode.
+
+   Fields that the metadata does not contain are left null and listed at the end. These are stabilization, focus/exposure lock, checkerboard display, digital zoom and notes.
+
+   Each file is copied as its video stream only, with no re-encoding. Metadata, location and audio are removed.
+
+   The script then verifies each copy:
+   - the same video packets as the source (sha256 recorded in session.json `sources`)
+   - one stream
+   - the same displayed size
+   - no metadata strings left
+
+   Source files are never modified.
+
+2. Measure the reference f and write it into session.json:
 
    ```bash
    $PY measure_reference.py /public/data/handcalib_data/<session> --write
@@ -49,7 +88,7 @@ The data root is `/public/data/handcalib_data`. Each session is one folder, name
 
    If the two values differ by more than 3 %, the script says so and exits with code 1. The whole session must then be reshot.
 
-4. Check the session against the guide:
+3. Check the session against the guide:
 
    ```bash
    $PY validate_session.py /public/data/handcalib_data/<session>
