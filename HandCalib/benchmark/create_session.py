@@ -9,7 +9,8 @@
 The session folder name (collector_date_device_lens_resolution[_zoomNN]) and
 session.json are filled from the video metadata:
 
-    date         com.apple.quicktime.creationdate (local date), else container creation_time
+    date         com.apple.quicktime.creationdate (local date), else the camera file name
+                 (YYYYMMDD_HHMMSS, e.g. Galaxy), else container creation_time (UTC)
     device       com.apple.quicktime.model
     camera       "back"/"front" in com.apple.quicktime.camera.lens_model
     lens         35 mm equivalent focal length / 25, rounded to a camera-app label
@@ -22,15 +23,15 @@ checkerboard display, digital zoom, notes) come from options; if an option is
 missing the field is left null and listed at the end, and validate_session.py
 will report it until it is filled.
 
-Files are copied as the video stream only, without re-encoding
-(ffmpeg -c copy, metadata, location and audio removed). The copy is verified:
-identical video packets (sha256 of the packet md5 list), one stream, same
-displayed size, and no location strings. Source files are never modified.
+Files are copied byte for byte (the guide requires original files; the
+camera's metadata, including location, stays in the copy). The copy is
+verified by sha256 of the whole file. Source files are never modified.
 """
 import argparse
 import hashlib
 import json
 import re
+import shutil
 import subprocess
 import sys
 from pathlib import Path
@@ -68,13 +69,18 @@ def describe(path):
            "cinematic": str(meta.get(APPLE + "cinematic-video-intent", "0")).strip() == "1",
            "date": None}
     created = meta.get(APPLE + "creationdate")
-    if not created:
+    m = re.match(r"(\d{4})(\d{2})(\d{2})_\d{6}", Path(path).stem)
+    if created:
+        out["date"] = str(created)[:10]
+    elif m:
+        out["date"] = f"{m[1]}-{m[2]}-{m[3]}"
+    else:
         tags = json.loads(subprocess.run(
             ["ffprobe", "-v", "error", "-show_entries", "format_tags=creation_time", "-of", "json", str(path)],
             capture_output=True, text=True, check=True).stdout).get("format", {}).get("tags", {})
-        created = tags.get("creation_time")
-    if created:
-        out["date"] = str(created)[:10]
+        if tags.get("creation_time"):
+            out["date"] = tags["creation_time"][:10]
+            out["date_utc"] = True
     try:
         out["f35"] = float(out["f35"]) if out["f35"] is not None else None
     except ValueError:
@@ -82,34 +88,23 @@ def describe(path):
     return out
 
 
-def packet_hash(path):
-    out = subprocess.run(["ffmpeg", "-v", "error", "-i", str(path), "-map", "0:v:0", "-c", "copy",
-                          "-f", "framemd5", "-"], capture_output=True, text=True, check=True).stdout
-    lines = [l.split(",")[-1].strip() for l in out.splitlines() if l and not l.startswith("#")]
-    return hashlib.sha256("\n".join(lines).encode()).hexdigest(), len(lines)
+def file_sha256(path):
+    h = hashlib.sha256()
+    with open(path, "rb") as fh:
+        for block in iter(lambda: fh.read(1 << 22), b""):
+            h.update(block)
+    return h.hexdigest()
 
 
 def copy_video(src, dst):
-    subprocess.run(["ffmpeg", "-v", "error", "-n", "-i", str(src), "-map", "0:v:0", "-c", "copy",
-                    "-map_metadata", "-1", "-map_chapters", "-1", "-movflags", "+faststart", str(dst)],
-                   check=True)
-    h_src, n_src = packet_hash(src)
-    h_dst, n_dst = packet_hash(dst)
-    if (h_src, n_src) != (h_dst, n_dst):
-        raise RuntimeError(f"{dst.name}: video packets differ from source")
-    streams = json.loads(subprocess.run(["ffprobe", "-v", "error", "-show_entries", "stream=codec_type",
-                                         "-of", "json", str(dst)], capture_output=True, text=True,
-                                        check=True).stdout)["streams"]
-    if len(streams) != 1:
-        raise RuntimeError(f"{dst.name}: {len(streams)} streams after copy")
-    a, b = probe(src), probe(dst)
-    if (a["width"], a["height"]) != (b["width"], b["height"]):
-        raise RuntimeError(f"{dst.name}: displayed size changed {a['width']}x{a['height']} -> "
-                           f"{b['width']}x{b['height']}")
-    data = dst.read_bytes()
-    for s in (b"ISO6709", b"location", b"com.apple"):
-        if s in data[:1 << 20] or s in data[-(1 << 20):]:
-            raise RuntimeError(f"{dst.name}: metadata string {s!r} left after copy")
+    """Byte-for-byte copy of the original file, verified by sha256."""
+    if dst.exists():
+        raise FileExistsError(dst)
+    shutil.copyfile(src, dst)
+    h_src, h_dst = file_sha256(src), file_sha256(dst)
+    if h_src != h_dst:
+        dst.unlink()
+        raise RuntimeError(f"{dst.name}: copy differs from source")
     return h_dst
 
 
@@ -180,6 +175,8 @@ def main():
         lm = ref["lens_model"].lower()
         camera = "front" if "front" in lm else "rear" if "back" in lm else None
     date = ref["date"]
+    if ref.get("date_utc"):
+        print(f"경고: 날짜를 UTC creation_time에서 읽음 ({date}). 자정 근처 촬영이면 현지 날짜와 다를 수 있음")
     missing_meta = [n for n, v in (("device (--device)", device), ("date", date),
                                     ("lens (--lens)", lens), ("camera (--camera)", camera)) if v is None]
     if ref["f35"] and lens is None and args.lens is None:
@@ -235,7 +232,7 @@ def main():
         session.mkdir(parents=True)
         for stem in roles:
             digest = copy_video(infos[stem]["path"], session / files[stem])
-            meta["sources"][files[stem]]["video_packets_sha256"] = digest
+            meta["sources"][files[stem]]["sha256"] = digest
             print(f"  복사 확인: {files[stem]}")
         (session / "session.json").write_text(json.dumps(meta, ensure_ascii=False, indent=2) + "\n",
                                               encoding="utf-8")

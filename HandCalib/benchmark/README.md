@@ -70,15 +70,9 @@ The data root is `/public/data/handcalib_data`. Collector IDs are not assigned y
 
    Fields that the metadata does not contain are left null and listed at the end. These are stabilization, focus/exposure lock, checkerboard display, digital zoom and notes.
 
-   Each file is copied as its video stream only, with no re-encoding. Metadata, location and audio are removed.
+   Each file is copied byte for byte, as the guide requires original files. The camera metadata, including location, stays in the copy.
 
-   The script then verifies each copy:
-   - the same video packets as the source (sha256 recorded in session.json `sources`)
-   - one stream
-   - the same displayed size
-   - no metadata strings left
-
-   Source files are never modified.
+   Each copy is verified by the sha256 of the whole file, which is recorded in session.json `sources`. Source files are never modified.
 
 2. Measure the reference f and write it into session.json:
 
