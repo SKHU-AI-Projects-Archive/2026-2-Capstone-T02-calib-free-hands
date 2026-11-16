@@ -1,0 +1,21 @@
+# 131: 벤치마크 세션(가이드 규약 영상)에 광류 파이프라인을 돌려 calibrator.py(검출기)와 비교 (사용자 2026-11-16: "같은 세션에 optical flow 파이프라인도 돌려서 비교해주고, optical flow 결과는 따로 적어놨으면 좋겠어."), 기록용, 판정 없음.
+# 변형 = chain(지금 사슬), no_thumb(127~129 에서 가장 나았던 엄지 제외 사슬). 경사 11° 고정만. 결과는 session.json 이 아니라 이 실험의 결과 파일에만.
+# 미리 적어 둠: 광류 추정 모델은 손을 책상에 대고 돌리는 영상 전제라, 공중에 든 가이드 영상에서는 맞지 않을 수 있다(시험 실행 1개: f 가 탐색 범위 끝 3072).
+experiment:
+  name: 131_benchmark_optical_flow
+  seed: 42
+settings_config: configs/74b_multistart_rerun.yaml
+joint_set: j16
+code: {branch: benchmark, commit: a95e0dd, modules: [HandCalib/benchmark/optical_flow_session.py, HandCalib/optical_flow/experiments.py]}
+ramps_deg: [11]
+reference: {mode: first_pause, pause_gap_frames: 15, min_pause_frames: 5}
+data_root: /public/data/handcalib_data
+region_variants:
+  variants:
+    chain: {mask: null}
+    no_thumb: {mask: [0, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20]}
+workers: 32
+video_workers: 8
+output:
+  root: runs/131_benchmark_optical_flow
+  results_yaml: results/131_benchmark_optical_flow.yaml
