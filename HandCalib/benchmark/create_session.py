@@ -155,7 +155,7 @@ def main():
     for stem, i in infos.items():
         if abs(i["fps"] - fps_session) > 1.0:
             print(f"경고: {i['path'].name}의 평균 fps {i['fps']:.2f}가 다른 영상({fps_session:.2f})보다 낮음. "
-                  f"어두워서 프레임이 떨어졌을 수 있음 (가이드 4장: 밝은 곳에서 촬영)")
+                  f"어두워서 프레임이 떨어졌을 수 있음 (가이드 4장: 밝은 곳에서 촬영)")  # fps = frames / played seconds
     for stem, i in infos.items():
         if i["cinematic"]:
             problems.append(f"{stem} ({Path(i['path']).name}): 시네마틱 모드로 촬영됨")

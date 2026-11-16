@@ -52,9 +52,15 @@ def probe(path):
     w, h = stream["width"], stream["height"]
     if rotation % 180:
         w, h = h, w
-    num, den = (int(x) for x in stream["avg_frame_rate"].split("/"))
-    return {"duration": float(info["format"]["duration"]), "width": w, "height": h,
-            "fps": num / den if den else 0.0}
+    duration = float(info["format"]["duration"])
+    # Frames per played second. avg_frame_rate divides by the whole media duration, which is
+    # wrong when the camera writes an edit list that starts mid-recording (iPhone originals).
+    if stream.get("nb_frames") and duration > 0:
+        fps = int(stream["nb_frames"]) / duration
+    else:
+        num, den = (int(x) for x in stream["avg_frame_rate"].split("/"))
+        fps = num / den if den else 0.0
+    return {"duration": duration, "width": w, "height": h, "fps": fps}
 
 
 def find_video(session, stem):
