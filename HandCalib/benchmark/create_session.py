@@ -108,6 +108,27 @@ def copy_video(src, dst):
     return h_dst
 
 
+def packet_hash(path):
+    """sha256 of the per-packet md5 list of the video stream (container-independent)."""
+    out = subprocess.run(["ffmpeg", "-v", "error", "-i", str(path), "-map", "0:v:0", "-c", "copy", "-f", "framemd5", "-"],
+                         capture_output=True, text=True, check=True).stdout
+    lines = [ln.split(",")[-1].strip() for ln in out.splitlines() if ln and not ln.startswith("#")]
+    return hashlib.sha256("\n".join(lines).encode()).hexdigest(), len(lines)
+
+
+def set_rotation(src, dst, rotation):
+    """Re-mux without re-encoding, display rotation set to `rotation` (ffmpeg 4: rotate tag).
+    Only the container's display matrix changes; video packets are verified identical."""
+    if dst.exists():
+        raise FileExistsError(dst)
+    subprocess.run(["ffmpeg", "-v", "error", "-n", "-i", str(src), "-map", "0", "-c", "copy", "-map_metadata", "0",
+                    "-metadata:s:v:0", f"rotate={int(rotation)}", str(dst)], check=True)
+    if packet_hash(src) != packet_hash(dst):
+        dst.unlink()
+        raise RuntimeError(f"{dst.name}: video packets differ after re-mux")
+    return file_sha256(dst), packet_hash(dst)[0]
+
+
 def main():
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     ap.add_argument("--collector", required=True, help="s01, s02, ...")
@@ -127,6 +148,9 @@ def main():
     ap.add_argument("--lens", type=float, help="override lens magnification (0.5, 1, 2, 3, 5 ...)")
     ap.add_argument("--camera", choices=("rear", "front"), help="override when the metadata has none")
     ap.add_argument("--notes", help="session notes (lighting, background)")
+    ap.add_argument("--display-rotation", type=int, default=None,
+                    help="re-mux every file with this display rotation (e.g. 0 when a landscape shot was "
+                         "tagged portrait); pixels are not re-encoded, the change is recorded in sources")
     ap.add_argument("--dry-run", action="store_true", help="print the plan, copy nothing")
     args = ap.parse_args()
 
@@ -192,8 +216,13 @@ def main():
         return 1
 
     w, h = ref["width"], ref["height"]
+    if args.display_rotation is not None:
+        coded = json.loads(subprocess.run(["ffprobe", "-v", "error", "-select_streams", "v:0", "-show_entries",
+                                           "stream=width,height", "-of", "json", str(ref["path"])],
+                                          capture_output=True, text=True, check=True).stdout)["streams"][0]
+        w, h = (coded["width"], coded["height"]) if args.display_rotation % 180 == 0 else (coded["height"], coded["width"])
     zoom = args.digital_zoom
-    name = (f"{args.collector}_{date.replace('-', '')}_{re.sub(r'[^a-z0-9]', '', device.lower())}_"
+    name = (f"{args.collector}_{date.replace('-', '')}_{re.sub(r'[^a-z0-9]', '', device.lower().replace('+', 'plus'))}_"
             f"{lens_token(lens)}_{res_token(w, h)}")
     if zoom is not None and abs(zoom - 1.0) > 1e-6:
         name += f"_zoom{f'{zoom:g}'.replace('.', '')}"
@@ -235,8 +264,17 @@ def main():
     else:
         session.mkdir(parents=True)
         for stem in roles:
-            digest = copy_video(infos[stem]["path"], session / files[stem])
-            meta["sources"][files[stem]]["sha256"] = digest
+            if args.display_rotation is None:
+                digest = copy_video(infos[stem]["path"], session / files[stem])
+                meta["sources"][files[stem]]["sha256"] = digest
+            else:
+                src_rot = probe(infos[stem]["path"])
+                digest, vph = set_rotation(infos[stem]["path"], session / files[stem], args.display_rotation)
+                meta["sources"][files[stem]].update({
+                    "original_sha256": file_sha256(infos[stem]["path"]), "sha256": digest,
+                    "display_rotation_changed": {"to": args.display_rotation,
+                                                 "displayed_size_before": [src_rot["width"], src_rot["height"]]},
+                    "video_packets_sha256": vph, "note": "re-muxed without re-encoding; video packets identical to the original"})
             print(f"  복사 확인: {files[stem]}")
         (session / "session.json").write_text(json.dumps(meta, ensure_ascii=False, indent=2) + "\n",
                                               encoding="utf-8")
