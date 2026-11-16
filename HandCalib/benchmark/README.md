@@ -133,7 +133,8 @@ $PY run_benchmark.py --config ../configs/benchmark.json
 - 체커보드 영상 2개와 손 영상 8개(`hand_{twinkle,nod,circle,mix}_{01,02}`)가 정확히 있는지
 - session.json의 모든 항목이 채워졌는지
 - collector와 date가 폴더 이름과 같은지
-- 손떨림 보정이 꺼져 있고 초점·노출이 잠겨 있는지
+- 초점·노출이 잠겨 있는지
+- 손떨림 보정이 off인지. off가 아닌 값(예: 아이폰 기본 앱의 `"standard (enhanced off)"`)은 교수님 확인 전까지 경고만 하고 채점합니다. 비어 있으면 오류입니다.
 - f_before와 f_after의 차이가 3% 이내인지
 - reference_f가 두 값의 평균인지
 - videos[]가 실제 파일과 같은지

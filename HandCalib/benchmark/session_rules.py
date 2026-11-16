@@ -100,8 +100,12 @@ def check_session(session, probe_videos=True):
         date = str(meta.get("date", "")).replace("-", "")
         if date != m["date"]:
             errors.append(f"date({meta.get('date')})가 폴더 이름의 날짜({m['date']})와 다름")
-    if str(meta.get("stabilization", "")).lower() != "off":
-        errors.append(f"stabilization이 off가 아님: {meta.get('stabilization')}")
+    stab = meta.get("stabilization")
+    if stab not in (None, "") and str(stab).lower() != "off":
+        # The iPhone stock camera cannot turn standard EIS off; such sessions are
+        # recorded as they are (e.g. "standard (enhanced off)") and only warned about
+        # until the professor decides whether they are acceptable.
+        warnings.append(f"stabilization이 off가 아님: {stab} (가이드는 off, 교수님 확인 필요)")
     if meta.get("focus_exposure_locked") is not True:
         errors.append("focus_exposure_locked가 true가 아님")
     if list(board.get("inner_corners", [7, 7])) != [7, 7]:

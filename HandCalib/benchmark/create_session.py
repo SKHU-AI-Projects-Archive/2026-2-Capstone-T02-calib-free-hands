@@ -116,7 +116,8 @@ def main():
     ap.add_argument("--after", required=True)
     for m in MOTIONS:
         ap.add_argument(f"--{m}", nargs=2, required=True, metavar=("FILE_01", "FILE_02"))
-    ap.add_argument("--stabilization", choices=("off", "on"))
+    ap.add_argument("--stabilization",
+                    help='"off", or what was actually used, e.g. "standard (enhanced off)" (only warned about)')
     ap.add_argument("--focus-exposure-locked", action="store_true", default=None)
     ap.add_argument("--shown-on", help='checkerboard display, e.g. "tablet screen" or "printed, rigid board"')
     ap.add_argument("--digital-zoom", type=float, help="1.0 if no digital zoom")
