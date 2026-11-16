@@ -106,6 +106,9 @@ def check_session(session, probe_videos=True):
         date = str(meta.get("date", "")).replace("-", "")
         if date != m["date"]:
             errors.append(f"date({meta.get('date')})가 폴더 이름의 날짜({m['date']})와 다름")
+    dz = meta.get("digital_zoom")
+    if dz is not None and dz != "" and not (dz == "none" or (isinstance(dz, (int, float)) and dz > 1.0)):
+        errors.append(f'digital_zoom은 "none"(디지털 줌 없음) 또는 1보다 큰 배율이어야 함: {dz}')
     stab = meta.get("stabilization")
     if stab not in (None, "") and str(stab).lower() != "off":
         # The iPhone stock camera cannot turn standard EIS off; such sessions are

@@ -61,12 +61,14 @@ cd benchmark
        --twinkle IMG_b.MOV IMG_c.MOV --nod IMG_d.MOV IMG_e.MOV \
        --circle IMG_f.MOV IMG_g.MOV --mix IMG_h.MOV IMG_i.MOV \
        --stabilization off --focus-exposure-locked --shown-on "tablet screen" \
-       --digital-zoom 1.0 --notes "..." [--dry-run]
+       --digital-zoom none --notes "..." [--dry-run]
    ```
 
    다음 경우에는 세션을 만들지 않고 멈춥니다.
    - 파일 10개의 기기, 렌즈 모델, 35mm 환산 초점거리, 해상도가 서로 다른 경우
    - 시네마틱 모드로 찍은 파일이 있는 경우
+
+   `digital_zoom`은 디지털 줌을 쓰지 않았으면 `"none"`, 썼으면 배율 숫자(예: `2.0`)로 적습니다. 배율이 있으면 폴더 이름 끝에 `_zoom2`(2배), `_zoom15`(1.5배) 형식으로 붙습니다.
 
    메타데이터에 없는 항목은 null로 남기고 마지막에 목록으로 알려 줍니다. 손떨림 보정, 초점·노출 잠금, 체커보드를 보여 준 방법, 디지털 줌, notes가 여기에 해당합니다. 메타데이터에 기기 정보가 없는 영상(예: 갤럭시 영상을 다시 묶은 파일)은 `--device`, `--lens`, `--camera`로 직접 지정합니다.
 

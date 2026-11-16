@@ -129,6 +129,16 @@ def set_rotation(src, dst, rotation):
     return file_sha256(dst), packet_hash(dst)[0]
 
 
+def zoom_value(text):
+    """digital_zoom: "none" (no digital zoom) or a factor > 1."""
+    if text.strip().lower() == "none":
+        return "none"
+    v = float(text)
+    if v <= 1.0:
+        raise argparse.ArgumentTypeError('no digital zoom is written as "none"; a factor must be > 1')
+    return v
+
+
 def main():
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     ap.add_argument("--collector", required=True, help="s01, s02, ...")
@@ -143,7 +153,7 @@ def main():
                     help='what the camera actually does, e.g. "iPhone stock camera: standard EIS + OIS, enhanced off"')
     ap.add_argument("--focus-exposure-locked", action="store_true", default=None)
     ap.add_argument("--shown-on", help='checkerboard display, e.g. "tablet screen" or "printed, rigid board"')
-    ap.add_argument("--digital-zoom", type=float, help="1.0 if no digital zoom")
+    ap.add_argument("--digital-zoom", type=zoom_value, help='"none" if no digital zoom, else the factor (e.g. 2.0)')
     ap.add_argument("--device", help="override device name when the metadata has none")
     ap.add_argument("--lens", type=float, help="override lens magnification (0.5, 1, 2, 3, 5 ...)")
     ap.add_argument("--camera", choices=("rear", "front"), help="override when the metadata has none")
@@ -224,7 +234,7 @@ def main():
     zoom = args.digital_zoom
     name = (f"{args.collector}_{date.replace('-', '')}_{re.sub(r'[^a-z0-9]', '', device.lower().replace('+', 'plus'))}_"
             f"{lens_token(lens)}_{res_token(w, h)}")
-    if zoom is not None and abs(zoom - 1.0) > 1e-6:
+    if isinstance(zoom, float):
         name += f"_zoom{f'{zoom:g}'.replace('.', '')}"
     session = Path(args.root) / name
     if session.exists():
@@ -287,7 +297,7 @@ def main():
     if args.shown_on is None:
         todo.append('checkerboard.shown_on: 체커보드를 무엇으로 보여줬는지 (--shown-on "tablet screen")')
     if zoom is None:
-        todo.append("digital_zoom: 디지털 줌 배율, 쓰지 않았으면 1.0 (--digital-zoom 1.0)")
+        todo.append("digital_zoom: 디지털 줌 배율, 쓰지 않았으면 none (--digital-zoom none)")
     if args.notes is None:
         todo.append("notes: 조명, 배경 등 (--notes)")
     if todo:

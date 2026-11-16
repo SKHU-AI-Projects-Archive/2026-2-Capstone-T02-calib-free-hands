@@ -4,7 +4,7 @@
   "device": "iPhone 13",
   "camera": "rear",
   "lens": "1x",
-  "digital_zoom": 1.0,
+  "digital_zoom": "none",
   "resolution": [1920, 1080],
   "fps": 30,
   "stabilization": "off",
