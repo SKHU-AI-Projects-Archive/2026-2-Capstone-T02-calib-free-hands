@@ -1,0 +1,285 @@
+experiment: 131_benchmark_optical_flow
+run: runs/131_benchmark_optical_flow/20261116T044026Z
+code_commit: 507b731
+git_dirty_at_run: false
+videos:
+  s01_20261116_iphoneduo_1x_1080p__hand_twinkle_01.mov:
+    chain:
+      info:
+        breaks: 0
+        n_use: 710
+        n_frames: 710
+        inliers_median: 400.0
+        drift_j16_pct: 1.6409
+      ramp_11:
+        f: 3072.0
+        pitch_deg: 11.0
+        roll_deg: 0.0
+        desk_tilt_deg: 74.2425
+        turn_range_deg: 3.9678
+        rms_px: 4.8122
+        cost: 22.7119
+        boundary: true
+        start: profile_7
+    no_thumb:
+      info:
+        breaks: 0
+        n_use: 710
+        n_frames: 710
+        inliers_median: 400.0
+        drift_j16_pct: 0.9482
+      ramp_11:
+        f: 3072.0
+        pitch_deg: 11.0
+        roll_deg: 0.0
+        desk_tilt_deg: 66.0875
+        turn_range_deg: 3.9108
+        rms_px: 5.7978
+        cost: 32.3866
+        boundary: true
+        start: profile_6
+  s01_20261116_iphoneduo_1x_1080p__hand_twinkle_02.mov:
+    chain:
+      info:
+        breaks: 0
+        n_use: 775
+        n_frames: 775
+        inliers_median: 400.0
+        drift_j16_pct: 1.3899
+      ramp_11:
+        f: 3072.0
+        pitch_deg: 11.0
+        roll_deg: 0.0
+        desk_tilt_deg: 70.3684
+        turn_range_deg: 5.8225
+        rms_px: 5.4294
+        cost: 29.2921
+        boundary: true
+        start: profile_5
+    no_thumb:
+      info:
+        breaks: 0
+        n_use: 775
+        n_frames: 775
+        inliers_median: 400.0
+        drift_j16_pct: 1.1343
+      ramp_11:
+        f: 3072.0
+        pitch_deg: 11.0
+        roll_deg: 0.0
+        desk_tilt_deg: 59.9721
+        turn_range_deg: 4.4919
+        rms_px: 5.8622
+        cost: 33.1326
+        boundary: true
+        start: profile_7
+  s01_20261116_iphoneduo_1x_1080p__hand_nod_01.mov:
+    chain:
+      info:
+        breaks: 0
+        n_use: 822
+        n_frames: 822
+        inliers_median: 400.0
+        drift_j16_pct: 1.3502
+      ramp_11:
+        f: 3072.0
+        pitch_deg: 11.0
+        roll_deg: 0.0
+        desk_tilt_deg: 66.3915
+        turn_range_deg: 2.7184
+        rms_px: 6.5217
+        cost: 40.7152
+        boundary: true
+        start: free_template
+    no_thumb:
+      info:
+        breaks: 0
+        n_use: 822
+        n_frames: 822
+        inliers_median: 400.0
+        drift_j16_pct: 1.4171
+      ramp_11:
+        f: 3072.0
+        pitch_deg: 11.0
+        roll_deg: 0.0
+        desk_tilt_deg: 60.3365
+        turn_range_deg: 363.468
+        rms_px: 6.3458
+        cost: 38.4343
+        boundary: true
+        start: free_template
+  s01_20261116_iphoneduo_1x_1080p__hand_nod_02.mov:
+    chain:
+      info:
+        breaks: 0
+        n_use: 741
+        n_frames: 741
+        inliers_median: 400.0
+        drift_j16_pct: 1.6035
+      ramp_11:
+        f: 3072.0
+        pitch_deg: 11.0
+        roll_deg: 0.0
+        desk_tilt_deg: 70.0344
+        turn_range_deg: 5.2247
+        rms_px: 5.6795
+        cost: 31.4846
+        boundary: true
+        start: profile_7
+    no_thumb:
+      info:
+        breaks: 0
+        n_use: 741
+        n_frames: 741
+        inliers_median: 399.0
+        drift_j16_pct: 1.5063
+      ramp_11:
+        f: 3072.0
+        pitch_deg: 11.0
+        roll_deg: 0.0
+        desk_tilt_deg: 57.0988
+        turn_range_deg: 1080.0467
+        rms_px: 5.9779
+        cost: 34.1202
+        boundary: true
+        start: profile_5
+  s01_20261116_iphoneduo_1x_1080p__hand_circle_01.mov:
+    chain:
+      info:
+        breaks: 0
+        n_use: 758
+        n_frames: 758
+        inliers_median: 399.0
+        drift_j16_pct: 1.7992
+      ramp_11:
+        f: 3072.0
+        pitch_deg: 11.0
+        roll_deg: 0.0
+        desk_tilt_deg: 63.2858
+        turn_range_deg: 361.8979
+        rms_px: 5.3494
+        cost: 28.4194
+        boundary: true
+        start: profile_5
+    no_thumb:
+      info:
+        breaks: 0
+        n_use: 758
+        n_frames: 758
+        inliers_median: 394.0
+        drift_j16_pct: 1.6547
+      ramp_11:
+        f: 3072.0
+        pitch_deg: 11.0
+        roll_deg: 0.0
+        desk_tilt_deg: 56.8117
+        turn_range_deg: 6.0428
+        rms_px: 7.3746
+        cost: 51.591
+        boundary: true
+        start: profile_3
+  s01_20261116_iphoneduo_1x_1080p__hand_circle_02.mov:
+    chain:
+      info:
+        breaks: 0
+        n_use: 816
+        n_frames: 816
+        inliers_median: 397.0
+        drift_j16_pct: 1.9606
+      ramp_11:
+        f: 3072.0
+        pitch_deg: 11.0
+        roll_deg: 0.0
+        desk_tilt_deg: 63.3302
+        turn_range_deg: 7.6303
+        rms_px: 6.5812
+        cost: 41.5502
+        boundary: true
+        start: profile_7
+    no_thumb:
+      info:
+        breaks: 0
+        n_use: 816
+        n_frames: 816
+        inliers_median: 396.0
+        drift_j16_pct: 1.9522
+      ramp_11:
+        f: 3072.0
+        pitch_deg: 11.0
+        roll_deg: 0.0
+        desk_tilt_deg: 86.5044
+        turn_range_deg: 183.9709
+        rms_px: 57.6906
+        cost: 647.5425
+        boundary: true
+        start: profile_5
+  s01_20261116_iphoneduo_1x_1080p__hand_mix_01.mov:
+    chain:
+      info:
+        breaks: 0
+        n_use: 916
+        n_frames: 916
+        inliers_median: 400.0
+        drift_j16_pct: 1.4685
+      ramp_11:
+        f: 3072.0
+        pitch_deg: 11.0
+        roll_deg: 0.0
+        desk_tilt_deg: 68.3317
+        turn_range_deg: 3.2308
+        rms_px: 8.2816
+        cost: 59.8547
+        boundary: true
+        start: profile_5
+    no_thumb:
+      info:
+        breaks: 0
+        n_use: 916
+        n_frames: 916
+        inliers_median: 400.0
+        drift_j16_pct: 1.2756
+      ramp_11:
+        f: 3072.0
+        pitch_deg: 11.0
+        roll_deg: 0.0
+        desk_tilt_deg: 67.6677
+        turn_range_deg: 7.5519
+        rms_px: 8.8019
+        cost: 67.0159
+        boundary: true
+        start: profile_7
+  s01_20261116_iphoneduo_1x_1080p__hand_mix_02.mov:
+    chain:
+      info:
+        breaks: 0
+        n_use: 879
+        n_frames: 879
+        inliers_median: 399.0
+        drift_j16_pct: 1.3595
+      ramp_11:
+        f: 3072.0
+        pitch_deg: 11.0
+        roll_deg: 0.0
+        desk_tilt_deg: 69.6165
+        turn_range_deg: 362.477
+        rms_px: 7.7155
+        cost: 52.9507
+        boundary: true
+        start: profile_6
+    no_thumb:
+      info:
+        breaks: 0
+        n_use: 879
+        n_frames: 879
+        inliers_median: 397.0
+        drift_j16_pct: 1.1662
+      ramp_11:
+        f: 3072.0
+        pitch_deg: 11.0
+        roll_deg: 0.0
+        desk_tilt_deg: 61.3765
+        turn_range_deg: 5.0375
+        rms_px: 7.843
+        cost: 53.4424
+        boundary: true
+        start: profile_6
