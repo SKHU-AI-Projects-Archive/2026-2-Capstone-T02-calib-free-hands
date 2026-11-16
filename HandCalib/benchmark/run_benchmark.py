@@ -155,6 +155,8 @@ def main():
     ap.add_argument("--config", required=True)
     ap.add_argument("--resume", help="existing run folder; videos already in results.csv are skipped")
     ap.add_argument("--data-root", help="override data_root in the config")
+    ap.add_argument("--sessions", nargs="+", help="score only these session folders (others are not run; "
+                                                   "compare with their earlier runs)")
     args = ap.parse_args()
 
     cfg = json.loads(Path(args.config).read_text(encoding="utf-8"))
@@ -173,6 +175,9 @@ def main():
 
     validation, refs, todo = {}, {}, []
     sessions = find_sessions(cfg["data_root"])
+    only = args.sessions or cfg.get("sessions")
+    if only:
+        sessions = [s for s in sessions if s.name in set(only)]
     for session in sessions:
         errors, warnings, meta = check_session(session, probe_videos=cfg.get("probe_videos", True))
         has_ref = isinstance(meta.get("reference_f"), (int, float)) and meta["reference_f"] > 0

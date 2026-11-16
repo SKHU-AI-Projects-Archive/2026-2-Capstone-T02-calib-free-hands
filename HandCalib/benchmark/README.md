@@ -106,6 +106,7 @@ $PY run_benchmark.py --config ../configs/benchmark.json
 4. 영상이 오류로 끝나면(손이 거의 검출되지 않은 경우) `error`로 기록하고 다음 영상으로 넘어갑니다.
 5. GPU 온도가 70°C 이상이면 멈추고 65°C 미만이 되면 다시 돌립니다.
 6. 결과는 영상마다 바로 저장합니다. 중단된 실행은 `--resume runs/benchmark/<실행>`으로 이어서 돌립니다.
+7. `--sessions <세션 폴더 ...>`(또는 설정의 `sessions`)를 주면 그 세션만 채점합니다. 새 세션을 추가했을 때는 새 세션만 돌리고, 기존 세션은 이전 실행 결과와 비교합니다.
 
 결과는 `runs/benchmark/<UTC 시각>/`에 저장됩니다.
 
