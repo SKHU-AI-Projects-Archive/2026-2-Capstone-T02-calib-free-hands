@@ -86,3 +86,11 @@ runs/*
 
 # Agent planning scratch from local bootstrapping
 docs/superpowers/
+
+# Local-only data, third-party code and personal experiment folders (never committed)
+GeoCalib/
+datasets/camera/
+datasets/interhand2.6m/
+datasets/hand_focal_videos/
+presentation_exports/
+hand_gesture/

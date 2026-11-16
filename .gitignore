@@ -78,3 +78,20 @@ experiments/runs/CAM-EXP-009_3_real_bilateral_geometry_separability/cache/
 experiments/runs/CAM-EXP-009_4_scene_shared_anatomy_focal_refinement/cache/
 experiments/runs/CAM-EXP-010_monocular_depth_scale_decomposition/cache/
 experiments/runs/CAM-EXP-011_allframe_three_model_hand_paired_benchmark/cache/
+
+# ── 영상·압축 원본은 어디에 두어도 커밋하지 않는다 (촬영 영상을 저장소 폴더에 올려 두는 경우 대비) ──
+*.mp4
+*.MP4
+*.mov
+*.MOV
+*.avi
+*.mkv
+*.zip
+*.7z
+*.tar
+*.tar.gz
+*.tgz
+# ── 비밀 값 ──
+.env
+.env.*
+!.env.example
