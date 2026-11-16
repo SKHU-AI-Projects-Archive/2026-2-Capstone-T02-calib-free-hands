@@ -1,0 +1,213 @@
+experiment: 133_benchmark_flow_calibrator_all
+run: runs/133_benchmark_flow_calibrator_all/20261116T052852Z
+code_commit: 6c080f3
+git_dirty_at_run: false
+videos:
+  s01_20261116_iphoneduo_05x_1080p__hand_twinkle_01.mov:
+    chain:
+      n_frames: 775
+      n_points_frames: 775
+      f: 2467.4866
+      breaks: 0
+      ref_frame: 385
+    no_thumb:
+      n_frames: 775
+      n_points_frames: 775
+      f: 1209.1592
+      breaks: 0
+      ref_frame: 385
+  s01_20261116_iphoneduo_05x_1080p__hand_twinkle_02.mov:
+    chain:
+      n_frames: 702
+      n_points_frames: 702
+      f: 4073.4079
+      breaks: 0
+      ref_frame: 350
+    no_thumb:
+      n_frames: 702
+      n_points_frames: 702
+      f: 1865.733
+      breaks: 0
+      ref_frame: 350
+  s01_20261116_iphoneduo_05x_1080p__hand_nod_01.mov:
+    chain:
+      n_frames: 751
+      n_points_frames: 751
+      f: 690.6605
+      breaks: 0
+      ref_frame: 376
+    no_thumb:
+      n_frames: 751
+      n_points_frames: 751
+      f: 536.8191
+      breaks: 0
+      ref_frame: 376
+  s01_20261116_iphoneduo_05x_1080p__hand_nod_02.mov:
+    chain:
+      n_frames: 758
+      n_points_frames: 758
+      f: 775.7118
+      breaks: 0
+      ref_frame: 88
+    no_thumb:
+      n_frames: 758
+      n_points_frames: 758
+      f: 536.9995
+      breaks: 0
+      ref_frame: 88
+  s01_20261116_iphoneduo_05x_1080p__hand_circle_01.mov:
+    chain:
+      n_frames: 756
+      n_points_frames: 756
+      f: 948.8605
+      breaks: 0
+      ref_frame: 82
+    no_thumb:
+      n_frames: 756
+      n_points_frames: 756
+      f: 0.0
+      breaks: 0
+      ref_frame: 82
+  s01_20261116_iphoneduo_05x_1080p__hand_circle_02.mov:
+    chain:
+      n_frames: 838
+      n_points_frames: 838
+      f: 904.5365
+      breaks: 0
+      ref_frame: 209
+    no_thumb:
+      n_frames: 838
+      n_points_frames: 838
+      f: -0.0001
+      breaks: 0
+      ref_frame: 209
+  s01_20261116_iphoneduo_05x_1080p__hand_mix_01.mov:
+    chain:
+      n_frames: 814
+      n_points_frames: 814
+      f: 1196.8236
+      breaks: 0
+      ref_frame: 300
+    no_thumb:
+      n_frames: 814
+      n_points_frames: 814
+      f: 647.222
+      breaks: 0
+      ref_frame: 300
+  s01_20261116_iphoneduo_05x_1080p__hand_mix_02.mov:
+    chain:
+      n_frames: 875
+      n_points_frames: 875
+      f: 1146.5752
+      breaks: 0
+      ref_frame: 281
+    no_thumb:
+      n_frames: 875
+      n_points_frames: 875
+      f: 838.6608
+      breaks: 0
+      ref_frame: 281
+  s01_20261116_iphoneduo_1x_1080p__hand_twinkle_01.mov:
+    chain:
+      n_frames: 710
+      n_points_frames: 710
+      f: 3409.8307
+      breaks: 0
+      ref_frame: 354
+    no_thumb:
+      n_frames: 710
+      n_points_frames: 710
+      f: 3812.1259
+      breaks: 0
+      ref_frame: 354
+  s01_20261116_iphoneduo_1x_1080p__hand_twinkle_02.mov:
+    chain:
+      n_frames: 775
+      n_points_frames: 775
+      f: 4581.2232
+      breaks: 0
+      ref_frame: 387
+    no_thumb:
+      n_frames: 775
+      n_points_frames: 775
+      f: 4992.0585
+      breaks: 0
+      ref_frame: 387
+  s01_20261116_iphoneduo_1x_1080p__hand_nod_01.mov:
+    chain:
+      n_frames: 822
+      n_points_frames: 822
+      f: 1887.4824
+      breaks: 0
+      ref_frame: 409
+    no_thumb:
+      n_frames: 822
+      n_points_frames: 822
+      f: 1161.0318
+      breaks: 0
+      ref_frame: 409
+  s01_20261116_iphoneduo_1x_1080p__hand_nod_02.mov:
+    chain:
+      n_frames: 741
+      n_points_frames: 741
+      f: 1903.7461
+      breaks: 0
+      ref_frame: 368
+    no_thumb:
+      n_frames: 741
+      n_points_frames: 741
+      f: -0.0004
+      breaks: 0
+      ref_frame: 368
+  s01_20261116_iphoneduo_1x_1080p__hand_circle_01.mov:
+    chain:
+      n_frames: 758
+      n_points_frames: 758
+      f: 2047.833
+      breaks: 0
+      ref_frame: 377
+    no_thumb:
+      n_frames: 758
+      n_points_frames: 758
+      f: 450.923
+      breaks: 0
+      ref_frame: 377
+  s01_20261116_iphoneduo_1x_1080p__hand_circle_02.mov:
+    chain:
+      n_frames: 816
+      n_points_frames: 816
+      f: 1920.0555
+      breaks: 0
+      ref_frame: 407
+    no_thumb:
+      n_frames: 816
+      n_points_frames: 816
+      f: 1398.1416
+      breaks: 0
+      ref_frame: 407
+  s01_20261116_iphoneduo_1x_1080p__hand_mix_01.mov:
+    chain:
+      n_frames: 916
+      n_points_frames: 916
+      f: 2195.7177
+      breaks: 0
+      ref_frame: 339
+    no_thumb:
+      n_frames: 916
+      n_points_frames: 916
+      f: 4897.4644
+      breaks: 0
+      ref_frame: 339
+  s01_20261116_iphoneduo_1x_1080p__hand_mix_02.mov:
+    chain:
+      n_frames: 879
+      n_points_frames: 879
+      f: 2500.1956
+      breaks: 0
+      ref_frame: 110
+    no_thumb:
+      n_frames: 879
+      n_points_frames: 879
+      f: 2902.8982
+      breaks: 0
+      ref_frame: 110
