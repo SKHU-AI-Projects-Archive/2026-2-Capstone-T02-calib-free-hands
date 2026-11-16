@@ -1,0 +1,21 @@
+# 132: 벤치마크 세션의 손 영상에서 광류 추적점을 calibrator.py 의 추정기(Calibrator.estimate, 수정 없음)로 추정해 검출기(RTMW) 값과 비교 (사용자 2026-11-16: "앞으로도 calibrator.py로 벤치마크 했던 영상들은 같은 추정방식으로 진행해줘."), 기록용, 판정 없음.
+# 131 은 광류 파이프라인의 책상 운동 추정기를 써서 16건 모두 f 탐색 범위 끝(3072)에 걸렸다. 여기서는 점의 출처만 바꾸고 추정기는 벤치마크와 같다.
+# 변형 = chain(지금 사슬), no_thumb(엄지 제외 사슬). 시험 실행(twinkle_01): chain 3410, no_thumb 3812.
+experiment:
+  name: 132_benchmark_flow_calibrator
+  seed: 42
+settings_config: configs/74b_multistart_rerun.yaml
+joint_set: j16
+code: {branch: benchmark, commit: bebcdb1, modules: [HandCalib/benchmark/optical_flow_calibrator.py, HandCalib/benchmark/calibrator.py, HandCalib/optical_flow/experiments.py]}
+ramps_deg: [11]
+reference: {mode: first_pause, pause_gap_frames: 15, min_pause_frames: 5}
+data_root: /public/data/handcalib_data
+region_variants:
+  variants:
+    chain: {mask: null}
+    no_thumb: {mask: [0, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20]}
+workers: 32
+video_workers: 8
+output:
+  root: runs/132_benchmark_flow_calibrator
+  results_yaml: results/132_benchmark_flow_calibrator.yaml
