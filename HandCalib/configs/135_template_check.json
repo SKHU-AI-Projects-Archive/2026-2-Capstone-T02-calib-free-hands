@@ -1,0 +1,14 @@
+{
+  "_comment": [
+    "135: nod/twinkle 오차가 calibrator.py 손 템플릿(전체 프레임 손 모양 평균)이 동작 방향으로 찌그러져서인지 확인 (사용자 2026-11-16: '3번으로 가자.' = 벤치마크의 nod 오차 원인 파기), 기록용, 판정 없음.",
+    "frontal = 영상 앞 2초(가이드: 정면에서 2초 멈춘 뒤 시작) 손 모양으로만 만든 템플릿, 나머지는 Calibrator.estimate 그대로. 2초는 가이드 값, 다른 값은 시도하지 않음.",
+    "시험 실행(0.5x twinkle_01): base -26.1% (벤치마크 값 재현), frontal +2.0%, 길쭉함 3.235 -> 2.859.",
+    "code: branch benchmark, commit cedb55d, modules HandCalib/benchmark/template_check.py, HandCalib/benchmark/calibrator.py"
+  ],
+  "experiment": "135_template_check",
+  "data_root": "/public/data/handcalib_data",
+  "frontal_seconds": 2.0,
+  "output_dir": "runs/135_template_check",
+  "results_json": "results/135_template_check.json",
+  "thermal": {"pause_c": 70, "resume_c": 65, "poll_s": 30}
+}
