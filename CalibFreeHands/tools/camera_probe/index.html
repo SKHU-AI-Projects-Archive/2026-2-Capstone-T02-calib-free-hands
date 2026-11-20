@@ -1,0 +1,22 @@
+<!doctype html>
+<html lang="ko">
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>CalibFreeHands 카메라 연결 테스트</title>
+<style>
+  * { box-sizing: border-box; }
+  body { margin: 32px auto; max-width: 860px; padding: 0 20px; font: 16px/1.5 system-ui, sans-serif; background: #101619; color: #eef6f2; }
+  h1 { font-size: clamp(1.35rem, 4vw, 2rem); }
+  video { width: 100%; aspect-ratio: 16/9; object-fit: contain; background: #050709; border-radius: 10px; }
+  button { padding: 10px 14px; margin: 4px 8px 12px 0; border-radius: 6px; border: 1px solid #637572; background: #192629; color: inherit; font: inherit; cursor: pointer; }
+  button[aria-pressed="true"] { background: #a5e6c7; color: #10251a; }
+  button:disabled { opacity: .5; cursor: default; }
+  pre { white-space: pre-wrap; overflow-wrap: anywhere; background: #192629; padding: 12px; border-radius: 6px; }
+  .video-area { position: relative; }
+  .inactive-feed { position: absolute; inset: 0; opacity: 0; pointer-events: none; }
+  .muted { color: #b8cac4; }
+</style>
+<h1>CalibFreeHands 카메라 연결 테스트</h1>
+<main id="workspace"></main>
+<script src="/probe.js" defer></script>
+</html>
