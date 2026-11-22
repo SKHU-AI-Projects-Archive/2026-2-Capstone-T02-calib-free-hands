@@ -53,6 +53,11 @@ def probe_media(path: Path, ffprobe: str = "ffprobe") -> MediaInfo:
         frame_rate = None
     duration = stream.get("duration", payload.get("format", {}).get("duration"))
     frame_count = stream.get("nb_frames")
-    return MediaInfo(Path(path), stream.get("width"), stream.get("height"), frame_rate,
+    width, height = stream.get("width"), stream.get("height")
+    rotation = next((side["rotation"] for side in stream.get("side_data_list", []) if "rotation" in side),
+                    stream.get("tags", {}).get("rotate", 0))
+    if abs(float(rotation)) % 180 == 90:
+        width, height = height, width
+    return MediaInfo(Path(path), width, height, frame_rate,
                      float(duration) if duration is not None else None,
                      int(frame_count) if frame_count and frame_count != "N/A" else None)

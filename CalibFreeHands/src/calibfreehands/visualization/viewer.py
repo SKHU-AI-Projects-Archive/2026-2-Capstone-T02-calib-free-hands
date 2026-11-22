@@ -10,7 +10,7 @@ import pyqtgraph.opengl as gl
 from pyqtgraph.opengl import shaders
 from pyqtgraph.opengl.items.GLLinePlotItem import GLLinePlotItem
 from pyqtgraph.opengl.items.GLScatterPlotItem import GLScatterPlotItem
-from PySide6.QtCore import QEvent, Qt, QTimer, QPointF, QLineF, QSignalBlocker
+from PySide6.QtCore import QEvent, Qt, QTimer, QPointF, QLineF, QRectF, QSignalBlocker
 from PySide6.QtGui import QFont, QGuiApplication, QImage, QPainter, QPen
 from PySide6.QtWidgets import QCheckBox, QHBoxLayout, QLabel, QPushButton, QSizePolicy, QSlider, QSplitter, QVBoxLayout, QWidget
 
@@ -317,9 +317,10 @@ def load_bundle_result(bundle: ResultBundle, decode_media: bool = True) -> Loade
 
 
 class _OverlayCanvas(QWidget):
-    def __init__(self, loaded):
+    def __init__(self, loaded, preserve_source_aspect=False):
         super().__init__()
         self.loaded = loaded
+        self.preserve_source_aspect = preserve_source_aspect
         self.frame = 0
         self._display_image = QImage()
         self._display_source_index = None
@@ -382,20 +383,30 @@ class _OverlayCanvas(QWidget):
                     self._display_source_index = source_index
                 image = self._display_image
                 image_width, image_height = rgb.shape[1], rgb.shape[0]
-            sx, sy = self.width() / image_width, self.height() / image_height
-            painter.drawImage(self.rect(), image)
+            viewport = QRectF(self.rect())
+            if self.preserve_source_aspect:
+                scale = min(viewport.width() / image_width, viewport.height() / image_height)
+                center = viewport.center()
+                viewport.setSize(QRectF(0, 0, image_width * scale, image_height * scale).size())
+                viewport.moveCenter(center)
+            sx, sy = viewport.width() / image_width, viewport.height() / image_height
+            x0, y0 = viewport.x(), viewport.y()
+            painter.drawImage(viewport, image)
+            if self._display_source_index != source_index:
+                return
             for hand_i, hand in enumerate(self.loaded.result.keypoints_2d[self.frame]):
                 if not self.loaded.detected[self.frame, hand_i] or (hand_i == 0 and not self.show_left) or (hand_i == 1 and not self.show_right): continue
                 painter.setPen(QPen(Qt.GlobalColor.cyan if hand_i == 0 else Qt.GlobalColor.yellow, 2))
                 if self.show_bones:
                     for a, b in HAND_CONNECTIONS:
                         if not np.isfinite(hand[[a, b]]).all(): continue
-                        p1 = QPointF(float(hand[a, 0] * sx), float(hand[a, 1] * sy)); p2 = QPointF(float(hand[b, 0] * sx), float(hand[b, 1] * sy))
+                        p1 = QPointF(x0 + float(hand[a, 0] * sx), y0 + float(hand[a, 1] * sy))
+                        p2 = QPointF(x0 + float(hand[b, 0] * sx), y0 + float(hand[b, 1] * sy))
                         painter.drawLine(QLineF(p1, p2))
                 if self.show_joints:
                     for point in hand:
                         if not np.isfinite(point).all(): continue
-                        x, y = float(point[0] * sx), float(point[1] * sy)
+                        x, y = x0 + float(point[0] * sx), y0 + float(point[1] * sy)
                         painter.drawEllipse(QPointF(x, y), 3.0, 3.0)
         finally:
             if painter.isActive(): painter.end()
@@ -683,7 +694,7 @@ class _GLResultView(gl.GLViewWidget):
 
 
 class ResultViewer(QWidget):
-    def __init__(self, result_path: Path | ResultBundle):
+    def __init__(self, result_path: Path | ResultBundle, *, preserve_source_aspect: bool = False):
         super().__init__()
         if isinstance(result_path, ResultBundle):
             self.loaded = load_bundle_result(result_path)
@@ -695,7 +706,7 @@ class ResultViewer(QWidget):
         self.setWindowTitle("CalibFreeHands — Result"); self.setMinimumSize(960, 640)
         screen = QGuiApplication.primaryScreen().availableGeometry(); self.resize(min(1400, int(screen.width() * .8)), min(900, int(screen.height() * .8)))
         self._arrow_mode = "frame"
-        self.overlay = _OverlayCanvas(self.loaded); self.gl_view = _GLResultView(self.loaded); split = QSplitter(Qt.Orientation.Horizontal); split.addWidget(self.overlay); split.addWidget(self.gl_view); split.setSizes([600, 600])
+        self.overlay = _OverlayCanvas(self.loaded, preserve_source_aspect); self.gl_view = _GLResultView(self.loaded); split = QSplitter(Qt.Orientation.Horizontal); split.addWidget(self.overlay); split.addWidget(self.gl_view); split.setSizes([600, 600])
         self.slider = QSlider(Qt.Orientation.Horizontal); self.slider.setRange(0, max(0, self.loaded.frame_count - 1)); self.slider.valueChanged.connect(self._set_frame)
         self.status = QLabel(); self.coordinate_info = QLabel("Camera space · metres   X: image right   Y: image down   Z: forward   ·   Fixed metric grid · raw coordinates unchanged")
         self.timer = QTimer(self); self.timer.timeout.connect(self._next); visibility = QHBoxLayout(); view = QHBoxLayout(); playback = QHBoxLayout()

@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import time
+from collections.abc import Iterable
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Protocol
@@ -53,7 +54,30 @@ def process_frames(frames: list[DecodedFrame], calibrator: CalibrationBackend, p
         sampled_focals.append(calibrator.estimate_focal(frames[int(index)].rgb))
         if progress: progress("Estimating focal", position, len(sample_ids))
     video_focal = aggregate_focal(sampled_focals, aggregation)
-    frame_count = len(frames)
+    result = reconstruct_frames(frames, len(frames), pose, video_focal, progress, cancelled)
+    def json_float(value):
+        value = float(value)
+        return value if np.isfinite(value) else None
+    result.calibration_metadata = {
+        "sampling_mode": sampling_mode, "requested_sample_count": int(sample_count),
+        "actual_sample_count": int(len(sample_ids)), "aggregation": aggregation,
+        "frame_indices": [int(frames[int(index)].index) for index in sample_ids],
+        "timestamps_s": [json_float(frames[int(index)].timestamp_s) for index in sample_ids],
+        "focal_px": [json_float(value) for value in sampled_focals],
+        "aggregated_focal_px": json_float(video_focal),
+    }
+    return result
+
+
+def reconstruct_frames(frames: Iterable[DecodedFrame], frame_count: int, pose: PoseBackend,
+                       video_focal: float, progress=None, cancelled=None) -> CanonicalResult:
+    """Pack WiLoR results using a focal already estimated for this input."""
+    if frame_count < 1:
+        raise ValueError("at least one decoded frame is required")
+    if not np.isfinite(video_focal) or video_focal <= 0:
+        raise ValueError("focal length must be finite and positive")
+    frame_indices, timestamps = [], []
+    image_size = None
     keypoints_2d = np.full((frame_count, 2, 21, 2), np.nan, np.float32)
     keypoints_3d = np.full((frame_count, 2, 21, 3), np.nan, np.float32)
     detected = np.zeros((frame_count, 2), bool)
@@ -67,6 +91,14 @@ def process_frames(frames: list[DecodedFrame], calibrator: CalibrationBackend, p
     frame_focal = np.full(frame_count, video_focal, np.float32)
     for frame_pos, frame in enumerate(frames):
         if cancelled and cancelled(): raise InterruptedError("Processing cancelled during reconstruction")
+        if frame_pos >= frame_count:
+            raise ValueError("decoded more frames than expected")
+        current_size = (frame.rgb.shape[1], frame.rgb.shape[0])
+        if image_size is not None and image_size != current_size:
+            raise ValueError("frame dimensions changed after calibration")
+        image_size = current_size
+        frame_indices.append(frame.index)
+        timestamps.append(frame.timestamp_s)
         for estimate in pose.predict(frame.rgb, video_focal):
             hand = 1 if estimate.is_right else 0
             keypoints_2d[frame_pos, hand] = estimate.keypoints_2d
@@ -98,23 +130,14 @@ def process_frames(frames: list[DecodedFrame], calibrator: CalibrationBackend, p
                 faces = np.asarray(estimate.mano_faces, dtype=np.int32)
                 mano_faces = np.stack((faces[:, [0, 2, 1]], faces), axis=0) if faces.ndim == 2 else faces
         if progress: progress("Reconstructing hands", frame_pos + 1, frame_count)
-    def json_float(value):
-        value = float(value)
-        return value if np.isfinite(value) else None
-    calibration_metadata = {
-        "sampling_mode": sampling_mode, "requested_sample_count": int(sample_count),
-        "actual_sample_count": int(len(sample_ids)), "aggregation": aggregation,
-        "frame_indices": [int(frames[int(index)].index) for index in sample_ids],
-        "timestamps_s": [json_float(frames[int(index)].timestamp_s) for index in sample_ids],
-        "focal_px": [json_float(value) for value in sampled_focals],
-        "aggregated_focal_px": json_float(video_focal),
-    }
-    return CanonicalResult(np.array([frame.index for frame in frames]), np.array([frame.timestamp_s for frame in frames]),
+    if len(frame_indices) != frame_count:
+        raise ValueError("decoded fewer frames than expected")
+    return CanonicalResult(np.array(frame_indices), np.array(timestamps),
                            keypoints_2d, keypoints_3d, detected, frame_focal,
-                           (frames[0].rgb.shape[1], frames[0].rgb.shape[0]), mano_vertices, mano_faces,
+                           image_size, mano_vertices, mano_faces,
                            confidence, bbox, mano_pose=mano_pose, mano_shape=mano_shape,
                            camera_translation=camera_translation, video_focal_px=video_focal,
-                           media_metadata={"frame_count": frame_count}, calibration_metadata=calibration_metadata)
+                           media_metadata={"frame_count": frame_count})
 
 
 def process_and_save(frames: list[DecodedFrame], calibrator: CalibrationBackend, pose: PoseBackend,
