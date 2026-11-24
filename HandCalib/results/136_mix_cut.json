@@ -1,0 +1,944 @@
+{
+ "experiment": "136_mix_cut",
+ "cache_dir": "runs/mix_cut/20261119T025833Z",
+ "videos": {
+  "s01_20261116_galaxys25plus_06x_1080p/hand_mix_01": {
+   "reference_f": 779.5,
+   "cut_s": 17.5,
+   "cut_frame": 525,
+   "n_frames": 822,
+   "full": {
+    "f": 819.0595941557879,
+    "err_pct": 5.074996043077329,
+    "n_detected": 822,
+    "n_frames": 822
+   },
+   "pre": {
+    "f": 803.3981774292896,
+    "err_pct": 3.0658341795111843,
+    "n_detected": 525,
+    "n_frames": 525
+   },
+   "post": {
+    "f": 864.6074843238588,
+    "err_pct": 10.918214794593805,
+    "n_detected": 297,
+    "n_frames": 297
+   },
+   "f_session_json": 819.1
+  },
+  "s01_20261116_galaxys25plus_06x_1080p/hand_mix_02": {
+   "reference_f": 779.5,
+   "cut_s": 17.5,
+   "cut_frame": 525,
+   "n_frames": 794,
+   "full": {
+    "f": 795.7348294177797,
+    "err_pct": 2.0827234660397265,
+    "n_detected": 774,
+    "n_frames": 794
+   },
+   "pre": {
+    "f": 817.7556436252743,
+    "err_pct": 4.907715667129486,
+    "n_detected": 505,
+    "n_frames": 525
+   },
+   "post": {
+    "f": 780.823946782569,
+    "err_pct": 0.16984564240782873,
+    "n_detected": 269,
+    "n_frames": 269
+   },
+   "f_session_json": 795.7
+  },
+  "s01_20261116_galaxys25plus_1x_1080p_zoom2/hand_mix_01": {
+   "reference_f": 2583.7,
+   "cut_s": 16.0,
+   "cut_frame": 478,
+   "n_frames": 696,
+   "full": {
+    "f": 1915.4209212766643,
+    "err_pct": -25.865196374321155,
+    "n_detected": 676,
+    "n_frames": 696
+   },
+   "pre": {
+    "f": 1699.3136203731428,
+    "err_pct": -34.22945309543899,
+    "n_detected": 459,
+    "n_frames": 478
+   },
+   "post": {
+    "f": 2272.5294305514135,
+    "err_pct": -12.04360295113931,
+    "n_detected": 217,
+    "n_frames": 218
+   },
+   "f_session_json": 1915.4
+  },
+  "s01_20261116_galaxys25plus_1x_1080p_zoom2/hand_mix_02": {
+   "reference_f": 2583.7,
+   "cut_s": 18.5,
+   "cut_frame": 553,
+   "n_frames": 822,
+   "full": {
+    "f": 2008.5244369274185,
+    "err_pct": -22.261700780763306,
+    "n_detected": 733,
+    "n_frames": 822
+   },
+   "pre": {
+    "f": 2083.898946612893,
+    "err_pct": -19.34439189484487,
+    "n_detected": 485,
+    "n_frames": 553
+   },
+   "post": {
+    "f": 1945.9278477181379,
+    "err_pct": -24.684450682426828,
+    "n_detected": 248,
+    "n_frames": 269
+   },
+   "f_session_json": 2008.5
+  },
+  "s01_20261116_iphoneduo_1x_1080p/hand_mix_01": {
+   "reference_f": 1668.9,
+   "cut_s": 20.0,
+   "cut_frame": 600,
+   "n_frames": 916,
+   "full": {
+    "f": 1416.6090533524025,
+    "err_pct": -15.117199751189258,
+    "n_detected": 897,
+    "n_frames": 916
+   },
+   "pre": {
+    "f": 1363.694825331687,
+    "err_pct": -18.28780482163779,
+    "n_detected": 600,
+    "n_frames": 600
+   },
+   "post": {
+    "f": 1502.3365110495422,
+    "err_pct": -9.980435553385936,
+    "n_detected": 297,
+    "n_frames": 316
+   },
+   "f_session_json": 1416.6
+  },
+  "s01_20261116_iphoneduo_1x_1080p/hand_mix_02": {
+   "reference_f": 1668.9,
+   "cut_s": 18.0,
+   "cut_frame": 540,
+   "n_frames": 879,
+   "full": {
+    "f": 1545.2572742387295,
+    "err_pct": -7.408635973471789,
+    "n_detected": 858,
+    "n_frames": 879
+   },
+   "pre": {
+    "f": 1522.3147957226965,
+    "err_pct": -8.783342577584252,
+    "n_detected": 535,
+    "n_frames": 540
+   },
+   "post": {
+    "f": 1562.7786000938772,
+    "err_pct": -6.3587632516102115,
+    "n_detected": 323,
+    "n_frames": 339
+   },
+   "f_session_json": 1545.3
+  },
+  "s01_20261116_iphoneduo_1x_1080p_zoom2/hand_mix_01": {
+   "reference_f": 3344.8,
+   "cut_s": 16.5,
+   "cut_frame": 494,
+   "n_frames": 779,
+   "full": {
+    "f": 2530.673140420076,
+    "err_pct": -24.340075926211558,
+    "n_detected": 697,
+    "n_frames": 779
+   },
+   "pre": {
+    "f": 2203.47294956377,
+    "err_pct": -34.12243035267372,
+    "n_detected": 439,
+    "n_frames": 494
+   },
+   "post": {
+    "f": 2920.838862032943,
+    "err_pct": -12.67523134319114,
+    "n_detected": 258,
+    "n_frames": 285
+   },
+   "f_session_json": 2530.7
+  },
+  "s01_20261116_iphoneduo_1x_1080p_zoom2/hand_mix_02": {
+   "reference_f": 3344.8,
+   "cut_s": 18.0,
+   "cut_frame": 539,
+   "n_frames": 818,
+   "full": {
+    "f": 2738.5835719478177,
+    "err_pct": -18.12414578008199,
+    "n_detected": 776,
+    "n_frames": 818
+   },
+   "pre": {
+    "f": 2624.9929795256603,
+    "err_pct": -21.520181190933386,
+    "n_detected": 533,
+    "n_frames": 539
+   },
+   "post": {
+    "f": 2978.3989343879034,
+    "err_pct": -10.954349007776154,
+    "n_detected": 243,
+    "n_frames": 279
+   },
+   "f_session_json": 2738.6
+  },
+  "s01_20261117_iphoneduo_05x_1080p/hand_mix_01": {
+   "reference_f": 882.4,
+   "cut_s": 18.0,
+   "cut_frame": 540,
+   "n_frames": 880,
+   "full": {
+    "f": 830.402647589506,
+    "err_pct": -5.892718994842916,
+    "n_detected": 621,
+    "n_frames": 880
+   },
+   "pre": {
+    "f": 878.8325174948432,
+    "err_pct": -0.40429312161794906,
+    "n_detected": 450,
+    "n_frames": 540
+   },
+   "post": {
+    "f": 784.6397376445174,
+    "err_pct": -11.078905525326677,
+    "n_detected": 171,
+    "n_frames": 340
+   },
+   "f_session_json": 850.9
+  },
+  "s01_20261117_iphoneduo_05x_1080p/hand_mix_02": {
+   "reference_f": 882.4,
+   "cut_s": 17.0,
+   "cut_frame": 510,
+   "n_frames": 804,
+   "full": {
+    "f": 808.2207000622249,
+    "err_pct": -8.406538977535716,
+    "n_detected": 661,
+    "n_frames": 804
+   },
+   "pre": {
+    "f": 811.9860088449478,
+    "err_pct": -7.979826740146434,
+    "n_detected": 442,
+    "n_frames": 510
+   },
+   "post": {
+    "f": 799.4467780824003,
+    "err_pct": -9.400863771260159,
+    "n_detected": 219,
+    "n_frames": 294
+   },
+   "f_session_json": 809.9
+  },
+  "s01_20261117_iphoneduo_1x_1080p/hand_mix_01": {
+   "reference_f": 1408.7,
+   "cut_s": 15.5,
+   "cut_frame": 465,
+   "n_frames": 778,
+   "full": {
+    "f": 1250.987006521244,
+    "err_pct": -11.195640908550864,
+    "n_detected": 743,
+    "n_frames": 778
+   },
+   "pre": {
+    "f": 1246.3746651016122,
+    "err_pct": -11.523059196307795,
+    "n_detected": 431,
+    "n_frames": 465
+   },
+   "post": {
+    "f": 1273.6045122954226,
+    "err_pct": -9.5900821824787,
+    "n_detected": 312,
+    "n_frames": 313
+   },
+   "f_session_json": 1255.6
+  },
+  "s01_20261117_iphoneduo_1x_1080p/hand_mix_02": {
+   "reference_f": 1408.7,
+   "cut_s": 16.5,
+   "cut_frame": 495,
+   "n_frames": 763,
+   "full": {
+    "f": 1358.7944908464995,
+    "err_pct": -3.542664098353132,
+    "n_detected": 674,
+    "n_frames": 763
+   },
+   "pre": {
+    "f": 1368.3096623439294,
+    "err_pct": -2.867206478034401,
+    "n_detected": 461,
+    "n_frames": 495
+   },
+   "post": {
+    "f": 1409.0371858283374,
+    "err_pct": 0.023935957147536158,
+    "n_detected": 213,
+    "n_frames": 268
+   },
+   "f_session_json": 1344.9
+  },
+  "s01_20261117_webcam_1x_1080p/hand_mix_01": {
+   "reference_f": 1422.4,
+   "cut_s": 17.0,
+   "cut_frame": 509,
+   "n_frames": 764,
+   "full": {
+    "f": 1491.1785125248205,
+    "err_pct": 4.83538473880909,
+    "n_detected": 763,
+    "n_frames": 764
+   },
+   "pre": {
+    "f": 1506.8746885295038,
+    "err_pct": 5.9388841767086475,
+    "n_detected": 509,
+    "n_frames": 509
+   },
+   "post": {
+    "f": 1427.2941391462089,
+    "err_pct": 0.3440761491991573,
+    "n_detected": 254,
+    "n_frames": 255
+   },
+   "f_session_json": 1488.7
+  },
+  "s01_20261117_webcam_1x_1080p/hand_mix_02": {
+   "reference_f": 1422.4,
+   "cut_s": 17.0,
+   "cut_frame": 508,
+   "n_frames": 759,
+   "full": {
+    "f": 1333.6413196414057,
+    "err_pct": -6.240064704625592,
+    "n_detected": 670,
+    "n_frames": 759
+   },
+   "pre": {
+    "f": 1487.8899966980453,
+    "err_pct": 4.604189869097652,
+    "n_detected": 473,
+    "n_frames": 508
+   },
+   "post": {
+    "f": 1222.697553482137,
+    "err_pct": -14.039823292875642,
+    "n_detected": 197,
+    "n_frames": 251
+   },
+   "f_session_json": 1333.2
+  },
+  "s02_20261116_galaxys25plus_06x_1080p/hand_mix_01": {
+   "reference_f": 774.7,
+   "cut_s": 20.0,
+   "cut_frame": 600,
+   "n_frames": 959,
+   "full": {
+    "f": 753.9718097640322,
+    "err_pct": -2.6756409237082557,
+    "n_detected": 955,
+    "n_frames": 959
+   },
+   "pre": {
+    "f": 805.1059273429238,
+    "err_pct": 3.9248647660931724,
+    "n_detected": 596,
+    "n_frames": 600
+   },
+   "post": {
+    "f": 584.1845603366024,
+    "err_pct": -24.592156920536667,
+    "n_detected": 359,
+    "n_frames": 359
+   },
+   "f_session_json": 754.0
+  },
+  "s02_20261116_galaxys25plus_06x_1080p/hand_mix_02": {
+   "reference_f": 774.7,
+   "cut_s": 17.5,
+   "cut_frame": 525,
+   "n_frames": 737,
+   "full": {
+    "f": 912.2830196156098,
+    "err_pct": 17.75952234614815,
+    "n_detected": 675,
+    "n_frames": 737
+   },
+   "pre": {
+    "f": 920.0922253777445,
+    "err_pct": 18.767552004355803,
+    "n_detected": 511,
+    "n_frames": 525
+   },
+   "post": {
+    "f": 666.2739543766744,
+    "err_pct": -13.99587525794832,
+    "n_detected": 164,
+    "n_frames": 212
+   },
+   "f_session_json": 912.3
+  },
+  "s02_20261116_galaxys25plus_1x_1080p_zoom2/hand_mix_01": {
+   "reference_f": 2567.0,
+   "cut_s": 17.5,
+   "cut_frame": 523,
+   "n_frames": 830,
+   "full": {
+    "f": 3009.2487264539905,
+    "err_pct": 17.228232429060796,
+    "n_detected": 830,
+    "n_frames": 830
+   },
+   "pre": {
+    "f": 3294.702290020076,
+    "err_pct": 28.348355668877122,
+    "n_detected": 523,
+    "n_frames": 523
+   },
+   "post": {
+    "f": 2782.8086397141988,
+    "err_pct": 8.40703699704708,
+    "n_detected": 307,
+    "n_frames": 307
+   },
+   "f_session_json": 3009.2
+  },
+  "s02_20261116_galaxys25plus_1x_1080p_zoom2/hand_mix_02": {
+   "reference_f": 2567.0,
+   "cut_s": 19.5,
+   "cut_frame": 583,
+   "n_frames": 888,
+   "full": {
+    "f": 1831.8602125980285,
+    "err_pct": -28.63809066622406,
+    "n_detected": 860,
+    "n_frames": 888
+   },
+   "pre": {
+    "f": 1619.72504895154,
+    "err_pct": -36.90202380399143,
+    "n_detected": 581,
+    "n_frames": 583
+   },
+   "post": {
+    "f": 2454.100603106742,
+    "err_pct": -4.398106618358321,
+    "n_detected": 279,
+    "n_frames": 305
+   },
+   "f_session_json": 1831.9
+  },
+  "s02_20261116_iphoneduo_1x_1080p/hand_mix_01": {
+   "reference_f": 1659.9,
+   "cut_s": 18.0,
+   "cut_frame": 540,
+   "n_frames": 835,
+   "full": {
+    "f": 1861.709981125641,
+    "err_pct": 12.157960185893169,
+    "n_detected": 680,
+    "n_frames": 835
+   },
+   "pre": {
+    "f": 1518.9672331136298,
+    "err_pct": -8.490437188166167,
+    "n_detected": 438,
+    "n_frames": 540
+   },
+   "post": {
+    "f": 2538.5489746509384,
+    "err_pct": 52.933849909689634,
+    "n_detected": 242,
+    "n_frames": 295
+   },
+   "f_session_json": 1861.7
+  },
+  "s02_20261116_iphoneduo_1x_1080p/hand_mix_02": {
+   "reference_f": 1659.9,
+   "cut_s": 16.5,
+   "cut_frame": 495,
+   "n_frames": 809,
+   "full": {
+    "f": 2418.99978486907,
+    "err_pct": 45.731657622089884,
+    "n_detected": 601,
+    "n_frames": 809
+   },
+   "pre": {
+    "f": 1833.790896532946,
+    "err_pct": 10.47598629633988,
+    "n_detected": 382,
+    "n_frames": 495
+   },
+   "post": {
+    "f": 2474.2500617615433,
+    "err_pct": 49.06018806925376,
+    "n_detected": 219,
+    "n_frames": 314
+   },
+   "f_session_json": 2419.0
+  },
+  "s02_20261116_iphoneduo_1x_1080p_zoom2/hand_mix_01": {
+   "reference_f": 3316.6,
+   "cut_s": 24.4169,
+   "cut_frame": 595,
+   "n_frames": 912,
+   "full": {
+    "f": 5330.274401704812,
+    "err_pct": 60.71502145886787,
+    "n_detected": 733,
+    "n_frames": 912
+   },
+   "pre": {
+    "f": 5897.862080467739,
+    "err_pct": 77.82856179423928,
+    "n_detected": 506,
+    "n_frames": 595
+   },
+   "post": {
+    "f": 5420.496549324671,
+    "err_pct": 63.43534189605835,
+    "n_detected": 227,
+    "n_frames": 317
+   },
+   "f_session_json": 5330.3
+  },
+  "s02_20261116_iphoneduo_1x_1080p_zoom2/hand_mix_02": {
+   "reference_f": 3316.6,
+   "cut_s": 17.5,
+   "cut_frame": 525,
+   "n_frames": 844,
+   "full": {
+    "f": 4397.715150903736,
+    "err_pct": 32.59709192859361,
+    "n_detected": 678,
+    "n_frames": 844
+   },
+   "pre": {
+    "f": 3309.512527956697,
+    "err_pct": -0.21369691983667005,
+    "n_detected": 493,
+    "n_frames": 525
+   },
+   "post": {
+    "f": 10228.520036870517,
+    "err_pct": 208.4037881224904,
+    "n_detected": 185,
+    "n_frames": 319
+   },
+   "f_session_json": 4397.7
+  },
+  "s02_20261117_iphoneduo_05x_1080p/hand_mix_01": {
+   "reference_f": 873.6,
+   "cut_s": 23.0,
+   "cut_frame": 690,
+   "n_frames": 1000,
+   "full": {
+    "f": 850.0494373308579,
+    "err_pct": -2.6958061663395205,
+    "n_detected": 876,
+    "n_frames": 1000
+   },
+   "pre": {
+    "f": 901.4275342622834,
+    "err_pct": 3.1853862479719997,
+    "n_detected": 619,
+    "n_frames": 690
+   },
+   "post": {
+    "f": 779.4959022681982,
+    "err_pct": -10.771989209226406,
+    "n_detected": 257,
+    "n_frames": 310
+   },
+   "f_session_json": 841.2
+  },
+  "s02_20261117_iphoneduo_05x_1080p/hand_mix_02": {
+   "reference_f": 873.6,
+   "cut_s": 26.8325,
+   "cut_frame": 705,
+   "n_frames": 1055,
+   "full": {
+    "f": 896.4141056130848,
+    "err_pct": 2.61150476340255,
+    "n_detected": 943,
+    "n_frames": 1055
+   },
+   "pre": {
+    "f": 942.0838827827996,
+    "err_pct": 7.839272296565891,
+    "n_detected": 674,
+    "n_frames": 705
+   },
+   "post": {
+    "f": 866.4799580689267,
+    "err_pct": -0.8150231148206566,
+    "n_detected": 269,
+    "n_frames": 350
+   },
+   "f_session_json": 889.6
+  },
+  "s02_20261117_iphoneduo_1x_1080p/hand_mix_01": {
+   "reference_f": 1418.3,
+   "cut_s": 21.0,
+   "cut_frame": 630,
+   "n_frames": 920,
+   "full": {
+    "f": 1557.0580600725598,
+    "err_pct": 9.78340690069519,
+    "n_detected": 763,
+    "n_frames": 920
+   },
+   "pre": {
+    "f": 1600.2221521800318,
+    "err_pct": 12.826775166046112,
+    "n_detected": 543,
+    "n_frames": 630
+   },
+   "post": {
+    "f": 1328.350180759336,
+    "err_pct": -6.34208695203159,
+    "n_detected": 220,
+    "n_frames": 290
+   },
+   "f_session_json": 1553.0
+  },
+  "s02_20261117_iphoneduo_1x_1080p/hand_mix_02": {
+   "reference_f": 1418.3,
+   "cut_s": 19.0,
+   "cut_frame": 570,
+   "n_frames": 905,
+   "full": {
+    "f": 1319.309673770451,
+    "err_pct": -6.979505480473036,
+    "n_detected": 453,
+    "n_frames": 905
+   },
+   "pre": {
+    "f": 1323.2566562195473,
+    "err_pct": -6.701215806278837,
+    "n_detected": 200,
+    "n_frames": 570
+   },
+   "post": {
+    "f": 1428.625012366412,
+    "err_pct": 0.7279850783622699,
+    "n_detected": 253,
+    "n_frames": 335
+   },
+   "f_session_json": 1306.1
+  },
+  "s02_20261117_webcam_1x_1080p/hand_mix_01": {
+   "reference_f": 1419.1,
+   "cut_s": 21.4942,
+   "cut_frame": 643,
+   "n_frames": 1043,
+   "full": {
+    "f": 974.9745653283069,
+    "err_pct": -31.296274728468255,
+    "n_detected": 645,
+    "n_frames": 1043
+   },
+   "pre": {
+    "f": 943.5028733210376,
+    "err_pct": -33.5139966654191,
+    "n_detected": 353,
+    "n_frames": 643
+   },
+   "post": {
+    "f": 1002.0025964800607,
+    "err_pct": -29.391685118732948,
+    "n_detected": 292,
+    "n_frames": 400
+   },
+   "f_session_json": 977.9
+  },
+  "s02_20261117_webcam_1x_1080p/hand_mix_02": {
+   "reference_f": 1419.1,
+   "cut_s": 23.5,
+   "cut_frame": 703,
+   "n_frames": 1037,
+   "full": {
+    "f": 1487.7593029165091,
+    "err_pct": 4.838228660172583,
+    "n_detected": 595,
+    "n_frames": 1037
+   },
+   "pre": {
+    "f": 1658.9225128860335,
+    "err_pct": 16.89962038517607,
+    "n_detected": 409,
+    "n_frames": 703
+   },
+   "post": {
+    "f": 1519.825288608726,
+    "err_pct": 7.097828807605255,
+    "n_detected": 186,
+    "n_frames": 334
+   },
+   "f_session_json": 1490.1
+  }
+ },
+ "circle_videos": {
+  "s01_20261116_galaxys25plus_06x_1080p": {
+   "hand_circle_01.mp4": {
+    "f": 769.2,
+    "err_pct": -1.321359846055159
+   },
+   "hand_circle_02.mp4": {
+    "f": 849.6,
+    "err_pct": 8.992944194996788
+   }
+  },
+  "s01_20261116_galaxys25plus_1x_1080p_zoom2": {
+   "hand_circle_01.mp4": {
+    "f": 2147.6,
+    "err_pct": -16.878894608507178
+   },
+   "hand_circle_02.mp4": {
+    "f": 2286.1,
+    "err_pct": -11.518365135271125
+   }
+  },
+  "s01_20261116_iphoneduo_1x_1080p": {
+   "hand_circle_01.mov": {
+    "f": 1659.9,
+    "err_pct": -0.5392773683264407
+   },
+   "hand_circle_02.mov": {
+    "f": 1517.3,
+    "err_pct": -9.083827670920975
+   }
+  },
+  "s01_20261116_iphoneduo_1x_1080p_zoom2": {
+   "hand_circle_01.mov": {
+    "f": 2876.8,
+    "err_pct": -13.991867974168859
+   },
+   "hand_circle_02.mov": {
+    "f": 2751.3,
+    "err_pct": -17.74396077493422
+   }
+  },
+  "s01_20261117_iphoneduo_05x_1080p": {
+   "hand_circle_01.mov": {
+    "f": 880.6,
+    "err_pct": -0.203989120580228
+   },
+   "hand_circle_02.mov": {
+    "f": 862.4,
+    "err_pct": -2.266545784224838
+   }
+  },
+  "s01_20261117_iphoneduo_1x_1080p": {
+   "hand_circle_01.mov": {
+    "f": 1329.3,
+    "err_pct": -5.636402356782854
+   },
+   "hand_circle_02.mov": {
+    "f": 1425.3,
+    "err_pct": 1.1783914247178284
+   }
+  },
+  "s01_20261117_webcam_1x_1080p": {
+   "hand_circle_01.mp4": {
+    "f": 1484.4,
+    "err_pct": 4.358830146231729
+   },
+   "hand_circle_02.mp4": {
+    "f": 1515.6,
+    "err_pct": 6.5523059617547785
+   }
+  },
+  "s02_20261116_galaxys25plus_06x_1080p": {
+   "hand_circle_01.mp4": {
+    "f": 806.6,
+    "err_pct": 4.117722989544337
+   },
+   "hand_circle_02.mp4": {
+    "f": 493.1,
+    "err_pct": -36.34955466632245
+   }
+  },
+  "s02_20261116_galaxys25plus_1x_1080p_zoom2": {
+   "hand_circle_01.mp4": {
+    "f": 2182.7,
+    "err_pct": -14.970783015192834
+   },
+   "hand_circle_02.mp4": {
+    "f": 2178.9,
+    "err_pct": -15.118815738215808
+   }
+  },
+  "s02_20261116_iphoneduo_1x_1080p": {
+   "hand_circle_01.mov": {
+    "f": 1808.3,
+    "err_pct": 8.940297608289649
+   },
+   "hand_circle_02.mov": {
+    "f": 1647.7,
+    "err_pct": -0.7349840351828396
+   }
+  },
+  "s02_20261116_iphoneduo_1x_1080p_zoom2": {
+   "hand_circle_01.mov": {
+    "f": 3512.6,
+    "err_pct": 5.909666525960322
+   },
+   "hand_circle_02.mov": {
+    "f": 4041.9,
+    "err_pct": 21.86878128203582
+   }
+  },
+  "s02_20261117_iphoneduo_05x_1080p": {
+   "hand_circle_01.mov": {
+    "f": 813.9,
+    "err_pct": -6.833791208791218
+   },
+   "hand_circle_02.mov": {
+    "f": 794.7,
+    "err_pct": -9.031593406593409
+   }
+  },
+  "s02_20261117_iphoneduo_1x_1080p": {
+   "hand_circle_01.mov": {
+    "f": 1222.9,
+    "err_pct": -13.777057040118446
+   },
+   "hand_circle_02.mov": {
+    "f": 1593.0,
+    "err_pct": 12.31756327998308
+   }
+  },
+  "s02_20261117_webcam_1x_1080p": {
+   "hand_circle_01.mp4": {
+    "f": 1165.7,
+    "err_pct": -17.856387851455136
+   },
+   "hand_circle_02.mp4": {
+    "f": 1018.1,
+    "err_pct": -28.257346205341406
+   }
+  }
+ },
+ "sessions_mean_abs_err_pct": {
+  "s01_20261116_galaxys25plus_06x_1080p": {
+   "circle": 5.157152020525974,
+   "pre": 3.9867749233203353,
+   "post": 5.544030218500817,
+   "full": 3.5788597545585277
+  },
+  "s01_20261116_galaxys25plus_1x_1080p_zoom2": {
+   "circle": 14.198629871889151,
+   "pre": 26.78692249514193,
+   "post": 18.364026816783067,
+   "full": 24.063448577542232
+  },
+  "s01_20261116_iphoneduo_1x_1080p": {
+   "circle": 4.811552519623708,
+   "pre": 13.535573699611021,
+   "post": 8.169599402498074,
+   "full": 11.262917862330523
+  },
+  "s01_20261116_iphoneduo_1x_1080p_zoom2": {
+   "circle": 15.867914374551539,
+   "pre": 27.82130577180355,
+   "post": 11.814790175483648,
+   "full": 21.23211085314677
+  },
+  "s01_20261117_iphoneduo_05x_1080p": {
+   "circle": 1.235267452402533,
+   "pre": 4.192059930882191,
+   "post": 10.239884648293419,
+   "full": 7.149628986189316
+  },
+  "s01_20261117_iphoneduo_1x_1080p": {
+   "circle": 3.4073968907503414,
+   "pre": 7.195132837171098,
+   "post": 4.807009069813118,
+   "full": 7.369152503451998
+  },
+  "s01_20261117_webcam_1x_1080p": {
+   "circle": 5.455568053993254,
+   "pre": 5.27153702290315,
+   "post": 7.1919497210374,
+   "full": 5.537724721717341
+  },
+  "s02_20261116_galaxys25plus_06x_1080p": {
+   "circle": 20.23363882793339,
+   "pre": 11.346208385224488,
+   "post": 19.294016089242493,
+   "full": 10.217581634928202
+  },
+  "s02_20261116_galaxys25plus_1x_1080p_zoom2": {
+   "circle": 15.044799376704322,
+   "pre": 32.62518973643428,
+   "post": 6.4025718077027,
+   "full": 22.933161547642428
+  },
+  "s02_20261116_iphoneduo_1x_1080p": {
+   "circle": 4.837640821736244,
+   "pre": 9.483211742253022,
+   "post": 50.9970189894717,
+   "full": 28.944808903991525
+  },
+  "s02_20261116_iphoneduo_1x_1080p_zoom2": {
+   "circle": 13.88922390399807,
+   "pre": 39.02112935703797,
+   "post": 135.91956500927438,
+   "full": 46.65605669373074
+  },
+  "s02_20261117_iphoneduo_05x_1080p": {
+   "circle": 7.932692307692314,
+   "pre": 5.512329272268945,
+   "post": 5.793506162023531,
+   "full": 2.6536554648710355
+  },
+  "s02_20261117_iphoneduo_1x_1080p": {
+   "circle": 13.047310160050763,
+   "pre": 9.763995486162475,
+   "post": 3.53503601519693,
+   "full": 8.381456190584114
+  },
+  "s02_20261117_webcam_1x_1080p": {
+   "circle": 23.056867028398273,
+   "pre": 25.206808525297586,
+   "post": 18.244756963169102,
+   "full": 18.06725169432042
+  }
+ },
+ "overall": {
+  "circle": 10.583975257874991,
+  "pre": 15.839155656108003,
+  "post": 21.879840077749314,
+  "full": 15.574843956357512,
+  "n_sessions": 14,
+  "n_videos": 28,
+  "sessions_circle_lower": 9,
+  "sessions_pre_lower": 5
+ }
+}
