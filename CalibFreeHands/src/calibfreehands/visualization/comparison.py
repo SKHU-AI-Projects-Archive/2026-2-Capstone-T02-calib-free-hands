@@ -1,0 +1,3415 @@
+from __future__ import annotations
+
+import colorsys
+import csv
+import json
+import re
+from dataclasses import dataclass
+from pathlib import Path
+from time import monotonic
+
+import numpy as np
+import pyqtgraph as pg
+import pyqtgraph.opengl as gl
+from PySide6.QtCore import (QEvent, QObject, QPoint, Qt, QTimer, QSignalBlocker, QRectF, QSize,
+                            QVariantAnimation, QRunnable, QThreadPool, Signal, QMimeData)
+from PySide6.QtGui import (QAction, QActionGroup, QDrag, QImage, QWindow, QIcon, QPainter,
+                           QPainterPath, QPen, QPixmap, QPalette, QColor)
+from PySide6.QtWidgets import (
+    QApplication, QAbstractButton, QCheckBox, QColorDialog, QComboBox, QDialog, QFileDialog, QGridLayout,
+    QFrame, QHBoxLayout, QLabel, QMainWindow, QMenu, QPushButton, QScrollArea, QSizePolicy, QStyle, QStyleOptionToolButton,
+    QSlider, QSplitter, QStackedWidget, QTableWidget, QTableWidgetItem, QToolButton,
+    QVBoxLayout, QWidget, QWidgetAction,
+)
+
+from calibfreehands.media.provider import MediaFrameProvider, release_shared_media_provider, shared_media_provider
+from .topology import HAND_CONNECTIONS, RAW_TO_VIEW
+from calibfreehands.pipeline.result_bundle import ResultBundle
+from calibfreehands.pipeline.metrics import compare_results, metric_registry
+from calibfreehands.joint_schema import JOINT_NAMES
+from .viewer import (
+    DEFAULT_WORKSPACE_ASPECT, _GLResultView, _OverlayCanvas, hand_space_bounds,
+    load_bundle_result, load_npz_result,
+    whole_video_hand_framing, workspace_camera_framing, workspace_geometry,
+)
+from .comparison_presentation import (_JointAnnotationLayer, _ViewportPanel, _PanelSurface,
+                                      _ResultDragHandle, _SplitPanelReorderController, _SwapSplitter)
+from .playback import PlaybackClock
+from .workspace import SOURCE_PANEL_ID, WorkspaceGroup, WorkspaceModel
+
+METRIC_FIELDS = ("source_identity", "reference_result_id", "candidate_result_id", "candidate_name", "metric_id",
+                 "metric_name", "category", "protocol_version", "frame_index", "timestamp_s", "hand",
+                 "joint_index", "joint_name", "value", "unit", "valid_status")
+
+VIEWER_CHROME_LABEL_STYLE = (
+    "QLabel { color: #f2f3f4; background: transparent; padding: 0px; border: none; }"
+)
+
+
+class _MetricSignals(QObject):
+    completed = Signal(int, str, object, object)
+
+
+class _MetricJob(QRunnable):
+    def __init__(self, generation, reference_id, reference, candidates):
+        super().__init__()
+        self.generation = generation
+        self.reference_id = reference_id
+        self.reference = reference
+        self.candidates = candidates
+        self.signals = _MetricSignals()
+
+    def run(self):
+        try:
+            computed = {
+                (self.reference_id, candidate_id): {
+                    (row.frame_index, row.hand): row
+                    for row in compare_results(self.reference, candidate)
+                }
+                for candidate_id, candidate in self.candidates
+            }
+            self.signals.completed.emit(self.generation, self.reference_id, computed, None)
+        except Exception as exc:
+            self.signals.completed.emit(self.generation, self.reference_id, {}, exc)
+
+
+class _ModeSwitch(QAbstractButton):
+    """Compact accessible toggle with a neutral painted track."""
+
+    def __init__(self, parent=None, *, accessible_name="View mode",
+                 accessible_description="Toggle between Overlay and Split views",
+                 tooltip="View: Overlay"):
+        super().__init__(parent)
+        self.setCheckable(True)
+        self.setFixedSize(42, 22)
+        self.setFocusPolicy(Qt.FocusPolicy.StrongFocus)
+        self.setAccessibleName(accessible_name)
+        self.setAccessibleDescription(accessible_description)
+        self.setToolTip(tooltip)
+        self._thumb_position = 0.0
+        self._animation = QVariantAnimation(self)
+        self._animation.setDuration(120)
+        self._animation.valueChanged.connect(self._set_thumb_position)
+        self.toggled.connect(self._animate_thumb)
+
+    def sizeHint(self):
+        return QSize(42, 22)
+
+    def _animate_thumb(self, checked):
+        self._animation.stop()
+        self._animation.setStartValue(self._thumb_position)
+        self._animation.setEndValue(1.0 if checked else 0.0)
+        self._animation.start()
+
+    def _set_thumb_position(self, value):
+        self._thumb_position = float(value)
+        self.update()
+
+    def _dark_palette(self):
+        window = self.palette().color(QPalette.ColorRole.Window)
+        luminance = 0.2126 * window.redF() + 0.7152 * window.greenF() + 0.0722 * window.blueF()
+        app_style = QApplication.instance().styleSheet().lower()
+        return luminance < 0.45 or "#202124" in app_style
+
+    def paintEvent(self, _event):
+        dark = self._dark_palette()
+        track = QColor("#555b63" if dark else "#b9bec5")
+        border = QColor("#858b93" if dark else "#9299a1")
+        thumb = QColor("#f2f3f4")
+        thumb_border = QColor("#c7cbd0" if dark else "#59616a")
+        if self.isDown():
+            track = track.darker(108)
+        elif self.underMouse():
+            track = track.lighter(112)
+
+        painter = QPainter(self)
+        painter.setRenderHint(QPainter.RenderHint.Antialiasing)
+        track_rect = QRectF(2, 2, self.width() - 4, self.height() - 4)
+        painter.setPen(QPen(border, 1))
+        painter.setBrush(track)
+        painter.drawRoundedRect(track_rect, track_rect.height() / 2, track_rect.height() / 2)
+
+        diameter = 16
+        margin = 3
+        travel = max(0, self.width() - 2 * margin - diameter)
+        x = margin + travel * self._thumb_position
+        thumb_rect = QRectF(x, (self.height() - diameter) / 2, diameter, diameter)
+        painter.setPen(QPen(thumb_border, 1))
+        painter.setBrush(thumb)
+        painter.drawEllipse(thumb_rect)
+
+        if self.hasFocus():
+            focus_color = self.palette().color(QPalette.ColorRole.Midlight)
+            painter.setPen(QPen(focus_color, 1, Qt.PenStyle.DashLine))
+            painter.setBrush(Qt.BrushStyle.NoBrush)
+            painter.drawRoundedRect(QRectF(0.5, 0.5, self.width() - 1, self.height() - 1), 10, 10)
+        painter.end()
+
+
+class _PinButton(QAbstractButton):
+    """Compact, palette-aware icon toggle for keeping viewer controls visible."""
+
+    def __init__(self, parent=None):
+        super().__init__(parent)
+        self.setCheckable(True)
+        self.setFixedSize(26, 26)
+        self.setFocusPolicy(Qt.FocusPolicy.StrongFocus)
+        self.setAccessibleName("Pin controls")
+        self.setToolTip("Keep controls visible")
+        self.setAccessibleDescription("Not pinned: controls may hide during playback")
+
+    def sizeHint(self):
+        return QSize(26, 26)
+
+    def paintEvent(self, _event):
+        palette = self.palette()
+        window = palette.color(QPalette.ColorRole.Window)
+        luminance = 0.2126 * window.redF() + 0.7152 * window.greenF() + 0.0722 * window.blueF()
+        dark = luminance < 0.45
+        if dark:
+            surface = QColor("#33FF33" if self.isChecked() else "#34383d")
+            border = QColor("#249924" if self.isChecked() else "#5a6068")
+            ink = QColor("#111111" if self.isChecked() else "#aab0b7")
+        else:
+            surface = QColor("#33FF33" if self.isChecked() else "#f0f1f2")
+            border = QColor("#249924" if self.isChecked() else "#c4c8ce")
+            ink = QColor("#111111" if self.isChecked() else "#666c74")
+        if self.underMouse():
+            surface = surface.darker(108) if self.isChecked() else surface.lighter(108)
+        if self.isDown():
+            surface = surface.darker(112)
+
+        painter = QPainter(self)
+        painter.setRenderHint(QPainter.RenderHint.Antialiasing)
+        painter.setPen(QPen(border, 1))
+        painter.setBrush(surface)
+        painter.drawRoundedRect(QRectF(1, 1, 24, 24), 5, 5)
+
+        painter.save()
+        painter.translate(self.width() / 2, self.height() / 2)
+        painter.scale(0.82, 0.82)
+        painter.translate(-14, -14)
+        icon = QPainterPath()
+        icon.moveTo(10, 7)
+        icon.lineTo(18, 7)
+        icon.lineTo(17, 10)
+        icon.lineTo(15, 12)
+        icon.lineTo(15, 17)
+        icon.lineTo(18, 20)
+        icon.lineTo(10, 20)
+        icon.lineTo(13, 17)
+        icon.lineTo(13, 12)
+        icon.lineTo(11, 10)
+        icon.closeSubpath()
+        painter.setPen(QPen(ink, 1.5, Qt.PenStyle.SolidLine,
+                            Qt.PenCapStyle.RoundCap, Qt.PenJoinStyle.RoundJoin))
+        painter.setBrush(ink)
+        painter.drawPath(icon)
+        painter.drawLine(14, 20, 14, 24)
+        painter.restore()
+        if self.hasFocus():
+            painter.setBrush(Qt.BrushStyle.NoBrush)
+            painter.setPen(QPen(palette.color(QPalette.ColorRole.Highlight), 1,
+                                Qt.PenStyle.DashLine))
+            painter.drawRoundedRect(QRectF(0.5, 0.5, 25, 25), 5, 5)
+        painter.end()
+
+
+def _finite(value):
+    return float(value) if np.isfinite(value) else None
+
+
+def _is_widget_or_popup_window(parent: QWidget, target: QObject) -> bool:
+    if isinstance(target, QWidget):
+        return target is parent or parent.isAncestorOf(target)
+    if isinstance(target, QWindow):
+        return target is parent.windowHandle() or target is parent.window().windowHandle()
+    return False
+
+
+def _session_results(session_path: Path):
+    session_path = Path(session_path).resolve()
+    data = json.loads(session_path.read_text(encoding="utf-8"))
+    if data.get("schema_version") != 1:
+        raise ValueError(f"Unsupported comparison session schema: {data.get('schema_version')}")
+    configurations = data["configurations"]
+    if not configurations:
+        raise ValueError("comparison session has no configurations")
+    results = []
+    for config in configurations:
+        entry = data["final_results"].get(config["id"])
+        if entry is None:
+            continue
+        result_path = (session_path.parent / entry["path"]).resolve()
+        if session_path.parent not in result_path.parents:
+            raise ValueError("comparison result path escapes the session directory")
+        loaded = load_npz_result(result_path, decode_media=False)
+        run_relative = entry.get("run_json")
+        if run_relative:
+            run_path = (session_path.parent / run_relative).resolve()
+            if session_path.parent not in run_path.parents:
+                raise ValueError("comparison provenance path escapes the session directory")
+            try:
+                loaded.metadata = {"run_provenance": json.loads(run_path.read_text(encoding="utf-8"))}
+            except (OSError, ValueError):
+                pass
+        results.append((config, loaded))
+    if not results:
+        raise ValueError("comparison session contains no saved results")
+    source = data.get("source_media") or ""
+    media, source_status = shared_media_provider(Path(source), data.get("source_media_sha256")) if source else (None, "missing")
+    for _, loaded in results:
+        loaded.media_frames = media
+        loaded.source_status = source_status
+    return data, results
+
+
+def _bundle_results(bundles: list[ResultBundle]):
+    if not bundles:
+        raise ValueError("no result bundles were selected")
+    source_ids = {str(bundle.metadata.get("source_media_sha256") or "").casefold() for bundle in bundles}
+    if len(bundles) > 1 and ("" in source_ids or len(source_ids) != 1):
+        raise ValueError("Selected results were generated from different source media.")
+    results, configurations = [], []
+    for index, bundle in enumerate(bundles):
+        metadata = bundle.metadata
+        base_id = metadata.get("configuration_id", f"bundle-{index + 1}")
+        config_id = base_id
+        duplicate = 2
+        while any(config["id"] == config_id for config in configurations):
+            config_id = f"{base_id}#{duplicate}"
+            duplicate += 1
+        config = {
+            "id": config_id,
+            "name": metadata.get("configuration_name") or
+                    f"{metadata['calibration_display_name']} + {metadata['reconstruction_display_name']}",
+            "calibration_model_id": metadata["calibration_model_id"],
+            "reconstruction_model_id": metadata["reconstruction_model_id"],
+        }
+        configurations.append(config)
+        results.append((config, load_bundle_result(bundle, decode_media=False)))
+    media_loaded = load_bundle_result(bundles[0], decode_media=True)
+    for _, loaded in results:
+        loaded.media_frames = media_loaded.media_frames
+        loaded.source_status = media_loaded.source_status
+    session = {
+        "schema_version": 1, "configurations": configurations, "final_results": {},
+        "source_media": bundles[0].metadata.get("source_media_path", ""),
+        "source_media_sha256": bundles[0].metadata.get("source_media_sha256"),
+        "reference_configuration_id": bundles[0].metadata.get("reference_configuration_id"),
+    }
+    return session, results
+
+
+def _comparison_results(source):
+    return _bundle_results(source) if isinstance(source, (list, tuple)) else _session_results(source)
+
+
+def _color_for_index(index: int):
+    palette = ((0x33 / 255, 0x33 / 255, 1.0), (1.0, 0x33 / 255, 1.0),
+               (1.0, 1.0, 0x33 / 255), (0x33 / 255, 1.0, 1.0),
+               (1.0, 0x33 / 255, 0x33 / 255), (0.95, 0.55, 0.12),
+               (0.55, 0.78, 1.0), (0.95, 0.72, 0.86))
+    if index < len(palette):
+        return palette[index]
+    hue = (index * 0.61803398875) % 1
+    if 0.20 <= hue <= 0.45:
+        hue = (hue + 0.35) % 1
+    return colorsys.hsv_to_rgb(hue, 0.72, 0.9)
+
+
+def _bone_color(color):
+    return tuple(channel * 0.8 for channel in color)
+
+
+def _manual_focal_display_name(model_id: str, saved_name: str, focal_px: float | None) -> str:
+    """Normalize the legacy calibration label for display without mutating saved metadata."""
+    if model_id != "checkerboard_reference":
+        return saved_name
+    name = saved_name.strip()
+    known_label = name.startswith("Checkerboard Reference") or name.startswith("Manual Focal")
+    if known_label and "px" in name.casefold():
+        name = name.replace("Checkerboard Reference", "Manual Focal", 1)
+        return re.sub(r"(?<=\d)\s+px\b", "\u00a0px", name, flags=re.IGNORECASE)
+    if focal_px is None:
+        return "Manual Focal"
+    return f"Manual Focal {focal_px:g}\u00a0px"
+
+
+def calculate_reference_metrics(session_path: Path | list[ResultBundle], reference_id=None) -> list[dict]:
+    data, entries = _comparison_results(session_path)
+    reference_id = reference_id or data.get("reference_configuration_id")
+    reference = next((loaded.result for config, loaded in entries if config["id"] == reference_id), None)
+    if reference is None:
+        raise ValueError("session reference configuration has no saved result")
+    rows = []
+    for config, loaded in entries:
+        if config["id"] == reference_id:
+            continue
+        result = loaded.result
+        for metrics in compare_results(reference, result):
+            joint_errors_m = metrics.joint_errors_mm / 1000.0
+            finite_errors = joint_errors_m[np.isfinite(joint_errors_m)]
+            depth_error_m = (result.keypoints_3d[np.flatnonzero(result.frame_indices == metrics.frame_index)[0],
+                                                 ("left", "right").index(metrics.hand), :, 2] -
+                             reference.keypoints_3d[np.flatnonzero(reference.frame_indices == metrics.frame_index)[0],
+                                                    ("left", "right").index(metrics.hand), :, 2])
+            depth_error_m = depth_error_m[np.isfinite(depth_error_m)]
+            metric_values = {key: value for key, value in metrics.metrics.items()}
+            metric_status = {key: value.value for key, value in metrics.metric_status.items()}
+            row = {"configuration_id": config["id"], "configuration_name": config["name"],
+                   "reference_configuration_id": reference_id, "frame_index": metrics.frame_index,
+                   "timestamp_s": _finite(metrics.timestamp_s), "hand": metrics.hand,
+                   "joint_count": metrics.valid_joint_count,
+                   "joint_distance_mean_m": float(finite_errors.mean()),
+                   "joint_distance_median_m": float(np.median(finite_errors)),
+                   "joint_distance_rmse_m": float(np.sqrt(np.mean(finite_errors ** 2))),
+                   "depth_error_mean_m": float(np.abs(depth_error_m).mean()),
+                   "depth_error_rmse_m": float(np.sqrt(np.mean(depth_error_m ** 2))),
+                   "translation_distance_m": (metric_values["translation_error"] / 1000
+                                              if metric_values["translation_error"] is not None else None),
+                   "translation_depth_error_m": (metric_values["translation_z_error"] / 1000
+                                                 if metric_values["translation_z_error"] is not None else None),
+                   "metric_values": metric_values, "metric_status": metric_status,
+                   "per_joint_error_mm": [float(value) if np.isfinite(value) else None
+                                          for value in metrics.joint_errors_mm]}
+            rows.append(row)
+    return rows
+
+
+def export_metrics_json(session_path: Path | list[ResultBundle], output_path: Path, reference_id=None) -> Path:
+    rows = _metric_export_rows(session_path, reference_id)
+    output_path = Path(output_path)
+    output_path.write_text(json.dumps(rows, indent=2, allow_nan=False), encoding="utf-8")
+    return output_path
+
+
+def export_metrics_csv(session_path: Path | list[ResultBundle], output_path: Path, reference_id=None) -> Path:
+    rows = _metric_export_rows(session_path, reference_id)
+    output_path = Path(output_path)
+    with output_path.open("w", newline="", encoding="utf-8") as stream:
+        writer = csv.DictWriter(stream, fieldnames=METRIC_FIELDS)
+        writer.writeheader()
+        writer.writerows(rows)
+    return output_path
+
+
+def _metric_export_rows(session_path: Path | list[ResultBundle], reference_id=None) -> list[dict]:
+    data, entries = _comparison_results(session_path)
+    reference_id = reference_id or data.get("reference_configuration_id")
+    reference_entry = next(((config, loaded.result) for config, loaded in entries
+                            if config["id"] == reference_id), None)
+    if reference_entry is None:
+        raise ValueError("session reference configuration has no saved result")
+    _, reference = reference_entry
+    source_identity = data.get("source_media_sha256") or data.get("source_media") or "unknown"
+    definitions = metric_registry()
+    records = []
+    for config, loaded in entries:
+        if config["id"] == reference_id:
+            continue
+        for pair in compare_results(reference, loaded.result):
+            for definition in definitions:
+                status = pair.metric_status[definition.metric_id]
+                value = pair.metrics.get(definition.metric_id)
+                if definition.metric_id == "per_joint_error":
+                    for joint_index, joint_value in enumerate(value):
+                        joint_status = status.value if joint_value is not None else "UNAVAILABLE_FOR_DATA"
+                        records.append({
+                            "source_identity": source_identity, "reference_result_id": reference_id,
+                            "candidate_result_id": config["id"], "candidate_name": config["name"],
+                            "metric_id": definition.metric_id, "metric_name": definition.name,
+                            "category": definition.category, "protocol_version": definition.protocol_version,
+                            "frame_index": pair.frame_index, "timestamp_s": _finite(pair.timestamp_s),
+                            "hand": pair.hand, "joint_index": joint_index,
+                            "joint_name": JOINT_NAMES[joint_index], "value": joint_value,
+                            "unit": definition.unit, "valid_status": joint_status,
+                        })
+                    continue
+                records.append({
+                    "source_identity": source_identity, "reference_result_id": reference_id,
+                    "candidate_result_id": config["id"], "candidate_name": config["name"],
+                    "metric_id": definition.metric_id, "metric_name": definition.name,
+                    "category": definition.category, "protocol_version": definition.protocol_version,
+                    "frame_index": pair.frame_index, "timestamp_s": _finite(pair.timestamp_s),
+                    "hand": pair.hand, "joint_index": None, "joint_name": None,
+                    "value": value, "unit": definition.unit, "valid_status": status.value,
+                })
+    return records
+
+
+class _LinkedResultView(_GLResultView):
+    def __init__(self, loaded, color, changed):
+        self.configuration_color = color
+        self.camera_changed = changed
+        self.confidence_opacity_enabled = False
+        super().__init__(loaded)
+        self.hand_colors = (color, color)
+        self.set_frame(self.frame)
+
+    def mouseMoveEvent(self, event):
+        super().mouseMoveEvent(event)
+        self.camera_changed(self)
+
+    def wheelEvent(self, event):
+        super().wheelEvent(event)
+        self.camera_changed(self)
+
+    def dragEnterEvent(self, event):
+        if event.mimeData().hasText():
+            self.setStyleSheet("border: 2px solid palette(highlight);")
+            event.acceptProposedAction()
+        else: event.ignore()
+
+    def dragLeaveEvent(self, event):
+        self.setStyleSheet("")
+        super().dragLeaveEvent(event)
+
+    def dropEvent(self, event):
+        self.setStyleSheet("")
+        if event.mimeData().hasText() and hasattr(self, "viewer"):
+            self.viewer.reorder_result(event.mimeData().text(), self.configuration_id)
+            event.acceptProposedAction()
+        else: event.ignore()
+
+    def set_mesh_opacity(self, opacity):
+        super().set_mesh_opacity(opacity)
+        if not hasattr(self, "loaded") or not hasattr(self, "configuration_color"):
+            return
+        for hand in range(2):
+            alpha = _confidence_alpha(self.loaded.result, self.frame, hand) if self.confidence_opacity_enabled else 1.0
+            _set_mesh_color(self.meshes[hand], self.hand_colors[hand], alpha * self.mesh_opacity)
+
+    def set_frame(self, frame):
+        super().set_frame(frame)
+        if not hasattr(self, "loaded"):
+            return
+        for hand_index in range(2):
+            alpha = _confidence_alpha(self.loaded.result, self.frame, hand_index) if self.confidence_opacity_enabled else 1.0
+            base = self.hand_colors[hand_index]
+            joint_color = (*base, alpha)
+            bone_color = (*_bone_color(base), alpha)
+            if self.joints[hand_index].visible():
+                self.joints[hand_index].setData(color=joint_color)
+            if self.bones[hand_index].visible():
+                self.bones[hand_index].setData(color=bone_color)
+            if self.meshes[hand_index].visible():
+                _set_mesh_color(self.meshes[hand_index], base, alpha * self.mesh_opacity)
+
+
+def _confidence_alpha(result, frame, hand, confidence=None):
+    if confidence is None:
+        confidence = result.confidence[frame, hand] if result.confidence is not None else np.nan
+    if not np.isfinite(confidence):
+        return 0.65
+    return float(0.2 + 0.8 * np.clip(confidence, 0.0, 1.0))
+
+
+def _set_mesh_color(mesh, color, alpha):
+    mesh.setGLOptions("opaque" if alpha >= 1.0 else "translucent")
+    mesh.setColor((*color, alpha))
+
+
+class _OverlayComparisonView(_GLResultView):
+    missing_confidence_alpha = 0.65
+
+    def __init__(self, loaded_results, colors):
+        self.loaded_results = loaded_results
+        self.configuration_colors = colors
+        self.configuration_visible = [True] * len(loaded_results)
+        self.confidence_opacity_enabled = False
+        self.error_vectors_enabled = False
+        self.error_candidate = 1 if len(loaded_results) > 1 else 0
+        self.reference_index = 0
+        self.member_configuration_indices = set(range(len(loaded_results)))
+        self.error_items = []
+        self.extra_items = []
+        super().__init__(loaded_results[0])
+        self.error_items = [gl.GLLinePlotItem(mode="lines", width=2, antialias=True, color=(1, 1, 0, 1))
+                            for _ in range(2)]
+        for item in self.error_items:
+            self.addItem(item)
+            item.setVisible(False)
+        self.hand_colors = (colors[0], colors[0])
+        for index, loaded in enumerate(loaded_results[1:], 1):
+            items = []
+            for _hand in range(2):
+                triplet = (gl.GLScatterPlotItem(), gl.GLLinePlotItem(mode="lines", width=2, antialias=True),
+                           gl.GLMeshItem(smooth=False, drawEdges=False))
+                for item in triplet:
+                    self.addItem(item)
+                    item.setVisible(False)
+                items.append(triplet)
+            self.extra_items.append(items)
+        self.set_frame(self.frame)
+
+    def mouseMoveEvent(self, event):
+        super().mouseMoveEvent(event)
+        callback = getattr(self, "camera_changed", None)
+        if callback is not None:
+            callback(self)
+
+    def wheelEvent(self, event):
+        super().wheelEvent(event)
+        callback = getattr(self, "camera_changed", None)
+        if callback is not None:
+            callback(self)
+
+    def confidence_alpha(self, frame, hand, confidence=None):
+        return _confidence_alpha(self.loaded_results[0].result, frame, hand, confidence)
+
+    def _geometry(self, frame):
+        if not hasattr(self, "loaded_results"):
+            return super()._geometry(frame)
+        points = []
+        for index, loaded in enumerate(self.loaded_results):
+            if (not self.configuration_visible[index]
+                    or index not in self.member_configuration_indices):
+                continue
+            result = loaded.result
+            position = min(frame, loaded.frame_count - 1)
+            for hand in range(2):
+                if result.detected[position, hand] and not (hand == 0 and not self.show_left) and not (hand == 1 and not self.show_right):
+                    if self.show_joints or self.show_bones:
+                        points.append(result.keypoints_3d[position, hand] @ RAW_TO_VIEW.T)
+                    if self.show_mesh and loaded.has_mesh_topology and result.mano_vertices is not None:
+                        points.append(result.mano_vertices[position, hand] @ RAW_TO_VIEW.T)
+        finite = np.concatenate(points) if points else np.empty((0, 3), dtype=np.float32)
+        return finite[np.isfinite(finite).all(axis=1)]
+
+    def set_configuration_visible(self, index, visible):
+        self.configuration_visible[index] = bool(visible)
+        if index == 0:
+            for item in (*self.joints, *self.bones, *self.meshes):
+                item.setVisible(item.visible() and self.configuration_visible[0])
+        else:
+            for item in self.extra_items[index - 1]:
+                for visual in item:
+                    if not visible:
+                        visual.setVisible(False)
+
+    def set_frame(self, frame):
+        super().set_frame(frame)
+        if not hasattr(self, "extra_items"):
+            return
+        for hand in range(2):
+            alpha = _confidence_alpha(self.loaded.result, self.frame, hand) if self.confidence_opacity_enabled else 1.0
+            base = self.configuration_colors[0]
+            if self.joints[hand].visible(): self.joints[hand].setData(color=(*base, alpha))
+            if self.bones[hand].visible(): self.bones[hand].setData(color=(*_bone_color(base), alpha))
+            if self.meshes[hand].visible(): _set_mesh_color(self.meshes[hand], self.configuration_colors[0], alpha * self.mesh_opacity)
+        for item in (*self.joints, *self.bones, *self.meshes):
+            item.setVisible(item.visible() and self.configuration_visible[0]
+                            and 0 in self.member_configuration_indices)
+        for config_index, (loaded, hands) in enumerate(zip(self.loaded_results[1:], self.extra_items), 1):
+            position = min(self.frame, loaded.frame_count - 1)
+            result = loaded.result
+            color = self.configuration_colors[config_index]
+            for hand, (joints, bones, mesh) in enumerate(hands):
+                for item in (joints, bones, mesh):
+                    item.setVisible(False)
+                visible = (self.configuration_visible[config_index]
+                           and config_index in self.member_configuration_indices
+                           and bool(result.detected[position, hand]))
+                visible &= not (hand == 0 and not self.show_left) and not (hand == 1 and not self.show_right)
+                has_visible_geometry = (self.show_joints or self.show_bones
+                                        or (self.show_mesh and loaded.has_mesh_topology))
+                if not visible or not has_visible_geometry:
+                    continue
+                alpha = _confidence_alpha(result, position, hand) if self.confidence_opacity_enabled else 1.0
+                hand_color = color
+                points = np.asarray(result.keypoints_3d[position, hand]) @ RAW_TO_VIEW.T
+                if not np.isfinite(points).all():
+                    continue
+                rgba = (*hand_color, alpha)
+                if self.show_joints:
+                    joints.setData(pos=np.ascontiguousarray(points, dtype=np.float32), size=8, color=rgba)
+                    joints.setVisible(True)
+                if self.show_bones:
+                    bone_points = np.ascontiguousarray(np.concatenate([points[[a, b]] for a, b in HAND_CONNECTIONS]), dtype=np.float32)
+                    bones.setData(pos=bone_points, color=(*_bone_color(hand_color), alpha), mode="lines")
+                    bones.setVisible(True)
+                if self.show_mesh and loaded.has_mesh_topology:
+                    vertices = np.asarray(result.mano_vertices[position, hand]) @ RAW_TO_VIEW.T
+                    faces = result.mano_faces[hand] if result.mano_faces.ndim == 3 else result.mano_faces
+                    if np.isfinite(vertices).all() and faces.min() >= 0 and faces.max() < len(vertices):
+                        mesh.setMeshData(meshdata=gl.MeshData(vertexes=np.ascontiguousarray(vertices, dtype=np.float32), faces=np.ascontiguousarray(faces, dtype=np.int32)))
+                        _set_mesh_color(mesh, hand_color, alpha * self.mesh_opacity)
+                        mesh.setVisible(True)
+        if self.error_vectors_enabled:
+            self._update_error_vectors()
+
+    def set_member_configuration_ids(self, configuration_ids):
+        self.member_configuration_indices = set(configuration_ids)
+        self.set_frame(self.frame)
+
+
+    def _update_error_vectors(self):
+        if not self.error_items:
+            return
+        if (not self.error_vectors_enabled or self.error_candidate == self.reference_index
+                or not 0 <= self.error_candidate < len(self.loaded_results)):
+            for item in self.error_items:
+                item.setVisible(False)
+            return
+        ref = self.loaded_results[self.reference_index].result
+        candidate = self.loaded_results[self.error_candidate].result
+        for item in self.error_items:
+            item.setVisible(False)
+        ref_pos = np.flatnonzero(ref.frame_indices == ref.frame_indices[min(self.frame, len(ref.frame_indices)-1)])
+        candidate_pos = min(self.frame, len(candidate.frame_indices)-1)
+        ref_pos = int(ref_pos[0])
+        for hand in range(2):
+            if (hand == 0 and not self.show_left) or (hand == 1 and not self.show_right):
+                continue
+            if not ref.detected[ref_pos, hand] or not candidate.detected[candidate_pos, hand]:
+                continue
+            a, b = ref.keypoints_3d[ref_pos, hand], candidate.keypoints_3d[candidate_pos, hand]
+            valid = np.isfinite(a).all(axis=1) & np.isfinite(b).all(axis=1)
+            if valid.any():
+                points = np.stack((a[valid] @ RAW_TO_VIEW.T, b[valid] @ RAW_TO_VIEW.T), axis=1).reshape(-1, 3)
+                self.error_items[hand].setData(pos=np.asarray(points, dtype=np.float32), color=(1, 1, 0, 1), mode="lines")
+                self.error_items[hand].setVisible(True)
+
+    def set_mesh_opacity(self, opacity):
+        super().set_mesh_opacity(opacity)
+        if not hasattr(self, "loaded_results"):
+            return
+        for hand in range(2):
+            alpha = _confidence_alpha(self.loaded_results[0].result, self.frame, hand) if self.confidence_opacity_enabled else 1.0
+            _set_mesh_color(self.meshes[hand], self.configuration_colors[0], alpha * self.mesh_opacity)
+        for config_index, (loaded, hands) in enumerate(zip(self.loaded_results[1:], self.extra_items), 1):
+            for hand, (_, _, mesh) in enumerate(hands):
+                alpha = _confidence_alpha(loaded.result, min(self.frame, loaded.frame_count - 1), hand) if self.confidence_opacity_enabled else 1.0
+                _set_mesh_color(mesh, self.configuration_colors[config_index], alpha * self.mesh_opacity)
+
+
+@dataclass
+class _DetachedWorkspace:
+    group_id: str
+    window: QMainWindow
+    source_canvas: _OverlayCanvas | None
+    views: list
+    panel: _ViewportPanel | None
+    members: tuple[str, ...]
+
+    def __iter__(self):
+        yield self.window
+        yield self.source_canvas
+        yield self.views
+
+    def __getitem__(self, index):
+        return tuple(self)[index]
+
+
+class _WorkspaceDragGrip(QToolButton):
+    """Compact drag handle that leaves native top-level resize behavior intact."""
+
+    MIME_TYPE = "application/x-calibfreehands-workspace"
+
+    def __init__(self, group_id, title, parent=None):
+        super().__init__(parent)
+        self.group_id = group_id
+        self._press_position = None
+        self.setText("↕")
+        self.setToolTip("Drag this workspace onto another Viewer window to combine them")
+        self.setAccessibleName(f"Move workspace {title}")
+        self.setFixedSize(30, 26)
+
+    def mousePressEvent(self, event):
+        if event.button() == Qt.MouseButton.LeftButton:
+            self._press_position = event.position().toPoint()
+            event.accept()
+            return
+        super().mousePressEvent(event)
+
+    def mouseMoveEvent(self, event):
+        if (self._press_position is not None
+                and event.buttons() & Qt.MouseButton.LeftButton
+                and (event.position().toPoint() - self._press_position).manhattanLength()
+                >= QApplication.startDragDistance()):
+            drag = QDrag(self)
+            data = QMimeData()
+            data.setData(self.MIME_TYPE, self.group_id.encode("utf-8"))
+            drag.setMimeData(data)
+            drag.exec(Qt.DropAction.MoveAction)
+            self._press_position = None
+            event.accept()
+            return
+        super().mouseMoveEvent(event)
+
+    def mouseReleaseEvent(self, event):
+        self._press_position = None
+        super().mouseReleaseEvent(event)
+
+
+class _WorkspaceDropArea(QWidget):
+    def __init__(self, controller, group_id, parent=None):
+        super().__init__(parent)
+        self.controller = controller
+        self.group_id = group_id
+        self.setAcceptDrops(True)
+
+    def dragEnterEvent(self, event):
+        if event.mimeData().hasFormat(_WorkspaceDragGrip.MIME_TYPE):
+            self.controller._set_workspace_drop_feedback(self.group_id, True)
+            event.acceptProposedAction()
+        else:
+            event.ignore()
+
+    def dragLeaveEvent(self, event):
+        self.controller._set_workspace_drop_feedback(self.group_id, False)
+        super().dragLeaveEvent(event)
+
+    def dropEvent(self, event):
+        source_group_id = bytes(event.mimeData().data(_WorkspaceDragGrip.MIME_TYPE)).decode("utf-8")
+        self.controller._set_workspace_drop_feedback(self.group_id, False)
+        self.controller.merge_workspace_groups(source_group_id, self.group_id)
+        event.acceptProposedAction()
+
+
+class _WorkspaceWindow(QMainWindow):
+    def __init__(self, controller, group_id, title):
+        super().__init__(controller, Qt.WindowType.Window)
+        self.controller = controller
+        self.group_id = group_id
+        self._closing_for_transition = False
+        self.setWindowTitle(title)
+
+    def closeEvent(self, event):
+        if not self._closing_for_transition and not self.controller._shutting_down:
+            self.controller.reattach_workspace_group(self.group_id, closing_window=self)
+        super().closeEvent(event)
+
+
+class ComparisonViewer(QWidget):
+    def __init__(self, session_path: Path | list[ResultBundle]):
+        super().__init__()
+        self.bundle_results = list(session_path) if isinstance(session_path, (list, tuple)) else None
+        self.session_path = None if self.bundle_results is not None else Path(session_path).resolve()
+        self.session, entries = _comparison_results(session_path)
+        self.single_mode = len(entries) == 1
+        self.configurations = [config for config, _ in entries]
+        self.loaded_results = [loaded for _, loaded in entries]
+        self._owned_media_providers = tuple({
+            id(loaded.media_frames): loaded.media_frames for loaded in self.loaded_results
+            if isinstance(loaded.media_frames, MediaFrameProvider)
+        }.values())
+        self._media_providers_released = False
+        self._shutting_down = False
+        for config, loaded in zip(self.configurations, self.loaded_results):
+            focal = loaded.result.video_focal_px
+            if focal is None:
+                finite = loaded.result.focal_px[np.isfinite(loaded.result.focal_px)]
+                focal = float(np.median(finite)) if finite.size else None
+            config["name"] = _manual_focal_display_name(
+                config.get("calibration_model_id", ""), config["name"], focal
+            )
+        names = [config["name"] for config in self.configurations]
+        for index, config in enumerate(self.configurations):
+            if names.count(config["name"]) > 1:
+                ordinal = sum(name == config["name"] for name in names[:index + 1]) + 1
+                self.configurations[index] = dict(config, name=f"{config['name']} ({ordinal})")
+        self.mode = "overlay"
+        self._overlay_splitter_dragging = False
+        self._syncing_camera = False
+        self._arrow_mode = "frame"
+        self._detached_windows = []
+        self._workspace_model = WorkspaceModel(tuple(config["id"] for config in self.configurations))
+        self._camera_linked = True
+        self._workspace_drop_group_id = None
+        frame_counts = {loaded.frame_count for loaded in self.loaded_results}
+        frame_indices = [loaded.result.frame_indices for loaded in self.loaded_results]
+        timestamps = [loaded.result.timestamps for loaded in self.loaded_results]
+        if (len(frame_counts) != 1 or any(not np.array_equal(frame_indices[0], frames) for frames in frame_indices[1:])
+                or any(not np.allclose(timestamps[0], values, equal_nan=True) for values in timestamps[1:])):
+            raise ValueError("comparison results must have matching frame indices, timestamps, and counts")
+        self._reference_fallback = False
+        self.reference_id = None if self.single_mode else self._default_reference_id()
+        self.hand_view_cache = {}
+        self.hand_space_cache = {}
+        self.space_mode = "physical"
+        self._camera_states = {"physical": None, "hand": None}
+        reference_index = (self._configuration_index(self.reference_id)
+                           if self.reference_id is not None else None)
+        candidate_index = 0
+        self.candidate_colors = []
+        for index in range(len(entries)):
+            if index == reference_index:
+                self.candidate_colors.append(_color_for_index(len(entries) - 1))
+            else:
+                self.candidate_colors.append(_color_for_index(candidate_index))
+                candidate_index += 1
+        self.configuration_colors = list(self.candidate_colors)
+        if self.reference_id is not None:
+            self.configuration_colors[reference_index] = (0x33 / 255, 1.0, 0x33 / 255)
+        self.metric_definitions = metric_registry()
+        self.selected_metric_ids = {"wrist_error", "mpjpe", "wrist_depth_error"}
+        self._metric_cache = {}
+        self._metric_pair_cache = {}
+        self._metric_generation = 0
+        self._metric_thread_pool = QThreadPool(self)
+        self._metric_thread_pool.setMaxThreadCount(1)
+        self._metric_jobs = {}
+        self.setWindowTitle("CalibFreeHands - Result" if self.single_mode else "CalibFreeHands - Comparison")
+        self.setMinimumSize(1280, 720)
+
+        self.source_overlay = _OverlayCanvas(self.loaded_results[0])
+        self.source_overlay.setMinimumSize(360, 300)
+        self.overlay_view = _OverlayComparisonView(self.loaded_results, self.configuration_colors)
+        self.overlay_view.camera_changed = self._camera_interacted
+        self.overlay_view.setMinimumSize(340, 260)
+        self.overlay_panel = _ViewportPanel(self.overlay_view, list(range(len(entries))))
+        self.overlay_view.hud = self.overlay_panel
+        self.hand_view_cache[self.configurations[0]["id"]] = (
+            tuple(float(value) for value in self.overlay_view.hand_view_target),
+            float(self.overlay_view.hand_view_distance),
+        )
+        self.split_views = [_LinkedResultView(loaded, color, self._camera_interacted)
+                            for loaded, color in zip(self.loaded_results, self.configuration_colors)]
+        for index, view in enumerate(self.split_views):
+            view.setMinimumSize(340, 260); view.setAcceptDrops(not self.single_mode)
+            view.viewer = self; view.configuration_id = self.configurations[index]["id"]
+        self.split_panels = [_ViewportPanel(view, [index]) for index, view in enumerate(self.split_views)]
+        for view, panel in zip(self.split_views, self.split_panels): view.hud = panel
+        result_ids = [config["id"] for config in self.configurations]
+        initial_results = sorted(result_ids, key=lambda config_id: (config_id != self.reference_id,
+                                                                     result_ids.index(config_id)))
+        self.split_panel_order = ["source-media", *(f"result:{config_id}" for config_id in initial_results)]
+        self.user_ordered_panels = False
+        self.overlay_panel_order = ["source-media", "overlay-3d"]
+        self.annotation_mode = "off"
+        self.annotation_content = "name" if self.single_mode else "error"
+        self.overlay_annotations = _JointAnnotationLayer(self, self.overlay_view, list(range(len(entries))))
+        self.split_annotations = [_JointAnnotationLayer(self, view, [index])
+                                  for index, view in enumerate(self.split_views)]
+        self.views = QStackedWidget()
+        overlay_splitter = _SwapSplitter(Qt.Orientation.Horizontal, self.views)
+        self.overlay_splitter = overlay_splitter
+        self.overlay_surfaces = {
+            "source-media": _PanelSurface("source-media", self.source_overlay),
+            "overlay-3d": _PanelSurface("overlay-3d", self.overlay_view),
+        }
+        self.overlay_surfaces[SOURCE_PANEL_ID].detach_source_button.clicked.connect(self.detach_source_media)
+        for panel_id in self.overlay_panel_order:
+            overlay_splitter.addWidget(self.overlay_surfaces[panel_id])
+        overlay_splitter.setStretchFactor(0, 1)
+        overlay_splitter.setStretchFactor(1, 2)
+        overlay_splitter.setSizes([560, 1120])
+        overlay_splitter.swapRequested.connect(
+            lambda: self.reorder_overlay_panel(self.overlay_panel_order[1], self.overlay_panel_order[0]))
+        overlay_splitter.draggingChanged.connect(self._set_overlay_splitter_dragging)
+        self.views.addWidget(overlay_splitter)
+
+        self.split_columns = 1
+        self.split_rows = 1
+        self._laid_out_panel_ids = []
+        self.split_widget = QWidget()
+        self.split_grid = QGridLayout(self.split_widget)
+        self.split_grid.setContentsMargins(4, 4, 4, 4)
+        self.split_grid.setSpacing(6)
+        self.split_source_overlay = _OverlayCanvas(self.loaded_results[0])
+        self.split_source_overlay.setMinimumSize(340, 260)
+        self.split_surfaces = {"source-media": _PanelSurface("source-media", self.split_source_overlay)}
+        self.split_surfaces[SOURCE_PANEL_ID].detach_source_button.clicked.connect(self.detach_source_media)
+        for index, config in enumerate(self.configurations):
+            self.split_surfaces[f"result:{config['id']}"] = _PanelSurface(
+                f"result:{config['id']}", self.split_views[index])
+        self._split_source_feedback = QFrame(self.split_widget)
+        self._split_target_feedback = QFrame(self.split_widget)
+        for feedback in (self._split_source_feedback, self._split_target_feedback):
+            feedback.setAttribute(Qt.WidgetAttribute.WA_TransparentForMouseEvents)
+            feedback.setStyleSheet("QFrame { background: transparent; border: 3px solid palette(highlight); }")
+            feedback.hide()
+        self._sync_split_layout()
+        self.split_scroll = QScrollArea()
+        self.split_scroll.setWidgetResizable(True)
+        self.split_scroll.setWidget(self.split_widget)
+        self.split_scroll.viewport().installEventFilter(self)
+        self.split_reflow_timer = QTimer(self)
+        self.split_reflow_timer.setSingleShot(True)
+        self.split_reflow_timer.setInterval(120)
+        self.split_reflow_timer.timeout.connect(self._sync_split_layout)
+        self.split_reorder_controller = _SplitPanelReorderController(self)
+        self.views.addWidget(self.split_scroll)
+
+        self.slider = QSlider(Qt.Orientation.Horizontal)
+        self.slider.setRange(0, self.loaded_results[0].frame_count - 1)
+        self.slider.setTracking(False)
+        self.slider.valueChanged.connect(self._set_frame)
+        self.status = QLabel()
+        self.metric_status = QLabel()
+        self.metric_status.setToolTip("Camera-space differences from the selected GT.")
+
+        self.mode_selector = QWidget()
+        mode_layout = QHBoxLayout(self.mode_selector)
+        mode_layout.setContentsMargins(0, 0, 0, 0)
+        mode_layout.setSpacing(6)
+        self.mode_label = QLabel("View")
+        self.mode_switch = _ModeSwitch(
+            accessible_name="View mode",
+            accessible_description="Toggle between Overlay and Split views",
+            tooltip="View: Overlay",
+        )
+        self.pin_controls_button = _PinButton()
+        mode_layout.addWidget(self.mode_label)
+        mode_layout.addWidget(self.mode_switch)
+        self.mode_switch.toggled.connect(self._set_mode_from_switch)
+
+        self.space_mode_selector = QWidget()
+        space_layout = QHBoxLayout(self.space_mode_selector)
+        space_layout.setContentsMargins(0, 0, 0, 0)
+        space_layout.setSpacing(6)
+        self.space_label = QLabel("Space")
+        self.space_mode_switch = _ModeSwitch(
+            accessible_name="3D space mode",
+            accessible_description="Toggle between Physical and Hand 3D spaces",
+            tooltip="Space: Physical",
+        )
+        self.space_mode_switch.toggled.connect(self._set_space_mode_from_switch)
+        space_layout.addWidget(self.space_label)
+        space_layout.addWidget(self.space_mode_switch)
+
+        self.labels_selector = QWidget()
+        labels_layout = QHBoxLayout(self.labels_selector)
+        labels_layout.setContentsMargins(0, 0, 0, 0)
+        labels_layout.setSpacing(6)
+        self.labels_label = QLabel("Labels")
+        self.labels_switch = _ModeSwitch(
+            accessible_name="Scale labels",
+            accessible_description="Show or hide numeric centimetre scale labels",
+            tooltip="Scale labels: On",
+        )
+        self.labels_switch.setChecked(True)
+        self.labels_switch.toggled.connect(self._set_scale_labels)
+        labels_layout.addWidget(self.labels_label)
+        labels_layout.addWidget(self.labels_switch)
+
+        self.primary_controls = QFrame()
+        self.primary_controls.setFrameShape(QFrame.Shape.NoFrame)
+        self.primary_controls.setAutoFillBackground(False)
+        self.primary_controls.setSizePolicy(QSizePolicy.Policy.Fixed, QSizePolicy.Policy.Preferred)
+        primary_layout = QHBoxLayout(self.primary_controls)
+        primary_layout.setContentsMargins(5, 3, 5, 3)
+        primary_layout.setSpacing(10)
+        for control in (self.mode_selector, self.space_mode_selector, self.labels_selector,
+                        self.pin_controls_button):
+            primary_layout.addWidget(control)
+
+        self.results_menu = QMenu(self)
+        self.visibility_checks = []
+        self.color_buttons = []
+        for index, config in enumerate(self.configurations):
+            row = QWidget()
+            row_layout = QHBoxLayout(row)
+            row_layout.setContentsMargins(6, 2, 8, 2)
+            check = QCheckBox(config["name"])
+            check.setToolTip("Show or hide this result")
+            check.setChecked(True)
+            check.toggled.connect(lambda value, i=index: self._set_configuration_visible(i, value))
+            swatch = QToolButton()
+            swatch.setFixedSize(20, 20)
+            self._style_swatch(swatch, self.configuration_colors[index])
+            if config["id"] == self.reference_id:
+                swatch.setEnabled(False)
+                swatch.setToolTip("GT color is fixed to #33FF33")
+            swatch.clicked.connect(lambda _=False, i=index: self._choose_color(i))
+            row_layout.addWidget(check, 1)
+            row_layout.addWidget(swatch)
+            action = QWidgetAction(self.results_menu)
+            action.setDefaultWidget(row)
+            self.results_menu.addAction(action)
+            self.visibility_checks.append(check)
+            self.color_buttons.append(swatch)
+        self.results_menu_button = QToolButton()
+        self.results_menu_button.setPopupMode(QToolButton.ToolButtonPopupMode.InstantPopup)
+        self.results_menu_button.setMenu(self.results_menu)
+        self._update_results_button()
+        if self.single_mode:
+            self.results_menu_button.hide()
+
+        self.reference_label = QLabel("GT" + (" (fallback)" if self._reference_fallback else ""))
+        self.reference_selector = QComboBox()
+        for config in self.configurations:
+            self.reference_selector.addItem(config["name"], config["id"])
+        self.reference_selector.setCurrentIndex(next((i for i, config in enumerate(self.configurations)
+                                                      if config["id"] == self.reference_id), 0))
+        self.reference_selector.setMaximumWidth(220)
+        self.reference_selector.setMinimumWidth(120)
+        self.reference_selector.setToolTip(self.reference_selector.currentText())
+        self.reference_selector.currentIndexChanged.connect(self._reference_changed)
+        if self.single_mode:
+            for widget in (self.reference_label, self.reference_selector):
+                widget.hide()
+
+        self.metric_menu = QMenu(self)
+        self.metric_checks = {}
+        self._rebuild_metrics_menu()
+        self.metric_menu_button = QToolButton()
+        self.metric_menu_button.setPopupMode(QToolButton.ToolButtonPopupMode.InstantPopup)
+        self.metric_menu_button.setMenu(self.metric_menu)
+        self._update_metrics_button()
+        if self.single_mode:
+            self.metric_menu_button.hide()
+
+        self.confidence_menu = QMenu(self)
+        self.confidence_opacity_checkbox = self._menu_checkbox(self.confidence_menu, "Use as opacity")
+        self.confidence_numeric_checkbox = self._menu_checkbox(self.confidence_menu, "Numeric value")
+        self.confidence_bar_checkbox = self._menu_checkbox(self.confidence_menu, "Bar")
+        self.confidence_opacity_checkbox.toggled.connect(self._confidence_opacity_changed)
+        self.confidence_numeric_checkbox.toggled.connect(self._refresh_metric_panels)
+        self.confidence_bar_checkbox.toggled.connect(self._refresh_metric_panels)
+        self.confidence_menu_button = QToolButton()
+        self.confidence_menu_button.setPopupMode(QToolButton.ToolButtonPopupMode.InstantPopup)
+        self.confidence_menu_button.setMenu(self.confidence_menu)
+        self.confidence_menu_button.setText("Confidence Display")
+        confidence_description = "YOLO hand detector bounding-box confidence; not joint or reconstruction confidence."
+        self.confidence_menu_button.setToolTip(confidence_description)
+        self.confidence_menu_button.setAccessibleName("Hand Detection Confidence")
+        self.confidence_menu_button.setAccessibleDescription(confidence_description)
+        self._update_confidence_button()
+
+        self.error_vectors_checkbox = QCheckBox("Error vectors")
+        self.error_candidate_selector = QComboBox()
+        for config in self.configurations:
+            if config["id"] != self.reference_id:
+                self.error_candidate_selector.addItem(config["name"], config["id"])
+        self.error_candidate_selector.setMaximumWidth(190)
+        self.error_candidate_selector.setEnabled(self.error_candidate_selector.count() > 0)
+        self.error_vectors_checkbox.setEnabled(self.error_candidate_selector.count() > 0)
+        self.selected_error_candidate_id = self.error_candidate_selector.currentData()
+        self.error_vectors_checkbox.toggled.connect(self._set_error_vectors)
+        self.error_candidate_selector.currentIndexChanged.connect(lambda: self._set_error_vectors(self.error_vectors_checkbox.isChecked()))
+        self.error_candidate_selector.hide()
+        self.error_vectors_menu = QMenu(self)
+        self.error_vectors_group = QActionGroup(self); self.error_vectors_group.setExclusive(True)
+        self.error_vectors_off = QAction("Off", self); self.error_vectors_off.setCheckable(True); self.error_vectors_off.setChecked(True)
+        self.error_vectors_group.addAction(self.error_vectors_off); self.error_vectors_menu.addAction(self.error_vectors_off)
+        self.error_vector_actions = {}
+        for config in self.configurations:
+            if config["id"] == self.reference_id: continue
+            action = QAction(config["name"], self); action.setCheckable(True)
+            action.triggered.connect(lambda checked, cid=config["id"]: self._select_error_candidate(cid) if checked else None)
+            self.error_vectors_group.addAction(action); self.error_vectors_menu.addAction(action)
+            self.error_vector_actions[config["id"]] = action
+        self.error_vectors_off.triggered.connect(lambda: self._set_error_vectors(False))
+        self.error_vectors_button = QToolButton(); self.error_vectors_button.setText("Error vectors: Off")
+        self.error_vectors_button.setPopupMode(QToolButton.ToolButtonPopupMode.InstantPopup)
+        self.error_vectors_button.setMenu(self.error_vectors_menu)
+        if self.single_mode:
+            self.error_vectors_button.hide()
+
+        self.annotation_menu = QMenu(self)
+        self.annotation_group = QActionGroup(self); self.annotation_group.setExclusive(True)
+        self.annotation_actions = {}
+        for text, mode in (("All joints", "all"), ("Hovered joint", "hovered"),
+                           ("Key joints", "key_joints"), ("Worst 5", "worst5"), ("Off", "off")):
+            action = QAction(text, self); action.setCheckable(True); action.setChecked(mode == "off")
+            action.triggered.connect(lambda checked, value=mode: self.set_annotation_mode(value) if checked else None)
+            self.annotation_group.addAction(action); self.annotation_menu.addAction(action)
+            self.annotation_actions[mode] = action
+        self.annotation_button = QToolButton(); self.annotation_button.setText("Annotations")
+        self.annotation_button.setPopupMode(QToolButton.ToolButtonPopupMode.InstantPopup)
+        self.annotation_button.setMenu(self.annotation_menu)
+        self.annotation_menu.addSeparator()
+        self.annotation_content_menu = self.annotation_menu.addMenu("Label")
+        self.annotation_content_group = QActionGroup(self); self.annotation_content_group.setExclusive(True)
+        self.annotation_content_actions = {}
+        for label, content in (("Error (mm)", "error"), ("Joint name", "name")):
+            action = QAction(label, self); action.setCheckable(True); action.setChecked(content == self.annotation_content)
+            action.triggered.connect(lambda checked, value=content: self._set_annotation_content(value) if checked else None)
+            self.annotation_content_group.addAction(action); self.annotation_content_menu.addAction(action)
+            self.annotation_content_actions[content] = action
+        if self.single_mode:
+            self.annotation_content_actions["error"].setVisible(False)
+            self.annotation_actions["worst5"].setVisible(False)
+        self.hud_menu = QMenu(self)
+        size_menu = self.hud_menu.addMenu("Size")
+        for size in ("small", "medium", "large"):
+            action = QAction(size.title(), self); action.triggered.connect(lambda _=False, value=size: self._set_hud(scale=value))
+            size_menu.addAction(action)
+        self.hud_background_menu = self.hud_menu.addMenu("Background")
+        self.hud_background_group = QActionGroup(self); self.hud_background_group.setExclusive(True)
+        self.hud_background_actions = {}
+        for label, style in (("None", "none"), ("Subtle", "subtle")):
+            action = QAction(label, self); action.setCheckable(True); action.setChecked(style == "none")
+            action.triggered.connect(lambda checked, value=style: self._set_hud_background(value) if checked else None)
+            self.hud_background_group.addAction(action); self.hud_background_menu.addAction(action)
+            self.hud_background_actions[style] = action
+        self.hud_opacity_widget = QWidget()
+        opacity_layout = QHBoxLayout(self.hud_opacity_widget)
+        opacity_layout.setContentsMargins(8, 0, 8, 0)
+        self.hud_opacity_label = QLabel("HUD opacity")
+        self.hud_opacity_label.setAlignment(Qt.AlignmentFlag.AlignVCenter | Qt.AlignmentFlag.AlignLeft)
+        opacity_layout.addWidget(self.hud_opacity_label)
+        self.hud_opacity_slider = QSlider(Qt.Orientation.Horizontal)
+        self.hud_opacity_slider.setRange(20, 100)
+        self.hud_opacity_slider.setValue(100)
+        self.hud_opacity_slider.setFixedWidth(100)
+        self.hud_opacity_slider.valueChanged.connect(lambda value: self._set_hud(opacity=value / 100))
+        opacity_layout.addWidget(self.hud_opacity_slider, 0, Qt.AlignmentFlag.AlignVCenter)
+        self.hud_opacity_action = QWidgetAction(self.hud_menu)
+        self.hud_opacity_action.setDefaultWidget(self.hud_opacity_widget)
+        self.hud_menu.insertAction(size_menu.menuAction(), self.hud_opacity_action)
+        self._fit_hud_opacity_row()
+        self.hud_button = QToolButton(); self.hud_button.setText("HUD")
+        self.hud_button.setCheckable(True); self.hud_button.setChecked(True)
+        self.hud_visible = True
+        self.hud_button.setAccessibleName("HUD visibility")
+        self.hud_button.setPopupMode(QToolButton.ToolButtonPopupMode.MenuButtonPopup); self.hud_button.setMenu(self.hud_menu)
+        self.hud_button.toggled.connect(self._set_hud_visible)
+        self._set_hud_visibility_label(True)
+
+        self.detach_button = QPushButton("Detach All")
+        self.detach_button.setSizePolicy(QSizePolicy.Policy.Fixed, QSizePolicy.Policy.Fixed)
+        self.detach_button.clicked.connect(self.detach_all)
+        self.detach_source_button = QPushButton("Detach Source")
+        self.detach_source_button.setSizePolicy(QSizePolicy.Policy.Fixed, QSizePolicy.Policy.Fixed)
+        self.detach_source_button.clicked.connect(self.detach_source_media)
+        self.reattach_all_button = QPushButton("Reattach All")
+        self.reattach_all_button.setSizePolicy(QSizePolicy.Policy.Fixed, QSizePolicy.Policy.Fixed)
+        self.reattach_all_button.clicked.connect(self.reattach_all)
+        self.reattach_all_button.setEnabled(False)
+        self.camera_link_checkbox = QCheckBox("Link Cameras")
+        self.camera_link_checkbox.setChecked(True)
+        self.camera_link_checkbox.toggled.connect(self.set_camera_linked)
+        self.more_menu = QMenu(self)
+        self.more_menu.addAction("Detach All", self.detach_all)
+        self.more_menu.addAction("Detach Source Media", self.detach_source_media)
+        self.more_menu.addAction("Reattach All", self.reattach_all)
+        self.performance_stats_action = self.more_menu.addAction("Playback Stats")
+        self.performance_stats_action.setCheckable(True)
+        self.performance_stats_action.toggled.connect(self._set_performance_stats)
+        self.more_button = QToolButton(); self.more_button.setText("More")
+        self.more_button.setPopupMode(QToolButton.ToolButtonPopupMode.InstantPopup); self.more_button.setMenu(self.more_menu)
+        self.export_csv_button = QPushButton("CSV")
+        self.export_json_button = QPushButton("JSON")
+        for button, callback in ((self.export_csv_button, self._export_csv), (self.export_json_button, self._export_json)):
+            button.setSizePolicy(QSizePolicy.Policy.Fixed, QSizePolicy.Policy.Fixed)
+            button.clicked.connect(callback)
+        if self.single_mode:
+            self.export_csv_button.hide()
+            self.export_json_button.hide()
+            self.metric_status.hide()
+
+        toolbar = QHBoxLayout()
+        toolbar.setContentsMargins(14, 8, 14, 6)
+        toolbar.setSpacing(7)
+        toolbar.addWidget(self.primary_controls)
+        toolbar.addSpacing(5)
+        toolbar.addWidget(self.results_menu_button)
+        toolbar.addWidget(self.reference_label); toolbar.addWidget(self.reference_selector)
+        toolbar.addWidget(self.metric_menu_button)
+        toolbar.addWidget(self.confidence_menu_button)
+        self.error_vectors_button.setToolTip("Show selected GT versus candidate error vectors")
+        toolbar.addWidget(self.annotation_button); toolbar.addWidget(self.hud_button)
+        toolbar.addWidget(self.more_button)
+        toolbar.addWidget(self.detach_button)
+        toolbar.addWidget(self.detach_source_button)
+        toolbar.addWidget(self.reattach_all_button)
+        toolbar.addWidget(self.camera_link_checkbox)
+        toolbar.addStretch(1)
+        self.toolbar = toolbar
+
+        self.joint_checkbox = QCheckBox("Joint")
+        self.joint_checkbox.setChecked(True)
+        self.joint_checkbox.toggled.connect(self._set_joint)
+        self.bone_checkbox = QCheckBox("Bone")
+        self.bone_checkbox.setChecked(True)
+        self.bone_checkbox.toggled.connect(self._set_bone)
+        self.mesh_checkbox = QCheckBox("Mesh")
+        self.mesh_checkbox.setEnabled(any(loaded.has_mesh_topology for loaded in self.loaded_results))
+        self.mesh_checkbox.toggled.connect(self._set_mesh)
+        self.mesh_opacity_label = QLabel("Mesh opacity")
+        self.mesh_opacity_slider = QSlider(Qt.Orientation.Horizontal)
+        self.mesh_opacity_slider.setRange(10, 100)
+        self.mesh_opacity_slider.setValue(100)
+        self.mesh_opacity_slider.setFixedWidth(110)
+        self.mesh_opacity_slider.setEnabled(self.mesh_checkbox.isEnabled() and self.mesh_checkbox.isChecked())
+        self.mesh_checkbox.toggled.connect(self.mesh_opacity_slider.setEnabled)
+        self.mesh_opacity_value = QLabel("100%")
+        self.mesh_opacity_value.setFixedWidth(self.mesh_opacity_value.fontMetrics().horizontalAdvance("100%") + 4)
+        self.mesh_opacity_slider.valueChanged.connect(self._set_opacity)
+        self.mesh_opacity_group = QWidget()
+        opacity_layout = QHBoxLayout(self.mesh_opacity_group)
+        opacity_layout.setContentsMargins(0, 0, 0, 0)
+        opacity_layout.setSpacing(4)
+        opacity_layout.addWidget(self.mesh_opacity_label)
+        opacity_layout.addWidget(self.mesh_opacity_slider)
+        opacity_layout.addWidget(self.mesh_opacity_value)
+        geometry = QHBoxLayout()
+        for control in (self.joint_checkbox, self.bone_checkbox, self.mesh_checkbox, self.mesh_opacity_group):
+            geometry.addWidget(control)
+        for text, attr in (("Left", "show_left"), ("Right", "show_right"), ("Grid", "show_grid"), ("Axis", "show_axis")):
+            check = QCheckBox(text)
+            check.setChecked(True)
+            check.toggled.connect(lambda value, name=attr: self._set_geometry(name, value))
+            geometry.addWidget(check)
+            if not hasattr(self, "geometry_checks"):
+                self.geometry_checks = {}
+            self.geometry_checks[attr] = check
+        geometry.addStretch(1)
+
+        self.view_buttons = []
+        view_toolbar = QHBoxLayout()
+        view_toolbar.addWidget(QLabel("Camera"))
+        focus_name = "Focus Hands" if self.single_mode else "Focus GT"
+        for text, method in (("Front", "front_view"), ("Left", "left_view"),
+                             ("Right", "right_view"), ("Top", "top_view"),
+                             (focus_name, "focus_gt"), ("Space Overview", "space_overview"),
+                             ("Fit All", "fit_all")):
+            button = QPushButton(text)
+            button.setFixedWidth(64)
+            button.setSizePolicy(QSizePolicy.Policy.Fixed, QSizePolicy.Policy.Fixed)
+            button.clicked.connect(lambda _=False, name=method: self._apply_camera_preset(name))
+            view_toolbar.addWidget(button)
+            self.view_buttons.append(button)
+        view_toolbar.addStretch(1)
+
+        geometry_menu = self.more_menu.addMenu("Geometry")
+        for label, check in (("Joints", self.joint_checkbox), ("Bones", self.bone_checkbox),
+                             ("Mesh", self.mesh_checkbox),
+                             *[(name, self.geometry_checks[attr]) for name, attr in
+                               (("Left hand", "show_left"), ("Right hand", "show_right"),
+                                ("Grid", "show_grid"), ("Axis", "show_axis"))]):
+            action = geometry_menu.addAction(label)
+            action.setCheckable(True); action.setChecked(check.isChecked()); action.setEnabled(check.isEnabled())
+            action.toggled.connect(check.setChecked); check.toggled.connect(action.setChecked)
+        labels_action = geometry_menu.addAction("Scale labels")
+        labels_action.setCheckable(True); labels_action.setChecked(True)
+        labels_action.toggled.connect(self.labels_switch.setChecked)
+        self.labels_switch.toggled.connect(labels_action.setChecked)
+        mesh_opacity_action = QWidgetAction(geometry_menu)
+        mesh_opacity_action.setDefaultWidget(self.mesh_opacity_group)
+        geometry_menu.addAction(mesh_opacity_action)
+        for widget in (self.joint_checkbox, self.bone_checkbox, self.mesh_checkbox,
+                       *self.geometry_checks.values(), *self.view_buttons):
+            widget.setParent(self)
+            widget.hide()
+        camera_menu = self.more_menu.addMenu("Camera")
+        for text, method in (("Front", "front_view"), ("Left", "left_view"),
+                             ("Right", "right_view"), ("Top", "top_view"),
+                             (focus_name, "focus_gt"), ("Space Overview", "space_overview"),
+                             ("Fit All", "fit_all")):
+            camera_menu.addAction(text, lambda _=False, name=method: self._apply_camera_preset(name))
+        self.more_menu.addSeparator()
+        self.export_csv_action = self.more_menu.addAction("Export CSV…", self._export_csv)
+        self.export_json_action = self.more_menu.addAction("Export JSON…", self._export_json)
+        if self.single_mode:
+            self.export_csv_action.setVisible(False)
+            self.export_json_action.setVisible(False)
+
+        playback_fps = 30.0
+        metadata = self.loaded_results[0].metadata or {}
+        provenance = metadata.get("run_provenance", {})
+        media_info = provenance.get("media_metadata", {}) if isinstance(provenance, dict) else {}
+        inference_info = provenance.get("inference_settings", {}) if isinstance(provenance, dict) else {}
+        for candidate_fps in (media_info.get("frame_rate"), inference_info.get("fps"), metadata.get("fps"), 30.0):
+            try:
+                if np.isfinite(float(candidate_fps)) and float(candidate_fps) > 0:
+                    playback_fps = float(candidate_fps)
+                    break
+            except (TypeError, ValueError):
+                continue
+        self.playback_clock = PlaybackClock(self.loaded_results[0].result.timestamps, fps=playback_fps, monotonic=monotonic)
+        self._clock_driven_update = False
+        self._last_rendered_frame = None
+        self._requested_frame = None
+        self.requested_frame = None
+        self.presented_frame = None
+        self._presented_source_image = QImage()
+        self._stats_frames = 0
+        self._stats_skipped = 0
+        self._stats_started = monotonic()
+        self.timer = QTimer(self)
+        self.timer.setInterval(16)
+        self.timer.timeout.connect(self._advance)
+        self.playback_buttons = []
+        self.playback_group = QWidget()
+        self.playback_group.setSizePolicy(QSizePolicy.Policy.Fixed, QSizePolicy.Policy.Fixed)
+        playback_group_layout = QHBoxLayout(self.playback_group)
+        playback_group_layout.setContentsMargins(0, 0, 0, 0)
+        playback_group_layout.setSpacing(3)
+        self.playback_label = QLabel("Playback")
+        playback_group_layout.addWidget(self.playback_label)
+        self.playback_icon_kinds = ["previous_frame", "play", "next_frame"]
+        accessible_names = ("Previous frame", "Play", "Next frame")
+        foreground = self.palette().color(QPalette.ColorRole.ButtonText)
+        disabled = self.palette().color(QPalette.ColorGroup.Disabled, QPalette.ColorRole.ButtonText)
+        self.playback_icons = [self._make_playback_icon(kind, foreground, disabled)
+                               for kind in self.playback_icon_kinds]
+        for callback, icon, accessible_name in zip((self._previous, self._play, self._next_frame), self.playback_icons, accessible_names):
+            button = QToolButton()
+            button.setIcon(icon)
+            button.setAccessibleName(accessible_name)
+            button.setToolTip(accessible_name)
+            button.setFixedSize(36, 32)
+            button.setSizePolicy(QSizePolicy.Policy.Fixed, QSizePolicy.Policy.Fixed)
+            button.clicked.connect(callback)
+            playback_group_layout.addWidget(button)
+            self.playback_buttons.append(button)
+        self.speed_group = QWidget()
+        self.speed_group.setSizePolicy(QSizePolicy.Policy.Fixed, QSizePolicy.Policy.Fixed)
+        speed_group_layout = QHBoxLayout(self.speed_group)
+        speed_group_layout.setContentsMargins(0, 0, 0, 0)
+        speed_group_layout.setSpacing(3)
+        self.speed_label = QLabel("Speed")
+        speed_group_layout.addWidget(self.speed_label)
+        self.speed_down_button = QToolButton(); self.speed_down_button.setText("▼")
+        self.speed_down_button.setFixedSize(28, 32)
+        self.speed_down_button.setAccessibleName("Decrease playback speed")
+        self.speed_down_button.setToolTip("Decrease playback speed")
+        self.speed_down_button.clicked.connect(lambda: self._step_playback_speed(-1))
+        self.speed_value_label = QLabel("1.0×")
+        self.speed_value_label.setFixedWidth(self.speed_value_label.fontMetrics().horizontalAdvance("1.25×") + 4)
+        self.speed_value_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        self.speed_up_button = QToolButton(); self.speed_up_button.setText("▲")
+        self.speed_up_button.setFixedSize(28, 32)
+        self.speed_up_button.setAccessibleName("Increase playback speed")
+        self.speed_up_button.setToolTip("Increase playback speed")
+        self.speed_up_button.clicked.connect(lambda: self._step_playback_speed(1))
+        for control in (self.speed_down_button, self.speed_value_label, self.speed_up_button):
+            speed_group_layout.addWidget(control)
+        self.performance_stats_label = QLabel()
+        self.performance_stats_label.hide()
+        self.performance_stats_timer = QTimer(self)
+        self.performance_stats_timer.setInterval(1000)
+        self.performance_stats_timer.timeout.connect(self._update_performance_stats)
+
+        self.chrome_text_labels = [
+            self.mode_label, self.space_label, self.labels_label, self.reference_label,
+            self.playback_label, self.speed_label, self.speed_value_label, self.status,
+            self.metric_status, self.performance_stats_label,
+        ]
+        for label in self.chrome_text_labels:
+            label.setStyleSheet(VIEWER_CHROME_LABEL_STYLE)
+
+        exports = QHBoxLayout()
+        exports.addWidget(self.metric_status, 1)
+        exports.addWidget(self.export_csv_button)
+        exports.addWidget(self.export_json_button)
+        layout = QGridLayout(self)
+        self._root_layout = layout
+        self.setAcceptDrops(True)
+        layout.setContentsMargins(0, 0, 0, 0)
+        layout.addWidget(self.views, 0, 0)
+        self.chrome = QWidget(); chrome_layout = QVBoxLayout(self.chrome); chrome_layout.setContentsMargins(14, 8, 14, 12); chrome_layout.setSpacing(6)
+        chrome_layout.addLayout(toolbar); chrome_layout.addWidget(self.slider)
+        playback = QHBoxLayout()
+        self.playback_controls_layout = playback
+        playback.addWidget(self.playback_group)
+        playback.addSpacing(12)
+        playback.addWidget(self.speed_group)
+        playback.addStretch(1)
+        playback.addWidget(self.status)
+        playback.addWidget(self.metric_status, 1)
+        chrome_layout.addLayout(playback); chrome_layout.addWidget(self.performance_stats_label)
+        layout.addWidget(self.chrome, 0, 0, Qt.AlignmentFlag.AlignBottom)
+        self.auto_hide_timer = QTimer(self); self.auto_hide_timer.setSingleShot(True); self.auto_hide_timer.setInterval(2500)
+        self.auto_hide_timer.timeout.connect(self._auto_hide_controls)
+        self.pin_controls_button.toggled.connect(self._set_pin_state)
+        self.pin_controls_button.toggled.connect(self._set_pin_label)
+        self._sync_speed_controls()
+        self._sync_play_icon()
+        self._panel_reorder_active = False
+        self._hover_menu_target = None
+        self._hover_button_entered = False
+        self._opening_menu_by_hover = False
+        self._hover_menu_latched = False
+        self._last_pointer_position = None
+        self._last_pointer_widget = None
+        self.hover_menu_timer = QTimer(self); self.hover_menu_timer.setSingleShot(True); self.hover_menu_timer.setInterval(0)
+        self.hover_menu_timer.timeout.connect(self._open_hover_menu)
+        self.hover_close_timer = QTimer(self); self.hover_close_timer.setSingleShot(True); self.hover_close_timer.setInterval(0)
+        self.hover_close_timer.timeout.connect(self._close_hover_menu)
+        self.setMouseTracking(True)
+        for widget in self.findChildren(QWidget):
+            widget.setMouseTracking(True)
+        for menu in self.findChildren(QMenu):
+            menu.aboutToShow.connect(lambda m=menu: self._menu_about_to_show(m))
+            menu.aboutToHide.connect(lambda m=menu: self._menu_about_to_hide(m))
+        source_provider = self._source_provider()
+        if source_provider is not None:
+            self._watch_source_provider(source_provider)
+        QApplication.instance().installEventFilter(self)
+        self._compute_metrics()
+        self._refresh_metric_panels()
+        self._refresh_annotations()
+        self._set_frame(0)
+        self.hand_view()
+
+    def _refresh_annotations(self, *, position_panels=True):
+        if self.annotation_mode != "off":
+            layers = [self.overlay_annotations] if self.mode == "overlay" else self.split_annotations
+            for layer in layers:
+                layer.refresh()
+        else:
+            self.overlay_annotations.hide()
+            for layer in self.split_annotations:
+                layer.hide()
+        panels = [self.overlay_panel] if self.mode == "overlay" else self.split_panels
+        for panel in panels:
+            if position_panels:
+                panel._position()
+            panel.raise_()
+
+    def _set_hud(self, anchor=None, scale=None, opacity=None):
+        for hud in (self.overlay_panel, *self.split_panels): hud.set_presentation(anchor, scale, opacity)
+
+    def _set_hud_background(self, style):
+        for hud in (self.overlay_panel, *self.split_panels): hud.set_background(style)
+
+    def _fit_hud_opacity_row(self):
+        self.hud_menu.ensurePolished()
+        self.hud_menu.adjustSize()
+        reference_height = self.hud_menu.actionGeometry(
+            self.hud_background_menu.menuAction()
+        ).height()
+        if reference_height > 0:
+            self.hud_opacity_widget.setFixedHeight(reference_height)
+        self.hud_menu.adjustSize()
+
+    def _set_hud_visible(self, visible):
+        self.hud_visible = bool(visible)
+        for panel in (self.overlay_panel, *self.split_panels):
+            panel.setVisible(self.hud_visible)
+        self._set_hud_visibility_label(self.hud_visible)
+
+    def _set_hud_visibility_label(self, visible):
+        label = "Hide HUD" if visible else "Show HUD"
+        self.hud_button.setToolTip(label)
+        self.hud_button.setAccessibleDescription(label)
+
+    def _select_error_candidate(self, candidate_id):
+        if candidate_id == self.reference_id or candidate_id not in self.error_vector_actions:
+            return
+        self.selected_error_candidate_id = candidate_id
+        index = self.error_candidate_selector.findData(candidate_id)
+        if index >= 0:
+            blocker = QSignalBlocker(self.error_candidate_selector)
+            self.error_candidate_selector.setCurrentIndex(index)
+            del blocker
+        self.error_candidate_selector.hide()
+        self.error_vectors_checkbox.setChecked(True)
+        self._set_error_vectors(True)
+        name = next(config["name"] for config in self.configurations if config["id"] == candidate_id)
+        self.error_vectors_button.setText(f"Vectors: {name}")
+        self.error_vectors_button.setToolTip(f"Show selected GT versus {name} error vectors")
+
+    def _show_controls(self):
+        self.chrome.show()
+        if self.timer.isActive() and not self.pin_controls_button.isChecked():
+            self.auto_hide_timer.start()
+
+    def _set_pin_state(self, pinned):
+        if pinned:
+            self.auto_hide_timer.stop()
+            self.chrome.show()
+        else:
+            self._show_controls()
+
+    def _set_pin_label(self, pinned):
+        self.pin_controls_button.setToolTip("Controls pinned" if pinned else "Keep controls visible")
+        self.pin_controls_button.setAccessibleDescription(
+            "Pinned: controls remain visible" if pinned else "Not pinned: controls may hide during playback")
+
+    def _menu_about_to_show(self, menu):
+        if not self._opening_menu_by_hover and menu is getattr(self._hover_menu_target, "menu", lambda: None)():
+            self._hover_menu_latched = True
+
+    def _menu_about_to_hide(self, menu):
+        button = self._hover_menu_target
+        if isinstance(button, QToolButton) and button.menu() is menu:
+            self._hover_menu_latched = False
+
+    def _auto_hide_controls(self):
+        if (not self.timer.isActive() or self.pin_controls_button.isChecked()
+                or self._panel_reorder_active): return
+        popup_open = any(menu.isVisible() for menu in self.findChildren(QMenu))
+        combo_open = any(combo.view().isVisible() for combo in self.findChildren(QComboBox))
+        modal = QApplication.activeModalWidget()
+        dialog_open = modal is not None and (modal is self or self.isAncestorOf(modal))
+        dragging = bool(QApplication.mouseButtons() & Qt.MouseButton.LeftButton)
+        if popup_open or combo_open or dialog_open or self.slider.isSliderDown() or dragging: self.auto_hide_timer.start()
+        else: self.chrome.hide()
+
+    @property
+    def result_order_ids(self):
+        return [panel_id.removeprefix("result:") for panel_id in self.split_panel_order
+                if panel_id.startswith("result:")]
+
+    @property
+    def split_result_order(self):
+        return [self._configuration_index(config_id) for config_id in self.result_order_ids]
+
+    def _visible_split_panel_ids(self):
+        main_members = self._main_workspace_members()
+        return [panel_id for panel_id in self.split_panel_order
+                if (panel_id in main_members
+                    and (panel_id == SOURCE_PANEL_ID
+                         or self.overlay_view.configuration_visible[
+                             self._configuration_index(panel_id.removeprefix("result:"))]))]
+
+    def _main_workspace_group(self) -> WorkspaceGroup | None:
+        return next(iter(self._workspace_model.groups(host="main")), None)
+
+    def _main_workspace_members(self) -> set[str]:
+        group = self._main_workspace_group()
+        return set(group.members) if group is not None else set()
+
+    def _split_available_size(self):
+        if hasattr(self, "split_scroll"):
+            size = self.split_scroll.viewport().size()
+            if size.width() >= 340 and size.height() >= 260:
+                return size
+        width = max(self.width(), self.minimumWidth()) - 32
+        height = max(self.height(), self.minimumHeight()) - 144
+        return QSize(max(340, width), max(260, height))
+
+    def _split_grid_shape(self, panel_count):
+        size = self._split_available_size()
+        if panel_count <= 0:
+            return 1, 1
+
+        minimum_width, minimum_height = 340, 260
+        margins = self.split_grid.contentsMargins()
+        spacing = self.split_grid.spacing()
+        available_width = max(1, size.width() - margins.left() - margins.right())
+        available_height = max(1, size.height() - margins.top() - margins.bottom())
+        best_shape = (1, panel_count)
+        best_score = None
+        for columns in range(1, panel_count + 1):
+            rows = int(np.ceil(panel_count / columns))
+            cell_width = max(1, (available_width - spacing * (columns - 1)) / columns)
+            cell_height = max(1, (available_height - spacing * (rows - 1)) / rows)
+            required_width = columns * minimum_width + spacing * (columns - 1)
+            required_height = rows * minimum_height + spacing * (rows - 1)
+            horizontal_overflow = max(0, required_width - available_width) / available_width
+            vertical_overflow = max(0, required_height - available_height) / available_height
+            aspect_error = abs(np.log((cell_width / cell_height) / 1.4))
+            unused_fraction = (columns * rows - panel_count) / panel_count
+            # Avoid vertical scrolling first, then horizontal overflow; next prefer
+            # usable landscape-ish cells and denser final rows. The row term breaks ties.
+            score = (10 * (horizontal_overflow + 1.5 * vertical_overflow)
+                     + aspect_error + 0.3 * unused_fraction + 0.01 * rows,
+                     columns, rows)
+            if best_score is None or score < best_score:
+                best_score, best_shape = score, (columns, rows)
+        return best_shape
+
+    def _sync_split_layout(self):
+        if not hasattr(self, "split_grid"):
+            return
+        panel_ids = self._visible_split_panel_ids()
+        columns, rows = self._split_grid_shape(len(panel_ids))
+        if (panel_ids == self._laid_out_panel_ids
+                and columns == self.split_columns and rows == self.split_rows):
+            return
+        previous_columns = max(self.split_columns, self.split_grid.columnCount())
+        previous_rows = max(self.split_rows, self.split_grid.rowCount())
+        for column in range(previous_columns):
+            self.split_grid.setColumnStretch(column, 0)
+            self.split_grid.setColumnMinimumWidth(column, 0)
+        for row in range(previous_rows):
+            self.split_grid.setRowStretch(row, 0)
+            self.split_grid.setRowMinimumHeight(row, 0)
+        previous_panel_ids = set(self._laid_out_panel_ids)
+        while self.split_grid.count():
+            self.split_grid.takeAt(0)
+        for panel_id in previous_panel_ids.difference(panel_ids):
+            self.split_surfaces[panel_id].hide()
+        self.split_columns, self.split_rows = columns, rows
+        for position, panel_id in enumerate(panel_ids):
+            surface = self.split_surfaces[panel_id]
+            self.split_grid.addWidget(surface, position // columns, position % columns)
+            surface.show()
+        for column in range(columns):
+            self.split_grid.setColumnStretch(column, 1)
+        for row in range(rows):
+            self.split_grid.setRowStretch(row, 1)
+        margins = self.split_grid.contentsMargins()
+        spacing = self.split_grid.spacing()
+        self.split_widget.setMinimumSize(
+            columns * 340 + max(0, columns - 1) * spacing + margins.left() + margins.right(),
+            rows * 260 + max(0, rows - 1) * spacing + margins.top() + margins.bottom(),
+        )
+        self._laid_out_panel_ids = panel_ids
+
+    def _split_panel_at(self, global_position):
+        viewport = self.split_scroll.viewport()
+        if not viewport.rect().contains(viewport.mapFromGlobal(global_position)):
+            return None
+        point = self.split_widget.mapFromGlobal(global_position)
+        if not self.split_widget.rect().contains(point):
+            return None
+        candidates = []
+        for panel_id in self._laid_out_panel_ids:
+            surface = self.split_surfaces[panel_id]
+            rect = surface.geometry()
+            if rect.contains(point):
+                return panel_id
+            dx = max(rect.left() - point.x(), 0, point.x() - rect.right())
+            dy = max(rect.top() - point.y(), 0, point.y() - rect.bottom())
+            distance = dx * dx + dy * dy
+            candidates.append((distance, panel_id))
+        if not candidates:
+            return None
+        distance, panel_id = min(candidates)
+        spacing = self.split_grid.spacing()
+        return panel_id if distance <= (spacing + 4) ** 2 else None
+
+    def _show_split_drag_feedback(self, source_id, target_id):
+        self._split_source_feedback.hide()
+        self._split_target_feedback.hide()
+        if source_id in self.split_surfaces:
+            self._split_source_feedback.setGeometry(self.split_surfaces[source_id].geometry())
+            self._split_source_feedback.show()
+            self._split_source_feedback.raise_()
+        if target_id in self.split_surfaces and target_id != source_id:
+            self._split_target_feedback.setGeometry(self.split_surfaces[target_id].geometry())
+            self._split_target_feedback.show()
+            self._split_target_feedback.raise_()
+
+    def move_split_panel_to_slot(self, source_id, target_id):
+        if (source_id not in self.split_panel_order or target_id not in self.split_panel_order
+                or source_id == target_id):
+            return
+        order = self.split_panel_order.copy()
+        old_target_index = order.index(target_id)
+        old_source_index = order.index(source_id)
+        order.remove(source_id)
+        target_index = order.index(target_id) + int(old_source_index < old_target_index)
+        order.insert(target_index, source_id)
+        if order != self.split_panel_order:
+            self.split_panel_order = order
+            self.user_ordered_panels = True
+            self._refresh_ordered_presentations()
+
+    def _refresh_ordered_presentations(self, *, preserve_overlay_groups=True):
+        self.overlay_panel.configuration_indices = [self._configuration_index(config_id)
+                                                    for config_id in self.result_order_ids]
+        if (not preserve_overlay_groups
+                or not self.overlay_panel.reorder_groups(self.result_order_ids)):
+            self.overlay_panel.refresh(self)
+        for index, panel in enumerate(self.split_panels):
+            panel.configuration_indices = [index]
+            panel.refresh(self)
+        self._sync_split_layout()
+        self._rebuild_results_menu()
+        self._refresh_annotations(position_panels=False)
+
+    def reorder_result_at(self, source_id, visible_ids, insertion):
+        order = self.result_order_ids
+        if source_id not in order:
+            return
+        visible_ids = [config_id for config_id in visible_ids if config_id in order]
+        insertion = max(0, min(insertion, len(visible_ids)))
+        preceding = [config_id for config_id in visible_ids[:insertion] if config_id != source_id]
+        following = [config_id for config_id in visible_ids[insertion:] if config_id != source_id]
+        order.remove(source_id)
+        if following:
+            target_slot = order.index(following[0])
+        elif preceding:
+            target_slot = order.index(preceding[-1]) + 1
+        else:
+            target_slot = 0
+        order.insert(target_slot, source_id)
+        self._set_result_order(order, manual=True)
+
+    def reorder_result(self, source_id, target_id):
+        order = self.result_order_ids
+        if source_id not in order or target_id not in order or source_id == target_id:
+            return
+        order.remove(source_id)
+        order.insert(order.index(target_id), source_id)
+        self._set_result_order(order, manual=True)
+
+    def _set_result_order(self, result_order, *, manual):
+        if result_order == self.result_order_ids:
+            return
+        iterator = iter(result_order)
+        self.split_panel_order = ["result:" + next(iterator) if panel_id.startswith("result:") else panel_id
+                                  for panel_id in self.split_panel_order]
+        if manual:
+            self.user_ordered_panels = True
+        self._refresh_ordered_presentations(preserve_overlay_groups=manual)
+
+    def reorder_split_panel(self, source_id, target_id, *, after=False):
+        if source_id not in self.split_panel_order or target_id not in self.split_panel_order or source_id == target_id:
+            return
+        order = self.split_panel_order.copy()
+        order.remove(source_id)
+        target_index = order.index(target_id) + int(after)
+        order.insert(target_index, source_id)
+        if order != self.split_panel_order:
+            self.split_panel_order = order
+            self.user_ordered_panels = True
+            self._refresh_ordered_presentations()
+
+    def reorder_overlay_panel(self, source_id, target_id, *, after=False):
+        order = self.overlay_panel_order.copy()
+        if source_id not in order or target_id not in order or source_id == target_id:
+            return
+        order.remove(source_id)
+        order.insert(order.index(target_id) + int(after), source_id)
+        if order == self.overlay_panel_order:
+            return
+        sizes = splitter.sizes() if (splitter := self.views.widget(0)) is not None else []
+        self.overlay_panel_order = order
+        for index, panel_id in enumerate(order):
+            splitter.insertWidget(index, self.overlay_surfaces[panel_id])
+        if sizes:
+            splitter.setSizes(sizes)
+
+    def _apply_default_gt_order(self):
+        if self.user_ordered_panels:
+            return
+        result_ids = self.result_order_ids
+        sorted_ids = sorted(result_ids, key=lambda config_id: (config_id != self.reference_id,
+                                                                result_ids.index(config_id)))
+        if sorted_ids != result_ids:
+            self._set_result_order(sorted_ids, manual=False)
+
+    def _rebuild_results_menu(self):
+        self.results_menu.clear(); self.visibility_checks = [None] * len(self.configurations)
+        self.color_buttons = [None] * len(self.configurations)
+        for index in self.split_result_order:
+            config = self.configurations[index]
+            row = QWidget(); row_layout = QHBoxLayout(row); row_layout.setContentsMargins(6, 2, 8, 2)
+            check = QCheckBox(config["name"]); check.setChecked(self.overlay_view.configuration_visible[index])
+            check.toggled.connect(lambda value, i=index: self._set_configuration_visible(i, value))
+            swatch = QToolButton(); swatch.setFixedSize(20, 20); self._style_swatch(swatch, self.configuration_colors[index])
+            is_gt = config["id"] == self.reference_id
+            swatch.setEnabled(not is_gt)
+            swatch.setToolTip("GT color is fixed to #33FF33" if is_gt else "Choose candidate result color")
+            swatch.clicked.connect(lambda _=False, i=index: self._choose_color(i))
+            row_layout.addWidget(check, 1); row_layout.addWidget(swatch)
+            action = QWidgetAction(self.results_menu); action.setDefaultWidget(row); self.results_menu.addAction(action)
+            self.visibility_checks[index] = check; self.color_buttons[index] = swatch
+        self._update_results_button()
+
+    def set_annotation_mode(self, mode):
+        if mode not in ("off", "hovered", "key_joints", "worst5", "all"): raise ValueError(mode)
+        self.annotation_mode = mode
+        self._refresh_annotations()
+
+    def _set_annotation_content(self, content):
+        if content not in ("error", "name"):
+            raise ValueError(content)
+        if self.single_mode and content == "error":
+            raise ValueError("single-result annotations only support joint names")
+        self.annotation_content = content
+        self._refresh_annotations()
+
+    @staticmethod
+    def _menu_checkbox(menu, text, checked=False):
+        row = QWidget()
+        layout = QHBoxLayout(row)
+        layout.setContentsMargins(8, 2, 12, 2)
+        checkbox = QCheckBox(text)
+        checkbox.setChecked(checked)
+        layout.addWidget(checkbox)
+        action = QWidgetAction(menu)
+        action.setDefaultWidget(row)
+        menu.addAction(action)
+        return checkbox
+
+    def _update_results_button(self):
+        visible = sum(check.isChecked() for check in self.visibility_checks)
+        self.results_menu_button.setText(f"Visible ({visible}/{len(self.visibility_checks)})")
+        self.results_menu_button.setToolTip("Show or hide comparison results")
+
+    def _update_metrics_button(self):
+        self.metric_menu_button.setText("Error Types")
+        self.metric_menu_button.setToolTip("Select error types shown in the HUD")
+
+    def _update_confidence_button(self):
+        self.confidence_menu_button.setText("Confidence Display")
+
+    def _configuration_index(self, configuration_id):
+        return next(index for index, config in enumerate(self.configurations)
+                    if config["id"] == configuration_id)
+
+    def _hand_view_source_id(self):
+        return self.reference_id or self.configurations[0]["id"]
+
+    def _hand_view_for(self, configuration_id):
+        framing = self.hand_view_cache.get(configuration_id)
+        if framing is None:
+            index = self._configuration_index(configuration_id)
+            result = self.loaded_results[index].result
+            framing = whole_video_hand_framing(result.keypoints_3d, result.detected)
+            self.hand_view_cache[configuration_id] = (
+                tuple(float(value) for value in framing[0]), float(framing[1])
+            )
+        return self.hand_view_cache[configuration_id]
+
+    def _hand_space_for(self, configuration_id):
+        bounds = self.hand_space_cache.get(configuration_id)
+        if bounds is None:
+            index = self._configuration_index(configuration_id)
+            result = self.loaded_results[index].result
+            bounds = hand_space_bounds(result.keypoints_3d, result.detected, result.mano_vertices)
+            bounds.setflags(write=False)
+            self.hand_space_cache[configuration_id] = bounds
+        return self.hand_space_cache[configuration_id]
+
+    def _camera_framing_for(self, configuration_id, space_mode, view=None):
+        if space_mode == "physical":
+            return self._hand_view_for(configuration_id)
+        if space_mode != "hand":
+            raise ValueError(f"unknown 3D space mode: {space_mode}")
+        workspace = workspace_geometry("hand", self._hand_space_for(configuration_id))
+        view = view or self._camera_source()
+        aspect = (view.width() / view.height() if view.height() > 0
+                  else DEFAULT_WORKSPACE_ASPECT)
+        return workspace_camera_framing(workspace, view.opts["fov"], aspect)
+
+    def _workspace_views(self):
+        views = [self.overlay_view, *self.split_views]
+        views.extend(view for _window, _source, detached in self._detached_windows for view in detached)
+        return views
+
+    def _all_detached_views(self):
+        return [view for workspace in self._detached_windows for view in workspace.views]
+
+    def _apply_workspace(self):
+        bounds = self._hand_space_for(self._hand_view_source_id()) if self.space_mode == "hand" else None
+        for view in self._workspace_views():
+            view.set_workspace(self.space_mode, bounds)
+
+    def _refocus_selected_gt(self):
+        configuration_id = self._hand_view_source_id()
+        source = self._view_for_configuration(configuration_id)
+        views = self._workspace_views()
+        active_pose = self._copy_camera_params(source)
+        for mode in ("physical", "hand"):
+            stored_pose = self._camera_states[mode]
+            if stored_pose is None:
+                stored_pose = active_pose
+            else:
+                stored_pose = dict(stored_pose)
+            target, distance = self._camera_framing_for(configuration_id, mode, source)
+            stored_pose["center"] = pg.Vector(*target)
+            stored_pose["distance"] = distance
+            self._camera_states[mode] = stored_pose
+
+        for view in views:
+            view_states = getattr(view, "_space_camera_states", {})
+            for mode in ("physical", "hand"):
+                pose = (self._copy_camera_params(source) if self._camera_linked
+                        else dict(view_states.get(mode, self._copy_camera_params(view))))
+                target, distance = self._camera_framing_for(configuration_id, mode, view)
+                pose["center"] = pg.Vector(*target)
+                pose["distance"] = distance
+                view_states[mode] = pose
+            view._space_camera_states = view_states
+            view.setCameraParams(**view_states[self.space_mode])
+        if self._camera_linked:
+            self._sync_camera(source, force=True)
+
+    @staticmethod
+    def _copy_camera_params(view):
+        params = dict(view.cameraParams())
+        params["center"] = pg.Vector(*tuple(params["center"]))
+        return params
+
+    def _camera_source(self):
+        return self.overlay_view if self.mode == "overlay" else self.split_views[0]
+
+    def _view_for_configuration(self, configuration_id):
+        panel_id = f"result:{configuration_id}"
+        try:
+            owner = self._workspace_model.owner(panel_id)
+        except ValueError:
+            owner = None
+        if owner is not None and owner.host == "detached":
+            workspace = next((item for item in self._detached_windows
+                              if item.group_id == owner.group_id), None)
+            if workspace is not None and workspace.views:
+                return workspace.views[0]
+        index = self._configuration_index(configuration_id)
+        if owner is not None and owner.host == "main" and self.mode == "split":
+            return self.split_views[index]
+        if panel_id in self._main_workspace_members():
+            return self.overlay_view
+        return self._camera_source()
+
+    def _camera_interacted(self, source):
+        self._sync_camera(source)
+
+    def set_camera_linked(self, linked):
+        linked = bool(linked)
+        if linked == self._camera_linked:
+            return
+        self._camera_linked = linked
+        if linked:
+            source = self._view_for_configuration(self.reference_id or self.configurations[0]["id"])
+            self._sync_camera(source, force=True)
+        else:
+            self._camera_states[self.space_mode] = self._copy_camera_params(
+                self._view_for_configuration(self.reference_id or self.configurations[0]["id"]))
+
+    def _set_space_mode_from_switch(self, hand_enabled):
+        self.set_space_mode("hand" if hand_enabled else "physical")
+
+    def set_space_mode(self, mode):
+        if mode not in {"physical", "hand"}:
+            raise ValueError(f"unknown 3D space mode: {mode}")
+        if mode == self.space_mode:
+            return
+        previous_mode = self.space_mode
+        source = self._view_for_configuration(self.reference_id or self.configurations[0]["id"])
+        current_pose = self._copy_camera_params(source)
+        self._camera_states[previous_mode] = current_pose
+        views = self._workspace_views()
+        for view in views:
+            view_states = getattr(view, "_space_camera_states", {})
+            view_states[previous_mode] = self._copy_camera_params(view)
+            view._space_camera_states = view_states
+        self.space_mode = mode
+        self.space_mode_switch.setChecked(mode == "hand")
+        label = "Hand" if mode == "hand" else "Physical"
+        self.space_mode_switch.setToolTip(f"Space: {label}")
+        self._apply_workspace()
+        source = self._view_for_configuration(self.reference_id or self.configurations[0]["id"])
+        shared_pose = self._camera_states[mode]
+        for view in views:
+            view_states = getattr(view, "_space_camera_states", {})
+            saved_pose = shared_pose if self._camera_linked else view_states.get(mode)
+            pose = dict(saved_pose) if saved_pose is not None else self._copy_camera_params(view)
+            if saved_pose is None:
+                target, distance = self._camera_framing_for(self._hand_view_source_id(), mode, view)
+                pose["center"] = pg.Vector(*target)
+                pose["distance"] = distance
+            view.setCameraParams(**pose)
+            view_states[mode] = self._copy_camera_params(view)
+            view._space_camera_states = view_states
+        self._camera_states[mode] = self._copy_camera_params(source)
+        self._sync_camera(source)
+
+    def _set_scale_labels(self, visible):
+        self.labels_switch.setToolTip(f"Scale labels: {'On' if visible else 'Off'}")
+        for view in self._workspace_views():
+            view.set_labels_visible(visible)
+
+    def _rebuild_metrics_menu(self):
+        self.metric_menu.clear()
+        self.metric_checks.clear()
+        categories = {}
+        available_ids = {definition.metric_id for definition in self.metric_definitions
+                         if definition.status.value == "READY" and self._metric_has_data(definition.metric_id)}
+        self.selected_metric_ids.intersection_update(available_ids)
+        for definition in self.metric_definitions:
+            if definition.metric_id not in available_ids:
+                continue
+            category = categories.get(definition.category)
+            if category is None:
+                category_label = "GT Differences" if definition.category == "Reference Accuracy" else definition.category
+                category = self.metric_menu.addMenu(category_label)
+                categories[definition.category] = category
+            check = QCheckBox(definition.name)
+            check.setChecked(definition.metric_id in self.selected_metric_ids)
+            check.toggled.connect(lambda value, key=definition.metric_id: self._set_metric_selected(key, value))
+            action = QWidgetAction(category)
+            action.setDefaultWidget(check)
+            category.addAction(action)
+            self.metric_checks[definition.metric_id] = check
+
+    def _default_reference_id(self):
+        checkerboards = [c for c in self.configurations
+                         if c.get("calibration_model_id") == "checkerboard_reference"]
+        if len(checkerboards) == 1:
+            return checkerboards[0]["id"]
+        explicit = self.session.get("reference_configuration_id")
+        if any(c["id"] == explicit for c in self.configurations):
+            return explicit
+        self._reference_fallback = True
+        return self.configurations[0]["id"]
+
+    def _metric_has_data(self, metric_id):
+        if self.single_mode:
+            return False
+        if metric_id not in ("translation_error", "translation_z_error", "translation_xy_error", "mpvpe", "pa_mpvpe"):
+            return True
+        reference = self.loaded_results[next(i for i, c in enumerate(self.configurations)
+                                              if c["id"] == self.reference_id)].result
+        for config, loaded in zip(self.configurations, self.loaded_results):
+            if config["id"] == self.reference_id:
+                continue
+            candidate = loaded.result
+            if metric_id.startswith("translation_") and reference.camera_translation is not None and candidate.camera_translation is not None:
+                if reference.camera_translation.shape == candidate.camera_translation.shape:
+                    return True
+            if metric_id in ("mpvpe", "pa_mpvpe") and reference.mano_vertices is not None and candidate.mano_vertices is not None:
+                if reference.mano_faces is not None and np.array_equal(reference.mano_faces, candidate.mano_faces):
+                    return True
+        return False
+
+    @staticmethod
+    def _style_swatch(button, color):
+        rgb = tuple(round(channel * 255) for channel in color)
+        button.setStyleSheet(f"QToolButton {{ background-color: rgb{rgb}; border: 1px solid palette(mid); }}")
+        button.setToolTip("Choose candidate result color")
+
+    def _choose_color(self, index):
+        if self.configurations[index]["id"] == self.reference_id:
+            return
+        from PySide6.QtGui import QColor
+        current = QColor(*(round(channel * 255) for channel in self.candidate_colors[index]))
+        chosen = QColorDialog.getColor(current, self, "Result color")
+        if not chosen.isValid():
+            return
+        self._apply_configuration_color(index, (chosen.redF(), chosen.greenF(), chosen.blueF()))
+
+    def _apply_configuration_color(self, index, color):
+        if self.configurations[index]["id"] == self.reference_id:
+            return
+        self.candidate_colors[index] = tuple(color)
+        self._refresh_effective_colors()
+
+    def _refresh_effective_colors(self, *, render=True, refresh_panels=True):
+        self.configuration_colors[:] = self.candidate_colors
+        if self.reference_id is not None:
+            self.configuration_colors[self._configuration_index(self.reference_id)] = (0x33 / 255, 1.0, 0x33 / 255)
+        self.overlay_view.configuration_colors[:] = self.configuration_colors
+        for index, (view, color) in enumerate(zip(self.split_views, self.configuration_colors)):
+            view.configuration_color = color
+            view.hand_colors = (color, color)
+            view.set_frame(self.slider.value())
+            swatch = self.color_buttons[index]
+            self._style_swatch(swatch, color)
+            is_gt = self.configurations[index]["id"] == self.reference_id
+            swatch.setEnabled(not is_gt)
+            swatch.setToolTip("GT color is fixed to #33FF33" if is_gt else "Choose candidate result color")
+        self.overlay_view.set_frame(self.slider.value())
+        for workspace in self._detached_windows:
+            for view in workspace.views:
+                if isinstance(view, _OverlayComparisonView):
+                    view.configuration_colors[:] = self.configuration_colors
+                    view.reference_index = self._configuration_index(self.reference_id) if self.reference_id else 0
+                else:
+                    index = self._configuration_index(view.configuration_id)
+                    color = self.configuration_colors[index]
+                    view.configuration_color = color
+                    view.hand_colors = (color, color)
+                view.set_frame(self.slider.value())
+        if render:
+            self._render_active_frame()
+        if refresh_panels:
+            self._refresh_metric_panels()
+
+    def _reference_changed(self, _index):
+        if self.single_mode:
+            return
+        self.reference_id = self.reference_selector.currentData()
+        self._hand_view_for(self.reference_id)
+        if self.space_mode == "hand":
+            self._apply_workspace()
+        self._refocus_selected_gt()
+        self.reference_selector.setToolTip(self.reference_selector.currentText())
+        self.reference_label.setText("GT")
+        self._rebuild_metrics_menu()
+        self._refresh_effective_colors(render=False, refresh_panels=False)
+        self.error_candidate_selector.clear()
+        for config in self.configurations:
+            if config["id"] != self.reference_id:
+                self.error_candidate_selector.addItem(config["name"], config["id"])
+        self.selected_error_candidate_id = self.error_candidate_selector.currentData()
+        self.error_vectors_checkbox.setEnabled(bool(self.error_candidate_selector.count()))
+        self.error_candidate_selector.setEnabled(bool(self.error_candidate_selector.count()))
+        self.error_vectors_checkbox.setChecked(False)
+        if not self.error_candidate_selector.count():
+            self.error_vectors_checkbox.setChecked(False)
+        self._request_metrics_for_reference()
+        self._refresh_metric_panels()
+        self._apply_default_gt_order()
+        self.error_vectors_button.setText("Error vectors: Off")
+        self._rebuild_error_vector_menu()
+
+    def _rebuild_error_vector_menu(self):
+        self.error_vectors_menu.clear(); self.error_vector_actions.clear()
+        self.error_vectors_group = QActionGroup(self); self.error_vectors_group.setExclusive(True)
+        self.error_vectors_off = QAction("Off", self); self.error_vectors_off.setCheckable(True)
+        self.error_vectors_off.setChecked(True); self.error_vectors_off.triggered.connect(lambda: self._set_error_vectors(False))
+        self.error_vectors_group.addAction(self.error_vectors_off); self.error_vectors_menu.addAction(self.error_vectors_off)
+        for config in self.configurations:
+            if config["id"] == self.reference_id: continue
+            action = QAction(config["name"], self); action.setCheckable(True)
+            action.triggered.connect(lambda checked, cid=config["id"]: self._select_error_candidate(cid) if checked else None)
+            self.error_vectors_group.addAction(action); self.error_vectors_menu.addAction(action)
+            self.error_vector_actions[config["id"]] = action
+
+    def _compute_metrics(self):
+        if self.single_mode:
+            self._metric_cache = {}
+            return
+        reference_index = next(i for i, config in enumerate(self.configurations) if config["id"] == self.reference_id)
+        reference = self.loaded_results[reference_index].result
+        cache = {}
+        for index, loaded in enumerate(self.loaded_results):
+            if index != reference_index:
+                candidate_id = self.configurations[index]["id"]
+                pair_key = (self.reference_id, candidate_id)
+                if pair_key not in self._metric_pair_cache:
+                    self._metric_pair_cache[pair_key] = {
+                        (row.frame_index, row.hand): row
+                        for row in compare_results(reference, loaded.result)
+                    }
+                cache[candidate_id] = self._metric_pair_cache[pair_key]
+        self._metric_cache = cache
+
+    def _request_metrics_for_reference(self):
+        self._metric_generation += 1
+        generation = self._metric_generation
+        for old_generation, old_job in list(self._metric_jobs.items()):
+            if old_generation != generation and self._metric_thread_pool.tryTake(old_job):
+                self._metric_jobs.pop(old_generation, None)
+        reference_index = self._configuration_index(self.reference_id)
+        reference = self.loaded_results[reference_index].result
+        missing = []
+        self._metric_cache = {}
+        for index, loaded in enumerate(self.loaded_results):
+            if index == reference_index:
+                continue
+            candidate_id = self.configurations[index]["id"]
+            pair_key = (self.reference_id, candidate_id)
+            cached = self._metric_pair_cache.get(pair_key)
+            if cached is None:
+                missing.append((candidate_id, loaded.result))
+            else:
+                self._metric_cache[candidate_id] = cached
+        if not missing:
+            self.metric_status.clear()
+            self.export_csv_button.setEnabled(True)
+            self.export_json_button.setEnabled(True)
+            return
+        if sum(loaded.frame_count for index, loaded in enumerate(self.loaded_results)
+               if index != reference_index) <= 200:
+            computed = {}
+            try:
+                for candidate_id, candidate in missing:
+                    computed[(self.reference_id, candidate_id)] = {
+                        (row.frame_index, row.hand): row
+                        for row in compare_results(reference, candidate)
+                    }
+            except Exception as exc:
+                self.metric_status.setText(f"Metric calculation failed: {exc}")
+                self.export_csv_button.setEnabled(False)
+                self.export_json_button.setEnabled(False)
+                return
+            self._metric_pair_cache.update(computed)
+            for candidate_id, _candidate in missing:
+                self._metric_cache[candidate_id] = self._metric_pair_cache[(self.reference_id, candidate_id)]
+            self.metric_status.clear()
+            self.export_csv_button.setEnabled(True)
+            self.export_json_button.setEnabled(True)
+            return
+        self._metric_cache = {}
+        self.metric_status.setText("Updating comparison metrics…")
+        self.export_csv_button.setEnabled(False)
+        self.export_json_button.setEnabled(False)
+        job = _MetricJob(generation, self.reference_id, reference, missing)
+        job.signals.completed.connect(self._metric_job_completed)
+        self._metric_jobs[generation] = job
+        self._metric_thread_pool.start(job)
+
+    def _metric_job_completed(self, generation, reference_id, computed, error):
+        self._metric_jobs.pop(generation, None)
+        self._metric_pair_cache.update(computed)
+        if generation != self._metric_generation or reference_id != self.reference_id:
+            return
+        if error is not None:
+            self._metric_cache = {}
+            self.metric_status.setText(f"Metric calculation failed: {error}")
+            self.export_csv_button.setEnabled(False)
+            self.export_json_button.setEnabled(False)
+        else:
+            self._metric_cache = {
+                candidate_id: self._metric_pair_cache[(reference_id, candidate_id)]
+                for candidate_id in (config["id"] for config in self.configurations)
+                if candidate_id != reference_id
+            }
+            self.metric_status.clear()
+            self.export_csv_button.setEnabled(True)
+            self.export_json_button.setEnabled(True)
+        self._refresh_metric_panels()
+
+    def _set_metric_selected(self, metric_id, selected):
+        if selected:
+            self.selected_metric_ids.add(metric_id)
+        else:
+            self.selected_metric_ids.discard(metric_id)
+        self._refresh_metric_panels()
+
+    def _refresh_metric_panels(self, *_):
+        self._update_metrics_button()
+        self._update_confidence_button()
+        self.overlay_panel.refresh(self)
+        for panel in self.split_panels:
+            panel.refresh(self)
+        for workspace in self._detached_windows:
+            if workspace.panel is not None:
+                workspace.panel.refresh(self)
+                workspace.panel.update_values(self)
+        self._refresh_annotations()
+
+    def _confidence_opacity_changed(self, enabled):
+        self._update_confidence_button()
+        for view in self._workspace_views():
+            view.confidence_opacity_enabled = enabled
+            view.set_frame(self.slider.value())
+        self._render_active_frame()
+
+    def _set_error_vectors(self, enabled):
+        if self.single_mode:
+            return
+        candidate_ids = {config["id"] for config in self.configurations if config["id"] != self.reference_id}
+        if self.selected_error_candidate_id not in candidate_ids:
+            self.selected_error_candidate_id = next(iter(candidate_ids), None)
+        enabled = bool(enabled and self.selected_error_candidate_id is not None)
+        if self.error_vectors_checkbox.isChecked() != enabled:
+            blocker = QSignalBlocker(self.error_vectors_checkbox)
+            self.error_vectors_checkbox.setChecked(enabled)
+            del blocker
+        self.error_candidate_selector.hide()
+        self.error_vectors_checkbox.setEnabled(bool(candidate_ids))
+        self.overlay_view.error_vectors_enabled = enabled
+        self.overlay_view.reference_index = next((i for i, config in enumerate(self.configurations)
+                                                  if config["id"] == self.reference_id), 0)
+        self.overlay_view.error_candidate = next((i for i, c in enumerate(self.configurations)
+                                                   if c["id"] == self.selected_error_candidate_id), -1)
+        self.error_vectors_off.setChecked(not enabled)
+        for candidate_id, action in self.error_vector_actions.items():
+            action.setChecked(enabled and candidate_id == self.selected_error_candidate_id)
+        if enabled and self.mode == "overlay":
+            self.overlay_view.set_frame(self.slider.value())
+        if not enabled:
+            for item in self.overlay_view.error_items:
+                item.setVisible(False)
+            self.error_vectors_button.setText("Vectors: Off")
+            self.error_vectors_button.setToolTip("Show selected GT versus candidate error vectors")
+        else:
+            name = next(config["name"] for config in self.configurations
+                        if config["id"] == self.selected_error_candidate_id)
+            self.error_vectors_button.setText(f"Vectors: {name}")
+            self.error_vectors_button.setToolTip(f"Show selected GT versus {name} error vectors")
+
+    def _show_joint_table(self, candidate_id):
+        candidate_name = next(config["name"] for config in self.configurations if config["id"] == candidate_id)
+        dialog = QDialog(self)
+        dialog.setWindowTitle(f"Per-Joint Error - {candidate_name}")
+        layout = QVBoxLayout(dialog)
+        table = QTableWidget(21, 3, dialog)
+        table.setHorizontalHeaderLabels(["Joint", "Left (mm)", "Right (mm)"])
+        frame = int(self.loaded_results[0].result.frame_indices[self.slider.value()])
+        for index, name in enumerate(JOINT_NAMES):
+            table.setItem(index, 0, QTableWidgetItem(name))
+            for column, hand in enumerate(("left", "right"), 1):
+                pair = self._metric_cache.get(candidate_id, {}).get((frame, hand))
+                error = pair.joint_errors_mm[index] if pair is not None else np.nan
+                table.setItem(index, column, QTableWidgetItem(f"{error:.2f}" if np.isfinite(error) else "N/A"))
+        table.resizeColumnsToContents()
+        layout.addWidget(table)
+        dialog.resize(420, 560)
+        dialog.setAttribute(Qt.WidgetAttribute.WA_DeleteOnClose)
+        dialog.open()
+        return dialog
+
+    def _update_main_workspace(self):
+        members = self._main_workspace_members()
+        result_indices = [index for index, config in enumerate(self.configurations)
+                          if f"result:{config['id']}" in members]
+        self.overlay_view.set_member_configuration_ids(result_indices)
+        self.overlay_panel.configuration_indices = result_indices
+        self.overlay_panel.refresh(self)
+        self.overlay_surfaces[SOURCE_PANEL_ID].setVisible(SOURCE_PANEL_ID in members)
+        self.overlay_surfaces["overlay-3d"].setVisible(bool(result_indices))
+        self._sync_split_layout()
+        self._render_active_frame()
+        has_visible_main_panel = (SOURCE_PANEL_ID in members or any(
+            self.visibility_checks[index].isChecked() for index in result_indices))
+        self.reattach_all_button.setEnabled(bool(self._detached_windows))
+        self.detach_source_button.setEnabled(SOURCE_PANEL_ID in members)
+        if has_visible_main_panel:
+            self.show()
+        else:
+            self.hide()
+
+    def _camera_pose_for_new_view(self):
+        return self._copy_camera_params(self._camera_source())
+
+    def _camera_snapshot_for_panel(self, panel_id):
+        owner = self._workspace_model.owner(panel_id)
+        if owner.host == "detached":
+            workspace = next((item for item in self._detached_windows
+                              if item.group_id == owner.group_id), None)
+            view = workspace.views[0] if workspace and workspace.views else self._camera_source()
+        else:
+            view = self._camera_source()
+            if panel_id.startswith("result:") and self.mode == "split":
+                view = self.split_views[self._configuration_index(panel_id.removeprefix("result:"))]
+        states = getattr(view, "_space_camera_states", {})
+        copied_states = {key: self._copy_camera_params_value(value) for key, value in states.items()}
+        return self._copy_camera_params(view), copied_states
+
+    @staticmethod
+    def _copy_camera_params_value(params):
+        copied = dict(params)
+        if "center" in copied:
+            copied["center"] = pg.Vector(*tuple(copied["center"]))
+        return copied
+
+    def _restore_group_cameras_to_main(self, workspace):
+        if not workspace.views:
+            return
+        pose = self._copy_camera_params(workspace.views[0])
+        states = getattr(workspace.views[0], "_space_camera_states", {})
+        group = self._workspace_model.group(workspace.group_id)
+        for panel_id in group.result_panel_ids:
+            index = self._configuration_index(panel_id.removeprefix("result:"))
+            split_view = self.split_views[index]
+            split_view.setCameraParams(**pose)
+            split_view._space_camera_states = {
+                key: self._copy_camera_params_value(value) for key, value in states.items()}
+            if panel_id == f"result:{self.reference_id or self.configurations[0]['id']}":
+                self.overlay_view.setCameraParams(**pose)
+                self.overlay_view._space_camera_states = {
+                    key: self._copy_camera_params_value(value) for key, value in states.items()}
+
+    def _create_detached_workspace(self, group_id, *, position=None, size=None,
+                                   camera_pose=None, camera_states=None):
+        group = self._workspace_model.group(group_id)
+        result_indices = [self._configuration_index(panel_id.removeprefix("result:"))
+                          for panel_id in group.result_panel_ids]
+        title_names = [self.configurations[index]["name"] for index in result_indices]
+        title = "Source Media" if not title_names else " + ".join(title_names)
+        window = _WorkspaceWindow(self, group_id, f"CalibFreeHands - {title}")
+        area = _WorkspaceDropArea(self, group_id)
+        area.setObjectName("workspace-drop-area")
+        layout = QVBoxLayout(area)
+        layout.setContentsMargins(6, 6, 6, 6)
+        layout.setSpacing(5)
+
+        header = QWidget(area)
+        header_layout = QHBoxLayout(header)
+        header_layout.setContentsMargins(0, 0, 0, 0)
+        grip = _WorkspaceDragGrip(group_id, title, header)
+        header_layout.addWidget(grip)
+        identity = QLabel(title, header)
+        identity.setStyleSheet("font-weight: 600")
+        header_layout.addWidget(identity, 1)
+        if SOURCE_PANEL_ID in group.members:
+            header_layout.addWidget(QLabel("Shared Viewer controls", header))
+            if result_indices:
+                separate_source = QToolButton(header)
+                separate_source.setText("Separate Source")
+                separate_source.setToolTip("Move Source Media and shared controls into its own window")
+                separate_source.clicked.connect(
+                    lambda _=False, current_group=group_id: self.extract_source_from_workspace(current_group))
+                header_layout.addWidget(separate_source)
+        layout.addWidget(header)
+
+        source_canvas = None
+        if SOURCE_PANEL_ID in group.members:
+            source_canvas = _OverlayCanvas(self.loaded_results[0])
+            source_canvas.set_frame(self.slider.value(), self._presented_source_image)
+            source_canvas.show_joints = self.source_overlay.show_joints
+            source_canvas.show_bones = self.source_overlay.show_bones
+            source_canvas.show_left = self.source_overlay.show_left
+            source_canvas.show_right = self.source_overlay.show_right
+            self.chrome.setParent(area)
+            self.chrome.show()
+            layout.addWidget(self.chrome)
+
+        views = []
+        panel = None
+        result_view = None
+        if result_indices:
+            if len(result_indices) == 1:
+                index = result_indices[0]
+                result_view = _LinkedResultView(
+                    self.loaded_results[index], self.configuration_colors[index], self._camera_interacted)
+                result_view.configuration_id = self.configurations[index]["id"]
+            else:
+                result_view = _OverlayComparisonView(self.loaded_results, self.configuration_colors)
+                result_view.set_member_configuration_ids(result_indices)
+            result_view.setMinimumSize(340, 260)
+            result_view.setCameraParams(**(camera_pose or self._camera_pose_for_new_view()))
+            if camera_states is not None:
+                result_view._space_camera_states = {
+                    key: self._copy_camera_params_value(value) for key, value in camera_states.items()
+                }
+            result_view.set_workspace(
+                self.space_mode,
+                self._hand_space_for(self._hand_view_source_id()) if self.space_mode == "hand" else None)
+            result_view.set_labels_visible(self.labels_switch.isChecked())
+            result_view.set_frame(self.slider.value())
+            if isinstance(result_view, _OverlayComparisonView):
+                result_view.configuration_visible = [check.isChecked() for check in self.visibility_checks]
+            else:
+                result_view.setVisible(self.visibility_checks[result_indices[0]].isChecked())
+            for attribute in ("show_joints", "show_bones", "show_left", "show_right", "show_grid", "show_axis"):
+                setattr(result_view, attribute, getattr(self.overlay_view, attribute))
+            result_view.show_mesh = self.mesh_checkbox.isChecked()
+            result_view.mesh_opacity = self.mesh_opacity_slider.value() / 100
+            result_view.confidence_opacity_enabled = self.confidence_opacity_checkbox.isChecked()
+            result_view.camera_changed = self._camera_interacted
+            panel = _ViewportPanel(result_view, result_indices)
+            panel.is_detached_group = True
+            panel.workspace_group_id = group_id
+            result_view.hud = panel
+            panel.refresh(self)
+            panel.update_values(self)
+            views.append(result_view)
+
+        if source_canvas is not None and result_view is not None:
+            composition = QSplitter(Qt.Orientation.Horizontal, area)
+            composition.addWidget(source_canvas)
+            composition.addWidget(result_view)
+            composition.setStretchFactor(0, 1)
+            composition.setStretchFactor(1, 2)
+            composition.setSizes([500, 1000])
+            layout.addWidget(composition, 1)
+        elif source_canvas is not None:
+            layout.addWidget(source_canvas, 1)
+        elif result_view is not None:
+            layout.addWidget(result_view, 1)
+        else:
+            layout.addWidget(QLabel("No visible results", area), 1)
+
+        window.setCentralWidget(area)
+        workspace = _DetachedWorkspace(group_id, window, source_canvas, views, panel, group.members)
+        self._detached_windows.append(workspace)
+        window.resize(size or QSize(900, 650))
+        if position is not None:
+            window.move(position)
+        window.show()
+        return workspace
+
+    def _dispose_detached_workspace(self, workspace):
+        workspace.window._closing_for_transition = True
+        if workspace.source_canvas is not None and self.chrome.parentWidget() is not self:
+            self.chrome.setParent(self)
+            self._root_layout.addWidget(self.chrome, 0, 0, Qt.AlignmentFlag.AlignBottom)
+        workspace.window.close()
+        workspace.window.deleteLater()
+        if workspace in self._detached_windows:
+            self._detached_windows.remove(workspace)
+
+    def _set_workspace_drop_feedback(self, group_id, active):
+        self._workspace_drop_group_id = group_id if active else None
+        for workspace in self._detached_windows:
+            if workspace.group_id == group_id:
+                workspace.window.centralWidget().setStyleSheet(
+                    "QWidget#workspace-drop-area { border: 3px solid palette(highlight); }" if active else "")
+
+    def _show_workspace_drop_feedback_at(self, global_position, source_group_id):
+        target_group_id = None
+        widget = QApplication.widgetAt(global_position)
+        if widget is not None:
+            target_window = widget.window()
+            target_group_id = next((workspace.group_id for workspace in self._detached_windows
+                                   if workspace.window is target_window), None)
+        if target_group_id == source_group_id:
+            target_group_id = None
+        self._workspace_drop_group_id = target_group_id
+        for workspace in self._detached_windows:
+            workspace.window.centralWidget().setStyleSheet(
+                "QWidget#workspace-drop-area { border: 3px solid palette(highlight); }"
+                if workspace.group_id == target_group_id else "")
+        return target_group_id
+
+    def _clear_workspace_drop_feedback(self):
+        self._workspace_drop_group_id = None
+        for workspace in self._detached_windows:
+            workspace.window.centralWidget().setStyleSheet("")
+
+    def detach_source_media(self):
+        if SOURCE_PANEL_ID not in self._main_workspace_members():
+            return
+        group_id = self._workspace_model.detach_panel(SOURCE_PANEL_ID)
+        self._update_main_workspace()
+        self._create_detached_workspace(group_id)
+        self.reattach_all_button.setEnabled(True)
+
+    def detach_result(self, configuration_id):
+        panel_id = f"result:{configuration_id}"
+        camera_pose, camera_states = self._camera_snapshot_for_panel(panel_id)
+        group_id = self._workspace_model.detach_panel(panel_id)
+        self._update_main_workspace()
+        self._create_detached_workspace(group_id, camera_pose=camera_pose, camera_states=camera_states)
+        self.reattach_all_button.setEnabled(True)
+
+    def reorder_workspace_result_at(self, configuration_id, group_id, visible_ids, insertion):
+        group = self._workspace_model.group(group_id)
+        ordered = [panel_id for panel_id in group.result_panel_ids if panel_id in visible_ids]
+        source_id = f"result:{configuration_id}"
+        if source_id not in ordered:
+            return
+        insertion = max(0, min(int(insertion), len(ordered)))
+        ordered.remove(source_id)
+        ordered.insert(insertion, source_id)
+        visible_set = set(visible_ids)
+        merged_order = []
+        visible_iter = iter(ordered)
+        for panel_id in group.result_panel_ids:
+            merged_order.append(next(visible_iter) if panel_id in visible_set else panel_id)
+        self._workspace_model.reorder_results(group_id, merged_order)
+        self._refresh_metric_panels()
+
+    def drop_result_from_workspace(self, configuration_id, source_group_id, global_position):
+        panel_id = f"result:{configuration_id}"
+        source_group = self._workspace_model.group(source_group_id)
+        target_group_id = None
+        widget = QApplication.widgetAt(global_position)
+        if widget is not None:
+            target_window = widget.window()
+            target_group_id = next((workspace.group_id for workspace in self._detached_windows
+                                   if workspace.window is target_window), None)
+            if target_group_id is None and (target_window is self or self.isAncestorOf(target_window)):
+                main = self._main_workspace_group()
+                target_group_id = main.group_id if main is not None else None
+        if target_group_id == source_group_id:
+            return
+
+        if target_group_id is not None:
+            old_workspace = next((item for item in self._detached_windows
+                                  if item.group_id == source_group_id), None)
+            old_position = old_workspace.window.pos() if old_workspace is not None else None
+            old_size = old_workspace.window.size() if old_workspace is not None else None
+            old_pose = (self._copy_camera_params(old_workspace.views[0])
+                        if old_workspace and old_workspace.views else None)
+            old_states = (getattr(old_workspace.views[0], "_space_camera_states", {})
+                          if old_workspace and old_workspace.views else None)
+            if source_group.host == "main":
+                moving_group = self._workspace_model.detach_panel(panel_id)
+                self._update_main_workspace()
+            else:
+                moving_group = self._workspace_model.extract(panel_id, source_group_id)
+                if old_workspace is not None:
+                    self._dispose_detached_workspace(old_workspace)
+                self._update_main_workspace()
+                self._create_detached_workspace(source_group_id, position=old_position, size=old_size,
+                                                camera_pose=old_pose, camera_states=old_states)
+            self.merge_workspace_groups(moving_group, target_group_id)
+            return
+
+        if source_group.host == "main":
+            self.detach_result(configuration_id)
+        else:
+            old_workspace = next((item for item in self._detached_windows
+                                  if item.group_id == source_group_id), None)
+            position = old_workspace.window.pos() if old_workspace is not None else None
+            size = old_workspace.window.size() if old_workspace is not None else None
+            camera_pose = (self._copy_camera_params(old_workspace.views[0])
+                           if old_workspace and old_workspace.views else None)
+            camera_states = (getattr(old_workspace.views[0], "_space_camera_states", {})
+                             if old_workspace and old_workspace.views else None)
+            new_group_id = self._workspace_model.extract(panel_id, source_group_id)
+            if new_group_id == source_group_id:
+                return
+            if old_workspace is not None:
+                self._dispose_detached_workspace(old_workspace)
+            self._update_main_workspace()
+            self._create_detached_workspace(source_group_id, position=position, size=size,
+                                            camera_pose=camera_pose, camera_states=camera_states)
+            self._create_detached_workspace(new_group_id,
+                                            position=position + QPoint(36, 36) if position else None,
+                                            size=size, camera_pose=camera_pose, camera_states=camera_states)
+
+    def drop_split_panel(self, panel_id, global_position):
+        camera_pose, camera_states = self._camera_snapshot_for_panel(panel_id)
+        target_group = None
+        widget = QApplication.widgetAt(global_position)
+        if widget is not None:
+            target_window = widget.window()
+            target_group = next((workspace.group_id for workspace in self._detached_windows
+                                 if workspace.window is target_window), None)
+        if target_group is not None:
+            source_group = self._workspace_model.detach_panel(panel_id)
+            self._update_main_workspace()
+            self.merge_workspace_groups(source_group, target_group)
+            return
+        if self.rect().contains(self.mapFromGlobal(global_position)):
+            return
+        group_id = self._workspace_model.detach_panel(panel_id)
+        self._update_main_workspace()
+        self._create_detached_workspace(group_id, position=global_position + QPoint(16, 16),
+                                        camera_pose=camera_pose, camera_states=camera_states)
+        self.reattach_all_button.setEnabled(True)
+
+    def extract_result_from_workspace(self, configuration_id, group_id):
+        panel_id = f"result:{configuration_id}"
+        old_workspace = next((item for item in self._detached_windows
+                              if item.group_id == group_id), None)
+        camera_pose = self._copy_camera_params(old_workspace.views[0]) if old_workspace and old_workspace.views else None
+        camera_states = getattr(old_workspace.views[0], "_space_camera_states", {}) if old_workspace and old_workspace.views else None
+        new_group_id = self._workspace_model.extract(panel_id, group_id)
+        if new_group_id == group_id:
+            return group_id
+        position = old_workspace.window.pos() if old_workspace is not None else None
+        size = old_workspace.window.size() if old_workspace is not None else None
+        if old_workspace is not None:
+            self._dispose_detached_workspace(old_workspace)
+        self._update_main_workspace()
+        self._create_detached_workspace(group_id, position=position, size=size,
+                                        camera_pose=camera_pose, camera_states=camera_states)
+        self._create_detached_workspace(new_group_id, position=(position + QPoint(36, 36)) if position else None,
+                                        size=size, camera_pose=camera_pose, camera_states=camera_states)
+        return new_group_id
+
+    def extract_source_from_workspace(self, group_id):
+        group = self._workspace_model.group(group_id)
+        if SOURCE_PANEL_ID not in group.members or not group.result_panel_ids:
+            return group_id
+        old_workspace = next((item for item in self._detached_windows
+                              if item.group_id == group_id), None)
+        camera_pose = self._copy_camera_params(old_workspace.views[0]) if old_workspace and old_workspace.views else None
+        camera_states = getattr(old_workspace.views[0], "_space_camera_states", {}) if old_workspace and old_workspace.views else None
+        position = old_workspace.window.pos() if old_workspace is not None else None
+        size = old_workspace.window.size() if old_workspace is not None else None
+        source_group_id = self._workspace_model.extract(SOURCE_PANEL_ID, group_id)
+        if old_workspace is not None:
+            self._dispose_detached_workspace(old_workspace)
+        self._update_main_workspace()
+        self._create_detached_workspace(source_group_id, position=position, size=size)
+        self._create_detached_workspace(group_id,
+                                        position=position + QPoint(36, 36) if position else None,
+                                        size=size, camera_pose=camera_pose, camera_states=camera_states)
+        return source_group_id
+
+    def detach_all(self):
+        visible = [config["id"] for index, config in enumerate(self.configurations)
+                   if self.visibility_checks[index].isChecked()]
+        camera_snapshots = {
+            f"result:{configuration_id}": self._camera_snapshot_for_panel(f"result:{configuration_id}")
+            for configuration_id in visible
+        }
+        group_ids = self._workspace_model.detach_visible(visible)
+        self._update_main_workspace()
+        for index, group_id in enumerate(group_ids):
+            offset = QPoint(80 + index * 36, 80 + index * 32)
+            result_panel_ids = self._workspace_model.group(group_id).result_panel_ids
+            if result_panel_ids:
+                camera_pose, camera_states = camera_snapshots[result_panel_ids[0]]
+            else:
+                camera_pose, camera_states = None, None
+            self._create_detached_workspace(group_id, position=self.pos() + offset,
+                                            camera_pose=camera_pose, camera_states=camera_states)
+        self.reattach_all_button.setEnabled(True)
+
+    def reattach_workspace_group(self, group_id, *, closing_window=None):
+        workspace = next((item for item in self._detached_windows if item.group_id == group_id), None)
+        if workspace is not None:
+            self._restore_group_cameras_to_main(workspace)
+        try:
+            self._workspace_model.reattach(group_id)
+        except ValueError:
+            return
+        if workspace is not None:
+            if closing_window is not None:
+                workspace.window._closing_for_transition = True
+                if workspace.source_canvas is not None and self.chrome.parentWidget() is not self:
+                    self.chrome.setParent(self)
+                    self._root_layout.addWidget(self.chrome, 0, 0, Qt.AlignmentFlag.AlignBottom)
+                self._detached_windows.remove(workspace)
+                workspace.window.deleteLater()
+            else:
+                self._dispose_detached_workspace(workspace)
+        self._update_main_workspace()
+
+    def reattach_all(self):
+        if not self._detached_windows:
+            return
+        for workspace in tuple(self._detached_windows):
+            self._restore_group_cameras_to_main(workspace)
+        self._workspace_model.reattach_all()
+        for workspace in tuple(self._detached_windows):
+            self._dispose_detached_workspace(workspace)
+        self._update_main_workspace()
+
+    def merge_workspace_groups(self, source_group_id, target_group_id):
+        if source_group_id == target_group_id:
+            return
+        self._workspace_model.group(source_group_id)
+        self._workspace_model.group(target_group_id)
+        target_workspace = next((item for item in self._detached_windows
+                                 if item.group_id == target_group_id), None)
+        source_workspace = next((item for item in self._detached_windows
+                                 if item.group_id == source_group_id), None)
+        position = target_workspace.window.pos() if target_workspace is not None else None
+        size = target_workspace.window.size() if target_workspace is not None else None
+        camera_workspace = (target_workspace if target_workspace and target_workspace.views else
+                            source_workspace if source_workspace and source_workspace.views else None)
+        camera_pose = (self._copy_camera_params(camera_workspace.views[0])
+                       if camera_workspace else None)
+        camera_states = (getattr(camera_workspace.views[0], "_space_camera_states", {})
+                         if camera_workspace else None)
+        self._workspace_model.merge(source_group_id, target_group_id)
+        for workspace in tuple(self._detached_windows):
+            if workspace.group_id in {source_group_id, target_group_id}:
+                self._dispose_detached_workspace(workspace)
+        self._update_main_workspace()
+        merged = self._workspace_model.group(target_group_id)
+        if merged.host == "detached":
+            self._create_detached_workspace(target_group_id, position=position, size=size,
+                                            camera_pose=camera_pose, camera_states=camera_states)
+        self.reattach_all_button.setEnabled(bool(self._detached_windows))
+        return target_group_id
+
+    def dragEnterEvent(self, event):
+        if event.mimeData().hasFormat(_WorkspaceDragGrip.MIME_TYPE):
+            event.acceptProposedAction()
+            return
+        super().dragEnterEvent(event)
+
+    def dropEvent(self, event):
+        if event.mimeData().hasFormat(_WorkspaceDragGrip.MIME_TYPE):
+            source_group_id = bytes(event.mimeData().data(_WorkspaceDragGrip.MIME_TYPE)).decode("utf-8")
+            target = self._main_workspace_group()
+            if target is not None:
+                self.merge_workspace_groups(source_group_id, target.group_id)
+            else:
+                self.reattach_workspace_group(source_group_id)
+            event.acceptProposedAction()
+            return
+        super().dropEvent(event)
+
+    @staticmethod
+    def _sync_detached(views, source):
+        params = source.cameraParams()
+        for view in views:
+            if view is not source:
+                view.setCameraParams(**params)
+
+    def set_mode(self, mode):
+        if mode not in ("overlay", "split"):
+            raise ValueError(f"unknown comparison view mode: {mode}")
+        if mode != self.mode:
+            camera_source = self.overlay_view if self.mode == "overlay" else self.split_views[0]
+            self._sync_camera(camera_source)
+        self.mode = mode
+        self.views.setCurrentIndex(0 if mode == "overlay" else 1)
+        if mode == "split":
+            self._sync_split_layout()
+        self.mode_switch.setChecked(mode == "split")
+        self.mode_switch.setToolTip("View: Split" if mode == "split" else "View: Overlay")
+        self._render_active_frame()
+        self._refresh_metric_panels()
+        self._refresh_annotations()
+
+    def _set_mode_from_switch(self, value):
+        target = "split" if value else "overlay"
+        if target != self.mode:
+            self.set_mode(target)
+
+    def _set_configuration_visible(self, index, visible):
+        self.overlay_view.set_configuration_visible(index, visible)
+        config_id = self.configurations[index]["id"]
+        for workspace in self._detached_windows:
+            for view in workspace.views:
+                if isinstance(view, _OverlayComparisonView):
+                    view.set_configuration_visible(index, visible)
+                elif getattr(view, "configuration_id", None) == config_id:
+                    view.setVisible(bool(visible))
+        self.split_surfaces[f"result:{config_id}"].setVisible(
+            f"result:{config_id}" in self._main_workspace_members() and bool(visible))
+        if visible:
+            self._render_active_frame()
+        self._sync_split_layout()
+        self._update_results_button()
+        self._refresh_metric_panels()
+
+    def _set_geometry(self, attr, value):
+        source = self.source_overlay if self.mode == "overlay" else self.split_source_overlay
+        if hasattr(source, attr):
+            setattr(source, attr, value)
+        source.update()
+        for workspace in self._detached_windows:
+            if workspace.source_canvas is not None:
+                if hasattr(workspace.source_canvas, attr):
+                    setattr(workspace.source_canvas, attr, value)
+                workspace.source_canvas.update()
+        for view in self._workspace_views():
+            setattr(view, attr, value)
+            view._update_reference_visibility()
+        self._render_active_frame()
+
+    def _set_mesh(self, value):
+        self.mesh_opacity_slider.setEnabled(bool(value) and self.mesh_checkbox.isEnabled())
+        if value:
+            for check in (self.joint_checkbox, self.bone_checkbox):
+                check.setChecked(False)
+        for view in self._workspace_views():
+            view.show_mesh = value
+        self._render_active_frame()
+
+    def _set_joint(self, value):
+        if value and self.mesh_checkbox.isChecked():
+            self.mesh_checkbox.setChecked(False)
+        self._set_geometry("show_joints", value)
+
+    def _set_bone(self, value):
+        if value and self.mesh_checkbox.isChecked():
+            self.mesh_checkbox.setChecked(False)
+        self._set_geometry("show_bones", value)
+
+    def _set_opacity(self, value):
+        self.mesh_opacity_value.setText(f"{value}%")
+        for view in self._workspace_views():
+            view.mesh_opacity = value / 100
+        self._render_active_frame()
+
+    def _set_frame(self, frame):
+        frame = int(frame)
+        if frame == self._last_rendered_frame and frame == self._requested_frame:
+            return
+        self._requested_frame = frame
+        self.requested_frame = frame
+        if self.timer.isActive() and not self._clock_driven_update:
+            self.playback_clock.play(frame)
+        provider = self._source_provider()
+        if provider is not None:
+            source_index = self._source_index(frame, provider)
+            rgb = provider.cached_frame(source_index)
+            if rgb is None:
+                provider.frame(source_index)
+                if self._last_rendered_frame is not None and self.slider.value() != self._last_rendered_frame:
+                    blocker = QSignalBlocker(self.slider)
+                    self.slider.setValue(self._last_rendered_frame)
+                    del blocker
+                return
+        self._present_frame(frame, source_rgb=rgb if provider is not None else None)
+
+    def _source_provider(self):
+        provider = self.loaded_results[0].media_frames
+        return provider if isinstance(provider, MediaFrameProvider) else None
+
+    def _source_index(self, frame, provider):
+        if provider._is_image:
+            return 0
+        return int(self.loaded_results[0].result.frame_indices[frame])
+
+    def _watch_source_provider(self, provider):
+        provider.signals.frame_ready.connect(self._source_frame_ready)
+
+    def _source_frame_ready(self, source_index):
+        frame = self._requested_frame
+        provider = self._source_provider()
+        if frame is None or provider is None or self._source_index(frame, provider) != source_index:
+            return
+        rgb = provider.cached_frame(source_index)
+        if rgb is None:
+            return
+        self._present_frame(frame, source_rgb=rgb)
+
+    def _present_frame(self, frame, *, force=False, source_rgb=None):
+        if frame == self._last_rendered_frame and not force:
+            return
+        previous = self._last_rendered_frame
+        if self.slider.value() != frame:
+            blocker = QSignalBlocker(self.slider)
+            self.slider.setValue(frame)
+            del blocker
+        if source_rgb is not None:
+            self._presented_source_image = QImage(
+                source_rgb.data, source_rgb.shape[1], source_rgb.shape[0], source_rgb.strides[0],
+                QImage.Format.Format_RGB888).copy()
+        source_image = self._presented_source_image if not self._presented_source_image.isNull() else None
+        if self.mode == "overlay":
+            self.source_overlay.set_frame(frame, source_image)
+            self.overlay_view.set_frame(frame)
+        else:
+            self.split_source_overlay.set_frame(frame, source_image)
+            for index, view in enumerate(self.split_views):
+                if self.visibility_checks[index].isChecked():
+                    view.set_frame(frame)
+        for workspace in self._detached_windows:
+            if not workspace.window.isVisible():
+                continue
+            if workspace.source_canvas is not None:
+                workspace.source_canvas.set_frame(frame, source_image)
+            for view in workspace.views:
+                if not view.isHidden():
+                    view.set_frame(frame)
+            if workspace.panel is not None:
+                workspace.panel.update_values(self)
+        panels = [self.overlay_panel] if self.mode == "overlay" else self.split_panels
+        for panel in panels:
+            if (self.mode == "split" and not self.visibility_checks[panel.configuration_indices[0]].isChecked()):
+                continue
+            panel.update_values(self)
+        if self.annotation_mode != "off":
+            layers = [self.overlay_annotations] if self.mode == "overlay" else self.split_annotations
+            for layer in layers:
+                layer.update()
+        timestamp = self.loaded_results[0].result.timestamps[frame]
+        suffix = f" | {float(timestamp):.3f} s" if np.isfinite(timestamp) else ""
+        source = " | Source media missing" if self.loaded_results[0].source_status == "missing" else (" | Source media changed" if self.loaded_results[0].source_status == "changed" else "")
+        self.status.setText(f"Frame {frame + 1} / {self.loaded_results[0].frame_count}{suffix}{source}")
+        self._last_rendered_frame = frame
+        self.presented_frame = frame
+        if previous is not None and self.timer.isActive() and self._clock_driven_update:
+            self._stats_frames += 1
+
+    def _render_active_frame(self):
+        if self.presented_frame is not None:
+            self._present_frame(self.presented_frame, force=True)
+        else:
+            self._set_frame(self.slider.value())
+
+    def _sync_speed_controls(self):
+        index = PlaybackClock.SPEEDS.index(self.playback_clock.speed)
+        speed = PlaybackClock.SPEEDS[index]
+        self.speed_value_label.setText(f"{speed:.1f}×" if speed == 1.0 else f"{speed:g}×")
+        self.speed_down_button.setEnabled(index > 0)
+        self.speed_up_button.setEnabled(index < len(PlaybackClock.SPEEDS) - 1)
+
+    def _step_playback_speed(self, direction):
+        index = PlaybackClock.SPEEDS.index(self.playback_clock.speed)
+        target = min(max(index + int(direction), 0), len(PlaybackClock.SPEEDS) - 1)
+        self.playback_clock.set_speed(PlaybackClock.SPEEDS[target])
+        self._sync_speed_controls()
+
+    def _sync_play_icon(self):
+        playing = self.timer.isActive()
+        button = self.playback_buttons[1]
+        self.playback_icon_kinds[1] = "pause" if playing else "play"
+        button.setIcon(self._make_playback_icon(
+            self.playback_icon_kinds[1], self.palette().color(QPalette.ColorRole.ButtonText),
+            self.palette().color(QPalette.ColorGroup.Disabled, QPalette.ColorRole.ButtonText)))
+        button.setAccessibleName("Pause" if playing else "Play")
+        button.setToolTip("Pause" if playing else "Play")
+
+    @staticmethod
+    def _make_playback_icon(kind, foreground, disabled_foreground=None):
+        icon = QIcon()
+        colors = ((QIcon.Mode.Normal, foreground),
+                  (QIcon.Mode.Disabled, disabled_foreground or foreground))
+        for mode, color in colors:
+            pixmap = QPixmap(32, 32)
+            pixmap.fill(Qt.GlobalColor.transparent)
+            painter = QPainter(pixmap)
+            painter.setRenderHint(QPainter.RenderHint.Antialiasing)
+            painter.setPen(QPen(color, 2.5, Qt.PenStyle.SolidLine, Qt.PenCapStyle.RoundCap,
+                                Qt.PenJoinStyle.RoundJoin))
+            painter.setBrush(color)
+            if kind == "previous_frame":
+                painter.drawLine(20, 8, 11, 16)
+                painter.drawLine(11, 16, 20, 24)
+            elif kind == "next_frame":
+                painter.drawLine(12, 8, 21, 16)
+                painter.drawLine(21, 16, 12, 24)
+            elif kind == "play":
+                path = QPainterPath()
+                path.moveTo(11, 7); path.lineTo(24, 16); path.lineTo(11, 25); path.closeSubpath()
+                painter.drawPath(path)
+            elif kind == "pause":
+                painter.drawRoundedRect(QRectF(9, 7, 5, 18), 1.5, 1.5)
+                painter.drawRoundedRect(QRectF(18, 7, 5, 18), 1.5, 1.5)
+            painter.end()
+            icon.addPixmap(pixmap, mode, QIcon.State.Off)
+        return icon
+
+    def changeEvent(self, event):
+        super().changeEvent(event)
+        if event.type() in (QEvent.Type.PaletteChange, QEvent.Type.ApplicationPaletteChange,
+                            QEvent.Type.StyleChange) and hasattr(self, "playback_buttons"):
+            foreground = self.palette().color(QPalette.ColorRole.ButtonText)
+            disabled = self.palette().color(QPalette.ColorGroup.Disabled, QPalette.ColorRole.ButtonText)
+            for index, button in enumerate(self.playback_buttons):
+                button.setIcon(self._make_playback_icon(self.playback_icon_kinds[index], foreground, disabled))
+
+    def _set_performance_stats(self, enabled):
+        self.performance_stats_label.setVisible(enabled)
+        self._stats_started = monotonic()
+        self._stats_frames = 0
+        self._stats_skipped = 0
+        if enabled:
+            self.performance_stats_timer.start()
+            self._update_performance_stats()
+        else:
+            self.performance_stats_timer.stop()
+            self.performance_stats_label.clear()
+
+    def _update_performance_stats(self):
+        elapsed = max(1e-6, monotonic() - self._stats_started)
+        source_fps = 1.0 / self.playback_clock.frame_duration
+        self.performance_stats_label.setText(
+            f"Source {source_fps:.1f} fps · Frame updates {self._stats_frames / elapsed:.1f} fps · "
+            f"{self.playback_clock.speed:.2f}× · Skipped {self._stats_skipped}")
+        self._stats_started = monotonic()
+        self._stats_frames = 0
+
+    def _sync_camera(self, source, *, force=False):
+        if self._syncing_camera or (not self._camera_linked and not force):
+            return
+        self._syncing_camera = True
+        try:
+            params = source.cameraParams()
+            for view in self._workspace_views():
+                if view is not source:
+                    view.setCameraParams(**params)
+        finally:
+            self._syncing_camera = False
+        state = self._copy_camera_params(source)
+        self._camera_states[self.space_mode] = state
+        self._refresh_annotations()
+
+    def fit_all(self):
+        points = self.overlay_view._geometry(self.slider.value())
+        if not len(points):
+            return False
+        if self.mode == "overlay":
+            fitted = self.overlay_view.fit_camera_to_points(points)
+            if fitted:
+                self._sync_camera(self.overlay_view)
+            return fitted
+
+        visible_indices = [index for index, check in enumerate(self.visibility_checks) if check.isChecked()]
+        if not visible_indices:
+            return False
+        visible_views = [self.split_views[index] for index in visible_indices]
+        aspect = max((view.width() / view.height() for view in visible_views if view.height() > 0),
+                     default=4 / 3)
+        source = visible_views[0]
+        if not source.fit_camera_to_points(points, aspect=aspect):
+            return False
+        self._sync_camera(source)
+        return True
+
+    def hand_view(self):
+        target, distance = self._hand_view_for(self._hand_view_source_id())
+        source = self.overlay_view if self.mode == "overlay" else self.split_views[0]
+        source.apply_hand_view(target, distance)
+        self._sync_camera(source)
+        self._refresh_annotations()
+
+    def focus_gt(self):
+        self.hand_view()
+
+    def space_overview(self):
+        source = self.overlay_view if self.mode == "overlay" else self.split_views[0]
+        source.space_overview()
+        self._sync_camera(source)
+        self._refresh_annotations()
+
+    def metric_overview(self):
+        source = self.overlay_view if self.mode == "overlay" else self.split_views[0]
+        source.metric_overview()
+        self._sync_camera(source)
+        self._refresh_annotations()
+
+    def reset_camera(self):
+        self.hand_view()
+
+    def _apply_camera_preset(self, method):
+        if method in {"hand_view", "focus_gt"}:
+            self.hand_view()
+            return
+        if method in {"metric_overview", "space_overview"}:
+            self.space_overview()
+            return
+        if method == "fit_all":
+            self.fit_all()
+            return
+        if method == "reset_camera":
+            self.reset_camera()
+            return
+        views = [self.overlay_view] if self.mode == "overlay" else self.split_views
+        if not views: return
+        getattr(views[0], method)()
+        self._sync_camera(views[0])
+
+    def _previous(self): self.slider.setValue(max(0, self.slider.value() - 1))
+    def _next_frame(self): self.slider.setValue(min(self.slider.maximum(), self.slider.value() + 1))
+
+    def _set_overlay_splitter_dragging(self, dragging):
+        self._overlay_splitter_dragging = bool(dragging)
+        self._update_overlay_resize_coalescing()
+
+    def _update_overlay_resize_coalescing(self):
+        self.overlay_splitter.set_drag_updates_coalesced(
+            self._overlay_splitter_dragging and self.timer.isActive())
+
+    def _advance(self):
+        frame_count = max(1, self.slider.maximum() + 1)
+        target = self.playback_clock.frame_at()
+        previous = self._requested_frame if self._requested_frame is not None else self.slider.value()
+        if target == previous:
+            return
+        distance = (target - previous) % frame_count
+        self._stats_skipped += max(0, distance - 1)
+        self._clock_driven_update = True
+        try:
+            self.slider.setValue(target)
+        finally:
+            self._clock_driven_update = False
+    def _play(self):
+        if self.timer.isActive():
+            pause_frame = self._last_rendered_frame if self._last_rendered_frame is not None else self.slider.value()
+            self.timer.stop(); self.playback_clock.pause(pause_frame); self._requested_frame = pause_frame
+            self.requested_frame = pause_frame
+            self.auto_hide_timer.stop(); self.chrome.show()
+        else:
+            self.playback_clock.play(self.slider.value()); self.timer.start(); self._show_controls()
+        self._update_overlay_resize_coalescing()
+        self._sync_play_icon()
+
+    def _export_csv(self): self._export("csv")
+    def _export_json(self): self._export("json")
+    def _export(self, kind):
+        if self.single_mode:
+            return
+        if self.session_path is not None:
+            initial = self.session_path.with_suffix(f".{kind}")
+        else:
+            source_name = self.bundle_results[0].metadata.get("source_media_name", "comparison")
+            initial = Path(self.bundle_results[0].metadata["source_media_path"]).with_name(f"{Path(source_name).stem}-metrics.{kind}")
+        path, _ = QFileDialog.getSaveFileName(self, "Export GT differences", str(initial), f"{kind.upper()} (*.{kind})")
+        if not path: return
+        try:
+            (export_metrics_csv if kind == "csv" else export_metrics_json)(
+                self.bundle_results or self.session_path, Path(path), self.reference_id)
+            self.metric_status.setText(f"Saved {Path(path).name}")
+        except (OSError, ValueError) as exc:
+            self.metric_status.setText(f"Export failed: {exc}")
+
+    def eventFilter(self, watched, event):
+        if (hasattr(self, "split_scroll") and watched is self.split_scroll.viewport()
+                and event.type() == QEvent.Type.Resize and hasattr(self, "split_reflow_timer")):
+            self.split_reflow_timer.start()
+        if event.type() in (QEvent.Type.MouseMove, QEvent.Type.MouseButtonPress):
+            self._last_pointer_widget = watched if isinstance(watched, QWidget) else None
+            try:
+                self._last_pointer_position = event.globalPosition().toPoint()
+            except AttributeError:
+                pass
+        active_button = self._hover_menu_target
+        if (event.type() == QEvent.Type.Hide and isinstance(active_button, QComboBox)
+                and self._is_active_hover_menu(watched)):
+            self._hover_menu_latched = False
+        active_combo = isinstance(active_button, QComboBox)
+        active_menu = active_button.menu() if isinstance(active_button, QToolButton) else None
+        active_popup_visible = (active_menu.isVisible() if active_menu is not None else
+                                active_button.view().isVisible() if active_combo else False)
+        if (event.type() == QEvent.Type.MouseButtonPress and self._hover_menu_latched
+                and (active_menu is not None or active_combo)):
+            inside_menu = self._is_active_hover_menu(watched)
+            inside_button = isinstance(watched, QWidget) and (
+                watched is active_button or active_button.isAncestorOf(watched))
+            if not inside_menu and not inside_button:
+                self._hover_menu_latched = False
+                if isinstance(active_button, QToolButton) and active_button.menu() is not None:
+                    active_button.menu().hide()
+        if (event.type() == QEvent.Type.MouseMove and not self._hover_menu_latched
+                and active_popup_visible):
+            self.hover_close_timer.start()
+        is_child_widget = isinstance(watched, QWidget) and (watched is self or self.isAncestorOf(watched))
+        if is_child_widget:
+            if ((isinstance(watched, QToolButton) and watched.menu() is not None)
+                    or isinstance(watched, QComboBox)):
+                if event.type() == QEvent.Type.Enter:
+                    if not self._hover_menu_latched or watched is self._hover_menu_target:
+                        if watched is self.hud_button:
+                            from PySide6.QtGui import QCursor
+                            menu_area = self._is_hud_menu_arrow(watched.mapFromGlobal(QCursor.pos()))
+                        else:
+                            menu_area = True
+                        if menu_area:
+                            self.hover_close_timer.stop()
+                            self._hover_menu_target = watched
+                            self._hover_button_entered = True
+                            self.hover_menu_timer.start()
+                elif event.type() == QEvent.Type.Leave:
+                    self._hover_button_entered = False
+                    self.hover_close_timer.start()
+                elif event.type() == QEvent.Type.MouseMove and watched is self.hud_button:
+                    menu_area = self._is_hud_menu_arrow(event.position().toPoint())
+                    self._hover_button_entered = menu_area
+                    if menu_area:
+                        self._hover_menu_target = watched
+                        self.hover_close_timer.stop()
+                        self.hover_menu_timer.start()
+                    else:
+                        self.hover_menu_timer.stop()
+            elif self._is_active_hover_menu(watched):
+                if event.type() == QEvent.Type.Enter:
+                    self.hover_close_timer.stop()
+                elif event.type() == QEvent.Type.Leave:
+                    self.hover_close_timer.start()
+                elif event.type() == QEvent.Type.MouseMove:
+                    self.hover_close_timer.start()
+            if event.type() in (QEvent.Type.MouseMove, QEvent.Type.MouseButtonPress, QEvent.Type.Wheel, QEvent.Type.KeyPress):
+                if not isinstance(watched, (QMenu, QComboBox, QSlider, QDialog)):
+                    self._show_controls()
+            if event.type() == QEvent.Type.MouseButtonPress and (
+                    (isinstance(watched, QToolButton) and watched.menu() is not None)
+                    or isinstance(watched, QComboBox)):
+                if watched is self.hud_button and not self._is_hud_menu_arrow(event.position().toPoint()):
+                    if watched.menu().isVisible():
+                        self._hide_hover_popup(watched)
+                    return False
+                popup_visible = (watched.menu().isVisible() if isinstance(watched, QToolButton)
+                                 else watched.view().isVisible())
+                if popup_visible:
+                    if self._hover_menu_latched:
+                        self._hover_menu_latched = False
+                        if isinstance(watched, QComboBox):
+                            QTimer.singleShot(0, lambda target=watched: self._dismiss_combo_popup(target))
+                            return False
+                        self._hide_hover_popup(watched)
+                    else:
+                        self._hover_menu_latched = True
+                    event.accept()
+                    return True
+                self._hover_menu_target = watched
+                self._hover_menu_latched = True
+                if isinstance(watched, QToolButton):
+                    self._show_hover_popup(watched)
+                else:
+                    return False
+                event.accept()
+                return True
+            if event.type() == QEvent.Type.MouseMove and self.annotation_mode == "hovered":
+                for layer in (self.overlay_annotations, *self.split_annotations):
+                    if layer.view is watched:
+                        layer.hover_position = event.position().toPoint()
+                        layer.update()
+        elif event.type() in (QEvent.Type.MouseMove, QEvent.Type.MouseButtonPress, QEvent.Type.Wheel, QEvent.Type.KeyPress):
+            if not isinstance(watched, (QMenu, QComboBox, QSlider, QDialog)):
+                self._show_controls()
+        if event.type() in (QEvent.Type.MouseMove, QEvent.Type.Wheel, QEvent.Type.Resize):
+            if watched is self.overlay_view or watched in self.split_views:
+                self._refresh_annotations()
+        if event.type() == QEvent.Type.KeyPress and event.key() == Qt.Key.Key_F11:
+            window = self.window()
+            window.showNormal() if window.isFullScreen() else window.showFullScreen()
+            event.accept(); return True
+        if event.type() == QEvent.Type.KeyPress and event.key() == Qt.Key.Key_Escape and self.window().isFullScreen():
+            self.window().showNormal(); event.accept(); return True
+        if event.type() == QEvent.Type.MouseButtonPress:
+            if isinstance(watched, QWidget):
+                self._arrow_mode = "orbit" if any(watched is view or view.isAncestorOf(watched) for view in self.split_views + [self.overlay_view]) else "frame"
+        elif event.type() == QEvent.Type.KeyPress:
+            if event.key() == Qt.Key.Key_Escape and self._hover_menu_latched and self._hover_menu_target is not None:
+                self._hover_menu_latched = False
+                if isinstance(self._hover_menu_target, QToolButton):
+                    self._hide_hover_popup(self._hover_menu_target)
+                    event.accept(); return True
+            if event.key() == Qt.Key.Key_Space:
+                if watched in (self.mode_switch, self.pin_controls_button):
+                    return super().eventFilter(watched, event)
+                self._play(); event.accept(); return True
+            if self._arrow_mode == "frame" and event.key() == Qt.Key.Key_Left: self._previous(); event.accept(); return True
+            if self._arrow_mode == "frame" and event.key() == Qt.Key.Key_Right: self._next_frame(); event.accept(); return True
+            if self._arrow_mode == "orbit" and event.key() in (Qt.Key.Key_Left, Qt.Key.Key_Right, Qt.Key.Key_Up, Qt.Key.Key_Down):
+                azim, elev = {Qt.Key.Key_Left: (-3, 0), Qt.Key.Key_Right: (3, 0), Qt.Key.Key_Up: (0, -3), Qt.Key.Key_Down: (0, 3)}[event.key()]
+                target = self.split_views[0] if self.mode == "split" else self.overlay_view
+                target.orbit(azim, elev)
+                if self.mode == "split": self._sync_camera(target)
+                self._refresh_annotations()
+                event.accept(); return True
+        return super().eventFilter(watched, event)
+
+    def _open_hover_menu(self):
+        target = self._hover_menu_target
+        if self._hover_button_entered and target is not None:
+            if isinstance(target, QComboBox):
+                if not target.view().isVisible():
+                    target.showPopup()
+            elif isinstance(target, QToolButton) and target.menu() is not None and not target.menu().isVisible():
+                self._opening_menu_by_hover = True
+                target.menu().popup(target.mapToGlobal(QPoint(0, target.height())))
+                self._opening_menu_by_hover = False
+
+    def _show_hover_popup(self, target):
+        self._hover_menu_target = target
+        if isinstance(target, QComboBox):
+            target.showPopup()
+        elif isinstance(target, QToolButton) and target.menu() is not None:
+            target.menu().popup(target.mapToGlobal(QPoint(0, target.height())))
+
+    def _hide_hover_popup(self, target):
+        if isinstance(target, QComboBox):
+            application = QApplication.instance()
+            application.removeEventFilter(self)
+            try:
+                target.hidePopup()
+            finally:
+                application.installEventFilter(self)
+        elif isinstance(target, QToolButton) and target.menu() is not None:
+            target.menu().hide()
+
+    def _dismiss_combo_popup(self, combo):
+        if combo.view().isVisible():
+            self._hide_hover_popup(combo)
+
+    def _is_active_hover_menu(self, target):
+        button = self._hover_menu_target
+        if isinstance(button, QComboBox):
+            view = button.view()
+            return _is_widget_or_popup_window(view, target)
+        if not isinstance(button, QToolButton) or button.menu() is None:
+            return False
+        root = button.menu()
+        return _is_widget_or_popup_window(root, target)
+
+    def _is_hud_menu_arrow(self, position):
+        option = QStyleOptionToolButton()
+        self.hud_button.initStyleOption(option)
+        arrow_rect = self.hud_button.style().subControlRect(
+            QStyle.ComplexControl.CC_ToolButton, option,
+            QStyle.SubControl.SC_ToolButtonMenu, self.hud_button
+        )
+        return arrow_rect.contains(position)
+
+    def _close_hover_menu(self):
+        button = self._hover_menu_target
+        if self._hover_menu_latched:
+            return
+        menu = button.menu() if isinstance(button, QToolButton) else None
+        combo_view = button.view() if isinstance(button, QComboBox) else None
+        position = self._last_pointer_position
+        pointer_widget = self._last_pointer_widget
+        if pointer_widget is button and position is not None and button.rect().contains(button.mapFromGlobal(position)):
+            return
+        if position is None:
+            from PySide6.QtGui import QCursor
+            position = QCursor.pos()
+        if button is not None and button.rect().contains(button.mapFromGlobal(position)):
+            return
+        if menu is not None:
+            for child_menu in (menu, *menu.findChildren(QMenu)):
+                if child_menu.isVisible() and child_menu.rect().contains(child_menu.mapFromGlobal(position)):
+                    return
+        if combo_view is not None and combo_view.isVisible() and combo_view.window().rect().contains(
+                combo_view.window().mapFromGlobal(position)):
+            return
+        if menu is not None:
+            menu.hide()
+        elif combo_view is not None:
+            self._hide_hover_popup(button)
+
+    def closeEvent(self, event):
+        self._shutting_down = True
+        for workspace in tuple(self._detached_windows):
+            workspace.window._closing_for_transition = True
+            workspace.window.close()
+            workspace.window.deleteLater()
+        self._detached_windows.clear()
+        if hasattr(self, "split_reorder_controller"):
+            self.split_reorder_controller.cancel()
+        for handle in self.findChildren(_ResultDragHandle):
+            handle._panel_drag_cancelled()
+        application = QApplication.instance()
+        application.removeEventFilter(self)
+        self.hover_menu_timer.stop(); self.hover_close_timer.stop()
+        if isinstance(self._hover_menu_target, QComboBox):
+            self._hover_menu_target.hidePopup()
+        if not self._media_providers_released:
+            self._media_providers_released = True
+            for provider in self._owned_media_providers:
+                release_shared_media_provider(provider)
+        super().closeEvent(event)

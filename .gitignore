@@ -95,3 +95,5 @@ experiments/runs/CAM-EXP-011_allframe_three_model_hand_paired_benchmark/cache/
 .env
 .env.*
 !.env.example
+# Local pretrained model assets (from CalibFreeHands)
+WiLoR/pretrained_models/
