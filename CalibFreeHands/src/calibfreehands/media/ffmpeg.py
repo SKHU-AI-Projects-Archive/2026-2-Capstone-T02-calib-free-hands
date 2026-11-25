@@ -44,17 +44,20 @@ class FFmpegDecoder:
         except (OSError, subprocess.CalledProcessError, json.JSONDecodeError, ValueError) as exc:
             raise RuntimeError(f"Could not read frame timestamps for {path.name}: {exc}") from exc
 
-    def decode_rgb(self, path: Path, width: int, height: int, frame_rate: float | None = None):
+    def decode_rgb(self, path: Path, width: int, height: int, frame_rate: float | None = None,
+                   timestamps: list[float] | None = None):
+        """Yield every frame; *timestamps* (from :meth:`timestamps`) saves an ffprobe pass when decoding repeatedly."""
         executable = self._executable(self.ffmpeg)
         command = [executable, "-v", "error", "-i", str(path), "-f", "rawvideo", "-pix_fmt", "rgb24", "pipe:1"]
         frame_bytes = width * height * 3
         process = subprocess.Popen(command, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
-        try:
-            timestamps = self.timestamps(path)
-        except RuntimeError as exc:
-            if "ffprobe was not found" not in str(exc):
-                raise
-            timestamps = []
+        if timestamps is None:
+            try:
+                timestamps = self.timestamps(path)
+            except RuntimeError as exc:
+                if "ffprobe was not found" not in str(exc):
+                    raise
+                timestamps = []
         index = 0
         reached_end = False
         try:

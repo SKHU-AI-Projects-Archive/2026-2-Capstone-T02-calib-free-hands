@@ -34,7 +34,9 @@ def result_filename(source_stem: str, calibration_name: str, reconstruction_name
 
     calibration = calibration_name
     if calibration_name in {"Checkerboard Reference", "Manual Focal"} and reference_focal_px is not None:
-        value = format(float(reference_focal_px), ".15f").rstrip("0").rstrip(".")
+        # 6 decimals: enough for a focal length in pixels, and no floating-point noise in the file name
+        # (880.58 is not exactly representable and printed as 880.580000000000041 with 15 decimals)
+        value = format(round(float(reference_focal_px), 6), "f").rstrip("0").rstrip(".")
         calibration = f"{calibration_name}-{value}px"
     return f"{safe(source_stem)}__{safe(calibration)}__{safe(reconstruction_name)}.cfh"
 

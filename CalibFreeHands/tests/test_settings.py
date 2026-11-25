@@ -39,7 +39,7 @@ def test_saved_theme_is_applied_before_window_construction(tmp_path, monkeypatch
     if theme == "system":
         assert qapp.styleHints().colorScheme() == main.Qt.ColorScheme.Unknown
     elif theme == "dark":
-        assert qapp.palette().color(QPalette.ColorRole.Window).name() == "#202124"
+        assert qapp.palette().color(QPalette.ColorRole.Window).name() == "#0f1216"  # the shared design's background
     else:
         assert qapp.palette().color(QPalette.ColorRole.Window) == qapp._calibfreehands_base_palette.color(QPalette.ColorRole.Window)
     window.close()
@@ -282,7 +282,7 @@ def test_processing_path_uses_selected_registry_models_and_records_selection(tmp
     source = tmp_path / "input.mp4"
     source.touch()
     monkeypatch.setattr(main, "probe_media", lambda path: SimpleNamespace(width=8, height=8, frame_rate=25.0))
-    monkeypatch.setattr(main, "FFmpegDecoder", lambda: SimpleNamespace(decode_rgb=lambda *args: ["frame"]))
+    monkeypatch.setattr(main, "VideoFrameSource", lambda *args: ["frame"])
     monkeypatch.setattr(main, "choose_output_file", lambda *args: tmp_path / "output.cfh")
     captured = {}
     def process(frames, configurations, config, root, out, settings, *args):

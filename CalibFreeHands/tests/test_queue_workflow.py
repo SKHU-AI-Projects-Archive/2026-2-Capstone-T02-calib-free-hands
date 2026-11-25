@@ -275,7 +275,7 @@ def test_media_progress_includes_queue_position_without_changing_stage_progress(
             reports.append((current, total, stage))
 
     monkeypatch.setattr(main, "probe_media", lambda *_: SimpleNamespace(width=8, height=8, frame_rate=30.0))
-    monkeypatch.setattr(main, "FFmpegDecoder", lambda: SimpleNamespace(decode_rgb=lambda *_: ["frame"]))
+    monkeypatch.setattr(main, "VideoFrameSource", lambda *_: ["frame"])  # a one-frame stand-in for the stream
     source.touch()
     monkeypatch.setattr(main, "choose_output_file", lambda *_: tmp_path / "output" / "sample.cfh")
 
@@ -300,7 +300,7 @@ def test_media_processing_exposes_only_cfh_and_cleans_internal_workspace(tmp_pat
     window._add_configuration_row()
     working_paths, captured = [], {}
     monkeypatch.setattr(main, "probe_media", lambda *_: SimpleNamespace(width=8, height=8, frame_rate=30.0))
-    monkeypatch.setattr(main, "FFmpegDecoder", lambda: SimpleNamespace(decode_rgb=lambda *_: ["frame"]))
+    monkeypatch.setattr(main, "VideoFrameSource", lambda *_: ["frame"])  # a one-frame stand-in for the stream
 
     def process(_frames, configurations, _config, _root, working, settings, *_args):
         working_paths.append(working)
@@ -333,7 +333,7 @@ def test_manual_focal_result_filename_uses_user_facing_name_without_changing_any
     output.mkdir()
     window.output_path.setText(str(output))
     monkeypatch.setattr(main, "probe_media", lambda *_: SimpleNamespace(width=8, height=8, frame_rate=30.0))
-    monkeypatch.setattr(main, "FFmpegDecoder", lambda: SimpleNamespace(decode_rgb=lambda *_: ["frame"]))
+    monkeypatch.setattr(main, "VideoFrameSource", lambda *_: ["frame"])  # a one-frame stand-in for the stream
     monkeypatch.setattr(main, "process_comparison_session", lambda _f, c, _cfg, _r, w, s, *_: _synthetic_session(w, c, s))
 
     paths, _ = window._process_media(source)
@@ -357,7 +357,7 @@ def test_existing_result_collision_never_overwrites_silently_or_runs_inference(t
     snapshot = main.ProcessingSnapshot((source,), (config,), "original", "uniform", 8, "median",
                                        output, policy, False)
     monkeypatch.setattr(main, "probe_media", lambda *_: SimpleNamespace(width=8, height=8, frame_rate=30.0))
-    monkeypatch.setattr(main, "FFmpegDecoder", lambda: SimpleNamespace(decode_rgb=lambda *_: ["frame"]))
+    monkeypatch.setattr(main, "VideoFrameSource", lambda *_: ["frame"])  # a one-frame stand-in for the stream
     monkeypatch.setattr(main, "process_comparison_session", lambda *_: pytest.fail("collision must be resolved before inference"))
     if policy == "ask":
         with pytest.raises(FileExistsError, match="confirmation"):
@@ -368,11 +368,12 @@ def test_existing_result_collision_never_overwrites_silently_or_runs_inference(t
     window.close()
 
 
-def test_cancellation_is_checked_while_decoding_media(tmp_path, monkeypatch, qapp):
+def test_cancellation_while_the_video_is_opened_stops_before_inference(tmp_path, monkeypatch, qapp):
+    # Frames are no longer decoded up front (they are streamed by every processing pass, which checks the
+    # cancel flag itself); opening the video is the last point before inference where _process_media checks it.
     main, window, _ = make_window(tmp_path, monkeypatch)
     source = tmp_path / "sample.mp4"
     source.touch()
-    yielded = []
 
     class Job:
         cancelled = False
@@ -380,21 +381,16 @@ def test_cancellation_is_checked_while_decoding_media(tmp_path, monkeypatch, qap
 
     job = Job()
 
-    def decode(*_):
-        for value in range(3):
-            yielded.append(value)
-            if value == 1:
-                job.cancelled = True
-            yield value
+    def open_video(*_args):
+        job.cancelled = True  # the user pressed Cancel while the video was being read
+        return ["frame"]
 
     monkeypatch.setattr(main, "probe_media", lambda *_: SimpleNamespace(width=8, height=8, frame_rate=30.0))
-    monkeypatch.setattr(main, "FFmpegDecoder", lambda: SimpleNamespace(decode_rgb=decode))
+    monkeypatch.setattr(main, "VideoFrameSource", open_video)
     monkeypatch.setattr(main, "process_comparison_session", lambda *_: pytest.fail("inference must not start after cancellation"))
 
-    with pytest.raises(InterruptedError, match="cancelled during media decoding"):
+    with pytest.raises(InterruptedError, match="cancelled while reading the video"):
         window._process_media(source, job)
-
-    assert yielded == [0, 1]
     window.close()
 
 

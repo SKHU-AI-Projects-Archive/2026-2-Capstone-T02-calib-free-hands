@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import colorsys
 import csv
+import functools
 import json
 import re
 from dataclasses import dataclass
@@ -23,6 +24,9 @@ from PySide6.QtWidgets import (
 )
 
 from calibfreehands.media.provider import MediaFrameProvider, release_shared_media_provider, shared_media_provider
+from calibfreehands.app.i18n import language as _ui_language, localize as _localize, tr as _tr
+from calibfreehands.app.theme import register_window as _register_window
+from calibfreehands.app.trlabel import TrLabel
 from .topology import HAND_CONNECTIONS, RAW_TO_VIEW
 from calibfreehands.pipeline.result_bundle import ResultBundle
 from calibfreehands.pipeline.metrics import compare_results, metric_registry
@@ -44,6 +48,16 @@ METRIC_FIELDS = ("source_identity", "reference_result_id", "candidate_result_id"
 VIEWER_CHROME_LABEL_STYLE = (
     "QLabel { color: #f2f3f4; background: transparent; padding: 0px; border: none; }"
 )
+
+
+def _localized(method):
+    """After a method that builds widgets: translate them (Korean only; coalesced, never in a frame update)."""
+    @functools.wraps(method)
+    def wrapper(self, *args, **kwargs):
+        result = method(self, *args, **kwargs)
+        self._schedule_localize()
+        return result
+    return wrapper
 
 
 class _MetricSignals(QObject):
@@ -937,8 +951,8 @@ class ComparisonViewer(QWidget):
         self.slider.setRange(0, self.loaded_results[0].frame_count - 1)
         self.slider.setTracking(False)
         self.slider.valueChanged.connect(self._set_frame)
-        self.status = QLabel()
-        self.metric_status = QLabel()
+        self.status = TrLabel()
+        self.metric_status = TrLabel()
         self.metric_status.setToolTip("Camera-space differences from the selected GT.")
 
         self.mode_selector = QWidget()
@@ -1370,7 +1384,7 @@ class ComparisonViewer(QWidget):
         self.speed_up_button.clicked.connect(lambda: self._step_playback_speed(1))
         for control in (self.speed_down_button, self.speed_value_label, self.speed_up_button):
             speed_group_layout.addWidget(control)
-        self.performance_stats_label = QLabel()
+        self.performance_stats_label = TrLabel()
         self.performance_stats_label.hide()
         self.performance_stats_timer = QTimer(self)
         self.performance_stats_timer.setInterval(1000)
@@ -1437,6 +1451,25 @@ class ComparisonViewer(QWidget):
         self._refresh_annotations()
         self._set_frame(0)
         self.hand_view()
+        _register_window(self)  # follows the Language box (retranslate)
+        if _ui_language() != "en":
+            _localize(self)
+
+    # ---- Korean user interface (app/i18n.py) ----
+    def retranslate(self) -> None:
+        """The Language box changed: translate (or restore) every static text of this viewer and its windows."""
+        _localize(self)
+        self._render_active_frame()  # the "Frame n / m" line is set by the frame update, not by a static text
+
+    def _schedule_localize(self) -> None:
+        if _ui_language() == "en" or getattr(self, "_localize_scheduled", False):
+            return
+        self._localize_scheduled = True
+        QTimer.singleShot(0, self._run_localize)
+
+    def _run_localize(self) -> None:
+        self._localize_scheduled = False
+        _localize(self)
 
     def _refresh_annotations(self, *, position_panels=True):
         if self.annotation_mode != "off":
@@ -1685,6 +1718,7 @@ class ComparisonViewer(QWidget):
             self.user_ordered_panels = True
             self._refresh_ordered_presentations()
 
+    @_localized
     def _refresh_ordered_presentations(self, *, preserve_overlay_groups=True):
         self.overlay_panel.configuration_indices = [self._configuration_index(config_id)
                                                     for config_id in self.result_order_ids]
@@ -1770,6 +1804,7 @@ class ComparisonViewer(QWidget):
         if sorted_ids != result_ids:
             self._set_result_order(sorted_ids, manual=False)
 
+    @_localized
     def _rebuild_results_menu(self):
         self.results_menu.clear(); self.visibility_checks = [None] * len(self.configurations)
         self.color_buttons = [None] * len(self.configurations)
@@ -1993,6 +2028,7 @@ class ComparisonViewer(QWidget):
         for view in self._workspace_views():
             view.set_labels_visible(visible)
 
+    @_localized
     def _rebuild_metrics_menu(self):
         self.metric_menu.clear()
         self.metric_checks.clear()
@@ -2127,6 +2163,7 @@ class ComparisonViewer(QWidget):
         self.error_vectors_button.setText("Error vectors: Off")
         self._rebuild_error_vector_menu()
 
+    @_localized
     def _rebuild_error_vector_menu(self):
         self.error_vectors_menu.clear(); self.error_vector_actions.clear()
         self.error_vectors_group = QActionGroup(self); self.error_vectors_group.setExclusive(True)
@@ -2298,10 +2335,10 @@ class ComparisonViewer(QWidget):
     def _show_joint_table(self, candidate_id):
         candidate_name = next(config["name"] for config in self.configurations if config["id"] == candidate_id)
         dialog = QDialog(self)
-        dialog.setWindowTitle(f"Per-Joint Error - {candidate_name}")
+        dialog.setWindowTitle(_tr(f"Per-Joint Error - {candidate_name}"))
         layout = QVBoxLayout(dialog)
         table = QTableWidget(21, 3, dialog)
-        table.setHorizontalHeaderLabels(["Joint", "Left (mm)", "Right (mm)"])
+        table.setHorizontalHeaderLabels([_tr("Joint"), _tr("Left (mm)"), _tr("Right (mm)")])
         frame = int(self.loaded_results[0].result.frame_indices[self.slider.value()])
         for index, name in enumerate(JOINT_NAMES):
             table.setItem(index, 0, QTableWidgetItem(name))
@@ -2316,6 +2353,7 @@ class ComparisonViewer(QWidget):
         dialog.open()
         return dialog
 
+    @_localized
     def _update_main_workspace(self):
         members = self._main_workspace_members()
         result_indices = [index for index, config in enumerate(self.configurations)
@@ -2377,6 +2415,7 @@ class ComparisonViewer(QWidget):
                 self.overlay_view._space_camera_states = {
                     key: self._copy_camera_params_value(value) for key, value in states.items()}
 
+    @_localized
     def _create_detached_workspace(self, group_id, *, position=None, size=None,
                                    camera_pose=None, camera_states=None):
         group = self._workspace_model.group(group_id)
@@ -2783,6 +2822,7 @@ class ComparisonViewer(QWidget):
             if view is not source:
                 view.setCameraParams(**params)
 
+    @_localized
     def set_mode(self, mode):
         if mode not in ("overlay", "split"):
             raise ValueError(f"unknown comparison view mode: {mode}")
@@ -3167,7 +3207,7 @@ class ComparisonViewer(QWidget):
         else:
             source_name = self.bundle_results[0].metadata.get("source_media_name", "comparison")
             initial = Path(self.bundle_results[0].metadata["source_media_path"]).with_name(f"{Path(source_name).stem}-metrics.{kind}")
-        path, _ = QFileDialog.getSaveFileName(self, "Export GT differences", str(initial), f"{kind.upper()} (*.{kind})")
+        path, _ = QFileDialog.getSaveFileName(self, _tr("Export GT differences"), str(initial), f"{kind.upper()} (*.{kind})")
         if not path: return
         try:
             (export_metrics_csv if kind == "csv" else export_metrics_json)(

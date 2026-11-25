@@ -14,6 +14,7 @@ from calibfreehands.app.configuration import ApplicationConfiguration
 from calibfreehands.calibration import aggregate_focal, sample_indices
 from calibfreehands.export.preview import encode_result_preview
 from calibfreehands.media.ffmpeg import DecodedFrame
+from calibfreehands.media.frames import FrameSource, as_frame_source, frame_meta
 from .provenance import runtime_metadata, sha256_file
 from .result import CanonicalResult, save_result
 
@@ -69,11 +70,12 @@ class RawPoseResult:
 
     @classmethod
     def from_predictions(
-        cls, frames: list[DecodedFrame], predictions: list[list[RawHandEstimate]]
+        cls, frames: "FrameSource | list[DecodedFrame]", predictions: list[list[RawHandEstimate]]
     ) -> RawPoseResult:
-        if len(frames) != len(predictions) or not frames:
+        frame_indices, frame_times, image_size = frame_meta(frames)
+        if len(frame_indices) != len(predictions) or not len(frame_indices):
             raise ValueError("raw pose predictions must contain one entry per decoded frame")
-        count = len(frames)
+        count = len(frame_indices)
         keypoints_2d = np.full((count, 2, 21, 2), np.nan, np.float32)
         keypoints_3d = np.full((count, 2, 21, 3), np.nan, np.float32)
         detected = np.zeros((count, 2), bool)
@@ -124,10 +126,9 @@ class RawPoseResult:
                     mano_faces = np.stack((faces[:, [0, 2, 1]], faces), axis=0) if faces.ndim == 2 else faces
 
         return cls(
-            np.asarray([frame.index for frame in frames]),
-            np.asarray([frame.timestamp_s for frame in frames], dtype=np.float64),
+            np.asarray(frame_indices), np.asarray(frame_times, dtype=np.float64),
             keypoints_2d, keypoints_3d, detected, translation, source_focal,
-            (frames[0].rgb.shape[1], frames[0].rgb.shape[0]),
+            image_size,
             vertices, mano_faces, confidence, bbox, mano_pose, mano_shape,
         )
 
@@ -270,8 +271,10 @@ def _calibration_result_id(item: PipelineConfiguration, backend: str) -> str:
 
 
 def _calibrate(
-    model_id: str, model_name: str, frames: list[DecodedFrame], backend, settings: dict, cancelled, progress
+    model_id: str, model_name: str, frames: "FrameSource | list[DecodedFrame]", backend, settings: dict,
+    cancelled, progress
 ) -> CalibrationResult:
+    source = as_frame_source(frames)
     if getattr(backend, "reference_focal_px", None) is not None:
         if cancelled and cancelled():
             raise InterruptedError("Processing cancelled during reference calibration")
@@ -284,14 +287,24 @@ def _calibrate(
             "actual_sample_count": 0,
             "aggregation": settings.get("aggregation", "median"),
         })
-    indices = sample_indices(len(frames), settings.get("sampling_mode", "uniform"), int(settings.get("sample_count", 8)))
-    focals = []
-    for position, index in enumerate(indices, 1):
+    indices = sample_indices(len(source), settings.get("sampling_mode", "uniform"), int(settings.get("sample_count", 8)))
+    wanted = {int(index): order for order, index in enumerate(indices)}
+    by_order: dict[int, float] = {}
+    # One decoding pass: only the sampled frames are handed to the estimator, none is kept.
+    for frame_number, frame in enumerate(source.iter_frames()):
         if cancelled and cancelled():
             raise InterruptedError("Processing cancelled during calibration")
-        focals.append(float(backend.estimate_focal(frames[int(index)].rgb)))
+        order = wanted.get(frame_number)
+        if order is None:
+            continue
+        by_order[order] = float(backend.estimate_focal(frame.rgb))
         if progress:
-            progress(f"Estimating focal ({model_name})", position, len(indices))
+            progress(f"Estimating focal ({model_name})", len(by_order), len(indices))
+        if len(by_order) == len(wanted):
+            break
+    if len(by_order) != len(wanted):
+        raise RuntimeError("the video ended before all sampled frames were read")
+    focals = [by_order[order] for order in range(len(indices))]
     mode = settings.get("aggregation", "median")
     focal = float(aggregate_focal(focals, mode))
     return CalibrationResult(model_id, model_id, focal, {
@@ -299,8 +312,8 @@ def _calibrate(
         "requested_sample_count": int(settings.get("sample_count", 8)),
         "actual_sample_count": len(indices),
         "aggregation": mode,
-        "frame_indices": [int(frames[int(index)].index) for index in indices],
-        "timestamps_s": [float(frames[int(index)].timestamp_s) for index in indices],
+        "frame_indices": [int(source.indices[int(index)]) for index in indices],
+        "timestamps_s": [float(source.timestamps[int(index)]) for index in indices],
         "focal_px": focals,
         "aggregated_focal_px": focal,
     })
@@ -311,7 +324,7 @@ def _stable_file_key(value: str) -> str:
 
 
 def process_comparison_session(
-    frames: list[DecodedFrame],
+    frames: "FrameSource | list[DecodedFrame]",
     configurations: list[PipelineConfiguration],
     config: ApplicationConfiguration,
     project_root: Path,
@@ -323,7 +336,8 @@ def process_comparison_session(
     pose_factory: Callable[[str], object] | None = None,
 ) -> ComparisonSession:
     _validate_configurations(configurations, config)
-    if not frames:
+    frames = as_frame_source(frames)  # a list stays in memory, a FrameSource decodes the video once per pass
+    if not len(frames):
         raise ValueError("at least one decoded frame is required")
     if calibration_factory is None:
         from calibfreehands.calibration import create_calibration_backend
@@ -377,7 +391,7 @@ def process_comparison_session(
             if not callable(predict_raw):
                 raise RuntimeError(f"Reconstruction backend {model_id} does not expose raw pose inference")
             raw_predictions = []
-            for frame_index, frame in enumerate(frames, 1):
+            for frame_index, frame in enumerate(frames.iter_frames(), 1):
                 if cancelled and cancelled():
                     raise InterruptedError("Processing cancelled during raw pose inference")
                 raw_predictions.append(predict_raw(frame.rgb))
@@ -417,7 +431,7 @@ def process_comparison_session(
             if settings.get("create_preview", False):
                 preview_path = result_dir / "preview.mp4"
                 def preview_frames():
-                    for frame_index, frame in enumerate(frames, 1):
+                    for frame_index, frame in enumerate(frames.iter_frames(), 1):
                         if cancelled and cancelled():
                             raise InterruptedError("Processing cancelled during preview encoding")
                         if progress:

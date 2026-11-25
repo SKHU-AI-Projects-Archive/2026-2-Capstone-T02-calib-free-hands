@@ -5,7 +5,7 @@ import math
 import os
 import sys
 import tempfile
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from pathlib import Path
 
 from PySide6.QtCore import Qt, QStandardPaths
@@ -17,7 +17,7 @@ from PySide6.QtWidgets import (
 )
 
 from calibfreehands.media import discover_media
-from calibfreehands.media.ffmpeg import FFmpegDecoder
+from calibfreehands.media.frames import VideoFrameSource
 from calibfreehands.media.probe import probe_media
 from calibfreehands.media.provider import close_shared_media_providers
 from calibfreehands.app.configuration import (
@@ -34,7 +34,9 @@ from calibfreehands.app.presets import (
     save_user_presets,
     validate_user_preset,
 )
+from calibfreehands.app.i18n import localize, set_language, tr
 from calibfreehands.app.settings import AppSettings
+from calibfreehands.app.theme import DARK, call_on_windows, register_window
 from calibfreehands.app.native_media_dialog import NativeMediaDialogError, select_media_paths
 from calibfreehands.export.paths import choose_output_file, result_filename
 from calibfreehands.pipeline import JobState, JobThread, ProcessingJob
@@ -53,6 +55,20 @@ import uuid
 
 
 def apply_application_theme(app: QApplication, value: str) -> None:
+    """Apply the color scheme (palette colors of the shared design) and tell the application windows.
+
+    The widget style sheet (buttons, chips, cards) is applied by the application window only, never to the whole
+    QApplication: a global style sheet makes every widget created later, e.g. in the result viewers, re-evaluate it,
+    which costs playback performance. The viewers get the palette colors, which are free.
+    """
+    _apply_color_scheme(app, value)
+    theme = value.strip().lower()
+    dark = (app.palette().color(QPalette.ColorRole.Window).lightness() < 128) if theme == "system" else theme == "dark"
+    app.setProperty("cfh_dark", dark)
+    call_on_windows("apply_design")
+
+
+def _apply_color_scheme(app: QApplication, value: str) -> None:
     """Apply an explicit Qt color scheme, with a palette fallback for Fusion."""
     theme = value.strip().lower()
     hints = app.styleHints()
@@ -71,27 +87,34 @@ def apply_application_theme(app: QApplication, value: str) -> None:
 
     palette = QPalette(app._calibfreehands_base_palette)
     if theme == "dark":
+        tokens = DARK  # the phone app's palette (app/theme.py)
         colors = {
-            QPalette.ColorRole.Window: "#202124",
-            QPalette.ColorRole.WindowText: "#e8eaed",
-            QPalette.ColorRole.Base: "#17191c",
-            QPalette.ColorRole.AlternateBase: "#292c30",
-            QPalette.ColorRole.Text: "#e8eaed",
-            QPalette.ColorRole.Button: "#303338",
-            QPalette.ColorRole.ButtonText: "#e8eaed",
-            QPalette.ColorRole.ToolTipBase: "#303338",
-            QPalette.ColorRole.ToolTipText: "#f1f3f4",
-            QPalette.ColorRole.Highlight: "#456a91",
-            QPalette.ColorRole.HighlightedText: "#ffffff",
-            QPalette.ColorRole.PlaceholderText: "#a6abb2",
-            QPalette.ColorRole.Link: "#8ab4f8",
+            QPalette.ColorRole.Window: tokens.bg,
+            QPalette.ColorRole.WindowText: tokens.text,
+            QPalette.ColorRole.Base: tokens.surface,
+            QPalette.ColorRole.AlternateBase: tokens.surface_alt,
+            QPalette.ColorRole.Text: tokens.text,
+            QPalette.ColorRole.Button: tokens.surface_alt,
+            QPalette.ColorRole.ButtonText: tokens.text,
+            QPalette.ColorRole.ToolTipBase: tokens.surface_alt,
+            QPalette.ColorRole.ToolTipText: tokens.text,
+            QPalette.ColorRole.Highlight: tokens.outline,
+            QPalette.ColorRole.HighlightedText: tokens.text,
+            QPalette.ColorRole.PlaceholderText: tokens.text_dim,
+            QPalette.ColorRole.Link: tokens.ok,
         }
         for role, color in colors.items():
             palette.setColor(role, QColor(color))
-        palette.setColor(QPalette.ColorGroup.Disabled, QPalette.ColorRole.WindowText, QColor("#92979e"))
-        palette.setColor(QPalette.ColorGroup.Disabled, QPalette.ColorRole.Text, QColor("#92979e"))
-        palette.setColor(QPalette.ColorGroup.Disabled, QPalette.ColorRole.ButtonText, QColor("#92979e"))
+        for role in (QPalette.ColorRole.WindowText, QPalette.ColorRole.Text, QPalette.ColorRole.ButtonText):
+            palette.setColor(QPalette.ColorGroup.Disabled, role, QColor(tokens.idle))
     app.setPalette(palette)
+
+
+class _ProgressLabel(QLabel):
+    """The status line: every message is translated when it is shown (see app/i18n.py)."""
+
+    def setText(self, text: str) -> None:  # noqa: N802 - Qt name
+        super().setText(tr(text))
 
 
 class QueueListWidget(QListWidget):
@@ -204,6 +227,7 @@ class MainWindow(QMainWindow):
         self.setWindowTitle("CalibFreeHands")
         self.setMinimumSize(980, 560)
         self.settings = settings
+        set_language(self.settings.get("language"))
         self.queue = QueueListWidget()
         self.queue.setSelectionMode(QAbstractItemView.SelectionMode.ExtendedSelection)
         self.queue.itemSelectionChanged.connect(self._refresh_queue_buttons)
@@ -233,7 +257,7 @@ class MainWindow(QMainWindow):
         self.cancel = QPushButton("Cancel")
         self.cancel.setEnabled(False)
         self.cancel.clicked.connect(self._cancel_job)
-        self.progress = QLabel("Waiting")
+        self.progress = _ProgressLabel("Waiting")
         buttons = QHBoxLayout()
         buttons.addWidget(self.open_button)
         buttons.addWidget(self.remove_button)
@@ -285,8 +309,13 @@ class MainWindow(QMainWindow):
         model_row.addWidget(self.set_default_button)
         self.preset_row = model_row
         settings_row = QHBoxLayout()
-        theme = QComboBox(); theme.addItems(["System", "Light", "Dark"]); theme.setCurrentText(self.settings.get("theme").title()); theme.currentTextChanged.connect(self._set_theme)
-        language = QComboBox(); language.addItems(["English", "한국어"]); language.setCurrentText("한국어" if self.settings.get("language") == "ko" else "English"); language.currentTextChanged.connect(lambda value: self._set_setting("language", "ko" if value == "한국어" else "en"))
+        # The combo boxes below work on their data values, never on their (translated) texts.
+        theme = QComboBox()
+        for text, data in (("System", "system"), ("Light", "light"), ("Dark", "dark")):
+            theme.addItem(text, data)
+        theme.setCurrentIndex(max(0, theme.findData(self.settings.get("theme"))))
+        theme.currentIndexChanged.connect(lambda _index: self._set_theme(theme.currentData()))
+        language = QComboBox(); language.addItems(["English", "한국어"]); language.setCurrentText("한국어" if self.settings.get("language") == "ko" else "English"); language.currentTextChanged.connect(lambda value: self._set_language("ko" if value == "한국어" else "en"))
         self.theme_combo, self.language_combo = theme, language
         self.output_path = QLineEdit()
         self.output_path.setReadOnly(True)
@@ -299,12 +328,18 @@ class MainWindow(QMainWindow):
         self.output_path.setText(str(Path(saved_output).expanduser().resolve()))
         self.output_browse_button = QPushButton("Browse...")
         self.output_browse_button.clicked.connect(self._browse_output)
-        collision = QComboBox(); collision.addItems(["Ask", "Overwrite", "Auto rename", "Skip"]); collision.setCurrentText(str(self.settings.get("collision_policy")).replace("_", " ").title()); collision.currentTextChanged.connect(lambda value: self._set_setting("collision_policy", value.lower().replace(" ", "_")))
-        sampling = QComboBox(); sampling.addItem("Uniform", "uniform"); sampling.addItem("All frames", "all"); sampling.setCurrentIndex(sampling.findData(self.settings.get("sampling_mode"))); sampling.currentTextChanged.connect(lambda value: self._set_setting("sampling_mode", "all" if value == "All frames" else "uniform"))
+        collision = QComboBox()
+        for text, data in (("Ask", "ask"), ("Overwrite", "overwrite"), ("Auto rename", "auto_rename"), ("Skip", "skip")):
+            collision.addItem(text, data)
+        collision.setCurrentIndex(max(0, collision.findData(self.settings.get("collision_policy"))))
+        collision.currentIndexChanged.connect(lambda _index: self._set_setting("collision_policy", collision.currentData()))
+        sampling = QComboBox(); sampling.addItem("Uniform", "uniform"); sampling.addItem("All frames", "all"); sampling.setCurrentIndex(sampling.findData(self.settings.get("sampling_mode"))); sampling.currentIndexChanged.connect(lambda _index: self._set_setting("sampling_mode", sampling.currentData()))
         sample_count = QComboBox(); sample_count.addItems(["4", "8", "16", "32"]); sample_count.setCurrentText(str(self.settings.get("sample_count"))); sample_count.currentTextChanged.connect(lambda value: self._set_setting("sample_count", int(value)))
-        sample_count.setEnabled(sampling.currentText() == "Uniform")
-        sampling.currentTextChanged.connect(lambda value: sample_count.setEnabled(value == "Uniform"))
-        aggregation = QComboBox(); aggregation.addItem("Median", "median"); aggregation.addItem("Mean", "mean"); aggregation.setCurrentIndex(aggregation.findData(self.settings.get("aggregation"))); aggregation.currentTextChanged.connect(lambda value: self._set_setting("aggregation", value.lower()))
+        sample_count.setEnabled(sampling.currentData() == "uniform")
+        sampling.currentIndexChanged.connect(lambda _index: sample_count.setEnabled(sampling.currentData() == "uniform"))
+        aggregation = QComboBox(); aggregation.addItem("Median", "median"); aggregation.addItem("Mean", "mean"); aggregation.setCurrentIndex(aggregation.findData(self.settings.get("aggregation"))); aggregation.currentIndexChanged.connect(lambda _index: self._set_setting("aggregation", aggregation.currentData()))
+        for combo in (theme, collision, sampling, aggregation):
+            combo.setProperty("i18n_items", True)  # their item texts are translated (data values stay)
         for control in (theme, language, collision, sampling, sample_count, aggregation):
             control.setSizeAdjustPolicy(QComboBox.SizeAdjustPolicy.AdjustToContents)
             control.setSizePolicy(QSizePolicy.Policy.Maximum, QSizePolicy.Policy.Fixed)
@@ -355,6 +390,7 @@ class MainWindow(QMainWindow):
         self._job_thread = None
         self._processing = False
         self._active_snapshot = None
+        self._skipped_existing: list[Path] = []  # results kept by "Skip existing": shown next to the new ones
         self._result_viewer = None
         self._open_viewers = []
         self._restore_model_defaults()
@@ -365,6 +401,8 @@ class MainWindow(QMainWindow):
         self._update_preset_actions()
         if self.preset_store_error:
             self.progress.setText(f"User presets could not be loaded: {self.preset_store_error}")
+        localize(self)
+        register_window(self)  # theme / language changes reach this window (the shell takes it over when embedded)
 
     @staticmethod
     def _model_combo(models: dict[str, ModelDefinition]) -> QComboBox:
@@ -411,6 +449,7 @@ class MainWindow(QMainWindow):
             2, max(self.rows_layout.columnMinimumWidth(2), focal_width)
         )
         self._refresh_row_buttons()
+        localize(self.rows_widget)  # the new row's labels and buttons
         return row
 
     def _remove_row_widgets(self, row):
@@ -779,7 +818,7 @@ class MainWindow(QMainWindow):
         try:
             self._save_user_preset(name, overwrite_id)
         except (OSError, ValueError) as exc:
-            QMessageBox.warning(self, "Could not save preset", str(exc))
+            QMessageBox.warning(self, tr("Could not save preset"), str(exc))
 
     def _rename_user_preset(self, preset_id: str, name: str) -> None:
         preset = next((item for item in self.user_presets if item.id == preset_id), None)
@@ -814,7 +853,7 @@ class MainWindow(QMainWindow):
 
     def _manage_user_presets(self) -> None:
         if not self.user_presets:
-            QMessageBox.information(self, "Manage Presets", "There are no User Presets to manage.")
+            QMessageBox.information(self, tr("Manage Presets"), tr("There are no User Presets to manage."))
             return
         names = [preset.display_name for preset in self.user_presets]
         name, accepted = QInputDialog.getItem(self, "Manage Presets", "User Preset:", names, 0, False)
@@ -834,12 +873,12 @@ class MainWindow(QMainWindow):
                 try:
                     self._rename_user_preset(preset.id, updated)
                 except (OSError, ValueError) as exc:
-                    QMessageBox.warning(self, "Could not rename preset", str(exc))
+                    QMessageBox.warning(self, tr("Could not rename preset"), str(exc))
         elif box.clickedButton() == delete:
             try:
                 self._delete_user_preset(preset.id)
             except OSError as exc:
-                QMessageBox.warning(self, "Could not delete preset", str(exc))
+                QMessageBox.warning(self, tr("Could not delete preset"), str(exc))
 
     def _import_user_preset(self, path: Path) -> PresetDefinition:
         preset = import_user_preset(path, self.configuration, self.user_presets)
@@ -857,7 +896,7 @@ class MainWindow(QMainWindow):
         try:
             self._import_user_preset(Path(path))
         except (OSError, ValueError) as exc:
-            QMessageBox.warning(self, "Could not import preset", str(exc))
+            QMessageBox.warning(self, tr("Could not import preset"), str(exc))
 
     def _export_user_preset(self, path: Path) -> Path:
         preset = next((item for item in self.user_presets if item.id == self.preset_combo.currentData()), None)
@@ -880,10 +919,24 @@ class MainWindow(QMainWindow):
         try:
             self._export_user_preset(target)
         except (OSError, ValueError) as exc:
-            QMessageBox.warning(self, "Could not export preset", str(exc))
+            QMessageBox.warning(self, tr("Could not export preset"), str(exc))
 
     def _set_setting(self, key: str, value) -> None:
         self.settings.set(key, value); self.settings.sync()
+
+    def _set_language(self, code: str) -> None:
+        """The Language box: save, then retranslate every application window (see app/i18n.py)."""
+        self._set_setting("language", code)
+        set_language(code)
+        call_on_windows("retranslate")
+
+    def retranslate(self) -> None:
+        localize(self)
+        for index in range(self.queue.count()):  # "[Waiting] name" texts
+            item = self.queue.item(index)
+            state = item.data(self.STATE_ROLE)
+            if state:
+                item.setText(f"[{tr(state)}] {self._queue_path(item).name}")
 
     def _set_theme(self, value: str) -> None:
         self._set_setting("theme", value.lower())
@@ -906,7 +959,7 @@ class MainWindow(QMainWindow):
                 item.setData(self.PATH_ROLE, str(resolved))
                 item.setData(self.STATE_ROLE, JobState.WAITING.value)
                 item.setToolTip(str(resolved))
-                item.setText(f"[{JobState.WAITING.value}] {resolved.name}")
+                item.setText(f"[{tr(JobState.WAITING.value)}] {resolved.name}")
                 self.queue.addItem(item)
                 existing.add(identity)
         self._refresh_queue_buttons()
@@ -920,7 +973,7 @@ class MainWindow(QMainWindow):
         if item is None:
             return
         item.setData(self.STATE_ROLE, state)
-        item.setText(f"[{state}] {self._queue_path(item).name}")
+        item.setText(f"[{tr(state)}] {self._queue_path(item).name}")
         item.setToolTip(f"{self._queue_path(item)}\n{detail}" if detail else str(self._queue_path(item)))
         self._refresh_queue_buttons()
 
@@ -967,8 +1020,32 @@ class MainWindow(QMainWindow):
         self.settings.set("last_input_directory", str(last.resolve()))
         self.settings.sync()
 
+    # ---- used by the capture page (calibfreehands.app.shell) ----
+    def add_media(self, paths) -> None:
+        """Queue files (or the media files of folders) like Open... does."""
+        self._add_paths([Path(path) for path in paths])
+
+    def use_manual_focal(self, focal_px: float, name: str = "Manual focal") -> None:
+        """Process with one Manual Focal configuration: HandCalib's focal, or a value typed by the user."""
+        reconstruction = self.configuration_rows[0].reconstruction.currentData()
+        self._updating_controls = True
+        try:
+            self._replace_configurations([PipelineConfiguration(
+                uuid.uuid4().hex, name, "checkerboard_reference", reconstruction, round(float(focal_px), 2)
+            )])
+        finally:
+            self._updating_controls = False
+        self._model_or_processing_changed()
+
+    def start_processing(self) -> None:
+        self._start_selected()
+
+    @property
+    def is_processing(self) -> bool:
+        return self._processing
+
     def _browse_output(self) -> None:
-        folder = QFileDialog.getExistingDirectory(self, "Select output folder", self.output_path.text())
+        folder = QFileDialog.getExistingDirectory(self, tr("Select output folder"), self.output_path.text())
         if folder:
             selected = str(Path(folder).resolve())
             self.output_path.setText(selected)
@@ -989,7 +1066,7 @@ class MainWindow(QMainWindow):
             int(self.sample_count_combo.currentText()),
             self.aggregation_combo.currentData(),
             output_directory,
-            str(self.collision_combo.currentText()).lower().replace(" ", "_"),
+            str(self.collision_combo.currentData()),
             bool(self.settings.get("preserve_audio")),
         )
 
@@ -1016,6 +1093,38 @@ class MainWindow(QMainWindow):
         self.cancel.setEnabled(processing)
         self._refresh_queue_buttons()
 
+    def _existing_results(self, snapshot: ProcessingSnapshot) -> list[Path]:
+        """Result files this run would write that already exist in the output folder."""
+        found = []
+        for media_path in snapshot.queue_paths:
+            for configuration in snapshot.configurations:
+                calibration = self.configuration.calibration_models[configuration.calibration_model_id]
+                reconstruction = self.configuration.reconstruction_models[configuration.reconstruction_model_id]
+                target = snapshot.output_directory / result_filename(
+                    media_path.stem, calibration.display_name, reconstruction.display_name,
+                    configuration.reference_focal_px,
+                )
+                if target.is_file() and target not in found:
+                    found.append(target)
+        return found
+
+    def _ask_collision_action(self, existing: list[Path]) -> str | None:
+        """What to do with results that already exist: 'overwrite', 'auto_rename', 'skip' or None (cancel)."""
+        shown = "\n".join(f"• {path.name}" for path in existing[:6])
+        more = f"\n… +{len(existing) - 6}" if len(existing) > 6 else ""
+        box = QMessageBox(self)
+        box.setWindowTitle(tr("Results already exist"))
+        box.setText(f"{tr('Some results already exist in the output folder:')}\n\n{shown}{more}\n\n"
+                    f"{tr('What should be done?')}")
+        skip = box.addButton(tr("Skip existing"), QMessageBox.ButtonRole.AcceptRole)
+        rename = box.addButton(tr("Keep both (rename)"), QMessageBox.ButtonRole.ActionRole)
+        overwrite = box.addButton(tr("Overwrite"), QMessageBox.ButtonRole.DestructiveRole)
+        box.addButton(tr("Cancel"), QMessageBox.ButtonRole.RejectRole)
+        box.setDefaultButton(skip)  # the harmless choice: only the new results are computed
+        box.exec()
+        clicked = box.clickedButton()
+        return {skip: "skip", rename: "auto_rename", overwrite: "overwrite"}.get(clicked)
+
     def _start_selected(self) -> None:
         if self._processing or (self._job_thread is not None and self._job_thread.isRunning()):
             return
@@ -1028,6 +1137,19 @@ class MainWindow(QMainWindow):
         except (ValueError, OSError, RuntimeError, KeyError) as exc:
             self.progress.setText(f"Failed: {exc}")
             return
+        self._skipped_existing = []
+        if snapshot.collision_policy == "ask":
+            # "Ask" means asking now, before anything runs: adding a focal to a video that was processed before
+            # finds the old results, and stopping the whole run with an error helped nobody.
+            existing = self._existing_results(snapshot)
+            if existing:
+                action = self._ask_collision_action(existing)
+                if action is None:
+                    self.progress.setText("Cancelled")
+                    return
+                snapshot = replace(snapshot, collision_policy=action)
+                if action == "skip":
+                    self._skipped_existing = existing
         self._active_snapshot = snapshot
         for index in range(self.queue.count()):
             self._set_queue_item_state(index, JobState.WAITING.value)
@@ -1098,9 +1220,25 @@ class MainWindow(QMainWindow):
                 return
             try:
                 bundles = [load_result_bundle(path) for path in bundle_paths]
+                bundles += self._same_source_existing(bundles)
                 self._show_result_bundles(bundles)
             except Exception as exc:
                 self.progress.setText(f"Completed — Viewer could not open: {exc}")
+
+    def _same_source_existing(self, new_bundles) -> list:
+        """Results of this video that were kept by "Skip existing", so that all its focal lengths open in one viewer."""
+        if not new_bundles:
+            return []
+        source = str(new_bundles[0].metadata.get("source_media_sha256", "")).casefold()
+        extra = []
+        for path in self._skipped_existing:  # disjoint from the new files: those were skipped because they existed
+            try:
+                bundle = load_result_bundle(path)
+            except (OSError, ValueError, KeyError):
+                continue
+            if source and str(bundle.metadata.get("source_media_sha256", "")).casefold() == source:
+                extra.append(bundle)  # same video only: a file of another video with the same name stays out
+        return extra
 
     def _process_media(self, input_path: Path, job=None, selection: ProcessingSnapshot | dict | None = None):
         info = probe_media(input_path)
@@ -1121,7 +1259,7 @@ class MainWindow(QMainWindow):
             }
             configurations, preset_id = selection["configurations"], selection["preset_id"]
             output_base = Path(self.output_path.text())
-            collision_policy = self.collision_combo.currentText().lower().replace(" ", "_")
+            collision_policy = str(self.collision_combo.currentData())
             sampling_mode, sample_count, aggregation = (
                 self.sampling_combo.currentData(), int(self.sample_count_combo.currentText()),
                 self.aggregation_combo.currentData(),
@@ -1131,11 +1269,15 @@ class MainWindow(QMainWindow):
         if job:
             job.report(1, 1, stage="Hashing source media")
         source_sha256 = sha256_file(input_path)
-        frames = []
-        for frame in FFmpegDecoder().decode_rgb(input_path, info.width, info.height, info.frame_rate):
-            if job and job.cancelled:
-                raise InterruptedError("Queue processing cancelled during media decoding")
-            frames.append(frame)
+        if job:
+            job.report(1, 1, stage="Reading video")
+        # Not decoded into memory: every processing pass decodes the video again, so a long take needs about
+        # one frame of RAM instead of ~6 MB per frame (a 20 s 1080p clip would take 3.7 GB).
+        frames = VideoFrameSource(input_path, info.width, info.height, info.frame_rate)
+        if job and job.cancelled:
+            raise InterruptedError("Queue processing cancelled while reading the video")
+        if not len(frames):
+            raise RuntimeError(f"No frames could be read from {input_path.name}")
         destinations = []
         reserved = set()
         for configuration in configurations:
@@ -1261,7 +1403,7 @@ class MainWindow(QMainWindow):
             bundles = [load_result_bundle(path) for path in result_paths]
             self._show_result_bundles(bundles)
         except (OSError, ValueError, KeyError) as exc:
-            QMessageBox.warning(self, "Could not open results", str(exc))
+            QMessageBox.warning(self, tr("Could not open results"), str(exc))
 
 
 def main() -> int:
@@ -1270,7 +1412,8 @@ def main() -> int:
     app.setStyle("Fusion")
     settings = AppSettings()
     apply_application_theme(app, settings.get("theme"))
-    window = MainWindow(settings)
+    from calibfreehands.app.shell import AppShell  # capture page + this window as the "Process" page
+    window = AppShell(settings)
     window.show()
     app.aboutToQuit.connect(close_shared_media_providers)
     return app.exec()

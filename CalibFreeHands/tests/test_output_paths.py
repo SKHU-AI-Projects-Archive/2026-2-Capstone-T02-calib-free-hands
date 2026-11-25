@@ -22,6 +22,16 @@ def test_checkerboard_filename_includes_clean_reference_focal():
     )
 
 
+def test_focal_without_floating_point_noise_in_the_file_name():
+    # 880.58 is printed as 880.580000000000041 with 15 decimals (HandCalib's focal is rounded to 2 decimals)
+    assert result_filename("clip", "Manual Focal", "Original WiLoR", 880.58) == (
+        "clip__Manual-Focal-880.58px__Original-WiLoR.cfh"
+    )
+    assert result_filename("clip", "Manual Focal", "Original WiLoR", 880.5833448921124) == (
+        "clip__Manual-Focal-880.583345px__Original-WiLoR.cfh"
+    )
+
+
 def test_predicted_focal_does_not_change_anycalib_filename():
     assert result_filename("clip", "Original AnyCalib", "Original WiLoR", 1573.25) == (
         "clip__Original-AnyCalib__Original-WiLoR.cfh"

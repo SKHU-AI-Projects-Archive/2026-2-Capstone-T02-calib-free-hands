@@ -39,6 +39,47 @@ Use **View Results...** to open one or more `.cfh` files. A single file opens th
 
 FFmpeg is required for video decoding. Provide it either through a Windows system installation with `ffmpeg` on `PATH`, or through the optional project-local `imageio-ffmpeg` runtime. `ffprobe` is recommended, but is not required for decoding: when available, the app uses source frame timestamps; when unavailable, decoding continues with sequential timestamps calculated as `frame_index / frame_rate` when a frame rate is known. Without `ffprobe`, timestamps for variable-frame-rate (VFR) media may be less accurate.
 
+## Capture, HandCalib and processing in one program
+
+The window has two pages (same design as the phone app: dark surfaces, green = start/ok, red = recording/stop; the Theme switch keeps Light and System):
+
+- **Capture**: live camera picture of the phone (streamed over SRT to a MediaMTX receiver that the page starts and stops itself), the phone QR code (opens by itself; the app scans it and streams) or of the PC's own camera (see below), and two takes:
+  1. **Calibration video**: move the whole right hand in front of the phone; stopping the take starts HandCalib, which returns the focal length in pixels (`HandCalib/benchmark/calibrator.py`, hand mode: the numbers the benchmark scores). A failure (hand found in too few frames, ...) is explained and the take can be recorded again.
+  2. **Work video**: recorded with that focal length. Stopping it queues the video on the Process page with **Manual Focal = the HandCalib value** and starts processing; the result viewer opens as before. "Process automatically" can be switched off.
+
+  The focal length can also be typed in (**Manual**; then no calibration video is needed). It is reused for further work videos of the same session until **Recalibrate**. Recording is started and stopped by the user. While a take runs, the phone's exposure and focus are locked and released again. Takes are saved as `<output folder>/captures/<session>/calibration.mp4` and `work_01.mp4`, `work_02.mp4`, ... (H.264 video only, about 1 MB per second).
+- **Process**: queue, models and results, as before.
+
+### PC camera instead of the phone
+
+The **Camera source** box on the Capture page switches between **Phone (QR)** and **PC camera**. With the PC camera a **camera box** (and **Refresh**) lists the webcams of the PC; the live view, both takes, HandCalib and the hand-over to processing work exactly as with the phone. The phone's receiver is not started while the PC camera is the source.
+
+- The camera is opened once (OpenCV / DirectShow, 1920x1080 at 30 fps requested, MJPEG; the real size and rate are shown) and stays open between takes, so a take starts and ends at once. If the camera cannot do 1080p the video has the size it delivers; use the same camera and settings for the calibration and the work video.
+- While a take runs, **focus, exposure and white balance are fixed** at what the camera had chosen (autofocus off; exposure and white balance switched to manual at their current values) and given back afterwards, like the phone's AE/AF lock. White balance is included because otherwise the colours keep drifting during the take, e.g. when the hand enters the picture. Verified on a Logitech StreamCam by reading the DirectShow controls: all three change from Auto to Manual without a jump and stay constant; on that camera the automatic exposure works through the gain, which is frozen with it. Whether another camera accepts this depends on its driver; the page says when it did not (focus/exposure) and names white balance only when it was locked too. A webcam that keeps refocusing changes its focal length between the two videos.
+- Takes are H.264 `.mp4` (about 8 Mbit/s, 1 MB/s, video only) with a **constant frame rate**; a picture is held until the next one arrives, so a webcam in dim light (fewer than 30 pictures per second) still gives a file as long as the real take. `<take>.intervals.csv` lists the real arrival times (the gaps are where pictures were held).
+- **A focal length belongs to one camera.** Changing the source or the camera forgets the focal length HandCalib found and asks for a new calibration video (a typed focal length stays).
+- Needs `ffmpeg` (camera list, encoding) on `PATH`; the camera list is DirectShow, i.e. Windows. Close other programs that use the camera (video calls, ...), it can only be opened once.
+
+The receiver code is `../streaming_test/pc` (see its README for the phone side); this program imports it, so there is one copy. It needs `PyYAML` and `segno` (`pip install -e ".[capture]"`) and `ffmpeg`.
+
+### Several focal lengths of one video
+
+Add a row with **+ Add** for every focal length (Calibration = Manual Focal, a different focal in each row) and press **Start Processing**: the reconstruction runs once and every row gets its own result file (`<video>__Manual-Focal-<f>px__<model>.cfh`); the viewer then shows all of them side by side (Overlay / Split). If some of these files exist already (the video was processed before), the **Collision = Ask** setting asks before anything runs: **Skip existing** (default; only the new focal lengths are computed and the old results of the same video open in the viewer together with the new ones), **Keep both (rename)** or **Overwrite**, or **Cancel**. The answer applies to this run only; Collision = Overwrite / Auto rename / Skip decides in advance without asking.
+
+### Language
+
+The **Language** box on the Process page (English / 한국어) translates the application at once, no restart: both pages, buttons, the items of the Theme / Collision / Sampling / Aggregate boxes, status and capture messages, and the **result viewer** (menus, buttons, tool tips, the frame line, detached windows, the per-joint error table; viewers that are already open follow the switch). The choice is saved. The translations are in `src/calibfreehands/app/i18n.py` (`KO` for fixed texts, `_RULES` for messages with numbers or names); a text without an entry stays English, so a new string can be added later without breaking anything.
+
+Not translated: preset and model names (they are part of the result file names), the error metric names in the viewer (MPJPE, PA-MPVPE, ... — abbreviations, the same as in the CSV/JSON exports) and the names of the results, the HUD value lines, and error texts of libraries. The viewer is translated only when a window is built or its menus are rebuilt, never in the per-frame update (the "Frame n / m" line is the one exception: it is translated when set, and is free in English).
+
+### Environments
+
+HandCalib needs OpenCV 5 + numpy 2 (the benchmark environment `.venv_bench` in the repository root), this program needs numpy 1.x for torch. Measured on the same video: OpenCV 4.10 gives the same focal within 0.02 % but its `cv2.calibrateCamera` takes 52 s instead of 0.1 s per 200 frames. So the focal estimate runs in a **separate Python process of `.venv_bench`** (`calibfreehands.handcalib`); the CUDA DLL directories of that environment are put on `PATH` automatically (without them onnxruntime-gpu silently falls back to the CPU). Another interpreter can be set with `handcalib_python` in the settings.
+
+### Memory
+
+Videos are no longer decoded into memory (a 20 s 1080p clip would need 3.7 GB, a minute 11 GB). `calibfreehands.media.frames.VideoFrameSource` knows the frame numbers, times and size up front and decodes the video again for every processing pass; the peak memory of two full passes over 801 frames of 1080p video is 46 MB.
+
 ## Data contract
 
 The `.cfh` bundle preserves canonical NPZ numeric arrays and the original `run.json` provenance inside `metadata.json`. Missing keypoints are represented by `NaN` and a separate `detected` mask. The intended coordinate responsibility is camera space only: X image-right, Y image-down, Z camera-forward, origin at the optical center, units in metres. This prototype does not claim ground-truth accuracy or world/robot coordinates.
