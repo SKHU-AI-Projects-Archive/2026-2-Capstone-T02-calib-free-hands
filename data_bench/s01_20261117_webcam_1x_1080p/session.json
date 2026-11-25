@@ -1,0 +1,127 @@
+{
+  "collector": "s01",
+  "date": "2026-11-17",
+  "device": "webcam",
+  "camera": "front",
+  "lens": "1x",
+  "digital_zoom": "none",
+  "resolution": [
+    1920,
+    1080
+  ],
+  "fps": 30,
+  "stabilization": "off",
+  "stabilization_detail": "",
+  "focus_exposure_locked": true,
+  "checkerboard": {
+    "squares": [
+      8,
+      8
+    ],
+    "inner_corners": [
+      7,
+      7
+    ],
+    "shown_on": "tablet screen",
+    "f_before": 1426.1,
+    "f_after": 1418.7
+  },
+  "reference_f": 1422.4,
+  "videos": [
+    {
+      "file": "hand_twinkle_01.mp4",
+      "motion": "twinkle",
+      "f": 6971.1,
+      "note": ""
+    },
+    {
+      "file": "hand_twinkle_02.mp4",
+      "motion": "twinkle",
+      "f": 5741.2,
+      "note": ""
+    },
+    {
+      "file": "hand_nod_01.mp4",
+      "motion": "nod",
+      "f": 850.8,
+      "note": ""
+    },
+    {
+      "file": "hand_nod_02.mp4",
+      "motion": "nod",
+      "f": 979.6,
+      "note": ""
+    },
+    {
+      "file": "hand_circle_01.mp4",
+      "motion": "circle",
+      "f": 1484.4,
+      "note": ""
+    },
+    {
+      "file": "hand_circle_02.mp4",
+      "motion": "circle",
+      "f": 1515.6,
+      "note": ""
+    },
+    {
+      "file": "hand_mix_01.mp4",
+      "motion": "mix",
+      "f": 1488.7,
+      "note": ""
+    },
+    {
+      "file": "hand_mix_02.mp4",
+      "motion": "mix",
+      "f": 1333.2,
+      "note": ""
+    }
+  ],
+  "notes": "형광등, 책상",
+  "camera_metadata": {
+    "lens_model": null,
+    "focal_length_35mm": null
+  },
+  "sources": {
+    "checkerboard_before.mp4": {
+      "original": "checker_board_before.mp4",
+      "sha256": "50add9d2a9e7f0831edccff016d29ded6d7aad78ea82917e2265a9115c00fbcb"
+    },
+    "checkerboard_after.mp4": {
+      "original": "checker_board_after.mp4",
+      "sha256": "3d0f9b8e2bc9e36d62c5989e284b70dc506b0082383f88398250fb2c0109bb76"
+    },
+    "hand_twinkle_01.mp4": {
+      "original": "hand_twinkle_01.mp4",
+      "sha256": "65c79483ed3e4e1c11ded287e74c87ebfb39f3c91bf6af95615089262415dc34"
+    },
+    "hand_twinkle_02.mp4": {
+      "original": "hand_twinkle_02.mp4",
+      "sha256": "9e8d3fbabafc48e9fb2738c6f9be979d7653f5ffb56b78d5e34d453017bbf1df"
+    },
+    "hand_nod_01.mp4": {
+      "original": "hand_nod_01.mp4",
+      "sha256": "3e64a04601a51e9ebb7e80da01094c565622bfc98055718704fa762489782a67"
+    },
+    "hand_nod_02.mp4": {
+      "original": "hand_nod_02.mp4",
+      "sha256": "f4b20021b91e02554d03649607e9cf2a1442cb73f3cdf8aa9eac1075177d46db"
+    },
+    "hand_circle_01.mp4": {
+      "original": "hand_circle_01.mp4",
+      "sha256": "d4d77ea4e830f4a86d4e485a7a2c03c6d317478a4035e50e63b16882ebb0edd2"
+    },
+    "hand_circle_02.mp4": {
+      "original": "hand_circle_02.mp4",
+      "sha256": "3389301a9f671b7ad86cc1938928221410f29843fe22f49e1f13233bd91194e2"
+    },
+    "hand_mix_01.mp4": {
+      "original": "hand_mix_01.mp4",
+      "sha256": "2c3aed42529485a36cd470c5efd859c2bb8fef9f53726d9682f4bc71e291a69f"
+    },
+    "hand_mix_02.mp4": {
+      "original": "hand_mix_02.mp4",
+      "sha256": "35e4c6643698d3ff25ab2989e66a6e83a39641c48771d88d426eae1576a9dd1f"
+    }
+  }
+}

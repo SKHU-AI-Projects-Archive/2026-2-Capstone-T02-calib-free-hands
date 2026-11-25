@@ -1,0 +1,127 @@
+{
+  "collector": "s01",
+  "date": "2026-11-18",
+  "device": "Galaxy Note20",
+  "camera": "rear",
+  "lens": "1x",
+  "digital_zoom": "none",
+  "resolution": [
+    1920,
+    1080
+  ],
+  "fps": 30,
+  "stabilization": "off",
+  "stabilization_detail": "",
+  "focus_exposure_locked": true,
+  "checkerboard": {
+    "squares": [
+      8,
+      8
+    ],
+    "inner_corners": [
+      7,
+      7
+    ],
+    "shown_on": "tablet screen",
+    "f_before": 1458.6,
+    "f_after": 1471.5
+  },
+  "reference_f": 1465.1,
+  "videos": [
+    {
+      "file": "hand_twinkle_01.mp4",
+      "motion": "twinkle",
+      "f": 1102.5,
+      "note": ""
+    },
+    {
+      "file": "hand_twinkle_02.mp4",
+      "motion": "twinkle",
+      "f": 1444.7,
+      "note": ""
+    },
+    {
+      "file": "hand_nod_01.mp4",
+      "motion": "nod",
+      "f": 867.0,
+      "note": ""
+    },
+    {
+      "file": "hand_nod_02.mp4",
+      "motion": "nod",
+      "f": 833.8,
+      "note": ""
+    },
+    {
+      "file": "hand_circle_01.mp4",
+      "motion": "circle",
+      "f": 1272.1,
+      "note": ""
+    },
+    {
+      "file": "hand_circle_02.mp4",
+      "motion": "circle",
+      "f": 1476.2,
+      "note": ""
+    },
+    {
+      "file": "hand_mix_01.mp4",
+      "motion": "mix",
+      "f": 1291.7,
+      "note": ""
+    },
+    {
+      "file": "hand_mix_02.mp4",
+      "motion": "mix",
+      "f": 1452.7,
+      "note": ""
+    }
+  ],
+  "notes": "형광등, 책상, 일그러짐 O",
+  "camera_metadata": {
+    "lens_model": null,
+    "focal_length_35mm": null
+  },
+  "sources": {
+    "checkerboard_before.mp4": {
+      "original": "checker_board_before.mp4",
+      "sha256": "55ba10fc1d08e51d4c6696ea7f99ac935f11d92ee7e02b3a2bb10d112e9bafa4"
+    },
+    "checkerboard_after.mp4": {
+      "original": "checker_board_after.mp4",
+      "sha256": "f60504d02fbcc49a304a509ee443b974990df396042e2a7d95bbd0331b4fa942"
+    },
+    "hand_twinkle_01.mp4": {
+      "original": "hand_twinkle_01.mp4",
+      "sha256": "ca43872c5e6481a34680129d03f0a9e691bdb5c468659b272da5e224d372a53d"
+    },
+    "hand_twinkle_02.mp4": {
+      "original": "hand_twinkle_02.mp4",
+      "sha256": "54ff54a2f8e72f5095a3b42dd1530609f8aeb36c7a82519cea484724e4c2cd4d"
+    },
+    "hand_nod_01.mp4": {
+      "original": "hand_nod_01.mp4",
+      "sha256": "10528efab6b2824bbb04225933581648abfb5885600f6b9457ddbd5e4ec9a735"
+    },
+    "hand_nod_02.mp4": {
+      "original": "hand_nod_02.mp4",
+      "sha256": "c1c76cd8420836b556b435969f21cacb7e55c8a1f23d9579e1808195a1f5a338"
+    },
+    "hand_circle_01.mp4": {
+      "original": "hand_circle_01.mp4",
+      "sha256": "d53f8249877a7bba7b2738ca132c29c1671969117455114e6ca4dbc9c26d4803"
+    },
+    "hand_circle_02.mp4": {
+      "original": "hand_circle_02.mp4",
+      "sha256": "075226a1d65d684bd457bb54233a578153e5b020cd38d66d1e7bac3b2601be13"
+    },
+    "hand_mix_01.mp4": {
+      "original": "hand_mix_01.mp4",
+      "sha256": "b9a5f248bf49051d38ac031f4450a130187ec0399240b48c3fbc1008565de960"
+    },
+    "hand_mix_02.mp4": {
+      "original": "hand_mix_02.mp4",
+      "sha256": "1e2369bf48f7a165653f30c7f0ed2375bc99206421361db37411d781e0a3992c"
+    }
+  }
+}

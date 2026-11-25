@@ -1,0 +1,127 @@
+{
+  "collector": "s02",
+  "date": "2026-11-17",
+  "device": "iPhone Duo",
+  "camera": "rear",
+  "lens": "0.5x",
+  "digital_zoom": "none",
+  "resolution": [
+    1920,
+    1080
+  ],
+  "fps": 30,
+  "stabilization": "off",
+  "stabilization_detail": "iPhone stock camera: standard EIS + OIS, enhanced stabilization off (professor: any setting is fine if focal length is fixed)",
+  "focus_exposure_locked": true,
+  "checkerboard": {
+    "squares": [
+      8,
+      8
+    ],
+    "inner_corners": [
+      7,
+      7
+    ],
+    "shown_on": "tablet screen",
+    "f_before": 873.0,
+    "f_after": 874.3
+  },
+  "reference_f": 873.6,
+  "videos": [
+    {
+      "file": "hand_twinkle_01.mov",
+      "motion": "twinkle",
+      "f": 441.0,
+      "note": ""
+    },
+    {
+      "file": "hand_twinkle_02.mov",
+      "motion": "twinkle",
+      "f": 475.0,
+      "note": ""
+    },
+    {
+      "file": "hand_nod_01.mov",
+      "motion": "nod",
+      "f": 471.0,
+      "note": ""
+    },
+    {
+      "file": "hand_nod_02.mov",
+      "motion": "nod",
+      "f": 536.2,
+      "note": ""
+    },
+    {
+      "file": "hand_circle_01.mov",
+      "motion": "circle",
+      "f": 813.9,
+      "note": ""
+    },
+    {
+      "file": "hand_circle_02.mov",
+      "motion": "circle",
+      "f": 794.7,
+      "note": ""
+    },
+    {
+      "file": "hand_mix_01.mov",
+      "motion": "mix",
+      "f": 841.2,
+      "note": ""
+    },
+    {
+      "file": "hand_mix_02.mov",
+      "motion": "mix",
+      "f": 889.6,
+      "note": ""
+    }
+  ],
+  "notes": "형광등, 책상",
+  "camera_metadata": {
+    "lens_model": "iPhone Duo back dual wide camera 2.22mm f/2.2",
+    "focal_length_35mm": 14.0
+  },
+  "sources": {
+    "checkerboard_before.mov": {
+      "original": "checker_board_before.MOV",
+      "sha256": "3e8ee3fa1a54420df3e6d4c0cf9dc4763fb966c50d4aa9be5dbc8f905c175d3c"
+    },
+    "checkerboard_after.mov": {
+      "original": "checker_board_after.MOV",
+      "sha256": "142965c8644dac7aecef2c79b5001bd4998ff73bd3805fb12004ef4b108610e5"
+    },
+    "hand_twinkle_01.mov": {
+      "original": "hand_twinkle_01.MOV",
+      "sha256": "0a64ee491d505116954a1a6b9cfcdb5dd1a9fc4441be559c5d3dbb37d47ae111"
+    },
+    "hand_twinkle_02.mov": {
+      "original": "hand_twinkle_02.MOV",
+      "sha256": "5e15423a41a1c5313c802e8451f4a230bbaef6d381e40da83eb6a4eab49e6c78"
+    },
+    "hand_nod_01.mov": {
+      "original": "hand_nod_01.MOV",
+      "sha256": "3476aa5186cbf327679cac5cd60688f8b86d9fbca924b7763035d619b4509f70"
+    },
+    "hand_nod_02.mov": {
+      "original": "hand_nod_02.MOV",
+      "sha256": "393ddb0d4378c2cf4ac8a36edb5f61f34205acbcc9372002dd03ceea00cfe4a2"
+    },
+    "hand_circle_01.mov": {
+      "original": "hand_circle_01.MOV",
+      "sha256": "b1968c0fa84bd07ddfaf133a6db1c02a5bf283be967f28770fdea4118dad3b0a"
+    },
+    "hand_circle_02.mov": {
+      "original": "hand_circle_02.MOV",
+      "sha256": "b254022df3067bb4215cf7c334afd72d02d029a548fb22669b5f9931b960c271"
+    },
+    "hand_mix_01.mov": {
+      "original": "hand_mix_01.MOV",
+      "sha256": "1d16c522c5eb5d9c3b836afa27c6eef968107c7d522186ef971a12cc9d223677"
+    },
+    "hand_mix_02.mov": {
+      "original": "hand_mix_02.MOV",
+      "sha256": "cb551edb595189d76c1f438005774c112a119e9d18bf8cdd0e25e66779765f39"
+    }
+  }
+}

@@ -1,0 +1,127 @@
+{
+  "collector": "s01",
+  "date": "2026-11-18",
+  "device": "iPad Pro 11-inch (M5)",
+  "camera": "rear",
+  "lens": "1x",
+  "digital_zoom": "none",
+  "resolution": [
+    1920,
+    1080
+  ],
+  "fps": 30,
+  "stabilization": "off",
+  "stabilization_detail": "",
+  "focus_exposure_locked": true,
+  "checkerboard": {
+    "squares": [
+      8,
+      8
+    ],
+    "inner_corners": [
+      7,
+      7
+    ],
+    "shown_on": "tablet screen",
+    "f_before": 1826.8,
+    "f_after": 1827.1
+  },
+  "reference_f": 1826.9,
+  "videos": [
+    {
+      "file": "hand_twinkle_01.mov",
+      "motion": "twinkle",
+      "f": 759.3,
+      "note": ""
+    },
+    {
+      "file": "hand_twinkle_02.mov",
+      "motion": "twinkle",
+      "f": 1112.2,
+      "note": ""
+    },
+    {
+      "file": "hand_nod_01.mov",
+      "motion": "nod",
+      "f": 910.2,
+      "note": ""
+    },
+    {
+      "file": "hand_nod_02.mov",
+      "motion": "nod",
+      "f": 999.0,
+      "note": ""
+    },
+    {
+      "file": "hand_circle_01.mov",
+      "motion": "circle",
+      "f": 1262.5,
+      "note": ""
+    },
+    {
+      "file": "hand_circle_02.mov",
+      "motion": "circle",
+      "f": 1479.5,
+      "note": ""
+    },
+    {
+      "file": "hand_mix_01.mov",
+      "motion": "mix",
+      "f": 1326.3,
+      "note": ""
+    },
+    {
+      "file": "hand_mix_02.mov",
+      "motion": "mix",
+      "f": 1497.9,
+      "note": ""
+    }
+  ],
+  "notes": "형광등, 책상",
+  "camera_metadata": {
+    "lens_model": "iPad Pro 11-inch (M5) back camera 3mm f/1.8",
+    "focal_length_35mm": 30.0
+  },
+  "sources": {
+    "checkerboard_before.mov": {
+      "original": "checker_board_before.MOV",
+      "sha256": "c4101753608cdedf53d71646b4623ee02a906ed189c699883f712b7b0a41bd1d"
+    },
+    "checkerboard_after.mov": {
+      "original": "checker_board_after.MOV",
+      "sha256": "39d4ac52ced930c21853fe813a2a3a95a26c4bd46e0b074d013d42a28e11c428"
+    },
+    "hand_twinkle_01.mov": {
+      "original": "hand_twinkle_01.MOV",
+      "sha256": "08af84b53cb94436501220193cd48eda843168a5e36e6868fb70c1e971586409"
+    },
+    "hand_twinkle_02.mov": {
+      "original": "hand_twinkle_02.MOV",
+      "sha256": "2e8c5ad9acf1ad75a56738da6b256337f127c1aa35e6c8345f99f10ab9f4b652"
+    },
+    "hand_nod_01.mov": {
+      "original": "hand_nod_01.MOV",
+      "sha256": "424a4955f95cb083284543777c6cee211de6879e338e6d2182be14abb2c8e85e"
+    },
+    "hand_nod_02.mov": {
+      "original": "hand_nod_02.MOV",
+      "sha256": "e7864751b0d645db09e46f8a771e8092b6c7f09d0d06025b47e2f2e262ad7ac7"
+    },
+    "hand_circle_01.mov": {
+      "original": "hand_circle_01.MOV",
+      "sha256": "2e5f261cfa0ec61d665e16bd1ed9825b038e92441c8c30d42a12abd465847af2"
+    },
+    "hand_circle_02.mov": {
+      "original": "hand_circle_02.MOV",
+      "sha256": "811fe22b4c164b31e4280f9e25096c97f4c3e3efbb9a8869da46de3aa669c5f4"
+    },
+    "hand_mix_01.mov": {
+      "original": "hand_mix_01.MOV",
+      "sha256": "d376cde4a51178c8156af177200e7521c1c7c11f48079f29fe5cb3b2e6d911b2"
+    },
+    "hand_mix_02.mov": {
+      "original": "hand_mix_02.MOV",
+      "sha256": "fa3fad4db9fece2a90e8ed8babe0993836deb5385604d23403c13f8c1b504ee9"
+    }
+  }
+}
