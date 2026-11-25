@@ -1,0 +1,32 @@
+# All settings of the camera-control test app. Edit, rebuild (assets are packaged in the APK).
+# Note: SnakeYAML reads unquoted on/off as booleans; both forms are accepted for eis/ois.
+
+stream:
+  protocol: srt                 # srt | rtsp  (url must start with this scheme)
+  url: "srt://192.168.0.10:8890?streamid=publish:cam"   # rtsp example: rtsp://192.168.0.10:8554/cam
+  width: 1920
+  height: 1080
+  fps: 30
+  bitrate_kbps: 8000
+  audio_sample_rate: 44100      # the library needs an audio track prepared
+  audio_bitrate_kbps: 128
+
+# enabled: false -> the module does nothing and library default behavior is kept.
+exposure:
+  enabled: true
+  mode: auto                    # auto | lock | manual
+  exposure_time_ns: 8000000     # manual only (8 ms); must be <= frame duration to keep fps
+  iso: 200                      # manual only
+
+focus:
+  enabled: true
+  mode: auto                    # auto | lock | manual
+  focus_distance: 0.0           # manual only, diopters (0 = infinity, 1/min_focus_distance = closest)
+
+stabilization:
+  enabled: true
+  eis: off                      # on | off  (CONTROL_VIDEO_STABILIZATION_MODE)
+  ois: off                      # on | off  (LENS_OPTICAL_STABILIZATION_MODE)
+
+log:
+  every_n_frames: 30

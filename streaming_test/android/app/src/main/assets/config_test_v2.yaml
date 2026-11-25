@@ -1,0 +1,35 @@
+# All settings of the camera-control test app (v2: adds the lock section). Edit, rebuild (assets are packaged in the APK).
+# Note: SnakeYAML reads unquoted on/off as booleans; both forms are accepted for eis/ois.
+
+stream:
+  protocol: srt                 # srt | rtsp  (url must start with this scheme)
+  url: "srt://192.168.0.10:8890?streamid=publish:cam"   # example address; the QR code scanned in the app replaces it. rtsp example: rtsp://192.168.0.10:8554/cam
+  width: 1920
+  height: 1080
+  fps: 30
+  bitrate_kbps: 8000            # video only: the app sends no audio
+
+# enabled: false -> the module does nothing and library default behavior is kept.
+exposure:
+  enabled: true
+  mode: auto                    # auto | lock | manual
+  exposure_time_ns: 8000000     # manual only (8 ms); must be <= frame duration to keep fps
+  iso: 200                      # manual only
+
+focus:
+  enabled: true
+  mode: auto                    # auto | lock | manual
+  focus_distance: 0.0           # manual only, diopters (0 = infinity, 1/min_focus_distance = closest)
+
+stabilization:
+  enabled: true
+  eis: off                      # on | off  (CONTROL_VIDEO_STABILIZATION_MODE)
+  ois: off                      # on | off  (LENS_OPTICAL_STABILIZATION_MODE)
+
+log:
+  every_n_frames: 30
+
+# Used by exposure.mode: lock and focus.mode: lock.
+lock:
+  wait_for_convergence: true    # true: lock when AE_STATE=CONVERGED / AF_STATE=FOCUSED; false: lock on the first frame
+  lock_timeout_frames: 90       # fallback: lock after this many frames even if never converged/focused

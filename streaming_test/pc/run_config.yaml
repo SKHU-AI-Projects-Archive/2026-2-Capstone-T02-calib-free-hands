@@ -1,0 +1,26 @@
+# Settings for run_pc.py / run_pc.bat
+
+# --- MediaMTX download (only used when mediamtx.exe is missing) ---
+mediamtx_version: "1.21.4"
+mediamtx_download_url: "https://github.com/bluenviron/mediamtx/releases/download/v{version}/mediamtx_v{version}_windows_amd64.zip"
+# SHA-256 list published with each release; the zip is checked against it.
+mediamtx_checksum_url: "https://github.com/bluenviron/mediamtx/releases/download/v{version}/checksums.sha256"
+download_timeout_s: 60
+
+# --- Files in this folder ---
+mediamtx_exe: mediamtx.exe
+mediamtx_config: mediamtx_run.yml
+verify_hook: verify_hook.py
+
+# --- Receiver ---
+stream_path: cam          # phone publishes to .../publish:<stream_path>
+srt_port: 8890            # UDP
+rtsp_port: 8554           # TCP, for live preview only
+# true: verify every finished recording with verify_hook.py. false: no hook (record only).
+auto_verify: true
+stop_timeout_s: 10        # wait this long for MediaMTX to exit after Ctrl+C before terminating it
+
+# --- Printed URLs ---
+lan_ip: auto              # "auto": the PC's Wi-Fi address (the phone is on Wi-Fi), else the default route's; or set it, e.g. 192.168.0.10
+lan_probe_address: 192.0.2.1   # only used for "auto": routing lookup, no packet is sent
+emulator_host: 10.0.2.2   # the PC as seen from the Android emulator

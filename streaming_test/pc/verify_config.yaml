@@ -1,0 +1,15 @@
+# Settings for verify_recording.py
+# Path to the recorded video (relative paths are resolved from the current directory).
+input_path: recordings/cam/REPLACE_WITH_RECORDING.ts
+# Frame rate the phone was asked to produce.
+nominal_fps: 30
+# An interval larger than gap_threshold * (1 / nominal_fps) counts as a gap (dropped frame[s]).
+gap_threshold: 1.5
+# ffprobe executable (name on PATH or full path).
+ffprobe_path: ffprobe
+# Video stream selector passed to ffprobe -select_streams.
+video_stream: "v:0"
+# Where the per-frame interval CSV is written.
+output_csv: intervals.csv
+# Maximum number of gaps listed in the console summary (all gaps are in the CSV).
+max_gaps_printed: 20

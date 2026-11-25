@@ -1,0 +1,10 @@
+recordings/
+intervals.csv
+*.csv
+mediamtx.exe
+__pycache__/
+# private keys stay local
+auto.key
+*.key
+# MediaMTX creates this self-signed certificate (with auto.key) by itself; nothing here uses it
+auto.crt

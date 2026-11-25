@@ -1,0 +1,40 @@
+# Settings for manual recording (start/stop from the PC while the phone streams continuously).
+# Used by run_pc.py; stream_path / verify_hook come from run_config.yaml.
+
+# manual: mediamtx_manual.yml (recording off) + the recorder GUI; a connected phone is only shown as connected,
+#         you start/stop recording in the window; recording is toggled via the API.
+# auto  : MediaMTX records every stream as soon as the phone connects (mediamtx_run.yml, optional auto-verify).
+record_mode: manual
+
+# Control API (localhost only)
+api_host: 127.0.0.1
+api_port: 9997
+api_timeout_s: 2
+poll_interval_s: 1.0           # GUI polls the API (stream connected / recording state)
+
+# Phone: lock exposure + focus while recording (the app releases them when the recording stops).
+# The PC calls the phone app's small remote-control server (only while it streams); the phone's address is
+# read from the receiver. If the phone cannot be reached the recording still starts, with a note.
+lock_on_record: true
+phone_port: 8898               # must match REMOTE_PORT in the Android app (MainActivity.kt)
+phone_address: ""              # empty = automatic; set only to override
+phone_timeout_s: 2
+
+# Live camera picture in the recorder window (ffmpeg reads the stream back from the local receiver).
+live_view: true
+
+# Finished takes: mp4 = the recorded .ts is copied into an .mp4 without re-encoding (about 1 s, no quality loss,
+# frame times kept) and the .ts is removed; ts = keep the .ts. About 20 MB per 20 s at the phone's 8 Mbps.
+output_format: mp4
+
+mediamtx_config_manual: mediamtx_manual.yml
+recordings_dir: recordings     # folder of recordings (relative to this folder); must match recordPath in the yml
+
+# Start: wait this long for the recording to begin (it begins at the next keyframe).
+start_wait_timeout_s: 10
+# Stop: the closed segment is detected by its file not changing for this long (> recordPartDuration).
+segment_settle_s: 2
+segment_wait_timeout_s: 15
+
+# Finished takes are renamed to <take_name>_<timestamp>.<ext>; timestamp = actual recording start.
+timestamp_format: "%Y%m%d_%H%M%S"

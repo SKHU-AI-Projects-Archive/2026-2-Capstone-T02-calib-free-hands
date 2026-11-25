@@ -1,0 +1,57 @@
+# MediaMTX config for record_mode: manual (run_config_manual.yaml): same as mediamtx_run.yml, but
+# recording is OFF by default and switched on/off at runtime through the Control API by
+# recorder_gui.py / recorder_control.py. No auto-verify hook (verification happens on stop).
+# (written against MediaMTX v1.21.x).
+# Same structure as the stock mediamtx.yml (global settings, pathDefaults, paths);
+# only the keys that differ from the defaults are listed here.
+# The stock mediamtx.yml is left untouched.
+#
+# Normally started by run_pc.py, which also overrides srtAddress, rtspAddress and apiAddress through
+# MTX_* environment variables using the values in run_config.yaml / run_config_manual.yaml.
+
+logLevel: info
+
+###############################################
+# Global settings -> protocols
+# Only SRT (publisher) and RTSP (optional monitoring with ffplay/VLC) stay on.
+
+rtsp: true
+rtspAddress: :8554
+# Control API, localhost only (the default 'any' user may use the API from 127.0.0.1 only).
+api: true
+apiAddress: 127.0.0.1:9997
+
+rtmp: false
+hls: false
+webrtc: false
+moq: false
+
+# SRT server: the phone publishes here.
+srt: true
+srtAddress: :8890
+srtMinLatency: 120ms
+
+###############################################
+# Default path settings
+
+pathDefaults:
+  # Recording is switched on per path at runtime. MediaMTX remuxes the incoming H.264/H.265 + AAC
+  # into the file container as-is: no decoding, no re-encoding.
+  record: false
+  # Relative to the working directory. %path is the publish path name (e.g. "cam").
+  recordPath: ./recordings/%path/%Y-%m-%d_%H-%M-%S-%f_%z
+  # "mpegts" (same container as the SRT payload) or "fmp4".
+  recordFormat: mpegts
+  recordPartDuration: 1s
+  recordSegmentDuration: 1h
+  # 0s = never delete.
+  recordDeleteAfter: 0s
+
+paths:
+  # Any path name is accepted: srt://<pc>:8890?streamid=publish:<anything>
+  all_others:
+
+  # Explicit entry so the Control API can PATCH its settings (record on/off) while the phone streams.
+  # (recorder_control.py adds the entry on the fly if run_config.yaml uses a different stream_path.)
+  cam:
+    record: false

@@ -1,0 +1,44 @@
+# MediaMTX config for the phone -> PC SRT recording test (written against MediaMTX v1.21.x).
+# Same structure as the stock mediamtx.yml (global settings, pathDefaults, paths);
+# only the keys that differ from the defaults are listed here.
+# The stock mediamtx.yml is left untouched.
+#
+# Run:  mediamtx.exe mediamtx_test.yml     (from this folder, so ./recordings/ lands here)
+
+logLevel: info
+
+###############################################
+# Global settings -> protocols
+# Only SRT (publisher) and RTSP (optional monitoring with ffplay/VLC) stay on.
+
+rtsp: true
+rtspAddress: :8554
+rtmp: false
+hls: false
+webrtc: false
+moq: false
+
+# SRT server: the phone publishes here.
+srt: true
+srtAddress: :8890
+srtMinLatency: 120ms
+
+###############################################
+# Default path settings
+
+pathDefaults:
+  # Record every published stream. MediaMTX remuxes the incoming H.264/H.265 + AAC
+  # into the file container as-is: no decoding, no re-encoding.
+  record: true
+  # Relative to the working directory. %path is the publish path name (e.g. "cam").
+  recordPath: ./recordings/%path/%Y-%m-%d_%H-%M-%S-%f
+  # "mpegts" (same container as the SRT payload) or "fmp4".
+  recordFormat: mpegts
+  recordPartDuration: 1s
+  recordSegmentDuration: 1h
+  # 0s = never delete.
+  recordDeleteAfter: 0s
+
+paths:
+  # Any path name is accepted: srt://<pc>:8890?streamid=publish:<anything>
+  all_others:

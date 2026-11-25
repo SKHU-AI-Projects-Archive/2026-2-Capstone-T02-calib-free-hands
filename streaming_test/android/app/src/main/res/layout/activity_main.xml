@@ -1,0 +1,209 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Same structure as the PC recorder window: header, state chips, big timer, big button, message card.
+     Colors/shapes: res/values/colors.xml, res/drawable/. -->
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:background="@color/bg"
+    android:fitsSystemWindows="true"
+    android:keepScreenOn="true"
+    android:orientation="horizontal">
+
+    <FrameLayout
+        android:layout_width="0dp"
+        android:layout_height="match_parent"
+        android:layout_weight="1">
+
+        <SurfaceView
+            android:id="@+id/preview"
+            android:layout_width="match_parent"
+            android:layout_height="match_parent" />
+
+        <TextView
+            android:id="@+id/lockBadge"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_gravity="top|start"
+            android:layout_margin="12dp"
+            android:background="@drawable/bg_badge_warn"
+            android:paddingHorizontal="12dp"
+            android:paddingVertical="4dp"
+            android:text="AE / AF LOCKED"
+            android:textColor="@color/on_accent"
+            android:textSize="12sp"
+            android:textStyle="bold"
+            android:visibility="gone" />
+
+        <TextView
+            android:id="@+id/hint"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_gravity="bottom|start"
+            android:layout_margin="12dp"
+            android:background="@drawable/bg_badge_dark"
+            android:paddingHorizontal="12dp"
+            android:paddingVertical="4dp"
+            android:text="Long-press the preview to lock exposure / focus"
+            android:textColor="@color/text_dim"
+            android:textSize="11sp" />
+    </FrameLayout>
+
+    <View
+        android:layout_width="1dp"
+        android:layout_height="match_parent"
+        android:background="@color/outline" />
+
+    <LinearLayout
+        android:layout_width="260dp"
+        android:layout_height="match_parent"
+        android:background="@color/surface"
+        android:orientation="vertical"
+        android:padding="16dp">
+
+        <LinearLayout
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:gravity="center_vertical"
+            android:orientation="horizontal">
+
+            <TextView
+                android:layout_width="0dp"
+                android:layout_height="wrap_content"
+                android:layout_weight="1"
+                android:autoSizeMaxTextSize="20sp"
+                android:autoSizeMinTextSize="12sp"
+                android:autoSizeTextType="uniform"
+                android:maxLines="1"
+                android:text="Calib-free-hands"
+                android:textColor="@color/text"
+                android:textStyle="bold" />
+
+            <Button
+                android:id="@+id/scanQr"
+                android:layout_width="wrap_content"
+                android:layout_height="34dp"
+                android:minWidth="0dp"
+                android:minHeight="0dp"
+                android:paddingHorizontal="12dp"
+                android:stateListAnimator="@null"
+                android:text="Scan QR"
+                android:textAllCaps="false"
+                android:textSize="12sp"
+                android:textStyle="bold" />
+        </LinearLayout>
+
+        <TextView
+            android:id="@+id/subtitle"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:fontFamily="monospace"
+            android:textColor="@color/text_dim"
+            android:textSize="11sp" />
+
+        <LinearLayout
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="14dp"
+            android:gravity="center_vertical"
+            android:orientation="horizontal">
+
+            <View
+                android:id="@+id/streamDot"
+                android:layout_width="10dp"
+                android:layout_height="10dp"
+                android:background="@drawable/dot" />
+
+            <TextView
+                android:layout_width="0dp"
+                android:layout_height="wrap_content"
+                android:layout_marginStart="8dp"
+                android:layout_weight="1"
+                android:text="STREAM"
+                android:textColor="@color/text_dim"
+                android:textSize="11sp"
+                android:textStyle="bold" />
+
+            <TextView
+                android:id="@+id/streamValue"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:fontFamily="monospace"
+                android:textSize="13sp"
+                android:textStyle="bold" />
+        </LinearLayout>
+
+        <LinearLayout
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="10dp"
+            android:gravity="center_vertical"
+            android:orientation="horizontal">
+
+            <View
+                android:id="@+id/lockDot"
+                android:layout_width="10dp"
+                android:layout_height="10dp"
+                android:background="@drawable/dot" />
+
+            <TextView
+                android:layout_width="0dp"
+                android:layout_height="wrap_content"
+                android:layout_marginStart="8dp"
+                android:layout_weight="1"
+                android:text="EXPOSURE / FOCUS"
+                android:textColor="@color/text_dim"
+                android:textSize="11sp"
+                android:textStyle="bold" />
+
+            <TextView
+                android:id="@+id/lockValue"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:fontFamily="monospace"
+                android:textSize="13sp"
+                android:textStyle="bold" />
+        </LinearLayout>
+
+        <TextView
+            android:id="@+id/elapsed"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="14dp"
+            android:fontFamily="monospace"
+            android:gravity="center"
+            android:text="00:00:00"
+            android:textColor="@color/text_dim"
+            android:textSize="32sp"
+            android:textStyle="bold" />
+
+        <Button
+            android:id="@+id/startStop"
+            android:layout_width="match_parent"
+            android:layout_height="52dp"
+            android:layout_marginTop="10dp"
+            android:stateListAnimator="@null"
+            android:text="Start streaming"
+            android:textAllCaps="false"
+            android:textSize="16sp"
+            android:textStyle="bold" />
+
+        <ScrollView
+            android:id="@+id/statusCard"
+            android:layout_width="match_parent"
+            android:layout_height="0dp"
+            android:layout_marginTop="12dp"
+            android:layout_weight="1"
+            android:background="@drawable/bg_card">
+
+            <TextView
+                android:id="@+id/status"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:fontFamily="monospace"
+                android:padding="10dp"
+                android:textColor="@color/text_dim"
+                android:textIsSelectable="true"
+                android:textSize="11sp" />
+        </ScrollView>
+    </LinearLayout>
+</LinearLayout>
